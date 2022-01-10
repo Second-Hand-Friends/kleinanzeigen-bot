@@ -1,0 +1,78 @@
+# https://docs.github.com/en/free-pro-team@latest/actions/reference/workflow-syntax-for-github-actions
+name: Build
+
+on:
+  push:
+    branches:
+    - '**'
+    tags-ignore:
+    - '**'
+    paths-ignore:
+    - '**/*.md'
+  workflow_dispatch:
+    # https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: Git Checkout
+      uses: actions/checkout@v2 #https://github.com/actions/checkout
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: "3.10"
+
+    - name: Install python dependencies
+      run: |
+         set -eux
+
+         python --version
+
+         pip install .[dev]
+
+    - name: pylint
+      run: |
+         set -eux
+         pip install pylint
+         pylint kleinanzeigen_bot.py
+
+    - name: run kleinanzeigen_bot.py
+      run: |
+        echo "
+        login:
+          username: 'john.doe@example.com'
+          password: 'such_a_secret'
+        " > config.yaml
+
+        set -eux
+
+        python kleinanzeigen_bot.py --help
+
+        python kleinanzeigen_bot.py --config=config.yaml
+
+    - name: py2exe
+      if: startsWith(matrix.os, 'windows')
+      run: |
+        python setup.py py2exe
+        ls -l dist
+
+    - name: run kleinanzeigen_bot.exe
+      if: startsWith(matrix.os, 'windows')
+      run: |
+        cd dist
+
+        python kleinanzeigen_bot.exe --help
+
+        python kleinanzeigen_bot.exe --config=../config.yaml

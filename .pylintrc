@@ -1,0 +1,8 @@
+[FORMAT]
+# https://pylint.pycqa.org/en/latest/technical_reference/features.html#format-checker
+max-line-length=160
+good-names=i,j,k,v,by,ex,_
+
+[MESSAGES CONTROL]
+# https://pylint.pycqa.org/en/latest/technical_reference/features.html#messages-control-options
+disable=bare-except, missing-docstring, multiple-imports, multiple-statements, no-self-use, too-many-branches, too-many-instance-attributes, too-many-locals, too-many-statements
