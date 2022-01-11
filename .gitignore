@@ -1,0 +1,37 @@
+# Local work folder that is not checked in
+_LOCAL/
+
+# kleinanzeigen_bot
+/config.yaml
+/data
+/*.log
+kleinanzeigen_bot/version.py
+
+# python
+__pycache__
+/build
+/dist
+/.eggs
+/*.egg-info
+
+# Eclipse
+/.project
+/.pydevproject
+/.settings/
+**/.*.md.html
+
+# IntelliJ
+/.idea
+/*.iml
+/*.ipr
+/*.iws
+
+# Visual Studio Code
+/.vscode
+
+# OSX
+.DS_Store
+
+# Vim
+*.swo
+*.swp

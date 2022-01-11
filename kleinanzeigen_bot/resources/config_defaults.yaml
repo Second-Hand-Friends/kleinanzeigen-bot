@@ -1,0 +1,35 @@
+ad_files:
+  - "**/ad_*.json"
+  - "**/ad_*.yml"
+  - "**/ad_*.yaml"
+
+ad_defaults:
+  active: true
+  type: OFFER
+  description:
+    prefix:
+    suffix:
+  price_type: NEGOTIABLE
+  shipping_type: SHIPPING
+  contact:
+    name:
+    street:
+    zipcode:
+    phone:
+  republication_interval: 7
+
+categories: []
+
+browser:
+  # https://peter.sh/experiments/chromium-command-line-switches/
+  arguments:
+    # https://stackoverflow.com/a/50725918/5116073
+    - --disable-dev-shm-usage
+    - --no-sandbox
+    # --headless
+    # --start-maximized
+  binary_location:
+
+login:
+  username:
+  password:
