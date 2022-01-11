@@ -1,0 +1,106 @@
+# inspired by
+# - https://github.com/alexkaratarakis/gitattributes/blob/master/Java.gitattributes
+# - https://github.com/alexkaratarakis/gitattributes/blob/master/Common.gitattributes
+
+# Handle line endings automatically for files detected as text
+# and leave all files detected as binary untouched.
+* text=auto
+
+#
+# The above will handle all files with names NOT matching patterns defined below
+#
+
+# Git files
+.gitattributes    text eol=lf
+**/.gitattributes text eol=lf
+.gitignore        text eol=lf
+**/.gitignore     text eol=lf
+
+
+# Documents
+*.doc        binary diff=astextplain
+*.docx       binary diff=astextplain
+*.dot        binary diff=astextplain
+*.pdf        binary diff=astextplain
+*.ppt        binary diff=astextplain
+*.pptx       binary diff=astextplain
+*.rtf        binary diff=astextplain
+*.vsd        binary diff=astextplain
+*.vsdx       binary diff=astextplain
+*.odt        binary diff=odf
+*.ods        binary diff=odf
+*.odp        binary diff=odf
+*.adoc       text
+*.csv        text
+*.md         text diff=markdown
+*.txt        text
+
+
+# Config/Serialisation
+.editorconfig    text
+**/.editorconfig text
+*.ini            text
+*.properties     text
+*.json           text
+*.toml           text
+*.xml            text
+*.yaml           text
+*.yml            text
+
+
+# Scripts
+*.bat        text eol=crlf
+*.cmd        text eol=crlf
+*.ps1        text eol=crlf
+*.bash       text eol=lf
+*.fish       text eol=lf
+*.sh         text eol=lf
+*.zsh        text eol=lf
+*.lua        text
+*.php        text
+*.py         text
+*.python     text
+*.sql        text
+
+
+# Archives
+*.7z         binary
+*.gz         binary
+*.tar        binary
+*.tar.gz     binary
+*.tgz        binary
+*.xz         binary
+*.zip        binary
+
+
+# Native binaries
+*.dll        binary
+*.dylib      binary
+*.exe        binary
+*.so         binary
+
+
+# Images
+*.eps        binary
+*.gif        binary
+*.ico        binary
+*.jpg        binary
+*.jpeg       binary
+*.png        binary
+*.svg        text
+*.svgz       binary
+*.tif        binary
+*.tiff       binary
+
+
+# Web
+*.css        text diff=css
+*.htm        text diff=html
+*.html       text diff=html
+*.js         text
+
+
+# https://git-scm.com/docs/gitattributes#_export_ignore
+.gitattributes export-ignore
+.gitignore     export-ignore
+.gitkeep       export-ignore

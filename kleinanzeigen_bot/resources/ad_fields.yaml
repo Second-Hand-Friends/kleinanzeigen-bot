@@ -1,0 +1,18 @@
+active:
+type:
+title:
+description:
+category:
+price:
+price_type:
+shipping_type:
+images: []
+contact:
+  name:
+  street:
+  zipcode:
+  phone:
+republication_interval:
+id:
+created_on:
+updated_on:

@@ -1,0 +1,54 @@
+# https://pip.pypa.io/en/stable/reference/build-system/pyproject-toml/
+
+#####################
+# bandit https://github.com/PyCQA/bandit
+#####################
+[tool.bandit]
+exclude = ["*/.eggs/*"] # broken :-( https://github.com/PyCQA/bandit/issues/657
+
+
+#####################
+# pylint
+#####################
+[tool.pylint.master]
+extension-pkg-whitelist = "win32api"
+ignore = "version.py"
+jobs = 4
+persistent = "no"
+
+[tool.pylint.basic]
+good-names = ["i", "j", "k", "v", "by", "ex", "fd", "_"]
+
+[tool.pylint.format]
+# https://pylint.pycqa.org/en/latest/technical_reference/features.html#format-checker
+max-line-length = 160
+
+[tool.pylint.logging]
+logging-modules = "logging"
+
+[tool.pylint.messages_control]
+# https://pylint.pycqa.org/en/latest/technical_reference/features.html#messages-control-options
+disable= [
+    "bare-except",
+    "missing-docstring",
+    "multiple-imports",
+    "multiple-statements",
+    "no-self-use"
+]
+
+[tool.pylint.miscelaneous]
+notes = [ "FIXME", "XXX", "TODO" ]
+
+[tool.pylint.design]
+max-attributes = 10
+max-branches   = 20
+max-locals     = 30
+max-returns    = 10
+max-statements = 70
+
+#####################
+# pytest
+#####################
+[tool.pytest.ini_options]
+#https://docs.pytest.org/en/stable/reference.html#confval-addopts
+addopts = "-p no:cacheprovider --doctest-modules --ignore=kleinanzeigen_bot/__main__.py"
