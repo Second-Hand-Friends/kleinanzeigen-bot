@@ -289,8 +289,9 @@ class KleinanzeigenBot(SeleniumMixin):
 
     def delete_ad(self, ad_cfg: Dict[str, Any]) -> bool:
         LOG.info("Deleting ad '%s' if already present...", ad_cfg["title"])
-
-#        self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
+        
+        pause(1500, 3000)
+        self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
         csrf_token_elem = self.web_find(By.XPATH, '//meta[@name="_csrf"]')
         csrf_token = csrf_token_elem.get_attribute("content")
 
