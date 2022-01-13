@@ -290,8 +290,9 @@ class KleinanzeigenBot(SeleniumMixin):
     def delete_ad(self, ad_cfg: Dict[str, Any]) -> bool:
         LOG.info("Deleting ad '%s' if already present...", ad_cfg["title"])
         
-        pause(1500, 3000)
+        pause(1000, 2000)
         self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
+        self.web_open(f"{self.root_url}/m-meine-anzeigen.html", timeout=1000, reload_if_already_open=True)
         csrf_token_elem = self.web_find(By.XPATH, '//meta[@name="_csrf"]')
         csrf_token = csrf_token_elem.get_attribute("content")
 
@@ -426,6 +427,7 @@ class KleinanzeigenBot(SeleniumMixin):
         #############################
         # submit
         #############################
+        self.handle_captcha_if_present("postAd-recaptcha", "but DON'T click 'Anzeige aufgeben'.")
         self.web_click(By.ID, 'pstad-submit')
         self.web_await(EC.url_contains("p-anzeige-aufgeben-bestaetigung.html?adId="), 20)
 
