@@ -160,6 +160,7 @@ class KleinanzeigenBot(SeleniumMixin):
         ad_fields = utils.load_dict_from_module(resources, "ad_fields.yaml")
         ads = []
         for ad_file in sorted(ad_files):
+            last_updated_on = False
 
             ad_cfg_orig = utils.load_dict(ad_file, "ad file")
             ad_cfg = copy.deepcopy(ad_cfg_orig)
@@ -289,7 +290,7 @@ class KleinanzeigenBot(SeleniumMixin):
     def delete_ad(self, ad_cfg: Dict[str, Any]) -> bool:
         LOG.info("Deleting ad '%s' if already present...", ad_cfg["title"])
 
-        self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
+#        self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
         csrf_token_elem = self.web_find(By.XPATH, '//meta[@name="_csrf"]')
         csrf_token = csrf_token_elem.get_attribute("content")
 
