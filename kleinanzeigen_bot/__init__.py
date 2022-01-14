@@ -176,6 +176,8 @@ class KleinanzeigenBot(SeleniumMixin):
                     last_updated_on = datetime.fromisoformat(ad_cfg["updated_on"])
                 elif ad_cfg["created_on"]:
                     last_updated_on = datetime.fromisoformat(ad_cfg["created_on"])
+                else:
+                    last_updated_on = None
 
                 if last_updated_on:
                     ad_age = datetime.utcnow() - last_updated_on
