@@ -214,6 +214,11 @@ class SeleniumMixin:
         pause()
 
     def web_open(self, url, timeout = 10, reload_if_already_open = False) -> None:
+        """
+        :param url: url to open in browser
+        :param timeout: timeout in seconds
+        :param reload_if_already_open: if False does nothing if the url is already open in the browser
+        """
         LOG.debug(" -> Opening [%s]...", url)
         if not reload_if_already_open and url == self.webdriver.current_url:
             LOG.debug("  => skipping, [%s] is already open", url)
