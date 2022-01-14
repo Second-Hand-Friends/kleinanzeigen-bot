@@ -426,6 +426,7 @@ class KleinanzeigenBot(SeleniumMixin):
         #############################
         # submit
         #############################
+        self.handle_captcha_if_present("postAd-recaptcha", "but DON'T click 'Anzeige aufgeben'.")
         self.web_click(By.ID, 'pstad-submit')
         self.web_await(EC.url_contains("p-anzeige-aufgeben-bestaetigung.html?adId="), 20)
 
