@@ -160,7 +160,6 @@ class KleinanzeigenBot(SeleniumMixin):
         ad_fields = utils.load_dict_from_module(resources, "ad_fields.yaml")
         ads = []
         for ad_file in sorted(ad_files):
-            last_updated_on = False
 
             ad_cfg_orig = utils.load_dict(ad_file, "ad file")
             ad_cfg = copy.deepcopy(ad_cfg_orig)
