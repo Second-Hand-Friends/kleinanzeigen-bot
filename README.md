@@ -196,6 +196,8 @@ updated_on: # set automatically
 
 ## <a name="development"></a> Development Notes
 
+> Please read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing code. Thank you!
+
 - Installing dev dependencies: `pip install .[dev]`
 - Running unit tests: `python -m pytest` or `pytest`
 - Running linter: `python -m pylint kleinanzeigen_bot` or `pylint kleinanzeigen_bot`
