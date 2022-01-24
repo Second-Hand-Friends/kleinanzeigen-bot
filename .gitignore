@@ -1,6 +1,9 @@
 # Local work folder that is not checked in
 _LOCAL/
 
+# docker
+.dockerignore
+
 # kleinanzeigen_bot
 /config.yaml
 /data
