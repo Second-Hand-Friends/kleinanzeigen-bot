@@ -86,7 +86,7 @@ class KleinanzeigenBot(SeleniumMixin):
         if is_frozen():
             exe = sys.argv[0]
         else:
-            exe = f"python -m {os.path.relpath(os.path.join(__file__, '..'))}"
+            exe = "python -m kleinanzeigen_bot"
 
         print(textwrap.dedent(f"""\
             Usage: {exe} COMMAND [-v|--verbose] [--config=<PATH>] [--logfile=<PATH>]

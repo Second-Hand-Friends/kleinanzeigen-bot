@@ -78,6 +78,15 @@ jobs:
         python -m kleinanzeigen_bot version
         python -m kleinanzeigen_bot verify
 
+    - name: "Build docker image"
+      if: startsWith(matrix.os, 'linux')
+      run: |
+        set -eux
+
+        bash docker/build-image.sh
+
+        docker run --rm kleinanzeigen-bot/kleinanzeigen-bot help
+
     - name: py2exe
       if: startsWith(matrix.os, 'windows')
       run: |
