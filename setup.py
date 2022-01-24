@@ -86,7 +86,6 @@ if "py2exe" in sys.argv:
         libpath = os.path.join(destdir, "kleinanzeigen-bot.exe")
         with zipfile.ZipFile(libpath, "a", zipfile.ZIP_DEFLATED if self.options.compress else zipfile.ZIP_STORED) as arc:
             for target, source in files_to_embed:
-                print(source)
                 if os.path.isdir(source):
                     for file in os.listdir(source):
                         if self.options.verbose:
