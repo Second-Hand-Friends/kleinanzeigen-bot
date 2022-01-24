@@ -43,6 +43,11 @@ jobs:
 
          pip install .[dev]
 
+    - name: python setup.py check
+      run: |
+         # https://docs.python.org/3/distutils/apiref.html#module-distutils.command.check
+         python setup.py check --metadata --strict --verbose
+
     - name: bandit
       run: |
          set -eux

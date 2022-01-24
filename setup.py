@@ -128,11 +128,12 @@ setuptools.setup(
     use_scm_version = {
         "write_to": "kleinanzeigen_bot/version.py",
     },
-    packages = setuptools.find_packages(""),
-    package_data = {"kleinanzeigen_bot": ["*.yaml"]},
+    packages = setuptools.find_packages(),
+    package_data = {"kleinanzeigen_bot": ["resources/*.yaml"]},
 
     # https://docs.python.org/3/distutils/setupscript.html#additional-meta-data
     author = "The kleinanzeigen-bot authors",
+    author_email = "n/a",
     url = "https://github.com/kleinanzeigen-bot/kleinanzeigen-bot",
     description = "Command line tool to publish ads on ebay-kleinanzeigen.de",
     license = "GNU AGPL 3.0+",
