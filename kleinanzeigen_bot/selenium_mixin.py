@@ -59,6 +59,7 @@ class SeleniumMixin:
             browser_options.add_experimental_option("prefs", {
                 "credentials_enable_service": False,
                 "profile.password_manager_enabled": False,
+                "profile.default_content_setting_values.notifications": 2,  # 1 = allow, 2 = block browser notifications
                 "devtools.preferences.currentDockState": "\"bottom\""
             })
 
