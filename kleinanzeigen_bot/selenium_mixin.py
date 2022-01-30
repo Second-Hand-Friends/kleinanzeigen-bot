@@ -60,7 +60,6 @@ class SeleniumMixin:
             if self.browser_binary_location:
                 browser_options.binary_location = self.browser_binary_location
                 LOG.info(" -> Chrome binary location: %s", self.browser_binary_location)
-
             return browser_options
 
         # if run via py2exe fix resource lookup
@@ -102,7 +101,12 @@ class SeleniumMixin:
                 webdriver_mgr = EdgeChromiumDriverManager(cache_valid_range = 14)
                 webdriver_mgr.driver.browser_version = chrome_major_version
                 webdriver_path = webdriver_mgr.install()
-                self.webdriver = webdriver.ChromiumEdge(service = EdgeService(webdriver_path), options = init_browser_options(webdriver.EdgeOptions()))
+                env = os.environ.copy()
+                env["MSEDGEDRIVER_TELEMETRY_OPTOUT"] = "1"  # https://docs.microsoft.com/en-us/microsoft-edge/privacy-whitepaper/#microsoft-edge-driver
+                self.webdriver = webdriver.ChromiumEdge(
+                    service = EdgeService(webdriver_path, env = env),
+                    options = init_browser_options(webdriver.EdgeOptions())
+                )
             else:
                 webdriver_mgr = ChromeDriverManager(chrome_type = chrome_type, cache_valid_range = 14)
                 webdriver_mgr.driver.browser_version = chrome_major_version
