@@ -21,4 +21,4 @@ fi
 
 cd /mnt/data
 
-python -m kleinanzeigen_bot --config $CONFIG_FILE "$@"
+/opt/kleinanzeigen-bot --config $CONFIG_FILE "$@"

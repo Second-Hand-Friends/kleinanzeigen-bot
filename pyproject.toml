@@ -1,10 +1,81 @@
 # https://pip.pypa.io/en/stable/reference/build-system/pyproject-toml/
+[build-system]
+requires = ["pdm-pep517"]
+build-backend = "pdm.pep517.api"
+
+[project]
+name = "kleinanzeigen-bot"
+dynamic = ["version"]
+description = "Command line tool to publish ads on ebay-kleinanzeigen.de"
+readme = "README.md"
+authors = [
+    {name = "sebthom", email = "sebthom@users.noreply.github.com"},
+]
+license = {text = "AGPL-3.0-or-later"}
+
+classifiers = [  # https://pypi.org/classifiers/
+	"Development Status :: 4 - Beta",
+	"Environment :: Console",
+	"Operating System :: OS Independent",
+
+	"Intended Audience :: End Users/Desktop",
+	"Topic :: Office/Business",
+
+	"License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+	"Programming Language :: Python :: 3.10"
+]
+requires-python = ">=3.10,<3.11" # <3.11 to get newer versions of pyinstaller
+dependencies = [
+    "coloredlogs~=15.0",
+    "inflect~=5.3",
+    "ruamel.yaml~=0.17",
+    "pywin32==303; sys_platform == 'win32'",
+    "selenium~=4.1",
+    "selenium_stealth~=1.0",
+    "webdriver_manager~=3.5"]
+
+[project.urls]
+homepage = "https://github.com/kleinanzeigen-bot/kleinanzeigen-bot"
+repository = "https://github.com/kleinanzeigen-bot/kleinanzeigen-bot"
+documentation = "https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/README.md"
+
+[project.optional-dependencies]
+
+
+[project.scripts]
+# https://www.python.org/dev/peps/pep-0621/#entry-points
+# https://blogs.thebitx.com/index.php/2021/09/02/pybites-how-to-package-and-deploy-cli-applications-with-python-pypa-setuptools-build/
+kleinanzeigen_bot = 'kleinanzeigen_bot:main'
+
+
+#####################
+# pdm https://github.com/pdm-project/pdm/
+#####################
+[tool.pdm]
+version = {use_scm = true}
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "bandit~=1.7",
+    "pytest~=6.2",
+    "pyinstaller~=4.8",
+    "psutil",
+    "pylint~=2.12",
+    "mypy~=0.931",
+]
+
+[tool.pdm.scripts]
+app = "python -m kleinanzeigen_bot"
+bandit = "bandit -c pyproject.toml -r kleinanzeigen_bot"
+pyinstaller = "pyinstaller pyinstaller.spec --clean"
+pylint = "pylint kleinanzeigen_bot"
+pytest = "python -m pytest -v"
+
 
 #####################
 # bandit https://github.com/PyCQA/bandit
 #####################
 [tool.bandit]
-exclude = ["*/.eggs/*"] # broken :-( https://github.com/PyCQA/bandit/issues/657
 
 
 #####################
@@ -46,9 +117,10 @@ max-locals     = 30
 max-returns    = 10
 max-statements = 70
 
+
 #####################
 # pytest
 #####################
 [tool.pytest.ini_options]
-#https://docs.pytest.org/en/stable/reference.html#confval-addopts
-addopts = "-p no:cacheprovider --doctest-modules --ignore=kleinanzeigen_bot/__main__.py"
+# https://docs.pytest.org/en/stable/reference.html#confval-addopts
+addopts = "-p no:cacheprovider --doctest-modules --ignore=__pypackages__ --ignore=kleinanzeigen_bot/__main__.py"

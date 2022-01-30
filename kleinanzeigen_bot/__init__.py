@@ -4,6 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 import atexit, copy, getopt, glob, json, logging, os, signal, sys, textwrap, time, urllib
 from datetime import datetime
+import importlib.metadata
 from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, Final, Iterable
 
@@ -19,11 +20,6 @@ from .selenium_mixin import SeleniumMixin
 LOG_ROOT:Final[logging.Logger] = logging.getLogger()
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot")
 LOG.setLevel(logging.INFO)
-
-try:
-    from .version import version as VERSION
-except ModuleNotFoundError:
-    VERSION = "unknown"
 
 
 class KleinanzeigenBot(SeleniumMixin):
@@ -50,7 +46,9 @@ class KleinanzeigenBot(SeleniumMixin):
     def __del__(self):
         if self.file_log:
             LOG_ROOT.removeHandler(self.file_log)
-        super().__del__()
+
+    def get_version(self) -> str:
+        return importlib.metadata.version(__package__)
 
     def run(self, args:Iterable[str]) -> None:
         self.parse_args(args)
@@ -58,7 +56,7 @@ class KleinanzeigenBot(SeleniumMixin):
             case "help":
                 self.show_help()
             case "version":
-                print(VERSION)
+                print(self.get_version())
             case "verify":
                 self.configure_file_logging()
                 self.load_config()
@@ -85,6 +83,8 @@ class KleinanzeigenBot(SeleniumMixin):
     def show_help(self) -> None:
         if is_frozen():
             exe = sys.argv[0]
+        elif os.getenv("PDM_PROJECT_ROOT", ""):
+            exe = "pdm run app"
         else:
             exe = "python -m kleinanzeigen_bot"
 
@@ -142,6 +142,8 @@ class KleinanzeigenBot(SeleniumMixin):
         self.file_log.setLevel(logging.DEBUG)
         self.file_log.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
         LOG_ROOT.addHandler(self.file_log)
+
+        LOG.info("App version: %s", self.get_version())
 
     def load_ads(self, exclude_inactive = True, exclude_undue = True) -> Iterable[Dict[str, Any]]:
         LOG.info("Searching for ad files...")

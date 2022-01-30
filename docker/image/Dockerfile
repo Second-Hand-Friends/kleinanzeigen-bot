@@ -6,7 +6,7 @@
 ######################
 # runtime image base
 ######################
-FROM python:3-slim as runtime-base-image
+FROM debian:stable-slim as runtime-base-image
 
 LABEL maintainer="Sebastian Thomschke"
 
@@ -36,25 +36,47 @@ RUN set -eu \
 FROM python:3-slim AS build-image
 
 RUN apt-get update \
- && apt-get install --no-install-recommends -y git \
- && python -m pip install --upgrade pip
+ # install required libraries
+ && apt-get install --no-install-recommends -y \
+    binutils `# required by pyinstaller` \
+    git `# required by pdm to generate app version` \
+    curl xz-utils `# required to install upx` \
+ # install upx
+ # upx is currently not supported on Linux, see https://github.com/pyinstaller/pyinstaller/discussions/6275
+ #&& mkdir /opt/upx \
+ #&& upx_download_url=$(curl -fsSL https://api.github.com/repos/upx/upx/releases/latest | grep browser_download_url | grep amd64_linux.tar.xz | cut "-d\"" -f4) \
+ #&& echo "Downloading [$upx_download_url]..." \
+ #&& curl -fL $upx_download_url | tar Jxv -C /opt/upx --strip-components=1 \
+ # upgrade pip
+ && python -m pip install --upgrade pip \
+ # install pdm
+ && pip install pdm
+
+ENV PATH="/opt/upx:${PATH}"
 
 COPY kleinanzeigen_bot /opt/app/kleinanzeigen_bot
 COPY .git /opt/app/.git
-COPY *.py *.txt *.toml /opt/app/
+COPY README.md pdm.lock pyinstaller.spec pyproject.toml /opt/app/
 
 RUN cd /opt/app \
  && ls -la . \
- && pip install --user . \
- # generates version.py
- && python setup.py --version
+ # https://github.com/python/mypy/issues/11829
+ && pip install -t __pypackages__/3.10/lib git+git://github.com/python/mypy.git@9b3147701f054bf8ef42bd96e33153b05976a5e1  \
+ # https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
+ && pip install -t __pypackages__/3.10/lib selenium \
+ && pdm install \
+ && ls -la kleinanzeigen_bot \
+ && pdm run pyinstaller \
+ && ls -l dist
+
+RUN /opt/app/dist/kleinanzeigen-bot --help
 
 
 ######################
 # final image
 ######################
 FROM runtime-base-image
-COPY --from=build-image /root/.local /root/.local
+COPY --from=build-image /opt/app/dist/kleinanzeigen-bot /opt/kleinanzeigen-bot
 
 ARG BUILD_DATE
 ARG GIT_COMMIT_HASH

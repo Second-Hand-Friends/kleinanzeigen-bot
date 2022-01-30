@@ -2,9 +2,8 @@
 Copyright (C) 2022 Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
-import logging, os, shutil, sys, tempfile
+import logging, os, shutil, sys
 from typing import Any, Callable, Dict, Final, Iterable, Tuple
-from importlib.resources import read_text as get_resource_as_string
 
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
@@ -22,7 +21,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.microsoft import EdgeChromiumDriverManager
 from webdriver_manager.utils import ChromeType
 
-from .utils import ensure, is_frozen, pause
+from .utils import ensure, pause
 
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.selenium_mixin")
 
@@ -33,10 +32,6 @@ class SeleniumMixin:
         self.browser_arguments:Iterable[str] = []
         self.browser_binary_location:str = None
         self.webdriver:WebDriver = None
-
-    def __del__(self):
-        if getattr(self, 'cacertfile', None):
-            os.remove(self.cacertfile)
 
     def create_webdriver_session(self) -> None:
         LOG.info("Creating WebDriver session...")
@@ -67,27 +62,6 @@ class SeleniumMixin:
                 browser_options.binary_location = self.browser_binary_location
                 LOG.info(" -> Chrome binary location: %s", self.browser_binary_location)
             return browser_options
-
-        # if run via py2exe fix resource lookup
-        if is_frozen():
-            import pathlib  # pylint: disable=import-outside-toplevel
-
-            if not os.getenv("REQUESTS_CA_BUNDLE", None) or not os.path.exists(os.getenv("REQUESTS_CA_BUNDLE", None)):
-                with tempfile.NamedTemporaryFile(delete = False) as tmp:
-                    LOG.debug("Writing cacert file to [%s]...", tmp.name)
-                    tmp.write(get_resource_as_string("certifi", "cacert.pem").encode('utf-8'))
-                    self.cacertfile = tmp.name
-                os.environ['REQUESTS_CA_BUNDLE'] = self.cacertfile
-
-            read_text_orig = pathlib.Path.read_text
-
-            def read_text_new(self, encoding = None, errors = None):
-                path = str(self)
-                if "selenium_stealth" in path:
-                    return get_resource_as_string("selenium_stealth", self.name)
-                return read_text_orig(self, encoding, errors)
-
-            pathlib.Path.read_text = read_text_new
 
         # check if a chrome driver is present already
         if shutil.which(DEFAULT_CHROMEDRIVER_PATH):

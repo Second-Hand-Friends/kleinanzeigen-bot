@@ -1,3 +1,6 @@
+# Copyright (C) 2022 Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
 # https://docs.github.com/en/free-pro-team@latest/actions/reference/workflow-syntax-for-github-actions
 name: Build
 
@@ -37,32 +40,34 @@ jobs:
 
     - name: Install python dependencies
       run: |
-         set -eux
+        set -eux
 
-         python --version
+        python --version
 
-         pip install .[dev]
+        python -m pip install --upgrade pip
 
-    - name: python setup.py check
+        pip install pdm
+        pip install pdm-packer
+
+        # https://github.com/python/mypy/issues/11829
+        pip install -t __pypackages__/3.10/lib git+git://github.com/python/mypy.git@9b3147701f054bf8ef42bd96e33153b05976a5e1
+
+        # https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
+        pip install -t __pypackages__/3.10/lib selenium
+
+        pdm install
+
+    - name: Scanning for security issues using bandit
       run: |
-         # https://docs.python.org/3/distutils/apiref.html#module-distutils.command.check
-         python setup.py check --metadata --strict --verbose
-
-    - name: bandit
-      run: |
-         set -eux
-         bandit -c pyproject.toml --exclude '*/.eggs/*' -r .
+        pdm run bandit
 
     - name: pylint
       run: |
-         set -eux
-         pip install pylint
-         pylint kleinanzeigen_bot
+        pdm run pylint
 
     - name: pytest
       run: |
-         set -eux
-         python -m pytest
+        pdm run pytest
 
     - name: run kleinanzeigen_bot
       run: |
@@ -74,9 +79,9 @@ jobs:
 
         set -eux
 
-        python -m kleinanzeigen_bot help
-        python -m kleinanzeigen_bot version
-        python -m kleinanzeigen_bot verify
+        pdm run app help
+        pdm run app version
+        pdm run app verify
 
     - name: "Build docker image"
       if: startsWith(matrix.os, 'linux')
@@ -87,10 +92,44 @@ jobs:
 
         docker run --rm kleinanzeigen-bot/kleinanzeigen-bot help
 
-    - name: py2exe
-      if: startsWith(matrix.os, 'windows')
+    - name: "Install: binutils (strip)"
+      if: startsWith(matrix.os, 'ubuntu')
+      run: sudo apt-get --no-install-recommends install -y binutils
+
+    - name: "Install: UPX"
       run: |
-        python setup.py py2exe
+        set -eu
+        
+        case "${{ matrix.target }}" in
+          macos-*)
+            brew install upx
+            ;;
+          ubuntu-*)
+            mkdir /opt/upx
+            upx_download_url=$(curl -fsSL https://api.github.com/repos/upx/upx/releases/latest | grep browser_download_url | grep amd64_linux.tar.xz | cut "-d\"" -f4)
+            echo "Downloading [$upx_download_url]..."
+            curl -fL $upx_download_url | tar Jxv -C /opt/upx --strip-components=1
+            echo "/opt/upx" >> $GITHUB_PATH
+            ;;
+          windows-*)
+            upx_download_url=$(curl -fsSL https://api.github.com/repos/upx/upx/releases/latest | grep browser_download_url | grep win64.zip | cut "-d\"" -f4)
+            echo "Downloading [$upx_download_url]..."
+            curl -fL -o /tmp/upx.zip $upx_download_url
+  
+            echo "Extracting upx.zip..."
+            mkdir /tmp/upx
+            7z e /tmp/upx.zip -o/tmp/upx *.exe -r
+            echo "$(cygpath -wa /tmp/upx)" >> $GITHUB_PATH
+            ;;
+        esac
+        
+
+    - name: pyinstaller
+      run: |
+        set -eux
+        
+        pdm run pyinstaller
+        
         ls -l dist
 
     - name: run kleinanzeigen_bot.exe
