@@ -11,11 +11,13 @@ _LOCAL/
 kleinanzeigen_bot/version.py
 
 # python
+/__pypackages__
 __pycache__
 /build
 /dist
 /.eggs
 /*.egg-info
+/.pdm.toml
 
 # Eclipse
 /.project

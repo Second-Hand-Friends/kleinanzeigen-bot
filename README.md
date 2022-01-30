@@ -68,12 +68,17 @@ It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.co
    cd kleinanzeigen-bot
    ```
 1. Install the Python dependencies using:
-   ```
-   pip install .
+   ```bash
+   pip install pdm
+
+   # temporary workaround for https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
+   pip install -t __pypackages__/3.10/lib selenium
+
+   pdm install
    ```
 1. Run the app:
    ```
-   python -m kleinanzeigen_bot --help
+   pdm run app --help
    ```
 
 ### Installation using Docker
@@ -243,17 +248,17 @@ updated_on: # set automatically
 
 > Please read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing code. Thank you!
 
-- Installing dev dependencies: `pip install .[dev]`
-- Running unit tests: `python -m pytest` or `pytest`
-- Running linter: `python -m pylint kleinanzeigen_bot` or `pylint kleinanzeigen_bot`
+- Running unit tests: `pdm run pytest`
+- Running linter: `pdm run pylint`
 - Displaying effective version:`python setup.py --version`
-- Creating Windows executable: `python setup.py py2exe`
+- Creating Windows executable: `pdm run pyinstaller`
 - Application bootstrap works like this:
   ```python
-  python -m kleinanzeigen_bot
-  |-> executes 'kleinanzeigen_bot/__main__.py'
-      |-> executes main() function of 'kleinanzeigen_bot/__init__.py'
-          |-> executes KleinanzeigenBot().run()
+  pdm run app
+  |-> executes 'python -m kleinanzeigen_bot'
+      |-> executes 'kleinanzeigen_bot/__main__.py'
+          |-> executes main() function of 'kleinanzeigen_bot/__init__.py'
+              |-> executes KleinanzeigenBot().run()
   ````
 
 
