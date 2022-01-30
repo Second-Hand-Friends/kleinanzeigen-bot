@@ -42,6 +42,11 @@ class SeleniumMixin:
         LOG.info("Creating WebDriver session...")
 
         def init_browser_options(browser_options):
+            if isinstance(browser_options, webdriver.EdgeOptions):
+                browser_options.add_argument("-inprivate")
+            else:
+                browser_options.add_argument("--incognito")
+
             browser_options.add_argument("--disable-crash-reporter")
             browser_options.add_argument("--no-first-run")
             browser_options.add_argument("--no-service-autorun")
