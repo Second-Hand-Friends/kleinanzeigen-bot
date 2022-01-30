@@ -13,6 +13,34 @@ datas = [
     * collect_data_files("selenium_stealth"),  # embeds *.js files
 ]
 
+excluded_modules = [
+    "_aix_support",
+    "argparse",
+    "backports",
+    "bz2",
+    "cryptography.hazmat",
+    "distutils",
+    "doctest",
+    "ftplib",
+    "lzma",
+    "pep517",
+    "pdb",
+    "pip",
+    "pydoc",
+    "pydoc_data",
+    "optparse",
+    "setuptools",
+    "six",
+    "statistics",
+    "test",
+    "unittest",
+    "xml.sax"
+]
+
+from sys import platform
+if platform != "darwin":
+    excluded_modules.append("_osx_support")
+
 block_cipher = None
 
 analysis = Analysis(
@@ -24,30 +52,7 @@ analysis = Analysis(
         hookspath = [],
         hooksconfig = {},
         runtime_hooks = [],
-        excludes = [
-            "_aix_support",
-            "_osx_support",
-            "argparse",
-            "backports",
-            "bz2",
-            "cryptography.hazmat",
-            "distutils",
-            "doctest",
-            "ftplib",
-            "lzma",
-            "pep517",
-            "pdb",
-            "pip",
-            "pydoc",
-            "pydoc_data",
-            "optparse",
-            "setuptools",
-            "six",
-            "statistics",
-            "test",
-            "unittest",
-            "xml.sax"
-        ],
+        excludes = excluded_modules,
         win_no_prefer_redirects = False,
         win_private_assemblies = False,
         cipher = block_cipher,

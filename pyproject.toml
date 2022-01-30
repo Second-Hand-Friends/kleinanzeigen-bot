@@ -67,7 +67,7 @@ dev = [
 [tool.pdm.scripts]
 app = "python -m kleinanzeigen_bot"
 bandit = "bandit -c pyproject.toml -r kleinanzeigen_bot"
-pyinstaller = "pyinstaller pyinstaller.spec --clean"
+pyinstaller = "python -O -m PyInstaller pyinstaller.spec --clean"
 pylint = "pylint kleinanzeigen_bot"
 pytest = "python -m pytest -v"
 

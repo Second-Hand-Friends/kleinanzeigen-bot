@@ -26,28 +26,47 @@ It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.co
   - use globbing (wildcards) to select images from local disk
   - reference categories by name (looked up from [categories.yaml](https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml))
 - logging is configurable and colorized
-- provided as self-contained Windows executable [kleinanzeigen-bot.exe](https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot.exe)
+- provided as self-contained executable for Windows, Linux and macOS
 - source code is pylint checked and uses Python type hints
 - CI builds
 
 
 ## <a name="installation"></a>Installation
 
-### Installation on Windows using self-containing exe
+### Installation using pre-compiled exe
 
 1. The following components need to be installed:
    1. [Chromium](https://www.chromium.org/getting-involved/download-chromium), [Google Chrome](https://www.google.com/chrome/),
       or Chromium based [Microsoft Edge](https://www.microsoft.com/edge) browser
 
 1. Open a command/terminal window
-1. Download the app using
-   ```
-   curl https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot.exe -o kleinanzeigen-bot.exe
-   ```
-1. Run the app:
-   ```
-   kleinanzeigen-bot --help
-   ```
+
+1. Download and run the app by entering the following commands:
+
+   1. On Windows:
+       ```batch
+       curl https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-windows-amd64.exe -o kleinanzeigen-bot.exe
+
+       kleinanzeigen-bot --help
+       ```
+
+   1. On Linux:
+       ```shell
+       curl https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-linux-amd64 -o kleinanzeigen-bot
+
+       chmod 655 kleinanzeigen-bot
+
+       ./kleinanzeigen-bot --help
+       ```
+
+   1. On macOS:
+       ```shell
+       curl https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-darwin-amd64 -o kleinanzeigen-bot
+
+       chmod 655 kleinanzeigen-bot
+
+       ./kleinanzeigen-bot --help
+       ```
 
 ### Installation from source
 
@@ -71,7 +90,7 @@ It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.co
    ```bash
    pip install pdm
 
-   # temporary workaround for https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
+   # temporary workaround for https://github.com/SeleniumHQ/selenium/issues/10022 / https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
    pip install -t __pypackages__/3.10/lib selenium
 
    pdm install
