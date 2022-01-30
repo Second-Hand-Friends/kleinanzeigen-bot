@@ -45,14 +45,14 @@ It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.co
 
    1. On Windows:
        ```batch
-       curl https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-windows-amd64.exe -o kleinanzeigen-bot.exe
+       curl -L https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-windows-amd64.exe -o kleinanzeigen-bot.exe
 
        kleinanzeigen-bot --help
        ```
 
    1. On Linux:
        ```shell
-       curl https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-linux-amd64 -o kleinanzeigen-bot
+       curl -L https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-linux-amd64 -o kleinanzeigen-bot
 
        chmod 655 kleinanzeigen-bot
 
@@ -61,7 +61,7 @@ It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.co
 
    1. On macOS:
        ```shell
-       curl https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-darwin-amd64 -o kleinanzeigen-bot
+       curl -L https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-darwin-amd64 -o kleinanzeigen-bot
 
        chmod 655 kleinanzeigen-bot
 
