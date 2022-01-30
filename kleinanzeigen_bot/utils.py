@@ -110,8 +110,11 @@ def on_sigint(_sig:int, _frame) -> None:
     sys.exit(0)
 
 
-def pause(min_ms:int = 200, max_ms:int = None) -> None:
-    duration = secrets.randbelow((max_ms is None and 2000 or max_ms) - min_ms) + min_ms
+def pause(min_ms:int = 200, max_ms:int = 2000) -> None:
+    if min_ms == max_ms:
+        duration = min_ms
+    else:
+        duration = secrets.randbelow(max_ms - min_ms) + min_ms
     LOG.log(logging.INFO if duration > 1500 else logging.DEBUG, " ... pausing for %d ms ...", duration)
     time.sleep(duration / 1000)
 
