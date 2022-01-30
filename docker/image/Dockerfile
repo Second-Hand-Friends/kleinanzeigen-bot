@@ -62,7 +62,7 @@ RUN cd /opt/app \
  && ls -la . \
  # https://github.com/python/mypy/issues/11829
  && pip install -t __pypackages__/3.10/lib git+git://github.com/python/mypy.git@9b3147701f054bf8ef42bd96e33153b05976a5e1  \
- # https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
+ # https://github.com/SeleniumHQ/selenium/issues/10022 / https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
  && pip install -t __pypackages__/3.10/lib selenium \
  && pdm install \
  && ls -la kleinanzeigen_bot \
