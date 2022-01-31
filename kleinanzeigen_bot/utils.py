@@ -27,7 +27,7 @@ def is_frozen() -> bool:
     >>> is_frozen()
     False
     """
-    return getattr(sys, 'frozen', False)
+    return getattr(sys, "frozen", False)
 
 
 def apply_defaults(target:Dict[Any, Any], defaults:Dict[Any, Any], ignore = lambda _k, _v: False, override = lambda _k, _v: False) -> Dict[Any, Any]:
@@ -76,7 +76,7 @@ def safe_get(a_map:Dict[Any, Any], *keys:str) -> Any:
 def configure_console_logging() -> None:
     stdout_log = logging.StreamHandler(sys.stderr)
     stdout_log.setLevel(logging.DEBUG)
-    stdout_log.setFormatter(coloredlogs.ColoredFormatter('[%(levelname)s] %(message)s'))
+    stdout_log.setFormatter(coloredlogs.ColoredFormatter("[%(levelname)s] %(message)s"))
     stdout_log.addFilter(type("", (logging.Filter,), {
         "filter": lambda rec: rec.levelno <= logging.INFO
     }))
@@ -84,7 +84,7 @@ def configure_console_logging() -> None:
 
     stderr_log = logging.StreamHandler(sys.stderr)
     stderr_log.setLevel(logging.WARNING)
-    stderr_log.setFormatter(coloredlogs.ColoredFormatter('[%(levelname)s] %(message)s'))
+    stderr_log.setFormatter(coloredlogs.ColoredFormatter("[%(levelname)s] %(message)s"))
     LOG_ROOT.addHandler(stderr_log)
 
 
@@ -106,7 +106,7 @@ def on_exit() -> None:
 
 
 def on_sigint(_sig:int, _frame) -> None:
-    LOG.warning('Aborted on user request.')
+    LOG.warning("Aborted on user request.")
     sys.exit(0)
 
 
@@ -134,7 +134,7 @@ def pluralize(word:str, count:Union[int, Iterable], prefix = True):
         count = len(count)
     plural = pluralize.inflect.plural_noun(word, count)
     if prefix:
-        return f'{count} {plural}'
+        return f"{count} {plural}"
     return plural
 
 
