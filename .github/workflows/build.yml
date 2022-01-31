@@ -150,7 +150,7 @@ jobs:
 
         bash docker/build-image.sh
 
-        docker run --rm kleinanzeigen-bot/kleinanzeigen-bot help
+        docker run --rm second-hand-friends/kleinanzeigen-bot help
 
 
   ###########################################################
