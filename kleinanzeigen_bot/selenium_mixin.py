@@ -49,8 +49,8 @@ class SeleniumMixin:
                 LOG.info(" -> Custom chrome argument: %s", chrome_option)
                 browser_options.add_argument(chrome_option)
 
-            browser_options.add_experimental_option('excludeSwitches', ['enable-automation'])
-            browser_options.add_experimental_option('useAutomationExtension', False)
+            browser_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            browser_options.add_experimental_option("useAutomationExtension", False)
             browser_options.add_experimental_option("prefs", {
                 "credentials_enable_service": False,
                 "profile.password_manager_enabled": False,
