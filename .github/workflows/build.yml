@@ -51,7 +51,8 @@ jobs:
 
         python --version
 
-        python -m pip install --upgrade pip
+        # don't upgrade PIP for now: https://github.com/pdm-project/pdm/issues/874
+        # python -m pip install --upgrade pip
 
         pip install pdm
 
