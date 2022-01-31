@@ -62,7 +62,7 @@ RUN cd /opt/app \
  && ls -la . \
  # https://github.com/SeleniumHQ/selenium/issues/10022 / https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
  && pip install -t __pypackages__/3.10/lib selenium \
- && pdm install \
+ && pdm install -v \
  && ls -la kleinanzeigen_bot \
  && pdm run pyinstaller \
  && ls -l dist
