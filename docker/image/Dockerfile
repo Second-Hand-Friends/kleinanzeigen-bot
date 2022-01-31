@@ -39,8 +39,8 @@ RUN apt-get update \
  # install required libraries
  && apt-get install --no-install-recommends -y \
     binutils `# required by pyinstaller` \
+    #curl xz-utils `# required to install upx` \
     git `# required by pdm to generate app version` \
-    curl xz-utils `# required to install upx` \
  #
  # install upx
  # upx is currently not supported on Linux, see https://github.com/pyinstaller/pyinstaller/discussions/6275
@@ -68,7 +68,7 @@ RUN cd /opt/app \
  && pip install -t __pypackages__/3.10/lib selenium \
  && pdm install -v \
  && ls -la kleinanzeigen_bot \
- && pdm run pyinstaller \
+ && pdm run compile \
  && ls -l dist
 
 RUN /opt/app/dist/kleinanzeigen-bot --help

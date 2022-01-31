@@ -268,10 +268,9 @@ updated_on: # set automatically
 
 > Please read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing code. Thank you!
 
-- Running unit tests: `pdm run pytest`
-- Running linter: `pdm run pylint`
-- Displaying effective version:`python setup.py --version`
-- Creating Windows executable: `pdm run pyinstaller`
+- Running unit tests: `pdm run test`
+- Running linter: `pdm run lint`
+- Creating platform-specific executable: `pdm run compile`
 - Application bootstrap works like this:
   ```python
   pdm run app

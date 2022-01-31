@@ -61,17 +61,17 @@ jobs:
 
         pdm install -v
 
-    - name: Scanning for security issues using bandit
+    - name: run security scan
       run: |
-        pdm run bandit
+        pdm run scan
 
-    - name: pylint
+    - name: check code style
       run: |
-        pdm run pylint
+        pdm run lint
 
-    - name: pytest
+    - name: run unit tests
       run: |
-        pdm run pytest
+        pdm run test
 
     - name: run kleinanzeigen_bot
       run: |
@@ -118,11 +118,11 @@ jobs:
             ;;
         esac
         
-    - name: pyinstaller
+    - name: build self-contained executable
       run: |
         set -eux
         
-        pdm run pyinstaller
+        pdm run compile
         
         ls -l dist
 
