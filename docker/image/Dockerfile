@@ -41,14 +41,18 @@ RUN apt-get update \
     binutils `# required by pyinstaller` \
     git `# required by pdm to generate app version` \
     curl xz-utils `# required to install upx` \
+ #
  # install upx
  # upx is currently not supported on Linux, see https://github.com/pyinstaller/pyinstaller/discussions/6275
  #&& mkdir /opt/upx \
  #&& upx_download_url=$(curl -fsSL https://api.github.com/repos/upx/upx/releases/latest | grep browser_download_url | grep amd64_linux.tar.xz | cut "-d\"" -f4) \
  #&& echo "Downloading [$upx_download_url]..." \
  #&& curl -fL $upx_download_url | tar Jxv -C /opt/upx --strip-components=1 \
+ #
  # upgrade pip
- && python -m pip install --upgrade pip \
+ # don't upgrade PIP for now: https://github.com/pdm-project/pdm/issues/874
+ #&& python -m pip install --upgrade pip \
+ #
  # install pdm
  && pip install pdm
 
