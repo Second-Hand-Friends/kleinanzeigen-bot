@@ -35,9 +35,9 @@ dependencies = [
     "webdriver_manager~=3.5"]
 
 [project.urls]
-homepage = "https://github.com/kleinanzeigen-bot/kleinanzeigen-bot"
-repository = "https://github.com/kleinanzeigen-bot/kleinanzeigen-bot"
-documentation = "https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/README.md"
+homepage = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot"
+repository = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot"
+documentation = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/README.md"
 
 [project.optional-dependencies]
 

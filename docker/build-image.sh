@@ -38,7 +38,7 @@ cp -f "$project_root/.gitignore" "$project_root/.dockerignore"
 #################################################
 # specify target docker registry/repo
 #################################################
-image_repo=kleinanzeigen-bot/kleinanzeigen-bot
+image_repo=second-hand-friends/kleinanzeigen-bot
 image_name=$image_repo:latest
 
 

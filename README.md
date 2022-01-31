@@ -1,8 +1,8 @@
 # kleinanzeigen-bot
 
-[![Build Status](https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/workflows/Build/badge.svg "GitHub Actions")](https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/actions?query=workflow%3A%22Build%22)
-[![License](https://img.shields.io/github/license/kleinanzeigen-bot/kleinanzeigen-bot.svg?color=blue)](LICENSE.txt)
-[![Maintainability](https://api.codeclimate.com/v1/badges/8d488c3a229bfb5091a3/maintainability)](https://codeclimate.com/github/kleinanzeigen-bot/kleinanzeigen-bot/maintainability)
+[![Build Status](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/workflows/Build/badge.svg "GitHub Actions")](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/actions?query=workflow%3A%22Build%22)
+[![License](https://img.shields.io/github/license/Second-Hand-Friends/kleinanzeigen-bot.svg?color=blue)](LICENSE.txt)
+[![Maintainability](https://api.codeclimate.com/v1/badges/8d488c3a229bfb5091a3/maintainability)](https://codeclimate.com/github/Second-Hand-Friends/kleinanzeigen-bot/maintainability)
 
 **Feedback and high-quality pull requests are  highly welcome!**
 
@@ -24,7 +24,7 @@ It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.co
   - use YAML or JSON for config files
   - one config file per ad
   - use globbing (wildcards) to select images from local disk
-  - reference categories by name (looked up from [categories.yaml](https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml))
+  - reference categories by name (looked up from [categories.yaml](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml))
 - logging is configurable and colorized
 - provided as self-contained executable for Windows, Linux and macOS
 - source code is pylint checked and uses Python type hints
@@ -45,14 +45,14 @@ It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.co
 
    1. On Windows:
        ```batch
-       curl -L https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-windows-amd64.exe -o kleinanzeigen-bot.exe
+       curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-windows-amd64.exe -o kleinanzeigen-bot.exe
 
        kleinanzeigen-bot --help
        ```
 
    1. On Linux:
        ```shell
-       curl -L https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-linux-amd64 -o kleinanzeigen-bot
+       curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-linux-amd64 -o kleinanzeigen-bot
 
        chmod 655 kleinanzeigen-bot
 
@@ -61,7 +61,7 @@ It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.co
 
    1. On macOS:
        ```shell
-       curl -L https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-darwin-amd64 -o kleinanzeigen-bot
+       curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-darwin-amd64 -o kleinanzeigen-bot
 
        chmod 655 kleinanzeigen-bot
 
@@ -80,7 +80,7 @@ It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.co
 1. Open a command/terminal window
 1. Clone the repo using
    ```
-   git clone https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/
+   git clone https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
    ```
 1. Change into the directory:
    ```
@@ -110,7 +110,7 @@ It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.co
 
 1. Clone the repo using
    ```
-   git clone https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/
+   git clone https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
    ```
 
 1. Open the cloned directory in a Bash terminal window and navigate to the [docker](docker) subdirectory
@@ -122,7 +122,7 @@ It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.co
    ```
    $ docker image ls
    REPOSITORY                            TAG      IMAGE ID       CREATED       SIZE
-   kleinanzeigen-bot/kleinanzeigen-bot   latest   c31fd256eeea   1 minute ago  590MB
+   second-hand-friends/kleinanzeigen-bot latest   c31fd256eeea   1 minute ago  590MB
    python                                3-slim   2052f0475488   5 days ago    123MB
    ```
 
@@ -141,7 +141,7 @@ It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.co
      --shm-size=256m \
      -e DISPLAY=$X11_DISPLAY \
      -v $DATA_DIR:/mnt/data \
-     kleinanzeigen-bot/kleinanzeigen-bot \
+     second-hand-friends/kleinanzeigen-bot \
      --help
    ```
 
@@ -197,7 +197,7 @@ ad_defaults:
   republication_interval: # every X days ads should be re-published
 
 # additional name to category ID mappings, see default list at
-# https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml
+# https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml
 categories:
  #Notebooks: 161/27
  #PCs: 161/228
@@ -234,7 +234,7 @@ type: # one of: OFFER, WANTED
 title:
 description: # can be multiline, see syntax here https://yaml-multiline.info/
 
-# built-in category name as specified in https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml
+# built-in category name as specified in https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml
 # or custom category name as specified in config.yaml
 # or category ID (e.g. 161/27)
 category: Notebooks
