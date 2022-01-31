@@ -12,11 +12,12 @@
 1. [Development Notes](#development)
 1. [License](#license)
 
+
 ## <a name="about"></a>About
 
 **kleinanzeigen-bot** is a console based application to ease publishing of ads to ebay-kleinanzeigen.de.
 
-It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.com/AnzeigenOrg/ebayKleinanzeigen) with the following advantages:
+It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https://github.com/Second-Hand-Friends/ebayKleinanzeigen) with the following advantages:
 - supports Microsoft Edge browser (Chromium based)
 - compatible chromedriver is installed automatically
 - better captcha handling
