@@ -123,9 +123,9 @@ jobs:
     - name: build self-contained executable
       run: |
         set -eux
-        
+
         pdm run compile
-        
+
         ls -l dist
 
     - name: run self-contained executable
@@ -150,6 +150,17 @@ jobs:
         bash docker/build-image.sh
 
         docker run --rm second-hand-friends/kleinanzeigen-bot help
+
+    - name: "Publish docker image"
+      if: startsWith(matrix.os, 'ubuntu') && github.ref == 'refs/heads/main'
+      run: |
+        set -eux
+
+        echo "${{ github.token }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
+
+        image_name="second-hand-friends/kleinanzeigen-bot"
+        docker image tag $image_name ghcr.io/$image_name
+        docker push ghcr.io/$image_name
 
 
   ###########################################################
