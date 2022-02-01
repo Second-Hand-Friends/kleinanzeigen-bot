@@ -143,7 +143,7 @@ def load_dict(filepath:str, content_label:str = "", must_exist = True) -> Option
     LOG.info("Loading %s[%s]...", content_label and content_label + " from " or "", filepath)
 
     _, file_ext = os.path.splitext(filepath)
-    if not file_ext in [ ".json", ".yaml" , ".yml" ]:
+    if file_ext not in [".json", ".yaml", ".yml"]:
         raise ValueError(f'Unsupported file type. The file name "{filepath}" must end with *.json, *.yaml, or *.yml')
 
     if not os.path.exists(filepath):
@@ -159,7 +159,7 @@ def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "
     LOG.debug("Loading %s[%s.%s]...", content_label and content_label + " from " or "", module.__name__, filename)
 
     _, file_ext = os.path.splitext(filename)
-    if not file_ext in [ ".json", ".yaml" , ".yml" ]:
+    if file_ext not in [".json", ".yaml", ".yml"]:
         raise ValueError(f'Unsupported file type. The file name "{filename}" must end with *.json, *.yaml, or *.yml')
 
     try:

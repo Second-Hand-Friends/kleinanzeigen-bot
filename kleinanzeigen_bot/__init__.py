@@ -354,7 +354,7 @@ class KleinanzeigenBot(SeleniumMixin):
         try:
             self.web_find(By.XPATH, "//*[@id='postad-category-path'][text()]")
             is_category_auto_selected = True
-        except:
+        except BaseException:
             is_category_auto_selected = False
 
         if ad_cfg["category"]:
