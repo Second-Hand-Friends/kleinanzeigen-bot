@@ -69,6 +69,32 @@ It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https:/
        ./kleinanzeigen-bot --help
        ```
 
+### Installation using Docker
+
+1. The following components need to be installed:
+   1. [Docker](https://www.docker.com/)
+   1. [Bash](https://www.gnu.org/software/bash/) (on Windows e.g. via [Cygwin](https://www.cygwin.com/), [MSys2](https://www.msys2.org/) or git)
+   1. [X11 - X Window System](https://en.wikipedia.org/wiki/X_Window_System) display server (on Windows e.g. https://github.com/P-St/Portable-X-Server/releases/latest)
+
+**Running the docker image:**
+1. Ensure the X11 Server is running
+
+1. Run the docker image:
+
+   ```bash
+   X11_DISPLAY=192.168.50.34:0.0 # replace with IP address of workstation where X11 server is running
+
+   DATA_DIR=/var/opt/data/kleinanzeigen-bot # path to config
+
+   # /mnt/data is the container's default working directory
+   docker run --rm --interactive --tty \
+     --shm-size=256m \
+     -e DISPLAY=$X11_DISPLAY \
+     -v $DATA_DIR:/mnt/data \
+     ghcr.io/second-hand-friends/kleinanzeigen-bot \
+     --help
+   ```
+
 ### Installation from source
 
 1. The following components need to be installed:
@@ -101,7 +127,7 @@ It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https:/
    pdm run app --help
    ```
 
-### Installation using Docker
+### Installation from source using Docker
 
 1. The following components need to be installed:
    1. [Docker](https://www.docker.com/)

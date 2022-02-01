@@ -63,13 +63,3 @@ docker build "$project_root" \
    --build-arg GIT_REPO_URL="$(git config --get remote.origin.url)" \
    -t $image_name \
    "$@"
-
-
-#################################################
-# push image with tags to remote docker image registry
-#################################################
-if [[ "${DOCKER_PUSH:-0}" == "1" ]]; then
-   docker image tag $image_name docker.io/$image_name
-
-   docker push docker.io/$image_name
-fi
