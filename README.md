@@ -268,6 +268,7 @@ updated_on: # set automatically
 
 > Please read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing code. Thank you!
 
+- Format source code: `pdm run format`
 - Running unit tests: `pdm run test`
 - Running linter: `pdm run lint`
 - Creating platform-specific executable: `pdm run compile`

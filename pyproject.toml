@@ -32,7 +32,8 @@ dependencies = [
     "pywin32==303; sys_platform == 'win32'",
     "selenium~=4.1",
     "selenium_stealth~=1.0",
-    "webdriver_manager~=3.5"]
+    "webdriver_manager~=3.5"
+]
 
 [project.urls]
 homepage = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot"
@@ -56,6 +57,7 @@ version = {use_scm = true}
 
 [tool.pdm.dev-dependencies]
 dev = [
+    "autopep8~=1.6.0",
     "bandit~=1.7",
     "pytest~=6.2",
     "pyinstaller~=4.8",
@@ -67,19 +69,40 @@ dev = [
 [tool.pdm.scripts]
 app = "python -m kleinanzeigen_bot"
 compile = "python -O -m PyInstaller pyinstaller.spec --clean"
+format = "autopep8 --recursive --in-place kleinanzeigen_bot tests"
 lint = "pylint kleinanzeigen_bot"
 scan = "bandit -c pyproject.toml -r kleinanzeigen_bot"
 test = "python -m pytest -v"
 
 
 #####################
-# bandit https://github.com/PyCQA/bandit
+# autopep8
+# https://pypi.org/project/autopep8/
+# https://github.com/hhatto/autopep8
+#####################
+[tool.autopep8]
+max_line_length = 160
+ignore = [ # https://github.com/hhatto/autopep8#features
+    "E124", # Don't change indention of multi-line statements
+    "E128", # Don't change indention of multi-line statements
+    "E231", # Don't add whitespace after colon (:) on type declaration
+    "E251", # Don't remove whitespace around parameter '=' sign.
+    "E401" # Don't put imports on separate lines
+]
+aggressive = 3
+
+#####################
+# bandit
+# https://pypi.org/project/bandit/
+# https://github.com/PyCQA/bandit
 #####################
 [tool.bandit]
 
 
 #####################
 # pylint
+# https://pypi.org/project/pylint/
+# https://github.com/PyCQA/pylint
 #####################
 [tool.pylint.master]
 extension-pkg-whitelist = "win32api"
@@ -120,6 +143,7 @@ max-statements = 70
 
 #####################
 # pytest
+# https://pypi.org/project/pytest/
 #####################
 [tool.pytest.ini_options]
 # https://docs.pytest.org/en/stable/reference.html#confval-addopts
