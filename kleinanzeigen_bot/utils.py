@@ -4,8 +4,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 import copy, json, logging, os, secrets, sys, traceback, time
 from importlib.resources import read_text as get_resource_as_string
+from collections.abc import Iterable
 from types import ModuleType
-from typing import Any, Dict, Final, Iterable, Optional, Union
+from typing import Any, Final
 
 import coloredlogs, inflect
 from ruamel.yaml import YAML
@@ -30,7 +31,7 @@ def is_frozen() -> bool:
     return getattr(sys, "frozen", False)
 
 
-def apply_defaults(target:Dict[Any, Any], defaults:Dict[Any, Any], ignore = lambda _k, _v: False, override = lambda _k, _v: False) -> Dict[Any, Any]:
+def apply_defaults(target:dict[Any, Any], defaults:dict[Any, Any], ignore = lambda _k, _v: False, override = lambda _k, _v: False) -> dict[Any, Any]:
     """
     >>> apply_defaults({}, {"foo": "bar"})
     {'foo': 'bar'}
@@ -47,17 +48,16 @@ def apply_defaults(target:Dict[Any, Any], defaults:Dict[Any, Any], ignore = lamb
     """
     for key, default_value in defaults.items():
         if key in target:
-            if isinstance(target[key], Dict) and isinstance(default_value, Dict):
+            if isinstance(target[key], dict) and isinstance(default_value, dict):
                 apply_defaults(target[key], default_value, ignore = ignore)
             elif override(key, target[key]):
                 target[key] = copy.deepcopy(default_value)
-        else:
-            if not ignore(key, default_value):
-                target[key] = copy.deepcopy(default_value)
+        elif not ignore(key, default_value):
+            target[key] = copy.deepcopy(default_value)
     return target
 
 
-def safe_get(a_map:Dict[Any, Any], *keys:str) -> Any:
+def safe_get(a_map:dict[Any, Any], *keys:str) -> Any:
     """
     >>> safe_get({"foo": {}}, "foo", "bar") is None
     True
@@ -119,7 +119,7 @@ def pause(min_ms:int = 200, max_ms:int = 2000) -> None:
     time.sleep(duration / 1000)
 
 
-def pluralize(word:str, count:Union[int, Iterable], prefix = True):
+def pluralize(word:str, count:int | Iterable, prefix = True):
     """
     >>> pluralize("field", 1)
     '1 field'
@@ -138,7 +138,7 @@ def pluralize(word:str, count:Union[int, Iterable], prefix = True):
     return plural
 
 
-def load_dict(filepath:str, content_label:str = "", must_exist = True) -> Optional[Dict[str, Any]]:
+def load_dict(filepath:str, content_label:str = "", must_exist = True) -> dict[str, Any] | None:
     filepath = os.path.abspath(filepath)
     LOG.info("Loading %s[%s]...", content_label and content_label + " from " or "", filepath)
 
@@ -155,7 +155,7 @@ def load_dict(filepath:str, content_label:str = "", must_exist = True) -> Option
         return json.load(file) if filepath.endswith(".json") else YAML().load(file)
 
 
-def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "", must_exist = True) -> Optional[Dict[str, Any]]:
+def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "", must_exist = True) -> dict[str, Any] | None:
     LOG.debug("Loading %s[%s.%s]...", content_label and content_label + " from " or "", module.__name__, filename)
 
     _, file_ext = os.path.splitext(filename)
@@ -172,7 +172,7 @@ def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "
     return json.loads(content) if filename.endswith(".json") else YAML().load(content)
 
 
-def save_dict(filepath:str, content:Dict[str, Any]) -> None:
+def save_dict(filepath:str, content:dict[str, Any]) -> None:
     filepath = os.path.abspath(filepath)
     LOG.info("Saving [%s]...", filepath)
     with open(filepath, "w", encoding = "utf-8") as file:

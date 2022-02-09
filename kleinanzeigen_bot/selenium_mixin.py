@@ -3,7 +3,8 @@ Copyright (C) 2022 Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 import logging, os, shutil, sys
-from typing import Any, Callable, Dict, Final, Iterable, Tuple
+from collections.abc import Callable, Iterable
+from typing import Any, Final
 
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
@@ -107,7 +108,7 @@ class SeleniumMixin:
 
         LOG.info("New WebDriver session is: %s %s", self.webdriver.session_id, self.webdriver.command_executor._url)  # pylint: disable=protected-access
 
-    def get_browser_version(self, executable_path: str) -> Tuple[ChromeType, str]:
+    def get_browser_version(self, executable_path: str) -> tuple[ChromeType, str]:
         if sys.platform == "win32":
             import win32api  # pylint: disable=import-outside-toplevel,import-error
             # pylint: disable=no-member
@@ -136,7 +137,7 @@ class SeleniumMixin:
             return (ChromeType.MSEDGE, version)
         return (ChromeType.GOOGLE, version)
 
-    def get_browser_version_from_os(self) -> Tuple[ChromeType, str]:
+    def get_browser_version_from_os(self) -> tuple[ChromeType, str]:
         version = ChromeDriverManagerUtils.get_browser_version_from_os(ChromeType.CHROMIUM)
         if version != "UNKNOWN":
             return (ChromeType.CHROMIUM, version)
@@ -211,7 +212,7 @@ class SeleniumMixin:
         WebDriverWait(self.webdriver, timeout).until(lambda _: self.web_execute("return document.readyState") == "complete")
 
     # pylint: disable=dangerous-default-value
-    def web_request(self, url:str, method:str = "GET", valid_response_codes:Iterable[int] = [200], headers:Dict[str, str] = None) -> Dict[str, Any]:
+    def web_request(self, url:str, method:str = "GET", valid_response_codes:Iterable[int] = [200], headers:dict[str, str] = None) -> dict[str, Any]:
         method = method.upper()
         LOG.debug(" -> HTTP %s [%s]...", method, url)
         response = self.webdriver.execute_async_script(f"""

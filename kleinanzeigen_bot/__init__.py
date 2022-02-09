@@ -3,10 +3,11 @@ Copyright (C) 2022 Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 import atexit, copy, getopt, glob, json, logging, os, signal, sys, textwrap, time, urllib
+from collections.abc import Iterable
 from datetime import datetime
 import importlib.metadata
 from logging.handlers import RotatingFileHandler
-from typing import Any, Dict, Final, Iterable
+from typing import Any, Final
 
 from ruamel.yaml import YAML
 from selenium.common.exceptions import NoSuchElementException
@@ -29,10 +30,10 @@ class KleinanzeigenBot(SeleniumMixin):
 
         self.root_url = "https://www.ebay-kleinanzeigen.de"
 
-        self.config:Dict[str, Any] = {}
+        self.config:dict[str, Any] = {}
         self.config_file_path = os.path.join(os.getcwd(), "config.yaml")
 
-        self.categories:Dict[str, str] = {}
+        self.categories:dict[str, str] = {}
 
         self.file_log:logging.FileHandler = None
         if is_frozen():
@@ -67,15 +68,15 @@ class KleinanzeigenBot(SeleniumMixin):
             case "publish":
                 self.configure_file_logging()
                 self.load_config()
-                ads = self.load_ads()
-                if len(ads) == 0:
-                    LOG.info("############################################")
-                    LOG.info("No ads to (re-)publish found.")
-                    LOG.info("############################################")
-                else:
+                if ads := self.load_ads():
                     self.create_webdriver_session()
                     self.login()
                     self.publish_ads(ads)
+                else:
+                    LOG.info("############################################")
+                    LOG.info("No ads to (re-)publish found.")
+                    LOG.info("############################################")
+
             case _:
                 LOG.error("Unknown command: %s", self.command)
                 sys.exit(2)
@@ -145,7 +146,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
         LOG.info("App version: %s", self.get_version())
 
-    def load_ads(self, exclude_inactive = True, exclude_undue = True) -> Iterable[Dict[str, Any]]:
+    def load_ads(self, exclude_inactive = True, exclude_undue = True) -> Iterable[dict[str, Any]]:
         LOG.info("Searching for ad files...")
 
         ad_files = set()
@@ -222,7 +223,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 for image_pattern in ad_cfg["images"]:
                     for image_file in glob.glob(image_pattern, root_dir = os.path.dirname(ad_file), recursive = True):
                         _, image_file_ext = os.path.splitext(image_file)
-                        ensure(image_file_ext.lower() in (".gif", ".jpg", ".jpeg", ".png"), f"Unsupported image file type [{image_file}]")
+                        ensure(image_file_ext.lower() in {".gif", ".jpg", ".jpeg", ".png"}, f"Unsupported image file type [{image_file}]")
                         if os.path.isabs(image_file):
                             images.add(image_file)
                         else:
@@ -290,7 +291,7 @@ class KleinanzeigenBot(SeleniumMixin):
         self.web_await(lambda _: self.webdriver.find_element(By.ID, "recaptcha-anchor").get_attribute("aria-checked") == "true", timeout = 5 * 60)
         self.webdriver.switch_to.default_content()
 
-    def delete_ad(self, ad_cfg: Dict[str, Any]) -> bool:
+    def delete_ad(self, ad_cfg: dict[str, Any]) -> bool:
         LOG.info("Deleting ad '%s' if already present...", ad_cfg["title"])
 
         self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
@@ -314,7 +315,7 @@ class KleinanzeigenBot(SeleniumMixin):
         ad_cfg["id"] = None
         return True
 
-    def publish_ads(self, ad_cfgs:Iterable[Dict[str, Any]]) -> None:
+    def publish_ads(self, ad_cfgs:Iterable[dict[str, Any]]) -> None:
         count = 0
 
         for (ad_file, ad_cfg, ad_cfg_orig) in ad_cfgs:
@@ -327,7 +328,7 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info("(Re-)published %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    def publish_ad(self, ad_file, ad_cfg: Dict[str, Any], ad_cfg_orig: Dict[str, Any]) -> None:
+    def publish_ad(self, ad_file, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any]) -> None:
         self.delete_ad(ad_cfg)
 
         LOG.info("Publishing ad '%s'...", ad_cfg["title"])
