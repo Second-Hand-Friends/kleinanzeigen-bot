@@ -76,7 +76,14 @@ jobs:
 
     - name: run unit tests
       run: |
-        pdm run test
+        case "${{ matrix.os }}" in
+           ubuntu-*) 
+              sudo apt-get install -o Acquire::Retries=3 --no-install-recommends -y xvfb
+              xvfb-run pdm run test
+              ;;
+           *) pdm run test
+              ;;
+        esac
 
     - name: run kleinanzeigen_bot
       run: |
