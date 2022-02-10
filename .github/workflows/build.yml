@@ -97,31 +97,20 @@ jobs:
       run: sudo apt-get --no-install-recommends install -y binutils
 
     - name: "Install: UPX"
+      if: startsWith(matrix.os, 'windows')
       run: |
         set -eu
-        
-        case "${{ matrix.target }}" in
-          macos-*)
-            brew install upx
-            ;;
-          ubuntu-*)
-            mkdir /opt/upx
-            upx_download_url=$(curl -fsSL https://api.github.com/repos/upx/upx/releases/latest | grep browser_download_url | grep amd64_linux.tar.xz | cut "-d\"" -f4)
-            echo "Downloading [$upx_download_url]..."
-            curl -fL $upx_download_url | tar Jxv -C /opt/upx --strip-components=1
-            echo "/opt/upx" >> $GITHUB_PATH
-            ;;
-          windows-*)
-            upx_download_url=$(curl -fsSL https://api.github.com/repos/upx/upx/releases/latest | grep browser_download_url | grep win64.zip | cut "-d\"" -f4)
-            echo "Downloading [$upx_download_url]..."
-            curl -fL -o /tmp/upx.zip $upx_download_url
-  
-            echo "Extracting upx.zip..."
-            mkdir /tmp/upx
-            7z e /tmp/upx.zip -o/tmp/upx *.exe -r
-            echo "$(cygpath -wa /tmp/upx)" >> $GITHUB_PATH
-            ;;
-        esac
+
+        upx_download_url=$(curl -fsSL https://api.github.com/repos/upx/upx/releases/latest | grep browser_download_url | grep win64.zip | cut "-d\"" -f4)
+        echo "Downloading [$upx_download_url]..."
+        curl -fL -o /tmp/upx.zip $upx_download_url
+
+        echo "Extracting upx zip..."
+        mkdir /tmp/upx
+        7z e /tmp/upx.zip -o/tmp/upx *.exe -r
+        echo "$(cygpath -wa /tmp/upx)" >> $GITHUB_PATH
+
+        /tmp/upx/upx.exe --version
         
     - name: build self-contained executable
       run: |
