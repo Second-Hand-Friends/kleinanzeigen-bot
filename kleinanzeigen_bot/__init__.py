@@ -43,6 +43,7 @@ class KleinanzeigenBot(SeleniumMixin):
         self.log_file_path = os.path.join(os.getcwd(), f"{log_file_basename}.log")
 
         self.command = "help"
+        self.force_mode = False
 
     def __del__(self):
         if self.file_log:
@@ -68,7 +69,7 @@ class KleinanzeigenBot(SeleniumMixin):
             case "publish":
                 self.configure_file_logging()
                 self.load_config()
-                if ads := self.load_ads():
+                if ads := self.load_ads(exclude_undue = not self.force_mode):
                     self.create_webdriver_session()
                     self.login()
                     self.publish_ads(ads)
@@ -90,7 +91,7 @@ class KleinanzeigenBot(SeleniumMixin):
             exe = "python -m kleinanzeigen_bot"
 
         print(textwrap.dedent(f"""\
-            Usage: {exe} COMMAND [-v|--verbose] [--config=<PATH>] [--logfile=<PATH>]
+            Usage: {exe} COMMAND [--config=<PATH>] [--force] [--logfile=<PATH>] [-v|--verbose]
 
             Commands:
               publish - (re-)publishes ads
@@ -98,11 +99,17 @@ class KleinanzeigenBot(SeleniumMixin):
               --
               help    - displays this help (default command)
               version - displays the application version
+
+            Flags:
+              --config=<PATH>  - path to the config YAML or JSON file (default: ./config.yaml)
+              --force          - republish all ads ignoring republication_interval
+              --logfile=<PATH> - path to the logfile (default: ./kleinanzeigen-bot.log)
+              -v, --verbose    - enables verbose output - only useful when troubleshooting issues
         """))
 
     def parse_args(self, args:Iterable[str]) -> None:
         try:
-            options, arguments = getopt.gnu_getopt(args[1:], "hv", ["help", "verbose", "logfile=", "config="])  # pylint: disable=unused-variable
+            options, arguments = getopt.gnu_getopt(args[1:], "hv", ["help", "verbose", "force", "logfile=", "config="])  # pylint: disable=unused-variable
         except getopt.error as ex:
             LOG.error(ex.msg)
             LOG.error("Use --help to display available options")
@@ -120,6 +127,8 @@ class KleinanzeigenBot(SeleniumMixin):
                         self.log_file_path = os.path.abspath(value)
                     else:
                         self.log_file_path = None
+                case "--force":
+                    self.force_mode = True
                 case "-v" | "--verbose":
                     LOG.setLevel(logging.DEBUG)
 
@@ -146,7 +155,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
         LOG.info("App version: %s", self.get_version())
 
-    def load_ads(self, exclude_inactive = True, exclude_undue = True) -> Iterable[dict[str, Any]]:
+    def load_ads(self, *, exclude_inactive = True, exclude_undue = True) -> Iterable[dict[str, Any]]:
         LOG.info("Searching for ad files...")
 
         ad_files = set()
