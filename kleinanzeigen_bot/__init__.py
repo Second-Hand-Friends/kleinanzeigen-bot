@@ -482,5 +482,5 @@ def main(args:Iterable[str]):
 
 if __name__ == "__main__":
     utils.configure_console_logging()
-    LOG.error("Direct execution not supported. Use 'python -m kleinanzeigen_bot'")
+    LOG.error("Direct execution not supported. Use 'pdm run app'")
     sys.exit(1)
