@@ -73,7 +73,8 @@ format = "autopep8 --recursive --in-place kleinanzeigen_bot tests"
 lint = "pylint -v kleinanzeigen_bot tests"
 scan = "bandit -c pyproject.toml -r kleinanzeigen_bot"
 test = "python -m pytest --capture=tee-sys -v"
-
+utest = "python -m pytest --capture=tee-sys -v -m 'not itest'"
+itest = "python -m pytest --capture=tee-sys -v -m 'itest'"
 
 #####################
 # autopep8
@@ -90,6 +91,7 @@ ignore = [ # https://github.com/hhatto/autopep8#features
     "E401" # Don't put imports on separate lines
 ]
 aggressive = 3
+
 
 #####################
 # bandit
@@ -161,4 +163,7 @@ max-statements = 70
 #####################
 [tool.pytest.ini_options]
 # https://docs.pytest.org/en/stable/reference.html#confval-addopts
-addopts = "-p no:cacheprovider --doctest-modules --ignore=__pypackages__ --ignore=kleinanzeigen_bot/__main__.py"
+addopts = "--strict-markers -p no:cacheprovider --doctest-modules --ignore=__pypackages__ --ignore=kleinanzeigen_bot/__main__.py"
+markers = [
+    "itest: marks a test as an integration test (i.e. a test with external dependencies)"
+]

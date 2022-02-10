@@ -70,18 +70,26 @@ jobs:
 
     - name: check code style
       run: |
+        set -eux
+        
         pdm run lint
 
         pdm run autopep8 -v --exit-code --recursive --diff kleinanzeigen_bot tests
 
     - name: run unit tests
       run: |
+        pdm run utest
+        
+    - name: run integration tests
+      run: |
+        set -eux
+        
         case "${{ matrix.os }}" in
            ubuntu-*) 
               sudo apt-get install -o Acquire::Retries=3 --no-install-recommends -y xvfb
-              xvfb-run pdm run test
+              xvfb-run pdm run itest
               ;;
-           *) pdm run test
+           *) pdm run itest
               ;;
         esac
 
