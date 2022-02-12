@@ -27,7 +27,7 @@ classifiers = [  # https://pypi.org/classifiers/
 requires-python = ">=3.10,<3.11" # <3.11 to get newer versions of pyinstaller
 dependencies = [
     "coloredlogs~=15.0",
-    "inflect~=5.3",
+    "inflect~=5.4",
     "ruamel.yaml~=0.17",
     "pywin32==303; sys_platform == 'win32'",
     "selenium~=4.1",
@@ -57,24 +57,25 @@ version = {use_scm = true}
 
 [tool.pdm.dev-dependencies]
 dev = [
-    "autopep8~=1.6.0",
+    "autopep8~=1.6",
     "bandit~=1.7",
-    "pytest~=6.2",
-    "pyinstaller~=4.8",
+    "pytest~=7.0",
+    "pyinstaller~=4.9",
     "psutil",
     "pylint~=2.12",
     "mypy~=0.931",
 ]
 
 [tool.pdm.scripts]
-app = "python -m kleinanzeigen_bot"
+app     = "python -m kleinanzeigen_bot"
 compile = "python -O -m PyInstaller pyinstaller.spec --clean"
-format = "autopep8 --recursive --in-place kleinanzeigen_bot tests"
-lint = "pylint -v kleinanzeigen_bot tests"
-scan = "bandit -c pyproject.toml -r kleinanzeigen_bot"
-test = "python -m pytest --capture=tee-sys -v"
-utest = "python -m pytest --capture=tee-sys -v -m 'not itest'"
-itest = "python -m pytest --capture=tee-sys -v -m 'itest'"
+format  = "autopep8 --recursive --in-place kleinanzeigen_bot tests"
+lint    = "pylint -v kleinanzeigen_bot tests"
+scan    = "bandit -c pyproject.toml -r kleinanzeigen_bot"
+test    = "python -m pytest --capture=tee-sys -v"
+utest   = "python -m pytest --capture=tee-sys -v -m 'not itest'"
+itest   = "python -m pytest --capture=tee-sys -v -m 'itest'"
+
 
 #####################
 # autopep8

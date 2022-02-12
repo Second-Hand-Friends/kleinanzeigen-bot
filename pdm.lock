@@ -67,7 +67,7 @@ dependencies = [
 
 [[package]]
 name = "charset-normalizer"
-version = "2.0.10"
+version = "2.0.11"
 requires_python = ">=3.5.0"
 summary = "The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet."
 
@@ -156,8 +156,8 @@ summary = "Internationalized Domain Names in Applications (IDNA)"
 
 [[package]]
 name = "inflect"
-version = "5.3.0"
-requires_python = ">=3.6"
+version = "5.4.0"
+requires_python = ">=3.7"
 summary = "Correctly generate plurals, singular nouns, ordinals, indefinite articles; convert numbers to words"
 
 [[package]]
@@ -226,7 +226,7 @@ dependencies = [
 
 [[package]]
 name = "pbr"
-version = "5.8.0"
+version = "5.8.1"
 requires_python = ">=2.6"
 summary = "Python Build Reasonableness"
 
@@ -241,7 +241,7 @@ dependencies = [
 
 [[package]]
 name = "platformdirs"
-version = "2.4.1"
+version = "2.5.0"
 requires_python = ">=3.7"
 summary = "A small Python module for determining appropriate platform-specific dirs, e.g. a \"user data dir\"."
 
@@ -276,7 +276,7 @@ summary = "C parser in Python"
 
 [[package]]
 name = "pyinstaller"
-version = "4.8"
+version = "4.9"
 requires_python = "<3.11,>=3.6"
 summary = "PyInstaller bundles a Python application and all its dependencies into a single package."
 dependencies = [
@@ -290,7 +290,8 @@ dependencies = [
 
 [[package]]
 name = "pyinstaller-hooks-contrib"
-version = "2022.0"
+version = "2022.1"
+requires_python = ">=3.7"
 summary = "Community maintained hooks for PyInstaller"
 
 [[package]]
@@ -309,12 +310,11 @@ dependencies = [
 
 [[package]]
 name = "pyopenssl"
-version = "21.0.0"
-requires_python = ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*"
+version = "22.0.0"
+requires_python = ">=3.6"
 summary = "Python wrapper module around the OpenSSL library"
 dependencies = [
-    "cryptography>=3.3",
-    "six>=1.5.2",
+    "cryptography>=35.0",
 ]
 
 [[package]]
@@ -330,7 +330,7 @@ summary = "A python implementation of GNU readline."
 
 [[package]]
 name = "pytest"
-version = "6.2.5"
+version = "7.0.1"
 requires_python = ">=3.6"
 summary = "pytest: simple powerful testing with Python"
 dependencies = [
@@ -341,7 +341,7 @@ dependencies = [
     "packaging",
     "pluggy<2.0,>=0.12",
     "py>=1.8.2",
-    "toml",
+    "tomli>=1.0.0",
 ]
 
 [[package]]
@@ -409,15 +409,9 @@ dependencies = [
 
 [[package]]
 name = "setuptools"
-version = "60.5.0"
+version = "60.8.2"
 requires_python = ">=3.7"
 summary = "Easily download, build, install, upgrade, and uninstall Python packages"
-
-[[package]]
-name = "six"
-version = "1.16.0"
-requires_python = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*"
-summary = "Python 2 and 3 compatibility utilities"
 
 [[package]]
 name = "smmap"
@@ -453,7 +447,7 @@ summary = "Python Library for Tom's Obvious, Minimal Language"
 
 [[package]]
 name = "tomli"
-version = "2.0.0"
+version = "2.0.1"
 requires_python = ">=3.7"
 summary = "A lil' TOML parser"
 
@@ -506,7 +500,7 @@ dependencies = [
     "cryptography>=1.3.4",
     "idna>=2.0.0",
     "pyOpenSSL>=0.14",
-    "urllib3==1.26.8",
+    "urllib3~=1.26",
 ]
 
 [[package]]
@@ -537,7 +531,7 @@ dependencies = [
 
 [metadata]
 lock_version = "3.1"
-content_hash = "sha256:774c08638da83171a24511eb8eecb055bc0b09bd5b38263118dd8ac32b842bdd"
+content_hash = "sha256:81a62c2f5f69bee0f964a0ec070894cdde80010a38de4fb6cc2b8a7610033c95"
 
 [metadata.files]
 "altgraph 0.17.2" = [
@@ -624,9 +618,9 @@ content_hash = "sha256:774c08638da83171a24511eb8eecb055bc0b09bd5b38263118dd8ac32
     {file = "cffi-1.15.0-cp39-cp39-win_amd64.whl", hash = "sha256:3773c4d81e6e818df2efbc7dd77325ca0dcb688116050fb2b3011218eda36139"},
     {file = "cffi-1.15.0.tar.gz", hash = "sha256:920f0d66a896c2d99f0adbb391f990a84091179542c205fa53ce5787aff87954"},
 ]
-"charset-normalizer 2.0.10" = [
-    {file = "charset_normalizer-2.0.10-py3-none-any.whl", hash = "sha256:cb957888737fc0bbcd78e3df769addb41fd1ff8cf950dc9e7ad7793f1bf44455"},
-    {file = "charset-normalizer-2.0.10.tar.gz", hash = "sha256:876d180e9d7432c5d1dfd4c5d26b72f099d503e8fcc0feb7532c9289be60fcbd"},
+"charset-normalizer 2.0.11" = [
+    {file = "charset_normalizer-2.0.11-py3-none-any.whl", hash = "sha256:2842d8f5e82a1f6aa437380934d5e1cd4fcf2003b06fed6940769c164a480a45"},
+    {file = "charset-normalizer-2.0.11.tar.gz", hash = "sha256:98398a9d69ee80548c762ba991a4728bfc3836768ed226b3945908d1a688371c"},
 ]
 "colorama 0.4.4" = [
     {file = "colorama-0.4.4-py2.py3-none-any.whl", hash = "sha256:9f47eda37229f68eee03b24b9748937c7dc3868f906e8ba69fbcbdd3bc5dc3e2"},
@@ -689,9 +683,9 @@ content_hash = "sha256:774c08638da83171a24511eb8eecb055bc0b09bd5b38263118dd8ac32
     {file = "idna-3.3-py3-none-any.whl", hash = "sha256:84d9dd047ffa80596e0f246e2eab0b391788b0503584e8945f2368256d2735ff"},
     {file = "idna-3.3.tar.gz", hash = "sha256:9d643ff0a55b762d5cdb124b8eaa99c66322e2157b69160bc32796e824360e6d"},
 ]
-"inflect 5.3.0" = [
-    {file = "inflect-5.3.0-py3-none-any.whl", hash = "sha256:42560be16af702a21d43d59427f276b5aed79efb1ded9b713468c081f4353d10"},
-    {file = "inflect-5.3.0.tar.gz", hash = "sha256:41a23f6788962e9775e40e2ecfb1d6455d02de315022afeedd3c5dc070019d73"},
+"inflect 5.4.0" = [
+    {file = "inflect-5.4.0-py3-none-any.whl", hash = "sha256:2eb3f9a481e12849370d5a74acc546cc128d79df6e483928aa78b5bb18244ef6"},
+    {file = "inflect-5.4.0.tar.gz", hash = "sha256:b58d58c4e73ffca9b25e075c1c4fc9cadecbb5c99d7cd9f3cdedda73ece83c1c"},
 ]
 "iniconfig 1.1.1" = [
     {file = "iniconfig-1.1.1-py2.py3-none-any.whl", hash = "sha256:011e24c64b7f47f6ebd835bb12a743f2fbe9a26d4cecaa7f53bc4f35ee9da8b3"},
@@ -782,16 +776,16 @@ content_hash = "sha256:774c08638da83171a24511eb8eecb055bc0b09bd5b38263118dd8ac32
     {file = "packaging-21.3-py3-none-any.whl", hash = "sha256:ef103e05f519cdc783ae24ea4e2e0f508a9c99b2d4969652eed6a2e1ea5bd522"},
     {file = "packaging-21.3.tar.gz", hash = "sha256:dd47c42927d89ab911e606518907cc2d3a1f38bbd026385970643f9c5b8ecfeb"},
 ]
-"pbr 5.8.0" = [
-    {file = "pbr-5.8.0-py2.py3-none-any.whl", hash = "sha256:176e8560eaf61e127817ef93d8a844803abb27a4d4637f0ff3bb783129be2e0a"},
-    {file = "pbr-5.8.0.tar.gz", hash = "sha256:672d8ebee84921862110f23fcec2acea191ef58543d34dfe9ef3d9f13c31cddf"},
+"pbr 5.8.1" = [
+    {file = "pbr-5.8.1-py2.py3-none-any.whl", hash = "sha256:27108648368782d07bbf1cb468ad2e2eeef29086affd14087a6d04b7de8af4ec"},
+    {file = "pbr-5.8.1.tar.gz", hash = "sha256:66bc5a34912f408bb3925bf21231cb6f59206267b7f63f3503ef865c1a292e25"},
 ]
 "pefile 2021.9.3" = [
     {file = "pefile-2021.9.3.tar.gz", hash = "sha256:344a49e40a94e10849f0fe34dddc80f773a12b40675bf2f7be4b8be578bdd94a"},
 ]
-"platformdirs 2.4.1" = [
-    {file = "platformdirs-2.4.1-py3-none-any.whl", hash = "sha256:1d7385c7db91728b83efd0ca99a5afb296cab9d0ed8313a45ed8ba17967ecfca"},
-    {file = "platformdirs-2.4.1.tar.gz", hash = "sha256:440633ddfebcc36264232365d7840a970e75e1018d15b4327d11f91909045fda"},
+"platformdirs 2.5.0" = [
+    {file = "platformdirs-2.5.0-py3-none-any.whl", hash = "sha256:30671902352e97b1eafd74ade8e4a694782bd3471685e78c32d0fdfd3aa7e7bb"},
+    {file = "platformdirs-2.5.0.tar.gz", hash = "sha256:8ec11dfba28ecc0715eb5fb0147a87b1bf325f349f3da9aab2cd6b50b96b692b"},
 ]
 "pluggy 1.0.0" = [
     {file = "pluggy-1.0.0-py2.py3-none-any.whl", hash = "sha256:74134bbf457f031a36d68416e1509f34bd5ccc019f0bcc952c7b909d06b37bd3"},
@@ -843,30 +837,30 @@ content_hash = "sha256:774c08638da83171a24511eb8eecb055bc0b09bd5b38263118dd8ac32
     {file = "pycparser-2.21-py2.py3-none-any.whl", hash = "sha256:8ee45429555515e1f6b185e78100aea234072576aa43ab53aefcae078162fca9"},
     {file = "pycparser-2.21.tar.gz", hash = "sha256:e644fdec12f7872f86c58ff790da456218b10f863970249516d60a5eaca77206"},
 ]
-"pyinstaller 4.8" = [
-    {file = "pyinstaller-4.8-py3-none-macosx_10_13_universal2.whl", hash = "sha256:b0b3a31aa60292469f9595f298e2c147cba29c30edcd92a38fdce27727809625"},
-    {file = "pyinstaller-4.8-py3-none-manylinux2014_aarch64.whl", hash = "sha256:9fbb05f5f67862005234da8c7eac69ef87e086f90e345749260051b031774c52"},
-    {file = "pyinstaller-4.8-py3-none-manylinux2014_i686.whl", hash = "sha256:15d9266d78dc757c103962826e62bce1513825078160be580534ead2ef53087c"},
-    {file = "pyinstaller-4.8-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:5c2fd5f18c0397f3d9160446035556afc7f6446fd88048887fdf46eadf85c5ec"},
-    {file = "pyinstaller-4.8-py3-none-manylinux2014_s390x.whl", hash = "sha256:6f5cdc39fbdec7b2e0c46cc0f5bd0071bb85e592e324bf4e15375c5ff19e55fc"},
-    {file = "pyinstaller-4.8-py3-none-manylinux2014_x86_64.whl", hash = "sha256:4c848720a65a5bd41249bc804d1bd3dd089bb56aef7f1c5e11f774f11e649443"},
-    {file = "pyinstaller-4.8-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:44783d58ac4cb0a74a4f2180da4dacbe6a7a013a62b3aa10be6082252e296954"},
-    {file = "pyinstaller-4.8-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:b720853a00bd9547b7d6403d85f23b7f7e451e41bc907673d9fc7f8d9d274594"},
-    {file = "pyinstaller-4.8-py3-none-win32.whl", hash = "sha256:53ed05214dd67624756fe4e82e861857921a79d0392debf8c9f5bb0ba5a479b6"},
-    {file = "pyinstaller-4.8-py3-none-win_amd64.whl", hash = "sha256:f00e1296abac71f3b5bb9fdc2e0d4c079201d62faeeeb894ccadd0616179fee3"},
-    {file = "pyinstaller-4.8.tar.gz", hash = "sha256:7ae868bbcc502832a2c802c84a1dbb9f48b44445c50144c29bfcd7b760140e13"},
+"pyinstaller 4.9" = [
+    {file = "pyinstaller-4.9-py3-none-macosx_10_13_universal2.whl", hash = "sha256:e2f165cea4470ce8a8349112cd78f48a61413805adc17792a91997a11cfe1d80"},
+    {file = "pyinstaller-4.9-py3-none-manylinux2014_aarch64.whl", hash = "sha256:24035eb9fffa2e3e288b4c1c9710043819efc7203cae5c8c573bec16f4a8e98f"},
+    {file = "pyinstaller-4.9-py3-none-manylinux2014_i686.whl", hash = "sha256:a0b988cfc197d40e3d773b3aa1c7d3e918fc0933b4c15ec3fc5d156f222d82cb"},
+    {file = "pyinstaller-4.9-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:62c97cbbdbee30974d607eb1de9afb081eb3adba787c203b00438e21027b829b"},
+    {file = "pyinstaller-4.9-py3-none-manylinux2014_s390x.whl", hash = "sha256:7f46ab11ec986e4c525b93251063144e12d432a132dbc0070e3030e34c76537a"},
+    {file = "pyinstaller-4.9-py3-none-manylinux2014_x86_64.whl", hash = "sha256:b5f1a94150315ea75bf3501be6c8476d65a7209580bb662da06dbdbc4454f375"},
+    {file = "pyinstaller-4.9-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:ebeb87cdbadb2b4e8f991ffd9945ebd4fb3a7303180e63682c3e1ce01b3fdd22"},
+    {file = "pyinstaller-4.9-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:59372b950d176fdc5ecea29719a8ab3f194b73a15b7f9875ac2a1de9a3daf5ed"},
+    {file = "pyinstaller-4.9-py3-none-win32.whl", hash = "sha256:ec3ca331d565ffca1b6470c5aaf798885a03708c3d0b15c1b19009126f84c1d4"},
+    {file = "pyinstaller-4.9-py3-none-win_amd64.whl", hash = "sha256:bec57b3b2b6178907255557ec0fc4b5ce5a0474013414cdadea853205c74ed26"},
+    {file = "pyinstaller-4.9.tar.gz", hash = "sha256:75a180a658871bc41f9cf94b6f90ffa54e98f5d6a7cdb02d7530f0360afe24f9"},
 ]
-"pyinstaller-hooks-contrib 2022.0" = [
-    {file = "pyinstaller_hooks_contrib-2022.0-py2.py3-none-any.whl", hash = "sha256:29f0bd8fbb2ff6f2df60a0c147e5b5ad65ae5c1a982d90641a5f712de03fa161"},
-    {file = "pyinstaller-hooks-contrib-2022.0.tar.gz", hash = "sha256:61b667f51b2525377fae30793f38fd9752a08032c72b209effabf707c840cc38"},
+"pyinstaller-hooks-contrib 2022.1" = [
+    {file = "pyinstaller_hooks_contrib-2022.1-py2.py3-none-any.whl", hash = "sha256:37f0a16df336c69c8c7bf76105a6c4a53a270d648920fa21de654a6649e70404"},
+    {file = "pyinstaller-hooks-contrib-2022.1.tar.gz", hash = "sha256:f0a40fbe1842598a7066f785da5ac103ae2a86b4cebf478e530e1df57464814e"},
 ]
 "pylint 2.12.2" = [
     {file = "pylint-2.12.2-py3-none-any.whl", hash = "sha256:daabda3f7ed9d1c60f52d563b1b854632fd90035bcf01443e234d3dc794e3b74"},
     {file = "pylint-2.12.2.tar.gz", hash = "sha256:9d945a73640e1fec07ee34b42f5669b770c759acd536ec7b16d7e4b87a9c9ff9"},
 ]
-"pyopenssl 21.0.0" = [
-    {file = "pyOpenSSL-21.0.0-py2.py3-none-any.whl", hash = "sha256:8935bd4920ab9abfebb07c41a4f58296407ed77f04bd1a92914044b848ba1ed6"},
-    {file = "pyOpenSSL-21.0.0.tar.gz", hash = "sha256:5e2d8c5e46d0d865ae933bef5230090bdaf5506281e9eec60fa250ee80600cb3"},
+"pyopenssl 22.0.0" = [
+    {file = "pyOpenSSL-22.0.0-py2.py3-none-any.whl", hash = "sha256:ea252b38c87425b64116f808355e8da644ef9b07e429398bfece610f893ee2e0"},
+    {file = "pyOpenSSL-22.0.0.tar.gz", hash = "sha256:660b1b1425aac4a1bea1d94168a85d99f0b3144c869dd4390d27629d0087f1bf"},
 ]
 "pyparsing 3.0.7" = [
     {file = "pyparsing-3.0.7-py3-none-any.whl", hash = "sha256:a6c06a88f252e6c322f65faf8f418b16213b51bdfaece0524c1c1bc30c63c484"},
@@ -876,9 +870,9 @@ content_hash = "sha256:774c08638da83171a24511eb8eecb055bc0b09bd5b38263118dd8ac32
     {file = "pyreadline3-3.4.1-py3-none-any.whl", hash = "sha256:b0efb6516fd4fb07b45949053826a62fa4cb353db5be2bbb4a7aa1fdd1e345fb"},
     {file = "pyreadline3-3.4.1.tar.gz", hash = "sha256:6f3d1f7b8a31ba32b73917cefc1f28cc660562f39aea8646d30bd6eff21f7bae"},
 ]
-"pytest 6.2.5" = [
-    {file = "pytest-6.2.5-py3-none-any.whl", hash = "sha256:7310f8d27bc79ced999e760ca304d69f6ba6c6649c0b60fb0e04a4a77cacc134"},
-    {file = "pytest-6.2.5.tar.gz", hash = "sha256:131b36680866a76e6781d13f101efb86cf674ebb9762eb70d3082b6f29889e89"},
+"pytest 7.0.1" = [
+    {file = "pytest-7.0.1-py3-none-any.whl", hash = "sha256:9ce3ff477af913ecf6321fe337b93a2c0dcf2a0a1439c43f5452112c1e4280db"},
+    {file = "pytest-7.0.1.tar.gz", hash = "sha256:e30905a0c131d3d94b89624a1cc5afec3e0ba2fbdb151867d8e0ebd49850f171"},
 ]
 "pywin32 303" = [
     {file = "pywin32-303-cp310-cp310-win32.whl", hash = "sha256:6fed4af057039f309263fd3285d7b8042d41507343cd5fa781d98fcc5b90e8bb"},
@@ -974,13 +968,9 @@ content_hash = "sha256:774c08638da83171a24511eb8eecb055bc0b09bd5b38263118dd8ac32
 "selenium-stealth 1.0.6" = [
     {file = "selenium_stealth-1.0.6-py3-none-any.whl", hash = "sha256:b62da5452aa4a84f29a4dfb21a9696aff20788a7c570dd0b81bc04a940848b97"},
 ]
-"setuptools 60.5.0" = [
-    {file = "setuptools-60.5.0-py3-none-any.whl", hash = "sha256:68eb94073fc486091447fcb0501efd6560a0e5a1839ba249e5ff3c4c93f05f90"},
-    {file = "setuptools-60.5.0.tar.gz", hash = "sha256:2404879cda71495fc4d5cbc445ed52fdaddf352b36e40be8dcc63147cb4edabe"},
-]
-"six 1.16.0" = [
-    {file = "six-1.16.0-py2.py3-none-any.whl", hash = "sha256:8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254"},
-    {file = "six-1.16.0.tar.gz", hash = "sha256:1e61c37477a1626458e36f7b1d82aa5c9b094fa4802892072e49de9c60c4c926"},
+"setuptools 60.8.2" = [
+    {file = "setuptools-60.8.2-py3-none-any.whl", hash = "sha256:43a5575eea6d3459789316e1596a3d2a0d215260cacf4189508112f35c9a145b"},
+    {file = "setuptools-60.8.2.tar.gz", hash = "sha256:66b8598da112b8dc8cd941d54cf63ef91d3b50657b374457eda5851f3ff6a899"},
 ]
 "smmap 5.0.0" = [
     {file = "smmap-5.0.0-py3-none-any.whl", hash = "sha256:2aba19d6a040e78d8b09de5c57e96207b09ed71d8e55ce0959eeee6c8e190d94"},
@@ -1002,9 +992,9 @@ content_hash = "sha256:774c08638da83171a24511eb8eecb055bc0b09bd5b38263118dd8ac32
     {file = "toml-0.10.2-py2.py3-none-any.whl", hash = "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b"},
     {file = "toml-0.10.2.tar.gz", hash = "sha256:b3bda1d108d5dd99f4a20d24d9c348e91c4db7ab1b749200bded2f839ccbe68f"},
 ]
-"tomli 2.0.0" = [
-    {file = "tomli-2.0.0-py3-none-any.whl", hash = "sha256:b5bde28da1fed24b9bd1d4d2b8cba62300bfb4ec9a6187a957e8ddb9434c5224"},
-    {file = "tomli-2.0.0.tar.gz", hash = "sha256:c292c34f58502a1eb2bbb9f5bbc9a5ebc37bee10ffb8c2d6bbdfa8eb13cc14e1"},
+"tomli 2.0.1" = [
+    {file = "tomli-2.0.1-py3-none-any.whl", hash = "sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc"},
+    {file = "tomli-2.0.1.tar.gz", hash = "sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f"},
 ]
 "trio 0.19.0" = [
     {file = "trio-0.19.0-py3-none-any.whl", hash = "sha256:c27c231e66336183c484fbfe080fa6cc954149366c15dc21db8b7290081ec7b8"},
