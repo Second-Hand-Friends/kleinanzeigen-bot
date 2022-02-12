@@ -220,7 +220,7 @@ ad_defaults:
     name:
     street:
     zipcode:
-    phone:
+    phone: "" # IMPORTANT: surround phone number with quotes to prevent removal of leading zeros
   republication_interval: # every X days ads should be re-published
 
 # additional name to category ID mappings, see default list at
@@ -281,7 +281,7 @@ contact:
   name:
   street:
   zipcode:
-  phone:
+  phone: "" # IMPORTANT: surround phone number with quotes to prevent removal of leading zeros
 
 republication_interval: # every X days the ad should be re-published
 
