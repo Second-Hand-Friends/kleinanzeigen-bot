@@ -2,9 +2,9 @@
 Copyright (C) 2022 Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
-import logging, os, shutil, sys, tempfile
-from typing import Any, Callable, Dict, Final, Iterable, Tuple
-from importlib.resources import read_text as get_resource_as_string
+import logging, os, shutil, sys
+from collections.abc import Callable, Iterable
+from typing import Any, Final
 
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
@@ -22,7 +22,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.microsoft import EdgeChromiumDriverManager
 from webdriver_manager.utils import ChromeType
 
-from .utils import ensure, is_frozen, pause
+from .utils import ensure, pause
 
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.selenium_mixin")
 
@@ -34,14 +34,15 @@ class SeleniumMixin:
         self.browser_binary_location:str = None
         self.webdriver:WebDriver = None
 
-    def __del__(self):
-        if getattr(self, 'cacertfile', None):
-            os.remove(self.cacertfile)
-
     def create_webdriver_session(self) -> None:
         LOG.info("Creating WebDriver session...")
 
         def init_browser_options(browser_options):
+            if isinstance(browser_options, webdriver.EdgeOptions):
+                browser_options.add_argument("-inprivate")
+            else:
+                browser_options.add_argument("--incognito")
+
             browser_options.add_argument("--disable-crash-reporter")
             browser_options.add_argument("--no-first-run")
             browser_options.add_argument("--no-service-autorun")
@@ -49,40 +50,19 @@ class SeleniumMixin:
                 LOG.info(" -> Custom chrome argument: %s", chrome_option)
                 browser_options.add_argument(chrome_option)
 
-            browser_options.add_experimental_option('excludeSwitches', ['enable-automation'])
-            browser_options.add_experimental_option('useAutomationExtension', False)
+            browser_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            browser_options.add_experimental_option("useAutomationExtension", False)
             browser_options.add_experimental_option("prefs", {
                 "credentials_enable_service": False,
                 "profile.password_manager_enabled": False,
+                "profile.default_content_setting_values.notifications": 2,  # 1 = allow, 2 = block browser notifications
                 "devtools.preferences.currentDockState": "\"bottom\""
             })
 
             if self.browser_binary_location:
                 browser_options.binary_location = self.browser_binary_location
                 LOG.info(" -> Chrome binary location: %s", self.browser_binary_location)
-
             return browser_options
-
-        # if run via py2exe fix resource lookup
-        if is_frozen():
-            import pathlib  # pylint: disable=import-outside-toplevel
-
-            if not os.getenv("REQUESTS_CA_BUNDLE", None) or not os.path.exists(os.getenv("REQUESTS_CA_BUNDLE", None)):
-                with tempfile.NamedTemporaryFile(delete = False) as tmp:
-                    LOG.debug("Writing cacert file to [%s]...", tmp.name)
-                    tmp.write(get_resource_as_string("certifi", "cacert.pem").encode('utf-8'))
-                    self.cacertfile = tmp.name
-                os.environ['REQUESTS_CA_BUNDLE'] = self.cacertfile
-
-            read_text_orig = pathlib.Path.read_text
-
-            def read_text_new(self, encoding = None, errors = None):
-                path = str(self)
-                if "selenium_stealth" in path:
-                    return get_resource_as_string("selenium_stealth", self.name)
-                return read_text_orig(self, encoding, errors)
-
-            pathlib.Path.read_text = read_text_new
 
         # check if a chrome driver is present already
         if shutil.which(DEFAULT_CHROMEDRIVER_PATH):
@@ -102,7 +82,12 @@ class SeleniumMixin:
                 webdriver_mgr = EdgeChromiumDriverManager(cache_valid_range = 14)
                 webdriver_mgr.driver.browser_version = chrome_major_version
                 webdriver_path = webdriver_mgr.install()
-                self.webdriver = webdriver.ChromiumEdge(service = EdgeService(webdriver_path), options = init_browser_options(webdriver.EdgeOptions()))
+                env = os.environ.copy()
+                env["MSEDGEDRIVER_TELEMETRY_OPTOUT"] = "1"  # https://docs.microsoft.com/en-us/microsoft-edge/privacy-whitepaper/#microsoft-edge-driver
+                self.webdriver = webdriver.ChromiumEdge(
+                    service = EdgeService(webdriver_path, env = env),
+                    options = init_browser_options(webdriver.EdgeOptions())
+                )
             else:
                 webdriver_mgr = ChromeDriverManager(chrome_type = chrome_type, cache_valid_range = 14)
                 webdriver_mgr.driver.browser_version = chrome_major_version
@@ -123,7 +108,7 @@ class SeleniumMixin:
 
         LOG.info("New WebDriver session is: %s %s", self.webdriver.session_id, self.webdriver.command_executor._url)  # pylint: disable=protected-access
 
-    def get_browser_version(self, executable_path: str) -> Tuple[ChromeType, str]:
+    def get_browser_version(self, executable_path: str) -> tuple[ChromeType, str]:
         if sys.platform == "win32":
             import win32api  # pylint: disable=import-outside-toplevel,import-error
             # pylint: disable=no-member
@@ -152,7 +137,7 @@ class SeleniumMixin:
             return (ChromeType.MSEDGE, version)
         return (ChromeType.GOOGLE, version)
 
-    def get_browser_version_from_os(self) -> Tuple[ChromeType, str]:
+    def get_browser_version_from_os(self) -> tuple[ChromeType, str]:
         version = ChromeDriverManagerUtils.get_browser_version_from_os(ChromeType.CHROMIUM)
         if version != "UNKNOWN":
             return (ChromeType.CHROMIUM, version)
@@ -227,7 +212,7 @@ class SeleniumMixin:
         WebDriverWait(self.webdriver, timeout).until(lambda _: self.web_execute("return document.readyState") == "complete")
 
     # pylint: disable=dangerous-default-value
-    def web_request(self, url:str, method:str = "GET", valid_response_codes:Iterable[int] = [200], headers:Dict[str, str] = None) -> Dict[str, Any]:
+    def web_request(self, url:str, method:str = "GET", valid_response_codes:Iterable[int] = [200], headers:dict[str, str] = None) -> dict[str, Any]:
         method = method.upper()
         LOG.debug(" -> HTTP %s [%s]...", method, url)
         response = self.webdriver.execute_async_script(f"""

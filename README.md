@@ -1,8 +1,8 @@
 # kleinanzeigen-bot
 
-[![Build Status](https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/workflows/Build/badge.svg "GitHub Actions")](https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/actions?query=workflow%3A%22Build%22)
-[![License](https://img.shields.io/github/license/kleinanzeigen-bot/kleinanzeigen-bot.svg?color=blue)](LICENSE.txt)
-[![Maintainability](https://api.codeclimate.com/v1/badges/8d488c3a229bfb5091a3/maintainability)](https://codeclimate.com/github/kleinanzeigen-bot/kleinanzeigen-bot/maintainability)
+[![Build Status](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/workflows/Build/badge.svg "GitHub Actions")](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/actions?query=workflow%3A%22Build%22)
+[![License](https://img.shields.io/github/license/Second-Hand-Friends/kleinanzeigen-bot.svg?color=blue)](LICENSE.txt)
+[![Maintainability](https://api.codeclimate.com/v1/badges/8d488c3a229bfb5091a3/maintainability)](https://codeclimate.com/github/Second-Hand-Friends/kleinanzeigen-bot/maintainability)
 
 **Feedback and high-quality pull requests are  highly welcome!**
 
@@ -12,12 +12,12 @@
 1. [Development Notes](#development)
 1. [License](#license)
 
+
 ## <a name="about"></a>About
 
 **kleinanzeigen-bot** is a console based application to ease publishing of ads to ebay-kleinanzeigen.de.
 
-
-It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.com/AnzeigenOrg/ebayKleinanzeigen) with the following advantages:
+It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https://github.com/Second-Hand-Friends/ebayKleinanzeigen) with the following advantages:
 - supports Microsoft Edge browser (Chromium based)
 - compatible chromedriver is installed automatically
 - better captcha handling
@@ -25,29 +25,74 @@ It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.co
   - use YAML or JSON for config files
   - one config file per ad
   - use globbing (wildcards) to select images from local disk
-  - reference categories by name (looked up from [categories.yaml](https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml))
+  - reference categories by name (looked up from [categories.yaml](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml))
 - logging is configurable and colorized
-- provided as self-contained Windows executable [kleinanzeigen-bot.exe](https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot.exe)
+- provided as self-contained executable for Windows, Linux and macOS
 - source code is pylint checked and uses Python type hints
 - CI builds
 
 
 ## <a name="installation"></a>Installation
 
-### Installation on Windows using self-containing exe
+### Installation using pre-compiled exe
 
 1. The following components need to be installed:
    1. [Chromium](https://www.chromium.org/getting-involved/download-chromium), [Google Chrome](https://www.google.com/chrome/),
       or Chromium based [Microsoft Edge](https://www.microsoft.com/edge) browser
 
 1. Open a command/terminal window
-1. Download the app using
-   ```
-   curl https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot.exe -o kleinanzeigen-bot.exe
-   ```
-1. Run the app:
-   ```
-   kleinanzeigen-bot --help
+
+1. Download and run the app by entering the following commands:
+
+   1. On Windows:
+       ```batch
+       curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-windows-amd64.exe -o kleinanzeigen-bot.exe
+
+       kleinanzeigen-bot --help
+       ```
+
+   1. On Linux:
+       ```shell
+       curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-linux-amd64 -o kleinanzeigen-bot
+
+       chmod 655 kleinanzeigen-bot
+
+       ./kleinanzeigen-bot --help
+       ```
+
+   1. On macOS:
+       ```shell
+       curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-darwin-amd64 -o kleinanzeigen-bot
+
+       chmod 655 kleinanzeigen-bot
+
+       ./kleinanzeigen-bot --help
+       ```
+
+### Installation using Docker
+
+1. The following components need to be installed:
+   1. [Docker](https://www.docker.com/)
+   1. [Bash](https://www.gnu.org/software/bash/) (on Windows e.g. via [Cygwin](https://www.cygwin.com/), [MSys2](https://www.msys2.org/) or git)
+   1. [X11 - X Window System](https://en.wikipedia.org/wiki/X_Window_System) display server (on Windows e.g. https://github.com/P-St/Portable-X-Server/releases/latest)
+
+**Running the docker image:**
+1. Ensure the X11 Server is running
+
+1. Run the docker image:
+
+   ```bash
+   X11_DISPLAY=192.168.50.34:0.0 # replace with IP address of workstation where X11 server is running
+
+   DATA_DIR=/var/opt/data/kleinanzeigen-bot # path to config
+
+   # /mnt/data is the container's default working directory
+   docker run --rm --interactive --tty \
+     --shm-size=256m \
+     -e DISPLAY=$X11_DISPLAY \
+     -v $DATA_DIR:/mnt/data \
+     ghcr.io/second-hand-friends/kleinanzeigen-bot \
+     --help
    ```
 
 ### Installation from source
@@ -62,20 +107,71 @@ It is a spiritual successor to [AnzeigenOrg/ebayKleinanzeigen](https://github.co
 1. Open a command/terminal window
 1. Clone the repo using
    ```
-   git clone https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/
+   git clone https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
    ```
 1. Change into the directory:
    ```
    cd kleinanzeigen-bot
    ```
 1. Install the Python dependencies using:
-   ```
-   pip install .
+   ```bash
+   pip install pdm
+
+   # temporary workaround for https://github.com/SeleniumHQ/selenium/issues/10022 / https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
+   pip install -t __pypackages__/3.10/lib selenium
+
+   pdm install
    ```
 1. Run the app:
    ```
-   python -m kleinanzeigen_bot --help
+   pdm run app --help
    ```
+
+### Installation from source using Docker
+
+1. The following components need to be installed:
+   1. [Docker](https://www.docker.com/)
+   1. [git client](https://git-scm.com/downloads)
+   1. [Bash](https://www.gnu.org/software/bash/) (on Windows e.g. via [Cygwin](https://www.cygwin.com/), [MSys2](https://www.msys2.org/) or git)
+   1. [X11 - X Window System](https://en.wikipedia.org/wiki/X_Window_System) display server (on Windows e.g. https://github.com/P-St/Portable-X-Server/releases/latest)
+
+1. Clone the repo using
+   ```
+   git clone https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+   ```
+
+1. Open the cloned directory in a Bash terminal window and navigate to the [docker](docker) subdirectory
+
+1. Execute `bash build-image.sh`
+
+1. Ensure the image is build:
+
+   ```
+   $ docker image ls
+   REPOSITORY                            TAG      IMAGE ID       CREATED       SIZE
+   second-hand-friends/kleinanzeigen-bot latest   c31fd256eeea   1 minute ago  590MB
+   python                                3-slim   2052f0475488   5 days ago    123MB
+   ```
+
+**Running the docker image:**
+1. Ensure the X11 Server is running
+
+1. Run the docker image:
+
+   ```bash
+   X11_DISPLAY=192.168.50.34:0.0 # replace with IP address of workstation where X11 server is running
+
+   DATA_DIR=/var/opt/data/kleinanzeigen-bot # path to config
+
+   # /mnt/data is the container's default working directory
+   docker run --rm --interactive --tty \
+     --shm-size=256m \
+     -e DISPLAY=$X11_DISPLAY \
+     -v $DATA_DIR:/mnt/data \
+     second-hand-friends/kleinanzeigen-bot \
+     --help
+   ```
+
 
 ## <a name="usage"></a>Usage
 
@@ -124,11 +220,11 @@ ad_defaults:
     name:
     street:
     zipcode:
-    phone:
+    phone: "" # IMPORTANT: surround phone number with quotes to prevent removal of leading zeros
   republication_interval: # every X days ads should be re-published
 
 # additional name to category ID mappings, see default list at
-# https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml
+# https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml
 categories:
  #Notebooks: 161/27
  #PCs: 161/228
@@ -165,7 +261,7 @@ type: # one of: OFFER, WANTED
 title:
 description: # can be multiline, see syntax here https://yaml-multiline.info/
 
-# built-in category name as specified in https://github.com/kleinanzeigen-bot/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml
+# built-in category name as specified in https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml
 # or custom category name as specified in config.yaml
 # or category ID (e.g. 161/27)
 category: Notebooks
@@ -185,7 +281,7 @@ contact:
   name:
   street:
   zipcode:
-  phone:
+  phone: "" # IMPORTANT: surround phone number with quotes to prevent removal of leading zeros
 
 republication_interval: # every X days the ad should be re-published
 
@@ -196,17 +292,22 @@ updated_on: # set automatically
 
 ## <a name="development"></a> Development Notes
 
-- Installing dev dependencies: `pip install .[dev]`
-- Running unit tests: `python -m pytest` or `pytest`
-- Running linter: `python -m pylint kleinanzeigen_bot` or `pylint kleinanzeigen_bot`
-- Displaying effective version:`python setup.py --version`
-- Creating Windows executable: `python setup.py py2exe`
+> Please read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing code. Thank you!
+
+- Format source code: `pdm run format`
+- Run tests:
+  - unit tests: `pdm run utest`
+  - integration tests: `pdm run itest`
+  - all tests: `pdm run test`
+- Run linter: `pdm run lint`
+- Create platform-specific executable: `pdm run compile`
 - Application bootstrap works like this:
   ```python
-  python -m kleinanzeigen_bot
-  |-> executes 'kleinanzeigen_bot/__main__.py'
-      |-> executes main() function of 'kleinanzeigen_bot/__init__.py'
-          |-> executes KleinanzeigenBot().run()
+  pdm run app
+  |-> executes 'python -m kleinanzeigen_bot'
+      |-> executes 'kleinanzeigen_bot/__main__.py'
+          |-> executes main() function of 'kleinanzeigen_bot/__init__.py'
+              |-> executes KleinanzeigenBot().run()
   ````
 
 

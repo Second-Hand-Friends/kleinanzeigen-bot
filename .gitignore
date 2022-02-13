@@ -1,6 +1,9 @@
 # Local work folder that is not checked in
 _LOCAL/
 
+# docker
+.dockerignore
+
 # kleinanzeigen_bot
 /config.yaml
 /data
@@ -8,11 +11,13 @@ _LOCAL/
 kleinanzeigen_bot/version.py
 
 # python
+/__pypackages__
 __pycache__
 /build
 /dist
 /.eggs
 /*.egg-info
+/.pdm.toml
 
 # Eclipse
 /.project

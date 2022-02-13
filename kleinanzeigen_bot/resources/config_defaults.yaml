@@ -15,7 +15,7 @@ ad_defaults:
     name:
     street:
     zipcode:
-    phone:
+    phone: "" # IMPORTANT: surround phone number with quotes to prevent removal of leading zeros
   republication_interval: 7
 
 categories: []

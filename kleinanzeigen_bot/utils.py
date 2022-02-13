@@ -4,8 +4,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 import copy, json, logging, os, secrets, sys, traceback, time
 from importlib.resources import read_text as get_resource_as_string
+from collections.abc import Iterable
 from types import ModuleType
-from typing import Any, Dict, Final, Iterable, Optional, Union
+from typing import Any, Final
 
 import coloredlogs, inflect
 from ruamel.yaml import YAML
@@ -27,10 +28,10 @@ def is_frozen() -> bool:
     >>> is_frozen()
     False
     """
-    return getattr(sys, 'frozen', False)
+    return getattr(sys, "frozen", False)
 
 
-def apply_defaults(target:Dict[Any, Any], defaults:Dict[Any, Any], ignore = lambda _k, _v: False, override = lambda _k, _v: False) -> Dict[Any, Any]:
+def apply_defaults(target:dict[Any, Any], defaults:dict[Any, Any], ignore = lambda _k, _v: False, override = lambda _k, _v: False) -> dict[Any, Any]:
     """
     >>> apply_defaults({}, {"foo": "bar"})
     {'foo': 'bar'}
@@ -47,17 +48,16 @@ def apply_defaults(target:Dict[Any, Any], defaults:Dict[Any, Any], ignore = lamb
     """
     for key, default_value in defaults.items():
         if key in target:
-            if isinstance(target[key], Dict) and isinstance(default_value, Dict):
+            if isinstance(target[key], dict) and isinstance(default_value, dict):
                 apply_defaults(target[key], default_value, ignore = ignore)
             elif override(key, target[key]):
                 target[key] = copy.deepcopy(default_value)
-        else:
-            if not ignore(key, default_value):
-                target[key] = copy.deepcopy(default_value)
+        elif not ignore(key, default_value):
+            target[key] = copy.deepcopy(default_value)
     return target
 
 
-def safe_get(a_map:Dict[Any, Any], *keys:str) -> Any:
+def safe_get(a_map:dict[Any, Any], *keys:str) -> Any:
     """
     >>> safe_get({"foo": {}}, "foo", "bar") is None
     True
@@ -76,7 +76,7 @@ def safe_get(a_map:Dict[Any, Any], *keys:str) -> Any:
 def configure_console_logging() -> None:
     stdout_log = logging.StreamHandler(sys.stderr)
     stdout_log.setLevel(logging.DEBUG)
-    stdout_log.setFormatter(coloredlogs.ColoredFormatter('[%(levelname)s] %(message)s'))
+    stdout_log.setFormatter(coloredlogs.ColoredFormatter("[%(levelname)s] %(message)s"))
     stdout_log.addFilter(type("", (logging.Filter,), {
         "filter": lambda rec: rec.levelno <= logging.INFO
     }))
@@ -84,7 +84,7 @@ def configure_console_logging() -> None:
 
     stderr_log = logging.StreamHandler(sys.stderr)
     stderr_log.setLevel(logging.WARNING)
-    stderr_log.setFormatter(coloredlogs.ColoredFormatter('[%(levelname)s] %(message)s'))
+    stderr_log.setFormatter(coloredlogs.ColoredFormatter("[%(levelname)s] %(message)s"))
     LOG_ROOT.addHandler(stderr_log)
 
 
@@ -106,17 +106,20 @@ def on_exit() -> None:
 
 
 def on_sigint(_sig:int, _frame) -> None:
-    LOG.warning('Aborted on user request.')
+    LOG.warning("Aborted on user request.")
     sys.exit(0)
 
 
-def pause(min_ms:int = 200, max_ms:int = None) -> None:
-    duration = secrets.randbelow((max_ms is None and 2000 or max_ms) - min_ms) + min_ms
+def pause(min_ms:int = 200, max_ms:int = 2000) -> None:
+    if min_ms == max_ms:
+        duration = min_ms
+    else:
+        duration = secrets.randbelow(max_ms - min_ms) + min_ms
     LOG.log(logging.INFO if duration > 1500 else logging.DEBUG, " ... pausing for %d ms ...", duration)
     time.sleep(duration / 1000)
 
 
-def pluralize(word:str, count:Union[int, Iterable], prefix = True):
+def pluralize(word:str, count:int | Iterable, prefix = True):
     """
     >>> pluralize("field", 1)
     '1 field'
@@ -131,16 +134,16 @@ def pluralize(word:str, count:Union[int, Iterable], prefix = True):
         count = len(count)
     plural = pluralize.inflect.plural_noun(word, count)
     if prefix:
-        return f'{count} {plural}'
+        return f"{count} {plural}"
     return plural
 
 
-def load_dict(filepath:str, content_label:str = "", must_exist = True) -> Optional[Dict[str, Any]]:
+def load_dict(filepath:str, content_label:str = "", must_exist = True) -> dict[str, Any] | None:
     filepath = os.path.abspath(filepath)
     LOG.info("Loading %s[%s]...", content_label and content_label + " from " or "", filepath)
 
     _, file_ext = os.path.splitext(filepath)
-    if not file_ext in [ ".json", ".yaml" , ".yml" ]:
+    if file_ext not in [".json", ".yaml", ".yml"]:
         raise ValueError(f'Unsupported file type. The file name "{filepath}" must end with *.json, *.yaml, or *.yml')
 
     if not os.path.exists(filepath):
@@ -152,11 +155,11 @@ def load_dict(filepath:str, content_label:str = "", must_exist = True) -> Option
         return json.load(file) if filepath.endswith(".json") else YAML().load(file)
 
 
-def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "", must_exist = True) -> Optional[Dict[str, Any]]:
+def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "", must_exist = True) -> dict[str, Any] | None:
     LOG.debug("Loading %s[%s.%s]...", content_label and content_label + " from " or "", module.__name__, filename)
 
     _, file_ext = os.path.splitext(filename)
-    if not file_ext in [ ".json", ".yaml" , ".yml" ]:
+    if file_ext not in [".json", ".yaml", ".yml"]:
         raise ValueError(f'Unsupported file type. The file name "{filename}" must end with *.json, *.yaml, or *.yml')
 
     try:
@@ -169,7 +172,7 @@ def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "
     return json.loads(content) if filename.endswith(".json") else YAML().load(content)
 
 
-def save_dict(filepath:str, content:Dict[str, Any]) -> None:
+def save_dict(filepath:str, content:dict[str, Any]) -> None:
     filepath = os.path.abspath(filepath)
     LOG.info("Saving [%s]...", filepath)
     with open(filepath, "w", encoding = "utf-8") as file:

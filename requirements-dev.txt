@@ -1,6 +1,0 @@
-bandit~=1.7.1
-py2exe~=0.11.0.1; sys_platform == 'win32'
-pylint~=2.12.2
-pytest~=6.2.5
-setuptools~=60.5.0
-wheel~=0.37.1

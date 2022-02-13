@@ -1,3 +1,6 @@
+# Copyright (C) 2022 Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
 # https://docs.github.com/en/free-pro-team@latest/actions/reference/workflow-syntax-for-github-actions
 name: Build
 
@@ -9,6 +12,7 @@ on:
     - '**'
     paths-ignore:
     - '**/*.md'
+    - '.github/*.yml'
   pull_request:
   workflow_dispatch:
     # https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/
@@ -17,8 +21,14 @@ defaults:
   run:
     shell: bash
 
+env:
+  PYTHON_VERSION: "3.10"
+  
 jobs:
+
+  ###########################################################
   build:
+  ###########################################################
     strategy:
       fail-fast: false
       matrix:
@@ -26,38 +36,62 @@ jobs:
           - macos-latest
           - ubuntu-latest
           - windows-latest
+
     runs-on: ${{ matrix.os }}
+
     steps:
+
     - name: Git Checkout
       uses: actions/checkout@v2 #https://github.com/actions/checkout
 
     - uses: actions/setup-python@v2
       with:
-        python-version: "3.10"
+        python-version: "${{ env.PYTHON_VERSION }}"
 
     - name: Install python dependencies
       run: |
-         set -eux
+        set -eux
 
-         python --version
+        python --version
 
-         pip install .[dev]
+        # don't upgrade PIP for now: https://github.com/pdm-project/pdm/issues/874
+        # python -m pip install --upgrade pip
 
-    - name: bandit
+        pip install pdm
+
+        # https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
+        pip install -t __pypackages__/${{ env.PYTHON_VERSION }}/lib selenium
+
+        pdm install -v
+
+    - name: run security scan
       run: |
-         set -eux
-         bandit -c pyproject.toml --exclude '*/.eggs/*' -r .
+        pdm run scan
 
-    - name: pylint
+    - name: check code style
       run: |
-         set -eux
-         pip install pylint
-         pylint kleinanzeigen_bot
+        set -eux
+        
+        pdm run lint
 
-    - name: pytest
+        pdm run autopep8 -v --exit-code --recursive --diff kleinanzeigen_bot tests
+
+    - name: run unit tests
       run: |
-         set -eux
-         python -m pytest
+        pdm run utest
+        
+    - name: run integration tests
+      run: |
+        set -eux
+        
+        case "${{ matrix.os }}" in
+           ubuntu-*) 
+              sudo apt-get install -o Acquire::Retries=3 --no-install-recommends -y xvfb
+              xvfb-run pdm run itest
+              ;;
+           *) pdm run itest
+              ;;
+        esac
 
     - name: run kleinanzeigen_bot
       run: |
@@ -69,27 +103,91 @@ jobs:
 
         set -eux
 
-        python -m kleinanzeigen_bot help
-        python -m kleinanzeigen_bot version
-        python -m kleinanzeigen_bot verify
+        pdm run app help
+        pdm run app version
+        pdm run app verify
 
-    - name: py2exe
+    - name: "Install: binutils (strip)"
+      if: startsWith(matrix.os, 'ubuntu')
+      run: sudo apt-get --no-install-recommends install -y binutils
+
+    - name: "Install: UPX"
       if: startsWith(matrix.os, 'windows')
       run: |
-        python setup.py py2exe
-        ls -l dist
+        set -eu
 
-    - name: run kleinanzeigen_bot.exe
-      if: startsWith(matrix.os, 'windows')
+        upx_download_url=$(curl -fsSL https://api.github.com/repos/upx/upx/releases/latest | grep browser_download_url | grep win64.zip | cut "-d\"" -f4)
+        echo "Downloading [$upx_download_url]..."
+        curl -fL -o /tmp/upx.zip $upx_download_url
+
+        echo "Extracting upx zip..."
+        mkdir /tmp/upx
+        7z e /tmp/upx.zip -o/tmp/upx *.exe -r
+        echo "$(cygpath -wa /tmp/upx)" >> $GITHUB_PATH
+
+        /tmp/upx/upx.exe --version
+        
+    - name: build self-contained executable
       run: |
         set -eux
 
-        dist/kleinanzeigen-bot.exe help
-        dist/kleinanzeigen-bot.exe version
-        dist/kleinanzeigen-bot.exe verify
+        pdm run compile
+
+        ls -l dist
+
+    - name: run self-contained executable
+      run: |
+        set -eux
+
+        dist/kleinanzeigen-bot help
+        dist/kleinanzeigen-bot version
+        dist/kleinanzeigen-bot verify
+
+    - name: "Share: self-contained executable"
+      uses: actions/upload-artifact@v2
+      with:
+        name: artifacts-${{ matrix.os }}
+        path: dist/kleinanzeigen-bot*
+
+    - name: "Build docker image"
+      if: startsWith(matrix.os, 'ubuntu')
+      run: |
+        set -eux
+
+        bash docker/build-image.sh
+
+        docker run --rm second-hand-friends/kleinanzeigen-bot help
+
+    - name: "Publish docker image"
+      if: startsWith(matrix.os, 'ubuntu') && github.ref == 'refs/heads/main'
+      run: |
+        set -eux
+
+        echo "${{ github.token }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
+
+        image_name="second-hand-friends/kleinanzeigen-bot"
+        docker image tag $image_name ghcr.io/$image_name
+        docker push ghcr.io/$image_name
+
+
+  ###########################################################
+  publish-release:
+  ###########################################################
+    runs-on: ubuntu-latest
+    needs: 
+      - build
+    if: github.ref == 'refs/heads/main'
+    concurrency: publish-latest-release # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idconcurrency
+
+    steps:
+    - name: "SCM Checkout" 
+      # only required by "hub release create" to prevent "fatal: Not a git repository"
+      uses: actions/checkout@v2 #https://github.com/actions/checkout
+
+    - name: "Get: all build artifacts"
+      uses: actions/download-artifact@v2
 
     - name: "Delete previous 'latest' release"
-      if: startsWith(matrix.os, 'windows') && github.ref == 'refs/heads/main'
       run: |
         set -eu
 
@@ -110,17 +208,22 @@ jobs:
         fi
 
     - name: "Create 'latest' Release"
-      if: startsWith(matrix.os, 'windows') && github.ref == 'refs/heads/main'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         set -eux
 
+        mv artifacts-macos-latest/kleinanzeigen-bot kleinanzeigen-bot-darwin-amd64
+        mv artifacts-ubuntu-latest/kleinanzeigen-bot kleinanzeigen-bot-linux-amd64
+        mv artifacts-windows-latest/kleinanzeigen-bot.exe kleinanzeigen-bot-windows-amd64.exe
+
         # https://hub.github.com/hub-release.1.html
         hub release create "latest" \
           --prerelease \
           --message "latest" \
-          --attach "dist/kleinanzeigen-bot.exe#kleinanzeigen-bot.exe"
+          --attach "kleinanzeigen-bot-darwin-amd64" \
+          --attach "kleinanzeigen-bot-linux-amd64" \
+          --attach "kleinanzeigen-bot-windows-amd64.exe"
 
     - name: "Delete intermediate build artifacts"
       uses: geekyeggo/delete-artifact@1-glob-support # https://github.com/GeekyEggo/delete-artifact/
