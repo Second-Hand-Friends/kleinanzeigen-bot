@@ -7,13 +7,13 @@ ad_defaults:
   active: true
   type: OFFER
   description:
-    prefix:
-    suffix:
+    prefix: ""
+    suffix: ""
   price_type: NEGOTIABLE
   shipping_type: SHIPPING
   contact:
-    name:
-    street:
+    name: ""
+    street: ""
     zipcode:
     phone: "" # IMPORTANT: surround phone number with quotes to prevent removal of leading zeros
   republication_interval: 7
@@ -31,5 +31,5 @@ browser:
   binary_location:
 
 login:
-  username:
-  password:
+  username: "" 
+  password: ""
