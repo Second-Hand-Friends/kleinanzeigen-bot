@@ -443,7 +443,7 @@ class KleinanzeigenBot(SeleniumMixin):
         self.web_await(EC.url_contains("p-anzeige-aufgeben-bestaetigung.html?adId="), 20)
 
         ad_cfg_orig["updated_on"] = datetime.utcnow().isoformat()
-        if not ad_cfg_orig["created_on"] and not ad_cfg_orig["id"]:
+        if not ad_cfg["created_on"] and not ad_cfg["id"]:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
 
         # extract the ad id from the URL's query parameter
