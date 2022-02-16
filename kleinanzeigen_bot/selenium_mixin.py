@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 import logging, os, shutil, sys
 from collections.abc import Callable, Iterable
-from typing import Any, Final
+from typing import Any, Final, TypeVar
 
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
@@ -25,6 +25,8 @@ from webdriver_manager.utils import ChromeType
 from .utils import ensure, pause
 
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.selenium_mixin")
+
+T:Final[TypeVar] = TypeVar('T')
 
 
 class SeleniumMixin:
@@ -155,7 +157,7 @@ class SeleniumMixin:
 
         return (None, None)
 
-    def web_await(self, condition: Callable[[WebDriver], WebElement], timeout:int = 5) -> WebElement:
+    def web_await(self, condition: Callable[[WebDriver], T], timeout:int = 5) -> T:
         """
         :param timeout: timeout in seconds
         :raises NoSuchElementException: if element could not be found within time
