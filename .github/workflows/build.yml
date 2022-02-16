@@ -74,8 +74,6 @@ jobs:
         
         pdm run lint
 
-        pdm run autopep8 -v --exit-code --recursive --diff kleinanzeigen_bot tests
-
     - name: run unit tests
       run: |
         pdm run utest
