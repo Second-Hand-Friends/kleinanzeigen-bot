@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 import copy, json, logging, os, secrets, sys, traceback, time
 from importlib.resources import read_text as get_resource_as_string
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from types import ModuleType
 from typing import Any, Final
 
@@ -15,12 +15,28 @@ LOG_ROOT:Final[logging.Logger] = logging.getLogger()
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.utils")
 
 
-def ensure(condition:bool, error_message:str) -> None:
+def ensure(condition:bool | Callable[[], bool], error_message:str, timeout:float = 5, poll_requency:float = 0.5) -> None:
     """
-    :raises AssertionError: if condition is False
+    :param timeout: timespan in seconds until when the condition must become `True`, default is 5 seconds
+    :param poll_requency: sleep interval between calls in seconds, default is 0.5 seconds
+    :raises AssertionError: if condition did not come `True` within given timespan
     """
-    if not condition:
+    if not isinstance(condition, Callable):
+        if condition:
+            return
         raise AssertionError(error_message)
+
+    if timeout < 0:
+        raise AssertionError("[timeout] must be >= 0")
+    if poll_requency < 0:
+        raise AssertionError("[poll_requency] must be >= 0")
+
+    start_at = time.time()
+    while not condition():
+        elapsed = time.time() - start_at
+        if elapsed >= timeout:
+            raise AssertionError(error_message)
+        time.sleep(poll_requency)
 
 
 def is_frozen() -> bool:
