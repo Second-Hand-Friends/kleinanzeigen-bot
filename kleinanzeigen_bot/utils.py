@@ -108,7 +108,7 @@ def on_exception(ex_type, ex_value, ex_traceback) -> None:
     if issubclass(ex_type, KeyboardInterrupt):
         sys.__excepthook__(ex_type, ex_value, ex_traceback)
         return
-    if LOG.isEnabledFor(logging.DEBUG) or isinstance(ex_value, (AttributeError, ImportError, NameError)):
+    if LOG.isEnabledFor(logging.DEBUG) or isinstance(ex_value, (AttributeError, ImportError, NameError, TypeError)):
         LOG.error("".join(traceback.format_exception(ex_type, ex_value, ex_traceback)))
     elif isinstance(ex_value, AssertionError):
         LOG.error(ex_value)
