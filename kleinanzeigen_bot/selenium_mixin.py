@@ -157,7 +157,7 @@ class SeleniumMixin:
 
         return (None, None)
 
-    def web_await(self, condition: Callable[[WebDriver], T], timeout:int = 5, timeout_exception_type: type[Exception] = TimeoutException) -> T:
+    def web_await(self, condition: Callable[[WebDriver], T], timeout:float = 5, timeout_exception_type: type[Exception] = TimeoutException) -> T:
         """
         :param timeout: timeout in seconds
         :raises TimeoutException: if element could not be found within time
@@ -169,7 +169,7 @@ class SeleniumMixin:
                 raise ex
             raise timeout_exception_type from ex
 
-    def web_click(self, selector_type:By, selector_value:str, timeout:int = 5) -> WebElement:
+    def web_click(self, selector_type:By, selector_value:str, timeout:float = 5) -> WebElement:
         """
         :param timeout: timeout in seconds
         :raises NoSuchElementException: if element could not be found within time
@@ -185,14 +185,14 @@ class SeleniumMixin:
         """
         return self.webdriver.execute_script(javascript)
 
-    def web_find(self, selector_type:By, selector_value:str, timeout:int = 5) -> WebElement:
+    def web_find(self, selector_type:By, selector_value:str, timeout:float = 5) -> WebElement:
         """
         :param timeout: timeout in seconds
         :raises NoSuchElementException: if element could not be found within time
         """
         return self.web_await(EC.presence_of_element_located((selector_type, selector_value)), timeout, NoSuchElementException)
 
-    def web_input(self, selector_type:By, selector_value:str, text:str, timeout:int = 5) -> WebElement:
+    def web_input(self, selector_type:By, selector_value:str, text:str, timeout:float = 5) -> WebElement:
         """
         :param timeout: timeout in seconds
         :raises NoSuchElementException: if element could not be found within time
@@ -202,11 +202,12 @@ class SeleniumMixin:
         input_field.send_keys(text)
         pause()
 
-    def web_open(self, url, timeout = 10, reload_if_already_open = False) -> None:
+    def web_open(self, url:str, timeout:float = 10, reload_if_already_open = False) -> None:
         """
         :param url: url to open in browser
-        :param timeout: timeout in seconds
-        :param reload_if_already_open: if False does nothing if the url is already open in the browser
+        :param timeout: timespan in seconds within the page needs to be loaded
+        :param reload_if_already_open: if False does nothing if the URL is already open in the browser
+        :raises TimeoutException: if page did not open within given timespan
         """
         LOG.debug(" -> Opening [%s]...", url)
         if not reload_if_already_open and url == self.webdriver.current_url:
@@ -244,7 +245,7 @@ class SeleniumMixin:
         return response
     # pylint: enable=dangerous-default-value
 
-    def web_select(self, selector_type:By, selector_value:str, selected_value:Any, timeout:int = 5) -> WebElement:
+    def web_select(self, selector_type:By, selector_value:str, selected_value:Any, timeout:float = 5) -> WebElement:
         """
         :param timeout: timeout in seconds
         :raises NoSuchElementException: if element could not be found within time
