@@ -157,22 +157,24 @@ class SeleniumMixin:
 
         return (None, None)
 
-    def web_await(self, condition: Callable[[WebDriver], T], timeout:int = 5) -> T:
+    def web_await(self, condition: Callable[[WebDriver], T], timeout:int = 5, timeout_exception_type: type[Exception] = TimeoutException) -> T:
         """
         :param timeout: timeout in seconds
-        :raises NoSuchElementException: if element could not be found within time
+        :raises TimeoutException: if element could not be found within time
         """
         try:
             return WebDriverWait(self.webdriver, timeout).until(condition)
         except TimeoutException as ex:
-            raise NoSuchElementException from ex
+            if isinstance(ex, timeout_exception_type):
+                raise ex
+            raise timeout_exception_type from ex
 
     def web_click(self, selector_type:By, selector_value:str, timeout:int = 5) -> WebElement:
         """
         :param timeout: timeout in seconds
         :raises NoSuchElementException: if element could not be found within time
         """
-        elem = self.web_await(EC.element_to_be_clickable((selector_type, selector_value)), timeout)
+        elem = self.web_await(EC.element_to_be_clickable((selector_type, selector_value)), timeout, NoSuchElementException)
         elem.click()
         pause()
         return elem
@@ -188,7 +190,7 @@ class SeleniumMixin:
         :param timeout: timeout in seconds
         :raises NoSuchElementException: if element could not be found within time
         """
-        return self.web_await(EC.presence_of_element_located((selector_type, selector_value)), timeout)
+        return self.web_await(EC.presence_of_element_located((selector_type, selector_value)), timeout, NoSuchElementException)
 
     def web_input(self, selector_type:By, selector_value:str, text:str, timeout:int = 5) -> WebElement:
         """
@@ -247,7 +249,7 @@ class SeleniumMixin:
         :param timeout: timeout in seconds
         :raises NoSuchElementException: if element could not be found within time
         """
-        elem = self.web_await(EC.element_to_be_clickable((selector_type, selector_value)), timeout)
+        elem = self.web_await(EC.element_to_be_clickable((selector_type, selector_value)), timeout, NoSuchElementException)
         Select(elem).select_by_value(selected_value)
         pause()
         return elem
