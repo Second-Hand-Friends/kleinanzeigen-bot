@@ -62,6 +62,7 @@ class SeleniumMixin:
                 browser_options.add_argument(f"--user-data-dir={self.browser_config.user_data_dir}")
 
             if self.browser_config.profile_name:
+                LOG.info(" -> Browser Profile Name: %s", self.browser_config.profile_name)
                 browser_options.add_argument(f"--profile-directory={self.browser_config.profile_name}")
 
             browser_options.add_argument("--disable-crash-reporter")
