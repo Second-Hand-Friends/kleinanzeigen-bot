@@ -28,6 +28,7 @@ requires-python = ">=3.10,<3.11" # <3.11 to get newer versions of pyinstaller
 dependencies = [
     "coloredlogs~=15.0",
     "inflect~=5.4",
+    "overrides~=6.1",
     "ruamel.yaml~=0.17",
     "pywin32==303; sys_platform == 'win32'",
     "selenium~=4.1",
