@@ -67,7 +67,7 @@ dependencies = [
 
 [[package]]
 name = "charset-normalizer"
-version = "2.0.11"
+version = "2.0.12"
 requires_python = ">=3.5.0"
 summary = "The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet."
 
@@ -290,7 +290,7 @@ dependencies = [
 
 [[package]]
 name = "pyinstaller-hooks-contrib"
-version = "2022.1"
+version = "2022.2"
 requires_python = ">=3.7"
 summary = "Community maintained hooks for PyInstaller"
 
@@ -374,7 +374,7 @@ dependencies = [
 
 [[package]]
 name = "ruamel.yaml"
-version = "0.17.20"
+version = "0.17.21"
 requires_python = ">=3"
 summary = "ruamel.yaml is a YAML parser/emitter that supports roundtrip preservation of comments, seq/map flow style, and map key order"
 dependencies = [
@@ -409,7 +409,7 @@ dependencies = [
 
 [[package]]
 name = "setuptools"
-version = "60.8.2"
+version = "60.9.2"
 requires_python = ">=3.7"
 summary = "Easily download, build, install, upgrade, and uninstall Python packages"
 
@@ -479,7 +479,7 @@ dependencies = [
 
 [[package]]
 name = "typing-extensions"
-version = "4.0.1"
+version = "4.1.1"
 requires_python = ">=3.6"
 summary = "Backported and Experimental Type Hints for Python 3.6+"
 
@@ -505,7 +505,7 @@ dependencies = [
 
 [[package]]
 name = "webdriver-manager"
-version = "3.5.2"
+version = "3.5.3"
 requires_python = ">=3.6"
 summary = "Library provides the way to automatically manage drivers for different browsers"
 dependencies = [
@@ -618,9 +618,9 @@ content_hash = "sha256:81a62c2f5f69bee0f964a0ec070894cdde80010a38de4fb6cc2b8a761
     {file = "cffi-1.15.0-cp39-cp39-win_amd64.whl", hash = "sha256:3773c4d81e6e818df2efbc7dd77325ca0dcb688116050fb2b3011218eda36139"},
     {file = "cffi-1.15.0.tar.gz", hash = "sha256:920f0d66a896c2d99f0adbb391f990a84091179542c205fa53ce5787aff87954"},
 ]
-"charset-normalizer 2.0.11" = [
-    {file = "charset_normalizer-2.0.11-py3-none-any.whl", hash = "sha256:2842d8f5e82a1f6aa437380934d5e1cd4fcf2003b06fed6940769c164a480a45"},
-    {file = "charset-normalizer-2.0.11.tar.gz", hash = "sha256:98398a9d69ee80548c762ba991a4728bfc3836768ed226b3945908d1a688371c"},
+"charset-normalizer 2.0.12" = [
+    {file = "charset_normalizer-2.0.12-py3-none-any.whl", hash = "sha256:6881edbebdb17b39b4eaaa821b438bf6eddffb4468cf344f09f89def34a8b1df"},
+    {file = "charset-normalizer-2.0.12.tar.gz", hash = "sha256:2857e29ff0d34db842cd7ca3230549d1a697f96ee6d3fb071cfa6c7393832597"},
 ]
 "colorama 0.4.4" = [
     {file = "colorama-0.4.4-py2.py3-none-any.whl", hash = "sha256:9f47eda37229f68eee03b24b9748937c7dc3868f906e8ba69fbcbdd3bc5dc3e2"},
@@ -850,9 +850,9 @@ content_hash = "sha256:81a62c2f5f69bee0f964a0ec070894cdde80010a38de4fb6cc2b8a761
     {file = "pyinstaller-4.9-py3-none-win_amd64.whl", hash = "sha256:bec57b3b2b6178907255557ec0fc4b5ce5a0474013414cdadea853205c74ed26"},
     {file = "pyinstaller-4.9.tar.gz", hash = "sha256:75a180a658871bc41f9cf94b6f90ffa54e98f5d6a7cdb02d7530f0360afe24f9"},
 ]
-"pyinstaller-hooks-contrib 2022.1" = [
-    {file = "pyinstaller_hooks_contrib-2022.1-py2.py3-none-any.whl", hash = "sha256:37f0a16df336c69c8c7bf76105a6c4a53a270d648920fa21de654a6649e70404"},
-    {file = "pyinstaller-hooks-contrib-2022.1.tar.gz", hash = "sha256:f0a40fbe1842598a7066f785da5ac103ae2a86b4cebf478e530e1df57464814e"},
+"pyinstaller-hooks-contrib 2022.2" = [
+    {file = "pyinstaller_hooks_contrib-2022.2-py2.py3-none-any.whl", hash = "sha256:7605e440ccb55904cb2a87d72e83642ef176fb7030c77e52ac4d9679bb3d1537"},
+    {file = "pyinstaller-hooks-contrib-2022.2.tar.gz", hash = "sha256:ab1d14fe053016fff7b0c6aea51d980bac6d02114b04063b46ef7dac70c70e1e"},
 ]
 "pylint 2.12.2" = [
     {file = "pylint-2.12.2-py3-none-any.whl", hash = "sha256:daabda3f7ed9d1c60f52d563b1b854632fd90035bcf01443e234d3dc794e3b74"},
@@ -931,9 +931,9 @@ content_hash = "sha256:81a62c2f5f69bee0f964a0ec070894cdde80010a38de4fb6cc2b8a761
     {file = "requests-2.27.1-py2.py3-none-any.whl", hash = "sha256:f22fa1e554c9ddfd16e6e41ac79759e17be9e492b3587efa038054674760e72d"},
     {file = "requests-2.27.1.tar.gz", hash = "sha256:68d7c56fd5a8999887728ef304a6d12edc7be74f1cfa47714fc8b414525c9a61"},
 ]
-"ruamel.yaml 0.17.20" = [
-    {file = "ruamel.yaml-0.17.20-py3-none-any.whl", hash = "sha256:810eef9c46523a3f77479c66267a4708255ebe806a2d540078408c2227f011af"},
-    {file = "ruamel.yaml-0.17.20.tar.gz", hash = "sha256:4b8a33c1efb2b443a93fcaafcfa4d2e445f8e8c29c528d9f5cdafb7cc9e4004c"},
+"ruamel.yaml 0.17.21" = [
+    {file = "ruamel.yaml-0.17.21-py3-none-any.whl", hash = "sha256:742b35d3d665023981bd6d16b3d24248ce5df75fdb4e2924e93a05c1f8b61ca7"},
+    {file = "ruamel.yaml-0.17.21.tar.gz", hash = "sha256:8b7ce697a2f212752a35c1ac414471dc16c424c9573be4926b56ff3f5d23b7af"},
 ]
 "ruamel.yaml.clib 0.2.6" = [
     {file = "ruamel.yaml.clib-0.2.6-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:6e7be2c5bcb297f5b82fee9c665eb2eb7001d1050deaba8471842979293a80b0"},
@@ -968,9 +968,9 @@ content_hash = "sha256:81a62c2f5f69bee0f964a0ec070894cdde80010a38de4fb6cc2b8a761
 "selenium-stealth 1.0.6" = [
     {file = "selenium_stealth-1.0.6-py3-none-any.whl", hash = "sha256:b62da5452aa4a84f29a4dfb21a9696aff20788a7c570dd0b81bc04a940848b97"},
 ]
-"setuptools 60.8.2" = [
-    {file = "setuptools-60.8.2-py3-none-any.whl", hash = "sha256:43a5575eea6d3459789316e1596a3d2a0d215260cacf4189508112f35c9a145b"},
-    {file = "setuptools-60.8.2.tar.gz", hash = "sha256:66b8598da112b8dc8cd941d54cf63ef91d3b50657b374457eda5851f3ff6a899"},
+"setuptools 60.9.2" = [
+    {file = "setuptools-60.9.2-py3-none-any.whl", hash = "sha256:93b1a3037230bf9aa07327b9fc58f527d5f4e22d36705b55d55ba3ece8606ca6"},
+    {file = "setuptools-60.9.2.tar.gz", hash = "sha256:80743e57120665fa65665286369a0734bce0e7a629ad36507fb7a4b65e7d2e3b"},
 ]
 "smmap 5.0.0" = [
     {file = "smmap-5.0.0-py3-none-any.whl", hash = "sha256:2aba19d6a040e78d8b09de5c57e96207b09ed71d8e55ce0959eeee6c8e190d94"},
@@ -1004,17 +1004,17 @@ content_hash = "sha256:81a62c2f5f69bee0f964a0ec070894cdde80010a38de4fb6cc2b8a761
     {file = "trio_websocket-0.9.2-py3-none-any.whl", hash = "sha256:5b558f6e83cc20a37c3b61202476c5295d1addf57bd65543364e0337e37ed2bc"},
     {file = "trio-websocket-0.9.2.tar.gz", hash = "sha256:a3d34de8fac26023eee701ed1e7bf4da9a8326b61a62934ec9e53b64970fd8fe"},
 ]
-"typing-extensions 4.0.1" = [
-    {file = "typing_extensions-4.0.1-py3-none-any.whl", hash = "sha256:7f001e5ac290a0c0401508864c7ec868be4e701886d5b573a9528ed3973d9d3b"},
-    {file = "typing_extensions-4.0.1.tar.gz", hash = "sha256:4ca091dea149f945ec56afb48dae714f21e8692ef22a395223bcd328961b6a0e"},
+"typing-extensions 4.1.1" = [
+    {file = "typing_extensions-4.1.1-py3-none-any.whl", hash = "sha256:21c85e0fe4b9a155d0799430b0ad741cdce7e359660ccbd8b530613e8df88ce2"},
+    {file = "typing_extensions-4.1.1.tar.gz", hash = "sha256:1a9462dcc3347a79b1f1c0271fbe79e844580bb598bafa1ed208b94da3cdcd42"},
 ]
 "urllib3 1.26.8" = [
     {file = "urllib3-1.26.8-py2.py3-none-any.whl", hash = "sha256:000ca7f471a233c2251c6c7023ee85305721bfdf18621ebff4fd17a8653427ed"},
     {file = "urllib3-1.26.8.tar.gz", hash = "sha256:0e7c33d9a63e7ddfcb86780aac87befc2fbddf46c58dbb487e0855f7ceec283c"},
 ]
-"webdriver-manager 3.5.2" = [
-    {file = "webdriver_manager-3.5.2-py2.py3-none-any.whl", hash = "sha256:1e3aa366b95b80b260bd71aea3a63ea3f19a6d14308e0cd93e1144ca46b11ef4"},
-    {file = "webdriver_manager-3.5.2.tar.gz", hash = "sha256:0a0df5e5d5d234702fd5948fec6c3884940aff904425725f15d8bb9eeaee18e8"},
+"webdriver-manager 3.5.3" = [
+    {file = "webdriver_manager-3.5.3-py2.py3-none-any.whl", hash = "sha256:ef4320064bec22df5b2d7ea0509d08a99d3cecd1ddabd190f26f871dfa52a362"},
+    {file = "webdriver_manager-3.5.3.tar.gz", hash = "sha256:33c86736c51839abdcdeed1bbfd1f0d55277411bae4f232fdc9ace0c518e04f4"},
 ]
 "wrapt 1.13.3" = [
     {file = "wrapt-1.13.3-cp27-cp27m-macosx_10_9_x86_64.whl", hash = "sha256:e05e60ff3b2b0342153be4d1b597bbcfd8330890056b9619f4ad6b8d5c96a81a"},
