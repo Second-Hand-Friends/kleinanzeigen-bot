@@ -34,6 +34,7 @@ browser:
     # --start-maximized
   binary_location: # path to custom browser executable, if not specified will be looked up on PATH
   extensions: [] # a list of .crx extension files to be loaded
+  use_private_window: true
   user_data_dir: "" # see https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md
   profile_name: ""
 
