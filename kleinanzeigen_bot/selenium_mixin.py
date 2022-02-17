@@ -10,6 +10,7 @@ from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service as ChromeService, DEFAULT_EXECUTEABLE_PATH as DEFAULT_CHROMEDRIVER_PATH
+from selenium.webdriver.chromium.options import ChromiumOptions
 from selenium.webdriver.chromium.webdriver import ChromiumDriver
 from selenium.webdriver.edge.service import Service as EdgeService, DEFAULT_EXECUTEABLE_PATH as DEFAULT_EDGEDRIVER_PATH
 from selenium.webdriver.remote.webdriver import WebDriver
@@ -39,7 +40,7 @@ class SeleniumMixin:
     def create_webdriver_session(self) -> None:
         LOG.info("Creating WebDriver session...")
 
-        def init_browser_options(browser_options):
+        def init_browser_options(browser_options:ChromiumOptions):
             if isinstance(browser_options, webdriver.EdgeOptions):
                 browser_options.add_argument("-inprivate")
             else:
@@ -51,6 +52,7 @@ class SeleniumMixin:
             for chrome_option in self.browser_arguments:
                 LOG.info(" -> Custom chrome argument: %s", chrome_option)
                 browser_options.add_argument(chrome_option)
+            LOG.debug("Effective browser arguments: %s", browser_options.arguments)
 
             browser_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             browser_options.add_experimental_option("useAutomationExtension", False)
@@ -60,6 +62,7 @@ class SeleniumMixin:
                 "profile.default_content_setting_values.notifications": 2,  # 1 = allow, 2 = block browser notifications
                 "devtools.preferences.currentDockState": "\"bottom\""
             })
+            LOG.debug("Effective experimental options: %s", browser_options.experimental_options)
 
             if self.browser_binary_location:
                 browser_options.binary_location = self.browser_binary_location
