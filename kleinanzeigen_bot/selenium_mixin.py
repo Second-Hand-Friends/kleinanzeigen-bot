@@ -35,6 +35,7 @@ class SeleniumMixin:
     def __init__(self):
         self.browser_arguments:Iterable[str] = []
         self.browser_binary_location:str = None
+        self.browser_extensions:Iterable[str] = []
         self.webdriver:WebDriver = None
 
     def create_webdriver_session(self) -> None:
@@ -53,6 +54,11 @@ class SeleniumMixin:
                 LOG.info(" -> Custom chrome argument: %s", chrome_option)
                 browser_options.add_argument(chrome_option)
             LOG.debug("Effective browser arguments: %s", browser_options.arguments)
+
+            for crx_extension in self.browser_extensions:
+                ensure(os.path.exists(crx_extension), f"Configured extension-file [{crx_extension}] does not exist.")
+                browser_options.add_extension(crx_extension)
+            LOG.debug("Effective browser extensions: %s", browser_options.extensions)
 
             browser_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             browser_options.add_experimental_option("useAutomationExtension", False)

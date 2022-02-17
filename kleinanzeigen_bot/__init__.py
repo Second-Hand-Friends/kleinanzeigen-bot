@@ -272,6 +272,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
         self.browser_arguments = self.config["browser"]["arguments"]
         self.browser_binary_location = self.config["browser"]["binary_location"]
+        self.browser_extensions = [ abspath(item, relative_to = self.config_file_path) for item in self.config["browser"]["extensions"] ]
 
     def login(self) -> None:
         LOG.info("Logging in as [%s]...", self.config["login"]["username"])
