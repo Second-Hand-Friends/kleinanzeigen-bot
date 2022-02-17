@@ -104,10 +104,7 @@ class SeleniumMixin:
 
         selenium_stealth.stealth(self.webdriver,  # https://github.com/diprajpatra/selenium-stealth#args
             languages = ("de-DE", "de", "en-US", "en"),
-            vendor = "Google Inc.",
             platform = "Win32",
-            webgl_vendor = "Intel Inc.",
-            renderer = "Intel Iris OpenGL Engine",
             fix_hairline = True,
         )
 
