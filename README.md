@@ -210,18 +210,18 @@ ad_files:
 # default values for ads, can be overwritten in each ad configuration file
 ad_defaults:
   active: true
-  type: # one of: OFFER, WANTED
+  type: OFFER # one of: OFFER, WANTED
   description:
     prefix: ""
     suffix: ""
-  price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY
-  shipping_type: # one of: PICKUP, SHIPPING, NOT_APPLICABLE
+  price_type: NEGOTIABLE # one of: FIXED, NEGOTIABLE, GIVE_AWAY
+  shipping_type: SHIPPING # one of: PICKUP, SHIPPING, NOT_APPLICABLE
   contact:
-    name:
-    street:
+    name: ""
+    street: ""
     zipcode:
     phone: "" # IMPORTANT: surround phone number with quotes to prevent removal of leading zeros
-  republication_interval: # every X days ads should be re-published
+  republication_interval: 7 # every X days ads should be re-published
 
 # additional name to category ID mappings, see default list at
 # https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml
@@ -240,6 +240,8 @@ browser:
     # --start-maximized
   binary_location: # path to custom browser executable, if not specified will be looked up on PATH
   extensions: [] # a list of .crx extension files to be loaded
+  user_data_dir: "" # see https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md
+  profile_name: ""
 
 # login credentials
 login:

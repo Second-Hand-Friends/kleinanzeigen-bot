@@ -144,7 +144,8 @@ disable= [
     "missing-docstring",
     "multiple-imports",
     "multiple-statements",
-    "no-self-use"
+    "no-self-use",
+    "too-few-public-methods"
 ]
 
 [tool.pylint.miscelaneous]

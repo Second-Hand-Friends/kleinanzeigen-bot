@@ -30,12 +30,20 @@ LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.selenium_mixin"
 T:Final[TypeVar] = TypeVar('T')
 
 
+class BrowserConfig:
+
+    def __init__(self):
+        self.arguments:Iterable[str] = []
+        self.binary_location:str = None
+        self.extensions:Iterable[str] = []
+        self.user_data_dir:str = ""
+        self.profile_name:str = ""
+
+
 class SeleniumMixin:
 
     def __init__(self):
-        self.browser_arguments:Iterable[str] = []
-        self.browser_binary_location:str = None
-        self.browser_extensions:Iterable[str] = []
+        self.browser_config:Final[BrowserConfig] = BrowserConfig()
         self.webdriver:WebDriver = None
 
     def create_webdriver_session(self) -> None:
@@ -47,15 +55,22 @@ class SeleniumMixin:
             else:
                 browser_options.add_argument("--incognito")
 
+            if self.browser_config.user_data_dir:
+                LOG.info(" -> Browser User Data Dir: %s", self.browser_config.user_data_dir)
+                browser_options.add_argument(f"--user-data-dir={self.browser_config.user_data_dir}")
+
+            if self.browser_config.profile_name:
+                browser_options.add_argument(f"--profile-directory={self.browser_config.profile_name}")
+
             browser_options.add_argument("--disable-crash-reporter")
             browser_options.add_argument("--no-first-run")
             browser_options.add_argument("--no-service-autorun")
-            for chrome_option in self.browser_arguments:
+            for chrome_option in self.browser_config.arguments:
                 LOG.info(" -> Custom chrome argument: %s", chrome_option)
                 browser_options.add_argument(chrome_option)
             LOG.debug("Effective browser arguments: %s", browser_options.arguments)
 
-            for crx_extension in self.browser_extensions:
+            for crx_extension in self.browser_config.extensions:
                 ensure(os.path.exists(crx_extension), f"Configured extension-file [{crx_extension}] does not exist.")
                 browser_options.add_extension(crx_extension)
             LOG.debug("Effective browser extensions: %s", browser_options.extensions)
@@ -70,9 +85,9 @@ class SeleniumMixin:
             })
             LOG.debug("Effective experimental options: %s", browser_options.experimental_options)
 
-            if self.browser_binary_location:
-                browser_options.binary_location = self.browser_binary_location
-                LOG.info(" -> Chrome binary location: %s", self.browser_binary_location)
+            if self.browser_config.binary_location:
+                browser_options.binary_location = self.browser_config.binary_location
+                LOG.info(" -> Chrome binary location: %s", self.browser_config.binary_location)
             return browser_options
 
         # check if a chrome driver is present already
@@ -82,8 +97,8 @@ class SeleniumMixin:
             self.webdriver = webdriver.ChromiumEdge(options = init_browser_options(webdriver.EdgeOptions()))
         else:
             # determine browser major version
-            if self.browser_binary_location:
-                chrome_type, chrome_version = self.get_browser_version(self.browser_binary_location)
+            if self.browser_config.binary_location:
+                chrome_type, chrome_version = self.get_browser_version(self.browser_config.binary_location)
             else:
                 chrome_type, chrome_version = self.get_browser_version_from_os()
             chrome_major_version = chrome_version.split(".", 1)[0]
