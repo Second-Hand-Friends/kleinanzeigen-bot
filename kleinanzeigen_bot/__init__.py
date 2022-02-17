@@ -159,9 +159,10 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info("Searching for ad files...")
 
         ad_files = set()
+        data_root_dir = os.path.dirname(self.config_file_path)
         for file_pattern in self.config["ad_files"]:
-            for ad_file in glob.glob(file_pattern, root_dir = os.getcwd(), recursive = True):
-                ad_files.add(os.path.abspath(ad_file))
+            for ad_file in glob.glob(file_pattern, root_dir = data_root_dir, recursive = True):
+                ad_files.add(os.path.join(data_root_dir, ad_file))
         LOG.info(" -> found %s", pluralize("ad file", ad_files))
         if not ad_files:
             return []
@@ -230,14 +231,15 @@ class KleinanzeigenBot(SeleniumMixin):
             if ad_cfg["images"]:
                 images = set()
                 for image_pattern in ad_cfg["images"]:
-                    for image_file in glob.glob(image_pattern, root_dir = os.path.dirname(ad_file), recursive = True):
+                    ad_dir = os.path.dirname(ad_file)
+                    for image_file in glob.glob(image_pattern, root_dir = ad_dir, recursive = True):
                         _, image_file_ext = os.path.splitext(image_file)
                         ensure(image_file_ext.lower() in {".gif", ".jpg", ".jpeg", ".png"}, f"Unsupported image file type [{image_file}]")
                         if os.path.isabs(image_file):
                             images.add(image_file)
                         else:
                             images.add(os.path.join(os.path.dirname(ad_file), image_file))
-                ensure(images or not ad_cfg["images"], f"No images found for given file patterns {ad_cfg['images']} at {os.getcwd()}")
+                ensure(images or not ad_cfg["images"], f"No images found for given file patterns {ad_cfg['images']} at {ad_dir}")
                 ad_cfg["images"] = sorted(images)
 
             ads.append((
