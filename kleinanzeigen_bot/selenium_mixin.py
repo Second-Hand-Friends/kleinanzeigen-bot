@@ -225,7 +225,7 @@ class SeleniumMixin:
         input_field.send_keys(text)
         pause()
 
-    def web_open(self, url:str, timeout:float = 10, reload_if_already_open = False) -> None:
+    def web_open(self, url:str, timeout:float = 15, reload_if_already_open = False) -> None:
         """
         :param url: url to open in browser
         :param timeout: timespan in seconds within the page needs to be loaded

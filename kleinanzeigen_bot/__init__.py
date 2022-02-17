@@ -9,8 +9,9 @@ import importlib.metadata
 from logging.handlers import RotatingFileHandler
 from typing import Any, Final
 
+from overrides import overrides
 from ruamel.yaml import YAML
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -279,7 +280,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
     def login(self) -> None:
         LOG.info("Logging in as [%s]...", self.config["login"]["username"])
-        self.web_open(f"{self.root_url}/m-einloggen.html")
+        self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
 
         # accept privacy banner
         self.web_click(By.ID, "gdpr-banner-accept")
@@ -460,6 +461,24 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
 
         utils.save_dict(ad_file, ad_cfg_orig)
+
+    @overrides
+    def web_open(self, url:str, timeout:float = 15, reload_if_already_open = False) -> None:
+        start_at = time.time()
+        super().web_open(url, timeout, reload_if_already_open)
+        pause(2000)
+
+        # reload the page until no fullscreen ad is displayed anymore
+        while True:
+            try:
+                self.web_find(By.XPATH, "/html/body/header[@id='site-header']", 2)
+                return
+            except NoSuchElementException as ex:
+                elapsed = time.time() - start_at
+                if elapsed < timeout:
+                    super().web_open(url, timeout - elapsed, True)
+                else:
+                    raise TimeoutException("Loading page failed, it still shows fullscreen ad.") from ex
 
 
 #############################
