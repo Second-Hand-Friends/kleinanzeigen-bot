@@ -15,6 +15,22 @@ LOG_ROOT:Final[logging.Logger] = logging.getLogger()
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.utils")
 
 
+def abspath(relative_path:str, relative_to:str = None):
+    """
+    Makes a given relative path absolute based on another file/folder
+    """
+    if os.path.isabs(relative_path):
+        return relative_path
+
+    if not relative_to:
+        return os.path.abspath(relative_path)
+
+    if os.path.isfile(relative_to):
+        relative_to = os.path.dirname(relative_to)
+
+    return os.path.normpath(os.path.join(relative_to, relative_path))
+
+
 def ensure(condition:bool | Callable[[], bool], error_message:str, timeout:float = 5, poll_requency:float = 0.5) -> None:
     """
     :param timeout: timespan in seconds until when the condition must become `True`, default is 5 seconds
