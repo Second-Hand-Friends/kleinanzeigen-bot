@@ -143,7 +143,7 @@ def on_sigint(_sig:int, _frame) -> None:
 
 
 def pause(min_ms:int = 200, max_ms:int = 2000) -> None:
-    if min_ms == max_ms:
+    if max_ms <= min_ms:
         duration = min_ms
     else:
         duration = secrets.randbelow(max_ms - min_ms) + min_ms
