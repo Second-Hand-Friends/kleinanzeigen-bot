@@ -270,9 +270,11 @@ class KleinanzeigenBot(SeleniumMixin):
         ensure(self.config["login"]["username"], f"[login.username] not specified @ [{self.config_file_path}]")
         ensure(self.config["login"]["password"], f"[login.password] not specified @ [{self.config_file_path}]")
 
-        self.browser_arguments = self.config["browser"]["arguments"]
-        self.browser_binary_location = self.config["browser"]["binary_location"]
-        self.browser_extensions = [ abspath(item, relative_to = self.config_file_path) for item in self.config["browser"]["extensions"] ]
+        self.browser_config.arguments = self.config["browser"]["arguments"]
+        self.browser_config.binary_location = self.config["browser"]["binary_location"]
+        self.browser_config.extensions = [abspath(item, relative_to = self.config_file_path) for item in self.config["browser"]["extensions"]]
+        self.browser_config.user_data_dir = abspath(self.config["browser"]["user_data_dir"], relative_to = self.config_file_path)
+        self.browser_config.profile_name = self.config["browser"]["profile_name"]
 
     def login(self) -> None:
         LOG.info("Logging in as [%s]...", self.config["login"]["username"])
