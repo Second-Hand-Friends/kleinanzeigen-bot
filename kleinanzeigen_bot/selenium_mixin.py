@@ -36,6 +36,7 @@ class BrowserConfig:
         self.arguments:Iterable[str] = []
         self.binary_location:str = None
         self.extensions:Iterable[str] = []
+        self.use_private_window:bool = True
         self.user_data_dir:str = ""
         self.profile_name:str = ""
 
@@ -50,10 +51,11 @@ class SeleniumMixin:
         LOG.info("Creating WebDriver session...")
 
         def init_browser_options(browser_options:ChromiumOptions):
-            if isinstance(browser_options, webdriver.EdgeOptions):
-                browser_options.add_argument("-inprivate")
-            else:
-                browser_options.add_argument("--incognito")
+            if self.browser_config.use_private_window:
+                if isinstance(browser_options, webdriver.EdgeOptions):
+                    browser_options.add_argument("-inprivate")
+                else:
+                    browser_options.add_argument("--incognito")
 
             if self.browser_config.user_data_dir:
                 LOG.info(" -> Browser User Data Dir: %s", self.browser_config.user_data_dir)
