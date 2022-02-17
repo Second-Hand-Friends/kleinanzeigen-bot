@@ -65,7 +65,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 self.load_config()
                 self.load_ads()
                 LOG.info("############################################")
-                LOG.info("No configuration errors found.")
+                LOG.info("DONE: No configuration errors found.")
                 LOG.info("############################################")
             case "publish":
                 self.configure_file_logging()
@@ -76,7 +76,7 @@ class KleinanzeigenBot(SeleniumMixin):
                     self.publish_ads(ads)
                 else:
                     LOG.info("############################################")
-                    LOG.info("No ads to (re-)publish found.")
+                    LOG.info("DONE: No new/outdated ads found.")
                     LOG.info("############################################")
 
             case _:
@@ -157,14 +157,14 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info("App version: %s", self.get_version())
 
     def load_ads(self, *, exclude_inactive = True, exclude_undue = True) -> Iterable[dict[str, Any]]:
-        LOG.info("Searching for ad files...")
+        LOG.info("Searching for ad config files...")
 
         ad_files = set()
         data_root_dir = os.path.dirname(self.config_file_path)
         for file_pattern in self.config["ad_files"]:
             for ad_file in glob.glob(file_pattern, root_dir = data_root_dir, recursive = True):
                 ad_files.add(abspath(ad_file, relative_to = data_root_dir))
-        LOG.info(" -> found %s", pluralize("ad file", ad_files))
+        LOG.info(" -> found %s", pluralize("ad config file", ad_files))
         if not ad_files:
             return []
 
@@ -175,7 +175,7 @@ class KleinanzeigenBot(SeleniumMixin):
         ads = []
         for ad_file in sorted(ad_files):
 
-            ad_cfg_orig = utils.load_dict(ad_file, "ad file")
+            ad_cfg_orig = utils.load_dict(ad_file, "ad")
             ad_cfg = copy.deepcopy(ad_cfg_orig)
             apply_defaults(ad_cfg, self.config["ad_defaults"], ignore = lambda k, _: k == "description", override = lambda _, v: v == "")
             apply_defaults(ad_cfg, ad_fields)
@@ -195,7 +195,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 if last_updated_on:
                     ad_age = datetime.utcnow() - last_updated_on
                     if ad_age.days <= ad_cfg["republication_interval"]:
-                        LOG.info(" -> skipping. last published %d days ago. republication is only required every %s days",
+                        LOG.info(" -> SKIPPED: ad was last published %d days ago. republication is only required every %s days",
                             ad_age.days,
                             ad_cfg["republication_interval"]
                         )
@@ -249,7 +249,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 ad_cfg_orig
             ))
 
-        LOG.info(" -> loaded %s", pluralize("ad", ads))
+        LOG.info("Loaded %s", pluralize("ad", ads))
         return ads
 
     def load_config(self) -> None:
@@ -341,7 +341,7 @@ class KleinanzeigenBot(SeleniumMixin):
             pause(3000, 5000)
 
         LOG.info("############################################")
-        LOG.info("(Re-)published %s", pluralize("ad", count))
+        LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
         LOG.info("############################################")
 
     def publish_ad(self, ad_file, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any]) -> None:
