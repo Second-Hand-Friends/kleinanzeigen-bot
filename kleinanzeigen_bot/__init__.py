@@ -15,7 +15,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
 from . import utils, resources
-from .utils import apply_defaults, ensure, is_frozen, pause, pluralize, safe_get
+from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get
 from .selenium_mixin import SeleniumMixin
 
 LOG_ROOT:Final[logging.Logger] = logging.getLogger()
@@ -31,7 +31,7 @@ class KleinanzeigenBot(SeleniumMixin):
         self.root_url = "https://www.ebay-kleinanzeigen.de"
 
         self.config:dict[str, Any] = {}
-        self.config_file_path = os.path.join(os.getcwd(), "config.yaml")
+        self.config_file_path = abspath("config.yaml")
 
         self.categories:dict[str, str] = {}
 
@@ -40,7 +40,7 @@ class KleinanzeigenBot(SeleniumMixin):
             log_file_basename = os.path.splitext(os.path.basename(sys.executable))[0]
         else:
             log_file_basename = self.__module__
-        self.log_file_path = os.path.join(os.getcwd(), f"{log_file_basename}.log")
+        self.log_file_path = abspath(f"{log_file_basename}.log")
 
         self.command = "help"
         self.force_mode = False
@@ -121,10 +121,10 @@ class KleinanzeigenBot(SeleniumMixin):
                     self.show_help()
                     sys.exit(0)
                 case "--config":
-                    self.config_file_path = os.path.abspath(value)
+                    self.config_file_path = abspath(value)
                 case "--logfile":
                     if value:
-                        self.log_file_path = os.path.abspath(value)
+                        self.log_file_path = abspath(value)
                     else:
                         self.log_file_path = None
                 case "--force":
@@ -162,7 +162,7 @@ class KleinanzeigenBot(SeleniumMixin):
         data_root_dir = os.path.dirname(self.config_file_path)
         for file_pattern in self.config["ad_files"]:
             for ad_file in glob.glob(file_pattern, root_dir = data_root_dir, recursive = True):
-                ad_files.add(os.path.join(data_root_dir, ad_file))
+                ad_files.add(abspath(ad_file, relative_to = data_root_dir))
         LOG.info(" -> found %s", pluralize("ad file", ad_files))
         if not ad_files:
             return []
@@ -238,7 +238,7 @@ class KleinanzeigenBot(SeleniumMixin):
                         if os.path.isabs(image_file):
                             images.add(image_file)
                         else:
-                            images.add(os.path.join(os.path.dirname(ad_file), image_file))
+                            images.add(abspath(image_file, relative_to = ad_file))
                 ensure(images or not ad_cfg["images"], f"No images found for given file patterns {ad_cfg['images']} at {ad_dir}")
                 ad_cfg["images"] = sorted(images)
 
