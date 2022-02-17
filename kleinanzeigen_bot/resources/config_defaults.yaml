@@ -3,23 +3,27 @@ ad_files:
   - "**/ad_*.yml"
   - "**/ad_*.yaml"
 
+# default values for ads, can be overwritten in each ad configuration file
 ad_defaults:
   active: true
-  type: OFFER
+  type: OFFER # one of: OFFER, WANTED
   description:
     prefix: ""
     suffix: ""
-  price_type: NEGOTIABLE
-  shipping_type: SHIPPING
+  price_type: NEGOTIABLE # one of: FIXED, NEGOTIABLE, GIVE_AWAY
+  shipping_type: SHIPPING # one of: PICKUP, SHIPPING, NOT_APPLICABLE
   contact:
     name: ""
     street: ""
     zipcode:
     phone: "" # IMPORTANT: surround phone number with quotes to prevent removal of leading zeros
-  republication_interval: 7
+  republication_interval: 7 # every X days ads should be re-published
 
+# additional name to category ID mappings, see default list at
+# https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml
 categories: []
 
+# browser configuration
 browser:
   # https://peter.sh/experiments/chromium-command-line-switches/
   arguments:
@@ -28,8 +32,10 @@ browser:
     - --no-sandbox
     # --headless
     # --start-maximized
-  binary_location:
+  binary_location: # path to custom browser executable, if not specified will be looked up on PATH
+  extensions: [] # a list of .crx extension files to be loaded
 
+# login credentials
 login:
-  username: "" 
+  username: ""
   password: ""

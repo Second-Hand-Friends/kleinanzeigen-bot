@@ -212,8 +212,8 @@ ad_defaults:
   active: true
   type: # one of: OFFER, WANTED
   description:
-    prefix:
-    suffix:
+    prefix: ""
+    suffix: ""
   price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY
   shipping_type: # one of: PICKUP, SHIPPING, NOT_APPLICABLE
   contact:
@@ -239,11 +239,12 @@ browser:
     # --headless
     # --start-maximized
   binary_location: # path to custom browser executable, if not specified will be looked up on PATH
+  extensions: [] # a list of .crx extension files to be loaded
 
 # login credentials
 login:
-  username:
-  password:
+  username: ""
+  password: ""
 
 ```
 
