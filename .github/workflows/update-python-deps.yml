@@ -1,0 +1,98 @@
+# Copyright (C) 2022 Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# https://docs.github.com/en/free-pro-team@latest/actions/reference/workflow-syntax-for-github-actions
+name: Update Python Dependencies
+
+on:
+  schedule:
+    # https://docs.github.com/en/free-pro-team@latest/actions/reference/events-that-trigger-workflows
+    - cron: '0 5 * * *' # daily at 5 a.m.
+  workflow_dispatch:
+    # https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PYTHON_VERSION: "3.10"
+
+jobs:
+
+  ###########################################################
+  update-python-deps:
+  ###########################################################
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - name: Generate GitHub Access Token
+      uses: tibdex/github-app-token@v1 #https://github.com/tibdex/github-app-token
+      id: generate_token
+      # see https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#authenticating-with-github-app-generated-tokens
+      with:
+        # see https://github.com/organizations/Second-Hand-Friends/settings/apps/kleinanzeigen-bot-deps-updater
+        app_id: ${{ secrets.DEPS_UPDATER_APP_ID }}
+        private_key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
+
+    - name: Git Checkout
+      uses: actions/checkout@v2 # https://github.com/actions/checkout
+      with:
+        token: ${{ steps.generate_token.outputs.token }}
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: "${{ env.PYTHON_VERSION }}"
+
+    - name: Install Python dependencies
+      run: |
+        set -eux
+
+        python --version
+
+        # don't upgrade PIP for now: https://github.com/pdm-project/pdm/issues/874
+        # python -m pip install --upgrade pip
+
+        pip install pdm
+
+        # https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
+        pip install -t __pypackages__/${{ env.PYTHON_VERSION }}/lib selenium
+
+        pdm install -v
+
+    - name: Update Python Dependencies 
+      id: update_deps
+      run: |
+        set -euo pipefail
+
+        exec 5>&1
+        updates=$(pdm update 2>&1 |tee /dev/fd/5)
+
+        if git diff --exit-code pdm.lock; then
+          echo "::set-output name=updates::"
+        else
+          updates=$(echo "$updates" | grep Update)
+          
+          # see https://trstringer.com/github-actions-multiline-strings/
+          updates="${updates//'%'/'%25'}"
+          updates="${updates//$'\n'/'%0A'}"
+          updates="${updates//$'\r'/'%0D'}"
+          
+          echo "::set-output name=updates::${updates}"
+        fi
+
+    - name: Create PR
+      id: create-pr
+      uses: peter-evans/create-pull-request@v3 # https://github.com/peter-evans/create-pull-request
+      if: "${{ steps.update_deps.outputs.updates != '' }}"
+      with:
+        title: "chore: Update Python dependencies"
+        commit-message: "chore: Update Python dependencies"
+        body: ${{ steps.update_deps.outputs.updates }}
+        add-paths: pdm.lock
+        branch: dependencies/pdm
+        branch-suffix: timestamp
+        delete-branch: true
+        token: ${{ steps.generate_token.outputs.token }}
+
