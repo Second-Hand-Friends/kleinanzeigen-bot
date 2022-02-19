@@ -13,8 +13,3 @@ updates:
       include: scope
     labels:
       - dependencies
-  - package-ecosystem: pip
-    directory: /
-    schedule:
-      interval: weekly
-      time: "17:00"
