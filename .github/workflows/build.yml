@@ -14,6 +14,7 @@ on:
     - '**/*.md'
     - '.github/*.yml'
     - '.github/workflows/codeql-analysis.yml'
+    - '.github/workflows/update-python-deps.yml'
   pull_request:
   workflow_dispatch:
     # https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/
