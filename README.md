@@ -226,8 +226,8 @@ ad_defaults:
 # additional name to category ID mappings, see default list at
 # https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml
 categories:
- #Notebooks: 161/27
- #PCs: 161/228
+ #Notebooks: 161/278 # Elektronik > Notebooks
+ #Autoteile: 210/223/sonstige_autoteile # Auto, Rad & Boot > Autoteile & Reifen > Weitere Autoteile
 
 # browser configuration
 browser:
