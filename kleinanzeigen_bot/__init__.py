@@ -44,7 +44,7 @@ class KleinanzeigenBot(SeleniumMixin):
         self.log_file_path = abspath(f"{log_file_basename}.log")
 
         self.command = "help"
-        self.force_mode = False
+        self.ads_selector = "due"
 
     def __del__(self):
         if self.file_log:
@@ -70,7 +70,7 @@ class KleinanzeigenBot(SeleniumMixin):
             case "publish":
                 self.configure_file_logging()
                 self.load_config()
-                if ads := self.load_ads(exclude_undue = not self.force_mode):
+                if ads := self.load_ads():
                     self.create_webdriver_session()
                     self.login()
                     self.publish_ads(ads)
@@ -92,7 +92,7 @@ class KleinanzeigenBot(SeleniumMixin):
             exe = "python -m kleinanzeigen_bot"
 
         print(textwrap.dedent(f"""\
-            Usage: {exe} COMMAND [--config=<PATH>] [--force] [--logfile=<PATH>] [-v|--verbose]
+            Usage: {exe} COMMAND [OPTIONS]
 
             Commands:
               publish - (re-)publishes ads
@@ -101,16 +101,21 @@ class KleinanzeigenBot(SeleniumMixin):
               help    - displays this help (default command)
               version - displays the application version
 
-            Flags:
-              --config=<PATH>  - path to the config YAML or JSON file (default: ./config.yaml)
-              --force          - republish all ads ignoring republication_interval
-              --logfile=<PATH> - path to the logfile (default: ./kleinanzeigen-bot.log)
-              -v, --verbose    - enables verbose output - only useful when troubleshooting issues
+            Options:
+              --ads=all|due|new - specifies which ads to (re-)publish (DEFAULT: due)
+                    Possible values:
+                    * all: (re-)publish all ads ignoring republication_interval
+                    * due: publish all new ads and republish ads according the republication_interval
+                    * new: only publish new ads (i.e. ads that have no id in the config file)
+              --force           - alias for '--ads=all'
+              --config=<PATH>   - path to the config YAML or JSON file (DEFAULT: ./config.yaml)
+              --logfile=<PATH>  - path to the logfile (DEFAULT: ./kleinanzeigen-bot.log)
+              -v, --verbose     - enables verbose output - only useful when troubleshooting issues
         """))
 
     def parse_args(self, args:Iterable[str]) -> None:
         try:
-            options, arguments = getopt.gnu_getopt(args[1:], "hv", ["help", "verbose", "force", "logfile=", "config="])  # pylint: disable=unused-variable
+            options, arguments = getopt.gnu_getopt(args[1:], "hv", ["help", "verbose", "ads=", "logfile=", "config="])  # pylint: disable=unused-variable
         except getopt.error as ex:
             LOG.error(ex.msg)
             LOG.error("Use --help to display available options")
@@ -128,8 +133,10 @@ class KleinanzeigenBot(SeleniumMixin):
                         self.log_file_path = abspath(value)
                     else:
                         self.log_file_path = None
+                case "--ads":
+                    self.ads_selector = value.strip().lower()
                 case "--force":
-                    self.force_mode = True
+                    self.ads_selector = "all"
                 case "-v" | "--verbose":
                     LOG.setLevel(logging.DEBUG)
 
@@ -156,7 +163,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
         LOG.info("App version: %s", self.get_version())
 
-    def load_ads(self, *, exclude_inactive = True, exclude_undue = True) -> Iterable[dict[str, Any]]:
+    def load_ads(self, *, ignore_inactive = True) -> Iterable[dict[str, Any]]:
         LOG.info("Searching for ad config files...")
 
         ad_files = set()
@@ -180,11 +187,15 @@ class KleinanzeigenBot(SeleniumMixin):
             apply_defaults(ad_cfg, self.config["ad_defaults"], ignore = lambda k, _: k == "description", override = lambda _, v: v == "")
             apply_defaults(ad_cfg, ad_fields)
 
-            if exclude_inactive and not ad_cfg["active"]:
-                LOG.info(" -> excluding inactive ad [%s]", ad_file)
+            if ignore_inactive and not ad_cfg["active"]:
+                LOG.info(" -> SKIPPED: inactive ad [%s]", ad_file)
                 continue
 
-            if exclude_undue:
+            if self.ads_selector == "new" and ad_cfg["id"]:
+                LOG.info(" -> SKIPPED: ad [%s] is not new. already has an id assigned.", ad_file)
+                continue
+
+            if self.ads_selector == "due":
                 if ad_cfg["updated_on"]:
                     last_updated_on = datetime.fromisoformat(ad_cfg["updated_on"])
                 elif ad_cfg["created_on"]:
@@ -195,7 +206,8 @@ class KleinanzeigenBot(SeleniumMixin):
                 if last_updated_on:
                     ad_age = datetime.utcnow() - last_updated_on
                     if ad_age.days <= ad_cfg["republication_interval"]:
-                        LOG.info(" -> SKIPPED: ad was last published %d days ago. republication is only required every %s days",
+                        LOG.info(" -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
+                            ad_file,
                             ad_age.days,
                             ad_cfg["republication_interval"]
                         )
