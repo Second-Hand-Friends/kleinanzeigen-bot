@@ -454,6 +454,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
             ensure(previous_uploaded_images_count < count_uploaded_images(), f"Couldn't upload image [{image}] within 60 seconds")
             LOG.debug("   => uploaded image within %i seconds", time.time() - start_at)
+            pause(2000)
 
         #############################
         # submit
