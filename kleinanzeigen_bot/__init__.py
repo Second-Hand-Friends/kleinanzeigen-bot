@@ -405,6 +405,13 @@ class KleinanzeigenBot(SeleniumMixin):
             self.web_input(By.ID, "pstad-price", ad_cfg["price"])
 
         #############################
+        # set special properties of category
+        #############################
+        if ad_cfg["special_attributes"]:
+            for special_property in ad_cfg["special_attributes"]:
+                self.web_input(By.ID, special_property['key'], special_property['value'])
+
+        #############################
         # set description
         #############################
         self.web_execute("document.querySelector('#pstad-descrptn').value = `" + ad_cfg["description"].replace("`", "'") + "`")
