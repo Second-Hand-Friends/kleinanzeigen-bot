@@ -44,7 +44,7 @@ jobs:
     steps:
 
     - name: Git Checkout
-      uses: actions/checkout@v2 #https://github.com/actions/checkout
+      uses: actions/checkout@v3 #https://github.com/actions/checkout
 
     - uses: actions/setup-python@v3
       with:
@@ -181,7 +181,7 @@ jobs:
     steps:
     - name: "SCM Checkout" 
       # only required by "hub release create" to prevent "fatal: Not a git repository"
-      uses: actions/checkout@v2 #https://github.com/actions/checkout
+      uses: actions/checkout@v3 #https://github.com/actions/checkout
 
     - name: "Get: all build artifacts"
       uses: actions/download-artifact@v2
