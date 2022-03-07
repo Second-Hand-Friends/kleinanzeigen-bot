@@ -273,6 +273,9 @@ category: Notebooks
 price:
 price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY
 
+special_attributes:
+  haus_mieten.zimmer_d: 5 # Zimmer
+
 shipping_type: # one of: PICKUP, SHIPPING, NOT_APPLICABLE
 
 # list of wildcard patterns to select images

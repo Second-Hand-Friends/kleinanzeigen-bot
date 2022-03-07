@@ -3,6 +3,7 @@ type:
 title:
 description:
 category:
+special_attributes: {}
 price:
 price_type:
 shipping_type:
