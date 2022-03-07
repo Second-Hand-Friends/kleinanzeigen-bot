@@ -274,8 +274,7 @@ price:
 price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY
 
 special_attributes:
-#   - key: haus_mieten.zimmer_d # Zimmer
-#     value: 5
+  haus_mieten.zimmer_d: 5 # Zimmer
 
 shipping_type: # one of: PICKUP, SHIPPING, NOT_APPLICABLE
 

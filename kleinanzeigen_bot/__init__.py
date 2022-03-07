@@ -408,8 +408,8 @@ class KleinanzeigenBot(SeleniumMixin):
         # set special properties of category
         #############################
         if ad_cfg["special_attributes"]:
-            for special_property in ad_cfg["special_attributes"]:
-                self.web_input(By.ID, special_property['key'], special_property['value'])
+            for special_property_key, special_property_value in ad_cfg["special_attributes"]:
+                self.web_input(By.ID, special_property_key, special_property_value)
 
         #############################
         # set description
