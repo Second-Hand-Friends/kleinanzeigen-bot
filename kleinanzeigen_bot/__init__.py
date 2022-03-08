@@ -408,8 +408,24 @@ class KleinanzeigenBot(SeleniumMixin):
         # set special properties of category
         #############################
         if ad_cfg["special_attributes"]:
-            for special_property_key, special_property_value in ad_cfg["special_attributes"]:
-                self.web_input(By.ID, special_property_key, special_property_value)
+            LOG.debug('found %i special attributes', len(ad_cfg["special_attributes"]))
+            for special_property_key, special_property_value in ad_cfg["special_attributes"].items():
+                LOG.debug("trying to add special attribute %s: %s ", special_property_key, special_property_value)
+                try:
+                    self.web_select(By.XPATH, "//select[@id='" + special_property_key +"']", special_property_value)
+                    LOG.debug("Successfully set attribute field '%s': '%s' ", special_property_key, special_property_value)
+                except:
+                    LOG.debug("attribute field '%s' is not of kind dropdown, trying to input as plain text ", special_property_key)
+                try:
+                    self.web_input(By.ID, special_property_key, special_property_value)
+                    LOG.debug("Successfully set attribute field '%s': '%s' ", special_property_key, special_property_value)
+                except:
+                    LOG.debug("attribute field '%s' is not of kind plain text, trying to input as radio button ", special_property_key)
+                try:
+                    self.web_click(By.XPATH, "//*[@id='" + special_property_key + "']/option[@value='" + special_property_value + "']")
+                    LOG.debug("Successfully set attribute field '%s': '%s' ", special_property_key, special_property_value)
+                except:
+                    LOG.debug("attribute field '%s' is not of kind radio button. No more options. Wasn't able to set attribute ", special_property_key)
 
         #############################
         # set description
