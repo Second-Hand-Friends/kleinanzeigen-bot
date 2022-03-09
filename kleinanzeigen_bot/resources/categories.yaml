@@ -26,3 +26,39 @@ Gesundheit: 153/224/gesundheit
 Tauschen: 272/273
 Verleihen: 272/274
 Verschenken: 272/192
+
+# Schuhe
+Weiteres_Mode_Beauty: 153/155
+Ballerinas: 153/159/ballerinas
+Halb_Schnuerschuhe: 153/159/halb_schnuerschuhe
+Hausschuhe: 153/159/hausschuhe
+Outdoor_Wanderschuhe: 153/159/outdoor_wanderschuhe
+Pumps_High_Heels: 153/159/pumps
+Sandalen: 153/159/sandalen
+Sneaker_Sportschuhe: 153/159/sneaker_sportschuhe
+Stiefel_Stiefeletten: 153/159/stiefel
+Weitere_Schuhe: 153/159/sonstiges
+
+#Familie, Kind & Baby
+Altenpflege: 17/236
+Weiteres_Familie_Kind_Baby: 17/18
+Kinderwagen_Buggys: 17/25
+Babysitter_Kinderbetreuung: 17/237
+Babyschalen_Kindersitze: 17/21
+Baby_Ausstattung: 17/258
+
+# Spielzeug
+Action_Spielfiguren: 17/23/actionfiguren
+Babyspielzeug: 17/23/babyspielzeug
+Barbie_Co: 17/23/barbie
+Dreirad_Co: 17/23/dreirad
+Gesellschaftsspiele: 17/23/gesellschaftsspiele
+Holzspielzeug: 17/23/holzspielzeug
+LEGO_Duplo: 17/23/lego_duplo
+Lernspielzeug: 17/23/lernspielzeug
+Playmobil: 17/23/playmobil
+Puppen: 17/23/puppen
+Spielzeugautos: 17/23/spielzeug_autos
+Spielzeug_draussen: 17/23/spielzeug_draussen
+Stofftiere: 17/23/stofftiere
+Weiteres_Spielzeug: 17/23/sonstiges
