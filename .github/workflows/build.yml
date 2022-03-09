@@ -60,9 +60,6 @@ jobs:
 
         pip install pdm
 
-        # https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
-        pip install -t __pypackages__/${{ env.PYTHON_VERSION }}/lib selenium
-
         pdm install -v
 
     - name: run security scan
