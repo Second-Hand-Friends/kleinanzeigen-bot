@@ -1,12 +1,12 @@
-active:
-type:
+active: # one of: true, false
+type: # one of: OFFER, WANTED
 title:
 description:
 category:
 special_attributes: {}
 price:
-price_type:
-shipping_type:
+price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY
+shipping_type: # one of: PICKUP, SHIPPING, NOT_APPLICABLE
 images: []
 contact:
   name:
