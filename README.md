@@ -253,7 +253,7 @@ login:
 
 #### 2) Ad configuration
 
-Each ad is described in a separate JSON or YAML file with prefix `ad_<filename>`.
+Each ad is described in a separate JSON or YAML file with prefix `ad_<filename>`. The prefix is configurable in config file.
 
 Parameter values specified in the `ad_defaults` section of the `config.yaml` file don't need to be specified again in the ad configuration file.
 

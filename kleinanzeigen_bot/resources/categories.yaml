@@ -62,26 +62,3 @@ Spielzeugautos: 17/23/spielzeug_autos
 Spielzeug für draußen: 17/23/spielzeug_draussen
 Stofftiere: 17/23/stofftiere
 Weiteres Spielzeug: 17/23/sonstiges
-
-# special attributes (always quote numbers)
-# special attributes Schuhe
-schuhe_damen.color_s: braun # Farbe (braun, blau...)
-schuhe_damen.versand_s: nein # Vesand (nein, ja)
-schuhe_damen.art_s: sandalen # Art (ballerinas, halb_schnuerschuhe, hausschuhe, outdoor_wanderschuhe, pumps, sandalen, sneaker_sportschuhe, stiefel, sonstiges)
-schuhe_damen.condition_s: like_new # Zustand (like_new..)
-schuhe_damen.groesse_s: '37' # Größe (37, 38, 39, 40, 41)
-
-# special attributes Immobilien
-haus_mieten.qm_d: '120' # Wohnfläche
-haus_mieten.zimmer_d: '3' # Zimmer
-haus_mieten.anzahl_etagen_i: value # Etagen (optional)
-haus_mieten.badezimmer_d: value # Badezimmer (optional)
-haus_mieten.baujahr_i: value # Baujahr (optional)
-haus_mieten.grundstuecksflaeche_d: value # Grundstücksfläche (optional)
-haus_mieten.haustyp_s: value # Haustyp (optional)
-haus_mieten.heizkosten_i: value # Heizkosten (optional)
-haus_mieten.kaution_i: value # Kaution (optional)
-haus_mieten.nebenkosten_i: value # Nebenkosten (optional)
-haus_mieten.online_tour_s: value # Online-Besichtigung (optional)
-haus_mieten.schlafzimmer_d: value # Schlafzimmer (optional)
-haus_mieten.warmmiete_i: value # Warmmiete (optional)
