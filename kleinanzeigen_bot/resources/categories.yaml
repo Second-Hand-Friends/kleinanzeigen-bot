@@ -1,11 +1,12 @@
 # Elektronik
+Elektronik: 161/168
 Drucker: 161/225/drucker_scanner
 Fernseher: 161/175/fernseher
 Grafikkarten: 161/225/grafikkarten
 Kameras: 161/245/camera
 Kopfhörer: 161/172/lautsprecher_kopfhoerer
 Lautsprecher: 161/172/lautsprecher_kopfhoerer
-Mäuse: 161/225/tastatur_maus/
+Mäuse: 161/225/tastatur_maus
 Monitore: 161/225/monitore
 Netzwerk: 161/225/netzwerk_modem
 Notebooks: 161/278
@@ -14,51 +15,74 @@ PC-Zubehör: 161/225/sonstiges
 Scanner: 161/225/drucker_scanner
 Software: 161/225/software
 Telefone: 161/173/telefone
-Tastaturen: 161/225/tastatur_maus/
+Tastaturen: 161/225/tastatur_maus
 
-# Freizeit
+# Freizeit, Hobby & Nachbarschaft
 Sammeln: 185/234/sonstige
 
 # Mode & Beauty
+Beauty: 153/224/sonstiges
 Gesundheit: 153/224/gesundheit
+Mode: 153/155
 
-# Sonstiges
-Tauschen: 272/273
-Verleihen: 272/274
-Verschenken: 272/192
+# Mode & Beauty > Damenschuhe
+Damenschuhe: 153/158/sonstiges
+Damen_Ballerinas: 153/158/ballerinas
+Damen_Halbschuhe: 153/158/halb_schnuerschuhe
+Damen_Hausschuhe: 153/158/hausschuhe
+Damen_High_Heels: 153/158/pumps
+Damen_Pumps: 153/158/pumps
+Damen_Sandalen: 153/158/sandalen
+Damen_Schnürschuhe: 153/158/halb_schnuerschuhe
+Damen_Sportschuche: 153/158/sneaker_sportschuhe
+Damen_Sneaker: 153/158/sneaker_sportschuhe
+Damen_Stiefel: 153/158/stiefel
+Damen_Stiefeletten: 153/158/stiefel
+Damen_Outdoorschuhe: 153/158/outdoor_wanderschuhe
+Damen_Wanderschuhe: 153/158/outdoor_wanderschuhe
 
-# Schuhe
-Weiteres_Mode_Beauty: 153/155
-Ballerinas: 153/159/ballerinas
-Halb_Schnuerschuhe: 153/159/halb_schnuerschuhe
-Hausschuhe: 153/159/hausschuhe
-Outdoor_Wanderschuhe: 153/159/outdoor_wanderschuhe
-Pumps_High_Heels: 153/159/pumps
-Sandalen: 153/159/sandalen
-Sneaker_Sportschuhe: 153/159/sneaker_sportschuhe
-Stiefel_Stiefeletten: 153/159/stiefel
-Weitere_Schuhe: 153/159/sonstiges
+# Mode & Beauty > Herrenschuhe
+Herrenschuhe: 153/158/sonstiges
+Herren_Halbschuhe: 153/158/halb_schnuerschuhe
+Herren_Hausschuhe: 153/158/hausschuhe
+Herren_Sandalen: 153/158/sandalen
+Herren_Schnürschuhe: 153/158/halb_schnuerschuhe
+Herren_Sportschuche: 153/158/sneaker_sportschuhe
+Herren_Sneaker: 153/158/sneaker_sportschuhe
+Herren_Stiefel: 153/158/stiefel
+Herren_Stiefeletten: 153/158/stiefel
+Herren_Outdoorschuhe: 153/158/outdoor_wanderschuhe
+Herren_Wanderschuhe: 153/158/outdoor_wanderschuhe
 
 #Familie, Kind & Baby
+Familie_Kind_Baby: 17/18
 Altenpflege: 17/236
-Weiteres_Familie_Kind_Baby: 17/18
-Kinderwagen_Buggys: 17/25
-Babysitter_Kinderbetreuung: 17/237
-Babyschalen_Kindersitze: 17/21
-Baby_Ausstattung: 17/258
+Babysitter: 17/237
+Buggys: 17/25
+Babyschalen: 17/21
+Baby-Ausstattung: 17/258
+Kinderbetreuung: 17/237
+Kindersitze: 17/21
+Kinderwagen: 17/25
 
-# Spielzeug
-Action_Spielfiguren: 17/23/actionfiguren
+# Familie, Kind & Baby > Spielzeug
+Spielzeug: 17/23/sonstiges
+Actionfiguren: 17/23/actionfiguren
 Babyspielzeug: 17/23/babyspielzeug
-Barbie_Co: 17/23/barbie
-Dreirad_Co: 17/23/dreirad
+Barbie: 17/23/barbie
+Dreirad: 17/23/dreirad
 Gesellschaftsspiele: 17/23/gesellschaftsspiele
 Holzspielzeug: 17/23/holzspielzeug
-LEGO_Duplo: 17/23/lego_duplo
+Duplo: 17/23/lego_duplo
+LEGO: 17/23/lego_duplo
 Lernspielzeug: 17/23/lernspielzeug
 Playmobil: 17/23/playmobil
 Puppen: 17/23/puppen
 Spielzeugautos: 17/23/spielzeug_autos
 Spielzeug_draussen: 17/23/spielzeug_draussen
 Stofftiere: 17/23/stofftiere
-Weiteres_Spielzeug: 17/23/sonstiges
+
+# Verschenken & Tauschen
+Tauschen: 272/273
+Verleihen: 272/274
+Verschenken: 272/192
