@@ -253,7 +253,7 @@ login:
 
 #### 2) Ad configuration
 
-Each ad is described in a separate JSON or YAML file.
+Each ad is described in a separate JSON or YAML file with prefix `ad_<filename>`. The prefix is configurable in config file.
 
 Parameter values specified in the `ad_defaults` section of the `config.yaml` file don't need to be specified again in the ad configuration file.
 
@@ -274,7 +274,7 @@ price:
 price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY
 
 special_attributes:
-  haus_mieten.zimmer_d: 5 # Zimmer
+  # haus_mieten.zimmer_d: value # Zimmer
 
 shipping_type: # one of: PICKUP, SHIPPING, NOT_APPLICABLE
 

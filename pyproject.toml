@@ -157,7 +157,7 @@ max-attributes = 10
 max-branches   = 20
 max-locals     = 30
 max-returns    = 10
-max-statements = 70
+max-statements = 80
 
 
 #####################
