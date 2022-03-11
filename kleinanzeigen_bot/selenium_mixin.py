@@ -183,6 +183,8 @@ class SeleniumMixin:
 
     def web_await(self, condition: Callable[[WebDriver], T], timeout:float = 5, timeout_exception_type: type[Exception] = TimeoutException) -> T:
         """
+        Blocks/waits until the given condition is met.
+
         :param timeout: timeout in seconds
         :raises TimeoutException: if element could not be found within time
         """
@@ -205,12 +207,16 @@ class SeleniumMixin:
 
     def web_execute(self, javascript:str) -> Any:
         """
+        Executes the given JavaScript code in the context of the current page.
+
         :return: The command's JSON response
         """
         return self.webdriver.execute_script(javascript)
 
     def web_find(self, selector_type:By, selector_value:str, timeout:float = 5) -> WebElement:
         """
+        Locates an HTML element.
+
         :param timeout: timeout in seconds
         :raises NoSuchElementException: if element could not be found within time
         """
@@ -218,6 +224,8 @@ class SeleniumMixin:
 
     def web_input(self, selector_type:By, selector_value:str, text:str, timeout:float = 5) -> WebElement:
         """
+        Enters text into an HTML input field.
+
         :param timeout: timeout in seconds
         :raises NoSuchElementException: if element could not be found within time
         """
@@ -271,6 +279,8 @@ class SeleniumMixin:
 
     def web_select(self, selector_type:By, selector_value:str, selected_value:Any, timeout:float = 5) -> WebElement:
         """
+        Selects an <option/> of a <select/> HTML element.
+
         :param timeout: timeout in seconds
         :raises NoSuchElementException: if element could not be found within time
         """
