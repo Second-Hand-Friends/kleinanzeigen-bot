@@ -11,7 +11,7 @@ from typing import Any, Final
 
 from overrides import overrides
 from ruamel.yaml import YAML
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -405,27 +405,26 @@ class KleinanzeigenBot(SeleniumMixin):
             self.web_input(By.ID, "pstad-price", ad_cfg["price"])
 
         #############################
-        # set special properties of category
+        # set category specific attributes
         #############################
         if ad_cfg["special_attributes"]:
-            LOG.debug('found %i special attributes', len(ad_cfg["special_attributes"]))
-            for special_property_key, special_property_value in ad_cfg["special_attributes"].items():
-                LOG.debug("trying to add special attribute %s: %s ", special_property_key, special_property_value)
+            LOG.debug('Found %i special attributes', len(ad_cfg["special_attributes"]))
+            for special_attribute_key, special_attribute_value in ad_cfg["special_attributes"].items():
+                LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value)
                 try:
-                    self.web_select(By.XPATH, "//select[@id='" + special_property_key + "']", special_property_value)
-                    LOG.debug("Successfully set attribute field '%s': '%s' ", special_property_key, special_property_value)
-                except BaseException:
-                    LOG.debug("attribute field '%s' is not of kind dropdown, trying to input as plain text ", special_property_key)
-                try:
-                    self.web_input(By.ID, special_property_key, special_property_value)
-                    LOG.debug("Successfully set attribute field '%s': '%s' ", special_property_key, special_property_value)
-                except BaseException:
-                    LOG.debug("attribute field '%s' is not of kind plain text, trying to input as radio button ", special_property_key)
-                try:
-                    self.web_click(By.XPATH, "//*[@id='" + special_property_key + "']/option[@value='" + special_property_value + "']")
-                    LOG.debug("Successfully set attribute field '%s': '%s' ", special_property_key, special_property_value)
-                except BaseException:
-                    LOG.debug("attribute field '%s' is not of kind radio button. No more options. Wasn't able to set attribute ", special_property_key)
+                    self.web_select(By.XPATH, f"//select[@id='{special_attribute_key}']", special_attribute_value)
+                except WebDriverException:
+                    LOG.debug("Attribute field '%s' is not of kind dropdown, trying to input as plain text...", special_attribute_key)
+                    try:
+                        self.web_input(By.ID, special_attribute_key, special_attribute_value)
+                    except WebDriverException:
+                        LOG.debug("Attribute field '%s' is not of kind plain text, trying to input as radio button...", special_attribute_key)
+                        try:
+                            self.web_click(By.XPATH, f"//*[@id='{special_attribute_key}']/option[@value='{special_attribute_value}']")
+                        except WebDriverException as ex:
+                            LOG.debug("Attribute field '%s' is not of kind radio button.", special_attribute_key)
+                            raise NoSuchElementException(f"Failed to set special attribute [{special_attribute_key}]") from ex
+                LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value)
 
         #############################
         # set description
