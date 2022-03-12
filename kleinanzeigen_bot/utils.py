@@ -6,13 +6,15 @@ import copy, decimal, json, logging, os, re, secrets, sys, traceback, time
 from importlib.resources import read_text as get_resource_as_string
 from collections.abc import Callable, Iterable
 from types import ModuleType
-from typing import Any, Final
+from typing import Any, Final, TypeVar
 
 import coloredlogs, inflect
 from ruamel.yaml import YAML
 
 LOG_ROOT:Final[logging.Logger] = logging.getLogger()
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.utils")
+
+T:Final[TypeVar] = TypeVar('T')
 
 
 def abspath(relative_path:str, relative_to:str = None):
@@ -123,8 +125,7 @@ def configure_console_logging() -> None:
 def on_exception(ex_type, ex_value, ex_traceback) -> None:
     if issubclass(ex_type, KeyboardInterrupt):
         sys.__excepthook__(ex_type, ex_value, ex_traceback)
-        return
-    if LOG.isEnabledFor(logging.DEBUG) or isinstance(ex_value, (AttributeError, ImportError, NameError, TypeError)):
+    elif LOG.isEnabledFor(logging.DEBUG) or isinstance(ex_value, (AttributeError, ImportError, NameError, TypeError)):
         LOG.error("".join(traceback.format_exception(ex_type, ex_value, ex_traceback)))
     elif isinstance(ex_value, AssertionError):
         LOG.error(ex_value)
