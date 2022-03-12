@@ -283,6 +283,7 @@ class SeleniumMixin:
 
         :param timeout: timeout in seconds
         :raises NoSuchElementException: if element could not be found within time
+        :raises UnexpectedTagNameException: if element is not a <select> element
         """
         elem = self.web_await(EC.element_to_be_clickable((selector_type, selector_value)), timeout, NoSuchElementException)
         Select(elem).select_by_value(selected_value)
