@@ -61,10 +61,10 @@ dev = [
     "autopep8~=1.6",
     "bandit~=1.7",
     "pytest~=7.0",
-    "pyinstaller~=4.9",
+    "pyinstaller~=4.10",
     "psutil",
     "pylint~=2.12",
-    "mypy~=0.931",
+    "mypy~=0.940",
 ]
 
 [tool.pdm.scripts]
