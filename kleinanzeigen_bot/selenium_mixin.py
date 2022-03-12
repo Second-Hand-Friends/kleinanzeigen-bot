@@ -188,7 +188,7 @@ class SeleniumMixin:
 
         return (None, None)
 
-    def web_await(self, condition: Callable[[WebDriver], T], timeout:float = 5, timeout_exception_type: type[Exception] = TimeoutException) -> T:
+    def web_await(self, condition: Callable[[WebDriver], T], timeout:float = 5, exception_on_timeout: Callable[[], Exception] = None) -> T:
         """
         Blocks/waits until the given condition is met.
 
@@ -198,16 +198,20 @@ class SeleniumMixin:
         try:
             return WebDriverWait(self.webdriver, timeout).until(condition)
         except TimeoutException as ex:
-            if isinstance(ex, timeout_exception_type):
-                raise ex
-            raise timeout_exception_type from ex
+            if exception_on_timeout:
+                raise exception_on_timeout() from ex
+            raise ex
 
     def web_click(self, selector_type:By, selector_value:str, timeout:float = 5) -> WebElement:
         """
         :param timeout: timeout in seconds
         :raises NoSuchElementException: if element could not be found within time
         """
-        elem = self.web_await(EC.element_to_be_clickable((selector_type, selector_value)), timeout, NoSuchElementException)
+        elem = self.web_await(
+            EC.element_to_be_clickable((selector_type, selector_value)),
+            timeout,
+            lambda: NoSuchElementException(f"Element {selector_type}:{selector_value} not found or not clickable")
+        )
         elem.click()
         pause()
         return elem
@@ -227,7 +231,11 @@ class SeleniumMixin:
         :param timeout: timeout in seconds
         :raises NoSuchElementException: if element could not be found within time
         """
-        return self.web_await(EC.presence_of_element_located((selector_type, selector_value)), timeout, NoSuchElementException)
+        return self.web_await(
+            EC.presence_of_element_located((selector_type, selector_value)),
+            timeout,
+            lambda: NoSuchElementException(f"Element {selector_type}='{selector_value}' not found")
+        )
 
     def web_input(self, selector_type:By, selector_value:str, text:str, timeout:float = 5) -> WebElement:
         """
@@ -292,7 +300,11 @@ class SeleniumMixin:
         :raises NoSuchElementException: if element could not be found within time
         :raises UnexpectedTagNameException: if element is not a <select> element
         """
-        elem = self.web_await(EC.element_to_be_clickable((selector_type, selector_value)), timeout, NoSuchElementException)
+        elem = self.web_await(
+            EC.element_to_be_clickable((selector_type, selector_value)),
+            timeout,
+            lambda: NoSuchElementException(f"Element {selector_type}='{selector_value}' not found or not clickable")
+        )
         Select(elem).select_by_value(selected_value)
         pause()
         return elem
