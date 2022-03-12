@@ -175,8 +175,8 @@ It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https:/
 
 ## <a name="usage"></a>Usage
 
-```yaml
-Usage: kleinanzeigen-bot COMMAND [-v|--verbose] [--config=<PATH>] [--logfile=<PATH>]
+```
+Usage: kleinanzeigen-bot COMMAND [OPTIONS]
 
 Commands:
   publish - (re-)publishes ads
@@ -184,6 +184,18 @@ Commands:
   --
   help    - displays this help (default command)
   version - displays the application version
+
+Options:
+  --ads=all|due|new - specifies which ads to (re-)publish (DEFAULT: due)
+        Possible values:
+        * all: (re-)publish all ads ignoring republication_interval
+        * due: publish all new ads and republish ads according the republication_interval
+        * new: only publish new ads (i.e. ads that have no id in the config file)
+  --force           - alias for '--ads=all'
+  --keep-old        - don't delete old ads on republication
+  --config=<PATH>   - path to the config YAML or JSON file (DEFAULT: ./config.yaml)
+  --logfile=<PATH>  - path to the logfile (DEFAULT: ./kleinanzeigen-bot.log)
+  -v, --verbose     - enables verbose output - only useful when troubleshooting issues
 ```
 
 ### Configuration
@@ -299,7 +311,7 @@ created_on: # set automatically
 updated_on: # set automatically
 ```
 
-## <a name="development"></a> Development Notes
+## <a name="development"></a>Development Notes
 
 > Please read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing code. Thank you!
 

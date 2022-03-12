@@ -154,7 +154,7 @@ notes = [ "FIXME", "XXX", "TODO" ]
 
 [tool.pylint.design]
 max-attributes = 10
-max-branches   = 20
+max-branches   = 30
 max-locals     = 30
 max-returns    = 10
 max-statements = 90
