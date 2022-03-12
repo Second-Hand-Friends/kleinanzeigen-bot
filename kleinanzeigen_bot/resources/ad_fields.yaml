@@ -7,6 +7,7 @@ special_attributes: {}
 price:
 price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY
 shipping_type: # one of: PICKUP, SHIPPING, NOT_APPLICABLE
+shipping_costs:
 images: []
 contact:
   name:
