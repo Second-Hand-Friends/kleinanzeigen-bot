@@ -241,6 +241,9 @@ class KleinanzeigenBot(SeleniumMixin):
             if ad_cfg["category"]:
                 ad_cfg["category"] = self.categories.get(ad_cfg["category"], ad_cfg["category"])
 
+            if ad_cfg["shipping_costs"]:
+                ad_cfg["shipping_costs"] = str(utils.parse_decimal(ad_cfg["shipping_costs"]))
+
             if ad_cfg["images"]:
                 images = set()
                 for image_pattern in ad_cfg["images"]:
@@ -396,6 +399,17 @@ class KleinanzeigenBot(SeleniumMixin):
             self.web_click(By.XPATH, "//*[@id='postad-step1-sbmt']/button")
         else:
             ensure(is_category_auto_selected, f"No category specified in [{ad_file}] and automatic category detection failed")
+
+        #############################
+        # set shipping type/costs
+        #############################
+        if ad_cfg["shipping_type"] == "PICKUP":
+            self.web_click(By.XPATH, '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/input[@type="radio"]')
+        elif ad_cfg["shipping_costs"]:
+            self.web_click(By.XPATH, '//*[contains(@class, "ShippingOption")]//input[@type="radio"]')
+            self.web_click(By.XPATH, '//*[contains(@class, "CarrierOptionsPopup")]//*[contains(@class, "IndividualPriceSection")]//input[@type="checkbox"]')
+            self.web_input(By.XPATH, '//*[contains(@class, "IndividualShippingInput")]//input[@type="text"]', str.replace(ad_cfg["shipping_costs"], ".", ","))
+            self.web_click(By.XPATH, '//*[contains(@class, "ReactModalPortal")]//button[.//*[text()[contains(.,"Weiter")]]]')
 
         #############################
         # set price

@@ -216,6 +216,7 @@ ad_defaults:
     suffix: ""
   price_type: NEGOTIABLE # one of: FIXED, NEGOTIABLE, GIVE_AWAY
   shipping_type: SHIPPING # one of: PICKUP, SHIPPING, NOT_APPLICABLE
+  shipping_costs: # e.g. 2.95
   contact:
     name: ""
     street: ""
@@ -277,6 +278,7 @@ special_attributes:
   # haus_mieten.zimmer_d: value # Zimmer
 
 shipping_type: # one of: PICKUP, SHIPPING, NOT_APPLICABLE
+shipping_costs: # e.g. 2.95
 
 # list of wildcard patterns to select images
 # if relative paths are specified, then they are relative to this ad configuration file

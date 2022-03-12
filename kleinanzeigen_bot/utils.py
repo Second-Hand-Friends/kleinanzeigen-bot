@@ -2,7 +2,7 @@
 Copyright (C) 2022 Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
-import copy, json, logging, os, secrets, sys, traceback, time
+import copy, decimal, json, logging, os, re, secrets, sys, traceback, time
 from importlib.resources import read_text as get_resource_as_string
 from collections.abc import Callable, Iterable
 from types import ModuleType
@@ -216,3 +216,28 @@ def save_dict(filepath:str, content:dict[str, Any]) -> None:
             yaml.allow_duplicate_keys = False
             yaml.explicit_start = False
             yaml.dump(content, file)
+
+
+def parse_decimal(number:float | int | str) -> decimal.Decimal:
+    """
+    >>> parse_decimal(5)
+    Decimal('5')
+    >>> parse_decimal(5.5)
+    Decimal('5.5')
+    >>> parse_decimal("5.5")
+    Decimal('5.5')
+    >>> parse_decimal("5,5")
+    Decimal('5.5')
+    >>> parse_decimal("1.005,5")
+    Decimal('1005.5')
+    >>> parse_decimal("1,005.5")
+    Decimal('1005.5')
+    """
+    try:
+        return decimal.Decimal(number)
+    except decimal.InvalidOperation as ex:
+        parts = re.split("[.,]", str(number))
+        try:
+            return decimal.Decimal("".join(parts[:-1]) + "." + parts[-1])
+        except decimal.InvalidOperation:
+            raise decimal.DecimalException(f"Invalid number format: {number}") from ex
