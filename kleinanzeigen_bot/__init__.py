@@ -45,6 +45,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
         self.command = "help"
         self.ads_selector = "due"
+        self.delete_old_ads = True
 
     def __del__(self):
         if self.file_log:
@@ -108,6 +109,7 @@ class KleinanzeigenBot(SeleniumMixin):
                     * due: publish all new ads and republish ads according the republication_interval
                     * new: only publish new ads (i.e. ads that have no id in the config file)
               --force           - alias for '--ads=all'
+              --keep-old        - don't delete old ads on republication
               --config=<PATH>   - path to the config YAML or JSON file (DEFAULT: ./config.yaml)
               --logfile=<PATH>  - path to the logfile (DEFAULT: ./kleinanzeigen-bot.log)
               -v, --verbose     - enables verbose output - only useful when troubleshooting issues
@@ -115,7 +117,15 @@ class KleinanzeigenBot(SeleniumMixin):
 
     def parse_args(self, args:Iterable[str]) -> None:
         try:
-            options, arguments = getopt.gnu_getopt(args[1:], "hv", ["help", "verbose", "ads=", "logfile=", "config="])  # pylint: disable=unused-variable
+            options, arguments = getopt.gnu_getopt(args[1:], "hv", [
+                "ads=",
+                "config=",
+                "force",
+                "help",
+                "keep-old",
+                "logfile=",
+                "verbose"
+            ])
         except getopt.error as ex:
             LOG.error(ex.msg)
             LOG.error("Use --help to display available options")
@@ -137,6 +147,8 @@ class KleinanzeigenBot(SeleniumMixin):
                     self.ads_selector = value.strip().lower()
                 case "--force":
                     self.ads_selector = "all"
+                case "--keep-old":
+                    self.delete_old_ads = False
                 case "-v" | "--verbose":
                     LOG.setLevel(logging.DEBUG)
 
@@ -361,7 +373,8 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info("############################################")
 
     def publish_ad(self, ad_file, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any]) -> None:
-        self.delete_ad(ad_cfg)
+        if self.delete_old_ads:
+            self.delete_ad(ad_cfg)
 
         LOG.info("Publishing ad '%s'...", ad_cfg["title"])
 
