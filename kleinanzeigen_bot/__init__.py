@@ -404,6 +404,7 @@ class KleinanzeigenBot(SeleniumMixin):
             is_category_auto_selected = False
 
         if ad_cfg["category"]:
+            utils.pause(2000)  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
             self.web_click(By.ID, "pstad-lnk-chngeCtgry")
             self.web_find(By.ID, "postad-step1-sbmt")
 
