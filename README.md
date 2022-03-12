@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/workflows/Build/badge.svg "GitHub Actions")](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/actions?query=workflow%3A%22Build%22)
 [![License](https://img.shields.io/github/license/Second-Hand-Friends/kleinanzeigen-bot.svg?color=blue)](LICENSE.txt)
-[![Maintainability](https://api.codeclimate.com/v1/badges/8d488c3a229bfb5091a3/maintainability)](https://codeclimate.com/github/Second-Hand-Friends/kleinanzeigen-bot/maintainability)
+[![Maintainability](https://api.codeclimate.com/v1/badges/77b4ed9cc0dd8cfe373c/maintainability)](https://codeclimate.com/github/Second-Hand-Friends/kleinanzeigen-bot/maintainability)
 
 **Feedback and high-quality pull requests are  highly welcome!**
 
