@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 import logging, os, shutil, sys
 from collections.abc import Callable, Iterable
-from typing import Any, Final, TypeVar
+from typing import Any, Final
 
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
@@ -23,11 +23,9 @@ from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.microsoft import EdgeChromiumDriverManager
 from webdriver_manager.utils import ChromeType
 
-from .utils import ensure, pause
+from .utils import ensure, pause, T
 
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.selenium_mixin")
-
-T:Final[TypeVar] = TypeVar('T')
 
 
 class BrowserConfig:
