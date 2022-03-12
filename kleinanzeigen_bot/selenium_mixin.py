@@ -86,12 +86,19 @@ class SeleniumMixin:
                 "profile.default_content_setting_values.notifications": 2,  # 1 = allow, 2 = block browser notifications
                 "devtools.preferences.currentDockState": "\"bottom\""
             })
+
+            if not LOG.isEnabledFor(logging.DEBUG):
+                browser_options.add_argument("--log-level=3")  # INFO: 0, WARNING: 1, ERROR: 2, FATAL: 3
+
             LOG.debug("Effective experimental options: %s", browser_options.experimental_options)
 
             if self.browser_config.binary_location:
                 browser_options.binary_location = self.browser_config.binary_location
                 LOG.info(" -> Chrome binary location: %s", self.browser_config.binary_location)
             return browser_options
+
+        if not LOG.isEnabledFor(logging.DEBUG):
+            os.environ['WDM_LOG_LEVEL'] = '0'  # silence the web driver manager
 
         # check if a chrome driver is present already
         if shutil.which(DEFAULT_CHROMEDRIVER_PATH):
