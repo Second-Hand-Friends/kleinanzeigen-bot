@@ -26,7 +26,7 @@ LOG.setLevel(logging.INFO)
 
 class KleinanzeigenBot(SeleniumMixin):
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
         self.root_url = "https://www.ebay-kleinanzeigen.de"
@@ -36,25 +36,25 @@ class KleinanzeigenBot(SeleniumMixin):
 
         self.categories:dict[str, str] = {}
 
-        self.file_log:logging.FileHandler = None
+        self.file_log:logging.FileHandler | None = None
         if is_frozen():
             log_file_basename = os.path.splitext(os.path.basename(sys.executable))[0]
         else:
             log_file_basename = self.__module__
-        self.log_file_path = abspath(f"{log_file_basename}.log")
+        self.log_file_path:str | None = abspath(f"{log_file_basename}.log")
 
         self.command = "help"
         self.ads_selector = "due"
         self.delete_old_ads = True
 
-    def __del__(self):
+    def __del__(self) -> None:
         if self.file_log:
             LOG_ROOT.removeHandler(self.file_log)
 
     def get_version(self) -> str:
         return importlib.metadata.version(__package__)
 
-    def run(self, args:Iterable[str]) -> None:
+    def run(self, args:list[str]) -> None:
         self.parse_args(args)
         match self.command:
             case "help":
@@ -115,7 +115,7 @@ class KleinanzeigenBot(SeleniumMixin):
               -v, --verbose     - enables verbose output - only useful when troubleshooting issues
         """))
 
-    def parse_args(self, args:Iterable[str]) -> None:
+    def parse_args(self, args:list[str]) -> None:
         try:
             options, arguments = getopt.gnu_getopt(args[1:], "hv", [
                 "ads=",
@@ -175,7 +175,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
         LOG.info("App version: %s", self.get_version())
 
-    def load_ads(self, *, ignore_inactive = True) -> Iterable[dict[str, Any]]:
+    def load_ads(self, *, ignore_inactive:bool = True) -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
         LOG.info("Searching for ad config files...")
 
         ad_files = set()
@@ -228,13 +228,13 @@ class KleinanzeigenBot(SeleniumMixin):
             ad_cfg["description"] = descr_prefix + (ad_cfg["description"] or "") + descr_suffix
 
             # pylint: disable=cell-var-from-loop
-            def assert_one_of(path:str, allowed:Iterable):
+            def assert_one_of(path:str, allowed:Iterable[str]) -> None:
                 ensure(safe_get(ad_cfg, *path.split(".")) in allowed, f"-> property [{path}] must be one of: {allowed} @ [{ad_file}]")
 
-            def assert_min_len(path:str, minlen:int):
+            def assert_min_len(path:str, minlen:int) -> None:
                 ensure(len(safe_get(ad_cfg, *path.split("."))) >= minlen, f"-> property [{path}] must be at least {minlen} characters long @ [{ad_file}]")
 
-            def assert_has_value(path:str):
+            def assert_has_value(path:str) -> None:
                 ensure(safe_get(ad_cfg, *path.split(".")), f"-> property [{path}] not specified @ [{ad_file}]")
             # pylint: enable=cell-var-from-loop
 
@@ -281,7 +281,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
     def load_config(self) -> None:
         config_defaults = utils.load_dict_from_module(resources, "config_defaults.yaml")
-        config = utils.load_dict(self.config_file_path, "config", must_exist = False)
+        config = utils.load_dict_if_exists(self.config_file_path, "config")
 
         if config is None:
             LOG.warning("Config file %s does not exist. Creating it with default values...", self.config_file_path)
@@ -359,7 +359,7 @@ class KleinanzeigenBot(SeleniumMixin):
         ad_cfg["id"] = None
         return True
 
-    def publish_ads(self, ad_cfgs:Iterable[dict[str, Any]]) -> None:
+    def publish_ads(self, ad_cfgs:list[tuple[str, dict[str, Any], dict[str, Any]]]) -> None:
         count = 0
 
         for (ad_file, ad_cfg, ad_cfg_orig) in ad_cfgs:
@@ -372,7 +372,7 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    def publish_ad(self, ad_file, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any]) -> None:
+    def publish_ad(self, ad_file:str, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any]) -> None:
         if self.delete_old_ads:
             self.delete_ad(ad_cfg)
 
@@ -489,7 +489,7 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info(" -> found %s", pluralize("image", ad_cfg["images"]))
         image_upload = self.web_find(By.XPATH, "//input[@type='file']")
 
-        def count_uploaded_images():
+        def count_uploaded_images() -> int:
             return len(self.webdriver.find_elements(By.CLASS_NAME, "imagebox-new-thumbnail"))
 
         for image in ad_cfg["images"]:
@@ -527,7 +527,7 @@ class KleinanzeigenBot(SeleniumMixin):
         utils.save_dict(ad_file, ad_cfg_orig)
 
     @overrides
-    def web_open(self, url:str, timeout:float = 15, reload_if_already_open = False) -> None:
+    def web_open(self, url:str, timeout:float = 15, reload_if_already_open:bool = False) -> None:
         start_at = time.time()
         super().web_open(url, timeout, reload_if_already_open)
         pause(2000)
@@ -548,7 +548,7 @@ class KleinanzeigenBot(SeleniumMixin):
 #############################
 # main entry point
 #############################
-def main(args:Iterable[str]):
+def main(args:list[str]) -> None:
     if "version" not in args:
         print(textwrap.dedent(r"""
          _    _      _                           _                       _           _

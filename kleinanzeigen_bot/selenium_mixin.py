@@ -30,9 +30,9 @@ LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.selenium_mixin"
 
 class BrowserConfig:
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.arguments:Iterable[str] = []
-        self.binary_location:str = None
+        self.binary_location:str | None = None
         self.extensions:Iterable[str] = []
         self.use_private_window:bool = True
         self.user_data_dir:str = ""
@@ -41,74 +41,77 @@ class BrowserConfig:
 
 class SeleniumMixin:
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.browser_config:Final[BrowserConfig] = BrowserConfig()
         self.webdriver:WebDriver = None
 
+    def _init_browser_options(self, browser_options:ChromiumOptions) -> ChromiumOptions:
+        if self.browser_config.use_private_window:
+            if isinstance(browser_options, webdriver.EdgeOptions):
+                browser_options.add_argument("-inprivate")
+            else:
+                browser_options.add_argument("--incognito")
+
+        if self.browser_config.user_data_dir:
+            LOG.info(" -> Browser User Data Dir: %s", self.browser_config.user_data_dir)
+            browser_options.add_argument(f"--user-data-dir={self.browser_config.user_data_dir}")
+
+        if self.browser_config.profile_name:
+            LOG.info(" -> Browser Profile Name: %s", self.browser_config.profile_name)
+            browser_options.add_argument(f"--profile-directory={self.browser_config.profile_name}")
+
+        browser_options.add_argument("--disable-crash-reporter")
+        browser_options.add_argument("--no-first-run")
+        browser_options.add_argument("--no-service-autorun")
+        for chrome_option in self.browser_config.arguments:
+            LOG.info(" -> Custom chrome argument: %s", chrome_option)
+            browser_options.add_argument(chrome_option)
+        LOG.debug("Effective browser arguments: %s", browser_options.arguments)
+
+        for crx_extension in self.browser_config.extensions:
+            ensure(os.path.exists(crx_extension), f"Configured extension-file [{crx_extension}] does not exist.")
+            browser_options.add_extension(crx_extension)
+        LOG.debug("Effective browser extensions: %s", browser_options.extensions)
+
+        browser_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        browser_options.add_experimental_option("useAutomationExtension", False)
+        browser_options.add_experimental_option("prefs", {
+            "credentials_enable_service": False,
+            "profile.password_manager_enabled": False,
+            "profile.default_content_setting_values.notifications": 2,  # 1 = allow, 2 = block browser notifications
+            "devtools.preferences.currentDockState": "\"bottom\""
+        })
+
+        if not LOG.isEnabledFor(logging.DEBUG):
+            browser_options.add_argument("--log-level=3")  # INFO: 0, WARNING: 1, ERROR: 2, FATAL: 3
+
+        LOG.debug("Effective experimental options: %s", browser_options.experimental_options)
+
+        if self.browser_config.binary_location:
+            browser_options.binary_location = self.browser_config.binary_location
+            LOG.info(" -> Chrome binary location: %s", self.browser_config.binary_location)
+        return browser_options
+
     def create_webdriver_session(self) -> None:
         LOG.info("Creating WebDriver session...")
-
-        def init_browser_options(browser_options:ChromiumOptions):
-            if self.browser_config.use_private_window:
-                if isinstance(browser_options, webdriver.EdgeOptions):
-                    browser_options.add_argument("-inprivate")
-                else:
-                    browser_options.add_argument("--incognito")
-
-            if self.browser_config.user_data_dir:
-                LOG.info(" -> Browser User Data Dir: %s", self.browser_config.user_data_dir)
-                browser_options.add_argument(f"--user-data-dir={self.browser_config.user_data_dir}")
-
-            if self.browser_config.profile_name:
-                LOG.info(" -> Browser Profile Name: %s", self.browser_config.profile_name)
-                browser_options.add_argument(f"--profile-directory={self.browser_config.profile_name}")
-
-            browser_options.add_argument("--disable-crash-reporter")
-            browser_options.add_argument("--no-first-run")
-            browser_options.add_argument("--no-service-autorun")
-            for chrome_option in self.browser_config.arguments:
-                LOG.info(" -> Custom chrome argument: %s", chrome_option)
-                browser_options.add_argument(chrome_option)
-            LOG.debug("Effective browser arguments: %s", browser_options.arguments)
-
-            for crx_extension in self.browser_config.extensions:
-                ensure(os.path.exists(crx_extension), f"Configured extension-file [{crx_extension}] does not exist.")
-                browser_options.add_extension(crx_extension)
-            LOG.debug("Effective browser extensions: %s", browser_options.extensions)
-
-            browser_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            browser_options.add_experimental_option("useAutomationExtension", False)
-            browser_options.add_experimental_option("prefs", {
-                "credentials_enable_service": False,
-                "profile.password_manager_enabled": False,
-                "profile.default_content_setting_values.notifications": 2,  # 1 = allow, 2 = block browser notifications
-                "devtools.preferences.currentDockState": "\"bottom\""
-            })
-
-            if not LOG.isEnabledFor(logging.DEBUG):
-                browser_options.add_argument("--log-level=3")  # INFO: 0, WARNING: 1, ERROR: 2, FATAL: 3
-
-            LOG.debug("Effective experimental options: %s", browser_options.experimental_options)
-
-            if self.browser_config.binary_location:
-                browser_options.binary_location = self.browser_config.binary_location
-                LOG.info(" -> Chrome binary location: %s", self.browser_config.binary_location)
-            return browser_options
 
         if not LOG.isEnabledFor(logging.DEBUG):
             os.environ['WDM_LOG_LEVEL'] = '0'  # silence the web driver manager
 
         # check if a chrome driver is present already
         if shutil.which(DEFAULT_CHROMEDRIVER_PATH):
-            self.webdriver = webdriver.Chrome(options = init_browser_options(webdriver.ChromeOptions()))
+            self.webdriver = webdriver.Chrome(options = self._init_browser_options(webdriver.ChromeOptions()))
         elif shutil.which(DEFAULT_EDGEDRIVER_PATH):
-            self.webdriver = webdriver.ChromiumEdge(options = init_browser_options(webdriver.EdgeOptions()))
+            self.webdriver = webdriver.ChromiumEdge(options = self._init_browser_options(webdriver.EdgeOptions()))
         else:
             # determine browser major version
             if self.browser_config.binary_location:
                 chrome_type, chrome_version = self.get_browser_version(self.browser_config.binary_location)
             else:
-                chrome_type, chrome_version = self.get_browser_version_from_os()
+                browser_info = self.get_browser_version_from_os()
+                if browser_info is None:
+                    raise AssertionError("No supported browser found!")
+                chrome_type, chrome_version = browser_info
             chrome_major_version = chrome_version.split(".", 1)[0]
 
             # download and install matching chrome driver
@@ -120,13 +123,13 @@ class SeleniumMixin:
                 env["MSEDGEDRIVER_TELEMETRY_OPTOUT"] = "1"  # https://docs.microsoft.com/en-us/microsoft-edge/privacy-whitepaper/#microsoft-edge-driver
                 self.webdriver = webdriver.ChromiumEdge(
                     service = EdgeService(webdriver_path, env = env),
-                    options = init_browser_options(webdriver.EdgeOptions())
+                    options = self._init_browser_options(webdriver.EdgeOptions())
                 )
             else:
                 webdriver_mgr = ChromeDriverManager(chrome_type = chrome_type, cache_valid_range = 14)
                 webdriver_mgr.driver.browser_version = chrome_major_version
                 webdriver_path = webdriver_mgr.install()
-                self.webdriver = webdriver.Chrome(service = ChromeService(webdriver_path), options = init_browser_options(webdriver.ChromeOptions()))
+                self.webdriver = webdriver.Chrome(service = ChromeService(webdriver_path), options = self._init_browser_options(webdriver.ChromeOptions()))
 
         # workaround to support Edge, see https://github.com/diprajpatra/selenium-stealth/pull/25
         selenium_stealth.Driver = ChromiumDriver
@@ -168,7 +171,7 @@ class SeleniumMixin:
             return (ChromeType.MSEDGE, version)
         return (ChromeType.GOOGLE, version)
 
-    def get_browser_version_from_os(self) -> tuple[ChromeType, str]:
+    def get_browser_version_from_os(self) -> tuple[ChromeType, str] | None:
         version = ChromeDriverManagerUtils.get_browser_version_from_os(ChromeType.CHROMIUM)
         if version != "UNKNOWN":
             return (ChromeType.CHROMIUM, version)
@@ -184,9 +187,9 @@ class SeleniumMixin:
             return (ChromeType.MSEDGE, version)
         LOG.debug("Microsoft Edge not found")
 
-        return (None, None)
+        return None
 
-    def web_await(self, condition: Callable[[WebDriver], T], timeout:float = 5, exception_on_timeout: Callable[[], Exception] = None) -> T:
+    def web_await(self, condition: Callable[[WebDriver], T], timeout:float = 5, exception_on_timeout: Callable[[], Exception] | None = None) -> T:
         """
         Blocks/waits until the given condition is met.
 
@@ -194,7 +197,7 @@ class SeleniumMixin:
         :raises TimeoutException: if element could not be found within time
         """
         try:
-            return WebDriverWait(self.webdriver, timeout).until(condition)
+            return WebDriverWait(self.webdriver, timeout).until(condition)  # type: ignore[no-any-return]
         except TimeoutException as ex:
             if exception_on_timeout:
                 raise exception_on_timeout() from ex
@@ -247,7 +250,7 @@ class SeleniumMixin:
         input_field.send_keys(text)
         pause()
 
-    def web_open(self, url:str, timeout:float = 15, reload_if_already_open = False) -> None:
+    def web_open(self, url:str, timeout:float = 15, reload_if_already_open:bool = False) -> None:
         """
         :param url: url to open in browser
         :param timeout: timespan in seconds within the page needs to be loaded
@@ -262,10 +265,10 @@ class SeleniumMixin:
         WebDriverWait(self.webdriver, timeout).until(lambda _: self.web_execute("return document.readyState") == "complete")
 
     # pylint: disable=dangerous-default-value
-    def web_request(self, url:str, method:str = "GET", valid_response_codes:Iterable[int] = [200], headers:dict[str, str] = None) -> dict[str, Any]:
+    def web_request(self, url:str, method:str = "GET", valid_response_codes:Iterable[int] = [200], headers:dict[str, str] | None = None) -> dict[str, Any]:
         method = method.upper()
         LOG.debug(" -> HTTP %s [%s]...", method, url)
-        response = self.webdriver.execute_async_script(f"""
+        response:dict[str, Any] = self.webdriver.execute_async_script(f"""
             var callback = arguments[arguments.length - 1];
             fetch("{url}", {{
                 method: "{method}",
