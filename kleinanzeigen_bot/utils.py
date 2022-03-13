@@ -4,8 +4,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 import copy, decimal, json, logging, os, re, secrets, sys, traceback, time
 from importlib.resources import read_text as get_resource_as_string
-from collections.abc import Callable, Iterable
-from types import ModuleType
+from collections.abc import Callable, Sized
+from types import FrameType, ModuleType, TracebackType
 from typing import Any, Final, TypeVar
 
 import coloredlogs, inflect
@@ -14,10 +14,11 @@ from ruamel.yaml import YAML
 LOG_ROOT:Final[logging.Logger] = logging.getLogger()
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.utils")
 
-T:Final[TypeVar] = TypeVar('T')
+# https://mypy.readthedocs.io/en/stable/generics.html#generic-functions
+T = TypeVar('T')
 
 
-def abspath(relative_path:str, relative_to:str = None):
+def abspath(relative_path:str, relative_to:str | None = None) -> str:
     """
     Makes a given relative path absolute based on another file/folder
     """
@@ -33,13 +34,13 @@ def abspath(relative_path:str, relative_to:str = None):
     return os.path.normpath(os.path.join(relative_to, relative_path))
 
 
-def ensure(condition:bool | Callable[[], bool], error_message:str, timeout:float = 5, poll_requency:float = 0.5) -> None:
+def ensure(condition:Any | bool | Callable[[], bool], error_message:str, timeout:float = 5, poll_requency:float = 0.5) -> None:
     """
     :param timeout: timespan in seconds until when the condition must become `True`, default is 5 seconds
     :param poll_requency: sleep interval between calls in seconds, default is 0.5 seconds
     :raises AssertionError: if condition did not come `True` within given timespan
     """
-    if not isinstance(condition, Callable):
+    if not isinstance(condition, Callable):  # type: ignore[arg-type] # https://github.com/python/mypy/issues/6864
         if condition:
             return
         raise AssertionError(error_message)
@@ -50,7 +51,7 @@ def ensure(condition:bool | Callable[[], bool], error_message:str, timeout:float
         raise AssertionError("[poll_requency] must be >= 0")
 
     start_at = time.time()
-    while not condition():
+    while not condition():  # type: ignore[operator]
         elapsed = time.time() - start_at
         if elapsed >= timeout:
             raise AssertionError(error_message)
@@ -65,7 +66,12 @@ def is_frozen() -> bool:
     return getattr(sys, "frozen", False)
 
 
-def apply_defaults(target:dict[Any, Any], defaults:dict[Any, Any], ignore = lambda _k, _v: False, override = lambda _k, _v: False) -> dict[Any, Any]:
+def apply_defaults(
+    target:dict[Any, Any],
+    defaults:dict[Any, Any],
+    ignore:Callable[[Any, Any], bool] = lambda _k, _v: False,
+    override:Callable[[Any, Any], bool] = lambda _k, _v: False
+) -> dict[Any, Any]:
     """
     >>> apply_defaults({}, {"foo": "bar"})
     {'foo': 'bar'}
@@ -122,7 +128,7 @@ def configure_console_logging() -> None:
     LOG_ROOT.addHandler(stderr_log)
 
 
-def on_exception(ex_type, ex_value, ex_traceback) -> None:
+def on_exception(ex_type:type[BaseException], ex_value:Any, ex_traceback:TracebackType | None) -> None:
     if issubclass(ex_type, KeyboardInterrupt):
         sys.__excepthook__(ex_type, ex_value, ex_traceback)
     elif LOG.isEnabledFor(logging.DEBUG) or isinstance(ex_value, (AttributeError, ImportError, NameError, TypeError)):
@@ -138,7 +144,7 @@ def on_exit() -> None:
         handler.flush()
 
 
-def on_sigint(_sig:int, _frame) -> None:
+def on_sigint(_sig:int, _frame:FrameType | None) -> None:
     LOG.warning("Aborted on user request.")
     sys.exit(0)
 
@@ -152,7 +158,7 @@ def pause(min_ms:int = 200, max_ms:int = 2000) -> None:
     time.sleep(duration / 1000)
 
 
-def pluralize(word:str, count:int | Iterable, prefix = True):
+def pluralize(word:str, count:int | Sized, prefix:bool = True) -> str:
     """
     >>> pluralize("field", 1)
     '1 field'
@@ -163,15 +169,25 @@ def pluralize(word:str, count:int | Iterable, prefix = True):
     """
     if not hasattr(pluralize, "inflect"):
         pluralize.inflect = inflect.engine()
-    if isinstance(count, Iterable):
+    if isinstance(count, Sized):
         count = len(count)
-    plural = pluralize.inflect.plural_noun(word, count)
+    plural:str = pluralize.inflect.plural_noun(word, count)
     if prefix:
         return f"{count} {plural}"
     return plural
 
 
-def load_dict(filepath:str, content_label:str = "", must_exist = True) -> dict[str, Any] | None:
+def load_dict(filepath:str, content_label:str = "") -> dict[str, Any]:
+    """
+    :raises FileNotFoundError
+    """
+    data = load_dict_if_exists(filepath, content_label)
+    if data is None:
+        raise FileNotFoundError(filepath)
+    return data
+
+
+def load_dict_if_exists(filepath:str, content_label:str = "") -> dict[str, Any] | None:
     filepath = os.path.abspath(filepath)
     LOG.info("Loading %s[%s]...", content_label and content_label + " from " or "", filepath)
 
@@ -180,28 +196,23 @@ def load_dict(filepath:str, content_label:str = "", must_exist = True) -> dict[s
         raise ValueError(f'Unsupported file type. The file name "{filepath}" must end with *.json, *.yaml, or *.yml')
 
     if not os.path.exists(filepath):
-        if must_exist:
-            raise FileNotFoundError(filepath)
         return None
 
     with open(filepath, encoding = "utf-8") as file:
         return json.load(file) if filepath.endswith(".json") else YAML().load(file)
 
 
-def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "", must_exist = True) -> dict[str, Any] | None:
+def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "") -> dict[str, Any]:
+    """
+    :raises FileNotFoundError
+    """
     LOG.debug("Loading %s[%s.%s]...", content_label and content_label + " from " or "", module.__name__, filename)
 
     _, file_ext = os.path.splitext(filename)
-    if file_ext not in [".json", ".yaml", ".yml"]:
+    if file_ext not in (".json", ".yaml", ".yml"):
         raise ValueError(f'Unsupported file type. The file name "{filename}" must end with *.json, *.yaml, or *.yml')
 
-    try:
-        content = get_resource_as_string(module, filename)
-    except FileNotFoundError as ex:
-        if must_exist:
-            raise ex
-        return None
-
+    content = get_resource_as_string(module, filename)
     return json.loads(content) if filename.endswith(".json") else YAML().load(content)
 
 
