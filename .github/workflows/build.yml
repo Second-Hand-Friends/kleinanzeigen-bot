@@ -165,7 +165,6 @@ jobs:
         docker image tag $image_name ghcr.io/$image_name
         docker push ghcr.io/$image_name
 
-
   ###########################################################
   publish-release:
   ###########################################################
@@ -179,6 +178,20 @@ jobs:
     - name: "SCM Checkout" 
       # only required by "hub release create" to prevent "fatal: Not a git repository"
       uses: actions/checkout@v3 #https://github.com/actions/checkout
+
+    - name: Generate GitHub Access Token
+      uses: tibdex/github-app-token@v1 #https://github.com/tibdex/github-app-token
+      id: generate_token
+      # see https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#authenticating-with-github-app-generated-tokens
+      with:
+        # see https://github.com/organizations/Second-Hand-Friends/settings/apps/kleinanzeigen-bot-tu
+        app_id: ${{ secrets.DEPS_UPDATER_APP_ID }}
+        private_key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
+
+    - name: "Delete untagged docker image"
+      uses: camargo/delete-untagged-action@v1
+      with:
+        github-token: ${{ steps.generate_token.outputs.token }}
 
     - name: "Get: all build artifacts"
       uses: actions/download-artifact@v2

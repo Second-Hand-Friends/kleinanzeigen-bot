@@ -32,7 +32,7 @@ jobs:
       id: generate_token
       # see https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#authenticating-with-github-app-generated-tokens
       with:
-        # see https://github.com/organizations/Second-Hand-Friends/settings/apps/kleinanzeigen-bot-deps-updater
+        # see https://github.com/organizations/Second-Hand-Friends/settings/apps/kleinanzeigen-bot-tu
         app_id: ${{ secrets.DEPS_UPDATER_APP_ID }}
         private_key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
 
