@@ -510,7 +510,13 @@ class KleinanzeigenBot(SeleniumMixin):
         # submit
         #############################
         self.handle_captcha_if_present("postAd-recaptcha", "but DON'T click 'Anzeige aufgeben'.")
-        self.web_click(By.ID, "pstad-submit")
+        try:
+            self.web_click(By.ID, "pstad-submit")
+        except NoSuchElementException:
+            # https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/40
+            self.web_click(By.XPATH, "//fieldset[@id='postad-publish']//*[contains(text(),'Anzeige aufgeben')]")
+            self.web_click(By.ID, "imprint-guidance-submit")
+
         self.web_await(EC.url_contains("p-anzeige-aufgeben-bestaetigung.html?adId="), 20)
 
         ad_cfg_orig["updated_on"] = datetime.utcnow().isoformat()
