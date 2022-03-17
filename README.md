@@ -117,9 +117,6 @@ It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https:/
    ```bash
    pip install pdm
 
-   # temporary workaround for https://github.com/SeleniumHQ/selenium/issues/10022 / https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
-   pip install -t __pypackages__/3.10/lib selenium
-
    pdm install
    ```
 1. Run the app:
