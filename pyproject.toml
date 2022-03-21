@@ -41,14 +41,6 @@ homepage = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot"
 repository = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot"
 documentation = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/README.md"
 
-[project.optional-dependencies]
-
-
-[project.scripts]
-# https://www.python.org/dev/peps/pep-0621/#entry-points
-# https://blogs.thebitx.com/index.php/2021/09/02/pybites-how-to-package-and-deploy-cli-applications-with-python-pypa-setuptools-build/
-kleinanzeigen_bot = 'kleinanzeigen_bot:main'
-
 
 #####################
 # pdm https://github.com/pdm-project/pdm/
