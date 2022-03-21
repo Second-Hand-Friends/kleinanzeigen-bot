@@ -37,9 +37,10 @@ dependencies = [
 ]
 
 [project.urls]
-homepage = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot"
-repository = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot"
-documentation = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/README.md"
+Homepage = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot"
+Repository = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot.git"
+Documentation = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/README.md"
+Issues = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues"
 
 
 #####################

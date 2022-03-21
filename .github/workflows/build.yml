@@ -43,14 +43,14 @@ jobs:
 
     steps:
 
-    - name: Git Checkout
+    - name: Git checkout
       uses: actions/checkout@v3 #https://github.com/actions/checkout
 
     - uses: actions/setup-python@v3
       with:
         python-version: "${{ env.PYTHON_VERSION }}"
 
-    - name: Install python dependencies
+    - name: "Install: Python dependencies"
       run: |
         set -eux
 
@@ -62,21 +62,25 @@ jobs:
 
         pdm install -v
 
-    - name: run security scan
+    - name: Display project metadata
+      run: |
+         pdm show
+
+    - name: Security scan
       run: |
         pdm run scan
 
-    - name: check code style
+    - name: Check code style
       run: |
         set -eux
         
         pdm run lint
 
-    - name: run unit tests
+    - name: Run unit tests
       run: |
         pdm run utest
         
-    - name: run integration tests
+    - name: Run integration tests
       run: |
         set -eux
         
@@ -89,7 +93,7 @@ jobs:
               ;;
         esac
 
-    - name: run kleinanzeigen_bot
+    - name: Run app from source
       run: |
         echo "
         login:
@@ -123,7 +127,7 @@ jobs:
 
         /tmp/upx/upx.exe --version
         
-    - name: build self-contained executable
+    - name: Build self-contained executable
       run: |
         set -eux
 
@@ -131,7 +135,7 @@ jobs:
 
         ls -l dist
 
-    - name: run self-contained executable
+    - name: Run self-contained executable
       run: |
         set -eux
 
@@ -139,13 +143,13 @@ jobs:
         dist/kleinanzeigen-bot version
         dist/kleinanzeigen-bot verify
 
-    - name: "Share: self-contained executable"
+    - name: Upload self-contained executable
       uses: actions/upload-artifact@v2
       with:
         name: artifacts-${{ matrix.os }}
         path: dist/kleinanzeigen-bot*
 
-    - name: "Build docker image"
+    - name: Build Docker image
       if: startsWith(matrix.os, 'ubuntu')
       run: |
         set -eux
@@ -154,7 +158,7 @@ jobs:
 
         docker run --rm second-hand-friends/kleinanzeigen-bot help
 
-    - name: "Publish docker image"
+    - name: Publish Docker image
       if: startsWith(matrix.os, 'ubuntu') && github.ref == 'refs/heads/main'
       run: |
         set -eux
@@ -175,11 +179,11 @@ jobs:
     concurrency: publish-latest-release # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idconcurrency
 
     steps:
-    - name: "SCM Checkout" 
+    - name: Git checkout 
       # only required by "hub release create" to prevent "fatal: Not a git repository"
       uses: actions/checkout@v3 #https://github.com/actions/checkout
 
-    - name: Generate GitHub Access Token
+    - name: Generate GitHub access token
       uses: tibdex/github-app-token@v1 #https://github.com/tibdex/github-app-token
       id: generate_token
       # see https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#authenticating-with-github-app-generated-tokens
@@ -188,12 +192,12 @@ jobs:
         app_id: ${{ secrets.DEPS_UPDATER_APP_ID }}
         private_key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
 
-    - name: "Delete untagged docker image"
+    - name: Delete untagged docker image
       uses: camargo/delete-untagged-action@v1
       with:
         github-token: ${{ steps.generate_token.outputs.token }}
 
-    - name: "Get: all build artifacts"
+    - name: Download build artifacts
       uses: actions/download-artifact@v2
 
     - name: "Delete previous 'latest' release"
@@ -216,7 +220,7 @@ jobs:
            curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -fsSL -X DELETE "$tag_url"
         fi
 
-    - name: "Create 'latest' Release"
+    - name: "Create 'latest' release"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -234,7 +238,7 @@ jobs:
           --attach "kleinanzeigen-bot-linux-amd64" \
           --attach "kleinanzeigen-bot-windows-amd64.exe"
 
-    - name: "Delete intermediate build artifacts"
+    - name: Delete intermediate build artifacts
       uses: geekyeggo/delete-artifact@1-glob-support # https://github.com/GeekyEggo/delete-artifact/
       with:
         name: "*"
