@@ -88,20 +88,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "configparser"
-version = "5.2.0"
-requires_python = ">=3.6"
-summary = "Updated configparser from Python 3.8 for Python 2.6+."
-
-[[package]]
-name = "crayons"
-version = "0.4.0"
-summary = "TextUI colors for Python."
-dependencies = [
-    "colorama",
-]
-
-[[package]]
 name = "cryptography"
 version = "36.0.2"
 requires_python = ">=3.6"
@@ -528,12 +514,10 @@ dependencies = [
 
 [[package]]
 name = "webdriver-manager"
-version = "3.5.3"
+version = "3.5.4"
 requires_python = ">=3.6"
 summary = "Library provides the way to automatically manage drivers for different browsers"
 dependencies = [
-    "configparser",
-    "crayons",
     "requests",
 ]
 
@@ -554,7 +538,7 @@ dependencies = [
 
 [metadata]
 lock_version = "3.1"
-content_hash = "sha256:2f987c3e7f97cf592c0366dfa6f3e7c95d77ad82b950872fc53577fd5a40267e"
+content_hash = "sha256:741030b205d43ca3ee40df89c6085d5e582f37e5b5100442e0608e5be4e728cc"
 
 [metadata.files]
 "altgraph 0.17.2" = [
@@ -652,14 +636,6 @@ content_hash = "sha256:2f987c3e7f97cf592c0366dfa6f3e7c95d77ad82b950872fc53577fd5
 "coloredlogs 15.0.1" = [
     {file = "coloredlogs-15.0.1-py2.py3-none-any.whl", hash = "sha256:612ee75c546f53e92e70049c9dbfcc18c935a2b9a53b66085ce9ef6a6e5c0934"},
     {file = "coloredlogs-15.0.1.tar.gz", hash = "sha256:7c991aa71a4577af2f82600d8f8f3a89f936baeaf9b50a9c197da014e5bf16b0"},
-]
-"configparser 5.2.0" = [
-    {file = "configparser-5.2.0-py3-none-any.whl", hash = "sha256:e8b39238fb6f0153a069aa253d349467c3c4737934f253ef6abac5fe0eca1e5d"},
-    {file = "configparser-5.2.0.tar.gz", hash = "sha256:1b35798fdf1713f1c3139016cfcbc461f09edbf099d1fb658d4b7479fcaa3daa"},
-]
-"crayons 0.4.0" = [
-    {file = "crayons-0.4.0-py2.py3-none-any.whl", hash = "sha256:e73ad105c78935d71fe454dd4b85c5c437ba199294e7ffd3341842bc683654b1"},
-    {file = "crayons-0.4.0.tar.gz", hash = "sha256:bd33b7547800f2cfbd26b38431f9e64b487a7de74a947b0fafc89b45a601813f"},
 ]
 "cryptography 36.0.2" = [
     {file = "cryptography-36.0.2-cp36-abi3-macosx_10_10_universal2.whl", hash = "sha256:4e2dddd38a5ba733be6a025a1475a9f45e4e41139d1321f412c6b360b19070b6"},
@@ -1051,9 +1027,9 @@ content_hash = "sha256:2f987c3e7f97cf592c0366dfa6f3e7c95d77ad82b950872fc53577fd5
     {file = "urllib3-1.26.9-py2.py3-none-any.whl", hash = "sha256:44ece4d53fb1706f667c9bd1c648f5469a2ec925fcf3a776667042d645472c14"},
     {file = "urllib3-1.26.9.tar.gz", hash = "sha256:aabaf16477806a5e1dd19aa41f8c2b7950dd3c746362d7e3223dbe6de6ac448e"},
 ]
-"webdriver-manager 3.5.3" = [
-    {file = "webdriver_manager-3.5.3-py2.py3-none-any.whl", hash = "sha256:ef4320064bec22df5b2d7ea0509d08a99d3cecd1ddabd190f26f871dfa52a362"},
-    {file = "webdriver_manager-3.5.3.tar.gz", hash = "sha256:33c86736c51839abdcdeed1bbfd1f0d55277411bae4f232fdc9ace0c518e04f4"},
+"webdriver-manager 3.5.4" = [
+    {file = "webdriver_manager-3.5.4-py2.py3-none-any.whl", hash = "sha256:b5b91b5df83181e002263fe27296967a5b19cb1ebe8e4a63ee83538394037df4"},
+    {file = "webdriver_manager-3.5.4.tar.gz", hash = "sha256:2eb7c2fe38ec5b06e2090164923e4dfb7c3ac4e7140333a3de9c7956f5047858"},
 ]
 "wrapt 1.13.3" = [
     {file = "wrapt-1.13.3-cp27-cp27m-macosx_10_9_x86_64.whl", hash = "sha256:e05e60ff3b2b0342153be4d1b597bbcfd8330890056b9619f4ad6b8d5c96a81a"},
