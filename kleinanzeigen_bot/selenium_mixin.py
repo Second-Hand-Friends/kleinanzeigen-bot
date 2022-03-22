@@ -2,7 +2,7 @@
 Copyright (C) 2022 Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
-import logging, os, shutil, sys
+import logging, os, shutil
 from collections.abc import Callable, Iterable
 from typing import Any, Final
 
@@ -21,7 +21,7 @@ import selenium_stealth
 import webdriver_manager.utils as ChromeDriverManagerUtils
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.microsoft import EdgeChromiumDriverManager
-from webdriver_manager.utils import ChromeType
+from webdriver_manager.utils import ChromeType, OSType
 
 from .utils import ensure, pause, T
 
@@ -92,26 +92,30 @@ class SeleniumMixin:
             LOG.info(" -> Chrome binary location: %s", self.browser_config.binary_location)
         return browser_options
 
-    def create_webdriver_session(self) -> None:
+    def create_webdriver_session(self, *, use_preinstalled_webdriver:bool = True) -> None:
         LOG.info("Creating WebDriver session...")
 
         if not LOG.isEnabledFor(logging.DEBUG):
             os.environ['WDM_LOG_LEVEL'] = '0'  # silence the web driver manager
 
         # check if a chrome driver is present already
-        if shutil.which(DEFAULT_CHROMEDRIVER_PATH):
+        if use_preinstalled_webdriver and shutil.which(DEFAULT_CHROMEDRIVER_PATH):
+            LOG.info("Using pre-installed Chrome Driver [%s]", shutil.which(DEFAULT_CHROMEDRIVER_PATH))
             self.webdriver = webdriver.Chrome(options = self._init_browser_options(webdriver.ChromeOptions()))
-        elif shutil.which(DEFAULT_EDGEDRIVER_PATH):
+        elif use_preinstalled_webdriver and shutil.which(DEFAULT_EDGEDRIVER_PATH):
+            LOG.info("Using pre-installed Edge Driver [%s]", shutil.which(DEFAULT_EDGEDRIVER_PATH))
             self.webdriver = webdriver.ChromiumEdge(options = self._init_browser_options(webdriver.EdgeOptions()))
         else:
             # determine browser major version
             if self.browser_config.binary_location:
                 chrome_type, chrome_version = self.get_browser_version(self.browser_config.binary_location)
             else:
-                browser_info = self.get_browser_version_from_os()
+                browser_info = self.find_compatible_browser()
                 if browser_info is None:
                     raise AssertionError("No supported browser found!")
-                chrome_type, chrome_version = browser_info
+                chrome_path, chrome_type, chrome_version = browser_info
+                self.browser_config.binary_location = chrome_path
+            LOG.info("Using Browser: %s %s [%s]", chrome_type.upper(), chrome_version, self.browser_config.binary_location)
             chrome_major_version = chrome_version.split(".", 1)[0]
 
             # download and install matching chrome driver
@@ -143,50 +147,88 @@ class SeleniumMixin:
         LOG.info("New WebDriver session is: %s %s", self.webdriver.session_id, self.webdriver.command_executor._url)  # pylint: disable=protected-access
 
     def get_browser_version(self, executable_path: str) -> tuple[ChromeType, str]:
-        if sys.platform == "win32":
-            import win32api  # pylint: disable=import-outside-toplevel,import-error
-            # pylint: disable=no-member
-            lang, codepage = win32api.GetFileVersionInfo(executable_path, "\\VarFileInfo\\Translation")[0]
-            product_name = win32api.GetFileVersionInfo(executable_path, f"\\StringFileInfo\\{lang:04X}{codepage:04X}\\ProductName")
-            product_version = win32api.GetFileVersionInfo(executable_path, f"\\StringFileInfo\\{lang:04X}{codepage:04X}\\ProductVersion")
-            # pylint: enable=no-member
-            match product_name:
-                case "Chromium":
-                    return (ChromeType.CHROMIUM, product_version)
-                case "Microsoft Edge":
-                    return (ChromeType.MSEDGE, product_version)
-                case _:  # "Google Chrome"
-                    return (ChromeType.GOOGLE, product_version)
+        match ChromeDriverManagerUtils.os_name():
+            case OSType.WIN:
+                import win32api  # pylint: disable=import-outside-toplevel,import-error
+                # pylint: disable=no-member
+                lang, codepage = win32api.GetFileVersionInfo(executable_path, "\\VarFileInfo\\Translation")[0]
+                product_name = win32api.GetFileVersionInfo(executable_path, f"\\StringFileInfo\\{lang:04X}{codepage:04X}\\ProductName")
+                product_version = win32api.GetFileVersionInfo(executable_path, f"\\StringFileInfo\\{lang:04X}{codepage:04X}\\ProductVersion")
+                # pylint: enable=no-member
+                match product_name:
+                    case "Chromium":
+                        return (ChromeType.CHROMIUM, product_version)
+                    case "Microsoft Edge":
+                        return (ChromeType.MSEDGE, product_version)
+                    case _:  # "Google Chrome"
+                        return (ChromeType.GOOGLE, product_version)
 
-        if sys.platform.startswith("linux"):
-            cmd = ChromeDriverManagerUtils.linux_browser_apps_to_cmd(executable_path)
-        else:
-            cmd = executable_path + " --version"
+            case OSType.LINUX:
+                version_cmd = ChromeDriverManagerUtils.linux_browser_apps_to_cmd(f'"{executable_path}"')
 
-        version = ChromeDriverManagerUtils.read_version_from_cmd(cmd, r'\d+\.\d+\.\d+')
+            case _:
+                version_cmd = f'"{executable_path}" --version'
+
         filename = os.path.basename(executable_path).lower()
         if "chromium" in filename:
-            return (ChromeType.CHROMIUM, version)
+            return (
+                ChromeType.CHROMIUM,
+                ChromeDriverManagerUtils.read_version_from_cmd(version_cmd, ChromeDriverManagerUtils.PATTERN[ChromeType.CHROMIUM])
+            )
         if "edge" in filename:
-            return (ChromeType.MSEDGE, version)
-        return (ChromeType.GOOGLE, version)
+            return (
+                ChromeType.MSEDGE,
+                ChromeDriverManagerUtils.read_version_from_cmd(version_cmd, ChromeDriverManagerUtils.PATTERN[ChromeType.MSEDGE])
+            )
+        return (
+            ChromeType.GOOGLE,
+            ChromeDriverManagerUtils.read_version_from_cmd(version_cmd, ChromeDriverManagerUtils.PATTERN[ChromeType.GOOGLE])
+        )
 
-    def get_browser_version_from_os(self) -> tuple[ChromeType, str] | None:
-        version = ChromeDriverManagerUtils.get_browser_version_from_os(ChromeType.CHROMIUM)
-        if version != "UNKNOWN":
-            return (ChromeType.CHROMIUM, version)
-        LOG.debug("Chromium not found")
+    def find_compatible_browser(self) -> tuple[str, ChromeType, str] | None:
+        match ChromeDriverManagerUtils.os_name():
+            case OSType.LINUX:
+                browser_paths = [
+                    shutil.which("chromium"),
+                    shutil.which("chromium-browser"),
+                    shutil.which("google-chome"),
+                    shutil.which("microsoft-edge")
+                ]
 
-        version = ChromeDriverManagerUtils.get_browser_version_from_os(ChromeType.GOOGLE)
-        if version != "UNKNOWN":
-            return (ChromeType.GOOGLE, version)
-        LOG.debug("Google Chrome not found")
+            case OSType.MAC:
+                browser_paths = [
+                    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+                    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+                ]
 
-        version = ChromeDriverManagerUtils.get_browser_version_from_os(ChromeType.MSEDGE)
-        if version != "UNKNOWN":
-            return (ChromeType.MSEDGE, version)
-        LOG.debug("Microsoft Edge not found")
+            case OSType.WIN:
+                browser_paths = [
+                    os.environ.get("ProgramFiles", "C:\\Program Files") + r'\Microsoft\Edge\Application\msedge.exe',
+                    os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)") + r'\Microsoft\Edge\Application\msedge.exe',
 
+                    os.environ["ProgramFiles"] + r'\Chromium\Application\chrome.exe',
+                    os.environ["ProgramFiles(x86)"] + r'\Chromium\Application\chrome.exe',
+                    os.environ["LOCALAPPDATA"] + r'\Chromium\Application\chrome.exe',
+
+                    os.environ["ProgramFiles"] + r'\Chrome\Application\chrome.exe',
+                    os.environ["ProgramFiles(x86)"] + r'\Chrome\Application\chrome.exe',
+                    os.environ["LOCALAPPDATA"] + r'\Chrome\Application\chrome.exe',
+
+                    shutil.which("msedge.exe"),
+                    shutil.which("chromium.exe"),
+                    shutil.which("chrome.exe")
+                ]
+
+            case _ as os_name:
+                LOG.warning("Installed browser for OS [%s] could not be detected", os_name)
+                return None
+
+        for browser_path in browser_paths:
+            if browser_path and os.path.isfile(browser_path):
+                return (browser_path, *self.get_browser_version(browser_path))
+
+        LOG.warning("Installed browser could not be detected")
         return None
 
     def web_await(self, condition: Callable[[WebDriver], T], timeout:float = 5, exception_on_timeout: Callable[[], Exception] | None = None) -> T:
