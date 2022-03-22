@@ -373,6 +373,8 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info("############################################")
 
     def publish_ad(self, ad_file:str, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any]) -> None:
+        self.assert_free_ad_limit_not_reached()
+
         if self.delete_old_ads:
             self.delete_ad(ad_cfg)
 
@@ -531,6 +533,13 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
 
         utils.save_dict(ad_file, ad_cfg_orig)
+
+    def assert_free_ad_limit_not_reached(self) -> None:
+        try:
+            self.web_find(By.XPATH, '/html/body/div[1]/form/fieldset[6]/div[1]/header')
+            raise AssertionError(f"Cannot publish more ads. The monthly limit of free ads of account {self.config['login']['username']} is reached.")
+        except NoSuchElementException:
+            pass
 
     @overrides
     def web_open(self, url:str, timeout:float = 15, reload_if_already_open:bool = False) -> None:
