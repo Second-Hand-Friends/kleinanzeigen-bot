@@ -198,6 +198,7 @@ jobs:
         private_key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
 
     - name: Delete untagged docker image
+      continue-on-error: true
       uses: camargo/delete-untagged-action@v1
       with:
         github-token: ${{ steps.generate_token.outputs.token }}
