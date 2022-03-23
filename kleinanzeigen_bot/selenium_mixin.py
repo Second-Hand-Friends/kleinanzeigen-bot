@@ -18,7 +18,7 @@ from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 import selenium_stealth
-import webdriver_manager.utils as ChromeDriverManagerUtils
+import webdriver_manager.utils
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.microsoft import EdgeChromiumDriverManager
 from webdriver_manager.utils import ChromeType, OSType
@@ -118,10 +118,12 @@ class SeleniumMixin:
             LOG.info("Using Browser: %s %s [%s]", chrome_type.upper(), chrome_version, self.browser_config.binary_location)
             chrome_major_version = chrome_version.split(".", 1)[0]
 
+            # hack to specify the concrete browser version for which the driver shall be downloaded
+            webdriver_manager.driver.get_browser_version_from_os = lambda _: chrome_major_version
+
             # download and install matching chrome driver
             if chrome_type == ChromeType.MSEDGE:
                 webdriver_mgr = EdgeChromiumDriverManager(cache_valid_range = 14)
-                webdriver_mgr.driver.browser_version = chrome_major_version
                 webdriver_path = webdriver_mgr.install()
                 env = os.environ.copy()
                 env["MSEDGEDRIVER_TELEMETRY_OPTOUT"] = "1"  # https://docs.microsoft.com/en-us/microsoft-edge/privacy-whitepaper/#microsoft-edge-driver
@@ -131,7 +133,6 @@ class SeleniumMixin:
                 )
             else:
                 webdriver_mgr = ChromeDriverManager(chrome_type = chrome_type, cache_valid_range = 14)
-                webdriver_mgr.driver.browser_version = chrome_major_version
                 webdriver_path = webdriver_mgr.install()
                 self.webdriver = webdriver.Chrome(service = ChromeService(webdriver_path), options = self._init_browser_options(webdriver.ChromeOptions()))
 
@@ -147,7 +148,7 @@ class SeleniumMixin:
         LOG.info("New WebDriver session is: %s %s", self.webdriver.session_id, self.webdriver.command_executor._url)  # pylint: disable=protected-access
 
     def get_browser_version(self, executable_path: str) -> tuple[ChromeType, str]:
-        match ChromeDriverManagerUtils.os_name():
+        match webdriver_manager.utils.os_name():
             case OSType.WIN:
                 import win32api  # pylint: disable=import-outside-toplevel,import-error
                 # pylint: disable=no-member
@@ -164,7 +165,7 @@ class SeleniumMixin:
                         return (ChromeType.GOOGLE, product_version)
 
             case OSType.LINUX:
-                version_cmd = ChromeDriverManagerUtils.linux_browser_apps_to_cmd(f'"{executable_path}"')
+                version_cmd = webdriver_manager.utils.linux_browser_apps_to_cmd(f'"{executable_path}"')
 
             case _:
                 version_cmd = f'"{executable_path}" --version'
@@ -173,20 +174,20 @@ class SeleniumMixin:
         if "chromium" in filename:
             return (
                 ChromeType.CHROMIUM,
-                ChromeDriverManagerUtils.read_version_from_cmd(version_cmd, ChromeDriverManagerUtils.PATTERN[ChromeType.CHROMIUM])
+                webdriver_manager.utils.read_version_from_cmd(version_cmd, webdriver_manager.utils.PATTERN[ChromeType.CHROMIUM])
             )
         if "edge" in filename:
             return (
                 ChromeType.MSEDGE,
-                ChromeDriverManagerUtils.read_version_from_cmd(version_cmd, ChromeDriverManagerUtils.PATTERN[ChromeType.MSEDGE])
+                webdriver_manager.utils.read_version_from_cmd(version_cmd, webdriver_manager.utils.PATTERN[ChromeType.MSEDGE])
             )
         return (
             ChromeType.GOOGLE,
-            ChromeDriverManagerUtils.read_version_from_cmd(version_cmd, ChromeDriverManagerUtils.PATTERN[ChromeType.GOOGLE])
+            webdriver_manager.utils.read_version_from_cmd(version_cmd, webdriver_manager.utils.PATTERN[ChromeType.GOOGLE])
         )
 
     def find_compatible_browser(self) -> tuple[str, ChromeType, str] | None:
-        match ChromeDriverManagerUtils.os_name():
+        match webdriver_manager.utils.os_name():
             case OSType.LINUX:
                 browser_paths = [
                     shutil.which("chromium"),
