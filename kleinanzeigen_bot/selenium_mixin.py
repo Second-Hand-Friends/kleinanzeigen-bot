@@ -108,6 +108,7 @@ class SeleniumMixin:
         else:
             # determine browser major version
             if self.browser_config.binary_location:
+                ensure(os.path.exists(self.browser_config.binary_location), f"Specified browser binary [{self.browser_config.binary_location}] does not exist.")
                 chrome_type, chrome_version = self.get_browser_version(self.browser_config.binary_location)
             else:
                 browser_info = self.find_compatible_browser()
