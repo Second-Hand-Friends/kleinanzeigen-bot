@@ -2,10 +2,9 @@
 Copyright (C) 2022 Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
-import atexit, copy, getopt, glob, json, logging, os, signal, sys, textwrap, time, urllib
+import atexit, copy, getopt, glob, importlib.metadata, json, logging, os, signal, sys, textwrap, time, urllib
 from collections.abc import Iterable
 from datetime import datetime
-import importlib.metadata
 from logging.handlers import RotatingFileHandler
 from typing import Any, Final
 
@@ -420,7 +419,10 @@ class KleinanzeigenBot(SeleniumMixin):
         # set shipping type/costs
         #############################
         if ad_cfg["shipping_type"] == "PICKUP":
+            try:
             self.web_click(By.XPATH, '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/input[@type="radio"]')
+            except NoSuchElementException as ex:
+                LOG.debug(ex, exc_info = True)
         elif ad_cfg["shipping_costs"]:
             self.web_click(By.XPATH, '//*[contains(@class, "ShippingOption")]//input[@type="radio"]')
             self.web_click(By.XPATH, '//*[contains(@class, "CarrierOptionsPopup")]//*[contains(@class, "IndividualPriceSection")]//input[@type="checkbox"]')
