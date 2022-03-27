@@ -396,31 +396,14 @@ class KleinanzeigenBot(SeleniumMixin):
         #############################
         # set category
         #############################
-        # trigger and wait for automatic category detection
-        self.web_click(By.ID, "pstad-price")
-        try:
-            self.web_find(By.XPATH, "//*[@id='postad-category-path'][text()]")
-            is_category_auto_selected = True
-        except NoSuchElementException:
-            is_category_auto_selected = False
-
-        if ad_cfg["category"]:
-            utils.pause(2000)  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
-            self.web_click(By.ID, "pstad-lnk-chngeCtgry")
-            self.web_find(By.ID, "postad-step1-sbmt")
-
-            category_url = f"{self.root_url}/p-kategorie-aendern.html#?path={ad_cfg['category']}"
-            self.web_open(category_url)
-            self.web_click(By.XPATH, "//*[@id='postad-step1-sbmt']/button")
-        else:
-            ensure(is_category_auto_selected, f"No category specified in [{ad_file}] and automatic category detection failed")
+        self.__set_category(ad_file, ad_cfg)
 
         #############################
         # set shipping type/costs
         #############################
         if ad_cfg["shipping_type"] == "PICKUP":
             try:
-            self.web_click(By.XPATH, '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/input[@type="radio"]')
+                self.web_click(By.XPATH, '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/input[@type="radio"]')
             except NoSuchElementException as ex:
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg["shipping_costs"]:
@@ -435,28 +418,6 @@ class KleinanzeigenBot(SeleniumMixin):
         self.web_select(By.XPATH, "//select[@id='priceType']", ad_cfg["price_type"])
         if ad_cfg["price_type"] != "GIVE_AWAY":
             self.web_input(By.ID, "pstad-price", ad_cfg["price"])
-
-        #############################
-        # set category specific attributes
-        #############################
-        if ad_cfg["special_attributes"]:
-            LOG.debug('Found %i special attributes', len(ad_cfg["special_attributes"]))
-            for special_attribute_key, special_attribute_value in ad_cfg["special_attributes"].items():
-                LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value)
-                try:
-                    self.web_select(By.XPATH, f"//select[@id='{special_attribute_key}']", special_attribute_value)
-                except WebDriverException:
-                    LOG.debug("Attribute field '%s' is not of kind dropdown, trying to input as plain text...", special_attribute_key)
-                    try:
-                        self.web_input(By.ID, special_attribute_key, special_attribute_value)
-                    except WebDriverException:
-                        LOG.debug("Attribute field '%s' is not of kind plain text, trying to input as radio button...", special_attribute_key)
-                        try:
-                            self.web_click(By.XPATH, f"//*[@id='{special_attribute_key}']/option[@value='{special_attribute_value}']")
-                        except WebDriverException as ex:
-                            LOG.debug("Attribute field '%s' is not of kind radio button.", special_attribute_key)
-                            raise NoSuchElementException(f"Failed to set special attribute [{special_attribute_key}]") from ex
-                LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value)
 
         #############################
         # set description
@@ -490,25 +451,7 @@ class KleinanzeigenBot(SeleniumMixin):
         #############################
         # upload images
         #############################
-        LOG.info(" -> found %s", pluralize("image", ad_cfg["images"]))
-        image_upload = self.web_find(By.XPATH, "//input[@type='file']")
-
-        def count_uploaded_images() -> int:
-            return len(self.webdriver.find_elements(By.CLASS_NAME, "imagebox-new-thumbnail"))
-
-        for image in ad_cfg["images"]:
-            LOG.info(" -> uploading image [%s]", image)
-            previous_uploaded_images_count = count_uploaded_images()
-            image_upload.send_keys(image)
-            start_at = time.time()
-            while previous_uploaded_images_count == count_uploaded_images() and time.time() - start_at < 60:
-                print(".", end = "", flush = True)
-                time.sleep(1)
-            print(flush = True)
-
-            ensure(previous_uploaded_images_count < count_uploaded_images(), f"Couldn't upload image [{image}] within 60 seconds")
-            LOG.debug("   => uploaded image within %i seconds", time.time() - start_at)
-            pause(2000)
+        self.__upload_images(ad_cfg)
 
         #############################
         # submit
@@ -535,6 +478,66 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
 
         utils.save_dict(ad_file, ad_cfg_orig)
+
+    def __set_category(self, ad_file:str, ad_cfg: dict[str, Any]):
+        # trigger and wait for automatic category detection
+        self.web_click(By.ID, "pstad-price")
+        try:
+            self.web_find(By.XPATH, "//*[@id='postad-category-path'][text()]")
+            is_category_auto_selected = True
+        except NoSuchElementException:
+            is_category_auto_selected = False
+
+        if ad_cfg["category"]:
+            utils.pause(2000)  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
+            self.web_click(By.ID, "pstad-lnk-chngeCtgry")
+            self.web_find(By.ID, "postad-step1-sbmt")
+
+            category_url = f"{self.root_url}/p-kategorie-aendern.html#?path={ad_cfg['category']}"
+            self.web_open(category_url)
+            self.web_click(By.XPATH, "//*[@id='postad-step1-sbmt']/button")
+        else:
+            ensure(is_category_auto_selected, f"No category specified in [{ad_file}] and automatic category detection failed")
+
+        if ad_cfg["special_attributes"]:
+            LOG.debug('Found %i special attributes', len(ad_cfg["special_attributes"]))
+            for special_attribute_key, special_attribute_value in ad_cfg["special_attributes"].items():
+                LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value)
+                try:
+                    self.web_select(By.XPATH, f"//select[@id='{special_attribute_key}']", special_attribute_value)
+                except WebDriverException:
+                    LOG.debug("Attribute field '%s' is not of kind dropdown, trying to input as plain text...", special_attribute_key)
+                    try:
+                        self.web_input(By.ID, special_attribute_key, special_attribute_value)
+                    except WebDriverException:
+                        LOG.debug("Attribute field '%s' is not of kind plain text, trying to input as radio button...", special_attribute_key)
+                        try:
+                            self.web_click(By.XPATH, f"//*[@id='{special_attribute_key}']/option[@value='{special_attribute_value}']")
+                        except WebDriverException as ex:
+                            LOG.debug("Attribute field '%s' is not of kind radio button.", special_attribute_key)
+                            raise NoSuchElementException(f"Failed to set special attribute [{special_attribute_key}]") from ex
+                LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value)
+
+    def __upload_images(self, ad_cfg: dict[str, Any]):
+        LOG.info(" -> found %s", pluralize("image", ad_cfg["images"]))
+        image_upload = self.web_find(By.XPATH, "//input[@type='file']")
+
+        def count_uploaded_images() -> int:
+            return len(self.webdriver.find_elements(By.CLASS_NAME, "imagebox-new-thumbnail"))
+
+        for image in ad_cfg["images"]:
+            LOG.info(" -> uploading image [%s]", image)
+            previous_uploaded_images_count = count_uploaded_images()
+            image_upload.send_keys(image)
+            start_at = time.time()
+            while previous_uploaded_images_count == count_uploaded_images() and time.time() - start_at < 60:
+                print(".", end = "", flush = True)
+                time.sleep(1)
+            print(flush = True)
+
+            ensure(previous_uploaded_images_count < count_uploaded_images(), f"Couldn't upload image [{image}] within 60 seconds")
+            LOG.debug("   => uploaded image within %i seconds", time.time() - start_at)
+            pause(2000)
 
     def assert_free_ad_limit_not_reached(self) -> None:
         try:

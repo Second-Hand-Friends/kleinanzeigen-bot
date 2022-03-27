@@ -7,7 +7,7 @@ from collections.abc import Callable, Iterable
 from typing import Any, Final
 
 from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service as ChromeService, DEFAULT_EXECUTABLE_PATH as DEFAULT_CHROMEDRIVER_PATH
 from selenium.webdriver.chromium.options import ChromiumOptions
@@ -240,12 +240,24 @@ class SeleniumMixin:
         :param timeout: timeout in seconds
         :raises TimeoutException: if element could not be found within time
         """
-        try:
-            return WebDriverWait(self.webdriver, timeout).until(condition)  # type: ignore[no-any-return]
-        except TimeoutException as ex:
-            if exception_on_timeout:
-                raise exception_on_timeout() from ex
-            raise ex
+        max_attempts = 2
+        for attempt in range(max_attempts + 1)[1:]:
+            try:
+                return WebDriverWait(self.webdriver, timeout).until(condition)  # type: ignore[no-any-return]
+            except TimeoutException as ex:
+                if exception_on_timeout:
+                    raise exception_on_timeout() from ex
+                raise ex
+            except WebDriverException as ex:
+                # temporary workaround for:
+                # - https://groups.google.com/g/chromedriver-users/c/Z_CaHJTJnLw
+                # - https://bugs.chromium.org/p/chromedriver/issues/detail?id=4048
+                if ex.msg == "target frame detached" and attempt < max_attempts:
+                    LOG.warning(ex)
+                else:
+                    raise ex
+
+        raise AssertionError("Should never be reached.")
 
     def web_click(self, selector_type:By, selector_value:str, timeout:float = 5) -> WebElement:
         """

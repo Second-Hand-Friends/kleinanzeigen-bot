@@ -56,7 +56,7 @@ dev = [
     "pytest~=7.0",
     "pyinstaller~=4.10",
     "psutil",
-    "pylint~=2.12",
+    "pylint==2.12.1", # pinning pylint version to prevent "RecursionError: maximum recursion depth exceeded" as of 2.13.1
     "mypy~=0.940",
 ]
 
@@ -164,7 +164,7 @@ max-attributes = 10
 max-branches   = 30
 max-locals     = 30
 max-returns    = 10
-max-statements = 90
+max-statements = 80
 
 
 #####################
