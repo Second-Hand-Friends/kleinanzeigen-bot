@@ -223,7 +223,7 @@ ad_defaults:
   description:
     prefix: ""
     suffix: ""
-  price_type: NEGOTIABLE # one of: FIXED, NEGOTIABLE, GIVE_AWAY
+  price_type: NEGOTIABLE # one of: FIXED, NEGOTIABLE, GIVE_AWAY, NOT_APPLICABLE
   shipping_type: SHIPPING # one of: PICKUP, SHIPPING, NOT_APPLICABLE
   shipping_costs: # e.g. 2.95
   contact:
