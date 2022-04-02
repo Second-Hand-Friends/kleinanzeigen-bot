@@ -412,7 +412,7 @@ dependencies = [
 
 [[package]]
 name = "setuptools"
-version = "61.2.0"
+version = "61.3.1"
 requires_python = ">=3.7"
 summary = "Easily download, build, install, upgrade, and uninstall Python packages"
 
@@ -980,9 +980,9 @@ content_hash = "sha256:ac0b72594f12f3da9c9e254a9dabe701637f2e23f8ee0d9b416a55893
 "selenium-stealth 1.0.6" = [
     {file = "selenium_stealth-1.0.6-py3-none-any.whl", hash = "sha256:b62da5452aa4a84f29a4dfb21a9696aff20788a7c570dd0b81bc04a940848b97"},
 ]
-"setuptools 61.2.0" = [
-    {file = "setuptools-61.2.0-py3-none-any.whl", hash = "sha256:8f4813dd6a4d6cc17bde85fb2e635fe19763f96efbb0ddf5575562e5ee0bc47a"},
-    {file = "setuptools-61.2.0.tar.gz", hash = "sha256:c3d4e2ab578fbf83775755cd76dae73627915a22832cf4ea5de895978767833b"},
+"setuptools 61.3.1" = [
+    {file = "setuptools-61.3.1-py3-none-any.whl", hash = "sha256:41aface2e85b517c3a466b4689b8055c02cd2e623461f09af7d93f3da65c4709"},
+    {file = "setuptools-61.3.1.tar.gz", hash = "sha256:88fafba4abc2f047e08a188fd4bbc10b0e464592c37b514c19f8f8f88d94450b"},
 ]
 "smmap 5.0.0" = [
     {file = "smmap-5.0.0-py3-none-any.whl", hash = "sha256:2aba19d6a040e78d8b09de5c57e96207b09ed71d8e55ce0959eeee6c8e190d94"},
