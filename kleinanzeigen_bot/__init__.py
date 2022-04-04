@@ -237,13 +237,13 @@ class KleinanzeigenBot(SeleniumMixin):
                 ensure(safe_get(ad_cfg, *path.split(".")), f"-> property [{path}] not specified @ [{ad_file}]")
             # pylint: enable=cell-var-from-loop
 
-            assert_one_of("type", ("OFFER", "WANTED"))
+            assert_one_of("type", {"OFFER", "WANTED"})
             assert_min_len("title", 10)
             assert_has_value("description")
-            assert_one_of("price_type", ("FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"))
-            if ad_cfg["price_type"] != "NOT_APPLICABLE":
+            assert_one_of("price_type", {"FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"})
+            if not ad_cfg["price_type"] in {"GIVE_AWAY", "NOT_APPLICABLE"}:
                 assert_has_value("price")
-            assert_one_of("shipping_type", ("PICKUP", "SHIPPING", "NOT_APPLICABLE"))
+            assert_one_of("shipping_type", {"PICKUP", "SHIPPING", "NOT_APPLICABLE"})
             assert_has_value("contact.name")
             assert_has_value("republication_interval")
 
