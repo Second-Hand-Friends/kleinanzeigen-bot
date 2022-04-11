@@ -149,7 +149,7 @@ jobs:
         dist/kleinanzeigen-bot verify
 
     - name: Upload self-contained executable
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: artifacts-${{ matrix.os }}
         path: dist/kleinanzeigen-bot*
