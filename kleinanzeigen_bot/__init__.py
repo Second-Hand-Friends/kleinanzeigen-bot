@@ -241,7 +241,9 @@ class KleinanzeigenBot(SeleniumMixin):
             assert_min_len("title", 10)
             assert_has_value("description")
             assert_one_of("price_type", {"FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"})
-            if not ad_cfg["price_type"] in {"GIVE_AWAY", "NOT_APPLICABLE"}:
+            if ad_cfg["price_type"] == "GIVE_AWAY":
+                ensure(not safe_get(ad_cfg, "price"), f"-> [price] must not be specified for GIVE_AWAY ad @ [{ad_file}]")
+            elif ad_cfg["price_type"] == "FIXED":
                 assert_has_value("price")
             assert_one_of("shipping_type", {"PICKUP", "SHIPPING", "NOT_APPLICABLE"})
             assert_has_value("contact.name")
@@ -419,7 +421,7 @@ class KleinanzeigenBot(SeleniumMixin):
         price_type = ad_cfg["price_type"]
         if price_type != "NOT_APPLICABLE":
             self.web_select(By.XPATH, "//select[@id='priceType']", price_type)
-            if price_type != "GIVE_AWAY":
+            if safe_get(ad_cfg, "price"):
                 self.web_input(By.ID, "pstad-price", ad_cfg["price"])
 
         #############################
