@@ -259,7 +259,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 ad_cfg["shipping_costs"] = str(utils.parse_decimal(ad_cfg["shipping_costs"]))
 
             if ad_cfg["images"]:
-                images = list()
+                images = []
                 for image_pattern in ad_cfg["images"]:
                     pattern_images = set()
                     ad_dir = os.path.dirname(ad_file)
