@@ -270,10 +270,9 @@ class KleinanzeigenBot(SeleniumMixin):
                             pattern_images.add(image_file)
                         else:
                             pattern_images.add(abspath(image_file, relative_to = ad_file))
-                    for image_file in sorted(pattern_images):
-                        images.append(image_file)
+                    images.extend(sorted(pattern_images))
                 ensure(images or not ad_cfg["images"], f"No images found for given file patterns {ad_cfg['images']} at {ad_dir}")
-                ad_cfg["images"] = images
+                ad_cfg["images"] = list(dict.fromkeys(images))
 
             ads.append((
                 ad_file,
