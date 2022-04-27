@@ -259,18 +259,21 @@ class KleinanzeigenBot(SeleniumMixin):
                 ad_cfg["shipping_costs"] = str(utils.parse_decimal(ad_cfg["shipping_costs"]))
 
             if ad_cfg["images"]:
-                images = set()
+                images = list()
                 for image_pattern in ad_cfg["images"]:
+                    pattern_images = set()
                     ad_dir = os.path.dirname(ad_file)
                     for image_file in glob.glob(image_pattern, root_dir = ad_dir, recursive = True):
                         _, image_file_ext = os.path.splitext(image_file)
                         ensure(image_file_ext.lower() in {".gif", ".jpg", ".jpeg", ".png"}, f"Unsupported image file type [{image_file}]")
                         if os.path.isabs(image_file):
-                            images.add(image_file)
+                            pattern_images.add(image_file)
                         else:
-                            images.add(abspath(image_file, relative_to = ad_file))
+                            pattern_images.add(abspath(image_file, relative_to = ad_file))
+                    for image_file in sorted(pattern_images):
+                        images.append(image_file)
                 ensure(images or not ad_cfg["images"], f"No images found for given file patterns {ad_cfg['images']} at {ad_dir}")
-                ad_cfg["images"] = sorted(images)
+                ad_cfg["images"] = images
 
             ads.append((
                 ad_file,
