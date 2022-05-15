@@ -45,6 +45,7 @@ class KleinanzeigenBot(SeleniumMixin):
         self.command = "help"
         self.ads_selector = "due"
         self.delete_old_ads = True
+        self.delete_ads_by_title = False
 
     def __del__(self) -> None:
         if self.file_log:
@@ -346,20 +347,28 @@ class KleinanzeigenBot(SeleniumMixin):
         csrf_token_elem = self.web_find(By.XPATH, "//meta[@name='_csrf']")
         csrf_token = csrf_token_elem.get_attribute("content")
 
-        published_ads = json.loads(self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT")["content"])["ads"]
+        if self.delete_ads_by_title:
+            published_ads = json.loads(self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT")["content"])["ads"]
 
-        for published_ad in published_ads:
-            published_ad_id = int(published_ad.get("id", -1))
-            published_ad_title = published_ad.get("title", "")
-            if ad_cfg["id"] == published_ad_id or ad_cfg["title"] == published_ad_title:
-                LOG.info(" -> deleting %s '%s'...", published_ad_id, published_ad_title)
-                self.web_request(
-                    url = f"{self.root_url}/m-anzeigen-loeschen.json?ids={published_ad_id}",
-                    method = "POST",
-                    headers = {"x-csrf-token": csrf_token}
-                )
-                pause(1500, 3000)
+            for published_ad in published_ads:
+                published_ad_id = int(published_ad.get("id", -1))
+                published_ad_title = published_ad.get("title", "")
+                if ad_cfg["id"] == published_ad_id or ad_cfg["title"] == published_ad_title:
+                    LOG.info(" -> deleting %s '%s'...", published_ad_id, published_ad_title)
+                    self.web_request(
+                        url = f"{self.root_url}/m-anzeigen-loeschen.json?ids={published_ad_id}",
+                        method = "POST",
+                        headers = {"x-csrf-token": csrf_token}
+                    )
+        elif ad_cfg["id"]:
+            self.web_request(
+                url = f"{self.root_url}/m-anzeigen-loeschen.json?ids={ad_cfg['id']}",
+                method = "POST",
+                headers = {"x-csrf-token": csrf_token},
+                valid_response_codes = [200, 404]
+            )
 
+        pause(1500, 3000)
         ad_cfg["id"] = None
         return True
 
