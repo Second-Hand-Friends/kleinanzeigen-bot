@@ -469,6 +469,13 @@ class KleinanzeigenBot(SeleniumMixin):
         # set contact phone
         #############################
         if ad_cfg["contact"]["phone"]:
+            try:
+                if not self.webdriver.find_element(By.ID, "postad-phonenumber").is_enabled():
+                    self.webdriver.find_element(By.ID, "phoneNumberVisibility").click()
+                    pause(2000)
+            except NoSuchElementException:
+                # ignore
+                pass
             self.web_input(By.ID, "postad-phonenumber", ad_cfg["contact"]["phone"])
 
         #############################
