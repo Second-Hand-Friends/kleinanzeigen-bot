@@ -79,7 +79,17 @@ class KleinanzeigenBot(SeleniumMixin):
                     LOG.info("############################################")
                     LOG.info("DONE: No new/outdated ads found.")
                     LOG.info("############################################")
-
+            case "delete":
+                self.configure_file_logging()
+                self.load_config()
+                if ads := self.load_ads():
+                    self.create_webdriver_session()
+                    self.login()
+                    self.delete_ads(ads)
+                else:
+                    LOG.info("############################################")
+                    LOG.info("DONE: No ads to delete found.")
+                    LOG.info("############################################")
             case _:
                 LOG.error("Unknown command: %s", self.command)
                 sys.exit(2)
@@ -98,6 +108,7 @@ class KleinanzeigenBot(SeleniumMixin):
             Commands:
               publish - (re-)publishes ads
               verify  - verifies the configuration files
+              delete  - deletes ads
               --
               help    - displays this help (default command)
               version - displays the application version
@@ -339,6 +350,19 @@ class KleinanzeigenBot(SeleniumMixin):
         self.webdriver.switch_to.frame(self.web_find(By.CSS_SELECTOR, f"#{captcha_element_id} iframe"))
         self.web_await(lambda _: self.webdriver.find_element(By.ID, "recaptcha-anchor").get_attribute("aria-checked") == "true", timeout = 5 * 60)
         self.webdriver.switch_to.default_content()
+
+    def delete_ads(self, ad_cfgs:list[tuple[str, dict[str, Any], dict[str, Any]]]) -> None:
+        count = 0
+
+        for (ad_file, ad_cfg, _) in ad_cfgs:
+            count += 1
+            LOG.info("Processing %s/%s: '%s' from [%s]...", count, len(ad_cfgs), ad_cfg["title"], ad_file)
+            self.delete_ad(ad_cfg)
+            pause(2000, 4000)
+
+        LOG.info("############################################")
+        LOG.info("DONE: Deleting %s", pluralize("ad", count))
+        LOG.info("############################################")
 
     def delete_ad(self, ad_cfg: dict[str, Any]) -> bool:
         LOG.info("Deleting ad '%s' if already present...", ad_cfg["title"])
