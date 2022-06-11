@@ -1,7 +1,5 @@
 ad_files:
-  - "**/ad_*.json"
-  - "**/ad_*.yml"
-  - "**/ad_*.yaml"
+  - "**/ad_*.{json,yml,yaml}"
 
 # default values for ads, can be overwritten in each ad configuration file
 ad_defaults:
