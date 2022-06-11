@@ -24,7 +24,7 @@ It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https:/
 - config:
   - use YAML or JSON for config files
   - one config file per ad
-  - use globbing (wildcards) to select images from local disk
+  - use globbing (wildcards) to select images from local disk via [wcmatch](https://facelessuser.github.io/wcmatch/glob/#syntax)
   - reference categories by name (looked up from [categories.yaml](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml))
 - logging is configurable and colorized
 - provided as self-contained executable for Windows, Linux and macOS
@@ -212,9 +212,7 @@ The following parameters can be configured:
 # wild card patterns to select ad configuration files
 # if relative paths are specified, then they are relative to this configuration file
 ad_files:
-  - "my_ads/**/ad_*.json"
-  - "my_ads/**/ad_*.yml"
-  - "my_ads/**/ad_*.yaml"
+  - "my_ads/**/ad_*.{json,yml,yaml}"
 
 # default values for ads, can be overwritten in each ad configuration file
 ad_defaults:
@@ -292,8 +290,7 @@ shipping_costs: # e.g. 2.95
 # list of wildcard patterns to select images
 # if relative paths are specified, then they are relative to this ad configuration file
 images:
- #- laptop_*.jpg
- #- laptop_*.png
+ #- laptop_*.{jpg,png}
 
 contact:
   name:
