@@ -37,7 +37,7 @@ jobs:
     - name: Git Checkout
       uses: actions/checkout@v3 #https://github.com/actions/checkout
 
-    - uses: actions/setup-python@v3
+    - uses: actions/setup-python@v4
       with:
         python-version: "${{ env.PYTHON_VERSION }}"
 
