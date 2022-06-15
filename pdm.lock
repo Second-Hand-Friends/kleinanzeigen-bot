@@ -203,7 +203,7 @@ summary = "Experimental type system extensions for programs checked with the myp
 [[package]]
 name = "outcome"
 version = "1.1.0"
-requires_python = ">=3.6"
+requires_python = ">=3.7"
 summary = "Capture the outcome of Python function calls."
 dependencies = [
     "attrs>=19.2.0",
@@ -275,6 +275,7 @@ summary = "Python style guide checker"
 [[package]]
 name = "pycparser"
 version = "2.21"
+requires_python = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 summary = "C parser in Python"
 
 [[package]]
@@ -522,7 +523,7 @@ dependencies = [
     "cryptography>=1.3.4",
     "idna>=2.0.0",
     "pyOpenSSL>=0.14",
-    "urllib3",
+    "urllib3~=1.26",
 ]
 
 [[package]]
