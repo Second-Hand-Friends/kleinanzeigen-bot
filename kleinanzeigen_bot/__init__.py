@@ -328,7 +328,10 @@ class KleinanzeigenBot(SeleniumMixin):
         self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
 
         # accept privacy banner
-        self.web_click(By.ID, "gdpr-banner-accept")
+        try:
+            self.web_click(By.ID, "gdpr-banner-accept")
+        except NoSuchElementException:
+            pass
 
         self.web_input(By.ID, "login-email", self.config["login"]["username"])
         self.web_input(By.ID, "login-password", self.config["login"]["password"])
