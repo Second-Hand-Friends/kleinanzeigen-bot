@@ -537,7 +537,7 @@ dependencies = [
 
 [[package]]
 name = "webdriver-manager"
-version = "3.7.0"
+version = "3.7.1"
 requires_python = ">=3.6"
 summary = "Library provides the way to automatically manage drivers for different browsers"
 dependencies = [
@@ -1065,9 +1065,9 @@ content_hash = "sha256:fc71d4d3b09f8b56d04adb73f69fcce816001a6f32d20023424aa39ba
     {file = "wcmatch-8.4-py3-none-any.whl", hash = "sha256:dc7351e5a7f8bbf4c6828d51ad20c1770113f5f3fd3dfe2a03cfde2a63f03f98"},
     {file = "wcmatch-8.4.tar.gz", hash = "sha256:ba4fc5558f8946bf1ffc7034b05b814d825d694112499c86035e0e4d398b6a67"},
 ]
-"webdriver-manager 3.7.0" = [
-    {file = "webdriver_manager-3.7.0-py2.py3-none-any.whl", hash = "sha256:ee09f7c5d9c61ca9cf2b78a036355f617f5dede2d68b7d2d77877d1d48df1361"},
-    {file = "webdriver_manager-3.7.0.tar.gz", hash = "sha256:4a7247086b181d3a077a7f0be71b2f8e297d213ddd563ecea263dcb17e4e865f"},
+"webdriver-manager 3.7.1" = [
+    {file = "webdriver_manager-3.7.1-py2.py3-none-any.whl", hash = "sha256:d0ccec0af85cf48a196309fd55c6d2d32858cfde6ff8c818cd77f3a3c1b8c958"},
+    {file = "webdriver_manager-3.7.1.tar.gz", hash = "sha256:5b7a6a3ebce9af03f41773465b84ea7e78bc7a7dad5524f2caa9c206365a55d4"},
 ]
 "wrapt 1.13.3" = [
     {file = "wrapt-1.13.3-cp27-cp27m-macosx_10_9_x86_64.whl", hash = "sha256:e05e60ff3b2b0342153be4d1b597bbcfd8330890056b9619f4ad6b8d5c96a81a"},
