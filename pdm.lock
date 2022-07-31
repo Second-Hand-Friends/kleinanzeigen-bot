@@ -468,6 +468,15 @@ requires_python = ">=3.7"
 summary = "A lil' TOML parser"
 
 [[package]]
+name = "tqdm"
+version = "4.64.0"
+requires_python = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.7"
+summary = "Fast, Extensible Progress Meter"
+dependencies = [
+    "colorama; platform_system == \"Windows\"",
+]
+
+[[package]]
 name = "trio"
 version = "0.21.0"
 requires_python = ">=3.7"
@@ -537,12 +546,13 @@ dependencies = [
 
 [[package]]
 name = "webdriver-manager"
-version = "3.8.2"
+version = "3.8.3"
 requires_python = ">=3.7"
 summary = "Library provides the way to automatically manage drivers for different browsers"
 dependencies = [
     "python-dotenv",
     "requests",
+    "tqdm",
 ]
 
 [[package]]
@@ -1054,6 +1064,10 @@ content_hash = "sha256:fc71d4d3b09f8b56d04adb73f69fcce816001a6f32d20023424aa39ba
     {url = "https://files.pythonhosted.org/packages/97/75/10a9ebee3fd790d20926a90a2547f0bf78f371b2f13aa822c759680ca7b9/tomli-2.0.1-py3-none-any.whl", hash = "sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc"},
     {url = "https://files.pythonhosted.org/packages/c0/3f/d7af728f075fb08564c5949a9c95e44352e23dee646869fa104a3b2060a3/tomli-2.0.1.tar.gz", hash = "sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f"},
 ]
+"tqdm 4.64.0" = [
+    {url = "https://files.pythonhosted.org/packages/8a/c4/d15f1e627fff25443ded77ea70a7b5532d6371498f9285d44d62587e209c/tqdm-4.64.0-py2.py3-none-any.whl", hash = "sha256:74a2cdefe14d11442cedf3ba4e21a3b84ff9a2dbdc6cfae2c34addb2a14a5ea6"},
+    {url = "https://files.pythonhosted.org/packages/98/2a/838de32e09bd511cf69fe4ae13ffc748ac143449bfc24bb3fd172d53a84f/tqdm-4.64.0.tar.gz", hash = "sha256:40be55d30e200777a307a7585aee69e4eabb46b4ec6a4b4a5f2d9f11e7d5408d"},
+]
 "trio 0.21.0" = [
     {url = "https://files.pythonhosted.org/packages/0b/81/47c8b8fc5303bed06d284a49a114e10032d2cbfa1ac51bef15949abf1b54/trio-0.21.0.tar.gz", hash = "sha256:523f39b7b69eef73501cebfe1aafd400a9aad5b03543a0eded52952488ff1c13"},
     {url = "https://files.pythonhosted.org/packages/a9/bc/aef5a15725e95df49d41838dd816b95aad7df07de9f87e4ff453a3326615/trio-0.21.0-py3-none-any.whl", hash = "sha256:4dc0bf9d5cc78767fc4516325b6d80cc0968705a31d0eec2ecd7cdda466265b0"},
@@ -1078,9 +1092,9 @@ content_hash = "sha256:fc71d4d3b09f8b56d04adb73f69fcce816001a6f32d20023424aa39ba
     {url = "https://files.pythonhosted.org/packages/95/b3/597b79292584de5b790146871e50cf3cb3bf37cf845232a20123fc784ef2/wcmatch-8.4.tar.gz", hash = "sha256:ba4fc5558f8946bf1ffc7034b05b814d825d694112499c86035e0e4d398b6a67"},
     {url = "https://files.pythonhosted.org/packages/e2/6d/c06b511d4cd8d7dcf4105ddfadf1c4778fd61207dff56ff72fefeaf0051c/wcmatch-8.4-py3-none-any.whl", hash = "sha256:dc7351e5a7f8bbf4c6828d51ad20c1770113f5f3fd3dfe2a03cfde2a63f03f98"},
 ]
-"webdriver-manager 3.8.2" = [
-    {url = "https://files.pythonhosted.org/packages/0d/92/6d990e73dbdfcdfcc06f09d52a1ec9a018f851c6c3bd1fe605c6842adf2b/webdriver_manager-3.8.2-py2.py3-none-any.whl", hash = "sha256:df23786e34d4c1f8c4490e1922618c2fe5a58a2bf6444b94c6664fc3fefba2e4"},
-    {url = "https://files.pythonhosted.org/packages/97/91/575a35e318c09a3ec66f890838e682c358714da2b36495787d315f246c14/webdriver_manager-3.8.2.tar.gz", hash = "sha256:5282e957fe59bc5cd96eae58b2ec4cc6f0de649fa832e5ab40d6284f6ee7830e"},
+"webdriver-manager 3.8.3" = [
+    {url = "https://files.pythonhosted.org/packages/80/8e/f047811cc4ae0fb363666f42ae74ab5a82b725a13219d7d26f139f2ab30b/webdriver_manager-3.8.3.tar.gz", hash = "sha256:2e0fa8abc164023a8171d308a34451b50cef4867768a8f5034b88d44d82546da"},
+    {url = "https://files.pythonhosted.org/packages/c2/3b/40c28318ed03ec0798654198c5d978289b771f5b3d80a5f8216f037f6722/webdriver_manager-3.8.3-py2.py3-none-any.whl", hash = "sha256:bd156a328bac384595ab102c057be6a98f41f7e830d68ca4ac94cb0d7f96da8c"},
 ]
 "wrapt 1.13.3" = [
     {url = "https://files.pythonhosted.org/packages/00/ae/e8e88651721412ce1e981300a70aaaf88197149682ddd6a890e03ab49b25/wrapt-1.13.3-cp39-cp39-win_amd64.whl", hash = "sha256:81bd7c90d28a4b2e1df135bfbd7c23aee3050078ca6441bead44c42483f9ebfb"},
