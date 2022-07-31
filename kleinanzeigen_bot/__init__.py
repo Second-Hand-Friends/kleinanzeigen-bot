@@ -193,7 +193,7 @@ class KleinanzeigenBot(SeleniumMixin):
         ad_files = set()
         data_root_dir = os.path.dirname(self.config_file_path)
         for file_pattern in self.config["ad_files"]:
-            for ad_file in glob.glob(file_pattern, root_dir = data_root_dir, flags = glob.BRACE | glob.EXTGLOB):
+            for ad_file in glob.glob(file_pattern, root_dir = data_root_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
                 ad_files.add(abspath(ad_file, relative_to = data_root_dir))
         LOG.info(" -> found %s", pluralize("ad config file", ad_files))
         if not ad_files:
@@ -276,7 +276,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 for image_pattern in ad_cfg["images"]:
                     pattern_images = set()
                     ad_dir = os.path.dirname(ad_file)
-                    for image_file in glob.glob(image_pattern, root_dir = ad_dir, flags = glob.BRACE | glob.EXTGLOB):
+                    for image_file in glob.glob(image_pattern, root_dir = ad_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
                         _, image_file_ext = os.path.splitext(image_file)
                         ensure(image_file_ext.lower() in {".gif", ".jpg", ".jpeg", ".png"}, f"Unsupported image file type [{image_file}]")
                         if os.path.isabs(image_file):
