@@ -458,7 +458,8 @@ class KleinanzeigenBot(SeleniumMixin):
             except NoSuchElementException as ex:
                 LOG.debug(ex, exc_info = True)
             try:
-                self.web_input(By.XPATH, '//*[contains(@class, "IndividualShippingInput")]//input[@type="text"]', str.replace(ad_cfg["shipping_costs"], ".", ","))
+                self.web_input(By.XPATH, '//*[contains(@class, "IndividualShippingInput")]//input[@type="text"]',
+                              str.replace(ad_cfg["shipping_costs"], ".", ","))
             except NoSuchElementException as ex:
                 LOG.debug(ex, exc_info = True)
             try:
