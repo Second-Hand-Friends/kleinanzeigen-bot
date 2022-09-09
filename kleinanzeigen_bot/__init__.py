@@ -451,18 +451,9 @@ class KleinanzeigenBot(SeleniumMixin):
         elif ad_cfg["shipping_costs"]:
             try:
                 self.web_click(By.XPATH, '//*[contains(@class, "ShippingOption")]//input[@type="radio"]')
-            except NoSuchElementException as ex:
-                LOG.debug(ex, exc_info = True)
-            try:
                 self.web_click(By.XPATH, '//*[contains(@class, "CarrierOptionsPopup")]//*[contains(@class, "IndividualPriceSection")]//input[@type="checkbox"]')
-            except NoSuchElementException as ex:
-                LOG.debug(ex, exc_info = True)
-            try:
                 self.web_input(By.XPATH, '//*[contains(@class, "IndividualShippingInput")]//input[@type="text"]',
                               str.replace(ad_cfg["shipping_costs"], ".", ","))
-            except NoSuchElementException as ex:
-                LOG.debug(ex, exc_info = True)
-            try:
                 self.web_click(By.XPATH, '//*[contains(@class, "ReactModalPortal")]//button[.//*[text()[contains(.,"Weiter")]]]')
             except NoSuchElementException as ex:
                 LOG.debug(ex, exc_info = True)
