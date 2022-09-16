@@ -93,11 +93,16 @@ class KleinanzeigenBot(SeleniumMixin):
                     LOG.info("############################################")
             case "download":
                 self.configure_file_logging()
-                # relative URL (ad ID) passed as argument to download command
-                assert len(args) >= 3
-                ad_url: str = args[2]
-                # TODO implement, call, and log ad download
-                pass
+                # ad ID passed as argument to download command
+                if not len(args) >= 3:
+                    LOG.error('Please provide an ad ID as argument together with the download command!')
+                    sys.exit(2)
+                try:
+                    ad_id: int = int(args[2])
+                    # TODO implement, call, and log ad download
+                    pass
+                except ValueError:
+                    LOG.error('The given ad ID (%s) is not a valid number!', args[2])
             case _:
                 LOG.error("Unknown command: %s", self.command)
                 sys.exit(2)
