@@ -91,6 +91,13 @@ class KleinanzeigenBot(SeleniumMixin):
                     LOG.info("############################################")
                     LOG.info("DONE: No ads to delete found.")
                     LOG.info("############################################")
+            case "download":
+                self.configure_file_logging()
+                # relative URL (ad ID) passed as argument to download command
+                assert len(args) >= 3
+                ad_url: str = args[2]
+                # TODO implement, call, and log ad download
+                pass
             case _:
                 LOG.error("Unknown command: %s", self.command)
                 sys.exit(2)
