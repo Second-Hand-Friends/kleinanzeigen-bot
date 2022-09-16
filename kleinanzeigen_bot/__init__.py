@@ -93,6 +93,9 @@ class KleinanzeigenBot(SeleniumMixin):
                     LOG.info("############################################")
             case "download":
                 self.configure_file_logging()
+                self.load_config()
+                self.create_webdriver_session()
+                self.login()
                 # ad ID passed as argument to download command
                 if not len(args) >= 3:
                     LOG.error('Please provide an ad ID as argument together with the download command!')
