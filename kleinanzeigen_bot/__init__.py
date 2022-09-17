@@ -675,9 +675,9 @@ class KleinanzeigenBot(SeleniumMixin):
         title: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-title"]').text
         LOG.info('Extracting information from ad with title \"%s\"', title)
         info['title'] = title
-        descr: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-description-text"]').text
-        # TODO process description
-
+        descr: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-description-text"]').text  # pure HTML
+        # TODO convert description format
+        info['description'] = descr
 
         # process pricing
         price_str: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-price"]').text
@@ -701,7 +701,16 @@ class KleinanzeigenBot(SeleniumMixin):
         info['price'] = price
         info['price_type'] = price_type
 
+        # process meta info
+        info['id'] = str(self.ad_id)
+        creation_date = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/section/'
+                                                              'article/div[1]/div[2]/div[2]/div[1]/span').text
+        # TODO must be in ISO format
+        info['created_on'] = creation_date
+
         print(info)
+
+        return info
 
 
 #############################
