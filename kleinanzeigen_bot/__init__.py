@@ -18,6 +18,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from . import utils, resources
 from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get
 from .selenium_mixin import SeleniumMixin
+from . import download
 
 LOG_ROOT:Final[logging.Logger] = logging.getLogger()
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot")
@@ -47,6 +48,7 @@ class KleinanzeigenBot(SeleniumMixin):
         self.ads_selector = "due"
         self.delete_old_ads = True
         self.delete_ads_by_title = False
+        self.ad_id = 0  # attribute needed when downloading an ad
 
     def __del__(self) -> None:
         if self.file_log:
@@ -96,16 +98,11 @@ class KleinanzeigenBot(SeleniumMixin):
                 self.load_config()
                 self.create_webdriver_session()
                 self.login()
-                # ad ID passed as argument to download command
-                if not len(args) >= 3:
-                    LOG.error('Please provide an ad ID as argument together with the download command!')
-                    sys.exit(2)
-                try:
-                    ad_id: int = int(args[2])
-                    # TODO implement, call, and log ad download
-                    pass
-                except ValueError:
-                    LOG.error('The given ad ID (%s) is not a valid number!', args[2])
+                # ad ID passed as value to download command
+                # TODO call download function
+                assert self.ad_id > 0
+                LOG.info('Start fetch task for ad with ID %s', str(self.ad_id))
+                download.navigate_to_ad_page(self.ad_id, self)
             case _:
                 LOG.error("Unknown command: %s", self.command)
                 sys.exit(2)
@@ -150,6 +147,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 "force",
                 "help",
                 "keep-old",
+                "ad=",
                 "logfile=",
                 "verbose"
             ])
@@ -176,6 +174,12 @@ class KleinanzeigenBot(SeleniumMixin):
                     self.ads_selector = "all"
                 case "--keep-old":
                     self.delete_old_ads = False
+                case "--ad":
+                    try:
+                        self.ad_id: int = int(value)
+                    except ValueError:  # given value cannot be parsed as integer
+                        LOG.error('The given ad ID (\"%s\") is not a valid number!', value)
+                        sys.exit(2)
                 case "-v" | "--verbose":
                     LOG.setLevel(logging.DEBUG)
 
