@@ -119,9 +119,10 @@ class KleinanzeigenBot(SeleniumMixin):
             Usage: {exe} COMMAND [OPTIONS]
 
             Commands:
-              publish - (re-)publishes ads
-              verify  - verifies the configuration files
-              delete  - deletes ads
+              publish  - (re-)publishes ads
+              verify   - verifies the configuration files
+              delete   - deletes ads
+              download - downloads an ad
               --
               help    - displays this help (default command)
               version - displays the application version
@@ -134,6 +135,7 @@ class KleinanzeigenBot(SeleniumMixin):
                     * new: only publish new ads (i.e. ads that have no id in the config file)
               --force           - alias for '--ads=all'
               --keep-old        - don't delete old ads on republication
+              --ad <ID>         - provide the ad ID after this option when using the download command
               --config=<PATH>   - path to the config YAML or JSON file (DEFAULT: ./config.yaml)
               --logfile=<PATH>  - path to the logfile (DEFAULT: ./kleinanzeigen-bot.log)
               -v, --verbose     - enables verbose output - only useful when troubleshooting issues
