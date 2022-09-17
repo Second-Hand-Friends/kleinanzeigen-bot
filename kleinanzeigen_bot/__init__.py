@@ -102,7 +102,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 LOG.info('Start fetch task for ad with ID %s', str(self.ad_id))
                 # TODO call download function
                 self.navigate_to_ad_page()
-
+                self.extract_ad_page_info()
             case _:
                 LOG.error("Unknown command: %s", self.command)
                 sys.exit(2)
@@ -657,14 +657,51 @@ class KleinanzeigenBot(SeleniumMixin):
         self.web_click(By.XPATH, '//*[@id="site-search-submit"]')
         pause(2000, 3000)
 
-
     def extract_ad_page_info(self) -> Dict:
         """
         Extracts all necessary information from an ad´s page.
 
         :return: a dictionary with the keys as given in an ad YAML, and their respective values
         """
+        info = dict()
 
+        # extract basic info
+        info['active'] = 'true'
+        if 's-anzeige' in self.webdriver.current_url:
+            o_type = 'OFFER'
+        else:
+            o_type = 'WANTED'
+        info['type'] = o_type
+        title: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-title"]').text
+        LOG.info('Extracting information from ad with title \"%s\"', title)
+        info['title'] = title
+        descr: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-description-text"]').text
+        # TODO process description
+
+
+        # process pricing
+        price_str: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-price"]').text
+        price_type: str = ''
+        price: int = -1
+        match price_str.split()[-1]:
+            case '€':
+                price_type = 'FIXED'
+                price_part = price_str.split()[0].replace('.', '')
+                price = int(price_part)
+            case 'VB':
+                price_type = 'NEGOTIABLE'
+                price_part = price_str.split()[0].replace('.', '')
+                price = int(price_part)
+            case 'verschenken':
+                price_type = 'GIVE_AWAY'
+                price = 0
+            case _:
+                price_type = 'NOT_APPLICABLE'
+        assert price_type != ''
+        info['price'] = price
+        info['price_type'] = price_type
+
+        print(info)
 
 
 #############################
