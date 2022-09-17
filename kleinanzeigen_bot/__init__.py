@@ -18,7 +18,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from . import utils, resources
 from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get
 from .selenium_mixin import SeleniumMixin
-from . import download
 
 LOG_ROOT:Final[logging.Logger] = logging.getLogger()
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot")
@@ -99,10 +98,10 @@ class KleinanzeigenBot(SeleniumMixin):
                 self.create_webdriver_session()
                 self.login()
                 # ad ID passed as value to download command
-                # TODO call download function
                 assert self.ad_id > 0
                 LOG.info('Start fetch task for ad with ID %s', str(self.ad_id))
-                download.navigate_to_ad_page(self.ad_id, self)
+                # TODO call download function
+                self.navigate_to_ad_page()
             case _:
                 LOG.error("Unknown command: %s", self.command)
                 sys.exit(2)
@@ -644,6 +643,18 @@ class KleinanzeigenBot(SeleniumMixin):
                     super().web_open(url, timeout - elapsed, True)
                 else:
                     raise TimeoutException("Loading page failed, it still shows fullscreen ad.") from ex
+
+    def navigate_to_ad_page(self):
+        """
+        Navigates to an ad page specified with an ad ID.
+
+        """
+        # goto homepage and enter the ad ID into the search bar
+        self.web_open('https://www.ebay-kleinanzeigen.de')
+        self.web_input(By.XPATH, '//*[@id="site-search-query"]', str(self.ad_id))
+        # navigate to ad page and wait
+        self.web_click(By.XPATH, '//*[@id="site-search-submit"]')
+        pause(2000, 3000)
 
 
 #############################
