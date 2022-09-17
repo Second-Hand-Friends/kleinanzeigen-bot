@@ -6,7 +6,7 @@ import atexit, copy, getopt, importlib.metadata, json, logging, os, signal, sys,
 from collections.abc import Iterable
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
-from typing import Any, Final
+from typing import Any, Final, Dict
 from wcmatch import glob
 
 from overrides import overrides
@@ -102,6 +102,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 LOG.info('Start fetch task for ad with ID %s', str(self.ad_id))
                 # TODO call download function
                 self.navigate_to_ad_page()
+
             case _:
                 LOG.error("Unknown command: %s", self.command)
                 sys.exit(2)
@@ -655,6 +656,15 @@ class KleinanzeigenBot(SeleniumMixin):
         # navigate to ad page and wait
         self.web_click(By.XPATH, '//*[@id="site-search-submit"]')
         pause(2000, 3000)
+
+
+    def extract_ad_page_info(self) -> Dict:
+        """
+        Extracts all necessary information from an ad´s page.
+
+        :return: a dictionary with the keys as given in an ad YAML, and their respective values
+        """
+
 
 
 #############################
