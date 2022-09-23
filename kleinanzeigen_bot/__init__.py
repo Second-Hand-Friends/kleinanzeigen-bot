@@ -723,26 +723,49 @@ class KleinanzeigenBot(SeleniumMixin):
         info['description'] = descr
 
         # process pricing
-        price_str: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-price"]').text
-        price_type: str = ''
-        price: int = -1
-        match price_str.split()[-1]:
-            case '€':
-                price_type = 'FIXED'
-                price_part = price_str.split()[0].replace('.', '')
-                price = int(price_part)
-            case 'VB':
-                price_type = 'NEGOTIABLE'
-                price_part = price_str.split()[0].replace('.', '')
-                price = int(price_part)
-            case 'verschenken':
-                price_type = 'GIVE_AWAY'
-                price = 0
-            case _:
-                price_type = 'NOT_APPLICABLE'
-        assert price_type != ''
-        info['price'] = price
-        info['price_type'] = price_type
+        try:
+            price_str: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-price"]').text
+            price_type: str
+            price: str = '-1'
+            match price_str.split()[-1]:
+                case '€':
+                    price_type = 'FIXED'
+                    price_part = price_str.split()[0].replace('.', '')
+                case 'VB':
+                    price_type = 'NEGOTIABLE'
+                    price_part = price_str.split()[0].replace('.', '')
+                case 'verschenken':
+                    price_type = 'GIVE_AWAY'
+                    price = '0'
+                case _:
+                    price_type = 'NOT_APPLICABLE'
+            assert price_type != ''
+            info['price'] = price
+            info['price_type'] = price_type
+        except NoSuchElementException:  # no 'commercial' ad, has no pricing box etc.
+            LOG.info('Ad is not commercial.')
+            info['price'] = '0'
+            info['price_type'] = 'NOT_APPLICABLE'
+
+        # process shipping
+        try:
+            pricing_box = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/section/'
+                                                                'article/div[3]/div[1]')
+            shipping_text = pricing_box.find_element(By.XPATH, './/span').text
+            # e.g. '+ Versand ab 5,49 €' OR 'Nur Abholung'
+            if shipping_text == 'Nur Abholung':
+                info['shipping_type'] = 'PICKUP'
+                info['shipping_costs'] = ''
+            elif '€' in shipping_text:
+                shipping_price_parts = shipping_text.split(' ')
+                assert shipping_price_parts[-1] == '€'
+                shipping_price = shipping_price_parts[-2].replace(',', '.')
+                info['shipping_type'] = 'SHIPPING'
+                info['shipping_costs'] = shipping_price
+        except NoSuchElementException:  # no pricing box -> no shipping given
+            info['shipping_type'] = 'NOT_APPLICABLE'
+            info['shipping_costs'] = ''
+
 
         # process address
         contact = dict()
@@ -777,6 +800,7 @@ class KleinanzeigenBot(SeleniumMixin):
             creation_date = self.webdriver.find_element(By.XPATH,
                                                         '/html/body/div[1]/div[2]/div/section[2]/section/section/'
                                                         'article/div[1]/div[2]/div[2]/div[1]/span').text
+            # TODO fix: still, sometimes another XPath is required
         # TODO must be in ISO format
         info['created_on'] = creation_date
 
