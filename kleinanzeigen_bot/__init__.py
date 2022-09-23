@@ -658,6 +658,7 @@ class KleinanzeigenBot(SeleniumMixin):
         # navigate to ad page and wait
         self.web_click(By.XPATH, '//*[@id="site-search-submit"]')
         pause(2000, 3000)
+        # TODO also handle the case that invalid ad ID given
 
     def extract_ad_page_info(self) -> Dict:
         """
@@ -678,6 +679,10 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info('Extracting information from ad with title \"%s\"', title)
         info['title'] = title
         descr: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-description-text"]').text  # pure HTML
+
+        # extract category
+        # TODO get category
+
         # TODO convert description format
         info['description'] = descr
 
@@ -704,9 +709,16 @@ class KleinanzeigenBot(SeleniumMixin):
         info['price_type'] = price_type
 
         # process meta info
+        info['republication_interval'] = '7'  # a default value for downloaded ads
         info['id'] = str(self.ad_id)
-        creation_date = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/section/'
-                                                              'article/div[1]/div[2]/div[2]/div[1]/span').text
+        try:
+            creation_date = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/'
+                                                                  'section/article/div[3]/div[2]/div[2]/'
+                                                                  'div[1]/span').text
+        except NoSuchElementException:
+            creation_date = self.webdriver.find_element(By.XPATH,
+                                                        '/html/body/div[1]/div[2]/div/section[2]/section/section/'
+                                                        'article/div[1]/div[2]/div[2]/div[1]/span').text
         # TODO must be in ISO format
         info['created_on'] = creation_date
 
