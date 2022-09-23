@@ -681,7 +681,14 @@ class KleinanzeigenBot(SeleniumMixin):
         descr: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-description-text"]').text  # pure HTML
 
         # extract category
-        # TODO get category
+        category_line = self.webdriver.find_element(By.XPATH, '//*[@id="vap-brdcrmb"]')
+        category_first_part = category_line.find_element(By.XPATH, './/a[2]')
+        category_second_part = category_line.find_element(By.XPATH, './/a[3]')
+        cat_num_first = category_first_part.get_attribute('href').split('/')[-1][1:]
+        cat_num_second = category_second_part.get_attribute('href').split('/')[-1][1:]
+        category = cat_num_first + '/' + cat_num_second
+        info['category'] = category
+        print(category)
 
         # TODO convert description format
         info['description'] = descr
