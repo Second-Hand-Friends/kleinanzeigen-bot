@@ -246,10 +246,10 @@ def parse_decimal(number:float | int | str) -> decimal.Decimal:
     Decimal('1005.5')
     """
     try:
-        return decimal.Decimal(number)
+        return round(decimal.Decimal(number), 2)
     except decimal.InvalidOperation as ex:
         parts = re.split("[.,]", str(number))
         try:
-            return decimal.Decimal("".join(parts[:-1]) + "." + parts[-1])
+            return round(decimal.Decimal("".join(parts[:-1]) + "." + parts[-1]), 2)
         except decimal.InvalidOperation:
             raise decimal.DecimalException(f"Invalid number format: {number}") from ex
