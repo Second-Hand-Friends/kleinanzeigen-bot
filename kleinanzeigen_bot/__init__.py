@@ -19,8 +19,8 @@ from . import utils, resources
 from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get
 from .selenium_mixin import SeleniumMixin
 
-LOG_ROOT:Final[logging.Logger] = logging.getLogger()
-LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot")
+LOG_ROOT: Final[logging.Logger] = logging.getLogger()
+LOG: Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot")
 LOG.setLevel(logging.INFO)
 
 
@@ -31,17 +31,17 @@ class KleinanzeigenBot(SeleniumMixin):
 
         self.root_url = "https://www.ebay-kleinanzeigen.de"
 
-        self.config:dict[str, Any] = {}
+        self.config: dict[str, Any] = {}
         self.config_file_path = abspath("config.yaml")
 
-        self.categories:dict[str, str] = {}
+        self.categories: dict[str, str] = {}
 
-        self.file_log:logging.FileHandler | None = None
+        self.file_log: logging.FileHandler | None = None
         if is_frozen():
             log_file_basename = os.path.splitext(os.path.basename(sys.executable))[0]
         else:
             log_file_basename = self.__module__
-        self.log_file_path:str | None = abspath(f"{log_file_basename}.log")
+        self.log_file_path: str | None = abspath(f"{log_file_basename}.log")
 
         self.command = "help"
         self.ads_selector = "due"
@@ -56,7 +56,7 @@ class KleinanzeigenBot(SeleniumMixin):
     def get_version(self) -> str:
         return importlib.metadata.version(__package__)
 
-    def run(self, args:list[str]) -> None:
+    def run(self, args: list[str]) -> None:
         self.parse_args(args)
         match self.command:
             case "help":
@@ -141,7 +141,7 @@ class KleinanzeigenBot(SeleniumMixin):
               -v, --verbose     - enables verbose output - only useful when troubleshooting issues
         """))
 
-    def parse_args(self, args:list[str]) -> None:
+    def parse_args(self, args: list[str]) -> None:
         try:
             options, arguments = getopt.gnu_getopt(args[1:], "hv", [
                 "ads=",
@@ -201,21 +201,23 @@ class KleinanzeigenBot(SeleniumMixin):
             return
 
         LOG.info("Logging to [%s]...", self.log_file_path)
-        self.file_log = RotatingFileHandler(filename = self.log_file_path, maxBytes = 10 * 1024 * 1024, backupCount = 10, encoding = "utf-8")
+        self.file_log = RotatingFileHandler(filename=self.log_file_path, maxBytes=10 * 1024 * 1024, backupCount=10,
+                                            encoding="utf-8")
         self.file_log.setLevel(logging.DEBUG)
         self.file_log.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
         LOG_ROOT.addHandler(self.file_log)
 
         LOG.info("App version: %s", self.get_version())
 
-    def load_ads(self, *, ignore_inactive:bool = True) -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
+    def load_ads(self, *, ignore_inactive: bool = True) -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
         LOG.info("Searching for ad config files...")
 
         ad_files = set()
         data_root_dir = os.path.dirname(self.config_file_path)
         for file_pattern in self.config["ad_files"]:
-            for ad_file in glob.glob(file_pattern, root_dir = data_root_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
-                ad_files.add(abspath(ad_file, relative_to = data_root_dir))
+            for ad_file in glob.glob(file_pattern, root_dir=data_root_dir,
+                                     flags=glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
+                ad_files.add(abspath(ad_file, relative_to=data_root_dir))
         LOG.info(" -> found %s", pluralize("ad config file", ad_files))
         if not ad_files:
             return []
@@ -229,7 +231,8 @@ class KleinanzeigenBot(SeleniumMixin):
 
             ad_cfg_orig = utils.load_dict(ad_file, "ad")
             ad_cfg = copy.deepcopy(ad_cfg_orig)
-            apply_defaults(ad_cfg, self.config["ad_defaults"], ignore = lambda k, _: k == "description", override = lambda _, v: v == "")
+            apply_defaults(ad_cfg, self.config["ad_defaults"], ignore=lambda k, _: k == "description",
+                           override=lambda _, v: v == "")
             apply_defaults(ad_cfg, ad_fields)
 
             if ignore_inactive and not ad_cfg["active"]:
@@ -251,24 +254,28 @@ class KleinanzeigenBot(SeleniumMixin):
                 if last_updated_on:
                     ad_age = datetime.utcnow() - last_updated_on
                     if ad_age.days <= ad_cfg["republication_interval"]:
-                        LOG.info(" -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
+                        LOG.info(
+                            " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
                             ad_file,
                             ad_age.days,
                             ad_cfg["republication_interval"]
-                        )
+                            )
                         continue
 
             ad_cfg["description"] = descr_prefix + (ad_cfg["description"] or "") + descr_suffix
 
             # pylint: disable=cell-var-from-loop
-            def assert_one_of(path:str, allowed:Iterable[str]) -> None:
-                ensure(safe_get(ad_cfg, *path.split(".")) in allowed, f"-> property [{path}] must be one of: {allowed} @ [{ad_file}]")
+            def assert_one_of(path: str, allowed: Iterable[str]) -> None:
+                ensure(safe_get(ad_cfg, *path.split(".")) in allowed,
+                       f"-> property [{path}] must be one of: {allowed} @ [{ad_file}]")
 
-            def assert_min_len(path:str, minlen:int) -> None:
-                ensure(len(safe_get(ad_cfg, *path.split("."))) >= minlen, f"-> property [{path}] must be at least {minlen} characters long @ [{ad_file}]")
+            def assert_min_len(path: str, minlen: int) -> None:
+                ensure(len(safe_get(ad_cfg, *path.split("."))) >= minlen,
+                       f"-> property [{path}] must be at least {minlen} characters long @ [{ad_file}]")
 
-            def assert_has_value(path:str) -> None:
+            def assert_has_value(path: str) -> None:
                 ensure(safe_get(ad_cfg, *path.split(".")), f"-> property [{path}] not specified @ [{ad_file}]")
+
             # pylint: enable=cell-var-from-loop
 
             assert_one_of("type", {"OFFER", "WANTED"})
@@ -276,7 +283,8 @@ class KleinanzeigenBot(SeleniumMixin):
             assert_has_value("description")
             assert_one_of("price_type", {"FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"})
             if ad_cfg["price_type"] == "GIVE_AWAY":
-                ensure(not safe_get(ad_cfg, "price"), f"-> [price] must not be specified for GIVE_AWAY ad @ [{ad_file}]")
+                ensure(not safe_get(ad_cfg, "price"),
+                       f"-> [price] must not be specified for GIVE_AWAY ad @ [{ad_file}]")
             elif ad_cfg["price_type"] == "FIXED":
                 assert_has_value("price")
             assert_one_of("shipping_type", {"PICKUP", "SHIPPING", "NOT_APPLICABLE"})
@@ -297,15 +305,18 @@ class KleinanzeigenBot(SeleniumMixin):
                 for image_pattern in ad_cfg["images"]:
                     pattern_images = set()
                     ad_dir = os.path.dirname(ad_file)
-                    for image_file in glob.glob(image_pattern, root_dir = ad_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
+                    for image_file in glob.glob(image_pattern, root_dir=ad_dir,
+                                                flags=glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
                         _, image_file_ext = os.path.splitext(image_file)
-                        ensure(image_file_ext.lower() in {".gif", ".jpg", ".jpeg", ".png"}, f"Unsupported image file type [{image_file}]")
+                        ensure(image_file_ext.lower() in {".gif", ".jpg", ".jpeg", ".png"},
+                               f"Unsupported image file type [{image_file}]")
                         if os.path.isabs(image_file):
                             pattern_images.add(image_file)
                         else:
-                            pattern_images.add(abspath(image_file, relative_to = ad_file))
+                            pattern_images.add(abspath(image_file, relative_to=ad_file))
                     images.extend(sorted(pattern_images))
-                ensure(images or not ad_cfg["images"], f"No images found for given file patterns {ad_cfg['images']} at {ad_dir}")
+                ensure(images or not ad_cfg["images"],
+                       f"No images found for given file patterns {ad_cfg['images']} at {ad_dir}")
                 ad_cfg["images"] = list(dict.fromkeys(images))
 
             ads.append((
@@ -338,10 +349,12 @@ class KleinanzeigenBot(SeleniumMixin):
 
         self.browser_config.arguments = self.config["browser"]["arguments"]
         self.browser_config.binary_location = self.config["browser"]["binary_location"]
-        self.browser_config.extensions = [abspath(item, relative_to = self.config_file_path) for item in self.config["browser"]["extensions"]]
+        self.browser_config.extensions = [abspath(item, relative_to=self.config_file_path) for item in
+                                          self.config["browser"]["extensions"]]
         self.browser_config.use_private_window = self.config["browser"]["use_private_window"]
         if self.config["browser"]["user_data_dir"]:
-            self.browser_config.user_data_dir = abspath(self.config["browser"]["user_data_dir"], relative_to = self.config_file_path)
+            self.browser_config.user_data_dir = abspath(self.config["browser"]["user_data_dir"],
+                                                        relative_to=self.config_file_path)
         self.browser_config.profile_name = self.config["browser"]["profile_name"]
 
     def login(self) -> None:
@@ -363,7 +376,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
         pause(800, 3000)
 
-    def handle_captcha_if_present(self, captcha_element_id:str, msg:str) -> None:
+    def handle_captcha_if_present(self, captcha_element_id: str, msg: str) -> None:
         try:
             self.web_click(By.XPATH, f"//*[@id='{captcha_element_id}']")
         except NoSuchElementException:
@@ -373,10 +386,12 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.warning("# Captcha present! Please solve and close the captcha, %s", msg)
         LOG.warning("############################################")
         self.webdriver.switch_to.frame(self.web_find(By.CSS_SELECTOR, f"#{captcha_element_id} iframe"))
-        self.web_await(lambda _: self.webdriver.find_element(By.ID, "recaptcha-anchor").get_attribute("aria-checked") == "true", timeout = 5 * 60)
+        self.web_await(
+            lambda _: self.webdriver.find_element(By.ID, "recaptcha-anchor").get_attribute("aria-checked") == "true",
+            timeout=5 * 60)
         self.webdriver.switch_to.default_content()
 
-    def delete_ads(self, ad_cfgs:list[tuple[str, dict[str, Any], dict[str, Any]]]) -> None:
+    def delete_ads(self, ad_cfgs: list[tuple[str, dict[str, Any], dict[str, Any]]]) -> None:
         count = 0
 
         for (ad_file, ad_cfg, _) in ad_cfgs:
@@ -397,7 +412,9 @@ class KleinanzeigenBot(SeleniumMixin):
         csrf_token = csrf_token_elem.get_attribute("content")
 
         if self.delete_ads_by_title:
-            published_ads = json.loads(self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT")["content"])["ads"]
+            published_ads = \
+            json.loads(self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT")["content"])[
+                "ads"]
 
             for published_ad in published_ads:
                 published_ad_id = int(published_ad.get("id", -1))
@@ -405,23 +422,23 @@ class KleinanzeigenBot(SeleniumMixin):
                 if ad_cfg["id"] == published_ad_id or ad_cfg["title"] == published_ad_title:
                     LOG.info(" -> deleting %s '%s'...", published_ad_id, published_ad_title)
                     self.web_request(
-                        url = f"{self.root_url}/m-anzeigen-loeschen.json?ids={published_ad_id}",
-                        method = "POST",
-                        headers = {"x-csrf-token": csrf_token}
+                        url=f"{self.root_url}/m-anzeigen-loeschen.json?ids={published_ad_id}",
+                        method="POST",
+                        headers={"x-csrf-token": csrf_token}
                     )
         elif ad_cfg["id"]:
             self.web_request(
-                url = f"{self.root_url}/m-anzeigen-loeschen.json?ids={ad_cfg['id']}",
-                method = "POST",
-                headers = {"x-csrf-token": csrf_token},
-                valid_response_codes = [200, 404]
+                url=f"{self.root_url}/m-anzeigen-loeschen.json?ids={ad_cfg['id']}",
+                method="POST",
+                headers={"x-csrf-token": csrf_token},
+                valid_response_codes=[200, 404]
             )
 
         pause(1500, 3000)
         ad_cfg["id"] = None
         return True
 
-    def publish_ads(self, ad_cfgs:list[tuple[str, dict[str, Any], dict[str, Any]]]) -> None:
+    def publish_ads(self, ad_cfgs: list[tuple[str, dict[str, Any], dict[str, Any]]]) -> None:
         count = 0
 
         for (ad_file, ad_cfg, ad_cfg_orig) in ad_cfgs:
@@ -434,7 +451,7 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    def publish_ad(self, ad_file:str, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any]) -> None:
+    def publish_ad(self, ad_file: str, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any]) -> None:
         self.assert_free_ad_limit_not_reached()
 
         if self.delete_old_ads:
@@ -466,18 +483,21 @@ class KleinanzeigenBot(SeleniumMixin):
         #############################
         if ad_cfg["shipping_type"] == "PICKUP":
             try:
-                self.web_click(By.XPATH, '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/input[@type="radio"]')
+                self.web_click(By.XPATH,
+                               '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/input[@type="radio"]')
             except NoSuchElementException as ex:
-                LOG.debug(ex, exc_info = True)
+                LOG.debug(ex, exc_info=True)
         elif ad_cfg["shipping_costs"]:
             try:
                 self.web_click(By.XPATH, '//*[contains(@class, "ShippingOption")]//input[@type="radio"]')
-                self.web_click(By.XPATH, '//*[contains(@class, "CarrierOptionsPopup")]//*[contains(@class, "IndividualPriceSection")]//input[@type="checkbox"]')
+                self.web_click(By.XPATH,
+                               '//*[contains(@class, "CarrierOptionsPopup")]//*[contains(@class, "IndividualPriceSection")]//input[@type="checkbox"]')
                 self.web_input(By.XPATH, '//*[contains(@class, "IndividualShippingInput")]//input[@type="text"]',
-                              str.replace(ad_cfg["shipping_costs"], ".", ","))
-                self.web_click(By.XPATH, '//*[contains(@class, "ReactModalPortal")]//button[.//*[text()[contains(.,"Weiter")]]]')
+                               str.replace(ad_cfg["shipping_costs"], ".", ","))
+                self.web_click(By.XPATH,
+                               '//*[contains(@class, "ReactModalPortal")]//button[.//*[text()[contains(.,"Weiter")]]]')
             except NoSuchElementException as ex:
-                LOG.debug(ex, exc_info = True)
+                LOG.debug(ex, exc_info=True)
 
         #############################
         # set price
@@ -491,7 +511,8 @@ class KleinanzeigenBot(SeleniumMixin):
         #############################
         # set description
         #############################
-        self.web_execute("document.querySelector('#pstad-descrptn').value = `" + ad_cfg["description"].replace("`", "'") + "`")
+        self.web_execute(
+            "document.querySelector('#pstad-descrptn').value = `" + ad_cfg["description"].replace("`", "'") + "`")
 
         #############################
         # set contact zipcode
@@ -562,7 +583,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
         utils.save_dict(ad_file, ad_cfg_orig)
 
-    def __set_category(self, ad_file:str, ad_cfg: dict[str, Any]):
+    def __set_category(self, ad_file: str, ad_cfg: dict[str, Any]):
         # trigger and wait for automatic category detection
         self.web_click(By.ID, "pstad-price")
         try:
@@ -580,7 +601,8 @@ class KleinanzeigenBot(SeleniumMixin):
             self.web_open(category_url)
             self.web_click(By.XPATH, "//*[@id='postad-step1-sbmt']/button")
         else:
-            ensure(is_category_auto_selected, f"No category specified in [{ad_file}] and automatic category detection failed")
+            ensure(is_category_auto_selected,
+                   f"No category specified in [{ad_file}] and automatic category detection failed")
 
         if ad_cfg["special_attributes"]:
             LOG.debug('Found %i special attributes', len(ad_cfg["special_attributes"]))
@@ -589,17 +611,22 @@ class KleinanzeigenBot(SeleniumMixin):
                 try:
                     self.web_select(By.XPATH, f"//select[@id='{special_attribute_key}']", special_attribute_value)
                 except WebDriverException:
-                    LOG.debug("Attribute field '%s' is not of kind dropdown, trying to input as plain text...", special_attribute_key)
+                    LOG.debug("Attribute field '%s' is not of kind dropdown, trying to input as plain text...",
+                              special_attribute_key)
                     try:
                         self.web_input(By.ID, special_attribute_key, special_attribute_value)
                     except WebDriverException:
-                        LOG.debug("Attribute field '%s' is not of kind plain text, trying to input as radio button...", special_attribute_key)
+                        LOG.debug("Attribute field '%s' is not of kind plain text, trying to input as radio button...",
+                                  special_attribute_key)
                         try:
-                            self.web_click(By.XPATH, f"//*[@id='{special_attribute_key}']/option[@value='{special_attribute_value}']")
+                            self.web_click(By.XPATH,
+                                           f"//*[@id='{special_attribute_key}']/option[@value='{special_attribute_value}']")
                         except WebDriverException as ex:
                             LOG.debug("Attribute field '%s' is not of kind radio button.", special_attribute_key)
-                            raise NoSuchElementException(f"Failed to set special attribute [{special_attribute_key}]") from ex
-                LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value)
+                            raise NoSuchElementException(
+                                f"Failed to set special attribute [{special_attribute_key}]") from ex
+                LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key,
+                          special_attribute_value)
 
     def __upload_images(self, ad_cfg: dict[str, Any]):
         LOG.info(" -> found %s", pluralize("image", ad_cfg["images"]))
@@ -614,23 +641,25 @@ class KleinanzeigenBot(SeleniumMixin):
             image_upload.send_keys(image)
             start_at = time.time()
             while previous_uploaded_images_count == count_uploaded_images() and time.time() - start_at < 60:
-                print(".", end = "", flush = True)
+                print(".", end="", flush=True)
                 time.sleep(1)
-            print(flush = True)
+            print(flush=True)
 
-            ensure(previous_uploaded_images_count < count_uploaded_images(), f"Couldn't upload image [{image}] within 60 seconds")
+            ensure(previous_uploaded_images_count < count_uploaded_images(),
+                   f"Couldn't upload image [{image}] within 60 seconds")
             LOG.debug("   => uploaded image within %i seconds", time.time() - start_at)
             pause(2000)
 
     def assert_free_ad_limit_not_reached(self) -> None:
         try:
             self.web_find(By.XPATH, '/html/body/div[1]/form/fieldset[6]/div[1]/header')
-            raise AssertionError(f"Cannot publish more ads. The monthly limit of free ads of account {self.config['login']['username']} is reached.")
+            raise AssertionError(
+                f"Cannot publish more ads. The monthly limit of free ads of account {self.config['login']['username']} is reached.")
         except NoSuchElementException:
             pass
 
     @overrides
-    def web_open(self, url:str, timeout:float = 15, reload_if_already_open:bool = False) -> None:
+    def web_open(self, url: str, timeout: float = 15, reload_if_already_open: bool = False) -> None:
         start_at = time.time()
         super().web_open(url, timeout, reload_if_already_open)
         pause(2000)
@@ -715,6 +744,27 @@ class KleinanzeigenBot(SeleniumMixin):
         info['price'] = price
         info['price_type'] = price_type
 
+        # process address
+        contact = dict()
+        address_element = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-locality"]')
+        address_text = address_element.text
+        # e.g. (Beispiel Allee 42,) 12345 Bundesland - Stadt
+        if ',' in address_text:
+            address_parts = address_text.split(',')
+            assert len(address_parts) == 2
+            contact['street'] = address_parts[0]
+            address_text = address_parts[1].strip()  # keep rest as 'core' part
+        # standard parts of address
+        address_parts = address_text.split(' ')
+        assert len(address_parts) == 4
+        contact['zipcode'] = address_parts[0]
+        contact['name'] = address_parts[3]
+        if 'street' not in contact:
+            contact['street'] = ''
+        contact['phone'] = ''  # phone seems to be a deprecated feature
+        # also see 'https://themen.ebay-kleinanzeigen.de/hilfe/deine-anzeigen/Telefon/
+        info['contact'] = contact
+
         # process meta info
         info['republication_interval'] = '7'  # a default value for downloaded ads
         info['id'] = str(self.ad_id)
@@ -737,7 +787,7 @@ class KleinanzeigenBot(SeleniumMixin):
 #############################
 # main entry point
 #############################
-def main(args:list[str]) -> None:
+def main(args: list[str]) -> None:
     if "version" not in args:
         print(textwrap.dedent(r"""
          _    _      _                           _                       _           _
@@ -747,7 +797,7 @@ def main(args:list[str]) -> None:
         |_|\_\_|\___|_|_| |_|\__,_|_| |_/___\___|_|\__, |\___|_| |_|    |_.__/ \___/ \__|
                                                    |___/
                                                      https://github.com/kleinanzeigen-bot
-        """), flush = True)
+        """), flush=True)
 
     utils.configure_console_logging()
 
