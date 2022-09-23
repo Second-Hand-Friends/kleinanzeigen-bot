@@ -749,11 +749,12 @@ class KleinanzeigenBot(SeleniumMixin):
         address_element = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-locality"]')
         address_text = address_element.text
         # e.g. (Beispiel Allee 42,) 12345 Bundesland - Stadt
-        if ',' in address_text:
-            address_parts = address_text.split(',')
-            assert len(address_parts) == 2
-            contact['street'] = address_parts[0]
-            address_text = address_parts[1].strip()  # keep rest as 'core' part
+        try:
+            street_element = self.webdriver.find_element(By.XPATH, '//*[@id="street-address"]')
+            street = street_element.text[:-2]  # trailing comma and whitespace
+            contact['street'] = street
+        except NoSuchElementException:
+            LOG.info('No street given in the contact.')
         # standard parts of address
         address_parts = address_text.split(' ')
         assert len(address_parts) == 4
