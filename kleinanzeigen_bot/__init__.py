@@ -470,7 +470,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 LOG.info('It seems like priceType ID was changed trying price-type-react instead')
                 self.web_select(By.XPATH, "//select[@id='price-type-react']", price_type)
             if safe_get(ad_cfg, "price"):
-                try: 
+                try:
                     self.web_input(By.ID, "pstad-price", ad_cfg["price"])
                 except NoSuchElementException as ex:
                     LOG.debug(ex, exc_info = True)
