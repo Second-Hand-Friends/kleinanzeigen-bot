@@ -792,15 +792,19 @@ class KleinanzeigenBot(SeleniumMixin):
         # process meta info
         info['republication_interval'] = '7'  # a default value for downloaded ads
         info['id'] = str(self.ad_id)
-        try:
+        try:  # three different locations known for creation date element
             creation_date = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/'
                                                                   'section/article/div[3]/div[2]/div[2]/'
                                                                   'div[1]/span').text
         except NoSuchElementException:
-            creation_date = self.webdriver.find_element(By.XPATH,
-                                                        '/html/body/div[1]/div[2]/div/section[2]/section/section/'
-                                                        'article/div[1]/div[2]/div[2]/div[1]/span').text
-            # TODO fix: still, sometimes another XPath is required
+            try:
+                creation_date = self.webdriver.find_element(By.XPATH,
+                                                            '/html/body/div[1]/div[2]/div/section[2]/section/section/'
+                                                            'article/div[1]/div[2]/div[2]/div[1]/span').text
+            except NoSuchElementException:
+                creation_date = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/'
+                                                                      'section/article/div[1]/div/div[2]/div[1]/'
+                                                                      'span').text
         # TODO must be in ISO format
         info['created_on'] = creation_date
 
