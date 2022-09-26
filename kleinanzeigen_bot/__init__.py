@@ -749,8 +749,8 @@ class KleinanzeigenBot(SeleniumMixin):
 
         # process shipping
         try:
-            pricing_box = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/section/'
-                                                                'article/div[3]/div[1]')
+            pricing_box = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/'
+                                                                'section/article/div[3]/div[1]')
             shipping_text = pricing_box.find_element(By.XPATH, './/span').text
             # e.g. '+ Versand ab 5,49 €' OR 'Nur Abholung'
             if shipping_text == 'Nur Abholung':
@@ -768,6 +768,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
         # fetch images
         n_images: int = -1
+        img_paths = []
         try:
             image_box = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/'
                                                               'section/article/div[1]')
@@ -794,8 +795,10 @@ class KleinanzeigenBot(SeleniumMixin):
                 while img_nr <= n_images:  # scrolling + downloading
                     current_img_url = img_element.get_attribute('src')  # URL of the image
                     file_ending = current_img_url.split('.')[-1].lower()
-                    request.urlretrieve(current_img_url, img_fn_prefix + str(img_nr) + '.' + file_ending)
+                    img_path = img_fn_prefix + str(img_nr) + '.' + file_ending
+                    request.urlretrieve(current_img_url, img_path)
                     dl_counter += 1
+                    img_paths.append(img_path)
 
                     # scroll to next image
                     if img_nr < n_images:
@@ -806,6 +809,8 @@ class KleinanzeigenBot(SeleniumMixin):
                             next_button.click()
                             self.web_await(lambda _: EC.invisibility_of_element(img_element))
                             img_element = image_box.find_element(By.XPATH, './/div[1]/img')  # reestablish reference
+                            print('Reference refreshed.')
+                            print(img_element)
                         except NoSuchElementException:
                             LOG.error('NEXT button in image gallery somehow missing, abort image fetching.')
                             break
@@ -818,6 +823,7 @@ class KleinanzeigenBot(SeleniumMixin):
         except NoSuchElementException:  # some ads do not require images
             n_images = 0
             LOG.warning('No image area found. Continue without downloading images.')
+        info['images'] = img_paths
 
         # process address
         contact = dict()
