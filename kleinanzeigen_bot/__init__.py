@@ -14,6 +14,7 @@ from ruamel.yaml import YAML
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
+from urllib import request
 
 from . import utils, resources
 from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get
@@ -765,7 +766,7 @@ class KleinanzeigenBot(SeleniumMixin):
             info['shipping_type'] = 'NOT_APPLICABLE'
             info['shipping_costs'] = ''
 
-        # download images
+        # fetch images
         n_images: int = -1
         try:
             image_box = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/'
@@ -782,6 +783,35 @@ class KleinanzeigenBot(SeleniumMixin):
                     LOG.info(f'Found {n_images} images.')
                 except NoSuchElementException:
                     LOG.info('Only one image found.')
+
+                # download all images from box
+                img_element = image_box.find_element(By.XPATH, './/div[1]/img')
+                assert img_element
+                img_fn_prefix = 'ad_' + str(self.ad_id) + '__img'
+
+                img_nr = 1
+                dl_counter = 0
+                while img_nr <= n_images:  # scrolling + downloading
+                    current_img_url = img_element.get_attribute('src')  # URL of the image
+                    file_ending = current_img_url.split('.')[-1].lower()
+                    request.urlretrieve(current_img_url, img_fn_prefix + str(img_nr) + '.' + file_ending)
+                    dl_counter += 1
+
+                    # scroll to next image
+                    if img_nr < n_images:
+                        try:
+                            next_button = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/'
+                                                                                'section[2]/section/section/article/'
+                                                                                'div[1]/div[5]')
+                            next_button.click()
+                            self.web_await(lambda _: EC.invisibility_of_element(img_element))
+                            img_element = image_box.find_element(By.XPATH, './/div[1]/img')  # reestablish reference
+                        except NoSuchElementException:
+                            LOG.error('NEXT button in image gallery somehow missing, abort image fetching.')
+                            break
+                    img_nr += 1
+                LOG.info(f'Downloaded {dl_counter} images.')
+
             else:  # XPath does not point to gallery
                 n_images = 0
                 LOG.info('No images found. Continue without downloading images.')
