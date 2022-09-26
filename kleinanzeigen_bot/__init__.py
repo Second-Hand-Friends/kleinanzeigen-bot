@@ -806,16 +806,20 @@ class KleinanzeigenBot(SeleniumMixin):
                             next_button = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/'
                                                                                 'section[2]/section/section/article/'
                                                                                 'div[1]/div[5]')
+                            assert next_button
+                            # click next button, wait, and reestablish reference
                             next_button.click()
-                            self.web_await(lambda _: EC.invisibility_of_element(img_element))
-                            img_element = image_box.find_element(By.XPATH, './/div[1]/img')  # reestablish reference
-                            print('Reference refreshed.')
-                            print(img_element)
+                            self.web_await(lambda _: EC.staleness_of(img_element))
+                            new_div = self.webdriver.find_element(By.CSS_SELECTOR, f'div.galleryimage-element:nth-child'
+                                                                                   f'({img_nr+1})')
+                            assert new_div
+                            img_element = new_div.find_element(By.XPATH, './/img')
+                            assert img_element
                         except NoSuchElementException:
                             LOG.error('NEXT button in image gallery somehow missing, abort image fetching.')
                             break
                     img_nr += 1
-                LOG.info(f'Downloaded {dl_counter} images.')
+                LOG.info(f'Downloaded {dl_counter} image(s).')
 
             else:  # XPath does not point to gallery
                 n_images = 0
