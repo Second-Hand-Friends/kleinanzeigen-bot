@@ -717,7 +717,6 @@ class KleinanzeigenBot(SeleniumMixin):
         cat_num_second = category_second_part.get_attribute('href').split('/')[-1][1:]
         category = cat_num_first + '/' + cat_num_second
         info['category'] = category
-        print(category)
 
         # TODO convert description format
         info['description'] = descr
@@ -766,6 +765,29 @@ class KleinanzeigenBot(SeleniumMixin):
             info['shipping_type'] = 'NOT_APPLICABLE'
             info['shipping_costs'] = ''
 
+        # download images
+        n_images: int = -1
+        try:
+            image_box = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/'
+                                                              'section/article/div[1]')
+            ib_class_name = image_box.get_attribute('class')
+
+            # if gallery image box exists, proceed with image fetching
+            if 'gallery' in ib_class_name and 'image' in ib_class_name:
+                n_images = 1
+
+                try:  # check if multiple images given
+                    image_counter = image_box.find_element(By.XPATH, './/div[6]')
+                    n_images = int(image_counter.text[2:])
+                    LOG.info(f'Found {n_images} images.')
+                except NoSuchElementException:
+                    LOG.info('Only one image found.')
+            else:  # XPath does not point to gallery
+                n_images = 0
+                LOG.info('No images found. Continue without downloading images.')
+        except NoSuchElementException:  # some ads do not require images
+            n_images = 0
+            LOG.warning('No image area found. Continue without downloading images.')
 
         # process address
         contact = dict()
