@@ -805,8 +805,12 @@ class KleinanzeigenBot(SeleniumMixin):
                 creation_date = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/'
                                                                       'section/article/div[1]/div/div[2]/div[1]/'
                                                                       'span').text
-        # TODO must be in ISO format
+        # convert creation date to ISO format
+        created_parts = creation_date.split('.')
+        assert len(created_parts) == 3
+        creation_date = created_parts[2] + '-' + created_parts[1] + '-' + created_parts[0] + ' 00:00:00'
         info['created_on'] = creation_date
+        info['updated_on'] = ''  # will be set later on
 
         print(info)
 
