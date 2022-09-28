@@ -11,7 +11,7 @@ from wcmatch import glob
 
 from overrides import overrides
 from ruamel.yaml import YAML
-from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException, ElementNotInteractableException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -467,7 +467,6 @@ class KleinanzeigenBot(SeleniumMixin):
             if safe_get(ad_cfg, "price"):
                 self.web_click(By.ID, "post-ad-frontend-price")
                 self.web_input(By.ID, "post-ad-frontend-price", ad_cfg["price"])
-            
 
         #############################
         # set description
