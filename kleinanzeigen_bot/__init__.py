@@ -238,6 +238,7 @@ class KleinanzeigenBot(SeleniumMixin):
                         continue
 
             ad_cfg["description"] = descr_prefix + (ad_cfg["description"] or "") + descr_suffix
+            ensure(len(ad_cfg["description"]) <= 4000, f"Length of ad description including prefix and suffix exceeds 4000 chars. @ [{ad_file}]")
 
             # pylint: disable=cell-var-from-loop
             def assert_one_of(path:str, allowed:Iterable[str]) -> None:
