@@ -11,7 +11,7 @@ from wcmatch import glob
 
 from overrides import overrides
 from ruamel.yaml import YAML
-from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException, ElementNotInteractableException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -463,19 +463,11 @@ class KleinanzeigenBot(SeleniumMixin):
         #############################
         price_type = ad_cfg["price_type"]
         if price_type != "NOT_APPLICABLE":
-            try:
-                self.web_select(By.XPATH, "//select[@id='priceType']", price_type)
-            except NoSuchElementException as ex:
-                LOG.debug(ex, exc_info = True)
-                LOG.info('It seems like priceType ID was changed trying price-type-react instead')
-                self.web_select(By.XPATH, "//select[@id='price-type-react']", price_type)
+            self.web_select(By.XPATH, "//select[@id='price-type-react']", price_type)
             if safe_get(ad_cfg, "price"):
-                try:
-                    self.web_input(By.ID, "pstad-price", ad_cfg["price"])
-                except NoSuchElementException as ex:
-                    LOG.debug(ex, exc_info = True)
-                    LOG.info('It seems like pstad-price ID was changed trying post-ad-frontend-price instead')
-                    self.web_select(By.XPATH, "//select[@id='post-ad-frontend-price']", price_type)
+                self.web_click(By.ID, "post-ad-frontend-price")
+                self.web_input(By.ID, "post-ad-frontend-price", ad_cfg["price"])
+            
 
         #############################
         # set description
