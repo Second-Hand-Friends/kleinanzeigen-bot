@@ -269,7 +269,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 ad_cfg["category"] = self.categories.get(ad_cfg["category"], ad_cfg["category"])
 
             if ad_cfg["shipping_costs"]:
-                ad_cfg["shipping_costs"] = str(utils.parse_decimal(ad_cfg["shipping_costs"]))
+                ad_cfg["shipping_costs"] = str(round(utils.parse_decimal(ad_cfg["shipping_costs"]), 2))
 
             if ad_cfg["images"]:
                 images = []
