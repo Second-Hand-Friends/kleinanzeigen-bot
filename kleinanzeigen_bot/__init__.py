@@ -687,7 +687,7 @@ class KleinanzeigenBot(SeleniumMixin):
         self.web_input(By.XPATH, '//*[@id="site-search-query"]', str(self.ad_id))
         # navigate to ad page and wait
         self.web_click(By.XPATH, '//*[@id="site-search-submit"]')
-        pause(2000, 3000)
+        pause(1000, 2000)
         # TODO also handle the case that invalid ad ID given
 
     def extract_ad_page_info(self) -> Dict:
@@ -722,18 +722,24 @@ class KleinanzeigenBot(SeleniumMixin):
         # TODO convert description format
         info['description'] = descr
 
+        # get special attributes
+        # TODO get attributes
+        # TODO adjust rest of function to 'extended' ads format
+
         # process pricing
         try:
-            price_str: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-price"]').text
+            price_str: str = self.webdriver.find_element(By.CLASS_NAME, 'boxedarticle--price').text
             price_type: str
             price: str = '-1'
             match price_str.split()[-1]:
                 case '€':
                     price_type = 'FIXED'
                     price_part = price_str.split()[0].replace('.', '')
+                    price = price_part
                 case 'VB':
                     price_type = 'NEGOTIABLE'
                     price_part = price_str.split()[0].replace('.', '')
+                    price = price_part
                 case 'verschenken':
                     price_type = 'GIVE_AWAY'
                     price = '0'
