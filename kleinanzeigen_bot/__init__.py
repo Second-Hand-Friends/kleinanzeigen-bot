@@ -104,7 +104,8 @@ class KleinanzeigenBot(SeleniumMixin):
                 # call download function
                 exists = self.navigate_to_ad_page()
                 if exists:
-                    self.extract_ad_page_info()
+                    info = self.extract_ad_page_info()
+                    # TODO implement writer to YAML
                 else:
                     sys.exit(2)
             case _:
@@ -744,11 +745,11 @@ class KleinanzeigenBot(SeleniumMixin):
             match price_str.split()[-1]:
                 case '€':
                     price_type = 'FIXED'
-                    price_part = price_str.split()[0].replace('.', '')
+                    price_part = str(utils.parse_decimal(price_str.split()[0]))
                     price = price_part
                 case 'VB':
                     price_type = 'NEGOTIABLE'
-                    price_part = price_str.split()[0].replace('.', '')
+                    price_part = str(utils.parse_decimal(price_str.split()[0]))
                     price = price_part
                 case 'verschenken':
                     price_type = 'GIVE_AWAY'
@@ -775,7 +776,7 @@ class KleinanzeigenBot(SeleniumMixin):
             elif '€' in shipping_text:
                 shipping_price_parts = shipping_text.split(' ')
                 assert shipping_price_parts[-1] == '€'
-                shipping_price = shipping_price_parts[-2].replace(',', '.')
+                shipping_price = str(utils.parse_decimal(shipping_price_parts[-2]))
                 info['shipping_type'] = 'SHIPPING'
                 info['shipping_costs'] = shipping_price
         except NoSuchElementException:  # no pricing box -> no shipping given
