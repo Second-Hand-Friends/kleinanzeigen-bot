@@ -105,7 +105,9 @@ class KleinanzeigenBot(SeleniumMixin):
                 exists = self.navigate_to_ad_page()
                 if exists:
                     info = self.extract_ad_page_info()
-                    # TODO implement writer to YAML
+                    # TODO put all created files in sub-directory
+                    ad_file_path = f'ad_{self.ad_id}.yaml'
+                    utils.save_dict(ad_file_path, info)
                 else:
                     sys.exit(2)
             case _:
@@ -710,7 +712,7 @@ class KleinanzeigenBot(SeleniumMixin):
         info = dict()
 
         # extract basic info
-        info['active'] = 'true'
+        info['active'] = True
         if 's-anzeige' in self.webdriver.current_url:
             o_type = 'OFFER'
         else:
@@ -741,19 +743,17 @@ class KleinanzeigenBot(SeleniumMixin):
         try:
             price_str: str = self.webdriver.find_element(By.CLASS_NAME, 'boxedarticle--price').text
             price_type: str
-            price: str = '-1'
+            price: float = -1
             match price_str.split()[-1]:
                 case '€':
                     price_type = 'FIXED'
-                    price_part = str(utils.parse_decimal(price_str.split()[0]))
-                    price = price_part
+                    price = float(utils.parse_decimal(price_str.split()[0]))
                 case 'VB':
                     price_type = 'NEGOTIABLE'
-                    price_part = str(utils.parse_decimal(price_str.split()[0]))
-                    price = price_part
+                    price = float(utils.parse_decimal(price_str.split()[0]))
                 case 'verschenken':
                     price_type = 'GIVE_AWAY'
-                    price = '0'
+                    price = 0.0
                 case _:
                     price_type = 'NOT_APPLICABLE'
             assert price_type != ''
@@ -772,11 +772,11 @@ class KleinanzeigenBot(SeleniumMixin):
             # e.g. '+ Versand ab 5,49 €' OR 'Nur Abholung'
             if shipping_text == 'Nur Abholung':
                 info['shipping_type'] = 'PICKUP'
-                info['shipping_costs'] = ''
+                info['shipping_costs'] = None
             elif '€' in shipping_text:
                 shipping_price_parts = shipping_text.split(' ')
                 assert shipping_price_parts[-1] == '€'
-                shipping_price = str(utils.parse_decimal(shipping_price_parts[-2]))
+                shipping_price = float(utils.parse_decimal(shipping_price_parts[-2]))
                 info['shipping_type'] = 'SHIPPING'
                 info['shipping_costs'] = shipping_price
         except NoSuchElementException:  # no pricing box -> no shipping given
@@ -860,17 +860,17 @@ class KleinanzeigenBot(SeleniumMixin):
         # standard parts of address
         address_parts = address_text.split(' ')
         assert len(address_parts) == 4
-        contact['zipcode'] = address_parts[0]
+        contact['zipcode'] = int(address_parts[0])
         contact['name'] = address_parts[3]
         if 'street' not in contact:
-            contact['street'] = ''
-        contact['phone'] = ''  # phone seems to be a deprecated feature
+            contact['street'] = None
+        contact['phone'] = None  # phone seems to be a deprecated feature
         # also see 'https://themen.ebay-kleinanzeigen.de/hilfe/deine-anzeigen/Telefon/
         info['contact'] = contact
 
         # process meta info
-        info['republication_interval'] = '7'  # a default value for downloaded ads
-        info['id'] = str(self.ad_id)
+        info['republication_interval'] = 7  # a default value for downloaded ads
+        info['id'] = self.ad_id
         try:  # three different locations known for creation date element
             creation_date = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/'
                                                                   'section/article/div[3]/div[2]/div[2]/'
@@ -888,8 +888,8 @@ class KleinanzeigenBot(SeleniumMixin):
         created_parts = creation_date.split('.')
         assert len(created_parts) == 3
         creation_date = created_parts[2] + '-' + created_parts[1] + '-' + created_parts[0] + ' 00:00:00'
-        info['created_on'] = creation_date
-        info['updated_on'] = ''  # will be set later on
+        info['created_on'] = datetime.fromisoformat(creation_date)
+        info['updated_on'] = None  # will be set later on
 
         print(info)
 
