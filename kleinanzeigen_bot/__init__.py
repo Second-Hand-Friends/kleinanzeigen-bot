@@ -3,6 +3,7 @@ Copyright (C) 2022 Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 import atexit, copy, getopt, importlib.metadata, json, logging, os, signal, sys, textwrap, time, urllib
+import shutil
 from collections.abc import Iterable
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
@@ -104,9 +105,19 @@ class KleinanzeigenBot(SeleniumMixin):
                 # call download function
                 exists = self.navigate_to_ad_page()
                 if exists:
-                    info = self.extract_ad_page_info()
-                    # TODO put all created files in sub-directory
-                    ad_file_path = f'ad_{self.ad_id}.yaml'
+                    # create sub-directory for ad to download
+                    relative_directory = str(self.config["ad_files"][0]).split('**')[0]
+                    new_base_dir = os.path.join(relative_directory, f'ad_{self.ad_id}')
+                    if os.path.exists(new_base_dir):
+                        LOG.info('Deleting current folder of ad...')
+                        shutil.rmtree(new_base_dir)
+                    os.mkdir(new_base_dir)
+                    assert os.path.exists(new_base_dir)
+                    LOG.info('New directory for ad created at ' + new_base_dir + '.')
+
+                    # call extraction function
+                    info = self.extract_ad_page_info(new_base_dir)
+                    ad_file_path = new_base_dir + '/' + f'ad_{self.ad_id}.yaml'
                     utils.save_dict(ad_file_path, info)
                 else:
                     sys.exit(2)
@@ -266,7 +277,7 @@ class KleinanzeigenBot(SeleniumMixin):
                             ad_file,
                             ad_age.days,
                             ad_cfg["republication_interval"]
-                            )
+                        )
                         continue
 
             ad_cfg["description"] = descr_prefix + (ad_cfg["description"] or "") + descr_suffix
@@ -420,8 +431,9 @@ class KleinanzeigenBot(SeleniumMixin):
 
         if self.delete_ads_by_title:
             published_ads = \
-            json.loads(self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT")["content"])[
-                "ads"]
+                json.loads(
+                    self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT")["content"])[
+                    "ads"]
 
             for published_ad in published_ads:
                 published_ad_id = int(published_ad.get("id", -1))
@@ -703,10 +715,11 @@ class KleinanzeigenBot(SeleniumMixin):
         else:
             return True
 
-    def extract_ad_page_info(self) -> Dict:
+    def extract_ad_page_info(self, directory: str) -> Dict:
         """
         Extracts all necessary information from an ad´s page.
 
+        :param directory: the path of the ad´s previously created directory
         :return: a dictionary with the keys as given in an ad YAML, and their respective values
         """
         info = dict()
@@ -812,10 +825,10 @@ class KleinanzeigenBot(SeleniumMixin):
                 while img_nr <= n_images:  # scrolling + downloading
                     current_img_url = img_element.get_attribute('src')  # URL of the image
                     file_ending = current_img_url.split('.')[-1].lower()
-                    img_path = img_fn_prefix + str(img_nr) + '.' + file_ending
+                    img_path = directory + '/' + img_fn_prefix + str(img_nr) + '.' + file_ending
                     request.urlretrieve(current_img_url, img_path)
                     dl_counter += 1
-                    img_paths.append(img_path)
+                    img_paths.append(img_path.split('/')[-1])
 
                     # scroll to next image
                     if img_nr < n_images:
@@ -828,7 +841,7 @@ class KleinanzeigenBot(SeleniumMixin):
                             next_button.click()
                             self.web_await(lambda _: EC.staleness_of(img_element))
                             new_div = self.webdriver.find_element(By.CSS_SELECTOR, f'div.galleryimage-element:nth-child'
-                                                                                   f'({img_nr+1})')
+                                                                                   f'({img_nr + 1})')
                             assert new_div
                             img_element = new_div.find_element(By.XPATH, './/img')
                             assert img_element
