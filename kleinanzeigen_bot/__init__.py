@@ -101,9 +101,12 @@ class KleinanzeigenBot(SeleniumMixin):
                 # ad ID passed as value to download command
                 assert self.ad_id > 0
                 LOG.info('Start fetch task for ad with ID %s', str(self.ad_id))
-                # TODO call download function
-                self.navigate_to_ad_page()
-                self.extract_ad_page_info()
+                # call download function
+                exists = self.navigate_to_ad_page()
+                if exists:
+                    self.extract_ad_page_info()
+                else:
+                    sys.exit(2)
             case _:
                 LOG.error("Unknown command: %s", self.command)
                 sys.exit(2)
@@ -677,10 +680,11 @@ class KleinanzeigenBot(SeleniumMixin):
                 else:
                     raise TimeoutException("Loading page failed, it still shows fullscreen ad.") from ex
 
-    def navigate_to_ad_page(self):
+    def navigate_to_ad_page(self) -> bool:
         """
         Navigates to an ad page specified with an ad ID.
 
+        :return: whether the navigation to the ad page was successful
         """
         # goto homepage and enter the ad ID into the search bar
         self.web_open('https://www.ebay-kleinanzeigen.de')
@@ -688,7 +692,13 @@ class KleinanzeigenBot(SeleniumMixin):
         # navigate to ad page and wait
         self.web_click(By.XPATH, '//*[@id="site-search-submit"]')
         pause(1000, 2000)
-        # TODO also handle the case that invalid ad ID given
+
+        # handle the case that invalid ad ID given
+        if self.webdriver.current_url.endswith('k0'):
+            LOG.error('There is no ad under the given ID.')
+            return False
+        else:
+            return True
 
     def extract_ad_page_info(self) -> Dict:
         """
