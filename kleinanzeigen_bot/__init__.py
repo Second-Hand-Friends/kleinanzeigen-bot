@@ -107,6 +107,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 if exists:
                     # create sub-directory for ad to download
                     relative_directory = str(self.config["ad_files"][0]).split('**')[0]
+                    assert os.path.exists(relative_directory)
                     new_base_dir = os.path.join(relative_directory, f'ad_{self.ad_id}')
                     if os.path.exists(new_base_dir):
                         LOG.info('Deleting current folder of ad...')
@@ -809,7 +810,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 n_images = 1
 
                 try:  # check if multiple images given
-                    image_counter = image_box.find_element(By.XPATH, './/div[6]')
+                    image_counter = image_box.find_element(By.CSS_SELECTOR, '.galleryimage--info')
                     n_images = int(image_counter.text[2:])
                     LOG.info(f'Found {n_images} images.')
                 except NoSuchElementException:
