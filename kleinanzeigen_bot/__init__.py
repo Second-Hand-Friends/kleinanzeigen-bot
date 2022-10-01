@@ -702,8 +702,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
         :return: whether the navigation to the ad page was successful
         """
-        # goto homepage and enter the ad ID into the search bar
-        self.web_open('https://www.ebay-kleinanzeigen.de')
+        # enter the ad ID into the search bar
         self.web_input(By.XPATH, '//*[@id="site-search-query"]', str(self.ad_id))
         # navigate to ad page and wait
         self.web_click(By.XPATH, '//*[@id="site-search-submit"]')
@@ -863,8 +862,8 @@ class KleinanzeigenBot(SeleniumMixin):
         contact = dict()
         address_element = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-locality')
         assert address_element
-        address_text = address_element.text
-        # e.g. (Beispiel Allee 42,) 12345 Bundesland - Stadt
+        address_text = address_element.text.strip()
+        # format: e.g. (Beispiel Allee 42,) 12345 Bundesland - Stadt
         try:
             street_element = self.webdriver.find_element(By.XPATH, '//*[@id="street-address"]')
             street = street_element.text[:-2]  # trailing comma and whitespace
@@ -873,10 +872,13 @@ class KleinanzeigenBot(SeleniumMixin):
             LOG.info('No street given in the contact.')
         # standard parts of address
         LOG.info('Address: ' + address_text)
-        address_parts = address_text.split(' ')
-        assert len(address_parts) == 4
-        contact['zipcode'] = int(address_parts[0])
-        contact['name'] = address_parts[3]
+        # construct remaining address
+        address_halves = address_text.split(' - ')
+        assert len(address_halves) == 2
+        address_left_parts = address_halves[0].split(' ')  # zip code and region/city
+        left_part_remaining = ' '.join(address_left_parts[1:])  # either a region or a city
+        contact['zipcode'] = int(address_left_parts[0])
+        contact['name'] = address_halves[1]
         if 'street' not in contact:
             contact['street'] = None
         contact['phone'] = None  # phone seems to be a deprecated feature
@@ -901,8 +903,6 @@ class KleinanzeigenBot(SeleniumMixin):
         creation_date = created_parts[2] + '-' + created_parts[1] + '-' + created_parts[0] + ' 00:00:00'
         info['created_on'] = datetime.fromisoformat(creation_date)
         info['updated_on'] = None  # will be set later on
-
-        print(info)
 
         return info
 
