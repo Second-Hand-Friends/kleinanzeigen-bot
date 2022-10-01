@@ -783,8 +783,7 @@ class KleinanzeigenBot(SeleniumMixin):
             info['price'] = price
             info['price_type'] = price_type
         except NoSuchElementException:  # no 'commercial' ad, has no pricing box etc.
-            LOG.info('Ad is not commercial.')
-            info['price'] = '0'
+            info['price'] = 0.0
             info['price_type'] = 'NOT_APPLICABLE'
 
         # process shipping
@@ -815,10 +814,13 @@ class KleinanzeigenBot(SeleniumMixin):
             # if gallery image box exists, proceed with image fetching
             n_images = 1
 
+            # determine number of images (1 ... N)
+            next_button = None
             try:  # check if multiple images given
                 image_counter = image_box.find_element(By.CSS_SELECTOR, '.galleryimage--info')
                 n_images = int(image_counter.text[2:])
                 LOG.info(f'Found {n_images} images.')
+                next_button = self.webdriver.find_element(By.CSS_SELECTOR, '.galleryimage--navigation--next')
             except NoSuchElementException:
                 LOG.info('Only one image found.')
 
@@ -837,14 +839,11 @@ class KleinanzeigenBot(SeleniumMixin):
                 dl_counter += 1
                 img_paths.append(img_path.split('/')[-1])
 
-                # scroll to next image
+                # scroll to next image (if exists)
                 if img_nr < n_images:
                     try:
-                        next_button = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/'
-                                                                            'section[2]/section/section/article/'
-                                                                            'div[1]/div[5]')
-                        assert next_button
                         # click next button, wait, and reestablish reference
+                        assert next_button
                         next_button.click()
                         self.web_await(lambda _: EC.staleness_of(img_element))
                         new_div = self.webdriver.find_element(By.CSS_SELECTOR, f'div.galleryimage-element:nth-child'
@@ -859,7 +858,6 @@ class KleinanzeigenBot(SeleniumMixin):
             LOG.info(f'Downloaded {dl_counter} image(s).')
 
         except NoSuchElementException:  # some ads do not require images
-            n_images = 0
             LOG.warning('No image area found. Continue without downloading images.')
         info['images'] = img_paths
 
