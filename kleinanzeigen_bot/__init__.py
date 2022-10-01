@@ -735,7 +735,8 @@ class KleinanzeigenBot(SeleniumMixin):
         title: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-title"]').text
         LOG.info('Extracting information from ad with title \"%s\"', title)
         info['title'] = title
-        descr: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-description-text"]').text  # pure HTML
+        descr: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-description-text"]').text
+        info['description'] = descr
 
         # extract category
         category_line = self.webdriver.find_element(By.XPATH, '//*[@id="vap-brdcrmb"]')
@@ -745,9 +746,6 @@ class KleinanzeigenBot(SeleniumMixin):
         cat_num_second = category_second_part.get_attribute('href').split('/')[-1][1:]
         category = cat_num_first + '/' + cat_num_second
         info['category'] = category
-
-        # TODO convert description format
-        info['description'] = descr
 
         # get special attributes
         details_box = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-details')
@@ -803,7 +801,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 info['shipping_costs'] = shipping_price
         except NoSuchElementException:  # no pricing box -> no shipping given
             info['shipping_type'] = 'NOT_APPLICABLE'
-            info['shipping_costs'] = ''
+            info['shipping_costs'] = None
 
         # fetch images
         n_images: int = -1
