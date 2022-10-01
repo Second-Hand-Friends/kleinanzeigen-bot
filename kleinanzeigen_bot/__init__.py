@@ -751,7 +751,8 @@ class KleinanzeigenBot(SeleniumMixin):
 
         # get special attributes
         # TODO get attributes
-        # TODO adjust rest of function to 'extended' ads format
+        details_box = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-details')
+        assert details_box
 
         # process pricing
         try:
@@ -801,60 +802,54 @@ class KleinanzeigenBot(SeleniumMixin):
         n_images: int = -1
         img_paths = []
         try:
-            image_box = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/'
-                                                              'section/article/div[1]')
-            ib_class_name = image_box.get_attribute('class')
+            image_box = self.webdriver.find_element(By.CSS_SELECTOR, '.galleryimage-large')
 
             # if gallery image box exists, proceed with image fetching
-            if 'gallery' in ib_class_name and 'image' in ib_class_name:
-                n_images = 1
+            n_images = 1
 
-                try:  # check if multiple images given
-                    image_counter = image_box.find_element(By.CSS_SELECTOR, '.galleryimage--info')
-                    n_images = int(image_counter.text[2:])
-                    LOG.info(f'Found {n_images} images.')
-                except NoSuchElementException:
-                    LOG.info('Only one image found.')
+            try:  # check if multiple images given
+                image_counter = image_box.find_element(By.CSS_SELECTOR, '.galleryimage--info')
+                n_images = int(image_counter.text[2:])
+                LOG.info(f'Found {n_images} images.')
+            except NoSuchElementException:
+                LOG.info('Only one image found.')
 
-                # download all images from box
-                img_element = image_box.find_element(By.XPATH, './/div[1]/img')
-                assert img_element
-                img_fn_prefix = 'ad_' + str(self.ad_id) + '__img'
+            # download all images from box
+            img_element = image_box.find_element(By.XPATH, './/div[1]/img')
+            assert img_element
+            img_fn_prefix = 'ad_' + str(self.ad_id) + '__img'
 
-                img_nr = 1
-                dl_counter = 0
-                while img_nr <= n_images:  # scrolling + downloading
-                    current_img_url = img_element.get_attribute('src')  # URL of the image
-                    file_ending = current_img_url.split('.')[-1].lower()
-                    img_path = directory + '/' + img_fn_prefix + str(img_nr) + '.' + file_ending
-                    request.urlretrieve(current_img_url, img_path)
-                    dl_counter += 1
-                    img_paths.append(img_path.split('/')[-1])
+            img_nr = 1
+            dl_counter = 0
+            while img_nr <= n_images:  # scrolling + downloading
+                current_img_url = img_element.get_attribute('src')  # URL of the image
+                file_ending = current_img_url.split('.')[-1].lower()
+                img_path = directory + '/' + img_fn_prefix + str(img_nr) + '.' + file_ending
+                request.urlretrieve(current_img_url, img_path)
+                dl_counter += 1
+                img_paths.append(img_path.split('/')[-1])
 
-                    # scroll to next image
-                    if img_nr < n_images:
-                        try:
-                            next_button = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/'
-                                                                                'section[2]/section/section/article/'
-                                                                                'div[1]/div[5]')
-                            assert next_button
-                            # click next button, wait, and reestablish reference
-                            next_button.click()
-                            self.web_await(lambda _: EC.staleness_of(img_element))
-                            new_div = self.webdriver.find_element(By.CSS_SELECTOR, f'div.galleryimage-element:nth-child'
-                                                                                   f'({img_nr + 1})')
-                            assert new_div
-                            img_element = new_div.find_element(By.XPATH, './/img')
-                            assert img_element
-                        except NoSuchElementException:
-                            LOG.error('NEXT button in image gallery somehow missing, abort image fetching.')
-                            break
-                    img_nr += 1
-                LOG.info(f'Downloaded {dl_counter} image(s).')
+                # scroll to next image
+                if img_nr < n_images:
+                    try:
+                        next_button = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/'
+                                                                            'section[2]/section/section/article/'
+                                                                            'div[1]/div[5]')
+                        assert next_button
+                        # click next button, wait, and reestablish reference
+                        next_button.click()
+                        self.web_await(lambda _: EC.staleness_of(img_element))
+                        new_div = self.webdriver.find_element(By.CSS_SELECTOR, f'div.galleryimage-element:nth-child'
+                                                                               f'({img_nr + 1})')
+                        assert new_div
+                        img_element = new_div.find_element(By.XPATH, './/img')
+                        assert img_element
+                    except NoSuchElementException:
+                        LOG.error('NEXT button in image gallery somehow missing, abort image fetching.')
+                        break
+                img_nr += 1
+            LOG.info(f'Downloaded {dl_counter} image(s).')
 
-            else:  # XPath does not point to gallery
-                n_images = 0
-                LOG.info('No images found. Continue without downloading images.')
         except NoSuchElementException:  # some ads do not require images
             n_images = 0
             LOG.warning('No image area found. Continue without downloading images.')
@@ -862,7 +857,8 @@ class KleinanzeigenBot(SeleniumMixin):
 
         # process address
         contact = dict()
-        address_element = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-locality"]')
+        address_element = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-locality')
+        assert address_element
         address_text = address_element.text
         # e.g. (Beispiel Allee 42,) 12345 Bundesland - Stadt
         try:
@@ -872,6 +868,7 @@ class KleinanzeigenBot(SeleniumMixin):
         except NoSuchElementException:
             LOG.info('No street given in the contact.')
         # standard parts of address
+        LOG.info('Address: ' + address_text)
         address_parts = address_text.split(' ')
         assert len(address_parts) == 4
         contact['zipcode'] = int(address_parts[0])
@@ -885,19 +882,15 @@ class KleinanzeigenBot(SeleniumMixin):
         # process meta info
         info['republication_interval'] = 7  # a default value for downloaded ads
         info['id'] = self.ad_id
-        try:  # three different locations known for creation date element
+        try:  # try different locations known for creation date element
             creation_date = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/'
                                                                   'section/article/div[3]/div[2]/div[2]/'
                                                                   'div[1]/span').text
         except NoSuchElementException:
-            try:
-                creation_date = self.webdriver.find_element(By.XPATH,
-                                                            '/html/body/div[1]/div[2]/div/section[2]/section/section/'
-                                                            'article/div[1]/div[2]/div[2]/div[1]/span').text
-            except NoSuchElementException:
-                creation_date = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/'
-                                                                      'section/article/div[1]/div/div[2]/div[1]/'
-                                                                      'span').text
+            creation_date = self.webdriver.find_element(By.CSS_SELECTOR,
+                                                        '#viewad-extra-info > div:nth-child(1)'
+                                                        ' > span:nth-child(2)').text
+
         # convert creation date to ISO format
         created_parts = creation_date.split('.')
         assert len(created_parts) == 3
