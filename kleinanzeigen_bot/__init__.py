@@ -780,17 +780,19 @@ class KleinanzeigenBot(SeleniumMixin):
             info['price'] = price
             info['price_type'] = price_type
         except NoSuchElementException:  # no 'commercial' ad, has no pricing box etc.
-            info['price'] = 0.0
+            info['price'] = None
             info['price_type'] = 'NOT_APPLICABLE'
 
         # process shipping
         try:
-            pricing_box = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/'
-                                                                'section/article/div[3]/div[1]')
-            shipping_text = pricing_box.find_element(By.XPATH, './/span').text
+            shipping_text = self.webdriver.find_element(By.CSS_SELECTOR, '.boxedarticle--details--shipping')\
+                .text.strip()
             # e.g. '+ Versand ab 5,49 €' OR 'Nur Abholung'
             if shipping_text == 'Nur Abholung':
                 info['shipping_type'] = 'PICKUP'
+                info['shipping_costs'] = None
+            elif shipping_text == 'Versand möglich':
+                info['shipping_type'] = 'SHIPPING'
                 info['shipping_costs'] = None
             elif '€' in shipping_text:
                 shipping_price_parts = shipping_text.split(' ')
