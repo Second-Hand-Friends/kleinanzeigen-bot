@@ -282,6 +282,7 @@ class KleinanzeigenBot(SeleniumMixin):
                         continue
 
             ad_cfg["description"] = descr_prefix + (ad_cfg["description"] or "") + descr_suffix
+            ensure(len(ad_cfg["description"]) <= 4000, f"Length of ad description including prefix and suffix exceeds 4000 chars. @ [{ad_file}]")
 
             # pylint: disable=cell-var-from-loop
             def assert_one_of(path: str, allowed: Iterable[str]) -> None:
@@ -317,7 +318,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 ad_cfg["category"] = self.categories.get(ad_cfg["category"], ad_cfg["category"])
 
             if ad_cfg["shipping_costs"]:
-                ad_cfg["shipping_costs"] = str(utils.parse_decimal(ad_cfg["shipping_costs"]))
+                ad_cfg["shipping_costs"] = str(round(utils.parse_decimal(ad_cfg["shipping_costs"]), 2))
 
             if ad_cfg["images"]:
                 images = []
@@ -524,9 +525,16 @@ class KleinanzeigenBot(SeleniumMixin):
         #############################
         price_type = ad_cfg["price_type"]
         if price_type != "NOT_APPLICABLE":
-            self.web_select(By.XPATH, "//select[@id='priceType']", price_type)
-            if safe_get(ad_cfg, "price"):
-                self.web_input(By.ID, "pstad-price", ad_cfg["price"])
+            try:
+                self.web_select(By.XPATH, "//select[@id='price-type-react']", price_type)
+                if safe_get(ad_cfg, "price"):
+                    self.web_click(By.ID, "post-ad-frontend-price")
+                    self.web_input(By.ID, "post-ad-frontend-price", ad_cfg["price"])
+            except NoSuchElementException as ex:
+                # code for old HTML version can be removed at one point in future
+                self.web_select(By.XPATH, "//select[@id='priceType']", price_type)
+                if safe_get(ad_cfg, "price"):
+                    self.web_input(By.ID, "pstad-price", ad_cfg["price"])
 
         #############################
         # set description
@@ -563,14 +571,15 @@ class KleinanzeigenBot(SeleniumMixin):
         # set contact phone
         #############################
         if ad_cfg["contact"]["phone"]:
-            try:
-                if not self.webdriver.find_element(By.ID, "postad-phonenumber").is_enabled():
-                    self.webdriver.find_element(By.ID, "phoneNumberVisibility").click()
-                    pause(2000)
-            except NoSuchElementException:
-                # ignore
-                pass
-            self.web_input(By.ID, "postad-phonenumber", ad_cfg["contact"]["phone"])
+            if self.webdriver.find_element(By.ID, "postad-phonenumber").is_displayed():
+                try:
+                    if not self.webdriver.find_element(By.ID, "postad-phonenumber").is_enabled():
+                        self.webdriver.find_element(By.ID, "phoneNumberVisibility").click()
+                        pause(2000)
+                except NoSuchElementException:
+                    # ignore
+                    pass
+                self.web_input(By.ID, "postad-phonenumber", ad_cfg["contact"]["phone"])
 
         #############################
         # upload images
