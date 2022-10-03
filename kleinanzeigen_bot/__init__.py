@@ -6,6 +6,7 @@ import atexit, copy, getopt, importlib.metadata, json, logging, os, signal, sys,
 import shutil
 from collections.abc import Iterable
 from datetime import datetime
+from decimal import DecimalException
 from logging.handlers import RotatingFileHandler
 from typing import Any, Final, Dict
 from wcmatch import glob
@@ -766,17 +767,20 @@ class KleinanzeigenBot(SeleniumMixin):
         try:
             price_str: str = self.webdriver.find_element(By.CLASS_NAME, 'boxedarticle--price').text
             price_type: str
-            price: float = -1
+            price: float | None = -1
             match price_str.split()[-1]:
                 case '€':
                     price_type = 'FIXED'
                     price = float(utils.parse_decimal(price_str.split()[0]))
-                case 'VB':
+                case 'VB':  # can be either 'X € VB', or just 'VB'
                     price_type = 'NEGOTIABLE'
-                    price = float(utils.parse_decimal(price_str.split()[0]))
+                    try:
+                        price = float(utils.parse_decimal(price_str.split()[0]))
+                    except DecimalException:
+                        price = None
                 case 'verschenken':
                     price_type = 'GIVE_AWAY'
-                    price = 0.0
+                    price = None
                 case _:
                     price_type = 'NOT_APPLICABLE'
             assert price_type != ''
@@ -875,8 +879,6 @@ class KleinanzeigenBot(SeleniumMixin):
             contact['street'] = street
         except NoSuchElementException:
             LOG.info('No street given in the contact.')
-        # standard parts of address
-        LOG.info('Address: ' + address_text)
         # construct remaining address
         address_halves = address_text.split(' - ')
         assert len(address_halves) == 2
