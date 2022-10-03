@@ -741,7 +741,7 @@ class KleinanzeigenBot(SeleniumMixin):
         else:
             o_type = 'WANTED'
         info['type'] = o_type
-        title: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-title"]').text
+        title: str = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-title').text
         LOG.info('Extracting information from ad with title \"%s\"', title)
         info['title'] = title
         descr: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-description-text"]').text
