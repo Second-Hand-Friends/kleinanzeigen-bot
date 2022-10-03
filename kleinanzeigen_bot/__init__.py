@@ -882,7 +882,7 @@ class KleinanzeigenBot(SeleniumMixin):
         assert len(address_halves) == 2
         address_left_parts = address_halves[0].split(' ')  # zip code and region/city
         left_part_remaining = ' '.join(address_left_parts[1:])  # either a region or a city
-        contact['zipcode'] = int(address_left_parts[0])
+        contact['zipcode'] = address_left_parts[0]
         contact['name'] = address_halves[1]
         if 'street' not in contact:
             contact['street'] = None
