@@ -510,7 +510,7 @@ class KleinanzeigenBot(SeleniumMixin):
         #############################
         if ad_cfg["contact"]["phone"]:
             if self.webdriver.find_element(By.ID, "postad-phonenumber").is_displayed():
-                try:                
+                try:
                     if not self.webdriver.find_element(By.ID, "postad-phonenumber").is_enabled():
                         self.webdriver.find_element(By.ID, "phoneNumberVisibility").click()
                         pause(2000)
