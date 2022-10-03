@@ -897,7 +897,12 @@ class KleinanzeigenBot(SeleniumMixin):
         contact['name'] = address_halves[1]
         if 'street' not in contact:
             contact['street'] = None
-        contact['phone'] = None  # phone seems to be a deprecated feature
+        try:  # phone number is unusual for non-professional sellers today
+            phone_element = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-contact-phone')
+            phone_number = phone_element.find_element(By.TAG_NAME, 'a').text
+            contact['phone'] = phone_number
+        except NoSuchElementException:
+            contact['phone'] = None  # phone seems to be a deprecated feature
         # also see 'https://themen.ebay-kleinanzeigen.de/hilfe/deine-anzeigen/Telefon/
         info['contact'] = contact
 
