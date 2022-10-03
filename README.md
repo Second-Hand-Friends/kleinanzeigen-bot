@@ -56,7 +56,7 @@ It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https:/
        ```shell
        curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-linux-amd64 -o kleinanzeigen-bot
 
-       chmod 655 kleinanzeigen-bot
+       chmod 755 kleinanzeigen-bot
 
        ./kleinanzeigen-bot --help
        ```
@@ -65,7 +65,7 @@ It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https:/
        ```shell
        curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-darwin-amd64 -o kleinanzeigen-bot
 
-       chmod 655 kleinanzeigen-bot
+       chmod 755 kleinanzeigen-bot
 
        ./kleinanzeigen-bot --help
        ```
