@@ -723,6 +723,15 @@ class KleinanzeigenBot(SeleniumMixin):
             LOG.error('There is no ad under the given ID.')
             return False
         else:
+            try:  # close (warning) popup
+                self.webdriver.find_element(By.CSS_SELECTOR, '#vap-ovrly-secure')
+                LOG.warning('A popup appeared.')
+                close_button = self.webdriver.find_element(By.CLASS_NAME, 'mfp-close')
+                assert close_button
+                close_button.click()
+                time.sleep(1)
+            except NoSuchElementException:
+                print('(no popup given)')
             return True
 
     def extract_ad_page_info(self, directory: str) -> Dict:
