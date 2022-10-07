@@ -780,11 +780,11 @@ class KleinanzeigenBot(SeleniumMixin):
             match price_str.split()[-1]:
                 case '€':
                     price_type = 'FIXED'
-                    price = float(utils.parse_decimal(price_str.split()[0]))
+                    price = float(utils.parse_decimal(price_str.split()[0].replace('.', '')))
                 case 'VB':  # can be either 'X € VB', or just 'VB'
                     price_type = 'NEGOTIABLE'
                     try:
-                        price = float(utils.parse_decimal(price_str.split()[0]))
+                        price = float(utils.parse_decimal(price_str.split()[0].replace('.', '')))
                     except DecimalException:
                         price = None
                 case 'verschenken':
