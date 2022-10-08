@@ -815,25 +815,25 @@ class KleinanzeigenBot(SeleniumMixin):
             info['price_type'] = 'NOT_APPLICABLE'
 
         # process shipping
+        ship_type, ship_costs = 'NOT_APPLICABLE', None
         try:
             shipping_text = self.webdriver.find_element(By.CSS_SELECTOR, '.boxedarticle--details--shipping')\
                 .text.strip()
             # e.g. '+ Versand ab 5,49 €' OR 'Nur Abholung'
             if shipping_text == 'Nur Abholung':
-                info['shipping_type'] = 'PICKUP'
-                info['shipping_costs'] = None
+                ship_type = 'PICKUP'
             elif shipping_text == 'Versand möglich':
-                info['shipping_type'] = 'SHIPPING'
-                info['shipping_costs'] = None
+                ship_type = 'SHIPPING'
             elif '€' in shipping_text:
                 shipping_price_parts = shipping_text.split(' ')
                 assert shipping_price_parts[-1] == '€'
                 shipping_price = float(utils.parse_decimal(shipping_price_parts[-2]))
-                info['shipping_type'] = 'SHIPPING'
-                info['shipping_costs'] = shipping_price
+                ship_type = 'SHIPPING'
+                ship_costs = shipping_price
         except NoSuchElementException:  # no pricing box -> no shipping given
-            info['shipping_type'] = 'NOT_APPLICABLE'
-            info['shipping_costs'] = None
+            ship_type = 'NOT_APPLICABLE'
+        info['shipping_type'] = ship_type
+        info['shipping_costs'] = ship_costs
 
         # fetch images
         n_images: int = -1
