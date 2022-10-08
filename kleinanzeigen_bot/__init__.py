@@ -112,21 +112,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 # call download function
                 exists = self.navigate_to_ad_page()
                 if exists:
-                    # create sub-directory for ad to download
-                    relative_directory = str(self.config["ad_files"][0]).split('**')[0]
-                    assert os.path.exists(relative_directory)
-                    new_base_dir = os.path.join(relative_directory, f'ad_{self.ad_id}')
-                    if os.path.exists(new_base_dir):
-                        LOG.info('Deleting current folder of ad...')
-                        shutil.rmtree(new_base_dir)
-                    os.mkdir(new_base_dir)
-                    assert os.path.exists(new_base_dir)
-                    LOG.info('New directory for ad created at ' + new_base_dir + '.')
-
-                    # call extraction function
-                    info = self.extract_ad_page_info(new_base_dir)
-                    ad_file_path = new_base_dir + '/' + f'ad_{self.ad_id}.yaml'
-                    utils.save_dict(ad_file_path, info)
+                    self.download_ad_page()
                 else:
                     sys.exit(2)
             case _:
@@ -941,6 +927,27 @@ class KleinanzeigenBot(SeleniumMixin):
         info['updated_on'] = None  # will be set later on
 
         return info
+
+    def download_ad_page(self):
+        """
+        Downloads an ad to a specific location, specified by config and ad_id.
+        """
+
+        # create sub-directory for ad to download
+        relative_directory = str(self.config["ad_files"][0]).split('**')[0]
+        assert os.path.exists(relative_directory)
+        new_base_dir = os.path.join(relative_directory, f'ad_{self.ad_id}')
+        if os.path.exists(new_base_dir):
+            LOG.info('Deleting current folder of ad...')
+            shutil.rmtree(new_base_dir)
+        os.mkdir(new_base_dir)
+        assert os.path.exists(new_base_dir)
+        LOG.info('New directory for ad created at ' + new_base_dir + '.')
+
+        # call extraction function
+        info = self.extract_ad_page_info(new_base_dir)
+        ad_file_path = new_base_dir + '/' + f'ad_{self.ad_id}.yaml'
+        utils.save_dict(ad_file_path, info)
 
 
 #############################
