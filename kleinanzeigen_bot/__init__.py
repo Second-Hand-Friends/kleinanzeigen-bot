@@ -50,7 +50,7 @@ class KleinanzeigenBot(SeleniumMixin):
         self.ads_selector = "due"
         self.delete_old_ads = True
         self.delete_ads_by_title = False
-        self.ad_id = 0  # attribute needed when downloading an ad
+        self.ad_id = None  # attribute needed when downloading an ad
 
     def __del__(self) -> None:
         if self.file_log:
@@ -97,12 +97,18 @@ class KleinanzeigenBot(SeleniumMixin):
                     LOG.info("############################################")
             case "download":
                 self.configure_file_logging()
+                # ad ID passed as value to download command
+                if self.ad_id is None:
+                    LOG.error('Provide the flag \'--ad\' with a valid ad ID to use the download command!')
+                    sys.exit(2)
+                if self.ad_id < 1:
+                    LOG.error('The given ad ID must be valid!')
+                    sys.exit(2)
+                LOG.info('Start fetch task for ad with ID %s', str(self.ad_id))
+
                 self.load_config()
                 self.create_webdriver_session()
                 self.login()
-                # ad ID passed as value to download command
-                assert self.ad_id > 0
-                LOG.info('Start fetch task for ad with ID %s', str(self.ad_id))
                 # call download function
                 exists = self.navigate_to_ad_page()
                 if exists:
