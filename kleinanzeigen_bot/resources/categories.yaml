@@ -1,22 +1,119 @@
   # Elektronik
 Elektronik: 161/168
-Drucker: 161/225/drucker_scanner
-Fernseher: 161/175/fernseher
-Festplatten: 161/225/festplatten_laufwerke
-Grafikkarten: 161/225/grafikkarten
-Kameras: 161/245/camera
+
+## Audio & Hifi
+Audio_und_Hifi: 161/172/sonstiges
+
+CD_Player: 161/172/cd_player
 Kopfhörer: 161/172/lautsprecher_kopfhoerer
 Lautsprecher: 161/172/lautsprecher_kopfhoerer
-Mäuse: 161/225/tastatur_maus
-Monitore: 161/225/monitore
-Netzwerk: 161/225/netzwerk_modem
-Notebooks: 161/278
-PCs: 161/228
-PC-Zubehör: 161/225/sonstiges
-Scanner: 161/225/drucker_scanner
-Software: 161/225/software
+MP3_Player: 161/172/mp3_player
+Radio: 161/172/radio_receiver
+Reciver: 161/172/radio_receiver
+Stereoanlagen: 161/172/stereoanlagen
+
+## Dienstleistungen Elektronik
+Dienstleistungen_Elektronik: 161/226
+
+## Foto
+Foto: 161/245/other
+
+Kameras: 161/245/camera
+Objektive: 161/245/lens
+Foto_Zubehör: 161/245/equipment
+Kamera_Equipment: 161/245/camera_and_equipment
+
+## Handy & Telefon
+Handys: 161/173/sonstige
+
+Handy_Apple: 161/173/apple
+Handy_HTC: 161/173/htc_handy
+Handy_LG: 161/173/lg_handy
+Handy_Motorola: 161/173/motorola_handy
+Handy_Nokia: 161/173/nokia_handy
+Handy_Samsung: 161/173/samsung_handy
+Handy_Siemens: 161/173/siemens_handy
+Handy_Sony: 161/173/sony_handy
+Faxgeräte: 161/173/faxgeraete
 Telefone: 161/173/telefone
+
+## Haushaltsgeräte
+Haushaltsgeräte: 161/176/sonstige
+
+Haushaltkleingeräte: 161/176/haushaltskleingeraete
+Herde: 161/176/herde_backoefen
+Backöfen: 161/176/herde_backoefen
+Kaffemaschinen: 161/176/kaffee_espressomaschinen
+Espressomaschinen: 161/176/kaffee_espressomaschinen
+Kühlschränke: 161/176/kuehlschraenke_gefriergeraete
+Gefriergeräte: 161/176/kuehlschraenke_gefriergeraete
+Spülmaschinen: 161/176/spuelmaschinen
+Staubsauger: 161/176/staubsauger
+Waschmaschinen: 161/176/waschmaschinen_trockner
+Trockner: 161/176/waschmaschinen_trockner
+
+## Konsolen
+Konsolen: 161/279/weitere
+
+Pocket_Konsolen: 161/279/dsi_psp
+Playstation: 161/279/playstation
+XBox: 161/279/xbox
+Wii: 161/279/wii
+
+## Notebooks
+Notebooks: 161/278
+
+## PCs
+PCs: 161/228
+
+## PC-Zubehör & Software
+PC-Zubehör: 161/225/sonstiges
+
+Drucker: 161/225/drucker_scanner
+Scanner: 161/225/drucker_scanner
+Festplatten: 161/225/festplatten_laufwerke
+Laufwerke: 161/225/festplatten_laufwerke
+Gehäuse: 161/225/gehaeuse
+Grafikkarten: 161/225/grafikkarten
+Kabel: 161/225/kabel_adapter
+Adapter: 161/225/kabel_adapter
+Mainboards: 161/225/mainboards
+Monitore: 161/225/monitore
+Multimedia: 161/225/multimedia
+Netzwerk: 161/225/netzwerk_modem
+CPUs: 161/225/prozessor_cpu
+Prozessoren: 161/225/prozessor_cpu
+Speicher: 161/225/speicher
+Software: 161/225/software
+Mäuse: 161/225/tastatur_maus
 Tastaturen: 161/225/tastatur_maus
+
+## Tablets & Reader
+Tablets_Reader: 161/285/weitere
+
+iPad: 161/285/ipad
+Kindle: 161/285/kindle
+Tablets_Samsung: 161/285/samsung_tablets
+
+## TV & Video
+TV_Video: 161/175/weitere
+
+DVD-Player: 161/175/dvdplayer_recorder
+Recorder: 161/175/dvdplayer_recorder
+Fernseher: 161/175/fernseher
+Reciever: 161/175/tv_receiver
+
+## Videospiele
+Videospiele: 161/227/sonstige
+
+Videospiele_DS: 161/227/dsi_psp
+Videospiele_PSP: 161/227/dsi_psp
+Videospiele_Nintendo: 161/227/nintendo
+Videospiele_Playstation: 161/227/playstation
+Videospiele_XBox: 161/227/xbox
+Videospiele_Wii: 161/227/wii
+Videospiele_PC: 161/227/pc_spiele
+
 
 #Auto, Rad & Boot
 Autoreifen: 210/223/reifen_felgen
