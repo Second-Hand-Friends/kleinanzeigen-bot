@@ -719,7 +719,6 @@ class KleinanzeigenBot(SeleniumMixin):
                 self.webdriver.find_element(By.CSS_SELECTOR, '#vap-ovrly-secure')
                 LOG.warning('A popup appeared.')
                 close_button = self.webdriver.find_element(By.CLASS_NAME, 'mfp-close')
-                assert close_button
                 close_button.click()
                 time.sleep(1)
             except NoSuchElementException:
@@ -762,7 +761,6 @@ class KleinanzeigenBot(SeleniumMixin):
             details_box = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-details')
             if details_box:  # detail box exists depending on category
                 details_list = details_box.find_element(By.XPATH, './/ul')
-                assert details_list
                 list_items = details_list.find_elements(By.TAG_NAME, 'li')
                 details = dict()
                 for list_item in list_items:
@@ -793,7 +791,6 @@ class KleinanzeigenBot(SeleniumMixin):
                     price = None
                 case _:
                     price_type = 'NOT_APPLICABLE'
-            assert price_type != ''
             info['price'] = price
             info['price_type'] = price_type
         except NoSuchElementException:  # no 'commercial' ad, has no pricing box etc.
@@ -812,7 +809,6 @@ class KleinanzeigenBot(SeleniumMixin):
                 ship_type = 'SHIPPING'
             elif '€' in shipping_text:
                 shipping_price_parts = shipping_text.split(' ')
-                assert shipping_price_parts[-1] == '€'
                 shipping_price = float(utils.parse_decimal(shipping_price_parts[-2]))
                 ship_type = 'SHIPPING'
                 ship_costs = shipping_price
@@ -842,7 +838,6 @@ class KleinanzeigenBot(SeleniumMixin):
 
             # download all images from box
             img_element = image_box.find_element(By.XPATH, './/div[1]/img')
-            assert img_element
             img_fn_prefix = 'ad_' + str(self.ad_id) + '__img'
 
             img_nr = 1
@@ -859,14 +854,11 @@ class KleinanzeigenBot(SeleniumMixin):
                 if img_nr < n_images:
                     try:
                         # click next button, wait, and reestablish reference
-                        assert next_button
                         next_button.click()
                         self.web_await(lambda _: EC.staleness_of(img_element))
                         new_div = self.webdriver.find_element(By.CSS_SELECTOR, f'div.galleryimage-element:nth-child'
                                                                                f'({img_nr + 1})')
-                        assert new_div
                         img_element = new_div.find_element(By.XPATH, './/img')
-                        assert img_element
                     except NoSuchElementException:
                         LOG.error('NEXT button in image gallery somehow missing, abort image fetching.')
                         break
@@ -880,7 +872,6 @@ class KleinanzeigenBot(SeleniumMixin):
         # process address
         contact = dict()
         address_element = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-locality')
-        assert address_element
         address_text = address_element.text.strip()
         # format: e.g. (Beispiel Allee 42,) 12345 Bundesland - Stadt
         try:
@@ -891,7 +882,6 @@ class KleinanzeigenBot(SeleniumMixin):
             LOG.info('No street given in the contact.')
         # construct remaining address
         address_halves = address_text.split(' - ')
-        assert len(address_halves) == 2
         address_left_parts = address_halves[0].split(' ')  # zip code and region/city
         left_part_remaining = ' '.join(address_left_parts[1:])  # either a region or a city
         contact['zipcode'] = address_left_parts[0]
@@ -921,7 +911,6 @@ class KleinanzeigenBot(SeleniumMixin):
 
         # convert creation date to ISO format
         created_parts = creation_date.split('.')
-        assert len(created_parts) == 3
         creation_date = created_parts[2] + '-' + created_parts[1] + '-' + created_parts[0] + ' 00:00:00'
         info['created_on'] = datetime.fromisoformat(creation_date)
         info['updated_on'] = None  # will be set later on
@@ -935,13 +924,11 @@ class KleinanzeigenBot(SeleniumMixin):
 
         # create sub-directory for ad to download
         relative_directory = str(self.config["ad_files"][0]).split('**')[0]
-        assert os.path.exists(relative_directory)
         new_base_dir = os.path.join(relative_directory, f'ad_{self.ad_id}')
         if os.path.exists(new_base_dir):
             LOG.info('Deleting current folder of ad...')
             shutil.rmtree(new_base_dir)
         os.mkdir(new_base_dir)
-        assert os.path.exists(new_base_dir)
         LOG.info('New directory for ad created at ' + new_base_dir + '.')
 
         # call extraction function
