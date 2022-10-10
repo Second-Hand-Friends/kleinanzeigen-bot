@@ -9,6 +9,7 @@ from datetime import datetime
 from decimal import DecimalException
 from logging.handlers import RotatingFileHandler
 from typing import Any, Final, Dict
+from urllib import request
 from wcmatch import glob
 
 from overrides import overrides
@@ -16,7 +17,6 @@ from ruamel.yaml import YAML
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
-from urllib import request
 
 from . import utils, resources
 from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get
@@ -714,28 +714,26 @@ class KleinanzeigenBot(SeleniumMixin):
         if self.webdriver.current_url.endswith('k0'):
             LOG.error('There is no ad under the given ID.')
             return False
-        else:
-            try:  # close (warning) popup
-                self.webdriver.find_element(By.CSS_SELECTOR, '#vap-ovrly-secure')
-                LOG.warning('A popup appeared.')
-                close_button = self.webdriver.find_element(By.CLASS_NAME, 'mfp-close')
-                close_button.click()
-                time.sleep(1)
-            except NoSuchElementException:
-                print('(no popup given)')
-            return True
+        try:  # close (warning) popup, if given
+            self.webdriver.find_element(By.CSS_SELECTOR, '#vap-ovrly-secure')
+            LOG.warning('A popup appeared.')
+            close_button = self.webdriver.find_element(By.CLASS_NAME, 'mfp-close')
+            close_button.click()
+            time.sleep(1)
+        except NoSuchElementException:
+            print('(no popup given)')
+        return True
 
-    def extract_ad_page_info(self, directory: str) -> Dict:
+    def extract_ad_page_info(self, directory: str) -> dict:
         """
         Extracts all necessary information from an ad´s page.
 
         :param directory: the path of the ad´s previously created directory
         :return: a dictionary with the keys as given in an ad YAML, and their respective values
         """
-        info = dict()
+        info = {'active': True}
 
         # extract basic info
-        info['active'] = True
         if 's-anzeige' in self.webdriver.current_url:
             o_type = 'OFFER'
         else:
@@ -762,14 +760,14 @@ class KleinanzeigenBot(SeleniumMixin):
             if details_box:  # detail box exists depending on category
                 details_list = details_box.find_element(By.XPATH, './/ul')
                 list_items = details_list.find_elements(By.TAG_NAME, 'li')
-                details = dict()
+                details = {}
                 for list_item in list_items:
                     detail_key = list_item.text.split('\n')[0]
                     detail_value = list_item.find_element(By.TAG_NAME, 'span').text
                     details[detail_key] = detail_value
                 info['special_attributes'] = details
         except NoSuchElementException:
-            info['special_attributes'] = dict()
+            info['special_attributes'] = {}
 
         # process pricing
         try:
@@ -831,7 +829,7 @@ class KleinanzeigenBot(SeleniumMixin):
             try:  # check if multiple images given
                 image_counter = image_box.find_element(By.CSS_SELECTOR, '.galleryimage--info')
                 n_images = int(image_counter.text[2:])
-                LOG.info(f'Found {n_images} images.')
+                LOG.info('Found %d images.', n_images)
                 next_button = self.webdriver.find_element(By.CSS_SELECTOR, '.galleryimage--navigation--next')
             except NoSuchElementException:
                 LOG.info('Only one image found.')
@@ -864,14 +862,14 @@ class KleinanzeigenBot(SeleniumMixin):
                         LOG.error('NEXT button in image gallery somehow missing, abort image fetching.')
                         break
                 img_nr += 1
-            LOG.info(f'Downloaded {dl_counter} image(s).')
+            LOG.info('Downloaded %d image(s).', dl_counter)
 
         except NoSuchElementException:  # some ads do not require images
             LOG.warning('No image area found. Continue without downloading images.')
         info['images'] = img_paths
 
         # process address
-        contact = dict()
+        contact = {}
         address_element = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-locality')
         address_text = address_element.text.strip()
         # format: e.g. (Beispiel Allee 42,) 12345 Bundesland - Stadt
@@ -884,7 +882,6 @@ class KleinanzeigenBot(SeleniumMixin):
         # construct remaining address
         address_halves = address_text.split(' - ')
         address_left_parts = address_halves[0].split(' ')  # zip code and region/city
-        left_part_remaining = ' '.join(address_left_parts[1:])  # either a region or a city
         contact['zipcode'] = address_left_parts[0]
         contact['name'] = address_halves[1]
         if 'street' not in contact:
@@ -924,13 +921,13 @@ class KleinanzeigenBot(SeleniumMixin):
         """
 
         # create sub-directory for ad to download
-        relative_directory = str(self.config["ad_files"][0]).split('**')[0]
+        relative_directory = str(self.config['ad_files'][0]).split('**', maxsplit=1)[0]
         new_base_dir = os.path.join(relative_directory, f'ad_{self.ad_id}')
         if os.path.exists(new_base_dir):
             LOG.info('Deleting current folder of ad...')
             shutil.rmtree(new_base_dir)
         os.mkdir(new_base_dir)
-        LOG.info('New directory for ad created at ' + new_base_dir + '.')
+        LOG.info('New directory for ad created at %s.', new_base_dir)
 
         # call extraction function
         info = self.extract_ad_page_info(new_base_dir)
