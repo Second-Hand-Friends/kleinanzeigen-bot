@@ -847,7 +847,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 file_ending = current_img_url.split('.')[-1].lower()
                 img_path = directory + '/' + img_fn_prefix + str(img_nr) + '.' + file_ending
                 if current_img_url.startswith('https'):  # verify https (for Bandit linter)
-                    request.urlretrieve(current_img_url, img_path)
+                    request.urlretrieve(current_img_url, img_path)  # nosec B310
                 dl_counter += 1
                 img_paths.append(img_path.split('/')[-1])
 
