@@ -158,14 +158,17 @@ disable= [
 ]
 
 [tool.pylint.miscelaneous]
-notes = [ "FIXME", "XXX", "TODO" ]
+# https://pylint.pycqa.org/en/latest/user_guide/configuration/all-options.html#miscellaneous-checker
+notes = [ "FIXME", "XXX", "TODO" ] # list of note tags to take in consideration
 
 [tool.pylint.design]
-max-attributes = 10
-max-branches   = 30
-max-locals     = 30
-max-returns    = 10
-max-statements = 80
+# https://pylint.pycqa.org/en/latest/user_guide/configuration/all-options.html#design-checker
+# https://pylint.pycqa.org/en/latest/user_guide/checkers/features.html#design-checker-messages
+max-attributes = 15 # maximum number of instance attributes for a class (R0902)
+max-branches   = 30 # maximum number of branch for function / method body (R0912)
+max-locals     = 30 # maximum number of local variables for function / method body (R0914)
+max-returns    = 10 # maximum number of return / yield for function / method body (R0911)
+max-statements = 80 # maximum number of statements in function / method body (R0915)
 
 
 #####################
