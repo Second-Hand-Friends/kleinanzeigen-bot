@@ -724,6 +724,97 @@ class KleinanzeigenBot(SeleniumMixin):
             print('(no popup given)')
         return True
 
+    def extract_category_from_ad_page(self) -> str:
+        """
+        Extracts a category of an ad in numerical form.
+        Assumes that the web driver currently shows an ad page.
+
+        :return: a category string of form abc/def, where a-f are digits
+        """
+        category_line = self.webdriver.find_element(By.XPATH, '//*[@id="vap-brdcrmb"]')
+        category_first_part = category_line.find_element(By.XPATH, './/a[2]')
+        category_second_part = category_line.find_element(By.XPATH, './/a[3]')
+        cat_num_first = category_first_part.get_attribute('href').split('/')[-1][1:]
+        cat_num_second = category_second_part.get_attribute('href').split('/')[-1][1:]
+        category: str = cat_num_first + '/' + cat_num_second
+
+        return category
+
+    def extract_special_attributes_from_ad_page(self) -> dict:
+        """
+        Extracts the special attributes from an ad page.
+
+        :return: a dictionary (possibly empty) where the keys are the attribute names, mapped to their values
+        """
+
+        try:
+            details_box = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-details')
+            if details_box:  # detail box exists depending on category
+                details_list = details_box.find_element(By.XPATH, './/ul')
+                list_items = details_list.find_elements(By.TAG_NAME, 'li')
+                details = {}
+                for list_item in list_items:
+                    detail_key = list_item.text.split('\n')[0]
+                    detail_value = list_item.find_element(By.TAG_NAME, 'span').text
+                    details[detail_key] = detail_value
+                return details
+        except NoSuchElementException:
+            return {}
+
+    def extract_pricing_info_from_ad_page(self) -> (float | None, str):
+        """
+        Extracts the pricing information (price and pricing type) from an ad page.
+
+        :return: the price of the offer (optional); and the pricing type
+        """
+        try:
+            price_str: str = self.webdriver.find_element(By.CLASS_NAME, 'boxedarticle--price').text
+            price_type: str
+            price: float | None = -1
+            match price_str.split()[-1]:
+                case '€':
+                    price_type = 'FIXED'
+                    price = float(utils.parse_decimal(price_str.split()[0].replace('.', '')))
+                case 'VB':  # can be either 'X € VB', or just 'VB'
+                    price_type = 'NEGOTIABLE'
+                    try:
+                        price = float(utils.parse_decimal(price_str.split()[0].replace('.', '')))
+                    except DecimalException:
+                        price = None
+                case 'verschenken':
+                    price_type = 'GIVE_AWAY'
+                    price = None
+                case _:
+                    price_type = 'NOT_APPLICABLE'
+            return price, price_type
+        except NoSuchElementException:  # no 'commercial' ad, has no pricing box etc.
+            return None, 'NOT_APPLICABLE'
+
+    def extract_shipping_info_from_ad_page(self) -> (str, float | None):
+        """
+        Extracts shipping information from an ad page.
+
+        :return: the shipping type, and the shipping price (optional)
+        """
+        ship_type, ship_costs = 'NOT_APPLICABLE', None
+        try:
+            shipping_text = self.webdriver.find_element(By.CSS_SELECTOR, '.boxedarticle--details--shipping') \
+                .text.strip()
+            # e.g. '+ Versand ab 5,49 €' OR 'Nur Abholung'
+            if shipping_text == 'Nur Abholung':
+                ship_type = 'PICKUP'
+            elif shipping_text == 'Versand möglich':
+                ship_type = 'SHIPPING'
+            elif '€' in shipping_text:
+                shipping_price_parts = shipping_text.split(' ')
+                shipping_price = float(utils.parse_decimal(shipping_price_parts[-2]))
+                ship_type = 'SHIPPING'
+                ship_costs = shipping_price
+        except NoSuchElementException:  # no pricing box -> no shipping given
+            ship_type = 'NOT_APPLICABLE'
+
+        return ship_type, ship_costs
+
     def extract_ad_page_info(self, directory: str) -> dict:
         """
         Extracts all necessary information from an ad´s page.
@@ -746,74 +837,16 @@ class KleinanzeigenBot(SeleniumMixin):
         info['description'] = descr
 
         # extract category
-        category_line = self.webdriver.find_element(By.XPATH, '//*[@id="vap-brdcrmb"]')
-        category_first_part = category_line.find_element(By.XPATH, './/a[2]')
-        category_second_part = category_line.find_element(By.XPATH, './/a[3]')
-        cat_num_first = category_first_part.get_attribute('href').split('/')[-1][1:]
-        cat_num_second = category_second_part.get_attribute('href').split('/')[-1][1:]
-        category = cat_num_first + '/' + cat_num_second
-        info['category'] = category
+        info['category'] = self.extract_category_from_ad_page()
 
         # get special attributes
-        try:
-            details_box = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-details')
-            if details_box:  # detail box exists depending on category
-                details_list = details_box.find_element(By.XPATH, './/ul')
-                list_items = details_list.find_elements(By.TAG_NAME, 'li')
-                details = {}
-                for list_item in list_items:
-                    detail_key = list_item.text.split('\n')[0]
-                    detail_value = list_item.find_element(By.TAG_NAME, 'span').text
-                    details[detail_key] = detail_value
-                info['special_attributes'] = details
-        except NoSuchElementException:
-            info['special_attributes'] = {}
+        info['special_attributes'] = self.extract_special_attributes_from_ad_page()
 
         # process pricing
-        try:
-            price_str: str = self.webdriver.find_element(By.CLASS_NAME, 'boxedarticle--price').text
-            price_type: str
-            price: float | None = -1
-            match price_str.split()[-1]:
-                case '€':
-                    price_type = 'FIXED'
-                    price = float(utils.parse_decimal(price_str.split()[0].replace('.', '')))
-                case 'VB':  # can be either 'X € VB', or just 'VB'
-                    price_type = 'NEGOTIABLE'
-                    try:
-                        price = float(utils.parse_decimal(price_str.split()[0].replace('.', '')))
-                    except DecimalException:
-                        price = None
-                case 'verschenken':
-                    price_type = 'GIVE_AWAY'
-                    price = None
-                case _:
-                    price_type = 'NOT_APPLICABLE'
-            info['price'] = price
-            info['price_type'] = price_type
-        except NoSuchElementException:  # no 'commercial' ad, has no pricing box etc.
-            info['price'] = None
-            info['price_type'] = 'NOT_APPLICABLE'
+        info['price'], info['price_type'] = self.extract_pricing_info_from_ad_page()
 
         # process shipping
-        ship_type, ship_costs = 'NOT_APPLICABLE', None
-        try:
-            shipping_text = self.webdriver.find_element(By.CSS_SELECTOR, '.boxedarticle--details--shipping')\
-                .text.strip()
-            # e.g. '+ Versand ab 5,49 €' OR 'Nur Abholung'
-            if shipping_text == 'Nur Abholung':
-                ship_type = 'PICKUP'
-            elif shipping_text == 'Versand möglich':
-                ship_type = 'SHIPPING'
-            elif '€' in shipping_text:
-                shipping_price_parts = shipping_text.split(' ')
-                shipping_price = float(utils.parse_decimal(shipping_price_parts[-2]))
-                ship_type = 'SHIPPING'
-                ship_costs = shipping_price
-        except NoSuchElementException:  # no pricing box -> no shipping given
-            ship_type = 'NOT_APPLICABLE'
-        info['shipping_type'] = ship_type
-        info['shipping_costs'] = ship_costs
+        info['shipping_type'], info['shipping_costs'] = self.extract_shipping_info_from_ad_page()
 
         # fetch images
         n_images: int = -1
