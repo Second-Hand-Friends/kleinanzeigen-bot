@@ -815,41 +815,15 @@ class KleinanzeigenBot(SeleniumMixin):
 
         return ship_type, ship_costs
 
-    def extract_ad_page_info(self, directory: str) -> dict:
+    def download_images_from_ad_page(self, directory: str) -> list[str]:
         """
-        Extracts all necessary information from an ad´s page.
+        Downloads all images of an ad.
 
-        :param directory: the path of the ad´s previously created directory
-        :return: a dictionary with the keys as given in an ad YAML, and their respective values
+        :param directory: the path of the directory created for this ad
+        :return: the relative paths for all downloaded images
         """
-        info = {'active': True}
 
-        # extract basic info
-        if 's-anzeige' in self.webdriver.current_url:
-            o_type = 'OFFER'
-        else:
-            o_type = 'WANTED'
-        info['type'] = o_type
-        title: str = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-title').text
-        LOG.info('Extracting information from ad with title \"%s\"', title)
-        info['title'] = title
-        descr: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-description-text"]').text
-        info['description'] = descr
-
-        # extract category
-        info['category'] = self.extract_category_from_ad_page()
-
-        # get special attributes
-        info['special_attributes'] = self.extract_special_attributes_from_ad_page()
-
-        # process pricing
-        info['price'], info['price_type'] = self.extract_pricing_info_from_ad_page()
-
-        # process shipping
-        info['shipping_type'], info['shipping_costs'] = self.extract_shipping_info_from_ad_page()
-
-        # fetch images
-        n_images: int = -1
+        n_images: int
         img_paths = []
         try:
             image_box = self.webdriver.find_element(By.CSS_SELECTOR, '.galleryimage-large')
@@ -899,9 +873,15 @@ class KleinanzeigenBot(SeleniumMixin):
 
         except NoSuchElementException:  # some ads do not require images
             LOG.warning('No image area found. Continue without downloading images.')
-        info['images'] = img_paths
 
-        # process address
+        return img_paths
+
+    def extract_contact_from_ad_page(self) -> dict:
+        """
+        Processes the address part involving street (optional), zip code + city, and phone number (optional).
+
+        :return: a dictionary containing the address parts with their corresponding values
+        """
         contact = {}
         address_element = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-locality')
         address_text = address_element.text.strip()
@@ -926,7 +906,47 @@ class KleinanzeigenBot(SeleniumMixin):
         except NoSuchElementException:
             contact['phone'] = None  # phone seems to be a deprecated feature
         # also see 'https://themen.ebay-kleinanzeigen.de/hilfe/deine-anzeigen/Telefon/
-        info['contact'] = contact
+
+        return contact
+
+    def extract_ad_page_info(self, directory: str) -> dict:
+        """
+        Extracts all necessary information from an ad´s page.
+
+        :param directory: the path of the ad´s previously created directory
+        :return: a dictionary with the keys as given in an ad YAML, and their respective values
+        """
+        info = {'active': True}
+
+        # extract basic info
+        if 's-anzeige' in self.webdriver.current_url:
+            o_type = 'OFFER'
+        else:
+            o_type = 'WANTED'
+        info['type'] = o_type
+        title: str = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-title').text
+        LOG.info('Extracting information from ad with title \"%s\"', title)
+        info['title'] = title
+        descr: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-description-text"]').text
+        info['description'] = descr
+
+        # extract category
+        info['category'] = self.extract_category_from_ad_page()
+
+        # get special attributes
+        info['special_attributes'] = self.extract_special_attributes_from_ad_page()
+
+        # process pricing
+        info['price'], info['price_type'] = self.extract_pricing_info_from_ad_page()
+
+        # process shipping
+        info['shipping_type'], info['shipping_costs'] = self.extract_shipping_info_from_ad_page()
+
+        # fetch images
+        info['images'] = self.download_images_from_ad_page(directory)
+
+        # process address
+        info['contact'] = self.extract_contact_from_ad_page()
 
         # process meta info
         info['republication_interval'] = 7  # a default value for downloaded ads
