@@ -749,15 +749,15 @@ class KleinanzeigenBot(SeleniumMixin):
 
         try:
             details_box = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-details')
-            if details_box:  # detail box exists depending on category
-                details_list = details_box.find_element(By.XPATH, './/ul')
-                list_items = details_list.find_elements(By.TAG_NAME, 'li')
-                details = {}
-                for list_item in list_items:
-                    detail_key = list_item.text.split('\n')[0]
-                    detail_value = list_item.find_element(By.TAG_NAME, 'span').text
-                    details[detail_key] = detail_value
-                return details
+            details_list = details_box.find_element(By.XPATH, './/ul')
+            list_items = details_list.find_elements(By.TAG_NAME, 'li')
+            details = {}
+            for list_item in list_items:
+                detail_key = list_item.text.split('\n')[0]
+                detail_value = list_item.find_element(By.TAG_NAME, 'span').text
+                details[detail_key] = detail_value
+
+            return details
         except NoSuchElementException:
             return {}
 
