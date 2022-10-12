@@ -6,10 +6,8 @@ import atexit, copy, getopt, importlib.metadata, json, logging, os, signal, sys,
 import shutil
 from collections.abc import Iterable
 from datetime import datetime
-from decimal import DecimalException
 from logging.handlers import RotatingFileHandler
-from typing import Any, Final, Dict
-from urllib import request
+from typing import Any, Final
 from wcmatch import glob
 
 from overrides import overrides
@@ -724,191 +722,6 @@ class KleinanzeigenBot(SeleniumMixin):
             print('(no popup given)')
         return True
 
-    def extract_category_from_ad_page(self) -> str:
-        """
-        Extracts a category of an ad in numerical form.
-        Assumes that the web driver currently shows an ad page.
-
-        :return: a category string of form abc/def, where a-f are digits
-        """
-        category_line = self.webdriver.find_element(By.XPATH, '//*[@id="vap-brdcrmb"]')
-        category_first_part = category_line.find_element(By.XPATH, './/a[2]')
-        category_second_part = category_line.find_element(By.XPATH, './/a[3]')
-        cat_num_first = category_first_part.get_attribute('href').split('/')[-1][1:]
-        cat_num_second = category_second_part.get_attribute('href').split('/')[-1][1:]
-        category: str = cat_num_first + '/' + cat_num_second
-
-        return category
-
-    def extract_special_attributes_from_ad_page(self) -> dict:
-        """
-        Extracts the special attributes from an ad page.
-
-        :return: a dictionary (possibly empty) where the keys are the attribute names, mapped to their values
-        """
-
-        try:
-            details_box = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-details')
-            details_list = details_box.find_element(By.XPATH, './/ul')
-            list_items = details_list.find_elements(By.TAG_NAME, 'li')
-            details = {}
-            for list_item in list_items:
-                detail_key = list_item.text.split('\n')[0]
-                detail_value = list_item.find_element(By.TAG_NAME, 'span').text
-                details[detail_key] = detail_value
-
-            return details
-        except NoSuchElementException:
-            return {}
-
-    def extract_pricing_info_from_ad_page(self) -> (float | None, str):
-        """
-        Extracts the pricing information (price and pricing type) from an ad page.
-
-        :return: the price of the offer (optional); and the pricing type
-        """
-        try:
-            price_str: str = self.webdriver.find_element(By.CLASS_NAME, 'boxedarticle--price').text
-            price_type: str
-            price: float | None = -1
-            match price_str.split()[-1]:
-                case '€':
-                    price_type = 'FIXED'
-                    price = float(utils.parse_decimal(price_str.split()[0].replace('.', '')))
-                case 'VB':  # can be either 'X € VB', or just 'VB'
-                    price_type = 'NEGOTIABLE'
-                    try:
-                        price = float(utils.parse_decimal(price_str.split()[0].replace('.', '')))
-                    except DecimalException:
-                        price = None
-                case 'verschenken':
-                    price_type = 'GIVE_AWAY'
-                    price = None
-                case _:
-                    price_type = 'NOT_APPLICABLE'
-            return price, price_type
-        except NoSuchElementException:  # no 'commercial' ad, has no pricing box etc.
-            return None, 'NOT_APPLICABLE'
-
-    def extract_shipping_info_from_ad_page(self) -> (str, float | None):
-        """
-        Extracts shipping information from an ad page.
-
-        :return: the shipping type, and the shipping price (optional)
-        """
-        ship_type, ship_costs = 'NOT_APPLICABLE', None
-        try:
-            shipping_text = self.webdriver.find_element(By.CSS_SELECTOR, '.boxedarticle--details--shipping') \
-                .text.strip()
-            # e.g. '+ Versand ab 5,49 €' OR 'Nur Abholung'
-            if shipping_text == 'Nur Abholung':
-                ship_type = 'PICKUP'
-            elif shipping_text == 'Versand möglich':
-                ship_type = 'SHIPPING'
-            elif '€' in shipping_text:
-                shipping_price_parts = shipping_text.split(' ')
-                shipping_price = float(utils.parse_decimal(shipping_price_parts[-2]))
-                ship_type = 'SHIPPING'
-                ship_costs = shipping_price
-        except NoSuchElementException:  # no pricing box -> no shipping given
-            ship_type = 'NOT_APPLICABLE'
-
-        return ship_type, ship_costs
-
-    def download_images_from_ad_page(self, directory: str) -> list[str]:
-        """
-        Downloads all images of an ad.
-
-        :param directory: the path of the directory created for this ad
-        :return: the relative paths for all downloaded images
-        """
-
-        n_images: int
-        img_paths = []
-        try:
-            image_box = self.webdriver.find_element(By.CSS_SELECTOR, '.galleryimage-large')
-
-            # if gallery image box exists, proceed with image fetching
-            n_images = 1
-
-            # determine number of images (1 ... N)
-            next_button = None
-            try:  # check if multiple images given
-                image_counter = image_box.find_element(By.CSS_SELECTOR, '.galleryimage--info')
-                n_images = int(image_counter.text[2:])
-                LOG.info('Found %d images.', n_images)
-                next_button = self.webdriver.find_element(By.CSS_SELECTOR, '.galleryimage--navigation--next')
-            except NoSuchElementException:
-                LOG.info('Only one image found.')
-
-            # download all images from box
-            img_element = image_box.find_element(By.XPATH, './/div[1]/img')
-            img_fn_prefix = 'ad_' + str(self.ad_id) + '__img'
-
-            img_nr = 1
-            dl_counter = 0
-            while img_nr <= n_images:  # scrolling + downloading
-                current_img_url = img_element.get_attribute('src')  # URL of the image
-                file_ending = current_img_url.split('.')[-1].lower()
-                img_path = directory + '/' + img_fn_prefix + str(img_nr) + '.' + file_ending
-                if current_img_url.startswith('https'):  # verify https (for Bandit linter)
-                    request.urlretrieve(current_img_url, img_path)  # nosec B310
-                dl_counter += 1
-                img_paths.append(img_path.split('/')[-1])
-
-                # scroll to next image (if exists)
-                if img_nr < n_images:
-                    try:
-                        # click next button, wait, and reestablish reference
-                        next_button.click()
-                        self.web_await(lambda _: EC.staleness_of(img_element))
-                        new_div = self.webdriver.find_element(By.CSS_SELECTOR, f'div.galleryimage-element:nth-child'
-                                                                               f'({img_nr + 1})')
-                        img_element = new_div.find_element(By.XPATH, './/img')
-                    except NoSuchElementException:
-                        LOG.error('NEXT button in image gallery somehow missing, abort image fetching.')
-                        break
-                img_nr += 1
-            LOG.info('Downloaded %d image(s).', dl_counter)
-
-        except NoSuchElementException:  # some ads do not require images
-            LOG.warning('No image area found. Continue without downloading images.')
-
-        return img_paths
-
-    def extract_contact_from_ad_page(self) -> dict:
-        """
-        Processes the address part involving street (optional), zip code + city, and phone number (optional).
-
-        :return: a dictionary containing the address parts with their corresponding values
-        """
-        contact = {}
-        address_element = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-locality')
-        address_text = address_element.text.strip()
-        # format: e.g. (Beispiel Allee 42,) 12345 Bundesland - Stadt
-        try:
-            street_element = self.webdriver.find_element(By.XPATH, '//*[@id="street-address"]')
-            street = street_element.text[:-2]  # trailing comma and whitespace
-            contact['street'] = street
-        except NoSuchElementException:
-            LOG.info('No street given in the contact.')
-        # construct remaining address
-        address_halves = address_text.split(' - ')
-        address_left_parts = address_halves[0].split(' ')  # zip code and region/city
-        contact['zipcode'] = address_left_parts[0]
-        contact['name'] = address_halves[1]
-        if 'street' not in contact:
-            contact['street'] = None
-        try:  # phone number is unusual for non-professional sellers today
-            phone_element = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-contact-phone')
-            phone_number = phone_element.find_element(By.TAG_NAME, 'a').text
-            contact['phone'] = ''.join(phone_number.replace('-', ' ').split(' ')).replace('+49(0)', '0')
-        except NoSuchElementException:
-            contact['phone'] = None  # phone seems to be a deprecated feature
-        # also see 'https://themen.ebay-kleinanzeigen.de/hilfe/deine-anzeigen/Telefon/
-
-        return contact
-
     def extract_ad_page_info(self, directory: str) -> dict:
         """
         Extracts all necessary information from an ad´s page.
@@ -930,23 +743,26 @@ class KleinanzeigenBot(SeleniumMixin):
         descr: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-description-text"]').text
         info['description'] = descr
 
+        from .extract import AdExtractor
+        extractor = AdExtractor(self)
+
         # extract category
-        info['category'] = self.extract_category_from_ad_page()
+        info['category'] = extractor.extract_category_from_ad_page()
 
         # get special attributes
-        info['special_attributes'] = self.extract_special_attributes_from_ad_page()
+        info['special_attributes'] = extractor.extract_special_attributes_from_ad_page()
 
         # process pricing
-        info['price'], info['price_type'] = self.extract_pricing_info_from_ad_page()
+        info['price'], info['price_type'] = extractor.extract_pricing_info_from_ad_page()
 
         # process shipping
-        info['shipping_type'], info['shipping_costs'] = self.extract_shipping_info_from_ad_page()
+        info['shipping_type'], info['shipping_costs'] = extractor.extract_shipping_info_from_ad_page()
 
         # fetch images
-        info['images'] = self.download_images_from_ad_page(directory)
+        info['images'] = extractor.download_images_from_ad_page(directory)
 
         # process address
-        info['contact'] = self.extract_contact_from_ad_page()
+        info['contact'] = extractor.extract_contact_from_ad_page()
 
         # process meta info
         info['republication_interval'] = 7  # a default value for downloaded ads
