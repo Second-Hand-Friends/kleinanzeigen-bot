@@ -140,7 +140,9 @@ good-names = ["i", "j", "k", "v", "by", "ex", "fd", "_", "T"]
 
 [tool.pylint.format]
 # https://pylint.pycqa.org/en/latest/technical_reference/features.html#format-checker
-max-line-length = 160
+# https://pylint.pycqa.org/en/latest/user_guide/checkers/features.html#format-checker-messages
+max-line-length = 160   # maximum number of characters on a single line (C0301)
+max-module-lines = 2000 # maximum number of lines in a module (C0302)
 
 [tool.pylint.logging]
 logging-modules = "logging"
@@ -169,6 +171,7 @@ max-branches   = 30 # maximum number of branch for function / method body (R0912
 max-locals     = 30 # maximum number of local variables for function / method body (R0914)
 max-returns    = 10 # maximum number of return / yield for function / method body (R0911)
 max-statements = 80 # maximum number of statements in function / method body (R0915)
+max-public-methods = 30 # maximum number of public methods for a class (R0904)
 
 
 #####################
