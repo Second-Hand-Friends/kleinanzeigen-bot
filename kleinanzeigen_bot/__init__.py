@@ -8,6 +8,8 @@ from collections.abc import Iterable
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from typing import Any, Final
+from urllib import request
+
 from wcmatch import glob
 
 from overrides import overrides
@@ -16,6 +18,7 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException,
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
+from kleinanzeigen_bot.extract import AdExtractor
 from . import utils, resources
 from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get
 from .selenium_mixin import SeleniumMixin
@@ -722,6 +725,70 @@ class KleinanzeigenBot(SeleniumMixin):
             print('(no popup given)')
         return True
 
+    def download_images_from_ad_page(self, directory: str, ad_id: int, logger: logging.Logger) -> list[str]:
+        """
+        Downloads all images of an ad.
+
+        :param directory: the path of the directory created for this ad
+        :param ad_id: the ID of the ad to download the images from
+        :param logger: an initialized logger
+        :return: the relative paths for all downloaded images
+        """
+
+        n_images: int
+        img_paths = []
+        try:
+            image_box = self.webdriver.find_element(By.CSS_SELECTOR, '.galleryimage-large')
+
+            # if gallery image box exists, proceed with image fetching
+            n_images = 1
+
+            # determine number of images (1 ... N)
+            next_button = None
+            try:  # check if multiple images given
+                image_counter = image_box.find_element(By.CSS_SELECTOR, '.galleryimage--info')
+                n_images = int(image_counter.text[2:])
+                logger.info('Found %d images.', n_images)
+                next_button = self.webdriver.find_element(By.CSS_SELECTOR, '.galleryimage--navigation--next')
+            except NoSuchElementException:
+                logger.info('Only one image found.')
+
+            # download all images from box
+            img_element = image_box.find_element(By.XPATH, './/div[1]/img')
+            img_fn_prefix = 'ad_' + str(ad_id) + '__img'
+
+            img_nr = 1
+            dl_counter = 0
+            while img_nr <= n_images:  # scrolling + downloading
+                current_img_url = img_element.get_attribute('src')  # URL of the image
+                file_ending = current_img_url.split('.')[-1].lower()
+                img_path = directory + '/' + img_fn_prefix + str(img_nr) + '.' + file_ending
+                if current_img_url.startswith('https'):  # verify https (for Bandit linter)
+                    request.urlretrieve(current_img_url, img_path)  # nosec B310
+                dl_counter += 1
+                img_paths.append(img_path.split('/')[-1])
+
+                # scroll to next image (if exists)
+                if img_nr < n_images:
+                    try:
+                        # click next button, wait, and reestablish reference
+                        next_button.click()
+                        self.web_await(lambda _: EC.staleness_of(img_element))
+                        new_div = self.webdriver.find_element(By.CSS_SELECTOR,
+                                                                   f'div.galleryimage-element:nth-child'
+                                                                   f'({img_nr + 1})')
+                        img_element = new_div.find_element(By.XPATH, './/img')
+                    except NoSuchElementException:
+                        logger.error('NEXT button in image gallery somehow missing, abort image fetching.')
+                        break
+                img_nr += 1
+            logger.info('Downloaded %d image(s).', dl_counter)
+
+        except NoSuchElementException:  # some ads do not require images
+            logger.warning('No image area found. Continue without downloading images.')
+
+        return img_paths
+
     def extract_ad_page_info(self, directory: str) -> dict:
         """
         Extracts all necessary information from an ad´s page.
@@ -743,8 +810,7 @@ class KleinanzeigenBot(SeleniumMixin):
         descr: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-description-text"]').text
         info['description'] = descr
 
-        from .extract import AdExtractor
-        extractor = AdExtractor(self)
+        extractor = AdExtractor(self.webdriver)
 
         # extract category
         info['category'] = extractor.extract_category_from_ad_page()
@@ -759,7 +825,7 @@ class KleinanzeigenBot(SeleniumMixin):
         info['shipping_type'], info['shipping_costs'] = extractor.extract_shipping_info_from_ad_page()
 
         # fetch images
-        info['images'] = extractor.download_images_from_ad_page(directory)
+        info['images'] = self.download_images_from_ad_page(directory, self.ad_id, LOG)
 
         # process address
         info['contact'] = extractor.extract_contact_from_ad_page()
