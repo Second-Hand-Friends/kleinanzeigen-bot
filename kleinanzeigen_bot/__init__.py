@@ -18,10 +18,9 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException,
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
-from . import utils, resources
+from . import utils, resources, extract
 from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get
 from .selenium_mixin import SeleniumMixin
-from .extract import AdExtractor
 
 LOG_ROOT: Final[logging.Logger] = logging.getLogger()
 LOG: Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot")
@@ -810,7 +809,7 @@ class KleinanzeigenBot(SeleniumMixin):
         descr: str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-description-text"]').text
         info['description'] = descr
 
-        extractor = AdExtractor(self.webdriver)
+        extractor = extract.AdExtractor(self.webdriver)
 
         # extract category
         info['category'] = extractor.extract_category_from_ad_page()
