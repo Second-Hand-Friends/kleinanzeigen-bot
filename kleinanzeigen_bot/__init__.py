@@ -18,10 +18,10 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException,
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
-from kleinanzeigen_bot.extract import AdExtractor
 from . import utils, resources
 from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get
 from .selenium_mixin import SeleniumMixin
+from .extract import AdExtractor
 
 LOG_ROOT: Final[logging.Logger] = logging.getLogger()
 LOG: Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot")
