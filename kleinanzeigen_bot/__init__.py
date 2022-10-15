@@ -21,10 +21,11 @@ from selenium.webdriver.support import expected_conditions as EC
 from . import utils, resources, extract  # pylint: disable=W0406
 from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get
 from .selenium_mixin import SeleniumMixin
+
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
-LOG_ROOT: Final[logging.Logger] = logging.getLogger()
-LOG: Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot")
+LOG_ROOT:Final[logging.Logger] = logging.getLogger()
+LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot")
 LOG.setLevel(logging.INFO)
 
 
@@ -276,7 +277,8 @@ class KleinanzeigenBot(SeleniumMixin):
                         continue
 
             ad_cfg["description"] = descr_prefix + (ad_cfg["description"] or "") + descr_suffix
-            ensure(len(ad_cfg["description"]) <= 4000, f"Length of ad description including prefix and suffix exceeds 4000 chars. @ [{ad_file}]")
+            ensure(len(ad_cfg["description"]) <= 4000,
+                   f"Length of ad description including prefix and suffix exceeds 4000 chars. @ [{ad_file}]")
 
             # pylint: disable=cell-var-from-loop
             def assert_one_of(path: str, allowed: Iterable[str]) -> None:
@@ -775,8 +777,8 @@ class KleinanzeigenBot(SeleniumMixin):
                         next_button.click()
                         self.web_await(lambda _: EC.staleness_of(img_element))
                         new_div = self.webdriver.find_element(By.CSS_SELECTOR,
-                                                                   f'div.galleryimage-element:nth-child'
-                                                                   f'({img_nr + 1})')
+                                                              f'div.galleryimage-element:nth-child'
+                                                              f'({img_nr + 1})')
                         img_element = new_div.find_element(By.XPATH, './/img')
                     except NoSuchElementException:
                         logger.error('NEXT button in image gallery somehow missing, abort image fetching.')
