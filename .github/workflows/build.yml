@@ -244,9 +244,8 @@ jobs:
           --attach "kleinanzeigen-bot-linux-amd64" \
           --attach "kleinanzeigen-bot-windows-amd64.exe"
 
-    - name: Delete intermediate build artifacts
-      uses: geekyeggo/delete-artifact@1-glob-support # https://github.com/GeekyEggo/delete-artifact/
+    - name: "Delete intermediate build artifacts"
+      uses: geekyeggo/delete-artifact@v2 # https://github.com/GeekyEggo/delete-artifact/
       with:
         name: "*"
-        useGlob: true
         failOnError: false
