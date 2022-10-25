@@ -215,8 +215,7 @@ class KleinanzeigenBot(SeleniumMixin):
             return
 
         LOG.info("Logging to [%s]...", self.log_file_path)
-        self.file_log = RotatingFileHandler(filename = self.log_file_path, maxBytes = 10 * 1024 * 1024,
-                                            backupCount = 10, encoding = "utf-8")
+        self.file_log = RotatingFileHandler(filename = self.log_file_path, maxBytes = 10 * 1024 * 1024, backupCount = 10, encoding = "utf-8")
         self.file_log.setLevel(logging.DEBUG)
         self.file_log.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
         LOG_ROOT.addHandler(self.file_log)
@@ -229,8 +228,7 @@ class KleinanzeigenBot(SeleniumMixin):
         ad_files = set()
         data_root_dir = os.path.dirname(self.config_file_path)
         for file_pattern in self.config["ad_files"]:
-            for ad_file in glob.glob(file_pattern, root_dir = data_root_dir,
-                                     flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
+            for ad_file in glob.glob(file_pattern, root_dir = data_root_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
                 ad_files.add(abspath(ad_file, relative_to = data_root_dir))
         LOG.info(" -> found %s", pluralize("ad config file", ad_files))
         if not ad_files:
@@ -245,8 +243,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
             ad_cfg_orig = utils.load_dict(ad_file, "ad")
             ad_cfg = copy.deepcopy(ad_cfg_orig)
-            apply_defaults(ad_cfg, self.config["ad_defaults"], ignore = lambda k, _: k == "description",
-                           override = lambda _, v: v == "")
+            apply_defaults(ad_cfg, self.config["ad_defaults"], ignore = lambda k, _: k == "description", override = lambda _, v: v == "")
             apply_defaults(ad_cfg, ad_fields)
 
             if ignore_inactive and not ad_cfg["active"]:
@@ -315,8 +312,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 for image_pattern in ad_cfg["images"]:
                     pattern_images = set()
                     ad_dir = os.path.dirname(ad_file)
-                    for image_file in glob.glob(image_pattern, root_dir = ad_dir,
-                                                flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
+                    for image_file in glob.glob(image_pattern, root_dir = ad_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
                         _, image_file_ext = os.path.splitext(image_file)
                         ensure(image_file_ext.lower() in {".gif", ".jpg", ".jpeg", ".png"}, f"Unsupported image file type [{image_file}]")
                         if os.path.isabs(image_file):
@@ -357,12 +353,10 @@ class KleinanzeigenBot(SeleniumMixin):
 
         self.browser_config.arguments = self.config["browser"]["arguments"]
         self.browser_config.binary_location = self.config["browser"]["binary_location"]
-        self.browser_config.extensions = [abspath(item, relative_to = self.config_file_path) for item in
-                                          self.config["browser"]["extensions"]]
+        self.browser_config.extensions = [abspath(item, relative_to = self.config_file_path) for item in self.config["browser"]["extensions"]]
         self.browser_config.use_private_window = self.config["browser"]["use_private_window"]
         if self.config["browser"]["user_data_dir"]:
-            self.browser_config.user_data_dir = abspath(self.config["browser"]["user_data_dir"],
-                                                        relative_to = self.config_file_path)
+            self.browser_config.user_data_dir = abspath(self.config["browser"]["user_data_dir"], relative_to = self.config_file_path)
         self.browser_config.profile_name = self.config["browser"]["profile_name"]
 
     def login(self) -> None:
@@ -394,7 +388,7 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.warning("# Captcha present! Please solve and close the captcha, %s", msg)
         LOG.warning("############################################")
         self.webdriver.switch_to.frame(self.web_find(By.CSS_SELECTOR, f"#{captcha_element_id} iframe"))
-        self.web_await(lambda _: self.webdriver.find_element(By.ID, "recaptcha-anchor").get_attribute("aria-checked") == "true", timeout=5 * 60)
+        self.web_await(lambda _: self.webdriver.find_element(By.ID, "recaptcha-anchor").get_attribute("aria-checked") == "true", timeout = 5 * 60)
         self.webdriver.switch_to.default_content()
 
     def delete_ads(self, ad_cfgs:list[tuple[str, dict[str, Any], dict[str, Any]]]) -> None:
@@ -455,7 +449,7 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    def publish_ad(self, ad_file:str, ad_cfg:dict[str, Any], ad_cfg_orig:dict[str, Any]) -> None:
+    def publish_ad(self, ad_file:str, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any]) -> None:
         self.assert_free_ad_limit_not_reached()
 
         if self.delete_old_ads:
@@ -495,7 +489,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 self.web_click(By.XPATH, '//*[contains(@class, "ShippingOption")]//input[@type="radio"]')
                 self.web_click(By.XPATH, '//*[contains(@class, "CarrierOptionsPopup")]//*[contains(@class, "IndividualPriceSection")]//input[@type="checkbox"]')
                 self.web_input(By.XPATH, '//*[contains(@class, "IndividualShippingInput")]//input[@type="text"]',
-                               str.replace(ad_cfg["shipping_costs"], ".", ","))
+                              str.replace(ad_cfg["shipping_costs"], ".", ","))
                 self.web_click(By.XPATH, '//*[contains(@class, "ReactModalPortal")]//button[.//*[text()[contains(.,"Weiter")]]]')
             except NoSuchElementException as ex:
                 LOG.debug(ex, exc_info = True)
@@ -591,7 +585,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
         utils.save_dict(ad_file, ad_cfg_orig)
 
-    def __set_category(self, ad_file:str, ad_cfg:dict[str, Any]):
+    def __set_category(self, ad_file:str, ad_cfg: dict[str, Any]):
         # trigger and wait for automatic category detection
         self.web_click(By.ID, "pstad-price")
         try:
@@ -645,7 +639,7 @@ class KleinanzeigenBot(SeleniumMixin):
             while previous_uploaded_images_count == count_uploaded_images() and time.time() - start_at < 60:
                 print(".", end = "", flush = True)
                 time.sleep(1)
-            print(flush=True)
+            print(flush = True)
 
             ensure(previous_uploaded_images_count < count_uploaded_images(), f"Couldn't upload image [{image}] within 60 seconds")
             LOG.debug("   => uploaded image within %i seconds", time.time() - start_at)
