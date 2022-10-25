@@ -177,8 +177,9 @@ It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https:/
 Usage: kleinanzeigen-bot COMMAND [OPTIONS]
 
 Commands:
-  publish - (re-)publishes ads
-  verify  - verifies the configuration files
+  publish  - (re-)publishes ads
+  verify   - verifies the configuration files
+  download - downloads an ad
   --
   help    - displays this help (default command)
   version - displays the application version
@@ -191,6 +192,7 @@ Options:
         * new: only publish new ads (i.e. ads that have no id in the config file)
   --force           - alias for '--ads=all'
   --keep-old        - don't delete old ads on republication
+  --ad <ID>         - provide the ad ID after this option when using the download command
   --config=<PATH>   - path to the config YAML or JSON file (DEFAULT: ./config.yaml)
   --logfile=<PATH>  - path to the logfile (DEFAULT: ./kleinanzeigen-bot.log)
   -v, --verbose     - enables verbose output - only useful when troubleshooting issues
