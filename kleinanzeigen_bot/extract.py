@@ -16,7 +16,7 @@ class AdExtractor:
     Wrapper class for ad extraction that uses an active bot´s web driver to extract specific elements from an ad page.
     """
 
-    def __init__(self, driver: WebDriver):
+    def __init__(self, driver:WebDriver):
         self.driver = driver
 
     def extract_category_from_ad_page(self) -> str:
@@ -31,7 +31,7 @@ class AdExtractor:
         category_second_part = category_line.find_element(By.XPATH, './/a[3]')
         cat_num_first = category_first_part.get_attribute('href').split('/')[-1][1:]
         cat_num_second = category_second_part.get_attribute('href').split('/')[-1][1:]
-        category: str = cat_num_first + '/' + cat_num_second
+        category:str = cat_num_first + '/' + cat_num_second
 
         return category
 
@@ -63,9 +63,9 @@ class AdExtractor:
         :return: the price of the offer (optional); and the pricing type
         """
         try:
-            price_str: str = self.driver.find_element(By.CLASS_NAME, 'boxedarticle--price').text
-            price_type: str
-            price: float | None = -1
+            price_str:str = self.driver.find_element(By.CLASS_NAME, 'boxedarticle--price').text
+            price_type:str
+            price:float | None = -1
             match price_str.split()[-1]:
                 case '€':
                     price_type = 'FIXED'
