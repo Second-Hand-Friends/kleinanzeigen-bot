@@ -24,7 +24,7 @@ classifiers = [  # https://pypi.org/classifiers/
     "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Programming Language :: Python :: 3.10"
 ]
-requires-python = ">=3.10,<3.11" # <3.11 to get newer versions of pyinstaller
+requires-python = ">=3.10,<3.12" # <3.12 required for pyinstaller
 dependencies = [
     "coloredlogs~=15.0",
     "inflect~=5.4",
@@ -54,11 +54,11 @@ version = {use_scm = true}
 dev = [
     "autopep8~=1.6",
     "bandit~=1.7",
-    "pytest~=7.0",
-    "pyinstaller~=4.10",
+    "pytest~=7.2",
+    "pyinstaller~=5.6",
     "psutil",
-    "pylint==2.12.1", # pinning pylint version to prevent "RecursionError: maximum recursion depth exceeded" as of 2.13.1
-    "mypy~=0.940",
+    "pylint==2.15",
+    "mypy~=0.982",
 ]
 
 [tool.pdm.scripts]
@@ -129,10 +129,11 @@ load-plugins = [
     "pylint.extensions.comparison_placement",
     "pylint.extensions.empty_comment",
     "pylint.extensions.for_any_all",
+    "pylint.extensions.no_self_use",
     "pylint.extensions.overlapping_exceptions",
     "pylint.extensions.redefined_variable_type",
     "pylint.extensions.set_membership",
-    "pylint.extensions.typing",
+    "pylint.extensions.typing"
 ]
 
 [tool.pylint.basic]

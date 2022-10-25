@@ -39,19 +39,11 @@ RUN apt-get update \
  # install required libraries
  && apt-get install --no-install-recommends -y \
     binutils `# required by pyinstaller` \
-    #curl xz-utils `# required to install upx` \
+    build-essential `# required by transitive dependency "wrapt"` \
     git `# required by pdm to generate app version` \
  #
- # install upx
- # upx is currently not supported on Linux, see https://github.com/pyinstaller/pyinstaller/discussions/6275
- #&& mkdir /opt/upx \
- #&& upx_download_url=$(curl -fsSL https://api.github.com/repos/upx/upx/releases/latest | grep browser_download_url | grep amd64_linux.tar.xz | cut "-d\"" -f4) \
- #&& echo "Downloading [$upx_download_url]..." \
- #&& curl -fL $upx_download_url | tar Jxv -C /opt/upx --strip-components=1 \
- #
  # upgrade pip
- # don't upgrade PIP for now: https://github.com/pdm-project/pdm/issues/874
- #&& python -m pip install --upgrade pip \
+ && python -m pip install --upgrade pip \
  #
  # install pdm
  && pip install pdm
@@ -64,8 +56,6 @@ COPY README.md pdm.lock pyinstaller.spec pyproject.toml /opt/app/
 
 RUN cd /opt/app \
  && ls -la . \
- # https://github.com/SeleniumHQ/selenium/issues/10022 / https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
- && pip install -t __pypackages__/3.10/lib selenium \
  && pdm install -v \
  && ls -la kleinanzeigen_bot \
  && pdm run compile \
