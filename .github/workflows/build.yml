@@ -23,9 +23,6 @@ defaults:
   run:
     shell: bash
 
-env:
-  PYTHON_VERSION: "3.10"
-  
 jobs:
 
   ###########################################################
@@ -34,10 +31,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - macos-latest
-          - ubuntu-latest
-          - windows-latest
+        include:
+        - os: macos-latest
+          PYTHON_VERSION: "3.10"
+          PUBLISH_RELEASE: true
+        - os: ubuntu-latest
+          PYTHON_VERSION: "3.10"
+          PUBLISH_RELEASE: false
+        - os: windows-latest
+          PYTHON_VERSION: "3.10"
+          PUBLISH_RELEASE: false
+        - os: ubuntu-latest
+          PYTHON_VERSION: "3.11"
+          PUBLISH_RELEASE: true
+        - os: windows-latest
+          PYTHON_VERSION: "3.11"
+          PUBLISH_RELEASE: true
 
     runs-on: ${{ matrix.os }}
 
@@ -48,7 +57,7 @@ jobs:
 
     - uses: actions/setup-python@v4
       with:
-        python-version: "${{ env.PYTHON_VERSION }}"
+        python-version: "${{ matrix.PYTHON_VERSION }}"
 
     - uses: actions/cache@v3
       with:
@@ -150,6 +159,7 @@ jobs:
 
     - name: Upload self-contained executable
       uses: actions/upload-artifact@v3
+      if: github.ref == 'refs/heads/main' && matrix.PUBLISH_RELEASE
       with:
         name: artifacts-${{ matrix.os }}
         path: dist/kleinanzeigen-bot*
@@ -164,7 +174,7 @@ jobs:
         docker run --rm second-hand-friends/kleinanzeigen-bot help
 
     - name: Publish Docker image
-      if: startsWith(matrix.os, 'ubuntu') && github.ref == 'refs/heads/main'
+      if: github.ref == 'refs/heads/main' && matrix.PUBLISH_RELEASE && startsWith(matrix.os, 'ubuntu')
       run: |
         set -eux
 
@@ -173,6 +183,7 @@ jobs:
         image_name="second-hand-friends/kleinanzeigen-bot"
         docker image tag $image_name ghcr.io/$image_name
         docker push ghcr.io/$image_name
+
 
   ###########################################################
   publish-release:
