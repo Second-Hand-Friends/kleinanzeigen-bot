@@ -28,11 +28,11 @@ summary = "Classes Without Boilerplate"
 
 [[package]]
 name = "autopep8"
-version = "1.7.0"
+version = "2.0.0"
 summary = "A tool that automatically formats Python code to conform to the PEP 8 style guide"
 dependencies = [
     "pycodestyle>=2.9.1",
-    "toml",
+    "tomli",
 ]
 
 [[package]]
@@ -288,11 +288,11 @@ summary = "Community maintained hooks for PyInstaller"
 
 [[package]]
 name = "pylint"
-version = "2.15.0"
+version = "2.15.5"
 requires_python = ">=3.7.2"
 summary = "python code static checker"
 dependencies = [
-    "astroid<=2.14.0-dev0,>=2.12.4",
+    "astroid<=2.14.0-dev0,>=2.12.12",
     "colorama>=0.4.5; sys_platform == \"win32\"",
     "dill>=0.2",
     "isort<6,>=4.2.5",
@@ -437,12 +437,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "toml"
-version = "0.10.2"
-requires_python = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
-summary = "Python Library for Tom's Obvious, Minimal Language"
-
-[[package]]
 name = "tomli"
 version = "2.0.1"
 requires_python = ">=3.7"
@@ -549,7 +543,7 @@ dependencies = [
 
 [metadata]
 lock_version = "4.0"
-content_hash = "sha256:a60d82bdd54f6984046176e4212212229ac888969137befc975bfb98434ffa3f"
+content_hash = "sha256:1f742ec77681cf823e997181cc2ba27718207515c788731378dc81c725efff96"
 
 [metadata.files]
 "altgraph 0.17.2" = [
@@ -568,9 +562,9 @@ content_hash = "sha256:a60d82bdd54f6984046176e4212212229ac888969137befc975bfb984
     {url = "https://files.pythonhosted.org/packages/be/be/7abce643bfdf8ca01c48afa2ddf8308c2308b0c3b239a44e57d020afa0ef/attrs-21.4.0-py2.py3-none-any.whl", hash = "sha256:2d27e3784d7a565d36ab851fe94887c5eccd6a463168875832a1be79c82828b4"},
     {url = "https://files.pythonhosted.org/packages/d7/77/ebb15fc26d0f815839ecd897b919ed6d85c050feeb83e100e020df9153d2/attrs-21.4.0.tar.gz", hash = "sha256:626ba8234211db98e869df76230a137c4c40a12d72445c45d5f5b716f076e2fd"},
 ]
-"autopep8 1.7.0" = [
-    {url = "https://files.pythonhosted.org/packages/5d/9b/1ed75f8c9086fafe0e9bbb379a70c43b1aa9dff6154ddcfb818f78cb0736/autopep8-1.7.0-py2.py3-none-any.whl", hash = "sha256:6f09e90a2be784317e84dc1add17ebfc7abe3924239957a37e5040e27d812087"},
-    {url = "https://files.pythonhosted.org/packages/d0/5d/016888824972086a4ee164806520d85ff173e83699907b9cfe119aaefbbc/autopep8-1.7.0.tar.gz", hash = "sha256:ca9b1a83e53a7fad65d731dc7a2a2d50aa48f43850407c59f6a1a306c4201142"},
+"autopep8 2.0.0" = [
+    {url = "https://files.pythonhosted.org/packages/2a/c0/a1372bd95578778aae8dc5359e4f8ec03a94479d2f36e30543298d30c48a/autopep8-2.0.0-py2.py3-none-any.whl", hash = "sha256:ad924b42c2e27a1ac58e432166cc4588f5b80747de02d0d35b1ecbd3e7d57207"},
+    {url = "https://files.pythonhosted.org/packages/ac/71/48b7fde78ef09f4636a9b81f926b879d0230f90768483c441f22059d2474/autopep8-2.0.0.tar.gz", hash = "sha256:8b1659c7f003e693199f52caffdc06585bb0716900bbc6a7442fd931d658c077"},
 ]
 "bandit 1.7.4" = [
     {url = "https://files.pythonhosted.org/packages/39/36/a37a2f6f8d0ed8c3bc616616ed5019e1df2680bd8b7df49ceae80fd457de/bandit-1.7.4.tar.gz", hash = "sha256:2d63a8c573417bae338962d4b9b06fbc6080f74ecd955a092849e1e65c717bd2"},
@@ -872,9 +866,9 @@ content_hash = "sha256:a60d82bdd54f6984046176e4212212229ac888969137befc975bfb984
     {url = "https://files.pythonhosted.org/packages/3d/fb/8ab57519f2c44efe3476eb06961ee42a87d0d21d75a01aa349fa407b29a7/pyinstaller_hooks_contrib-2022.8-py2.py3-none-any.whl", hash = "sha256:e46f099934dd4577fb1ddcf37a99fa04027c92f8f5291c8802f326345988d001"},
     {url = "https://files.pythonhosted.org/packages/a4/75/a0a8e398c4b97a8fa84f110ec8be0f2f11462ed1053087d6fcc6ee4d129c/pyinstaller-hooks-contrib-2022.8.tar.gz", hash = "sha256:c4210fc50282c9c6a918e485e0bfae9405592390508e3be9fde19acc2213da56"},
 ]
-"pylint 2.15.0" = [
-    {url = "https://files.pythonhosted.org/packages/5e/1b/920b36e0db0fe3d4b583a934e1889153699bcccbca0a41b18202d2d2e1e9/pylint-2.15.0-py3-none-any.whl", hash = "sha256:4b124affc198b7f7c9b5f9ab690d85db48282a025ef9333f51d2d7281b92a6c3"},
-    {url = "https://files.pythonhosted.org/packages/76/4e/e0420c7283541d984aa03d48b8758d514ac002a1d08a56e48f16302d6a98/pylint-2.15.0.tar.gz", hash = "sha256:4f3f7e869646b0bd63b3dfb79f3c0f28fc3d2d923ea220d52620fd625aed92b0"},
+"pylint 2.15.5" = [
+    {url = "https://files.pythonhosted.org/packages/4e/9d/fa68dd17140373786c5a379f6b313ceeb324dfe47ff13f717710c2e63c1d/pylint-2.15.5.tar.gz", hash = "sha256:3b120505e5af1d06a5ad76b55d8660d44bf0f2fc3c59c2bdd94e39188ee3a4df"},
+    {url = "https://files.pythonhosted.org/packages/f1/01/f3189750e584499239357d910114be62e6bbe3da37116e6c6d79d23c0ba0/pylint-2.15.5-py3-none-any.whl", hash = "sha256:c2108037eb074334d9e874dc3c783752cc03d0796c88c9a9af282d0f161a1004"},
 ]
 "pyparsing 3.0.9" = [
     {url = "https://files.pythonhosted.org/packages/6c/10/a7d0fa5baea8fe7b50f448ab742f26f52b80bfca85ac2be9d35cdd9a3246/pyparsing-3.0.9-py3-none-any.whl", hash = "sha256:5026bae9a10eeaefb61dab2f09052b9f4307d44aee4eda64b309723d8d206bbc"},
@@ -1022,10 +1016,6 @@ content_hash = "sha256:a60d82bdd54f6984046176e4212212229ac888969137befc975bfb984
 "stevedore 4.0.0" = [
     {url = "https://files.pythonhosted.org/packages/d5/f7/7593812b0687e8aaf01b10f7f07bf59e5a6bbfcd9d657cefdeb48a72cd06/stevedore-4.0.0-py3-none-any.whl", hash = "sha256:87e4d27fe96d0d7e4fc24f0cbe3463baae4ec51e81d95fbe60d2474636e0c7d8"},
     {url = "https://files.pythonhosted.org/packages/f5/70/7953626fd19faa7a0852779c1949650e825f650ee6060f68658a84584c26/stevedore-4.0.0.tar.gz", hash = "sha256:f82cc99a1ff552310d19c379827c2c64dd9f85a38bcd5559db2470161867b786"},
-]
-"toml 0.10.2" = [
-    {url = "https://files.pythonhosted.org/packages/44/6f/7120676b6d73228c96e17f1f794d8ab046fc910d781c8d151120c3f1569e/toml-0.10.2-py2.py3-none-any.whl", hash = "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b"},
-    {url = "https://files.pythonhosted.org/packages/be/ba/1f744cdc819428fc6b5084ec34d9b30660f6f9daaf70eead706e3203ec3c/toml-0.10.2.tar.gz", hash = "sha256:b3bda1d108d5dd99f4a20d24d9c348e91c4db7ab1b749200bded2f839ccbe68f"},
 ]
 "tomli 2.0.1" = [
     {url = "https://files.pythonhosted.org/packages/97/75/10a9ebee3fd790d20926a90a2547f0bf78f371b2f13aa822c759680ca7b9/tomli-2.0.1-py3-none-any.whl", hash = "sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc"},

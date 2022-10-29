@@ -52,12 +52,12 @@ version = {use_scm = true}
 
 [tool.pdm.dev-dependencies]
 dev = [
-    "autopep8~=1.6",
+    "autopep8~=2.0",
     "bandit~=1.7",
     "pytest~=7.2",
     "pyinstaller~=5.6",
     "psutil",
-    "pylint==2.15",
+    "pylint~=2.15",
     "mypy~=0.982",
 ]
 
