@@ -130,7 +130,12 @@ class AdExtractor:
         address_halves = address_text.split(' - ')
         address_left_parts = address_halves[0].split(' ')  # zip code and region/city
         contact['zipcode'] = address_left_parts[0]
-        contact['name'] = address_halves[1]
+
+        contact_person_element = self.driver.find_element(By.CSS_SELECTOR, '#viewad-contact')
+        name_element = contact_person_element.find_element(By.CLASS_NAME, 'iconlist-text')
+        name = name_element.find_element(By.TAG_NAME, 'a').text
+        contact['name'] = name
+
         if 'street' not in contact:
             contact['street'] = None
         try:  # phone number is unusual for non-professional sellers today
