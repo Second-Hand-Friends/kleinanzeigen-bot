@@ -804,7 +804,8 @@ class KleinanzeigenBot(SeleniumMixin):
         # convert creation date to ISO format
         created_parts = creation_date.split('.')
         creation_date = created_parts[2] + '-' + created_parts[1] + '-' + created_parts[0] + ' 00:00:00'
-        info['created_on'] = datetime.fromisoformat(creation_date)
+        creation_date = datetime.fromisoformat(creation_date).isoformat()
+        info['created_on'] = creation_date
         info['updated_on'] = None  # will be set later on
 
         return info
