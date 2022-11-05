@@ -3,6 +3,7 @@ Copyright (C) 2022 Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 from decimal import DecimalException
+import json
 
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
@@ -41,20 +42,12 @@ class AdExtractor:
 
         :return: a dictionary (possibly empty) where the keys are the attribute names, mapped to their values
         """
-
-        try:
-            details_box = self.driver.find_element(By.CSS_SELECTOR, '#viewad-details')
-            details_list = details_box.find_element(By.XPATH, './/ul')
-            list_items = details_list.find_elements(By.TAG_NAME, 'li')
-            details = {}
-            for list_item in list_items:
-                detail_key = list_item.text.split('\n')[0]
-                detail_value = list_item.find_element(By.TAG_NAME, 'span').text
-                details[detail_key] = detail_value
-
-            return details
-        except NoSuchElementException:
-            return {}
+        belen_conf = self.driver.execute_script("return window.BelenConf")
+        special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"]["dimension108"]
+        special_attributes = json.loads(special_attributes_str)
+        assert isinstance(special_attributes, dict)
+        special_attributes = {k: v for k, v in special_attributes.items() if not k.endswith('.versand_s')}
+        return special_attributes
 
     def extract_pricing_info_from_ad_page(self) -> (float | None, str):
         """
