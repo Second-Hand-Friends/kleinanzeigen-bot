@@ -19,7 +19,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
 from . import utils, resources, extract  # pylint: disable=W0406
-from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get
+from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get, parse_datetime
 from .selenium_mixin import SeleniumMixin
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
@@ -256,9 +256,9 @@ class KleinanzeigenBot(SeleniumMixin):
 
             if self.ads_selector == "due":
                 if ad_cfg["updated_on"]:
-                    last_updated_on = datetime.fromisoformat(ad_cfg["updated_on"])
+                    last_updated_on = parse_datetime(ad_cfg["updated_on"])
                 elif ad_cfg["created_on"]:
-                    last_updated_on = datetime.fromisoformat(ad_cfg["created_on"])
+                    last_updated_on = parse_datetime(ad_cfg["created_on"])
                 else:
                     last_updated_on = None
 

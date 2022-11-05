@@ -5,6 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import copy, decimal, json, logging, os, re, secrets, sys, traceback, time
 from importlib.resources import read_text as get_resource_as_string
 from collections.abc import Callable, Sized
+from datetime import datetime
 from types import FrameType, ModuleType, TracebackType
 from typing import Any, Final, TypeVar
 
@@ -253,3 +254,19 @@ def parse_decimal(number:float | int | str) -> decimal.Decimal:
             return decimal.Decimal("".join(parts[:-1]) + "." + parts[-1])
         except decimal.InvalidOperation:
             raise decimal.DecimalException(f"Invalid number format: {number}") from ex
+
+
+def parse_datetime(date:datetime | str | None) -> datetime | None:
+    """
+    >>> parse_datetime(datetime(2020, 1, 1, 0, 0))
+    datetime.datetime(2020, 1, 1, 0, 0)
+    >>> parse_datetime("2020-01-01T00:00:00")
+    datetime.datetime(2020, 1, 1, 0, 0)
+    >>> parse_datetime(None)
+
+    """
+    if date is None:
+        return None
+    if isinstance(date, datetime):
+        return date
+    return datetime.fromisoformat(date)
