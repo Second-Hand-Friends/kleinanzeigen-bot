@@ -710,7 +710,9 @@ class KleinanzeigenBot(SeleniumMixin):
             # determine number of images (1 ... N)
             next_button = None
             try:  # check if multiple images given
-                image_counter = image_box.find_element(By.CSS_SELECTOR, '.galleryimage--info')
+                # edge case: 'Virtueller Rundgang' div could be found by same CSS class
+                element_candidates = image_box.find_elements(By.CSS_SELECTOR, '.galleryimage--info')
+                image_counter = element_candidates[-1]
                 n_images = int(image_counter.text[2:])
                 logger.info('Found %d images.', n_images)
                 next_button = self.webdriver.find_element(By.CSS_SELECTOR, '.galleryimage--navigation--next')
