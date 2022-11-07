@@ -133,7 +133,10 @@ class AdExtractor:
 
         contact_person_element = self.driver.find_element(By.CSS_SELECTOR, '#viewad-contact')
         name_element = contact_person_element.find_element(By.CLASS_NAME, 'iconlist-text')
-        name = name_element.find_element(By.TAG_NAME, 'a').text
+        try:
+            name = name_element.find_element(By.TAG_NAME, 'a').text
+        except NoSuchElementException:  # edge case: name without link
+            name = name_element.find_element(By.TAG_NAME, 'span').text
         contact['name'] = name
 
         if 'street' not in contact:
