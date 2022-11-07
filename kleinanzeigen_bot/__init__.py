@@ -716,7 +716,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 n_images = int(image_counter.text[2:])
                 logger.info('Found %d images.', n_images)
                 next_button = self.webdriver.find_element(By.CSS_SELECTOR, '.galleryimage--navigation--next')
-            except NoSuchElementException:
+            except (NoSuchElementException, IndexError):
                 logger.info('Only one image found.')
 
             # download all images from box
