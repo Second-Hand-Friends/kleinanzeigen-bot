@@ -10,6 +10,7 @@ ad_defaults:
     suffix: ""
   price_type: NEGOTIABLE # one of: FIXED, NEGOTIABLE, GIVE_AWAY, NOT_APPLICABLE
   shipping_type: SHIPPING # one of: PICKUP, SHIPPING, NOT_APPLICABLE
+  sell_directly: false # requires shipping_options to take effect
   contact:
     name: ""
     street: ""
