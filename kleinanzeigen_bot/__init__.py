@@ -469,13 +469,15 @@ class KleinanzeigenBot(SeleniumMixin):
         self.__set_category(ad_file, ad_cfg)
 
         #############################
-        # set shipping type/costs
+        # set shipping type/options/costs
         #############################
         if ad_cfg["shipping_type"] == "PICKUP":
             try:
                 self.web_click(By.XPATH, '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/input[@type="radio"]')
             except NoSuchElementException as ex:
                 LOG.debug(ex, exc_info = True)
+        elif ad_cfg["shipping_options"]:
+            self.__set_shipping_options(ad_cfg)
         elif ad_cfg["shipping_costs"]:
             try:
                 self.web_click(By.XPATH, '//*[contains(@class, "ShippingOption")]//input[@type="radio"]')
@@ -494,6 +496,16 @@ class KleinanzeigenBot(SeleniumMixin):
             self.web_select(By.XPATH, "//select[@id='price-type-react' or @id='micro-frontend-price-type' or @id='priceType']", price_type)
             if safe_get(ad_cfg, "price"):
                 self.web_input(By.XPATH, "//input[@id='post-ad-frontend-price' or @id='micro-frontend-price' or @id='pstad-price']", ad_cfg["price"])
+
+        #############################
+        # set sell_directly
+        #############################
+        sell_directly = ad_cfg["sell_directly"]
+        if sell_directly and ad_cfg["shipping_type"] == "SHIPPING" and ad_cfg["shipping_options"] and price_type in {"FIXED", "NEGOTIABLE"}:
+            try:
+                self.web_click(By.XPATH, '//*[contains(@class, "BuyNowSection")]//span[contains(@class, "Toggle--Slider")]')
+            except NoSuchElementException as ex:
+                LOG.debug(ex, exc_info = True)
 
         #############################
         # set description
@@ -608,6 +620,43 @@ class KleinanzeigenBot(SeleniumMixin):
                             LOG.debug("Attribute field '%s' is not of kind radio button.", special_attribute_key)
                             raise NoSuchElementException(f"Failed to set special attribute [{special_attribute_key}]") from ex
                 LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value)
+
+    def __set_shipping_options(self, ad_cfg: dict[str, Any]) -> None:
+        try:
+            shipping_option_mapping = {
+                "DHL_2": ("Klein", "Paket 2 kg"),
+                "Hermes_Päckchen": ("Klein", "Päckchen"),
+                "Hermes_S": ("Klein", "S-Paket"),
+                "DHL_5": ("Mittel", "Paket 5 kg"),
+                "Hermes_M": ("Mittel", "M-Paket"),
+                "DHL_10": ("Mittel", "Paket 10 kg"),
+                "DHL_31,5": ("Groß", "Paket 31,5 kg"),
+                "Hermes_L": ("Groß", "L-Paket"),
+            }
+            try:
+                mapped_shipping_options = [shipping_option_mapping[option] for option in ad_cfg["shipping_options"]]
+                shipping_sizes, shipping_packages = zip(*mapped_shipping_options)
+            except KeyError as ex:
+                raise KeyError(f"Unknown shipping option(s), please refer to the documentation/README: {ad_cfg['shipping_options']}") from ex
+
+            unique_shipping_sizes = set(shipping_sizes)
+            if len(unique_shipping_sizes) > 1:
+                raise ValueError("You can only specify shipping options for one package size!")
+
+            shipping_size, = unique_shipping_sizes
+            self.web_click(By.XPATH, f'//*[contains(@class, "ShippingOption")]//input[@type="radio" and @data-testid="{shipping_size}"]')
+
+            for shipping_package in shipping_packages:
+                self.web_click(
+                    By.XPATH,
+                    '//*[contains(@class, "CarrierOptionsPopup")]'
+                    '//*[contains(@class, "CarrierOption")]'
+                    f'//input[@type="checkbox" and @data-testid="{shipping_package}"]'
+                )
+
+            self.web_click(By.XPATH, '//*[contains(@class, "ReactModalPortal")]//button[.//*[text()[contains(.,"Weiter")]]]')
+        except NoSuchElementException as ex:
+            LOG.debug(ex, exc_info = True)
 
     def __upload_images(self, ad_cfg: dict[str, Any]):
         LOG.info(" -> found %s", pluralize("image", ad_cfg["images"]))
