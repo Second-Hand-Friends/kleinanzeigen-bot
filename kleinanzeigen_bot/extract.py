@@ -45,7 +45,11 @@ class AdExtractor:
         belen_conf = self.driver.execute_script("return window.BelenConf")
         special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"]["dimension108"]
         special_attributes = json.loads(special_attributes_str)
-        assert isinstance(special_attributes, dict)
+        if not isinstance(special_attributes, dict):
+            raise ValueError(
+                "Failed to parse special attributes from ad page."
+                f"Expected a dictionary, but got a {type(special_attributes)}"
+            )
         special_attributes = {k: v for k, v in special_attributes.items() if not k.endswith('.versand_s')}
         return special_attributes
 
