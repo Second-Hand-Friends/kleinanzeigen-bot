@@ -143,7 +143,7 @@ class AdExtractor:
             phone_number = phone_element.find_element(By.TAG_NAME, 'a').text
             contact['phone'] = ''.join(phone_number.replace('-', ' ').split(' ')).replace('+49(0)', '0')
         except NoSuchElementException:
-            contact['phone'] = None  # phone seems to be a deprecated feature
+            contact['phone'] = None  # phone seems to be a deprecated feature (for non-professional users)
         # also see 'https://themen.ebay-kleinanzeigen.de/hilfe/deine-anzeigen/Telefon/
 
         return contact

@@ -815,8 +815,11 @@ class KleinanzeigenBot(SeleniumMixin):
         Downloads an ad to a specific location, specified by config and ad_id.
         """
 
-        # create sub-directory for ad to download
+        # create sub-directory for ad to download:
         relative_directory = str(self.config['ad_files'][0]).split('**', maxsplit=1)[0]
+        # make sure configured base directory exists
+        if not os.path.exists(relative_directory) or not os.path.isdir(relative_directory):
+            os.mkdir(relative_directory)
         new_base_dir = os.path.join(relative_directory, f'ad_{self.ad_id}')
         if os.path.exists(new_base_dir):
             LOG.info('Deleting current folder of ad...')
