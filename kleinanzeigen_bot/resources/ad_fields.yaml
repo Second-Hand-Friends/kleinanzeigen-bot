@@ -8,6 +8,8 @@ price:
 price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY, NOT_APPLICABLE
 shipping_type: # one of: PICKUP, SHIPPING, NOT_APPLICABLE
 shipping_costs:
+shipping_options: [] # see README.md for more information
+sell_directly: # requires shipping_options to take effect
 images: []
 contact:
   name:

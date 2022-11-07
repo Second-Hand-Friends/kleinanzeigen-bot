@@ -232,6 +232,7 @@ ad_defaults:
   price_type: NEGOTIABLE # one of: FIXED, NEGOTIABLE, GIVE_AWAY, NOT_APPLICABLE
   shipping_type: SHIPPING # one of: PICKUP, SHIPPING, NOT_APPLICABLE
   shipping_costs: # e.g. 2.95
+  sell_directly: false # requires shipping_options to take effect
   contact:
     name: ""
     street: ""
@@ -294,6 +295,22 @@ special_attributes:
 
 shipping_type: # one of: PICKUP, SHIPPING, NOT_APPLICABLE
 shipping_costs: # e.g. 2.95
+
+# specify shipping options / packages
+# it is possible to select multiple packages, but only from one size (S, M, L)!
+# possible package types for size S:
+# - DHL_2
+# - Hermes_Päckchen
+# - Hermes_S
+# possible package types for size M:
+# - DHL_5
+# - Hermes_M
+# possible package types for size L:
+# - DHL_10
+# - DHL_31,5
+# - Hermes_L
+shipping_options: []
+sell_directly: # true or false, requires shipping_options to take effect
 
 # list of wildcard patterns to select images
 # if relative paths are specified, then they are relative to this ad configuration file
