@@ -52,7 +52,7 @@ class KleinanzeigenBot(SeleniumMixin):
         self.ads_selector = "due"
         self.delete_old_ads = True
         self.delete_ads_by_title = False
-        self.ad_id = None  # attribute needed when downloading an ad
+        self.ad_id = None  # attribute needed when downloading an ad; 0 = all
 
     def __del__(self) -> None:
         if self.file_log:
@@ -103,20 +103,37 @@ class KleinanzeigenBot(SeleniumMixin):
                 if self.ad_id is None:
                     LOG.error('Provide the flag \'--ad\' with a valid ad ID to use the download command!')
                     sys.exit(2)
-                if self.ad_id < 1:
+                if self.ad_id < 0:
                     LOG.error('The given ad ID must be valid!')
                     sys.exit(2)
-                LOG.info('Start fetch task for ad with ID %s', str(self.ad_id))
 
+                # trigger download routine
                 self.load_config()
                 self.create_webdriver_session()
                 self.login()
-                # call download function
-                exists = self.navigate_to_ad_page()
-                if exists:
-                    self.download_ad_page()
-                else:
-                    sys.exit(2)
+
+                if self.ad_id > 0:  # download a single specified ad
+                    LOG.info('Start fetch task for ad with ID %s', str(self.ad_id))
+
+                    # call download function
+                    exists = self.navigate_to_ad_page()
+                    if exists:
+                        self.download_ad_page()
+                    else:
+                        sys.exit(2)
+                else:  # download all own ads
+                    LOG.info('Start fetch task for all your ads!')
+                    ext = extract.AdExtractor(self.webdriver)
+                    refs = ext.extract_own_ads_references()
+                    LOG.info('%d ads were found!', len(refs))
+                    success_count = 0
+                    # call download function for each ad page
+                    for ref in refs:
+                        if self.navigate_to_ad_page(ref):
+                            self.download_ad_page()
+                            success_count += 1
+                    LOG.info("%d of %d ads were downloaded from your profile.", success_count, len(refs))
+
             case _:
                 LOG.error("Unknown command: %s", self.command)
                 sys.exit(2)
@@ -150,6 +167,7 @@ class KleinanzeigenBot(SeleniumMixin):
               --force           - alias for '--ads=all'
               --keep-old        - don't delete old ads on republication
               --ad <ID>         - provide the ad ID after this option when using the download command
+              --all             - provide this flag when using the download command to download all of your own ads
               --config=<PATH>   - path to the config YAML or JSON file (DEFAULT: ./config.yaml)
               --logfile=<PATH>  - path to the logfile (DEFAULT: ./kleinanzeigen-bot.log)
               -v, --verbose     - enables verbose output - only useful when troubleshooting issues
@@ -164,6 +182,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 "help",
                 "keep-old",
                 "ad=",
+                "all",
                 "logfile=",
                 "verbose"
             ])
@@ -196,6 +215,8 @@ class KleinanzeigenBot(SeleniumMixin):
                     except ValueError:  # given value cannot be parsed as integer
                         LOG.error('The given ad ID (\"%s\") is not a valid number!', value)
                         sys.exit(2)
+                case "--all":
+                    self.ad_id:int = 0  # mark to download all own ads
                 case "-v" | "--verbose":
                     LOG.setLevel(logging.DEBUG)
 
@@ -663,16 +684,20 @@ class KleinanzeigenBot(SeleniumMixin):
                 else:
                     raise TimeoutException("Loading page failed, it still shows fullscreen ad.") from ex
 
-    def navigate_to_ad_page(self) -> bool:
+    def navigate_to_ad_page(self, url:str | None = None) -> bool:
         """
-        Navigates to an ad page specified with an ad ID.
+        Navigates to an ad page specified with an ad ID; or alternatively by a given URL.
 
+        :param url: if given, this URL is used instead of an id to find the ad page
         :return: whether the navigation to the ad page was successful
         """
-        # enter the ad ID into the search bar
-        self.web_input(By.XPATH, '//*[@id="site-search-query"]', str(self.ad_id))
-        # navigate to ad page and wait
-        self.web_click(By.XPATH, '//*[@id="site-search-submit"]')
+        if url:
+            self.webdriver.get(url)  # navigate to URL directly given
+        else:
+            # enter the ad ID into the search bar
+            self.web_input(By.XPATH, '//*[@id="site-search-query"]', str(self.ad_id))
+            # navigate to ad page and wait
+            self.web_click(By.XPATH, '//*[@id="site-search-submit"]')
         pause(1000, 2000)
 
         # handle the case that invalid ad ID given
@@ -753,11 +778,12 @@ class KleinanzeigenBot(SeleniumMixin):
 
         return img_paths
 
-    def extract_ad_page_info(self, directory:str) -> dict:
+    def extract_ad_page_info(self, directory:str, _id:int) -> dict:
         """
         Extracts all necessary information from an ad´s page.
 
         :param directory: the path of the ad´s previously created directory
+        :param _id: the ad ID, already extracted by a calling function
         :return: a dictionary with the keys as given in an ad YAML, and their respective values
         """
         info = {'active': True}
@@ -796,7 +822,10 @@ class KleinanzeigenBot(SeleniumMixin):
 
         # process meta info
         info['republication_interval'] = 7  # a default value for downloaded ads
-        info['id'] = self.ad_id
+        if _id:
+            info['id'] = _id
+        else:
+            info['id'] = self.ad_id
         try:  # try different locations known for creation date element
             creation_date = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/section/article/div[3]/div[2]/div[2]/'
                                                                   'div[1]/span').text
@@ -815,6 +844,7 @@ class KleinanzeigenBot(SeleniumMixin):
     def download_ad_page(self):
         """
         Downloads an ad to a specific location, specified by config and ad_id.
+        NOTE: Requires that the driver session currently is on the ad page.
         """
 
         # create sub-directory for ad to download:
@@ -822,7 +852,15 @@ class KleinanzeigenBot(SeleniumMixin):
         # make sure configured base directory exists
         if not os.path.exists(relative_directory) or not os.path.isdir(relative_directory):
             os.mkdir(relative_directory)
-        new_base_dir = os.path.join(relative_directory, f'ad_{self.ad_id}')
+
+        # for multi-download: need to determine ad ID
+        current_ad_id:int = self.ad_id
+        if current_ad_id < 1:  # ad_id field is set to 0 for multi-download scenario
+            id_box = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-ad-id-box')
+            id_element = id_box.find_element(By.XPATH, './/ul/li[2]')
+            current_ad_id = int(id_element.text.strip())
+
+        new_base_dir = os.path.join(relative_directory, f'ad_{current_ad_id}')
         if os.path.exists(new_base_dir):
             LOG.info('Deleting current folder of ad...')
             shutil.rmtree(new_base_dir)
@@ -830,8 +868,8 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info('New directory for ad created at %s.', new_base_dir)
 
         # call extraction function
-        info = self.extract_ad_page_info(new_base_dir)
-        ad_file_path = new_base_dir + '/' + f'ad_{self.ad_id}.yaml'
+        info = self.extract_ad_page_info(new_base_dir, current_ad_id)
+        ad_file_path = new_base_dir + '/' + f'ad_{current_ad_id}.yaml'
         utils.save_dict(ad_file_path, info)
 
 
