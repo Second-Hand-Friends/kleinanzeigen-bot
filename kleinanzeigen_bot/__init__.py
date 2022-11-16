@@ -443,7 +443,7 @@ class KleinanzeigenBot(SeleniumMixin):
             count += 1
             LOG.info("Processing %s/%s: '%s' from [%s]...", count, len(ad_cfgs), ad_cfg["title"], ad_file)
             self.publish_ad(ad_file, ad_cfg, ad_cfg_orig)
-            pause(3000, 5000)
+            self.web_await(lambda _: self.webdriver.find_element(By.ID, "checking-done").is_displayed(), timeout = 5 * 60)            
 
         LOG.info("############################################")
         LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
