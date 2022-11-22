@@ -2,14 +2,16 @@
 Copyright (C) 2022 Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
-from decimal import DecimalException
 import json
+from decimal import DecimalException
 
+import selenium.webdriver.support.expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webdriver import WebDriver
+from selenium.webdriver.support.wait import WebDriverWait
 
-from .utils import parse_decimal
+from .utils import parse_decimal, pause, smooth_scroll_page
 
 
 class AdExtractor:
@@ -147,3 +149,57 @@ class AdExtractor:
         # also see 'https://themen.ebay-kleinanzeigen.de/hilfe/deine-anzeigen/Telefon/
 
         return contact
+
+    def extract_own_ads_references(self) -> list[str]:
+        """
+        Extracts the references to all own ads.
+
+        :return: the links to your ad pages
+        """
+        # navigate to your ads page
+        self.driver.get('https://www.ebay-kleinanzeigen.de/m-meine-anzeigen.html')
+        WebDriverWait(self.driver, 15).until(EC.url_contains('meine-anzeigen'))
+        pause(2000, 3000)
+
+        # collect ad references:
+
+        pagination_section = self.driver.find_element(By.CSS_SELECTOR, 'section.jsx-1105488430:nth-child(4)')
+        # scroll down to load dynamically
+        smooth_scroll_page(self.driver)
+        pause(2000, 3000)
+        # detect multi-page
+        try:
+            pagination = pagination_section.find_element(By.XPATH, './/div/div[2]/div[2]/div')  # Pagination
+        except NoSuchElementException:  # 0 ads - no pagination area
+            print('There currently seem to be no ads on your profile!')
+            return []
+
+        n_buttons = len(pagination.find_element(By.XPATH, './/div[1]').find_elements(By.TAG_NAME, 'button'))
+        multi_page:bool
+        if n_buttons > 1:
+            multi_page = True
+            print('It seems like you have many ads!')
+        else:
+            multi_page = False
+            print('It seems like all your ads fit on one overview page.')
+
+        refs:list[str] = []
+        while True:  # loop reference extraction until no more forward page
+            # extract references
+            list_section = self.driver.find_element(By.XPATH, '//*[@id="my-manageads-adlist"]')
+            list_items = list_section.find_elements(By.CLASS_NAME, 'cardbox')
+            refs += [li.find_element(By.XPATH, 'article/section/section[2]/h2/div/a').get_attribute('href') for li in list_items]
+
+            if not multi_page:  # only one iteration for single-page overview
+                break
+            # check if last page
+            nav_button = self.driver.find_elements(By.CSS_SELECTOR, 'button.jsx-2828608826')[-1]
+            if nav_button.get_attribute('title') != 'Nächste':
+                print('Last ad overview page explored.')
+                break
+            # navigate to next overview page
+            nav_button.click()
+            pause(2000, 3000)
+            smooth_scroll_page(self.driver)
+
+        return refs
