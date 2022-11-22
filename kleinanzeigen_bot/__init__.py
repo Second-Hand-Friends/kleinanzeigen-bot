@@ -919,7 +919,7 @@ def main(args:list[str]) -> None:
         |   <| |  __/ | | | | (_| | | | |/ /  __/ | (_| |  __/ | | |____| |_) | (_) | |_
         |_|\_\_|\___|_|_| |_|\__,_|_| |_/___\___|_|\__, |\___|_| |_|    |_.__/ \___/ \__|
                                                    |___/
-                                                     https://github.com/kleinanzeigen-bot
+                                 https://github.com/Second-Hand-Friends/kleinanzeigen-bot
         """), flush = True)
 
     utils.configure_console_logging()
