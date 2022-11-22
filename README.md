@@ -179,20 +179,25 @@ Usage: kleinanzeigen-bot COMMAND [OPTIONS]
 Commands:
   publish  - (re-)publishes ads
   verify   - verifies the configuration files
-  download - downloads an ad
+  delete   - deletes ads
+  download - downloads one or multiple ads
   --
-  help    - displays this help (default command)
-  version - displays the application version
+  help     - displays this help (default command)
+  version  - displays the application version
 
 Options:
-  --ads=all|due|new - specifies which ads to (re-)publish (DEFAULT: due)
+  --ads=all|due|new (publish) - specifies which ads to (re-)publish (DEFAULT: due)
         Possible values:
         * all: (re-)publish all ads ignoring republication_interval
         * due: publish all new ads and republish ads according the republication_interval
         * new: only publish new ads (i.e. ads that have no id in the config file)
+  --ads=all|new|<id(s)> (download) - specifies which ads to download (DEFAULT: new)
+        Possible values:
+        * all: downloads all ads from your profile
+        * new: downloads ads from your profile that are not locally saved yet
+        * <id(s)>: provide one or several ads by ID to download, like e.g. "--ads=1,2,3"
   --force           - alias for '--ads=all'
   --keep-old        - don't delete old ads on republication
-  --ad <ID>         - provide the ad ID after this option when using the download command
   --config=<PATH>   - path to the config YAML or JSON file (DEFAULT: ./config.yaml)
   --logfile=<PATH>  - path to the logfile (DEFAULT: ./kleinanzeigen-bot.log)
   -v, --verbose     - enables verbose output - only useful when troubleshooting issues

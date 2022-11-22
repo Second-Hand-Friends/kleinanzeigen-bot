@@ -293,3 +293,20 @@ def smooth_scroll_page(driver: WebDriver, scroll_length: int = 10, scroll_speed:
             current_y_pos -= scroll_length
             driver.execute_script(f'window.scrollTo(0, {current_y_pos});')
             time.sleep(scroll_length / scroll_speed / 2)  # double speed
+
+
+def extract_ad_id_from_ad_link(url: str) -> int:
+    """
+    Extracts the ID of an ad, given by its reference link.
+
+    :param url: the URL to the ad page
+    :return: the ad ID, a (ten-digit) integer number
+    """
+    num_part = url.split('/')[-1]  # suffix
+    id_part = num_part.split('-')[0]
+
+    try:
+        return int(id_part)
+    except ValueError:
+        print('The ad ID could not be extracted from the given ad reference!')
+        return -1
