@@ -2,7 +2,7 @@
 Copyright (C) 2022 Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
-import logging, os, shutil
+import logging, os, shutil, time
 from collections.abc import Callable, Iterable
 from typing import Any, Final
 
@@ -348,6 +348,27 @@ class SeleniumMixin:
         )
         return response
     # pylint: enable=dangerous-default-value
+
+    def web_scroll_page_down(self, scroll_length: int = 10, scroll_speed: int = 10000, scroll_back_top: bool = False):
+        """
+        Smoothly scrolls the current web page down.
+
+        :param scroll_length: the length of a single scroll iteration, determines smoothness of scrolling, lower is smoother
+        :param scroll_speed: the speed of scrolling, higher is faster
+        :param scroll_back_top: whether to scroll the page back to the top after scrolling to the bottom
+        """
+        current_y_pos = 0
+        bottom_y_pos: int = self.webdriver.execute_script('return document.body.scrollHeight;')  # get bottom position by JS
+        while current_y_pos < bottom_y_pos:  # scroll in steps until bottom reached
+            current_y_pos += scroll_length
+            self.webdriver.execute_script(f'window.scrollTo(0, {current_y_pos});')  # scroll one step
+            time.sleep(scroll_length / scroll_speed)
+
+        if scroll_back_top:  # scroll back to top in same style
+            while current_y_pos > 0:
+                current_y_pos -= scroll_length
+                self.webdriver.execute_script(f'window.scrollTo(0, {current_y_pos});')
+                time.sleep(scroll_length / scroll_speed / 2)  # double speed
 
     def web_select(self, selector_type:By, selector_value:str, selected_value:Any, timeout:float = 5) -> WebElement:
         """

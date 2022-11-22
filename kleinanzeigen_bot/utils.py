@@ -11,7 +11,6 @@ from typing import Any, Final, TypeVar
 
 import coloredlogs, inflect
 from ruamel.yaml import YAML
-from selenium.webdriver.chrome.webdriver import WebDriver
 
 LOG_ROOT:Final[logging.Logger] = logging.getLogger()
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.utils")
@@ -271,28 +270,6 @@ def parse_datetime(date:datetime | str | None) -> datetime | None:
     if isinstance(date, datetime):
         return date
     return datetime.fromisoformat(date)
-
-
-def smooth_scroll_page(driver: WebDriver, scroll_length: int = 10, scroll_speed: int = 10000, scroll_back_top: bool = False):
-    """
-    Scrolls the current page of a web driver session.
-    :param driver: the web driver session
-    :param scroll_length: the length of a single scroll iteration, determines smoothness of scrolling, lower is smoother
-    :param scroll_speed: the speed of scrolling, higher is faster
-    :param scroll_back_top: whether to scroll the page back to the top after scrolling to the bottom
-    """
-    current_y_pos = 0
-    bottom_y_pos: int = driver.execute_script('return document.body.scrollHeight;')  # get bottom position by JS
-    while current_y_pos < bottom_y_pos:  # scroll in steps until bottom reached
-        current_y_pos += scroll_length
-        driver.execute_script(f'window.scrollTo(0, {current_y_pos});')  # scroll one step
-        time.sleep(scroll_length / scroll_speed)
-
-    if scroll_back_top:  # scroll back to top in same style
-        while current_y_pos > 0:
-            current_y_pos -= scroll_length
-            driver.execute_script(f'window.scrollTo(0, {current_y_pos});')
-            time.sleep(scroll_length / scroll_speed / 2)  # double speed
 
 
 def extract_ad_id_from_ad_link(url: str) -> int:
