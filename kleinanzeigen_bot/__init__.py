@@ -3,20 +3,22 @@ Copyright (C) 2022 Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 import atexit, copy, getopt, importlib.metadata, json, logging, os, signal, sys, textwrap, time, urllib
+import re
 import shutil
 from collections.abc import Iterable
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from typing import Any, Final
 from urllib import request
-
 from wcmatch import glob
 
 from overrides import overrides
 from ruamel.yaml import YAML
-from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException, \
+    ElementClickInterceptedException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.wait import WebDriverWait
 
 from . import utils, resources, extract  # pylint: disable=W0406
 from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get, parse_datetime
@@ -52,7 +54,6 @@ class KleinanzeigenBot(SeleniumMixin):
         self.ads_selector = "due"
         self.delete_old_ads = True
         self.delete_ads_by_title = False
-        self.ad_id = None  # attribute needed when downloading an ad
 
     def __del__(self) -> None:
         if self.file_log:
@@ -99,24 +100,16 @@ class KleinanzeigenBot(SeleniumMixin):
                     LOG.info("############################################")
             case "download":
                 self.configure_file_logging()
-                # ad ID passed as value to download command
-                if self.ad_id is None:
-                    LOG.error('Provide the flag \'--ad\' with a valid ad ID to use the download command!')
-                    sys.exit(2)
-                if self.ad_id < 1:
-                    LOG.error('The given ad ID must be valid!')
-                    sys.exit(2)
-                LOG.info('Start fetch task for ad with ID %s', str(self.ad_id))
-
+                # ad IDs depends on selector
+                if not (self.ads_selector in {'all', 'new'} or re.compile(r'\d+[,\d+]*').search(self.ads_selector)):
+                    LOG.warning('You provided no ads selector. Defaulting to "new".')
+                    self.ads_selector = 'new'
+                # start session
                 self.load_config()
                 self.create_webdriver_session()
                 self.login()
-                # call download function
-                exists = self.navigate_to_ad_page()
-                if exists:
-                    self.download_ad_page()
-                else:
-                    sys.exit(2)
+                self.start_download_routine()  # call correct version of download
+
             case _:
                 LOG.error("Unknown command: %s", self.command)
                 sys.exit(2)
@@ -136,20 +129,24 @@ class KleinanzeigenBot(SeleniumMixin):
               publish  - (re-)publishes ads
               verify   - verifies the configuration files
               delete   - deletes ads
-              download - downloads an ad
+              download - downloads one or multiple ads
               --
-              help    - displays this help (default command)
-              version - displays the application version
+              help     - displays this help (default command)
+              version  - displays the application version
 
             Options:
-              --ads=all|due|new - specifies which ads to (re-)publish (DEFAULT: due)
+              --ads=all|due|new (publish) - specifies which ads to (re-)publish (DEFAULT: due)
                     Possible values:
                     * all: (re-)publish all ads ignoring republication_interval
                     * due: publish all new ads and republish ads according the republication_interval
                     * new: only publish new ads (i.e. ads that have no id in the config file)
+              --ads=all|new|<id(s)> (download) - specifies which ads to download (DEFAULT: new)
+                    Possible values:
+                    * all: downloads all ads from your profile
+                    * new: downloads ads from your profile that are not locally saved yet
+                    * <id(s)>: provide one or several ads by ID to download, like e.g. "--ads=1,2,3"
               --force           - alias for '--ads=all'
               --keep-old        - don't delete old ads on republication
-              --ad <ID>         - provide the ad ID after this option when using the download command
               --config=<PATH>   - path to the config YAML or JSON file (DEFAULT: ./config.yaml)
               --logfile=<PATH>  - path to the logfile (DEFAULT: ./kleinanzeigen-bot.log)
               -v, --verbose     - enables verbose output - only useful when troubleshooting issues
@@ -163,7 +160,6 @@ class KleinanzeigenBot(SeleniumMixin):
                 "force",
                 "help",
                 "keep-old",
-                "ad=",
                 "logfile=",
                 "verbose"
             ])
@@ -190,12 +186,6 @@ class KleinanzeigenBot(SeleniumMixin):
                     self.ads_selector = "all"
                 case "--keep-old":
                     self.delete_old_ads = False
-                case "--ad":
-                    try:
-                        self.ad_id:int = int(value)
-                    except ValueError:  # given value cannot be parsed as integer
-                        LOG.error('The given ad ID (\"%s\") is not a valid number!', value)
-                        sys.exit(2)
                 case "-v" | "--verbose":
                     LOG.setLevel(logging.DEBUG)
 
@@ -663,16 +653,30 @@ class KleinanzeigenBot(SeleniumMixin):
                 else:
                     raise TimeoutException("Loading page failed, it still shows fullscreen ad.") from ex
 
-    def navigate_to_ad_page(self) -> bool:
+    def navigate_to_ad_page(self, id_:int | None = None, url:str | None = None) -> bool:
         """
-        Navigates to an ad page specified with an ad ID.
+        Navigates to an ad page specified with an ad ID; or alternatively by a given URL.
 
+        :param id_: if provided (and no url given), the ID is used to search for the ad to navigate to
+        :param url: if given, this URL is used instead of an id to find the ad page
         :return: whether the navigation to the ad page was successful
         """
-        # enter the ad ID into the search bar
-        self.web_input(By.XPATH, '//*[@id="site-search-query"]', str(self.ad_id))
-        # navigate to ad page and wait
-        self.web_click(By.XPATH, '//*[@id="site-search-submit"]')
+        if not (id_ or url):
+            raise UserWarning('This function needs either the "id_" or "url" parameter given!')
+        if url:
+            self.webdriver.get(url)  # navigate to URL directly given
+        else:
+            # enter the ad ID into the search bar
+            self.web_input(By.XPATH, '//*[@id="site-search-query"]', str(id_))
+            # navigate to ad page and wait
+            submit_button = self.webdriver.find_element(By.XPATH, '//*[@id="site-search-submit"]')
+            WebDriverWait(self.webdriver, 15).until(EC.element_to_be_clickable(submit_button))
+            try:
+                submit_button.click()
+            except ElementClickInterceptedException:  # sometimes: special banner might pop up and intercept
+                LOG.warning('Waiting for unexpected element to close...')
+                pause(6000, 10000)
+                submit_button.click()
         pause(1000, 2000)
 
         # handle the case that invalid ad ID given
@@ -686,7 +690,7 @@ class KleinanzeigenBot(SeleniumMixin):
             close_button.click()
             time.sleep(1)
         except NoSuchElementException:
-            print('(no popup given)')
+            print('(no popup)')
         return True
 
     def download_images_from_ad_page(self, directory:str, ad_id:int, logger:logging.Logger) -> list[str]:
@@ -753,11 +757,12 @@ class KleinanzeigenBot(SeleniumMixin):
 
         return img_paths
 
-    def extract_ad_page_info(self, directory:str) -> dict:
+    def extract_ad_page_info(self, directory:str, id_:int) -> dict:
         """
         Extracts all necessary information from an ad´s page.
 
         :param directory: the path of the ad´s previously created directory
+        :param id_: the ad ID, already extracted by a calling function
         :return: a dictionary with the keys as given in an ad YAML, and their respective values
         """
         info = {'active': True}
@@ -789,14 +794,15 @@ class KleinanzeigenBot(SeleniumMixin):
         info['shipping_type'], info['shipping_costs'] = extractor.extract_shipping_info_from_ad_page()
 
         # fetch images
-        info['images'] = self.download_images_from_ad_page(directory, self.ad_id, LOG)
+        info['images'] = self.download_images_from_ad_page(directory, id_, LOG)
 
         # process address
         info['contact'] = extractor.extract_contact_from_ad_page()
 
         # process meta info
         info['republication_interval'] = 7  # a default value for downloaded ads
-        info['id'] = self.ad_id
+        info['id'] = id_
+
         try:  # try different locations known for creation date element
             creation_date = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/section/article/div[3]/div[2]/div[2]/'
                                                                   'div[1]/span').text
@@ -812,9 +818,12 @@ class KleinanzeigenBot(SeleniumMixin):
 
         return info
 
-    def download_ad_page(self):
+    def download_ad_page(self, id_:int):
         """
-        Downloads an ad to a specific location, specified by config and ad_id.
+        Downloads an ad to a specific location, specified by config and ad ID.
+        NOTE: Requires that the driver session currently is on the ad page.
+
+        :param id_: the ad ID
         """
 
         # create sub-directory for ad to download:
@@ -822,7 +831,8 @@ class KleinanzeigenBot(SeleniumMixin):
         # make sure configured base directory exists
         if not os.path.exists(relative_directory) or not os.path.isdir(relative_directory):
             os.mkdir(relative_directory)
-        new_base_dir = os.path.join(relative_directory, f'ad_{self.ad_id}')
+
+        new_base_dir = os.path.join(relative_directory, f'ad_{id_}')
         if os.path.exists(new_base_dir):
             LOG.info('Deleting current folder of ad...')
             shutil.rmtree(new_base_dir)
@@ -830,9 +840,77 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info('New directory for ad created at %s.', new_base_dir)
 
         # call extraction function
-        info = self.extract_ad_page_info(new_base_dir)
-        ad_file_path = new_base_dir + '/' + f'ad_{self.ad_id}.yaml'
+        info = self.extract_ad_page_info(new_base_dir, id_)
+        ad_file_path = new_base_dir + '/' + f'ad_{id_}.yaml'
         utils.save_dict(ad_file_path, info)
+
+    def start_download_routine(self):
+        """
+        Determines which download mode was chosen with the arguments, and calls the specified download routine.
+        This downloads either all, only unsaved (new), or specific ads given by ID.
+        """
+
+        # use relevant download routine
+        if self.ads_selector in {'all', 'new'}:  # explore ads overview for these two modes
+            LOG.info('Scanning your ad overview...')
+            ext = extract.AdExtractor(self.webdriver)
+            refs = ext.extract_own_ads_references()
+            LOG.info('%d ads were found!', len(refs))
+
+            if self.ads_selector == 'all':  # download all of your adds
+                LOG.info('Start fetch task for all your ads!')
+
+                success_count = 0
+                # call download function for each ad page
+                for ref in refs:
+                    ref_ad_id: int = utils.extract_ad_id_from_ad_link(ref)
+                    if self.navigate_to_ad_page(url=ref):
+                        self.download_ad_page(ref_ad_id)
+                        success_count += 1
+                LOG.info("%d of %d ads were downloaded from your profile.", success_count, len(refs))
+
+            elif self.ads_selector == 'new':  # download only unsaved ads
+                # determine ad IDs from links
+                ref_ad_ids = [utils.extract_ad_id_from_ad_link(r) for r in refs]
+                ref_pairs = list(zip(refs, ref_ad_ids))
+
+                # check which ads already saved
+                saved_ad_ids = []
+                data_root_dir = os.path.dirname(self.config_file_path)
+                for file_pattern in self.config["ad_files"]:
+                    for ad_file in glob.glob(file_pattern, root_dir=os.path.dirname(self.config_file_path),
+                                             flags=glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
+                        ad_file_path = abspath(ad_file, relative_to=data_root_dir)
+                        ad_dict = utils.load_dict(ad_file_path)
+                        ad_id = int(ad_dict['id'])
+                        saved_ad_ids.append(ad_id)
+
+                LOG.info('Start fetch task for your unsaved ads!')
+                new_count = 0
+                for ref_pair in ref_pairs:
+                    # check if ad with ID already saved
+                    id_: int = ref_pair[1]
+                    if id_ in saved_ad_ids:
+                        LOG.info('The ad with id %d has already been saved.', id_)
+                        continue
+
+                    if self.navigate_to_ad_page(url=ref_pair[0]):
+                        self.download_ad_page(id_)
+                        new_count += 1
+                LOG.info('%d new ads were downloaded from your profile.', new_count)
+
+        elif re.compile(r'\d+[,\d+]*').search(self.ads_selector):  # download ad(s) with specific id(s)
+            ids = [int(n) for n in self.ads_selector.split(',')]
+            LOG.info('Start fetch task for the ad(s) with the id(s):')
+            LOG.info(' | '.join([str(id_) for id_ in ids]))
+
+            for id_ in ids:  # call download routine for every id
+                exists = self.navigate_to_ad_page(id_)
+                if exists:
+                    self.download_ad_page(id_)
+                    LOG.info('Downloaded ad with id %d', id_)
+                else:
+                    LOG.error('The page with the id %d does not exist!', id_)
 
 
 #############################
