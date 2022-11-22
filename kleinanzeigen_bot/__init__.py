@@ -2,23 +2,18 @@
 Copyright (C) 2022 Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
-import atexit, copy, getopt, importlib.metadata, json, logging, os, signal, sys, textwrap, time, urllib
-import re
-import shutil
+import atexit, copy, getopt, importlib.metadata, json, logging, os, re, signal, shutil, sys, textwrap, time, urllib
 from collections.abc import Iterable
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from typing import Any, Final
-from urllib import request
 from wcmatch import glob
 
 from overrides import overrides
 from ruamel.yaml import YAML
-from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException, \
-    ElementClickInterceptedException
+from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.wait import WebDriverWait
 
 from . import utils, resources, extract  # pylint: disable=W0406
 from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get, parse_datetime
@@ -365,7 +360,6 @@ class KleinanzeigenBot(SeleniumMixin):
         self.handle_captcha_if_present("login-recaptcha", "but DON'T click 'Einloggen'.")
 
         self.web_click(By.ID, "login-submit")
-
         pause(800, 3000)
 
     def handle_captcha_if_present(self, captcha_element_id:str, msg:str) -> None:
@@ -479,7 +473,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 self.web_click(By.XPATH, '//*[contains(@class, "ShippingOption")]//input[@type="radio"]')
                 self.web_click(By.XPATH, '//*[contains(@class, "CarrierOptionsPopup")]//*[contains(@class, "IndividualPriceSection")]//input[@type="checkbox"]')
                 self.web_input(By.XPATH, '//*[contains(@class, "IndividualShippingInput")]//input[@type="text"]',
-                              str.replace(ad_cfg["shipping_costs"], ".", ","))
+                               str.replace(ad_cfg["shipping_costs"], ".", ","))
                 self.web_click(By.XPATH, '//*[contains(@class, "ReactModalPortal")]//button[.//*[text()[contains(.,"Weiter")]]]')
             except NoSuchElementException as ex:
                 LOG.debug(ex, exc_info = True)
@@ -670,7 +664,7 @@ class KleinanzeigenBot(SeleniumMixin):
             self.web_input(By.XPATH, '//*[@id="site-search-query"]', str(id_))
             # navigate to ad page and wait
             submit_button = self.webdriver.find_element(By.XPATH, '//*[@id="site-search-submit"]')
-            WebDriverWait(self.webdriver, 15).until(EC.element_to_be_clickable(submit_button))
+            self.web_await(EC.element_to_be_clickable(submit_button), 15)
             try:
                 submit_button.click()
             except ElementClickInterceptedException:  # sometimes: special banner might pop up and intercept
@@ -734,7 +728,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 file_ending = current_img_url.split('.')[-1].lower()
                 img_path = directory + '/' + img_fn_prefix + str(img_nr) + '.' + file_ending
                 if current_img_url.startswith('https'):  # verify https (for Bandit linter)
-                    request.urlretrieve(current_img_url, img_path)  # nosec B310
+                    urllib.request.urlretrieve(current_img_url, img_path)  # nosec B310
                 dl_counter += 1
                 img_paths.append(img_path.split('/')[-1])
 
@@ -827,7 +821,7 @@ class KleinanzeigenBot(SeleniumMixin):
         """
 
         # create sub-directory for ad to download:
-        relative_directory = str(self.config['ad_files'][0]).split('**', maxsplit=1)[0]
+        relative_directory = str(self.config['ad_files'][0]).split('**', maxsplit = 1)[0]
         # make sure configured base directory exists
         if not os.path.exists(relative_directory) or not os.path.isdir(relative_directory):
             os.mkdir(relative_directory)
@@ -864,7 +858,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 # call download function for each ad page
                 for ref in refs:
                     ref_ad_id: int = utils.extract_ad_id_from_ad_link(ref)
-                    if self.navigate_to_ad_page(url=ref):
+                    if self.navigate_to_ad_page(url = ref):
                         self.download_ad_page(ref_ad_id)
                         success_count += 1
                 LOG.info("%d of %d ads were downloaded from your profile.", success_count, len(refs))
@@ -878,9 +872,9 @@ class KleinanzeigenBot(SeleniumMixin):
                 saved_ad_ids = []
                 data_root_dir = os.path.dirname(self.config_file_path)
                 for file_pattern in self.config["ad_files"]:
-                    for ad_file in glob.glob(file_pattern, root_dir=os.path.dirname(self.config_file_path),
-                                             flags=glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
-                        ad_file_path = abspath(ad_file, relative_to=data_root_dir)
+                    for ad_file in glob.glob(file_pattern, root_dir = os.path.dirname(self.config_file_path),
+                                             flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
+                        ad_file_path = abspath(ad_file, relative_to = data_root_dir)
                         ad_dict = utils.load_dict(ad_file_path)
                         ad_id = int(ad_dict['id'])
                         saved_ad_ids.append(ad_id)
@@ -894,7 +888,7 @@ class KleinanzeigenBot(SeleniumMixin):
                         LOG.info('The ad with id %d has already been saved.', id_)
                         continue
 
-                    if self.navigate_to_ad_page(url=ref_pair[0]):
+                    if self.navigate_to_ad_page(url = ref_pair[0]):
                         self.download_ad_page(id_)
                         new_count += 1
                 LOG.info('%d new ads were downloaded from your profile.', new_count)
