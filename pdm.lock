@@ -5,7 +5,7 @@ summary = "Python graph (network) package"
 
 [[package]]
 name = "astroid"
-version = "2.12.12"
+version = "2.12.13"
 requires_python = ">=3.7.2"
 summary = "An abstract syntax tree for Python with inference support."
 dependencies = [
@@ -288,11 +288,11 @@ summary = "Community maintained hooks for PyInstaller"
 
 [[package]]
 name = "pylint"
-version = "2.15.6"
+version = "2.15.7"
 requires_python = ">=3.7.2"
 summary = "python code static checker"
 dependencies = [
-    "astroid<=2.14.0-dev0,>=2.12.12",
+    "astroid<=2.14.0-dev0,>=2.12.13",
     "colorama>=0.4.5; sys_platform == \"win32\"",
     "dill>=0.2",
     "isort<6,>=4.2.5",
@@ -385,7 +385,7 @@ summary = "C version of reader, parser and emitter for ruamel.yaml derived from 
 
 [[package]]
 name = "selenium"
-version = "4.6.0"
+version = "4.7.2"
 requires_python = "~=3.7"
 summary = ""
 dependencies = [
@@ -549,7 +549,7 @@ dependencies = [
 ]
 
 [metadata]
-lock_version = "4.0"
+lock_version = "4.1"
 content_hash = "sha256:49316b36fd12597e245782d252fa7fbe8e9e952b15bdd0cd658229f89fb23f38"
 
 [metadata.files]
@@ -557,9 +557,9 @@ content_hash = "sha256:49316b36fd12597e245782d252fa7fbe8e9e952b15bdd0cd658229f89
     {url = "https://files.pythonhosted.org/packages/84/3f/1a5c9bef54cac9bf41edd6f4aaf61cd52ed578e10ccc607e0278012cb4a5/altgraph-0.17.2-py2.py3-none-any.whl", hash = "sha256:743628f2ac6a7c26f5d9223c91ed8ecbba535f506f4b6f558885a8a56a105857"},
     {url = "https://files.pythonhosted.org/packages/a9/f1/62830c4915178dbc6948687916603f1cd37c2c299634e4a8ee0efc9977e7/altgraph-0.17.2.tar.gz", hash = "sha256:ebf2269361b47d97b3b88e696439f6e4cbc607c17c51feb1754f90fb79839158"},
 ]
-"astroid 2.12.12" = [
-    {url = "https://files.pythonhosted.org/packages/be/61/5a97efa0622b3413e3d01d6bc6b019a87bcc23058c378dbd24b8c2474860/astroid-2.12.12.tar.gz", hash = "sha256:1c00a14f5a3ed0339d38d2e2e5b74ea2591df5861c0936bb292b84ccf3a78d83"},
-    {url = "https://files.pythonhosted.org/packages/fb/22/5864e9d2632c4180824336aff5aca14da77d6753e5a4d3426065728576a9/astroid-2.12.12-py3-none-any.whl", hash = "sha256:72702205200b2a638358369d90c222d74ebc376787af8fb2f7f2a86f7b5cc85f"},
+"astroid 2.12.13" = [
+    {url = "https://files.pythonhosted.org/packages/61/d0/e7cfca72ec7d6c5e0da725c003db99bb056e9b6c2f4ee6fae1145adf28a6/astroid-2.12.13.tar.gz", hash = "sha256:1493fe8bd3dfd73dc35bd53c9d5b6e49ead98497c47b2307662556a5692d29d7"},
+    {url = "https://files.pythonhosted.org/packages/b1/61/42e075b7d29ed4d452d91cbaaca142710d50d04e68eb7161ce5807a00a30/astroid-2.12.13-py3-none-any.whl", hash = "sha256:10e0ad5f7b79c435179d0d0f0df69998c4eef4597534aae44910db060baeb907"},
 ]
 "async-generator 1.10" = [
     {url = "https://files.pythonhosted.org/packages/71/52/39d20e03abd0ac9159c162ec24b93fbcaa111e8400308f2465432495ca2b/async_generator-1.10-py3-none-any.whl", hash = "sha256:01c7bf666359b4967d2cda0000cc2e4af16a0ae098cbffcb8472fb9e8ad6585b"},
@@ -857,9 +857,9 @@ content_hash = "sha256:49316b36fd12597e245782d252fa7fbe8e9e952b15bdd0cd658229f89
     {url = "https://files.pythonhosted.org/packages/3d/fb/8ab57519f2c44efe3476eb06961ee42a87d0d21d75a01aa349fa407b29a7/pyinstaller_hooks_contrib-2022.8-py2.py3-none-any.whl", hash = "sha256:e46f099934dd4577fb1ddcf37a99fa04027c92f8f5291c8802f326345988d001"},
     {url = "https://files.pythonhosted.org/packages/a4/75/a0a8e398c4b97a8fa84f110ec8be0f2f11462ed1053087d6fcc6ee4d129c/pyinstaller-hooks-contrib-2022.8.tar.gz", hash = "sha256:c4210fc50282c9c6a918e485e0bfae9405592390508e3be9fde19acc2213da56"},
 ]
-"pylint 2.15.6" = [
-    {url = "https://files.pythonhosted.org/packages/62/6d/d671e27077c7d2721266180757c507e68f46403728c6e87eac1b4309c372/pylint-2.15.6.tar.gz", hash = "sha256:25b13ddcf5af7d112cf96935e21806c1da60e676f952efb650130f2a4483421c"},
-    {url = "https://files.pythonhosted.org/packages/d5/5f/dbeceb81e1b3700d1cca3e8b19b0f6643b0e32b675bb75cb9f74de95e920/pylint-2.15.6-py3-none-any.whl", hash = "sha256:15060cc22ed6830a4049cf40bc24977744df2e554d38da1b2657591de5bcd052"},
+"pylint 2.15.7" = [
+    {url = "https://files.pythonhosted.org/packages/9c/a2/60c34e79143148fd44ad1fe69e528ab4dc9760b1ea8fd3f79c31b73523ef/pylint-2.15.7-py3-none-any.whl", hash = "sha256:1d561d1d3e8be9dd880edc685162fbdaa0409c88b9b7400873c0cf345602e326"},
+    {url = "https://files.pythonhosted.org/packages/f8/56/81d13f29c39361c99c307e5b98bd8fc243db10089a16726d7cd80f843726/pylint-2.15.7.tar.gz", hash = "sha256:91e4776dbcb4b4d921a3e4b6fec669551107ba11f29d9199154a01622e460a57"},
 ]
 "pyparsing 3.0.9" = [
     {url = "https://files.pythonhosted.org/packages/6c/10/a7d0fa5baea8fe7b50f448ab742f26f52b80bfca85ac2be9d35cdd9a3246/pyparsing-3.0.9-py3-none-any.whl", hash = "sha256:5026bae9a10eeaefb61dab2f09052b9f4307d44aee4eda64b309723d8d206bbc"},
@@ -982,8 +982,8 @@ content_hash = "sha256:49316b36fd12597e245782d252fa7fbe8e9e952b15bdd0cd658229f89
     {url = "https://files.pythonhosted.org/packages/e1/c6/a8ed2b252c9a1018ea1758bbfa6bcd1b4965009e4f9040e1d0456417d7ef/ruamel.yaml.clib-0.2.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64.whl", hash = "sha256:221eca6f35076c6ae472a531afa1c223b9c29377e62936f61bc8e6e8bdc5f9e7"},
     {url = "https://files.pythonhosted.org/packages/f9/be/d2e098e62a9b18b67cb5b44651984014ff5584100074bcb68b1483e54dc1/ruamel.yaml.clib-0.2.6-cp35-cp35m-manylinux1_x86_64.whl", hash = "sha256:7b2927e92feb51d830f531de4ccb11b320255ee95e791022555971c466af4527"},
 ]
-"selenium 4.6.0" = [
-    {url = "https://files.pythonhosted.org/packages/c7/35/721fde638ea1ed2f32851f89544d04dab573ff629496f0275f4e7d5f5f29/selenium-4.6.0-py3-none-any.whl", hash = "sha256:3f1999875ef487ae676a254e7293a68041f1f1ec76be81402d8a1cd5a481bf3b"},
+"selenium 4.7.2" = [
+    {url = "https://files.pythonhosted.org/packages/00/7b/d511219e116fd4d18b0dd6e32fb5ec7a0a169165f8132111a7422d5952f5/selenium-4.7.2-py3-none-any.whl", hash = "sha256:06a1c7d9f313130b21c3218ddd8852070d0e7419afdd31f96160cd576555a5ce"},
 ]
 "selenium-stealth 1.0.6" = [
     {url = "https://files.pythonhosted.org/packages/cb/ac/7877df8b819d54a4e317a093a0a9e0a38d21d884a7250aa713f2f0869442/selenium_stealth-1.0.6-py3-none-any.whl", hash = "sha256:b62da5452aa4a84f29a4dfb21a9696aff20788a7c570dd0b81bc04a940848b97"},
