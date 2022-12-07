@@ -360,7 +360,15 @@ class KleinanzeigenBot(SeleniumMixin):
         self.handle_captcha_if_present("login-recaptcha", "but DON'T click 'Einloggen'.")
 
         self.web_click(By.ID, "login-submit")
-        pause(800, 3000)
+
+        try:
+            self.web_find(By.ID, "new-device-login", 4)
+            LOG.warning("############################################")
+            LOG.warning("# Device verification message detected. Use the 'Login bestätigen' URL from the mentioned e-mail into the same browser tab.")
+            LOG.warning("############################################")
+            input("Press ENTER when done...")
+        except NoSuchElementException:
+            pass
 
     def handle_captcha_if_present(self, captcha_element_id:str, msg:str) -> None:
         try:
@@ -738,7 +746,7 @@ class KleinanzeigenBot(SeleniumMixin):
                         # click next button, wait, and reestablish reference
                         next_button.click()
                         self.web_await(lambda _: EC.staleness_of(img_element))
-                        new_div = self.webdriver.find_element(By.CSS_SELECTOR,f'div.galleryimage-element:nth-child({img_nr + 1})')
+                        new_div = self.webdriver.find_element(By.CSS_SELECTOR, f'div.galleryimage-element:nth-child({img_nr + 1})')
                         img_element = new_div.find_element(By.XPATH, './/img')
                     except NoSuchElementException:
                         logger.error('NEXT button in image gallery somehow missing, abort image fetching.')
