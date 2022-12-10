@@ -203,6 +203,8 @@ Options:
   -v, --verbose     - enables verbose output - only useful when troubleshooting issues
 ```
 
+Limitation of `download`: It's only possible to extract the cheaptest given shipping option.
+
 ### Configuration
 
 All configuration files can be in YAML or JSON format.
