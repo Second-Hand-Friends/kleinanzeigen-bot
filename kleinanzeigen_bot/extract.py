@@ -162,29 +162,32 @@ class AdExtractor(SeleniumMixin):
         self.web_await(EC.url_contains('meine-anzeigen'), 15)
         pause(2000, 3000)
 
-        # collect ad references:
+        def has_multiple_pages() -> bool:
+            """
+            Checks whether the pagination section is present.
 
-        pagination_section = self.webdriver.find_element(By.CSS_SELECTOR, 'section.jsx-1105488430:nth-child(4)')
-        # scroll down to load dynamically
-        self.web_scroll_page_down()
-        pause(2000, 3000)
-        # detect multi-page
-        try:
-            pagination = pagination_section.find_element(By.XPATH, './/div/div[2]/div[2]/div')  # Pagination
-        except NoSuchElementException:  # 0 ads - no pagination area
-            print('There currently seem to be no ads on your profile!')
-            return []
+            :return: a boolean indicating whether the pagination section is present
+            """
+            try:
+                pagination_section = self.webdriver.find_element(By.CSS_SELECTOR, 'section.jsx-1105488430:nth-child(4)')
+                # scroll down to load dynamically
+                self.web_scroll_page_down()
+                pause(2000, 3000)
+                # detect multi-page
+                pagination = pagination_section.find_element(By.XPATH, './/div/div[2]/div[2]/div')  # Pagination
 
-        n_buttons = len(pagination.find_element(By.XPATH, './/div[1]').find_elements(By.TAG_NAME, 'button'))
-        multi_page:bool
-        if n_buttons > 1:
-            multi_page = True
-            print('It seems like you have many ads!')
-        else:
-            multi_page = False
-            print('It seems like all your ads fit on one overview page.')
+                n_buttons = len(pagination.find_element(By.XPATH, './/div[1]').find_elements(By.TAG_NAME, 'button'))
+                if n_buttons > 1:
+                    print('It seems like you have many ads!')
+                    return True
+                print('It seems like all your ads fit on one overview page.')
+                return False
+            except NoSuchElementException:  # 0 ads - no pagination area
+                print('No pagination section on your ads overview page.')
+                return False
 
         refs:list[str] = []
+        multi_page = has_multiple_pages()
         while True:  # loop reference extraction until no more forward page
             # extract references
             list_section = self.webdriver.find_element(By.XPATH, '//*[@id="my-manageads-adlist"]')
