@@ -842,7 +842,8 @@ class KleinanzeigenBot(SeleniumMixin):
         info['price'], info['price_type'] = extractor.extract_pricing_info_from_ad_page()
 
         # process shipping
-        info['shipping_type'], info['shipping_costs'] = extractor.extract_shipping_info_from_ad_page()
+        info['shipping_type'], info['shipping_costs'], info['shipping_options'] = extractor.extract_shipping_info_from_ad_page()
+        info['sell_directly'] = extractor.extract_sell_directly_from_ad_page()
 
         # fetch images
         info['images'] = self.download_images_from_ad_page(directory, id_, LOG)

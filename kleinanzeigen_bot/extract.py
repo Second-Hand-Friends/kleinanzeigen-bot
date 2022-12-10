@@ -85,13 +85,13 @@ class AdExtractor(SeleniumMixin):
         except NoSuchElementException:  # no 'commercial' ad, has no pricing box etc.
             return None, 'NOT_APPLICABLE'
 
-    def extract_shipping_info_from_ad_page(self) -> (str, float | None):
+    def extract_shipping_info_from_ad_page(self) -> (str, float | None, list | None):
         """
         Extracts shipping information from an ad page.
 
         :return: the shipping type, and the shipping price (optional)
         """
-        ship_type, ship_costs = 'NOT_APPLICABLE', None
+        ship_type, ship_costs, shipping_options = 'NOT_APPLICABLE', None, None
         try:
             shipping_text = self.webdriver.find_element(By.CSS_SELECTOR, '.boxedarticle--details--shipping') \
                 .text.strip()
@@ -105,10 +105,40 @@ class AdExtractor(SeleniumMixin):
                 shipping_price = float(parse_decimal(shipping_price_parts[-2]))
                 ship_type = 'SHIPPING'
                 ship_costs = shipping_price
+
+                # extract shipping options
+                # It is only possible the extract the cheapest shipping option,
+                # as the other options are not shown
+                shipping_option_mapping = {
+                    "DHL_2": "5,49",
+                    "Hermes_Päckchen": "4,50",
+                    "Hermes_S": "4,95",
+                    "DHL_5": "6,99",
+                    "Hermes_M": "5,95",
+                    "DHL_10": "9,49",
+                    "DHL_31,5": "16,49",
+                    "Hermes_L": "10,95",
+                }
+                for shipping_option, shipping_price in shipping_option_mapping.items():
+                    if shipping_price in shipping_text:
+                        shipping_options = [shipping_option]
+                        break
         except NoSuchElementException:  # no pricing box -> no shipping given
             ship_type = 'NOT_APPLICABLE'
 
-        return ship_type, ship_costs
+        return ship_type, ship_costs, shipping_options
+
+    def extract_sell_directly_from_ad_page(self) -> bool | None:
+        """
+        Extracts the sell directly option from an ad page.
+
+        :return: a boolean indicating whether the sell directly option is active (optional)
+        """
+        try:
+            buy_now_is_active = self.webdriver.find_element(By.ID, 'j-buy-now').text == "Direkt kaufen"
+            return buy_now_is_active
+        except NoSuchElementException:
+            return None
 
     def extract_contact_from_ad_page(self) -> dict:
         """
