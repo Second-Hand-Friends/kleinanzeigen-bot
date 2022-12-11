@@ -51,10 +51,11 @@ jobs:
 
         python --version
 
-        # don't upgrade PIP for now: https://github.com/pdm-project/pdm/issues/874
-        # python -m pip install --upgrade pip
+        python -m pip install --upgrade pip
 
-        pip install pdm
+        # pin packaging to 21.3 for now to prevent: packaging.specifiers.InvalidSpecifier: Invalid specifier: '>=3.4.*'
+        # see https://github.com/pdm-project/pdm/issues/1556
+        pip install --upgrade pdm packaging==21.3
 
         # https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
         pip install -t __pypackages__/${{ env.PYTHON_VERSION }}/lib selenium
