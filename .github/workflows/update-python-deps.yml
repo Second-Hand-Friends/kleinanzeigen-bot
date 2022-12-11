@@ -71,16 +71,16 @@ jobs:
         updates=$(pdm update 2>&1 |tee /dev/fd/5)
 
         if git diff --exit-code pdm.lock; then
-          echo "::set-output name=updates::"
+          echo "updates=" >> $GITHUB_OUTPUT
         else
           updates=$(echo "$updates" | grep Update)
-          
+
           # see https://trstringer.com/github-actions-multiline-strings/
           updates="${updates//'%'/'%25'}"
           updates="${updates//$'\n'/'%0A'}"
           updates="${updates//$'\r'/'%0D'}"
-          
-          echo "::set-output name=updates::${updates}"
+
+          echo "updates=${updates}" >> $GITHUB_OUTPUT
         fi
 
     - name: Create PR
