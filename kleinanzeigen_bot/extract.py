@@ -194,7 +194,8 @@ class AdExtractor(SeleniumMixin):
 
         # collect ad references:
 
-        pagination_section = self.webdriver.find_element(By.CSS_SELECTOR, 'section.jsx-1105488430:nth-child(4)')
+        pagination_section = self.webdriver.find_element(By.CSS_SELECTOR, '.l-splitpage')\
+            .find_element(By.XPATH, './/section[4]')
         # scroll down to load dynamically
         self.web_scroll_page_down()
         pause(2000, 3000)
