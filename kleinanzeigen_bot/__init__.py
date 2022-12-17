@@ -207,14 +207,15 @@ class KleinanzeigenBot(SeleniumMixin):
 
         LOG.info("App version: %s", self.get_version())
 
-    def load_ads(self, *, ignore_inactive:bool = True) -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
+    def load_ads(self, *, ignore_inactive:bool = True, check_id:bool = True) -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
         LOG.info("Searching for ad config files...")
 
         ad_files = set()
         data_root_dir = os.path.dirname(self.config_file_path)
         for file_pattern in self.config["ad_files"]:
             for ad_file in glob.glob(file_pattern, root_dir = data_root_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
-                ad_files.add(abspath(ad_file, relative_to = data_root_dir))
+                if not str(ad_file).endswith('ad_fields.yaml'):
+                    ad_files.add(abspath(ad_file, relative_to = data_root_dir))
         LOG.info(" -> found %s", pluralize("ad config file", ad_files))
         if not ad_files:
             return []
@@ -235,7 +236,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 LOG.info(" -> SKIPPED: inactive ad [%s]", ad_file)
                 continue
 
-            if self.ads_selector == "new" and ad_cfg["id"]:
+            if self.ads_selector == "new" and ad_cfg["id"] and check_id:
                 LOG.info(" -> SKIPPED: ad [%s] is not new. already has an id assigned.", ad_file)
                 continue
 
@@ -878,11 +879,12 @@ class KleinanzeigenBot(SeleniumMixin):
         :param id_: the ad ID
         """
 
-        # create sub-directory for ad to download:
-        relative_directory = str(self.config['ad_files'][0]).split('**', maxsplit = 1)[0]
+        # create sub-directory for ad(s) to download (if necessary):
+        relative_directory = 'downloaded-ads'
         # make sure configured base directory exists
         if not os.path.exists(relative_directory) or not os.path.isdir(relative_directory):
             os.mkdir(relative_directory)
+            LOG.info('Created ads directory at /%s.', relative_directory)
 
         new_base_dir = os.path.join(relative_directory, f'ad_{id_}')
         if os.path.exists(new_base_dir):
@@ -928,14 +930,10 @@ class KleinanzeigenBot(SeleniumMixin):
 
                 # check which ads already saved
                 saved_ad_ids = []
-                data_root_dir = os.path.dirname(self.config_file_path)
-                for file_pattern in self.config["ad_files"]:
-                    for ad_file in glob.glob(file_pattern, root_dir = os.path.dirname(self.config_file_path),
-                                             flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
-                        ad_file_path = abspath(ad_file, relative_to = data_root_dir)
-                        ad_dict = utils.load_dict(ad_file_path)
-                        ad_id = int(ad_dict['id'])
-                        saved_ad_ids.append(ad_id)
+                ads = self.load_ads(ignore_inactive=False, check_id=False)  # do not skip because of existing IDs
+                for ad_ in ads:
+                    ad_id = int(ad_[2]['id'])
+                    saved_ad_ids.append(ad_id)
 
                 LOG.info('Start fetch task for your unsaved ads!')
                 new_count = 0
@@ -949,7 +947,7 @@ class KleinanzeigenBot(SeleniumMixin):
                     if self.navigate_to_ad_page(url = ref_pair[0]):
                         self.download_ad_page(id_)
                         new_count += 1
-                LOG.info('%d new ads were downloaded from your profile.', new_count)
+                LOG.info('%d new ad(s) were downloaded from your profile.', new_count)
 
         elif re.compile(r'\d+[,\d+]*').search(self.ads_selector):  # download ad(s) with specific id(s)
             ids = [int(n) for n in self.ads_selector.split(',')]

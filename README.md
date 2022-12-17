@@ -222,7 +222,7 @@ The following parameters can be configured:
 # wild card patterns to select ad configuration files
 # if relative paths are specified, then they are relative to this configuration file
 ad_files:
-  - "my_ads/**/ad_*.{json,yml,yaml}"
+  - "./**/ad_*.{json,yml,yaml}"
 
 # default values for ads, can be overwritten in each ad configuration file
 ad_defaults:
