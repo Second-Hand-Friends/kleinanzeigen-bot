@@ -573,7 +573,7 @@ class KleinanzeigenBot(SeleniumMixin):
     def __set_category(self, ad_file:str, ad_cfg: dict[str, Any]):
         # click on something to trigger automatic category detection
         self.web_click(By.ID, "pstad-descrptn")
-        
+
         try:
             self.web_find(By.XPATH, "//*[@id='postad-category-path'][text()]")
             is_category_auto_selected = True
