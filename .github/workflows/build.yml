@@ -88,18 +88,16 @@ jobs:
 
     - name: Check code style
       run: |
-        set -eux
-        
         pdm run lint
 
     - name: Run unit tests
       run: |
         pdm run utest
-        
+
     - name: Run integration tests
       run: |
         set -eux
-        
+
         case "${{ matrix.os }}" in
            ubuntu-*) 
               sudo apt-get install -o Acquire::Retries=3 --no-install-recommends -y xvfb
@@ -132,7 +130,7 @@ jobs:
       run: |
         set -eu
 
-        upx_download_url=$(curl -fsSL https://api.github.com/repos/upx/upx/releases/latest | grep browser_download_url | grep win64.zip | cut "-d\"" -f4)
+        upx_download_url=$(curl -fsSL -H "Authorization: token ${{ github.token }}" https://api.github.com/repos/upx/upx/releases/latest | grep browser_download_url | grep win64.zip | cut "-d\"" -f4)
         echo "Downloading [$upx_download_url]..."
         curl -fL -o /tmp/upx.zip $upx_download_url
 
@@ -142,7 +140,7 @@ jobs:
         echo "$(cygpath -wa /tmp/upx)" >> $GITHUB_PATH
 
         /tmp/upx/upx.exe --version
-        
+
     - name: Build self-contained executable
       run: |
         set -eux
