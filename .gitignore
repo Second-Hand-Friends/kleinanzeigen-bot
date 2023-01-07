@@ -9,6 +9,7 @@ _LOCAL/
 /data
 /*.log
 kleinanzeigen_bot/version.py
+downloaded-ads
 
 # python
 /__pypackages__
