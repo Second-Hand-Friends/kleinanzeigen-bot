@@ -391,7 +391,7 @@ summary = "C version of reader, parser and emitter for ruamel.yaml derived from 
 
 [[package]]
 name = "selenium"
-version = "4.8.0"
+version = "4.8.2"
 requires_python = ">=3.7"
 summary = ""
 dependencies = [
@@ -989,9 +989,9 @@ content_hash = "sha256:49316b36fd12597e245782d252fa7fbe8e9e952b15bdd0cd658229f89
     {url = "https://files.pythonhosted.org/packages/e1/c6/a8ed2b252c9a1018ea1758bbfa6bcd1b4965009e4f9040e1d0456417d7ef/ruamel.yaml.clib-0.2.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64.whl", hash = "sha256:221eca6f35076c6ae472a531afa1c223b9c29377e62936f61bc8e6e8bdc5f9e7"},
     {url = "https://files.pythonhosted.org/packages/f9/be/d2e098e62a9b18b67cb5b44651984014ff5584100074bcb68b1483e54dc1/ruamel.yaml.clib-0.2.6-cp35-cp35m-manylinux1_x86_64.whl", hash = "sha256:7b2927e92feb51d830f531de4ccb11b320255ee95e791022555971c466af4527"},
 ]
-"selenium 4.8.0" = [
-    {url = "https://files.pythonhosted.org/packages/2e/3d/492cf1a6823c48369328572c6bc63b7a957ba25c0009ee6bdb507cd9a6a4/selenium-4.8.0.tar.gz", hash = "sha256:fee36724d6cf0b18c73781bb8ec7be4a35ab1e2564e64e64e64da75e50e052af"},
-    {url = "https://files.pythonhosted.org/packages/d9/4c/d18374c7652b575c93838ffa728415826ae6108156b65e96344922130e9e/selenium-4.8.0-py3-none-any.whl", hash = "sha256:20f28ee4ea9b273b4112a7df5276ebb3052f79ff6eff42a564db6143e5926683"},
+"selenium 4.8.2" = [
+    {url = "https://files.pythonhosted.org/packages/92/1e/e25dee0e94cdab007464279ee599e4663a4cc3e829bb3448a4084fca4b79/selenium-4.8.2.tar.gz", hash = "sha256:c48372905bffcc3b24bd55ab4683a07ee5e1f30fe918c59558ea5ee44cedf6c3"},
+    {url = "https://files.pythonhosted.org/packages/ad/13/481aa476a9bcfec0bf74140a4c395dede0569cf56dc773abec181f95e30f/selenium-4.8.2-py3-none-any.whl", hash = "sha256:bd04eb41395605d9b2b65fe587f3fed21431da75512985c52772529e5e210c60"},
 ]
 "selenium-stealth 1.0.6" = [
     {url = "https://files.pythonhosted.org/packages/cb/ac/7877df8b819d54a4e317a093a0a9e0a38d21d884a7250aa713f2f0869442/selenium_stealth-1.0.6-py3-none-any.whl", hash = "sha256:b62da5452aa4a84f29a4dfb21a9696aff20788a7c570dd0b81bc04a940848b97"},
