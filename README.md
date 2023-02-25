@@ -203,7 +203,7 @@ Options:
   -v, --verbose     - enables verbose output - only useful when troubleshooting issues
 ```
 
-Limitation of `download`: It's only possible to extract the cheaptest given shipping option.
+Limitation of `download`: It's only possible to extract the cheapest given shipping option.
 
 ### Configuration
 
