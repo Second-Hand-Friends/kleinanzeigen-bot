@@ -71,16 +71,13 @@ jobs:
         updates=$(pdm update 2>&1 |tee /dev/fd/5)
 
         if git diff --exit-code pdm.lock; then
-          echo "updates=" >> $GITHUB_OUTPUT
+          echo "updates=" >> "$GITHUB_OUTPUT"
         else
-          updates=$(echo "$updates" | grep Update)
-
-          # see https://trstringer.com/github-actions-multiline-strings/
-          updates="${updates//'%'/'%25'}"
-          updates="${updates//$'\n'/'%0A'}"
-          updates="${updates//$'\r'/'%0D'}"
-
-          echo "updates=${updates}" >> $GITHUB_OUTPUT
+          # https://github.com/orgs/community/discussions/26288#discussioncomment-3876281
+          delimiter="$(openssl rand -hex 8)"
+          echo "updates<<${delimiter}" >> "${GITHUB_OUTPUT}"
+          echo "$(echo "$updates" | grep Update | grep -v kleinanzeigen-bot)" >> "${GITHUB_OUTPUT}"
+          echo "${delimiter}" >> "${GITHUB_OUTPUT}"
         fi
 
     - name: Create PR
