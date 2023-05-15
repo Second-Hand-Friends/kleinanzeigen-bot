@@ -6,7 +6,7 @@ build-backend = "pdm.pep517.api"
 [project]
 name = "kleinanzeigen-bot"
 dynamic = ["version"]
-description = "Command line tool to publish ads on ebay-kleinanzeigen.de"
+description = "Command line tool to publish ads on kleinanzeigen.de"
 readme = "README.md"
 authors = [
     {name = "sebthom", email = "sebthom@users.noreply.github.com"},

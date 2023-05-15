@@ -177,7 +177,7 @@ class AdExtractor(SeleniumMixin):
             contact['phone'] = ''.join(phone_number.replace('-', ' ').split(' ')).replace('+49(0)', '0')
         except NoSuchElementException:
             contact['phone'] = None  # phone seems to be a deprecated feature (for non-professional users)
-        # also see 'https://themen.ebay-kleinanzeigen.de/hilfe/deine-anzeigen/Telefon/
+        # also see 'https://themen.kleinanzeigen.de/hilfe/deine-anzeigen/Telefon/
 
         return contact
 
@@ -188,7 +188,7 @@ class AdExtractor(SeleniumMixin):
         :return: the links to your ad pages
         """
         # navigate to your ads page
-        self.webdriver.get('https://www.ebay-kleinanzeigen.de/m-meine-anzeigen.html')
+        self.webdriver.get('https://www.kleinanzeigen.de/m-meine-anzeigen.html')
         self.web_await(EC.url_contains('meine-anzeigen'), 15)
         pause(2000, 3000)
 
