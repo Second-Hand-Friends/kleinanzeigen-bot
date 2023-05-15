@@ -18,7 +18,7 @@ __pycache__
 /dist
 /.eggs
 /*.egg-info
-/.pdm.toml
+/.pdm-python
 
 # Eclipse
 /.project
