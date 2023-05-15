@@ -349,6 +349,12 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info("Logging in as [%s]...", self.config["login"]["username"])
         self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
 
+        # close redesign banner
+        try:
+            self.web_click(By.XPATH, '//*[@id="pre-launch-comms-interstitial-frontend"]//button[.//*[text()[contains(.,"nicht mehr anzeigen")]]]')
+        except NoSuchElementException:
+            pass
+
         # accept privacy banner
         try:
             self.web_click(By.ID, "gdpr-banner-accept")
@@ -934,7 +940,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
                 # check which ads already saved
                 saved_ad_ids = []
-                ads = self.load_ads(ignore_inactive=False, check_id=False)  # do not skip because of existing IDs
+                ads = self.load_ads(ignore_inactive = False, check_id = False)  # do not skip because of existing IDs
                 for ad_ in ads:
                     ad_id = int(ad_[2]['id'])
                     saved_ad_ids.append(ad_id)
