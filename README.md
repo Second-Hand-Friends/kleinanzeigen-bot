@@ -16,7 +16,7 @@
 
 ## <a name="about"></a>About
 
-**kleinanzeigen-bot** is a console based application to ease publishing of ads to ebay-kleinanzeigen.de.
+**kleinanzeigen-bot** is a console based application to ease publishing of ads to [kleinanzeigen.de](https://kleinanzeigen.de).
 
 It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https://github.com/Second-Hand-Friends/ebayKleinanzeigen) with the following advantages:
 - supports Microsoft Edge browser (Chromium based)

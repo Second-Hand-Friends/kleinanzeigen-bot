@@ -31,7 +31,7 @@ class KleinanzeigenBot(SeleniumMixin):
     def __init__(self) -> None:
         super().__init__()
 
-        self.root_url = "https://www.ebay-kleinanzeigen.de"
+        self.root_url = "https://www.kleinanzeigen.de"
 
         self.config:dict[str, Any] = {}
         self.config_file_path = abspath("config.yaml")
