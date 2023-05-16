@@ -618,6 +618,16 @@ class KleinanzeigenBot(SeleniumMixin):
             for special_attribute_key, special_attribute_value in ad_cfg["special_attributes"].items():
                 LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value)
                 try:
+                    # if the <select> element exists but is inside an invisible container, make the container visible
+                    select_container_xpath = f"//div[@class='l-row' and descendant::select[@id='{special_attribute_key}']]"
+                    select_container = self.web_find(By.XPATH, select_container_xpath)
+                    if not select_container.is_displayed():
+                        self.web_execute(f"document.evaluate(\"{select_container_xpath}\"," +
+                            " document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.style.display = 'block';")
+                except BaseException:
+                    pass  # nosec
+
+                try:
                     self.web_select(By.XPATH, f"//select[@id='{special_attribute_key}']", special_attribute_value)
                 except WebDriverException:
                     LOG.debug("Attribute field '%s' is not of kind dropdown, trying to input as plain text...", special_attribute_key)
