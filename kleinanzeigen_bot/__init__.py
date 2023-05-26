@@ -689,14 +689,17 @@ class KleinanzeigenBot(SeleniumMixin):
         for image in ad_cfg["images"]:
             LOG.info(" -> uploading image [%s]", image)
             previous_uploaded_images_count = count_uploaded_images()
-            image_upload.send_keys(image)
-            start_at = time.time()
-            while previous_uploaded_images_count == count_uploaded_images() and time.time() - start_at < 60:
-                print(".", end = "", flush = True)
-                time.sleep(1)
+            attempt = 0
+            while attempt < 3 and previous_uploaded_images_count == count_uploaded_images():
+              image_upload.send_keys(image)
+              start_at = time.time()
+              while previous_uploaded_images_count == count_uploaded_images() and time.time() - start_at < 60:
+                  print(".", end = "", flush = True)
+                  time.sleep(1)
+              attempt += 1
             print(flush = True)
 
-            ensure(previous_uploaded_images_count < count_uploaded_images(), f"Couldn't upload image [{image}] within 60 seconds")
+            ensure(previous_uploaded_images_count < count_uploaded_images(), f"Couldn't upload image [{image}] within 60 seconds and 3 attempts")
             LOG.debug("   => uploaded image within %i seconds", time.time() - start_at)
             pause(2000)
 
