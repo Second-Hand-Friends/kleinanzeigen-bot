@@ -183,6 +183,15 @@ Spielzeugautos: 17/23/spielzeug_autos
 Spielzeug_draussen: 17/23/spielzeug_draussen
 Stofftiere: 17/23/stofftiere
 
+# Haus & Garten > Wohnzimmer
+Wohnzimmer_Regale: 80/88/regale
+Wohnzimmer_Schraenke: 80/88/schraenke
+Wohnzimmer_Sitzmoebel: 80/88/sitzmoebel
+Wohnzimmer_Sofas_Sitzgarnituren: 80/88/sofas_sitzgarnituren
+Wohnzimmer_Tische: 80/88/tische
+Wohnzimmer_TV_Moebel: 80/88/tv_moebel
+Wohnzimmer_Sonstiges: 80/88/sonstiges
+
 # Verschenken & Tauschen
 Tauschen: 272/273
 Verleihen: 272/274
