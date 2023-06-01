@@ -6,8 +6,9 @@ name: Build
 
 on:
   push:
-    branches:
-    - '**'
+    branches-ignore:
+    - 'dependabot/**'    # prevent GHA triggered twice (once for commit to the branch and once for opening/syncing the PR)
+    - 'dependencies/pdm' # prevent GHA triggered twice (once for commit to the branch and once for opening/syncing the PR)
     tags-ignore:
     - '**'
     paths-ignore:
