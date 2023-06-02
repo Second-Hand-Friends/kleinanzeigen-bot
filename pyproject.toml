@@ -173,7 +173,7 @@ max-attributes = 15 # maximum number of instance attributes for a class (R0902)
 max-branches   = 30 # maximum number of branch for function / method body (R0912)
 max-locals     = 30 # maximum number of local variables for function / method body (R0914)
 max-returns    = 10 # maximum number of return / yield for function / method body (R0911)
-max-statements = 80 # maximum number of statements in function / method body (R0915)
+max-statements = 100 # maximum number of statements in function / method body (R0915)
 max-public-methods = 30 # maximum number of public methods for a class (R0904)
 
 
