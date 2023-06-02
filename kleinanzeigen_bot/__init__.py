@@ -491,7 +491,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal--Button")]')
                 self.web_click(By.XPATH, '//*[contains(@class, "CarrierOption--Main")]')
                 if ad_cfg["shipping_costs"]:
-                    self.web_input(By.XPATH, 
+                    self.web_input(By.XPATH,
                         '//*[contains(@class, "IndividualShippingInput")]//input[@type="text"]',
                         str.replace(ad_cfg["shipping_costs"], ".", ",")
                     )
