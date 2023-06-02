@@ -491,7 +491,10 @@ class KleinanzeigenBot(SeleniumMixin):
                 self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal--Button")]')
                 self.web_click(By.XPATH, '//*[contains(@class, "CarrierOption--Main")]')
                 if ad_cfg["shipping_costs"]:
-                    self.web_input(By.XPATH, '//*[contains(@class, "IndividualShippingInput")]//input[@type="text"]',str.replace(ad_cfg["shipping_costs"], ".", ","))
+                    self.web_input(By.XPATH, 
+                        '//*[contains(@class, "IndividualShippingInput")]//input[@type="text"]',
+                        str.replace(ad_cfg["shipping_costs"], ".", ",")
+                    )
                 self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
             except NoSuchElementException as ex:
                 LOG.debug(ex, exc_info = True)
