@@ -485,13 +485,14 @@ class KleinanzeigenBot(SeleniumMixin):
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg["shipping_options"]:
             self.__set_shipping_options(ad_cfg)
-        elif ad_cfg["shipping_costs"]:
+        else:
             try:
-                self.web_click(By.XPATH, '//*[contains(@class, "ShippingOption")]//input[@type="radio"]')
-                self.web_click(By.XPATH, '//*[contains(@class, "CarrierOptionsPopup")]//*[contains(@class, "IndividualPriceSection")]//input[@type="checkbox"]')
-                self.web_input(By.XPATH, '//*[contains(@class, "IndividualShippingInput")]//input[@type="text"]',
-                               str.replace(ad_cfg["shipping_costs"], ".", ","))
-                self.web_click(By.XPATH, '//*[contains(@class, "ReactModalPortal")]//button[.//*[text()[contains(.,"Weiter")]]]')
+                self.web_click(By.XPATH, '//*[contains(@class, "SelectionButton--Right")]')
+                self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal--Button")]')
+                self.web_click(By.XPATH, '//*[contains(@class, "CarrierOption--Main")]')
+                if ad_cfg["shipping_costs"]:
+                    self.web_input(By.XPATH, '//*[contains(@class, "IndividualShippingInput")]//input[@type="text"]',str.replace(ad_cfg["shipping_costs"], ".", ","))
+                self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
             except NoSuchElementException as ex:
                 LOG.debug(ex, exc_info = True)
 
