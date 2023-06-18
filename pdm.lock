@@ -295,7 +295,7 @@ summary = "Pygments is a syntax highlighting package written in Python."
 
 [[package]]
 name = "pyinstaller"
-version = "5.11.0"
+version = "5.12.0"
 requires_python = "<3.12,>=3.7"
 summary = "PyInstaller bundles a Python application and all its dependencies into a single package."
 dependencies = [
@@ -349,7 +349,7 @@ summary = "A Python SOCKS client module. See https://github.com/Anorov/PySocks f
 
 [[package]]
 name = "pytest"
-version = "7.3.1"
+version = "7.3.2"
 requires_python = ">=3.7"
 summary = "pytest: simple powerful testing with Python"
 dependencies = [
@@ -407,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "ruamel-yaml"
-version = "0.17.31"
+version = "0.17.32"
 requires_python = ">=3"
 summary = "ruamel.yaml is a YAML parser/emitter that supports roundtrip preservation of comments, seq/map flow style, and map key order"
 dependencies = [
@@ -422,7 +422,7 @@ summary = "C version of reader, parser and emitter for ruamel.yaml derived from 
 
 [[package]]
 name = "selenium"
-version = "4.9.1"
+version = "4.10.0"
 requires_python = ">=3.7"
 summary = ""
 dependencies = [
@@ -891,19 +891,19 @@ content_hash = "sha256:49316b36fd12597e245782d252fa7fbe8e9e952b15bdd0cd658229f89
     {url = "https://files.pythonhosted.org/packages/0b/42/d9d95cc461f098f204cd20c85642ae40fbff81f74c300341b8d0e0df14e0/Pygments-2.14.0-py3-none-any.whl", hash = "sha256:fa7bd7bd2771287c0de303af8bfdfc731f51bd2c6a47ab69d117138893b82717"},
     {url = "https://files.pythonhosted.org/packages/da/6a/c427c06913204e24de28de5300d3f0e809933f376e0b7df95194b2bb3f71/Pygments-2.14.0.tar.gz", hash = "sha256:b3ed06a9e8ac9a9aae5a6f5dbe78a8a58655d17b43b93c078f094ddc476ae297"},
 ]
-"pyinstaller 5.11.0" = [
-    {url = "https://files.pythonhosted.org/packages/09/ec/f95316587a05412849e0cc225e169b27139b76b004c49cc8cd9a76535afb/pyinstaller-5.11.0-py3-none-manylinux2014_i686.whl", hash = "sha256:e359571327bbef434fc61324891399f9117efbb685b5065234eebb01713650a8"},
-    {url = "https://files.pythonhosted.org/packages/0e/e2/2e2e7ab072995a59abed2685dc985b4ac1b810ba1be983dc65043f5aeca5/pyinstaller-5.11.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:b3c6299fd7526c6ca87ea5f9017fb1928d47046df0b9f983d6bbd893801010dc"},
-    {url = "https://files.pythonhosted.org/packages/2c/36/f8207716a6283e7eff4ab98b9ea7a542fbef29e7d0c622d50ae9c475576e/pyinstaller-5.11.0-py3-none-win32.whl", hash = "sha256:049cdc3524aefb5ca015a63d2c81b6bf1567cc818ac066859fbfde702c6165d3"},
-    {url = "https://files.pythonhosted.org/packages/3f/de/142b1f6d456dc7299de591c120eeeacd9e36987728a8b88d45dfd1e2a85d/pyinstaller-5.11.0-py3-none-win_arm64.whl", hash = "sha256:036a062a228af41f6bb6370a4e87cef34858cc839200a07ace7f8738ef64ad86"},
-    {url = "https://files.pythonhosted.org/packages/67/09/57ba28093a564e4cb552b3e752a5e2a0cf5868fc02494b58714a82f78719/pyinstaller-5.11.0-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:a445a91b85c9a1ea3985268643a674900dd86f244cc4be4ff4ec4c6367ff99a9"},
-    {url = "https://files.pythonhosted.org/packages/75/57/191fddf2031ec532b926e0423c640fec27f40758fb1164f7e9d6442f256f/pyinstaller-5.11.0-py3-none-manylinux2014_s390x.whl", hash = "sha256:2a1fe6d0da22f207cfa4b3221fe365503cba071c77aac19f76a75503f67d9ff9"},
-    {url = "https://files.pythonhosted.org/packages/96/9d/0526e65a112578f2236bd3a0c32856538c9f309367f1d8be17a7d252a1e7/pyinstaller-5.11.0-py3-none-win_amd64.whl", hash = "sha256:42fdea67e4c2217cedd54d17d1d402736df3ba718db2b497df65df5a68ae4f93"},
-    {url = "https://files.pythonhosted.org/packages/a2/01/87094ac853460c897f7503966a2295a945e81a41b7c19c793cf4d71980b6/pyinstaller-5.11.0-py3-none-macosx_10_13_universal2.whl", hash = "sha256:8454bac8f3cb2219a3ce2227fd039bdaf943dcba60e8c55732958ea3a6d81263"},
-    {url = "https://files.pythonhosted.org/packages/ac/8a/59db374ec3522af36b378fbe6818c2eb2e1d5b5ba8b92c089f4f86f7fc54/pyinstaller-5.11.0-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:b8a4f6834e5c85150948e22c74dd3ab8b98aa4ccdf964d880ac14d2f78d9c1a4"},
-    {url = "https://files.pythonhosted.org/packages/b7/8b/ac00e4b615aea76c3b3d61592791ed739468ab6d27e314f6ad24e02bdd0f/pyinstaller-5.11.0.tar.gz", hash = "sha256:cb87cee0b3c81ccd74d4bf3f4faf03b5e1e39bb91f1a894b2ce4cd22363bf779"},
-    {url = "https://files.pythonhosted.org/packages/d3/1b/77edecaf20239aff9fc6088d24f391bc3f4cffc9a9fc00e61c1905454ca9/pyinstaller-5.11.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:b4cac0e7b0d63c6a869843113008f59fd5b38b2959ffa6059e7fac4bb05de92b"},
-    {url = "https://files.pythonhosted.org/packages/ec/61/5b264f5a06721e19b52ddd94883e27209da3cdfed06ffe7561a56faecc26/pyinstaller-5.11.0-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:0af9d11a09ce217d32f95c79c984054457b310671387ff32bae1496876308556"},
+"pyinstaller 5.12.0" = [
+    {url = "https://files.pythonhosted.org/packages/06/75/2dd1b787c979506d5d468c9cd5f2c9fb7a43104652210ad3fa8bbee80006/pyinstaller-5.12.0-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:d14c1c2b753af5efed96584f075a6740ea634ca55789113d325dc8c32aef50fe"},
+    {url = "https://files.pythonhosted.org/packages/20/c1/1de7e7cba1d66cdadec075f7b027305d95abc2565b228a5510d09a00bc9b/pyinstaller-5.12.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:303952c2a8ece894b655c2a0783a0bdc844282f47790707446bde3eaf355f0da"},
+    {url = "https://files.pythonhosted.org/packages/57/f7/3d9133a6d69519588bea8f4cce61bb04a76d3a0076f94475d9089a05a1cd/pyinstaller-5.12.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:92eeacd052092a0a4368f50ddecbeb6e020b5a70cdf113243fbd6bd8ee25524e"},
+    {url = "https://files.pythonhosted.org/packages/5b/3d/49d8288c9470f982929426691ff433c21797a0c4071cd586e3cc581b2b03/pyinstaller-5.12.0-py3-none-macosx_10_13_universal2.whl", hash = "sha256:edcb6eb6618f3b763c11487db1d3516111d54bd5598b9470e295c1f628a95496"},
+    {url = "https://files.pythonhosted.org/packages/5b/ab/7454d768044582849cafd89f0d8a72ead861b838a4172b44692c440f0866/pyinstaller-5.12.0-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:96ad645347671c9fce190506c09523c02f01a503fe3ea65f79bb0cfe22a8c83e"},
+    {url = "https://files.pythonhosted.org/packages/76/a7/27bd8cefa6539c3679c122a4b39aae188e79d021eed601aa1400e228b631/pyinstaller-5.12.0-py3-none-win_arm64.whl", hash = "sha256:2f70e2d9b032e5f24a336f41affcb4624e66a84cd863ba58f6a92bd6040653bb"},
+    {url = "https://files.pythonhosted.org/packages/7b/13/9874a39cf239ceab680c534a7009fee665bf3610593bd706e1a4bcf752e9/pyinstaller-5.12.0-py3-none-manylinux2014_i686.whl", hash = "sha256:7eed9996c12aeee7530cbc7c57350939f46391ecf714ac176579190dbd3ec7bf"},
+    {url = "https://files.pythonhosted.org/packages/7e/e6/4f15b9a81fe1c5d6f6763a034f9e0c45c9dbe69707972b079f18e8863e52/pyinstaller-5.12.0-py3-none-win_amd64.whl", hash = "sha256:62d75bb70cdbeea1a0d55067d7201efa2f7d7c19e56c241291c03d551b531684"},
+    {url = "https://files.pythonhosted.org/packages/a5/75/48f926bcc7b3d466d0ecd73a5b583a81d8542ced008278ab59e8dd5a225b/pyinstaller-5.12.0-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:3605ac72311318455907a88efb4a4b334b844659673a2a371bbaac2d8b52843a"},
+    {url = "https://files.pythonhosted.org/packages/ae/fa/5ff36d93095d3ff70176307b4cb539c66ce5ac38d5a94c68e17d985ac0ed/pyinstaller-5.12.0-py3-none-win32.whl", hash = "sha256:b64d8a3056e6c7e4ed4d1f95e793ef401bf5b166ef00ad544b5812be0ac63b4b"},
+    {url = "https://files.pythonhosted.org/packages/d4/00/6e1ee650d7bd112b31cdeabc8c83041211151b5dbb4b8930d82cdcf7bc82/pyinstaller-5.12.0-py3-none-manylinux2014_s390x.whl", hash = "sha256:c3ceb6c3a34b9407ba16fb68a32f83d5fd94f21d43d9fe38d8f752feb75ca5bb"},
+    {url = "https://files.pythonhosted.org/packages/fb/f8/a0bfbf01945821c5d9887ecef8ee6a25c1373339ab75ddc3e7a8dbc99ce3/pyinstaller-5.12.0.tar.gz", hash = "sha256:a1c2667120730604c3ad1e0739a45bb72ca4a502a91e2f5c5b220fbfbb05f0d4"},
 ]
 "pyinstaller-hooks-contrib 2022.8" = [
     {url = "https://files.pythonhosted.org/packages/3d/fb/8ab57519f2c44efe3476eb06961ee42a87d0d21d75a01aa349fa407b29a7/pyinstaller_hooks_contrib-2022.8-py2.py3-none-any.whl", hash = "sha256:e46f099934dd4577fb1ddcf37a99fa04027c92f8f5291c8802f326345988d001"},
@@ -926,9 +926,9 @@ content_hash = "sha256:49316b36fd12597e245782d252fa7fbe8e9e952b15bdd0cd658229f89
     {url = "https://files.pythonhosted.org/packages/a2/4b/52123768624ae28d84c97515dd96c9958888e8c2d8f122074e31e2be878c/PySocks-1.7.1-py27-none-any.whl", hash = "sha256:08e69f092cc6dbe92a0fdd16eeb9b9ffbc13cadfe5ca4c7bd92ffb078b293299"},
     {url = "https://files.pythonhosted.org/packages/bd/11/293dd436aea955d45fc4e8a35b6ae7270f5b8e00b53cf6c024c83b657a11/PySocks-1.7.1.tar.gz", hash = "sha256:3f8804571ebe159c380ac6de37643bb4685970655d3bba243530d6558b799aa0"},
 ]
-"pytest 7.3.1" = [
-    {url = "https://files.pythonhosted.org/packages/1b/d1/72df649a705af1e3a09ffe14b0c7d3be1fd730da6b98beb4a2ed26b8a023/pytest-7.3.1-py3-none-any.whl", hash = "sha256:3799fa815351fea3a5e96ac7e503a96fa51cc9942c3753cda7651b93c1cfa362"},
-    {url = "https://files.pythonhosted.org/packages/ec/d9/36b65598f3d19d0a14d13dc87ad5fa42869ae53bb7471f619a30eaabc4bf/pytest-7.3.1.tar.gz", hash = "sha256:434afafd78b1d78ed0addf160ad2b77a30d35d4bdf8af234fe621919d9ed15e3"},
+"pytest 7.3.2" = [
+    {url = "https://files.pythonhosted.org/packages/58/2a/07c65fdc40846ecb8a9dcda2c38fcb5a06a3e39d08d4a4960916431951cb/pytest-7.3.2.tar.gz", hash = "sha256:ee990a3cc55ba808b80795a79944756f315c67c12b56abd3ac993a7b8c17030b"},
+    {url = "https://files.pythonhosted.org/packages/7a/d0/de969198293cdea22b3a6fb99a99aeeddb7b3827f0823b33c5dc0734bbe5/pytest-7.3.2-py3-none-any.whl", hash = "sha256:cdcbd012c9312258922f8cd3f1b62a6580fdced17db6014896053d47cddf9295"},
 ]
 "python-dotenv 0.20.0" = [
     {url = "https://files.pythonhosted.org/packages/02/ee/43e1c862a3e7259a1f264958eaea144f0a2fac9f175c1659c674c34ea506/python-dotenv-0.20.0.tar.gz", hash = "sha256:b7e3b04a59693c42c36f9ab1cc2acc46fa5df8c78e178fc33a8d4cd05c8d498f"},
@@ -1002,9 +1002,9 @@ content_hash = "sha256:49316b36fd12597e245782d252fa7fbe8e9e952b15bdd0cd658229f89
     {url = "https://files.pythonhosted.org/packages/42/5c/f44fc88bad850c4a20711a3349ec0e8bc50fece8d8b32c962d2aab70ea2b/rich-13.3.3-py3-none-any.whl", hash = "sha256:540c7d6d26a1178e8e8b37e9ba44573a3cd1464ff6348b99ee7061b95d1c6333"},
     {url = "https://files.pythonhosted.org/packages/9a/50/672a8d347f92bc752b04c338bbf932fbd0104fbc416c82cc91aa5f7b4b0b/rich-13.3.3.tar.gz", hash = "sha256:dc84400a9d842b3a9c5ff74addd8eb798d155f36c1c91303888e0a66850d2a15"},
 ]
-"ruamel-yaml 0.17.31" = [
-    {url = "https://files.pythonhosted.org/packages/39/97/03674459c459b9b69ef71eba039205a72867e5c6c409df3136858f6836f3/ruamel.yaml-0.17.31.tar.gz", hash = "sha256:098ed1eb6d338a684891a72380277c1e6fc4d4ae0e120de9a447275056dda335"},
-    {url = "https://files.pythonhosted.org/packages/9c/9c/e69fc06169ac6e757c66004885e0dfcc6c2b5c1a331a5dc70b890b6b4bf8/ruamel.yaml-0.17.31-py3-none-any.whl", hash = "sha256:3cf153f0047ced526e723097ac615d3009371779432e304dbd5596b6f3a4c777"},
+"ruamel-yaml 0.17.32" = [
+    {url = "https://files.pythonhosted.org/packages/63/dd/b4719a290e49015536bd0ab06ab13e3b468d8697bec6c2f668ac48b05661/ruamel.yaml-0.17.32.tar.gz", hash = "sha256:ec939063761914e14542972a5cba6d33c23b0859ab6342f61cf070cfc600efc2"},
+    {url = "https://files.pythonhosted.org/packages/d9/0e/2a05efa11ea33513fbdf4a2e2576fe94fd8fa5ad226dbb9c660886390974/ruamel.yaml-0.17.32-py3-none-any.whl", hash = "sha256:23cd2ed620231677564646b0c6a89d138b6822a0d78656df7abda5879ec4f447"},
 ]
 "ruamel-yaml-clib 0.2.7" = [
     {url = "https://files.pythonhosted.org/packages/11/50/b4ebeac05e40ab40d85659ec8629f9af54ed09f07b3269e17cbfb0fbecd6/ruamel.yaml.clib-0.2.7-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64.whl", hash = "sha256:41d0f1fa4c6830176eef5b276af04c89320ea616655d01327d5ce65e50575c94"},
@@ -1045,9 +1045,9 @@ content_hash = "sha256:49316b36fd12597e245782d252fa7fbe8e9e952b15bdd0cd658229f89
     {url = "https://files.pythonhosted.org/packages/fb/c0/de69d49a6d0a346fb27ddf3114d807380b08a40d8e22e0fbaf19be8b6044/ruamel.yaml.clib-0.2.7-cp37-cp37m-macosx_12_0_arm64.whl", hash = "sha256:f01da5790e95815eb5a8a138508c01c758e5f5bc0ce4286c4f7028b8dd7ac3d0"},
     {url = "https://files.pythonhosted.org/packages/ff/66/4c05485243e24c6db5d7305063304c410b5539577becc89e4539d2897e41/ruamel.yaml.clib-0.2.7-cp39-cp39-manylinux2014_aarch64.whl", hash = "sha256:bf9a6bc4a0221538b1a7de3ed7bca4c93c02346853f44e1cd764be0023cd3640"},
 ]
-"selenium 4.9.1" = [
-    {url = "https://files.pythonhosted.org/packages/b4/5c/803b797ba26bcd741c3b460b9a2ac663c04f21e8e4e425d26c1c842ca438/selenium-4.9.1-py3-none-any.whl", hash = "sha256:82aedaa85d55bc861f4c89ff9609e82f6c958e2e1e3da3ffcc36703f21d3ee16"},
-    {url = "https://files.pythonhosted.org/packages/fd/e2/0e5bee6762a7bf7852b47a79c5b12f9e526e6962958dbb9719fa490ba24c/selenium-4.9.1.tar.gz", hash = "sha256:3444f4376321530c36ce8355b6b357d8cf4a7d588ce5cf772183465930bbed0e"},
+"selenium 4.10.0" = [
+    {url = "https://files.pythonhosted.org/packages/19/e7/6c6468d913edb3645ed4d0c0c7b3bd7a2a41e78a03e0d52696408ca08189/selenium-4.10.0-py3-none-any.whl", hash = "sha256:40241b9d872f58959e9b34e258488bf11844cd86142fd68182bd41db9991fc5c"},
+    {url = "https://files.pythonhosted.org/packages/86/d3/7fd6820e441550a4d0dae621c02f75339c6fafd98352f2727dd68e6e4cda/selenium-4.10.0.tar.gz", hash = "sha256:871bf800c4934f745b909c8dfc7d15c65cf45bd2e943abd54451c810ada395e3"},
 ]
 "selenium-stealth 1.0.6" = [
     {url = "https://files.pythonhosted.org/packages/cb/ac/7877df8b819d54a4e317a093a0a9e0a38d21d884a7250aa713f2f0869442/selenium_stealth-1.0.6-py3-none-any.whl", hash = "sha256:b62da5452aa4a84f29a4dfb21a9696aff20788a7c570dd0b81bc04a940848b97"},
