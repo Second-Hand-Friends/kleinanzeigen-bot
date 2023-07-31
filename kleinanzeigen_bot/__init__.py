@@ -515,7 +515,7 @@ class KleinanzeigenBot(SeleniumMixin):
         try:
             if sell_directly and ad_cfg["shipping_type"] == "SHIPPING" and ad_cfg["shipping_options"] and price_type in {"FIXED", "NEGOTIABLE"}:
                 if not self.webdriver.find_element(By.ID, "buy-now-toggle").is_selected():
-                    self.web_click(By.XPATH, '//*[contains(@class, "BuyNowSection")]//span[contains(@class, "Toggle--Slider")]')
+                    self.web_click(By.XPATH, '//*[contains(@class, "BuyNowSection")]//div[contains(@class, "Toggle--Slider")]')
             elif self.webdriver.find_element(By.ID, "buy-now-toggle").is_selected():
                 self.web_click(By.XPATH, '//*[contains(@class, "BuyNowSection")]//span[contains(@class, "Toggle--Slider")]')
         except NoSuchElementException as ex:
