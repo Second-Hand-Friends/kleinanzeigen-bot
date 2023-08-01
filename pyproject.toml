@@ -31,10 +31,10 @@ dependencies = [
     "overrides~=6.1",
     "ruamel.yaml~=0.17",
     "pywin32==303; sys_platform == 'win32'",
-    "selenium~=4.1",
+    "selenium~=4.10",
     "selenium_stealth~=1.0",
     "wcmatch~=8.4",
-    "webdriver_manager~=3.7"
+    "webdriver_manager~=3.8"
 ]
 
 [project.urls]
@@ -56,10 +56,10 @@ dev = [
     "bandit~=1.7",
     "toml", # required by bandit
     "tomli", # required by bandit
-    "pytest~=7.2",
-    "pyinstaller~=5.6",
+    "pytest~=7.4",
+    "pyinstaller~=5.13",
     "psutil",
-    "pylint~=2.15",
+    "pylint~=2.17",
     "mypy~=0.982",
 ]
 
