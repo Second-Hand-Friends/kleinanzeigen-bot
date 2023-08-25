@@ -487,7 +487,7 @@ class KleinanzeigenBot(SeleniumMixin):
             self.__set_shipping_options(ad_cfg)
         else:
             try:
-                self.web_click(By.XPATH, '//*[contains(@class, "SelectionButton--Right")]')
+                self.web_click(By.XPATH, '//*[contains(@class, "jsx-2623555103")]')
                 self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal--Button")]')
                 self.web_click(By.XPATH, '//*[contains(@class, "CarrierOption--Main")]')
                 if ad_cfg["shipping_costs"]:
