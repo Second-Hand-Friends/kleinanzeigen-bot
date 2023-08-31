@@ -349,6 +349,10 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG.info("Logging in as [%s]...", self.config["login"]["username"])
         self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
 
+        if self.is_logged_in():
+            LOG.info("Already logged in as [%s]. Skipping login.", self.config["login"]["username"])
+            return
+
         # close redesign banner
         try:
             self.web_click(By.XPATH, '//*[@id="pre-launch-comms-interstitial-frontend"]//button[.//*[text()[contains(.,"nicht mehr anzeigen")]]]')
@@ -376,6 +380,16 @@ class KleinanzeigenBot(SeleniumMixin):
             input("Press ENTER when done...")
         except NoSuchElementException:
             pass
+
+    def is_logged_in(self) -> bool:
+        try:
+            user_email_elem = self.web_find(By.ID, "user-email")
+            email_text = user_email_elem.text
+            if f"angemeldet als: {self.config['login']['username']}" == email_text:
+                return True
+        except NoSuchElementException:
+            return False
+        return False
 
     def handle_captcha_if_present(self, captcha_element_id:str, msg:str) -> None:
         try:
