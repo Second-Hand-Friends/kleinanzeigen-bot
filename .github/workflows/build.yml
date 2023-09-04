@@ -54,7 +54,7 @@ jobs:
     steps:
 
     - name: Git checkout
-      uses: actions/checkout@v3 #https://github.com/actions/checkout
+      uses: actions/checkout@v4 #https://github.com/actions/checkout
 
     - uses: actions/setup-python@v4
       with:
@@ -198,7 +198,7 @@ jobs:
     steps:
     - name: Git checkout 
       # only required by "hub release create" to prevent "fatal: Not a git repository"
-      uses: actions/checkout@v3 #https://github.com/actions/checkout
+      uses: actions/checkout@v4 #https://github.com/actions/checkout
 
     - name: Generate GitHub access token
       uses: tibdex/github-app-token@v1 #https://github.com/tibdex/github-app-token
