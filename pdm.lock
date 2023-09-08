@@ -55,7 +55,7 @@ files = [
 
 [[package]]
 name = "autopep8"
-version = "2.0.2"
+version = "2.0.4"
 requires_python = ">=3.6"
 summary = "A tool that automatically formats Python code to conform to the PEP 8 style guide"
 dependencies = [
@@ -63,8 +63,8 @@ dependencies = [
     "tomli; python_version < \"3.11\"",
 ]
 files = [
-    {file = "autopep8-2.0.2-py2.py3-none-any.whl", hash = "sha256:86e9303b5e5c8160872b2f5ef611161b2893e9bfe8ccc7e2f76385947d57a2f1"},
-    {file = "autopep8-2.0.2.tar.gz", hash = "sha256:f9849cdd62108cb739dbcdbfb7fdcc9a30d1b63c4cc3e1c1f893b5360941b61c"},
+    {file = "autopep8-2.0.4-py2.py3-none-any.whl", hash = "sha256:067959ca4a07b24dbd5345efa8325f5f58da4298dab0dde0443d5ed765de80cb"},
+    {file = "autopep8-2.0.4.tar.gz", hash = "sha256:2913064abd97b3419d1cc83ea71f042cb821f87e45b9c88cad5ad3c4ea87fe0c"},
 ]
 
 [[package]]
@@ -508,7 +508,7 @@ files = [
 
 [[package]]
 name = "pyinstaller"
-version = "5.13.0"
+version = "5.13.2"
 requires_python = "<3.13,>=3.7"
 summary = "PyInstaller bundles a Python application and all its dependencies into a single package."
 dependencies = [
@@ -520,18 +520,18 @@ dependencies = [
     "setuptools>=42.0.0",
 ]
 files = [
-    {file = "pyinstaller-5.13.0-py3-none-macosx_10_13_universal2.whl", hash = "sha256:7fdd319828de679f9c5e381eff998ee9b4164bf4457e7fca56946701cf002c3f"},
-    {file = "pyinstaller-5.13.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:0df43697c4914285ecd333be968d2cd042ab9b2670124879ee87931d2344eaf5"},
-    {file = "pyinstaller-5.13.0-py3-none-manylinux2014_i686.whl", hash = "sha256:28d9742c37e9fb518444b12f8c8ab3cb4ba212d752693c34475c08009aa21ccf"},
-    {file = "pyinstaller-5.13.0-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:e5fb17de6c325d3b2b4ceaeb55130ad7100a79096490e4c5b890224406fa42f4"},
-    {file = "pyinstaller-5.13.0-py3-none-manylinux2014_s390x.whl", hash = "sha256:78975043edeb628e23a73fb3ef0a273cda50e765f1716f75212ea3e91b09dede"},
-    {file = "pyinstaller-5.13.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:cd7d5c06f2847195a23d72ede17c60857d6f495d6f0727dc6c9bc1235f2eb79c"},
-    {file = "pyinstaller-5.13.0-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:24009eba63cfdbcde6d2634e9c87f545eb67249ddf3b514e0cd3b2cdaa595828"},
-    {file = "pyinstaller-5.13.0-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:1fde4381155f21d6354dc450dcaa338cd8a40aaacf6bd22b987b0f3e1f96f3ee"},
-    {file = "pyinstaller-5.13.0-py3-none-win32.whl", hash = "sha256:2d03419904d1c25c8968b0ad21da0e0f33d8d65716e29481b5bd83f7f342b0c5"},
-    {file = "pyinstaller-5.13.0-py3-none-win_amd64.whl", hash = "sha256:9fc27c5a853b14a90d39c252707673c7a0efec921cd817169aff3af0fca8c127"},
-    {file = "pyinstaller-5.13.0-py3-none-win_arm64.whl", hash = "sha256:3a331951f9744bc2379ea5d65d36f3c828eaefe2785f15039592cdc08560b262"},
-    {file = "pyinstaller-5.13.0.tar.gz", hash = "sha256:5e446df41255e815017d96318e39f65a3eb807e74a796c7e7ff7f13b6366a2e9"},
+    {file = "pyinstaller-5.13.2-py3-none-macosx_10_13_universal2.whl", hash = "sha256:16cbd66b59a37f4ee59373a003608d15df180a0d9eb1a29ff3bfbfae64b23d0f"},
+    {file = "pyinstaller-5.13.2-py3-none-manylinux2014_aarch64.whl", hash = "sha256:8f6dd0e797ae7efdd79226f78f35eb6a4981db16c13325e962a83395c0ec7420"},
+    {file = "pyinstaller-5.13.2-py3-none-manylinux2014_i686.whl", hash = "sha256:65133ed89467edb2862036b35d7c5ebd381670412e1e4361215e289c786dd4e6"},
+    {file = "pyinstaller-5.13.2-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:7d51734423685ab2a4324ab2981d9781b203dcae42839161a9ee98bfeaabdade"},
+    {file = "pyinstaller-5.13.2-py3-none-manylinux2014_s390x.whl", hash = "sha256:2c2fe9c52cb4577a3ac39626b84cf16cf30c2792f785502661286184f162ae0d"},
+    {file = "pyinstaller-5.13.2-py3-none-manylinux2014_x86_64.whl", hash = "sha256:c63ef6133eefe36c4b2f4daf4cfea3d6412ece2ca218f77aaf967e52a95ac9b8"},
+    {file = "pyinstaller-5.13.2-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:aadafb6f213549a5906829bb252e586e2cf72a7fbdb5731810695e6516f0ab30"},
+    {file = "pyinstaller-5.13.2-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:b2e1c7f5cceb5e9800927ddd51acf9cc78fbaa9e79e822c48b0ee52d9ce3c892"},
+    {file = "pyinstaller-5.13.2-py3-none-win32.whl", hash = "sha256:421cd24f26144f19b66d3868b49ed673176765f92fa9f7914cd2158d25b6d17e"},
+    {file = "pyinstaller-5.13.2-py3-none-win_amd64.whl", hash = "sha256:ddcc2b36052a70052479a9e5da1af067b4496f43686ca3cdda99f8367d0627e4"},
+    {file = "pyinstaller-5.13.2-py3-none-win_arm64.whl", hash = "sha256:27cd64e7cc6b74c5b1066cbf47d75f940b71356166031deb9778a2579bb874c6"},
+    {file = "pyinstaller-5.13.2.tar.gz", hash = "sha256:c8e5d3489c3a7cc5f8401c2d1f48a70e588f9967e391c3b06ddac1f685f8d5d2"},
 ]
 
 [[package]]
@@ -596,7 +596,7 @@ files = [
 
 [[package]]
 name = "pytest"
-version = "7.4.0"
+version = "7.4.2"
 requires_python = ">=3.7"
 summary = "pytest: simple powerful testing with Python"
 dependencies = [
@@ -608,8 +608,8 @@ dependencies = [
     "tomli>=1.0.0; python_version < \"3.11\"",
 ]
 files = [
-    {file = "pytest-7.4.0-py3-none-any.whl", hash = "sha256:78bf16451a2eb8c7a2ea98e32dc119fd2aa758f1d5d66dbf0a59d69a3969df32"},
-    {file = "pytest-7.4.0.tar.gz", hash = "sha256:b4bf8c45bd59934ed84001ad51e11b4ee40d40a1229d2c79f9c592b0a3f6bd8a"},
+    {file = "pytest-7.4.2-py3-none-any.whl", hash = "sha256:1d881c6124e08ff0a1bb75ba3ec0bfd8b5354a01c194ddd5a0a870a48d99b002"},
+    {file = "pytest-7.4.2.tar.gz", hash = "sha256:a766259cfab564a2ad52cb1aae1b881a75c3eb7e34ca3779697c23ed47c47069"},
 ]
 
 [[package]]
@@ -732,8 +732,8 @@ files = [
 
 [[package]]
 name = "selenium"
-version = "4.10.0"
-requires_python = ">=3.7"
+version = "4.12.0"
+requires_python = ">=3.8"
 summary = ""
 dependencies = [
     "certifi>=2021.10.8",
@@ -742,8 +742,8 @@ dependencies = [
     "urllib3[socks]<3,>=1.26",
 ]
 files = [
-    {file = "selenium-4.10.0-py3-none-any.whl", hash = "sha256:40241b9d872f58959e9b34e258488bf11844cd86142fd68182bd41db9991fc5c"},
-    {file = "selenium-4.10.0.tar.gz", hash = "sha256:871bf800c4934f745b909c8dfc7d15c65cf45bd2e943abd54451c810ada395e3"},
+    {file = "selenium-4.12.0-py3-none-any.whl", hash = "sha256:b2c48b1440db54a0653300d9955f5421390723d53b36ec835e18de8e13bbd401"},
+    {file = "selenium-4.12.0.tar.gz", hash = "sha256:95be6aa449a0ab4ac1198bb9de71bbe9170405e04b9752f4b450dc7292a21828"},
 ]
 
 [[package]]
@@ -841,19 +841,6 @@ files = [
 ]
 
 [[package]]
-name = "tqdm"
-version = "4.64.0"
-requires_python = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.7"
-summary = "Fast, Extensible Progress Meter"
-dependencies = [
-    "colorama; platform_system == \"Windows\"",
-]
-files = [
-    {file = "tqdm-4.64.0-py2.py3-none-any.whl", hash = "sha256:74a2cdefe14d11442cedf3ba4e21a3b84ff9a2dbdc6cfae2c34addb2a14a5ea6"},
-    {file = "tqdm-4.64.0.tar.gz", hash = "sha256:40be55d30e200777a307a7585aee69e4eabb46b4ec6a4b4a5f2d9f11e7d5408d"},
-]
-
-[[package]]
 name = "trio"
 version = "0.21.0"
 requires_python = ">=3.7"
@@ -924,31 +911,30 @@ files = [
 
 [[package]]
 name = "wcmatch"
-version = "8.4.1"
-requires_python = ">=3.7"
+version = "8.5"
+requires_python = ">=3.8"
 summary = "Wildcard/glob file name matcher."
 dependencies = [
     "bracex>=2.1.1",
 ]
 files = [
-    {file = "wcmatch-8.4.1-py3-none-any.whl", hash = "sha256:3476cd107aba7b25ba1d59406938a47dc7eec6cfd0ad09ff77193f21a964dee7"},
-    {file = "wcmatch-8.4.1.tar.gz", hash = "sha256:b1f042a899ea4c458b7321da1b5e3331e3e0ec781583434de1301946ceadb943"},
+    {file = "wcmatch-8.5-py3-none-any.whl", hash = "sha256:14554e409b142edeefab901dc68ad570b30a72a8ab9a79106c5d5e9a6d241bd5"},
+    {file = "wcmatch-8.5.tar.gz", hash = "sha256:86c17572d0f75cbf3bcb1a18f3bf2f9e72b39a9c08c9b4a74e991e1882a8efb3"},
 ]
 
 [[package]]
 name = "webdriver-manager"
-version = "3.8.6"
+version = "3.9.1"
 requires_python = ">=3.7"
 summary = "Library provides the way to automatically manage drivers for different browsers"
 dependencies = [
     "packaging",
     "python-dotenv",
     "requests",
-    "tqdm",
 ]
 files = [
-    {file = "webdriver_manager-3.8.6-py2.py3-none-any.whl", hash = "sha256:7d3aa8d67bd6c92a5d25f4abd75eea2c6dd24ea6617bff986f502280903a0e2b"},
-    {file = "webdriver_manager-3.8.6.tar.gz", hash = "sha256:ee788d389b8f45222a8a62f6f39b579360a1f87be46dad6da89918354af3ce73"},
+    {file = "webdriver_manager-3.9.1-py2.py3-none-any.whl", hash = "sha256:1dfc29a786abb97ba28076d4766d931064eeeac71a9685a3e8d46f5d363fcbe3"},
+    {file = "webdriver_manager-3.9.1.tar.gz", hash = "sha256:cd1f49ebb325a98b4dc3c41056f5b645e82fff3f83e346607844ec0bdf561c0b"},
 ]
 
 [[package]]
