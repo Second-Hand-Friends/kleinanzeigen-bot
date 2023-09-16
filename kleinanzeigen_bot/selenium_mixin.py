@@ -193,7 +193,7 @@ class SeleniumMixin:
                 browser_paths = [
                     shutil.which("chromium"),
                     shutil.which("chromium-browser"),
-                    shutil.which("google-chome"),
+                    shutil.which("google-chrome"),
                     shutil.which("microsoft-edge")
                 ]
 
