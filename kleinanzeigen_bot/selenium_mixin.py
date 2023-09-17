@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 import logging, os, shutil, time
 from collections.abc import Callable, Iterable
-from typing import Any, Final
+from typing import Any, Final, TypeVar
 
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
@@ -16,6 +16,7 @@ from selenium.webdriver.edge.service import Service as EdgeService, DEFAULT_EXEC
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.expected_conditions import AnyDriver
 from selenium.webdriver.support.ui import Select, WebDriverWait
 import selenium_stealth
 import webdriver_manager.core
@@ -39,13 +40,16 @@ class BrowserConfig:
         self.profile_name:str = ""
 
 
+CHROMIUM_OPTIONS = TypeVar('CHROMIUM_OPTIONS', bound = ChromiumOptions)  # pylint: disable=invalid-name
+
+
 class SeleniumMixin:
 
     def __init__(self) -> None:
         self.browser_config:Final[BrowserConfig] = BrowserConfig()
         self.webdriver:WebDriver = None
 
-    def _init_browser_options(self, browser_options:ChromiumOptions) -> ChromiumOptions:
+    def _init_browser_options(self, browser_options:CHROMIUM_OPTIONS) -> CHROMIUM_OPTIONS:
         if self.browser_config.use_private_window:
             if isinstance(browser_options, webdriver.EdgeOptions):
                 browser_options.add_argument("-inprivate")
@@ -123,6 +127,7 @@ class SeleniumMixin:
             webdriver_manager.core.driver.get_browser_version_from_os = lambda _: chrome_major_version
 
             # download and install matching chrome driver
+            webdriver_mgr: DriverManager
             if chrome_type == ChromeType.MSEDGE:
                 webdriver_mgr = EdgeChromiumDriverManager(cache_valid_range = 14)
                 webdriver_path = webdriver_mgr.install()
@@ -148,7 +153,7 @@ class SeleniumMixin:
 
         LOG.info("New WebDriver session is: %s %s", self.webdriver.session_id, self.webdriver.command_executor._url)  # pylint: disable=protected-access
 
-    def get_browser_version(self, executable_path: str) -> tuple[ChromeType, str]:
+    def get_browser_version(self, executable_path: str) -> tuple[ChromeType, str]:  # -> [ chrome_type, chrome_version ]
         match webdriver_manager.core.utils.os_name():
             case OSType.WIN:
                 import win32api  # pylint: disable=import-outside-toplevel,import-error
@@ -187,7 +192,7 @@ class SeleniumMixin:
             webdriver_manager.core.utils.read_version_from_cmd(version_cmd, webdriver_manager.core.utils.PATTERN[ChromeType.GOOGLE])
         )
 
-    def find_compatible_browser(self) -> tuple[str, ChromeType, str] | None:
+    def find_compatible_browser(self) -> tuple[str, ChromeType, str] | None:  # -> [ browser_path, chrome_type, chrome_version ]
         match webdriver_manager.core.utils.os_name():
             case OSType.LINUX:
                 browser_paths = [
@@ -233,7 +238,7 @@ class SeleniumMixin:
         LOG.warning("Installed browser could not be detected")
         return None
 
-    def web_await(self, condition: Callable[[WebDriver], T], timeout:float = 5, exception_on_timeout: Callable[[], Exception] | None = None) -> T:
+    def web_await(self, condition: Callable[[AnyDriver], T], timeout:float = 5, exception_on_timeout: Callable[[], Exception] | None = None) -> T:
         """
         Blocks/waits until the given condition is met.
 
@@ -305,6 +310,7 @@ class SeleniumMixin:
         input_field.clear()
         input_field.send_keys(text)
         pause()
+        return input_field
 
     def web_open(self, url:str, timeout:float = 15, reload_if_already_open:bool = False) -> None:
         """
@@ -349,7 +355,7 @@ class SeleniumMixin:
         return response
     # pylint: enable=dangerous-default-value
 
-    def web_scroll_page_down(self, scroll_length: int = 10, scroll_speed: int = 10000, scroll_back_top: bool = False):
+    def web_scroll_page_down(self, scroll_length: int = 10, scroll_speed: int = 10000, scroll_back_top: bool = False) -> None:
         """
         Smoothly scrolls the current web page down.
 
