@@ -4,11 +4,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 import json
 from decimal import DecimalException
+from typing import Any
 
-import selenium.webdriver.support.expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webdriver import WebDriver
+import selenium.webdriver.support.expected_conditions as EC
 
 from .selenium_mixin import SeleniumMixin
 from .utils import parse_decimal, pause
@@ -39,7 +40,7 @@ class AdExtractor(SeleniumMixin):
 
         return category
 
-    def extract_special_attributes_from_ad_page(self) -> dict:
+    def extract_special_attributes_from_ad_page(self) -> dict[str, Any]:
         """
         Extracts the special attributes from an ad page.
 
@@ -56,7 +57,7 @@ class AdExtractor(SeleniumMixin):
         special_attributes = {k: v for k, v in special_attributes.items() if not k.endswith('.versand_s')}
         return special_attributes
 
-    def extract_pricing_info_from_ad_page(self) -> (float | None, str):
+    def extract_pricing_info_from_ad_page(self) -> tuple[float | None, str]:
         """
         Extracts the pricing information (price and pricing type) from an ad page.
 
@@ -85,7 +86,7 @@ class AdExtractor(SeleniumMixin):
         except NoSuchElementException:  # no 'commercial' ad, has no pricing box etc.
             return None, 'NOT_APPLICABLE'
 
-    def extract_shipping_info_from_ad_page(self) -> (str, float | None, list | None):
+    def extract_shipping_info_from_ad_page(self) -> tuple[str, float | None, list[str] | None]:
         """
         Extracts shipping information from an ad page.
 
@@ -102,9 +103,8 @@ class AdExtractor(SeleniumMixin):
                 ship_type = 'SHIPPING'
             elif '€' in shipping_text:
                 shipping_price_parts = shipping_text.split(' ')
-                shipping_price = float(parse_decimal(shipping_price_parts[-2]))
                 ship_type = 'SHIPPING'
-                ship_costs = shipping_price
+                ship_costs = float(parse_decimal(shipping_price_parts[-2]))
 
                 # extract shipping options
                 # It is only possible the extract the cheapest shipping option,
@@ -140,13 +140,13 @@ class AdExtractor(SeleniumMixin):
         except NoSuchElementException:
             return None
 
-    def extract_contact_from_ad_page(self) -> dict:
+    def extract_contact_from_ad_page(self) -> dict[str, (str | None)]:
         """
         Processes the address part involving street (optional), zip code + city, and phone number (optional).
 
         :return: a dictionary containing the address parts with their corresponding values
         """
-        contact = {}
+        contact:dict[str, (str | None)] = {}
         address_element = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-locality')
         address_text = address_element.text.strip()
         # format: e.g. (Beispiel Allee 42,) 12345 Bundesland - Stadt
