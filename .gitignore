@@ -18,6 +18,7 @@ __pycache__
 /dist
 /.eggs
 /*.egg-info
+/.mypy_cache
 /.pdm-python
 
 # Eclipse
