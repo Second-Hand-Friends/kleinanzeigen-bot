@@ -56,6 +56,18 @@ jobs:
     - name: Git checkout
       uses: actions/checkout@v4 #https://github.com/actions/checkout
 
+    - name: Configure Fast APT Mirror
+      uses: vegardit/fast-apt-mirror.sh@v1
+
+    - name: Install Chromium Browser
+      if: env.ACT == 'true' && startsWith(matrix.os, 'ubuntu')
+      run: |
+        if ! hash google-chrome &>/dev/null; then
+          curl -sSfL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o /tmp/chrome.deb
+          sudo dpkg -i /tmp/chrome.deb || true
+          sudo apt-get --no-install-recommends -y --fix-broken install
+        fi
+
     - uses: actions/setup-python@v4
       with:
         python-version: "${{ matrix.PYTHON_VERSION }}"
@@ -80,20 +92,16 @@ jobs:
         pdm install -v
 
     - name: Display project metadata
-      run: |
-         pdm show
+      run: pdm show
 
     - name: Security scan
-      run: |
-        pdm run scan
+      run: pdm run scan
 
     - name: Check code style
-      run: |
-        pdm run lint
+      run: pdm run lint
 
     - name: Run unit tests
-      run: |
-        pdm run utest
+      run: pdm run utest
 
     - name: Run integration tests
       run: |
@@ -101,7 +109,7 @@ jobs:
 
         case "${{ matrix.os }}" in
            ubuntu-*) 
-              sudo apt-get install -o Acquire::Retries=3 --no-install-recommends -y xvfb
+              sudo apt-get install --no-install-recommends -y xvfb
               xvfb-run pdm run itest
               ;;
            *) pdm run itest
@@ -124,7 +132,7 @@ jobs:
 
     - name: "Install: binutils (strip)"
       if: startsWith(matrix.os, 'ubuntu')
-      run: sudo apt-get --no-install-recommends install -y binutils
+      run: sudo apt-get install --no-install-recommends -y binutils
 
     - name: "Install: UPX"
       if: startsWith(matrix.os, 'windows')
@@ -160,7 +168,7 @@ jobs:
 
     - name: Upload self-contained executable
       uses: actions/upload-artifact@v3
-      if: github.ref == 'refs/heads/main' && matrix.PUBLISH_RELEASE
+      if: ${{ github.ref_name == 'main' && matrix.PUBLISH_RELEASE && !env.ACT }}
       with:
         name: artifacts-${{ matrix.os }}
         path: dist/kleinanzeigen-bot*
@@ -175,7 +183,7 @@ jobs:
         docker run --rm second-hand-friends/kleinanzeigen-bot help
 
     - name: Publish Docker image
-      if: github.ref == 'refs/heads/main' && matrix.PUBLISH_RELEASE && startsWith(matrix.os, 'ubuntu')
+      if: ${{ github.ref_name == 'main' && matrix.PUBLISH_RELEASE && startsWith(matrix.os, 'ubuntu') && !env.ACT }}
       run: |
         set -eux
 
@@ -192,7 +200,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: 
       - build
-    if: github.ref == 'refs/heads/main'
+    if: ${{ github.ref_name == 'main' && !github.event.act }}
     concurrency: publish-latest-release # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idconcurrency
 
     steps:
