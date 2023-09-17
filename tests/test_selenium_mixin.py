@@ -11,6 +11,7 @@ from kleinanzeigen_bot import utils
 @pytest.mark.itest
 def test_webdriver_auto_init():
     selenium_mixin = SeleniumMixin()
+    selenium_mixin.browser_config.arguments = ["--no-sandbox"]
 
     browser_info = selenium_mixin.find_compatible_browser()
     utils.ensure(browser_info is not None, "Chrome type not auto-detected")
