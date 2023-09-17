@@ -169,10 +169,10 @@ def pluralize(word:str, count:int | Sized, prefix:bool = True) -> str:
     'fields'
     """
     if not hasattr(pluralize, "inflect"):
-        pluralize.inflect = inflect.engine()
+        pluralize.inflect = inflect.engine()  # type: ignore[attr-defined] # mypy
     if isinstance(count, Sized):
         count = len(count)
-    plural:str = pluralize.inflect.plural_noun(word, count)
+    plural:str = pluralize.inflect.plural_noun(word, count)  # type: ignore[attr-defined] # mypy
     if prefix:
         return f"{count} {plural}"
     return plural
@@ -200,7 +200,7 @@ def load_dict_if_exists(filepath:str, content_label:str = "") -> dict[str, Any] 
         return None
 
     with open(filepath, encoding = "utf-8") as file:
-        return json.load(file) if filepath.endswith(".json") else YAML().load(file)
+        return json.load(file) if filepath.endswith(".json") else YAML().load(file)  # type: ignore[no-any-return] # mypy
 
 
 def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "") -> dict[str, Any]:
@@ -214,7 +214,7 @@ def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "
         raise ValueError(f'Unsupported file type. The file name "{filename}" must end with *.json, *.yaml, or *.yml')
 
     content = get_resource_as_string(module, filename)
-    return json.loads(content) if filename.endswith(".json") else YAML().load(content)
+    return json.loads(content) if filename.endswith(".json") else YAML().load(content)  # type: ignore[no-any-return] # mypy
 
 
 def save_dict(filepath:str, content:dict[str, Any]) -> None:

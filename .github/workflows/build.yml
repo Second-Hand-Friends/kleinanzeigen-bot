@@ -201,7 +201,7 @@ jobs:
       uses: actions/checkout@v4 #https://github.com/actions/checkout
 
     - name: Generate GitHub access token
-      uses: tibdex/github-app-token@v1 #https://github.com/tibdex/github-app-token
+      uses: tibdex/github-app-token@v2 #https://github.com/tibdex/github-app-token
       id: generate_token
       # see https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#authenticating-with-github-app-generated-tokens
       with:

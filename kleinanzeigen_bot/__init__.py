@@ -13,6 +13,7 @@ from overrides import overrides
 from ruamel.yaml import YAML
 from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 
 from . import utils, resources, extract  # pylint: disable=W0406
@@ -409,6 +410,8 @@ class KleinanzeigenBot(SeleniumMixin):
         self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
         csrf_token_elem = self.web_find(By.XPATH, "//meta[@name='_csrf']")
         csrf_token = csrf_token_elem.get_attribute("content")
+        if csrf_token is None:
+            raise AssertionError("Expected CSRF Token not found in HTML content!")
 
         if self.delete_ads_by_title:
             published_ads = json.loads(self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT")["content"])["ads"]
@@ -589,14 +592,14 @@ class KleinanzeigenBot(SeleniumMixin):
 
         # extract the ad id from the URL's query parameter
         current_url_query_params = urllib.parse.parse_qs(urllib.parse.urlparse(self.webdriver.current_url).query)
-        ad_id = int(current_url_query_params.get("adId", None)[0])
+        ad_id = int(current_url_query_params.get("adId", [])[0])
         ad_cfg_orig["id"] = ad_id
 
         LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
 
         utils.save_dict(ad_file, ad_cfg_orig)
 
-    def __set_category(self, ad_file:str, ad_cfg: dict[str, Any]):
+    def __set_category(self, ad_file:str, ad_cfg: dict[str, Any]) -> None:
         # click on something to trigger automatic category detection
         self.web_click(By.ID, "pstad-descrptn")
 
@@ -683,7 +686,7 @@ class KleinanzeigenBot(SeleniumMixin):
         except NoSuchElementException as ex:
             LOG.debug(ex, exc_info = True)
 
-    def __upload_images(self, ad_cfg: dict[str, Any]):
+    def __upload_images(self, ad_cfg: dict[str, Any]) -> None:
         LOG.info(" -> found %s", pluralize("image", ad_cfg["images"]))
         image_upload = self.web_find(By.XPATH, "//input[@type='file']")
 
@@ -791,7 +794,7 @@ class KleinanzeigenBot(SeleniumMixin):
             n_images = 1
 
             # determine number of images (1 ... N)
-            next_button = None
+            next_button:WebElement
             try:  # check if multiple images given
                 # edge case: 'Virtueller Rundgang' div could be found by same CSS class
                 element_candidates = image_box.find_elements(By.CSS_SELECTOR, '.galleryimage--info')
@@ -810,6 +813,8 @@ class KleinanzeigenBot(SeleniumMixin):
             dl_counter = 0
             while img_nr <= n_images:  # scrolling + downloading
                 current_img_url = img_element.get_attribute('src')  # URL of the image
+                if current_img_url is None:
+                    continue
                 file_ending = current_img_url.split('.')[-1].lower()
                 img_path = directory + '/' + img_fn_prefix + str(img_nr) + '.' + file_ending
                 if current_img_url.startswith('https'):  # verify https (for Bandit linter)
@@ -836,7 +841,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
         return img_paths
 
-    def extract_ad_page_info(self, directory:str, id_:int) -> dict:
+    def extract_ad_page_info(self, directory:str, id_:int) -> dict[str, Any]:
         """
         Extracts all necessary information from an ad´s page.
 
@@ -844,7 +849,7 @@ class KleinanzeigenBot(SeleniumMixin):
         :param id_: the ad ID, already extracted by a calling function
         :return: a dictionary with the keys as given in an ad YAML, and their respective values
         """
-        info = {'active': True}
+        info:dict[str, Any] = {'active': True}
 
         # extract basic info
         if 's-anzeige' in self.webdriver.current_url:
@@ -898,7 +903,7 @@ class KleinanzeigenBot(SeleniumMixin):
 
         return info
 
-    def download_ad_page(self, id_:int):
+    def download_ad_page(self, id_:int) -> None:
         """
         Downloads an ad to a specific location, specified by config and ad ID.
         NOTE: Requires that the driver session currently is on the ad page.
@@ -925,7 +930,7 @@ class KleinanzeigenBot(SeleniumMixin):
         ad_file_path = new_base_dir + '/' + f'ad_{id_}.yaml'
         utils.save_dict(ad_file_path, info)
 
-    def start_download_routine(self):
+    def start_download_routine(self) -> None:
         """
         Determines which download mode was chosen with the arguments, and calls the specified download routine.
         This downloads either all, only unsaved (new), or specific ads given by ID.

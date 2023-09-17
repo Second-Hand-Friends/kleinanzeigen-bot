@@ -4,28 +4,34 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 import logging, os, shutil, time
 from collections.abc import Callable, Iterable
-from typing import Any, Final
+from typing import Any, Final, TypeVar
 
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service as ChromeService, DEFAULT_EXECUTABLE_PATH as DEFAULT_CHROMEDRIVER_PATH
+from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chromium.options import ChromiumOptions
 from selenium.webdriver.chromium.webdriver import ChromiumDriver
-from selenium.webdriver.edge.service import Service as EdgeService, DEFAULT_EXECUTABLE_PATH as DEFAULT_EDGEDRIVER_PATH
+from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.expected_conditions import AnyDriver
 from selenium.webdriver.support.ui import Select, WebDriverWait
 import selenium_stealth
 import webdriver_manager.core
 from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.core.driver_cache import DriverCacheManager
+from webdriver_manager.core.manager import DriverManager
+from webdriver_manager.core.os_manager import ChromeType, OSType, OperationSystemManager
 from webdriver_manager.microsoft import EdgeChromiumDriverManager
-from webdriver_manager.core.utils import ChromeType, OSType
 
 from .utils import ensure, pause, T
 
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.selenium_mixin")
+
+DEFAULT_CHROMEDRIVER_PATH = "chromedriver"
+DEFAULT_EDGEDRIVER_PATH = "msedgedriver"
 
 
 class BrowserConfig:
@@ -39,13 +45,16 @@ class BrowserConfig:
         self.profile_name:str = ""
 
 
+CHROMIUM_OPTIONS = TypeVar('CHROMIUM_OPTIONS', bound = ChromiumOptions)  # pylint: disable=invalid-name
+
+
 class SeleniumMixin:
 
     def __init__(self) -> None:
         self.browser_config:Final[BrowserConfig] = BrowserConfig()
         self.webdriver:WebDriver = None
 
-    def _init_browser_options(self, browser_options:ChromiumOptions) -> ChromiumOptions:
+    def _init_browser_options(self, browser_options:CHROMIUM_OPTIONS) -> CHROMIUM_OPTIONS:
         if self.browser_config.use_private_window:
             if isinstance(browser_options, webdriver.EdgeOptions):
                 browser_options.add_argument("-inprivate")
@@ -123,8 +132,9 @@ class SeleniumMixin:
             webdriver_manager.core.driver.get_browser_version_from_os = lambda _: chrome_major_version
 
             # download and install matching chrome driver
+            webdriver_mgr: DriverManager
             if chrome_type == ChromeType.MSEDGE:
-                webdriver_mgr = EdgeChromiumDriverManager(cache_valid_range = 14)
+                webdriver_mgr = EdgeChromiumDriverManager(cache_manager = DriverCacheManager(valid_range = 14))
                 webdriver_path = webdriver_mgr.install()
                 env = os.environ.copy()
                 env["MSEDGEDRIVER_TELEMETRY_OPTOUT"] = "1"  # https://docs.microsoft.com/en-us/microsoft-edge/privacy-whitepaper/#microsoft-edge-driver
@@ -133,7 +143,7 @@ class SeleniumMixin:
                     options = self._init_browser_options(webdriver.EdgeOptions())
                 )
             else:
-                webdriver_mgr = ChromeDriverManager(chrome_type = chrome_type, cache_valid_range = 14)
+                webdriver_mgr = ChromeDriverManager(chrome_type = chrome_type, cache_manager = DriverCacheManager(valid_range = 14))
                 webdriver_path = webdriver_mgr.install()
                 self.webdriver = webdriver.Chrome(service = ChromeService(webdriver_path), options = self._init_browser_options(webdriver.ChromeOptions()))
 
@@ -148,8 +158,8 @@ class SeleniumMixin:
 
         LOG.info("New WebDriver session is: %s %s", self.webdriver.session_id, self.webdriver.command_executor._url)  # pylint: disable=protected-access
 
-    def get_browser_version(self, executable_path: str) -> tuple[ChromeType, str]:
-        match webdriver_manager.core.utils.os_name():
+    def get_browser_version(self, executable_path: str) -> tuple[ChromeType, str]:  # -> [ chrome_type, chrome_version ]
+        match OperationSystemManager.get_os_name():
             case OSType.WIN:
                 import win32api  # pylint: disable=import-outside-toplevel,import-error
                 # pylint: disable=no-member
@@ -175,25 +185,25 @@ class SeleniumMixin:
         if "chromium" in filename:
             return (
                 ChromeType.CHROMIUM,
-                webdriver_manager.core.utils.read_version_from_cmd(version_cmd, webdriver_manager.core.utils.PATTERN[ChromeType.CHROMIUM])
+                webdriver_manager.core.utils.read_version_from_cmd(version_cmd, webdriver_manager.core.os_manager.PATTERN[ChromeType.CHROMIUM])
             )
         if "edge" in filename:
             return (
                 ChromeType.MSEDGE,
-                webdriver_manager.core.utils.read_version_from_cmd(version_cmd, webdriver_manager.core.utils.PATTERN[ChromeType.MSEDGE])
+                webdriver_manager.core.utils.read_version_from_cmd(version_cmd, webdriver_manager.core.os_manager.PATTERN[ChromeType.MSEDGE])
             )
         return (
             ChromeType.GOOGLE,
-            webdriver_manager.core.utils.read_version_from_cmd(version_cmd, webdriver_manager.core.utils.PATTERN[ChromeType.GOOGLE])
+            webdriver_manager.core.utils.read_version_from_cmd(version_cmd, webdriver_manager.core.os_manager.PATTERN[ChromeType.GOOGLE])
         )
 
-    def find_compatible_browser(self) -> tuple[str, ChromeType, str] | None:
-        match webdriver_manager.core.utils.os_name():
+    def find_compatible_browser(self) -> tuple[str, ChromeType, str] | None:  # -> [ browser_path, chrome_type, chrome_version ]
+        match OperationSystemManager.get_os_name():
             case OSType.LINUX:
                 browser_paths = [
                     shutil.which("chromium"),
                     shutil.which("chromium-browser"),
-                    shutil.which("google-chome"),
+                    shutil.which("google-chrome"),
                     shutil.which("microsoft-edge")
                 ]
 
@@ -233,7 +243,7 @@ class SeleniumMixin:
         LOG.warning("Installed browser could not be detected")
         return None
 
-    def web_await(self, condition: Callable[[WebDriver], T], timeout:float = 5, exception_on_timeout: Callable[[], Exception] | None = None) -> T:
+    def web_await(self, condition: Callable[[AnyDriver], T], timeout:float = 5, exception_on_timeout: Callable[[], Exception] | None = None) -> T:
         """
         Blocks/waits until the given condition is met.
 
@@ -305,6 +315,7 @@ class SeleniumMixin:
         input_field.clear()
         input_field.send_keys(text)
         pause()
+        return input_field
 
     def web_open(self, url:str, timeout:float = 15, reload_if_already_open:bool = False) -> None:
         """
@@ -349,7 +360,7 @@ class SeleniumMixin:
         return response
     # pylint: enable=dangerous-default-value
 
-    def web_scroll_page_down(self, scroll_length: int = 10, scroll_speed: int = 10000, scroll_back_top: bool = False):
+    def web_scroll_page_down(self, scroll_length: int = 10, scroll_speed: int = 10000, scroll_back_top: bool = False) -> None:
         """
         Smoothly scrolls the current web page down.
 
