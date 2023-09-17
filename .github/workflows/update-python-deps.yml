@@ -37,7 +37,7 @@ jobs:
         private_key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
 
     - name: Git Checkout
-      uses: actions/checkout@v3 # https://github.com/actions/checkout
+      uses: actions/checkout@v4 # https://github.com/actions/checkout
       with:
         token: ${{ steps.generate_token.outputs.token }}
 
