@@ -19,7 +19,7 @@ files = [
 
 [[package]]
 name = "astroid"
-version = "2.15.6"
+version = "2.15.7"
 requires_python = ">=3.7.2"
 summary = "An abstract syntax tree for Python with inference support."
 dependencies = [
@@ -29,8 +29,8 @@ dependencies = [
     "wrapt<2,>=1.14; python_version >= \"3.11\"",
 ]
 files = [
-    {file = "astroid-2.15.6-py3-none-any.whl", hash = "sha256:389656ca57b6108f939cf5d2f9a2a825a3be50ba9d589670f393236e0a03b91c"},
-    {file = "astroid-2.15.6.tar.gz", hash = "sha256:903f024859b7c7687d7a7f3a3f73b17301f8e42dfd9cc9df9d4418172d3e2dbd"},
+    {file = "astroid-2.15.7-py3-none-any.whl", hash = "sha256:958f280532e36ca84a13023f15cb1556fb6792d193acb87e1f3ca536b6fa6bd2"},
+    {file = "astroid-2.15.7.tar.gz", hash = "sha256:c522f2832a900e27a7d284b9b6ef670d2495f760ede3c8c0b004a5641d3c5987"},
 ]
 
 [[package]]
@@ -576,11 +576,11 @@ files = [
 
 [[package]]
 name = "pylint"
-version = "2.17.5"
+version = "2.17.6"
 requires_python = ">=3.7.2"
 summary = "python code static checker"
 dependencies = [
-    "astroid<=2.17.0-dev0,>=2.15.6",
+    "astroid<=2.17.0-dev0,>=2.15.7",
     "colorama>=0.4.5; sys_platform == \"win32\"",
     "dill>=0.2; python_version < \"3.11\"",
     "dill>=0.3.6; python_version >= \"3.11\"",
@@ -591,8 +591,8 @@ dependencies = [
     "tomlkit>=0.10.1",
 ]
 files = [
-    {file = "pylint-2.17.5-py3-none-any.whl", hash = "sha256:73995fb8216d3bed149c8d51bba25b2c52a8251a2c8ac846ec668ce38fab5413"},
-    {file = "pylint-2.17.5.tar.gz", hash = "sha256:f7b601cbc06fef7e62a754e2b41294c2aa31f1cb659624b9a85bcba29eaf8252"},
+    {file = "pylint-2.17.6-py3-none-any.whl", hash = "sha256:18a1412e873caf8ffb56b760ce1b5643675af23e6173a247b502406b24c716af"},
+    {file = "pylint-2.17.6.tar.gz", hash = "sha256:be928cce5c76bf9acdc65ad01447a1e0b1a7bccffc609fb7fc40f2513045bd05"},
 ]
 
 [[package]]
@@ -762,7 +762,7 @@ files = [
 
 [[package]]
 name = "selenium"
-version = "4.12.0"
+version = "4.13.0"
 requires_python = ">=3.8"
 summary = ""
 dependencies = [
@@ -772,8 +772,8 @@ dependencies = [
     "urllib3[socks]<3,>=1.26",
 ]
 files = [
-    {file = "selenium-4.12.0-py3-none-any.whl", hash = "sha256:b2c48b1440db54a0653300d9955f5421390723d53b36ec835e18de8e13bbd401"},
-    {file = "selenium-4.12.0.tar.gz", hash = "sha256:95be6aa449a0ab4ac1198bb9de71bbe9170405e04b9752f4b450dc7292a21828"},
+    {file = "selenium-4.13.0-py3-none-any.whl", hash = "sha256:f0f9185c01ae249a321529c4e3aa0edc2a900642e61fdbb76988cd72d2762ece"},
+    {file = "selenium-4.13.0.tar.gz", hash = "sha256:3c413a4f1b8af67824703195e3b1c19cfb1c3186c799efa035d55fd59d6dd59f"},
 ]
 
 [[package]]
@@ -954,7 +954,7 @@ files = [
 
 [[package]]
 name = "webdriver-manager"
-version = "4.0.0"
+version = "4.0.1"
 requires_python = ">=3.7"
 summary = "Library provides the way to automatically manage drivers for different browsers"
 dependencies = [
@@ -963,8 +963,8 @@ dependencies = [
     "requests",
 ]
 files = [
-    {file = "webdriver_manager-4.0.0-py2.py3-none-any.whl", hash = "sha256:05f58ab599b907b03e0aa8d6b43624b1ca8c12d5d48455c79c531b9052ae2356"},
-    {file = "webdriver_manager-4.0.0.tar.gz", hash = "sha256:2b8d1c2cb590d296ade18bc7bc2589578a868f5587133922d744641f6a757a20"},
+    {file = "webdriver_manager-4.0.1-py2.py3-none-any.whl", hash = "sha256:d7970052295bb9cda2c1a24cf0b872dd2c41ababcc78f7b6b8dc37a41e979a7e"},
+    {file = "webdriver_manager-4.0.1.tar.gz", hash = "sha256:25ec177c6a2ce9c02fb8046f1b2732701a9418d6a977967bb065d840a3175d87"},
 ]
 
 [[package]]
