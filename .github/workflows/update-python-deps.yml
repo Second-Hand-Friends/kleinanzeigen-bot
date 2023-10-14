@@ -16,7 +16,7 @@ defaults:
     shell: bash
 
 env:
-  PYTHON_VERSION: "3.11"
+  PYTHON_VERSION: "3.12"
 
 jobs:
 
@@ -68,7 +68,7 @@ jobs:
         set -euo pipefail
 
         exec 5>&1
-        updates=$(pdm update 2>&1 |tee /dev/fd/5)
+        updates=$(pdm update --update-all 2>&1 |tee /dev/fd/5)
 
         if git diff --exit-code pdm.lock; then
           echo "updates=" >> "$GITHUB_OUTPUT"

@@ -41,44 +41,52 @@ from sys import platform
 if platform != "darwin":
     excluded_modules.append("_osx_support")
 
-block_cipher = None
-
+# https://github.com/pyinstaller/pyinstaller/blob/e7c252573f424ad9b79169ab01229d27599004b1/PyInstaller/building/build_main.py#L318
 analysis = Analysis(
         ['kleinanzeigen_bot/__main__.py'],
-        pathex = [],
-        binaries = [],
+        # pathex = [],
+        # binaries = [],
         datas = datas,
         hiddenimports = ['pkg_resources'],
-        hookspath = [],
-        hooksconfig = {},
-        runtime_hooks = [],
+        # hookspath = [],
+        # hooksconfig = {},
         excludes = excluded_modules,
-        win_no_prefer_redirects = False,
-        win_private_assemblies = False,
-        cipher = block_cipher,
-        noarchive = False
+        # runtime_hooks = [],
+        # noarchive = False,
+        # module_collection_mode = None
     )
 
-pyz = PYZ(analysis.pure, analysis.zipped_data, cipher = block_cipher)
+# https://github.com/pyinstaller/pyinstaller/blob/e7c252573f424ad9b79169ab01229d27599004b1/PyInstaller/building/api.py#L51
+pyz = PYZ(
+        analysis.pure,  # tocs
+        analysis.zipped_data,
+        # name = None
+    )
 
 import shutil
 
+# https://github.com/pyinstaller/pyinstaller/blob/e7c252573f424ad9b79169ab01229d27599004b1/PyInstaller/building/api.py#L338
 exe = EXE(pyz,
         analysis.scripts,
         analysis.binaries,
-        analysis.zipfiles,
         analysis.datas,
-        [],
+        # bootloader_ignore_signals = False,
+        # console = True,
+        # disable_windowed_traceback = False,
+        # debug = False,
         name = 'kleinanzeigen-bot',
-        debug = False,
-        bootloader_ignore_signals = False,
+        # exclude_binaries = False,
+        # icon = None,
+        # version = None,
+        # uac_admin = False,
+        # uac_uiaccess = False,
+        # argv_emulation = None,
+        # target_arch = None,
+        # codesign_identity = None,
+        # entitlements_file = None,
+        # contents_directory = "_internal",
         strip = shutil.which("strip") is not None,
         upx = shutil.which("upx") is not None,
         upx_exclude = [],
         runtime_tmpdir = None,
-        console = True,
-        disable_windowed_traceback = False,
-        target_arch = None,
-        codesign_identity = None,
-        entitlements_file = None
     )

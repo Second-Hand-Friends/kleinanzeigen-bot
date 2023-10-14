@@ -35,18 +35,21 @@ jobs:
         include:
         - os: macos-latest
           PYTHON_VERSION: "3.10"
-          PUBLISH_RELEASE: true
+          PUBLISH_RELEASE: false
         - os: ubuntu-latest
           PYTHON_VERSION: "3.10"
           PUBLISH_RELEASE: false
         - os: windows-latest
           PYTHON_VERSION: "3.10"
           PUBLISH_RELEASE: false
+        - os: macos-latest
+          PYTHON_VERSION: "3.12"
+          PUBLISH_RELEASE: true
         - os: ubuntu-latest
-          PYTHON_VERSION: "3.11"
+          PYTHON_VERSION: "3.12"
           PUBLISH_RELEASE: true
         - os: windows-latest
-          PYTHON_VERSION: "3.11"
+          PYTHON_VERSION: "3.12"
           PUBLISH_RELEASE: true
 
     runs-on: ${{ matrix.os }}
@@ -85,9 +88,7 @@ jobs:
 
         python -m pip install --upgrade pip
 
-        # pin packaging to 21.3 for now to prevent: packaging.specifiers.InvalidSpecifier: Invalid specifier: '>=3.4.*'
-        # see https://github.com/pdm-project/pdm/issues/1556
-        pip install --upgrade pdm packaging==21.3
+        pip install --upgrade pdm
 
         pdm install -v
 
@@ -205,7 +206,7 @@ jobs:
 
     steps:
     - name: Git checkout 
-      # only required by "hub release create" to prevent "fatal: Not a git repository"
+      # only required by "gh release create" to prevent "fatal: Not a git repository"
       uses: actions/checkout@v4 #https://github.com/actions/checkout
 
     - name: Generate GitHub access token
@@ -227,28 +228,16 @@ jobs:
       uses: actions/download-artifact@v3
 
     - name: "Delete previous 'latest' release"
-      run: |
-        set -eu
-
-        api_base_url="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY"
-
-        # delete 'latest' github release
-        release_id=$(curl -fsL -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/$GITHUB_REPOSITORY/releases | jq -r '.[] | select(.name == "latest") | .id')
-        if [[ -n $release_id ]]; then
-           echo "Deleting release [$api_base_url/releases/$release_id]..."
-           curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -fsSL -X DELETE "$api_base_url/releases/$release_id"
-        fi
-
-        # delete 'latest' git tag
-        tag_url="$api_base_url/git/refs/tags/latest"
-        if curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -fsLo /dev/null --head "$tag_url"; then
-           echo "Deleting tag [$tag_url]..."
-           curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -fsSL -X DELETE "$tag_url"
-        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RELEASE_NAME: latest
+      # https://cli.github.com/manual/gh_release_delete
+      run: gh release delete "$RELEASE_NAME" --yes --cleanup-tag || true
 
     - name: "Create 'latest' release"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RELEASE_NAME: latest
       run: |
         set -eux
 
@@ -256,13 +245,15 @@ jobs:
         mv artifacts-ubuntu-latest/kleinanzeigen-bot kleinanzeigen-bot-linux-amd64
         mv artifacts-windows-latest/kleinanzeigen-bot.exe kleinanzeigen-bot-windows-amd64.exe
 
-        # https://hub.github.com/hub-release.1.html
-        hub release create "latest" \
+        # https://cli.github.com/manual/gh_release_create
+        gh release create "$RELEASE_NAME" \
+          --latest \
           --prerelease \
-          --message "latest" \
-          --attach "kleinanzeigen-bot-darwin-amd64" \
-          --attach "kleinanzeigen-bot-linux-amd64" \
-          --attach "kleinanzeigen-bot-windows-amd64.exe"
+          --target "${{ github.sha }}" \
+          --notes "$RELEASE_NAME" \
+          kleinanzeigen-bot-darwin-amd64 \
+          kleinanzeigen-bot-linux-amd64 \
+          kleinanzeigen-bot-windows-amd64.exe
 
     - name: "Delete intermediate build artifacts"
       uses: geekyeggo/delete-artifact@v2 # https://github.com/GeekyEggo/delete-artifact/

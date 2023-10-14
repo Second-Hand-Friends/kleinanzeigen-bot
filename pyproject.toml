@@ -24,14 +24,14 @@ classifiers = [  # https://pypi.org/classifiers/
     "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Programming Language :: Python :: 3.10"
 ]
-requires-python = ">=3.10,<3.12" # <3.12 required for pyinstaller
+requires-python = ">=3.10,<3.13" # <3.12 required for pyinstaller
 dependencies = [
     "coloredlogs~=15.0",
     "inflect~=7.0",
     "overrides~=7.4",
     "ruamel.yaml~=0.17",
-    "pywin32==303; sys_platform == 'win32'",
-    "selenium~=4.12",
+    "pywin32==306; sys_platform == 'win32'",
+    "selenium~=4.13",
     "selenium_stealth~=1.0",
     "wcmatch~=8.5",
     "webdriver_manager~=4.0"
@@ -56,12 +56,12 @@ dev = [
     "bandit~=1.7",
     "toml", # required by bandit
     "tomli", # required by bandit
-    "pydantic~=1.10", # inflect depends on pydantic > 1.9 which results in pydantic 2 being loaded, which however is not compatible with pyinstaller, so pinning to 1.x
+    "pydantic~=2.4",
     "pytest~=7.4",
-    "pyinstaller~=5.13",
+    "pyinstaller~=6.0",
     "psutil",
-    "pylint~=2.17",
-    "mypy~=1.5.1",
+    "pylint~=3.0",
+    "mypy~=1.5",
 ]
 
 [tool.pdm.scripts]
