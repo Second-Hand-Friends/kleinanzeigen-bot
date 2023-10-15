@@ -1,4 +1,10 @@
 # https://pip.pypa.io/en/stable/reference/build-system/pyproject-toml/
+#
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+#
+
 [build-system]
 requires = ["pdm-pep517"]
 build-backend = "pdm.pep517.api"

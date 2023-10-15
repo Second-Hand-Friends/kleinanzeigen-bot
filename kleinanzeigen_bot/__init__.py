@@ -1,6 +1,7 @@
 """
-Copyright (C) 2022 Sebastian Thomschke and contributors
+SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
+SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
 import atexit, copy, getopt, importlib.metadata, json, logging, os, re, signal, shutil, sys, textwrap, time, urllib
 from collections.abc import Iterable
