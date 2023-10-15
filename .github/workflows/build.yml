@@ -232,7 +232,9 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         RELEASE_NAME: latest
       # https://cli.github.com/manual/gh_release_delete
-      run: gh release delete "$RELEASE_NAME" --yes --cleanup-tag || true
+      run: |
+        GH_DEBUG=1 gh release delete "$RELEASE_NAME" --yes --cleanup-tag || true
+
 
     - name: "Create 'latest' release"
       env:
@@ -246,11 +248,11 @@ jobs:
         mv artifacts-windows-latest/kleinanzeigen-bot.exe kleinanzeigen-bot-windows-amd64.exe
 
         # https://cli.github.com/manual/gh_release_create
-        gh release create "$RELEASE_NAME" \
-          --latest \
+        GH_DEBUG=1 gh release create "$RELEASE_NAME" \
           --prerelease \
+          --latest \
+          --notes "${{ github.event.head_commit.message }}" \
           --target "${{ github.sha }}" \
-          --notes "$RELEASE_NAME" \
           kleinanzeigen-bot-darwin-amd64 \
           kleinanzeigen-bot-linux-amd64 \
           kleinanzeigen-bot-windows-amd64.exe
