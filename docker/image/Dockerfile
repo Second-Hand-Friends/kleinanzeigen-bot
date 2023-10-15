@@ -3,8 +3,9 @@
 # see https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/reference.md#syntax
 # see https://docs.docker.com/engine/reference/builder/#syntax
 #
-# Copyright (C) 2022 Sebastian Thomschke and contributors
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 #
 
 ######################
