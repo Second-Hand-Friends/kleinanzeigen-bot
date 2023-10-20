@@ -522,7 +522,10 @@ class KleinanzeigenBot(SeleniumMixin):
         #############################
         price_type = ad_cfg["price_type"]
         if price_type != "NOT_APPLICABLE":
-            self.web_select(By.XPATH, "//select[@id='price-type-react' or @id='micro-frontend-price-type' or @id='priceType']", price_type)
+            try:
+                self.web_select(By.XPATH, "//select[@id='price-type-react' or @id='micro-frontend-price-type' or @id='priceType']", price_type)
+            except NoSuchElementException:
+                pass
             if safe_get(ad_cfg, "price"):
                 self.web_input(By.XPATH, "//input[@id='post-ad-frontend-price' or @id='micro-frontend-price' or @id='pstad-price']", ad_cfg["price"])
 
