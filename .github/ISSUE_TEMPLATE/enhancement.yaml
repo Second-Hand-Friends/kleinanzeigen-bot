@@ -1,0 +1,50 @@
+name: 💡 Enhancement Request
+description: File a enhancement request for an existing feature
+title: "[ENH] "
+labels: [enhancement]
+
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to fill out this enhancement request!
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 😕 Addressed Problem
+      description: Which problem does this request address?
+      placeholder: Please enter answer here...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 💡 Suggested Solution
+      description: What solution do you suggest?
+      placeholder: Please enter answer here...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 🔎 Alternatives
+      description: Which Alternatives did you consider?
+      placeholder: Please enter answer here...
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 🗺️ Additional Context
+      description: Any relevant additional context information
+      placeholder: Please enter answer here...
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our [Code of Conduct](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/CODE_OF_CONDUCT.md)
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

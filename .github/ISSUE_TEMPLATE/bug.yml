@@ -1,0 +1,72 @@
+name: 🐞 Bug Report
+description: File a bug report
+title: "[BUG] "
+labels: ["bug"]
+
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to fill out this bug report!
+
+  - type: textarea
+    id: expected-behaviour
+    attributes:
+      label: ✔️ Expected Behaviour
+      description: What did you expect to happen?
+      placeholder: Please enter expected behaviour here...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behaviour
+    attributes:
+      label: 🐞 Actual Behaviour
+      description: What did actually happen?
+      placeholder: Please enter actual behaviour here...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: 📋 Steps to Reproduce
+      description: How can we reproduce the issue?
+      placeholder: Please enter steps to reproduce here...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browsers
+    attributes:
+      label: 📺 What browsers are you seeing the problem on? (if applicable)
+      multiple: true
+      options:
+        - Chrome
+        - Microsoft Edge
+
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: 💻 What operating systems are you seeing the problem on? (if applicable)
+      multiple: true
+      options:
+        - Linux
+        - MacOS
+        - Windows
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 📃 Relevant log output (if applicable)
+      description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our [Code of Conduct](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/CODE_OF_CONDUCT.md)
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true
