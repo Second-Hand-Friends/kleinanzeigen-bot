@@ -15,6 +15,7 @@ on:
     paths-ignore:
     - '**/*.md'
     - '.github/*.yml'
+    - '.github/ISSUE_TEMPLATE/*'
     - '.github/workflows/codeql-analysis.yml'
     - '.github/workflows/update-python-deps.yml'
   pull_request:

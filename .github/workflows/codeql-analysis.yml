@@ -9,6 +9,7 @@ on:
     - '**'
     paths-ignore:
     - '**/*.md'
+    - '.github/ISSUE_TEMPLATE/*'
     - '.github/workflows/build.yml'
     - '.github/workflows/update-python-deps.yml'
   pull_request:
