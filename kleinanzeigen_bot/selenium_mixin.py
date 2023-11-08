@@ -7,6 +7,8 @@ import logging, os, shutil, time
 from collections.abc import Callable, Iterable
 from typing import Any, Final, TypeVar
 
+
+import undetected_chromedriver as uc
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
@@ -83,14 +85,14 @@ class SeleniumMixin:
             browser_options.add_extension(crx_extension)
         LOG.debug("Effective browser extensions: %s", browser_options.extensions)
 
-        browser_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        browser_options.add_experimental_option("useAutomationExtension", False)
-        browser_options.add_experimental_option("prefs", {
-            "credentials_enable_service": False,
-            "profile.password_manager_enabled": False,
-            "profile.default_content_setting_values.notifications": 2,  # 1 = allow, 2 = block browser notifications
-            "devtools.preferences.currentDockState": "\"bottom\""
-        })
+#        browser_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+#        browser_options.add_experimental_option("useAutomationExtension", False)
+#        browser_options.add_experimental_option("prefs", {
+#            "credentials_enable_service": False,
+#            "profile.password_manager_enabled": False,
+#            "profile.default_content_setting_values.notifications": 2,  # 1 = allow, 2 = block browser notifications
+#            "devtools.preferences.currentDockState": "\"bottom\""
+#        })
 
         if not LOG.isEnabledFor(logging.DEBUG):
             browser_options.add_argument("--log-level=3")  # INFO: 0, WARNING: 1, ERROR: 2, FATAL: 3
@@ -111,7 +113,7 @@ class SeleniumMixin:
         # check if a chrome driver is present already
         if use_preinstalled_webdriver and shutil.which(DEFAULT_CHROMEDRIVER_PATH):
             LOG.info("Using pre-installed Chrome Driver [%s]", shutil.which(DEFAULT_CHROMEDRIVER_PATH))
-            self.webdriver = webdriver.Chrome(options = self._init_browser_options(webdriver.ChromeOptions()))
+            self.webdriver = uc.Chrome(options = self._init_browser_options(webdriver.ChromeOptions()))
         elif use_preinstalled_webdriver and shutil.which(DEFAULT_EDGEDRIVER_PATH):
             LOG.info("Using pre-installed Edge Driver [%s]", shutil.which(DEFAULT_EDGEDRIVER_PATH))
             self.webdriver = webdriver.ChromiumEdge(options = self._init_browser_options(webdriver.EdgeOptions()))
@@ -146,7 +148,7 @@ class SeleniumMixin:
             else:
                 webdriver_mgr = ChromeDriverManager(chrome_type = chrome_type, cache_manager = DriverCacheManager(valid_range = 14))
                 webdriver_path = webdriver_mgr.install()
-                self.webdriver = webdriver.Chrome(service = ChromeService(webdriver_path), options = self._init_browser_options(webdriver.ChromeOptions()))
+                self.webdriver = uc.Chrome(service = ChromeService(webdriver_path), options = self._init_browser_options(webdriver.ChromeOptions()))
 
         # workaround to support Edge, see https://github.com/diprajpatra/selenium-stealth/pull/25
         selenium_stealth.Driver = ChromiumDriver
