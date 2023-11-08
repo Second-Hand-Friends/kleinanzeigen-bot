@@ -37,9 +37,10 @@ dependencies = [
     "overrides~=7.4",
     "ruamel.yaml~=0.17",
     "pywin32==306; sys_platform == 'win32'",
-    "selenium~=4.13",
+    "selenium==4.12",
     "selenium_stealth~=1.0",
     "wcmatch~=8.5",
+    "undetected_chromedriver>=3.5",
     "webdriver_manager~=4.0"
 ]
 
