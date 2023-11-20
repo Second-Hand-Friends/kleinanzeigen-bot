@@ -35,9 +35,9 @@ dependencies = [
     "coloredlogs~=15.0",
     "inflect~=7.0",
     "overrides~=7.4",
-    "ruamel.yaml~=0.17",
+    "ruamel.yaml~=0.18",
     "pywin32==306; sys_platform == 'win32'",
-    "selenium~=4.13",
+    "selenium~=4.15",
     "selenium_stealth~=1.0",
     "wcmatch~=8.5",
     "webdriver_manager~=4.0"
@@ -64,10 +64,10 @@ dev = [
     "tomli", # required by bandit
     "pydantic~=2.4",
     "pytest~=7.4",
-    "pyinstaller~=6.0",
+    "pyinstaller~=6.2",
     "psutil",
     "pylint~=3.0",
-    "mypy~=1.5",
+    "mypy~=1.7",
 ]
 
 [tool.pdm.scripts]
@@ -134,19 +134,35 @@ extension-pkg-whitelist = "win32api"
 ignore = "version.py"
 jobs = 4
 persistent = "no"
+
+# https://pylint.pycqa.org/en/latest/user_guide/checkers/extensions.html
 load-plugins = [
     "pylint.extensions.bad_builtin",
-    "pylint.extensions.comparetozero",
+    #"pylint.extensions.broad_try_clause",
     "pylint.extensions.check_elif",
     "pylint.extensions.code_style",
     "pylint.extensions.comparison_placement",
+    #"pylint.extensions.confusing_elif",
+    "pylint.extensions.consider_ternary_expression",
+    "pylint.extensions.consider_refactoring_into_while_condition",
+    "pylint.extensions.dict_init_mutate",
+    "pylint.extensions.docstyle",
+    #"pylint.extensions.docparams",
+    "pylint.extensions.dunder",
     "pylint.extensions.empty_comment",
+    "pylint.extensions.eq_without_hash",
     "pylint.extensions.for_any_all",
+    #"pylint.extensions.magic_value",
+    #"pylint.extensions.mccabe",
+    "pylint.extensions.set_membership",
     "pylint.extensions.no_self_use",
     "pylint.extensions.overlapping_exceptions",
+    "pylint.extensions.private_import",
+    "pylint.extensions.redefined_loop_name",
     "pylint.extensions.redefined_variable_type",
     "pylint.extensions.set_membership",
-    "pylint.extensions.typing"
+    "pylint.extensions.typing",
+    #"pylint.extensions.while_used"
 ]
 
 [tool.pylint.basic]
@@ -166,6 +182,7 @@ logging-modules = "logging"
 disable= [
     "broad-except",
     "consider-using-assignment-expr",
+    "docstring-first-line-empty",
     "missing-docstring",
     "multiple-imports",
     "multiple-statements",
