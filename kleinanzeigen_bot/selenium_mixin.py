@@ -17,7 +17,6 @@ from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.expected_conditions import AnyDriver
 from selenium.webdriver.support.ui import Select, WebDriverWait
 import selenium_stealth
 import webdriver_manager.core
@@ -244,7 +243,7 @@ class SeleniumMixin:
         LOG.warning("Installed browser could not be detected")
         return None
 
-    def web_await(self, condition: Callable[[AnyDriver], T], timeout:float = 5, exception_on_timeout: Callable[[], Exception] | None = None) -> T:
+    def web_await(self, condition: Callable[[WebDriver], T], timeout:float = 5, exception_on_timeout: Callable[[], Exception] | None = None) -> T:
         """
         Blocks/waits until the given condition is met.
 

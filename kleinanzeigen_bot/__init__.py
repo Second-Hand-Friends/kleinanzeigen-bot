@@ -41,10 +41,7 @@ class KleinanzeigenBot(SeleniumMixin):
         self.categories:dict[str, str] = {}
 
         self.file_log:logging.FileHandler | None = None
-        if is_frozen():
-            log_file_basename = os.path.splitext(os.path.basename(sys.executable))[0]
-        else:
-            log_file_basename = self.__module__
+        log_file_basename = is_frozen() and os.path.splitext(os.path.basename(sys.executable))[0] or self.__module__
         self.log_file_path:str | None = abspath(f"{log_file_basename}.log")
 
         self.command = "help"
@@ -870,11 +867,7 @@ class KleinanzeigenBot(SeleniumMixin):
         info:dict[str, Any] = {'active': True}
 
         # extract basic info
-        if 's-anzeige' in self.webdriver.current_url:
-            o_type = 'OFFER'
-        else:
-            o_type = 'WANTED'
-        info['type'] = o_type
+        info['type'] = 'OFFER' if 's-anzeige' in self.webdriver.current_url else 'WANTED'
         title:str = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-title').text
         LOG.info('Extracting information from ad with title \"%s\"', title)
         info['title'] = title
