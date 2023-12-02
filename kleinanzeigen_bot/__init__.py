@@ -348,12 +348,15 @@ class KleinanzeigenBot(SeleniumMixin):
         self.browser_config.profile_name = self.config["browser"]["profile_name"]
 
     def login(self) -> None:
-        LOG.info("Logging in as [%s]...", self.config["login"]["username"])
-        self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
+        LOG.info("Checking if already logged in")
+        self.web_open(f"{self.root_url}")
 
         if self.is_logged_in():
             LOG.info("Already logged in as [%s]. Skipping login.", self.config["login"]["username"])
             return
+
+        LOG.info("Logging in as [%s]...", self.config["login"]["username"])
+        self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
 
         # close redesign banner
         try:
