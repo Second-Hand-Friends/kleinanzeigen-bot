@@ -531,11 +531,12 @@ class KleinanzeigenBot(SeleniumMixin):
         #############################
         sell_directly = ad_cfg["sell_directly"]
         try:
-            if sell_directly and ad_cfg["shipping_type"] == "SHIPPING" and ad_cfg["shipping_options"] and price_type in {"FIXED", "NEGOTIABLE"}:
-                if not self.webdriver.find_element(By.ID, "radio-buy-now-yes").is_selected():
-                    self.web_click(By.XPATH, '//*[contains(@id, "radio-buy-now-yes")]')
-            elif not self.webdriver.find_element(By.ID, "radio-buy-now-no").is_selected():
-                self.web_click(By.XPATH, '//*[contains(@id, "radio-buy-now-no")]')
+            if ad_cfg["shipping_type"] == "SHIPPING":
+                if sell_directly and ad_cfg["shipping_options"] and price_type in {"FIXED", "NEGOTIABLE"}:
+                    if not self.webdriver.find_element(By.ID, "radio-buy-now-yes").is_selected():
+                        self.web_click(By.XPATH, '//*[contains(@id, "radio-buy-now-yes")]')
+                elif not self.webdriver.find_element(By.ID, "radio-buy-now-no").is_selected():
+                    self.web_click(By.XPATH, '//*[contains(@id, "radio-buy-now-no")]')
         except NoSuchElementException as ex:
             LOG.debug(ex, exc_info = True)
 
