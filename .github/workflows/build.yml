@@ -2,23 +2,33 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 #
-# https://docs.github.com/en/free-pro-team@latest/actions/reference/workflow-syntax-for-github-actions
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
 name: Build
 
 on:
   push:
-    branches-ignore:
+    branches-ignore: # build all branches except:
     - 'dependabot/**'    # prevent GHA triggered twice (once for commit to the branch and once for opening/syncing the PR)
     - 'dependencies/pdm' # prevent GHA triggered twice (once for commit to the branch and once for opening/syncing the PR)
-    tags-ignore:
+    tags-ignore: # don't build tags
     - '**'
     paths-ignore:
     - '**/*.md'
+    - '.editorconfig'
+    - '.git*'
     - '.github/*.yml'
     - '.github/ISSUE_TEMPLATE/*'
     - '.github/workflows/codeql-analysis.yml'
     - '.github/workflows/update-python-deps.yml'
   pull_request:
+    paths-ignore:
+    - '**/*.md'
+    - '.editorconfig'
+    - '.git*'
+    - '.github/*.yml'
+    - '.github/ISSUE_TEMPLATE/*'
+    - '.github/workflows/codeql-analysis.yml'
+    - '.github/workflows/update-python-deps.yml'
   workflow_dispatch:
     # https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/
 
@@ -57,12 +67,13 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-
     - name: Git checkout
       uses: actions/checkout@v4 #https://github.com/actions/checkout
 
+
     - name: Configure Fast APT Mirror
       uses: vegardit/fast-apt-mirror.sh@v1
+
 
     - name: Install Chromium Browser
       if: env.ACT == 'true' && startsWith(matrix.os, 'ubuntu')
@@ -73,38 +84,43 @@ jobs:
           sudo apt-get --no-install-recommends -y --fix-broken install
         fi
 
+
     - uses: actions/setup-python@v4
       with:
         python-version: "${{ matrix.PYTHON_VERSION }}"
+
 
     - uses: actions/cache@v3
       with:
         path: __pypackages__
         key: ${{ runner.os }}-pypackages-${{ hashFiles('pdm.lock') }}
 
+
     - name: "Install: Python dependencies"
       run: |
         set -eux
 
         python --version
-
         python -m pip install --upgrade pip
-
         pip install --upgrade pdm
-
         pdm install -v
+
 
     - name: Display project metadata
       run: pdm show
 
+
     - name: Security scan
       run: pdm run scan
+
 
     - name: Check code style
       run: pdm run lint
 
+
     - name: Run unit tests
       run: pdm run utest
+
 
     - name: Run integration tests
       run: |
@@ -118,6 +134,7 @@ jobs:
            *) pdm run itest
               ;;
         esac
+
 
     - name: Run app from source
       run: |
@@ -133,9 +150,11 @@ jobs:
         pdm run app version
         pdm run app verify
 
+
     - name: "Install: binutils (strip)"
       if: startsWith(matrix.os, 'ubuntu')
       run: sudo apt-get install --no-install-recommends -y binutils
+
 
     - name: "Install: UPX"
       if: startsWith(matrix.os, 'windows')
@@ -161,6 +180,7 @@ jobs:
 
         ls -l dist
 
+
     - name: Run self-contained executable
       run: |
         set -eux
@@ -169,12 +189,14 @@ jobs:
         dist/kleinanzeigen-bot version
         dist/kleinanzeigen-bot verify
 
+
     - name: Upload self-contained executable
       uses: actions/upload-artifact@v3
       if: ${{ github.ref_name == 'main' && matrix.PUBLISH_RELEASE && !env.ACT }}
       with:
         name: artifacts-${{ matrix.os }}
         path: dist/kleinanzeigen-bot*
+
 
     - name: Build Docker image
       if: startsWith(matrix.os, 'ubuntu')
@@ -184,6 +206,7 @@ jobs:
         bash docker/build-image.sh
 
         docker run --rm second-hand-friends/kleinanzeigen-bot help
+
 
     - name: Publish Docker image
       if: ${{ github.ref_name == 'main' && matrix.PUBLISH_RELEASE && startsWith(matrix.os, 'ubuntu') && !env.ACT }}
@@ -211,6 +234,7 @@ jobs:
       # only required by "gh release create" to prevent "fatal: Not a git repository"
       uses: actions/checkout@v4 #https://github.com/actions/checkout
 
+
     - name: Generate GitHub access token
       uses: tibdex/github-app-token@v2 #https://github.com/tibdex/github-app-token
       id: generate_token
@@ -220,14 +244,17 @@ jobs:
         app_id: ${{ secrets.DEPS_UPDATER_APP_ID }}
         private_key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
 
+
     - name: Delete untagged docker image
       continue-on-error: true
       uses: camargo/delete-untagged-action@v1
       with:
         github-token: ${{ steps.generate_token.outputs.token }}
 
+
     - name: Download build artifacts
       uses: actions/download-artifact@v3
+
 
     - name: "Delete previous 'latest' release"
       env:
@@ -251,13 +278,14 @@ jobs:
 
         # https://cli.github.com/manual/gh_release_create
         GH_DEBUG=1 gh release create "$RELEASE_NAME" \
-          --prerelease \
+          --title "$RELEASE_NAME" \
           --latest \
           --notes "${{ github.event.head_commit.message }}" \
           --target "${{ github.sha }}" \
           kleinanzeigen-bot-darwin-amd64 \
           kleinanzeigen-bot-linux-amd64 \
           kleinanzeigen-bot-windows-amd64.exe
+
 
     - name: "Delete intermediate build artifacts"
       uses: geekyeggo/delete-artifact@v2 # https://github.com/GeekyEggo/delete-artifact/
