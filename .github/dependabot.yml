@@ -12,4 +12,6 @@ updates:
       prefix-development: chore
       include: scope
     labels:
+      - pinned
       - dependencies
+      - gha
