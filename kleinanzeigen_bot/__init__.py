@@ -52,6 +52,9 @@ class KleinanzeigenBot(SeleniumMixin):
     def __del__(self) -> None:
         if self.file_log:
             LOG_ROOT.removeHandler(self.file_log)
+        if self.webdriver:
+            self.webdriver.quit()
+            self.webdriver = None
 
     def get_version(self) -> str:
         return importlib.metadata.version(__package__)
