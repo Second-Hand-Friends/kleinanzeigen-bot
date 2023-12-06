@@ -235,21 +235,14 @@ jobs:
       uses: actions/checkout@v4 #https://github.com/actions/checkout
 
 
-    - name: Generate GitHub access token
-      uses: tibdex/github-app-token@v2 #https://github.com/tibdex/github-app-token
-      id: generate_token
-      # see https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#authenticating-with-github-app-generated-tokens
-      with:
-        # see https://github.com/organizations/Second-Hand-Friends/settings/apps/kleinanzeigen-bot-tu
-        app_id: ${{ secrets.DEPS_UPDATER_APP_ID }}
-        private_key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
-
-
     - name: Delete untagged docker image
       continue-on-error: true
-      uses: camargo/delete-untagged-action@v1
+      uses: actions/delete-package-versions@v4
       with:
-        github-token: ${{ steps.generate_token.outputs.token }}
+        token: ${{ github.token }}
+        delete-only-untagged-versions: true
+        package-name: kleinanzeigen-bot
+        package-type: container
 
 
     - name: Download build artifacts
