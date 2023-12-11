@@ -33,7 +33,6 @@ classifiers = [  # https://pypi.org/classifiers/
 requires-python = ">=3.10,<3.13" # <3.12 required for pyinstaller
 dependencies = [
     "coloredlogs~=15.0",
-    "inflect~=7.0",
     "overrides~=7.4",
     "ruamel.yaml~=0.18",
     "pywin32==306; sys_platform == 'win32'",
