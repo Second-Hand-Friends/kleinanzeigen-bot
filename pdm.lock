@@ -65,19 +65,19 @@ files = [
 
 [[package]]
 name = "bandit"
-version = "1.7.5"
-requires_python = ">=3.7"
+version = "1.7.6"
+requires_python = ">=3.8"
 summary = "Security oriented static analyser for python code."
 dependencies = [
-    "GitPython>=1.0.1",
+    "GitPython>=3.1.30",
     "PyYAML>=5.3.1",
     "colorama>=0.3.9; platform_system == \"Windows\"",
     "rich",
     "stevedore>=1.20.0",
 ]
 files = [
-    {file = "bandit-1.7.5-py3-none-any.whl", hash = "sha256:75665181dc1e0096369112541a056c59d1c5f66f9bb74a8d686c3c362b83f549"},
-    {file = "bandit-1.7.5.tar.gz", hash = "sha256:bdfc739baa03b880c2d15d0431b31c658ffc348e907fe197e54e0389dd59e11e"},
+    {file = "bandit-1.7.6-py3-none-any.whl", hash = "sha256:36da17c67fc87579a5d20c323c8d0b1643a890a2b93f00b3d1229966624694ff"},
+    {file = "bandit-1.7.6.tar.gz", hash = "sha256:72ce7bc9741374d96fb2f1c9a8960829885f1243ffde743de70a19cee353e8f3"},
 ]
 
 [[package]]
@@ -88,6 +88,15 @@ summary = "Bash style brace expander."
 files = [
     {file = "bracex-2.4-py3-none-any.whl", hash = "sha256:efdc71eff95eaff5e0f8cfebe7d01adf2c8637c8c92edaf63ef348c241a82418"},
     {file = "bracex-2.4.tar.gz", hash = "sha256:a27eaf1df42cf561fed58b7a8f3fdf129d1ea16a81e1fadd1d17989bc6384beb"},
+]
+
+[[package]]
+name = "cerberus"
+version = "1.3.5"
+summary = "Lightweight, extensible schema and data validation tool for Pythondictionaries."
+files = [
+    {file = "Cerberus-1.3.5-py3-none-any.whl", hash = "sha256:7649a5815024d18eb7c6aa5e7a95355c649a53aacfc9b050e9d0bf6bfa2af372"},
+    {file = "Cerberus-1.3.5.tar.gz", hash = "sha256:81011e10266ef71b6ec6d50e60171258a5b134d69f8fb387d16e4936d0d47642"},
 ]
 
 [[package]]
@@ -233,6 +242,23 @@ files = [
 ]
 
 [[package]]
+name = "distlib"
+version = "0.3.7"
+summary = "Distribution utilities"
+files = [
+    {file = "distlib-0.3.7-py2.py3-none-any.whl", hash = "sha256:2e24928bc811348f0feb63014e97aaae3037f2cf48712d51ae61df7fd6075057"},
+    {file = "distlib-0.3.7.tar.gz", hash = "sha256:9dafe54b34a028eafd95039d5e5d4851a13734540f1331060d31c9916e7147a8"},
+]
+
+[[package]]
+name = "docopt"
+version = "0.6.2"
+summary = "Pythonic argument parser, that will make you smile"
+files = [
+    {file = "docopt-0.6.2.tar.gz", hash = "sha256:49b3a825280bd66b3aa83585ef59c4a8c82f2c8a522dbe754a8bc8d08c85c491"},
+]
+
+[[package]]
 name = "exceptiongroup"
 version = "1.2.0"
 requires_python = ">=3.7"
@@ -327,12 +353,17 @@ files = [
 
 [[package]]
 name = "isort"
-version = "5.12.0"
+version = "5.13.0"
 requires_python = ">=3.8.0"
 summary = "A Python utility / library to sort Python imports."
+dependencies = [
+    "pip-api",
+    "pipreqs",
+    "requirementslib",
+]
 files = [
-    {file = "isort-5.12.0-py3-none-any.whl", hash = "sha256:f84c2818376e66cf843d497486ea8fed8700b340f308f076c6fb1229dff318b6"},
-    {file = "isort-5.12.0.tar.gz", hash = "sha256:8bef7dde241278824a6d83f44a544709b065191b95b6e50894bdc722fcba0504"},
+    {file = "isort-5.13.0-py3-none-any.whl", hash = "sha256:15e0e937819b350bc256a7ae13bb25f4fe4f8871a0bc335b20c3627dba33f458"},
+    {file = "isort-5.13.0.tar.gz", hash = "sha256:d67f78c6a1715f224cca46b29d740037bdb6eea15323a133e897cda15876147b"},
 ]
 
 [[package]]
@@ -474,6 +505,56 @@ files = [
 ]
 
 [[package]]
+name = "pep517"
+version = "0.13.1"
+requires_python = ">=3.6"
+summary = "Wrappers to build Python packages using PEP 517 hooks"
+dependencies = [
+    "tomli>=1.1.0; python_version < \"3.11\"",
+]
+files = [
+    {file = "pep517-0.13.1-py3-none-any.whl", hash = "sha256:31b206f67165b3536dd577c5c3f1518e8fbaf38cbc57efff8369a392feff1721"},
+    {file = "pep517-0.13.1.tar.gz", hash = "sha256:1b2fa2ffd3938bb4beffe5d6146cbcb2bda996a5a4da9f31abffd8b24e07b317"},
+]
+
+[[package]]
+name = "pip"
+version = "23.3.1"
+requires_python = ">=3.7"
+summary = "The PyPA recommended tool for installing Python packages."
+files = [
+    {file = "pip-23.3.1-py3-none-any.whl", hash = "sha256:55eb67bb6171d37447e82213be585b75fe2b12b359e993773aca4de9247a052b"},
+    {file = "pip-23.3.1.tar.gz", hash = "sha256:1fcaa041308d01f14575f6d0d2ea4b75a3e2871fe4f9c694976f908768e14174"},
+]
+
+[[package]]
+name = "pip-api"
+version = "0.0.30"
+requires_python = ">=3.7"
+summary = "An unofficial, importable pip API"
+dependencies = [
+    "pip",
+]
+files = [
+    {file = "pip-api-0.0.30.tar.gz", hash = "sha256:a05df2c7aa9b7157374bcf4273544201a0c7bae60a9c65bcf84f3959ef3896f3"},
+    {file = "pip_api-0.0.30-py3-none-any.whl", hash = "sha256:2a0314bd31522eb9ffe8a99668b0d07fee34ebc537931e7b6483001dbedcbdc9"},
+]
+
+[[package]]
+name = "pipreqs"
+version = "0.4.13"
+requires_python = ">=3.7"
+summary = "Pip requirements.txt generator based on imports in project"
+dependencies = [
+    "docopt",
+    "yarg",
+]
+files = [
+    {file = "pipreqs-0.4.13-py2.py3-none-any.whl", hash = "sha256:e522b9ed54aa3e8b7978ff251ab7a9af2f75d2cd8de4c102e881b666a79a308e"},
+    {file = "pipreqs-0.4.13.tar.gz", hash = "sha256:a17f167880b6921be37533ce4c81ddc6e22b465c107aad557db43b1add56a99b"},
+]
+
+[[package]]
 name = "platformdirs"
 version = "4.1.0"
 requires_python = ">=3.8"
@@ -481,6 +562,34 @@ summary = "A small Python package for determining appropriate platform-specific 
 files = [
     {file = "platformdirs-4.1.0-py3-none-any.whl", hash = "sha256:11c8f37bcca40db96d8144522d925583bdb7a31f7b0e37e3ed4318400a8e2380"},
     {file = "platformdirs-4.1.0.tar.gz", hash = "sha256:906d548203468492d432bcb294d4bc2fff751bf84971fbb2c10918cc206ee420"},
+]
+
+[[package]]
+name = "plette"
+version = "0.4.4"
+requires_python = ">=3.7"
+summary = "Structured Pipfile and Pipfile.lock models."
+dependencies = [
+    "tomlkit",
+]
+files = [
+    {file = "plette-0.4.4-py2.py3-none-any.whl", hash = "sha256:42d68ce8c6b966874b68758d87d7f20fcff2eff0d861903eea1062126be4d98f"},
+    {file = "plette-0.4.4.tar.gz", hash = "sha256:06b8c09eb90293ad0b8101cb5c95c4ea53e9b2b582901845d0904ff02d237454"},
+]
+
+[[package]]
+name = "plette"
+version = "0.4.4"
+extras = ["validation"]
+requires_python = ">=3.7"
+summary = "Structured Pipfile and Pipfile.lock models."
+dependencies = [
+    "cerberus",
+    "plette==0.4.4",
+]
+files = [
+    {file = "plette-0.4.4-py2.py3-none-any.whl", hash = "sha256:42d68ce8c6b966874b68758d87d7f20fcff2eff0d861903eea1062126be4d98f"},
+    {file = "plette-0.4.4.tar.gz", hash = "sha256:06b8c09eb90293ad0b8101cb5c95c4ea53e9b2b582901845d0904ff02d237454"},
 ]
 
 [[package]]
@@ -635,7 +744,7 @@ files = [
 
 [[package]]
 name = "pyinstaller"
-version = "6.2.0"
+version = "6.3.0"
 requires_python = "<3.13,>=3.8"
 summary = "PyInstaller bundles a Python application and all its dependencies into a single package."
 dependencies = [
@@ -648,18 +757,18 @@ dependencies = [
     "setuptools>=42.0.0",
 ]
 files = [
-    {file = "pyinstaller-6.2.0-py3-none-macosx_10_13_universal2.whl", hash = "sha256:a1adbd3cf25dc90926d783eae0f444d65cdfecc7bcdf6da522c3ae3ff47b4c25"},
-    {file = "pyinstaller-6.2.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:29d164394f1e949072f78a64c1e040f1c47b7f4aff08514c7666a031c8b44996"},
-    {file = "pyinstaller-6.2.0-py3-none-manylinux2014_i686.whl", hash = "sha256:ba602a38d7403de89c38b8956b221ce6de0280730d269bab522492fcad82ee33"},
-    {file = "pyinstaller-6.2.0-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:ebac06d99b80d2035594c3cc2fb5f2612d86289edd0510dbcbeb20a873f51d5a"},
-    {file = "pyinstaller-6.2.0-py3-none-manylinux2014_s390x.whl", hash = "sha256:fcfabc0ff1d38a4262c051dea3fdc1f7f106405c1f1b491b4c79cd28df19cab6"},
-    {file = "pyinstaller-6.2.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:104430686149b2f1c135b2c17aa2967c85d54ef77dc92feb4e179ec846c0c467"},
-    {file = "pyinstaller-6.2.0-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:e87fd60292b53bb9965cb5a84122875469a2bd475fd0d0db0052a3f1be351f75"},
-    {file = "pyinstaller-6.2.0-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:8ec9d6c98972bb922cedb16a6638257aa66e5deadd79e2953f3464696237c413"},
-    {file = "pyinstaller-6.2.0-py3-none-win32.whl", hash = "sha256:e5561e9a9b946d835c8dbc11ae4c16cc21e62bc77d10cc043406dc2992dfb4c6"},
-    {file = "pyinstaller-6.2.0-py3-none-win_amd64.whl", hash = "sha256:3b586196277c4c54b69880650984c39c28bb6258c2b4b64200032e6ac69d53a0"},
-    {file = "pyinstaller-6.2.0-py3-none-win_arm64.whl", hash = "sha256:d0c87b605bf13c3a04dfaa1d2fa7cd36765b8137000eeadccba865e1d6a19bf0"},
-    {file = "pyinstaller-6.2.0.tar.gz", hash = "sha256:1ce77043929bf525be38289d78feecde0fcf15506215eda6500176a8715c5047"},
+    {file = "pyinstaller-6.3.0-py3-none-macosx_10_13_universal2.whl", hash = "sha256:75a6f2a6f835a2e6e0899d10e60c10caf5defd25aced38b1dd48fbbabc89de07"},
+    {file = "pyinstaller-6.3.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:de25beb176f73a944758553caacec46cc665bf3910ad8a174706d79cf6e95340"},
+    {file = "pyinstaller-6.3.0-py3-none-manylinux2014_i686.whl", hash = "sha256:e436fcc0ea87c3f132baac916d508c24c84a8f6d8a06c3154fbc753f169b76c7"},
+    {file = "pyinstaller-6.3.0-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:b721d793a33b6d9946c7dd95d3ea7589c0424b51cf1b9fe580f03c544f1336b2"},
+    {file = "pyinstaller-6.3.0-py3-none-manylinux2014_s390x.whl", hash = "sha256:96c37a1ee5b2fd5bb25c098ef510661d6d17b6515d0b86d8fc93727dd2475ba3"},
+    {file = "pyinstaller-6.3.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:abe91106a3bbccc3f3a27af4325676ecdb6f46cb842ac663625002a870fc503b"},
+    {file = "pyinstaller-6.3.0-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:41c937fe8f07ae02009b3b5a96ac3eb0800a4f8a97af142d4100060fe2135bb9"},
+    {file = "pyinstaller-6.3.0-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:886b3b995b674905a20ad5b720b47cc395897d7b391117831027a4c8c5d67a58"},
+    {file = "pyinstaller-6.3.0-py3-none-win32.whl", hash = "sha256:0597fb04337695e5cc5250253e0655530bf14f264b7a5b7d219cc65f6889c4bd"},
+    {file = "pyinstaller-6.3.0-py3-none-win_amd64.whl", hash = "sha256:156b32ba943e0090bcc68e40ae1cb68fd92b7f1ab6fe0bdf8faf3d3cfc4e12dd"},
+    {file = "pyinstaller-6.3.0-py3-none-win_arm64.whl", hash = "sha256:1eadbd1fae84e2e6c678d8b4ed6a232ec5c8fe3a839aea5a3071c4c0282f98cc"},
+    {file = "pyinstaller-6.3.0.tar.gz", hash = "sha256:914d4c96cc99472e37ac552fdd82fbbe09e67bb592d0717fcffaa99ea74273df"},
 ]
 
 [[package]]
@@ -814,6 +923,27 @@ files = [
 ]
 
 [[package]]
+name = "requirementslib"
+version = "3.0.0"
+requires_python = ">=3.7"
+summary = "A tool for converting between pip-style and pipfile requirements."
+dependencies = [
+    "distlib>=0.2.8",
+    "pep517>=0.5.0",
+    "pip>=23.1",
+    "platformdirs",
+    "plette[validation]",
+    "pydantic",
+    "requests",
+    "setuptools>=40.8",
+    "tomlkit>=0.5.3",
+]
+files = [
+    {file = "requirementslib-3.0.0-py2.py3-none-any.whl", hash = "sha256:67b42903d7c32f89c7047d1020c619d37cb515c475a4ae6f4e5683e1c56d7bf7"},
+    {file = "requirementslib-3.0.0.tar.gz", hash = "sha256:28f8e0b1c38b34ae06de68ef115b03bbcdcdb99f9e9393333ff06ded443e3f24"},
+]
+
+[[package]]
 name = "rich"
 version = "13.7.0"
 requires_python = ">=3.7.0"
@@ -875,7 +1005,7 @@ files = [
 
 [[package]]
 name = "selenium"
-version = "4.15.2"
+version = "4.16.0"
 requires_python = ">=3.8"
 summary = ""
 dependencies = [
@@ -885,8 +1015,8 @@ dependencies = [
     "urllib3[socks]<3,>=1.26",
 ]
 files = [
-    {file = "selenium-4.15.2-py3-none-any.whl", hash = "sha256:9e82cd1ac647fb73cf0d4a6e280284102aaa3c9d94f0fa6e6cc4b5db6a30afbf"},
-    {file = "selenium-4.15.2.tar.gz", hash = "sha256:22eab5a1724c73d51b240a69ca702997b717eee4ba1f6065bf5d6b44dba01d48"},
+    {file = "selenium-4.16.0-py3-none-any.whl", hash = "sha256:aec71f4e6ed6cb3ec25c9c1b5ed56ae31b6da0a7f17474c7566d303f84e6219f"},
+    {file = "selenium-4.16.0.tar.gz", hash = "sha256:b2e987a445306151f7be0e6dfe2aa72a479c2ac6a91b9d5ef2d6dd4e49ad0435"},
 ]
 
 [[package]]
@@ -1019,12 +1149,12 @@ files = [
 
 [[package]]
 name = "typing-extensions"
-version = "4.8.0"
+version = "4.9.0"
 requires_python = ">=3.8"
 summary = "Backported and Experimental Type Hints for Python 3.8+"
 files = [
-    {file = "typing_extensions-4.8.0-py3-none-any.whl", hash = "sha256:8f92fc8806f9a6b641eaa5318da32b44d401efaac0f6678c9bc448ba3605faa0"},
-    {file = "typing_extensions-4.8.0.tar.gz", hash = "sha256:df8e4339e9cb77357558cbdbceca33c303714cf861d1eef15e1070055ae8b7ef"},
+    {file = "typing_extensions-4.9.0-py3-none-any.whl", hash = "sha256:af72aea155e91adfc61c3ae9e0e342dbc0cba726d6cba4b6c72c1f34e47291cd"},
+    {file = "typing_extensions-4.9.0.tar.gz", hash = "sha256:23478f88c37f27d76ac8aee6c905017a143b0b1b886c3c9f66bc2fd94f9f5783"},
 ]
 
 [[package]]
@@ -1091,4 +1221,16 @@ dependencies = [
 files = [
     {file = "wsproto-1.2.0-py3-none-any.whl", hash = "sha256:b9acddd652b585d75b20477888c56642fdade28bdfd3579aa24a4d2c037dd736"},
     {file = "wsproto-1.2.0.tar.gz", hash = "sha256:ad565f26ecb92588a3e43bc3d96164de84cd9902482b130d0ddbaa9664a85065"},
+]
+
+[[package]]
+name = "yarg"
+version = "0.1.9"
+summary = "A semi hard Cornish cheese, also queries PyPI (PyPI client)"
+dependencies = [
+    "requests",
+]
+files = [
+    {file = "yarg-0.1.9-py2.py3-none-any.whl", hash = "sha256:4f9cebdc00fac946c9bf2783d634e538a71c7d280a4d806d45fd4dc0ef441492"},
+    {file = "yarg-0.1.9.tar.gz", hash = "sha256:55695bf4d1e3e7f756496c36a69ba32c40d18f821e38f61d028f6049e5e15911"},
 ]
