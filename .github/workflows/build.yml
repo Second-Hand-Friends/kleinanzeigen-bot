@@ -55,13 +55,13 @@ jobs:
           PYTHON_VERSION: "3.10"
           PUBLISH_RELEASE: false
         - os: macos-latest
-          PYTHON_VERSION: "3.12"
+          PYTHON_VERSION: "3.12.1"
           PUBLISH_RELEASE: true
         - os: ubuntu-latest
-          PYTHON_VERSION: "3.12"
+          PYTHON_VERSION: "3.12.1"
           PUBLISH_RELEASE: true
         - os: windows-latest
-          PYTHON_VERSION: "3.12"
+          PYTHON_VERSION: "3.12.1"
           PUBLISH_RELEASE: true
 
     runs-on: ${{ matrix.os }}
