@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import atexit, copy, getopt, importlib.metadata, json, logging, os, re, signal, shutil, sys, textwrap, time, urllib
+import atexit, certifi, copy, getopt, importlib.metadata, json, logging, os, re, signal, shutil, sys, textwrap, time, urllib
 from collections.abc import Iterable
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
@@ -31,6 +31,11 @@ LOG.setLevel(logging.INFO)
 class KleinanzeigenBot(SeleniumMixin):
 
     def __init__(self) -> None:
+
+        # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/207
+        # see https://github.com/pyinstaller/pyinstaller/issues/7229#issuecomment-1309383026
+        os.environ["SSL_CERT_FILE"] = certifi.where()
+
         super().__init__()
 
         self.root_url = "https://www.kleinanzeigen.de"
