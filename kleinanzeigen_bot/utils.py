@@ -10,7 +10,7 @@ from datetime import datetime
 from types import FrameType, ModuleType, TracebackType
 from typing import Any, Final, TypeVar
 
-import coloredlogs, inflect
+import coloredlogs
 from ruamel.yaml import YAML
 
 LOG_ROOT:Final[logging.Logger] = logging.getLogger()
@@ -157,23 +157,27 @@ def pause(min_ms:int = 200, max_ms:int = 2000) -> None:
     time.sleep(duration / 1000)
 
 
-def pluralize(word:str, count:int | Sized, prefix:bool = True) -> str:
+def pluralize(noun:str, count:int | Sized, prefix_with_count:bool = True) -> str:
     """
     >>> pluralize("field", 1)
     '1 field'
     >>> pluralize("field", 2)
     '2 fields'
-    >>> pluralize("field", 2, prefix = False)
+    >>> pluralize("field", 2, prefix_with_count = False)
     'fields'
     """
-    if not hasattr(pluralize, "inflect"):
-        pluralize.inflect = inflect.engine()  # type: ignore[attr-defined] # mypy
     if isinstance(count, Sized):
         count = len(count)
-    plural:str = pluralize.inflect.plural_noun(word, count)  # type: ignore[attr-defined] # mypy
-    if prefix:
-        return f"{count} {plural}"
-    return plural
+
+    prefix = f"{count} " if prefix_with_count else ""
+
+    if count == 1:
+        return f"{prefix}{noun}"
+    if noun.endswith('s') or noun.endswith('sh') or noun.endswith('ch') or noun.endswith('x') or noun.endswith('z'):
+        return f"{prefix}{noun}es"
+    if noun.endswith('y'):
+        return f"{prefix}{noun[:-1]}ies"
+    return f"{prefix}{noun}s"
 
 
 def load_dict(filepath:str, content_label:str = "") -> dict[str, Any]:
