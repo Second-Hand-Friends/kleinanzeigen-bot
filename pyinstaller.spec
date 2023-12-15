@@ -42,7 +42,7 @@ from sys import platform
 if platform != "darwin":
     excluded_modules.append("_osx_support")
 
-# https://github.com/pyinstaller/pyinstaller/blob/e7c252573f424ad9b79169ab01229d27599004b1/PyInstaller/building/build_main.py#L318
+# https://github.com/pyinstaller/pyinstaller/blob/f563dce1e83fd5ec72a20dffd2ac24be3e647150/PyInstaller/building/build_main.py#L320
 analysis = Analysis(
         ['kleinanzeigen_bot/__main__.py'],
         # pathex = [],
@@ -53,11 +53,14 @@ analysis = Analysis(
         # hooksconfig = {},
         excludes = excluded_modules,
         # runtime_hooks = [],
+        # cipher = None, # Deprecated
+        # win_no_prefer_redirets = False, # Deprecated
+        # win_private_assemblies = False, # Deprecated
         # noarchive = False,
         # module_collection_mode = None
     )
 
-# https://github.com/pyinstaller/pyinstaller/blob/e7c252573f424ad9b79169ab01229d27599004b1/PyInstaller/building/api.py#L51
+# https://github.com/pyinstaller/pyinstaller/blob/f563dce1e83fd5ec72a20dffd2ac24be3e647150/PyInstaller/building/api.py#L51
 pyz = PYZ(
         analysis.pure,  # tocs
         analysis.zipped_data,
@@ -66,13 +69,14 @@ pyz = PYZ(
 
 import shutil
 
-# https://github.com/pyinstaller/pyinstaller/blob/e7c252573f424ad9b79169ab01229d27599004b1/PyInstaller/building/api.py#L338
+# https://github.com/pyinstaller/pyinstaller/blob/f563dce1e83fd5ec72a20dffd2ac24be3e647150/PyInstaller/building/api.py#L338
 exe = EXE(pyz,
         analysis.scripts,
         analysis.binaries,
         analysis.datas,
         # bootloader_ignore_signals = False,
         # console = True,
+        # hide_console = None,
         # disable_windowed_traceback = False,
         # debug = False,
         name = 'kleinanzeigen-bot',

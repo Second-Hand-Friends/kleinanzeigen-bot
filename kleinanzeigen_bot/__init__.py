@@ -8,14 +8,15 @@ from collections.abc import Iterable
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from typing import Any, Final
-from wcmatch import glob
 
+import certifi
 from overrides import overrides
 from ruamel.yaml import YAML
 from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
+from wcmatch import glob
 
 from . import utils, resources, extract  # pylint: disable=W0406
 from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get, parse_datetime
@@ -31,6 +32,11 @@ LOG.setLevel(logging.INFO)
 class KleinanzeigenBot(SeleniumMixin):
 
     def __init__(self) -> None:
+
+        # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/207
+        # see https://github.com/pyinstaller/pyinstaller/issues/7229#issuecomment-1309383026
+        os.environ["SSL_CERT_FILE"] = certifi.where()
+
         super().__init__()
 
         self.root_url = "https://www.kleinanzeigen.de"
@@ -52,6 +58,9 @@ class KleinanzeigenBot(SeleniumMixin):
     def __del__(self) -> None:
         if self.file_log:
             LOG_ROOT.removeHandler(self.file_log)
+        if self.webdriver:
+            self.webdriver.quit()
+            self.webdriver = None
 
     def get_version(self) -> str:
         return importlib.metadata.version(__package__)
@@ -345,12 +354,15 @@ class KleinanzeigenBot(SeleniumMixin):
         self.browser_config.profile_name = self.config["browser"]["profile_name"]
 
     def login(self) -> None:
-        LOG.info("Logging in as [%s]...", self.config["login"]["username"])
-        self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
+        LOG.info("Checking if already logged in")
+        self.web_open(f"{self.root_url}")
 
         if self.is_logged_in():
             LOG.info("Already logged in as [%s]. Skipping login.", self.config["login"]["username"])
             return
+
+        LOG.info("Logging in as [%s]...", self.config["login"]["username"])
+        self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
 
         # close redesign banner
         try:
