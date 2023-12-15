@@ -499,6 +499,8 @@ class KleinanzeigenBot(SeleniumMixin):
             except NoSuchElementException as ex:
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg["shipping_options"]:
+            self.web_click(By.XPATH, '//*[contains(@class, "jsx-2623555103")]')
+            self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal--Button")]')
             self.__set_shipping_options(ad_cfg)
         else:
             try:
@@ -688,17 +690,17 @@ class KleinanzeigenBot(SeleniumMixin):
                 raise ValueError("You can only specify shipping options for one package size!")
 
             shipping_size, = unique_shipping_sizes
-            self.web_click(By.XPATH, f'//*[contains(@class, "ShippingOption")]//input[@type="radio" and @data-testid="{shipping_size}"]')
+            self.web_click(By.XPATH, f'//*[contains(@class, "SingleSelectionItem--Main")]//input[@type="radio" and @data-testid="{shipping_size}"]')
 
             for shipping_package in shipping_packages:
                 self.web_click(
                     By.XPATH,
-                    '//*[contains(@class, "CarrierOptionsPopup")]'
+                    '//*[contains(@class, "CarrierSelectionModal")]'
                     '//*[contains(@class, "CarrierOption")]'
-                    f'//input[@type="checkbox" and @data-testid="{shipping_package}"]'
+                    f'//*[contains(@class, "CarrierOption--Main") and @data-testid="{shipping_package}"]'
                 )
 
-            self.web_click(By.XPATH, '//*[contains(@class, "ReactModalPortal")]//button[.//*[text()[contains(.,"Weiter")]]]')
+            self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
         except NoSuchElementException as ex:
             LOG.debug(ex, exc_info = True)
 
