@@ -281,7 +281,7 @@ jobs:
 
 
     - name: "Delete intermediate build artifacts"
-      uses: geekyeggo/delete-artifact@v2 # https://github.com/GeekyEggo/delete-artifact/
+      uses: geekyeggo/delete-artifact@v4 # https://github.com/GeekyEggo/delete-artifact/
       with:
         name: "*"
         failOnError: false
