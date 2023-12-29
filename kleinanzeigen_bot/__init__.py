@@ -82,6 +82,11 @@ class KleinanzeigenBot(SeleniumMixin):
             case "publish":
                 self.configure_file_logging()
                 self.load_config()
+                
+                if not (self.ads_selector in {'all', 'new', 'due'} or re.compile(r'\d+[,\d+]*').search(self.ads_selector)):
+                    LOG.warning('You provided no ads selector. Defaulting to "due".')
+                    self.ads_selector = 'due'
+                
                 if ads := self.load_ads():
                     self.create_webdriver_session()
                     self.login()
@@ -138,11 +143,12 @@ class KleinanzeigenBot(SeleniumMixin):
               version  - displays the application version
 
             Options:
-              --ads=all|due|new (publish) - specifies which ads to (re-)publish (DEFAULT: due)
+              --ads=all|due|new|<id(s)> (publish) - specifies which ads to (re-)publish (DEFAULT: due)
                     Possible values:
                     * all: (re-)publish all ads ignoring republication_interval
                     * due: publish all new ads and republish ads according the republication_interval
                     * new: only publish new ads (i.e. ads that have no id in the config file)
+                    * <id(s)>: provide one or several ads by ID to (re-)publish, like e.g. "--ads=1,2,3" ignoring republication_interval
               --ads=all|new|<id(s)> (download) - specifies which ads to download (DEFAULT: new)
                     Possible values:
                     * all: downloads all ads from your profile
@@ -230,6 +236,12 @@ class KleinanzeigenBot(SeleniumMixin):
 
         descr_prefix = self.config["ad_defaults"]["description"]["prefix"] or ""
         descr_suffix = self.config["ad_defaults"]["description"]["suffix"] or ""
+        
+        ids = []
+        if re.compile(r'\d+[,\d+]*').search(self.ads_selector):
+            ids = [int(n) for n in self.ads_selector.split(',')]
+            LOG.info('Start fetch task for the ad(s) with the id(s):')
+            LOG.info(' | '.join([str(id_) for id_ in ids]))
 
         ad_fields = utils.load_dict_from_module(resources, "ad_fields.yaml")
         ads = []
@@ -265,7 +277,11 @@ class KleinanzeigenBot(SeleniumMixin):
                             ad_cfg["republication_interval"]
                         )
                         continue
-
+            
+            if not ad_cfg["id"] in ids:
+                LOG.info(" -> SKIPPED: ad [%s] is not in list of given ids.", ad_file)
+                continue            
+            
             ad_cfg["description"] = descr_prefix + (ad_cfg["description"] or "") + descr_suffix
             ensure(len(ad_cfg["description"]) <= 4000, f"Length of ad description including prefix and suffix exceeds 4000 chars. @ [{ad_file}]")
 
