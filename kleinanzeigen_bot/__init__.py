@@ -238,8 +238,10 @@ class KleinanzeigenBot(SeleniumMixin):
         descr_suffix = self.config["ad_defaults"]["description"]["suffix"] or ""
 
         ids = []
+        use_specific_ads = False
         if re.compile(r'\d+[,\d+]*').search(self.ads_selector):
             ids = [int(n) for n in self.ads_selector.split(',')]
+            use_specific_ads = True
             LOG.info('Start fetch task for the ad(s) with the id(s):')
             LOG.info(' | '.join([str(id_) for id_ in ids]))
 
@@ -256,31 +258,32 @@ class KleinanzeigenBot(SeleniumMixin):
                 LOG.info(" -> SKIPPED: inactive ad [%s]", ad_file)
                 continue
 
-            if self.ads_selector == "new" and ad_cfg["id"] and check_id:
-                LOG.info(" -> SKIPPED: ad [%s] is not new. already has an id assigned.", ad_file)
-                continue
+            if use_specific_ads:
+                if not ad_cfg["id"] in ids:
+                    LOG.info(" -> SKIPPED: ad [%s] is not in list of given ids.", ad_file)
+                    continue
+            else:
+                if self.ads_selector == "new" and ad_cfg["id"] and check_id:
+                    LOG.info(" -> SKIPPED: ad [%s] is not new. already has an id assigned.", ad_file)
+                    continue
 
-            if self.ads_selector == "due":
-                if ad_cfg["updated_on"]:
-                    last_updated_on = parse_datetime(ad_cfg["updated_on"])
-                elif ad_cfg["created_on"]:
-                    last_updated_on = parse_datetime(ad_cfg["created_on"])
-                else:
-                    last_updated_on = None
+                if self.ads_selector == "due":
+                    if ad_cfg["updated_on"]:
+                        last_updated_on = parse_datetime(ad_cfg["updated_on"])
+                    elif ad_cfg["created_on"]:
+                        last_updated_on = parse_datetime(ad_cfg["created_on"])
+                    else:
+                        last_updated_on = None
 
-                if last_updated_on:
-                    ad_age = datetime.utcnow() - last_updated_on
-                    if ad_age.days <= ad_cfg["republication_interval"]:
-                        LOG.info(" -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
-                            ad_file,
-                            ad_age.days,
-                            ad_cfg["republication_interval"]
-                        )
-                        continue
-
-            if not ad_cfg["id"] in ids:
-                LOG.info(" -> SKIPPED: ad [%s] is not in list of given ids.", ad_file)
-                continue
+                    if last_updated_on:
+                        ad_age = datetime.utcnow() - last_updated_on
+                        if ad_age.days <= ad_cfg["republication_interval"]:
+                            LOG.info(" -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
+                                ad_file,
+                                ad_age.days,
+                                ad_cfg["republication_interval"]
+                            )
+                            continue
 
             ad_cfg["description"] = descr_prefix + (ad_cfg["description"] or "") + descr_suffix
             ensure(len(ad_cfg["description"]) <= 4000, f"Length of ad description including prefix and suffix exceeds 4000 chars. @ [{ad_file}]")
