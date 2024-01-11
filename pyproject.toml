@@ -69,9 +69,10 @@ dev = [
     "mypy~=1.7",
 ]
 
-[tool.pdm.scripts]
+[tool.pdm.scripts] # https://pdm-project.org/latest/usage/scripts/
 app     = "python -m kleinanzeigen_bot"
-compile = "python -O -m PyInstaller pyinstaller.spec --clean"
+compile.cmd = "python -O -m PyInstaller pyinstaller.spec --clean"
+compile.env = {PYTHONHASHSEED = "1", SOURCE_DATE_EPOCH = "0"} # https://pyinstaller.org/en/stable/advanced-topics.html#creating-a-reproducible-build
 format  = "autopep8 --recursive --in-place kleinanzeigen_bot tests --verbose"
 lint    = {shell = "pylint -v kleinanzeigen_bot tests && autopep8 -v --exit-code --recursive --diff kleinanzeigen_bot tests && echo No issues found."}
 scan    = "bandit -c pyproject.toml -r kleinanzeigen_bot"
