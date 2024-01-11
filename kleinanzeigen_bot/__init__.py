@@ -220,6 +220,7 @@ class KleinanzeigenBot(SeleniumMixin):
         LOG_ROOT.addHandler(self.file_log)
 
         LOG.info("App version: %s", self.get_version())
+        LOG.info("Python version: %s", sys.version)
 
     def load_ads(self, *, ignore_inactive:bool = True, check_id:bool = True) -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
         LOG.info("Searching for ad config files...")
