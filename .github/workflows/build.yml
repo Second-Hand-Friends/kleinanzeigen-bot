@@ -283,5 +283,6 @@ jobs:
     - name: "Delete intermediate build artifacts"
       uses: geekyeggo/delete-artifact@v4 # https://github.com/GeekyEggo/delete-artifact/
       with:
+        token: ${{ secrets.GITHUB_TOKEN }}
         name: "*"
         failOnError: false
