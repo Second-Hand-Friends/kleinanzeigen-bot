@@ -8,7 +8,7 @@ _LOCAL/
 /config.yaml
 /data
 /*.log
-kleinanzeigen_bot/version.py
+kleinanzeigen_bot/_version.py
 downloaded-ads
 
 # python
@@ -19,6 +19,7 @@ __pycache__
 /.eggs
 /*.egg-info
 /.mypy_cache
+/.pdm-build/
 /.pdm-python
 
 # Eclipse

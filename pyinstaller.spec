@@ -6,12 +6,15 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 
 PyInstaller config file, see https://pyinstaller.readthedocs.io/en/stable/spec-files.html
 """
-from PyInstaller.utils.hooks import copy_metadata, collect_data_files
+from PyInstaller.utils.hooks import collect_data_files
 
 datas = [
-    * copy_metadata('kleinanzeigen_bot'),  # required to get version info
     * collect_data_files("kleinanzeigen_bot"),  # embeds *.yaml files
     * collect_data_files("selenium_stealth"),  # embeds *.js files
+
+    # required to get version info via 'importlib.metadata.version(__package__)'
+    # but we use https://backend.pdm-project.org/metadata/#writing-dynamic-version-to-file
+    # * copy_metadata('kleinanzeigen_bot'),
 ]
 
 excluded_modules = [
