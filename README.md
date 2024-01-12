@@ -186,11 +186,12 @@ Commands:
   version  - displays the application version
 
 Options:
-  --ads=all|due|new (publish) - specifies which ads to (re-)publish (DEFAULT: due)
+  --ads=all|due|new|<id(s)> (publish) - specifies which ads to (re-)publish (DEFAULT: due)
         Possible values:
         * all: (re-)publish all ads ignoring republication_interval
         * due: publish all new ads and republish ads according the republication_interval
         * new: only publish new ads (i.e. ads that have no id in the config file)
+        * <id(s)>: provide one or several ads by ID to (re-)publish, like e.g. "--ads=1,2,3" ignoring republication_interval
   --ads=all|new|<id(s)> (download) - specifies which ads to download (DEFAULT: new)
         Possible values:
         * all: downloads all ads from your profile
