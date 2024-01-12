@@ -56,6 +56,8 @@ Issues = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues"
 [tool.pdm.version] # https://backend.pdm-project.org/metadata/#dynamic-project-version
 source = "call"
 getter = "version:get_version"
+write_to = "kleinanzeigen_bot/_version.py"
+write_template = "__version__ = '{}'\n"
 
 [tool.pdm.dev-dependencies]
 dev = [

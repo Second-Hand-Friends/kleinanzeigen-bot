@@ -21,6 +21,7 @@ from wcmatch import glob
 from . import utils, resources, extract  # pylint: disable=W0406
 from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get, parse_datetime
 from .selenium_mixin import SeleniumMixin
+from ._version import __version__
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
@@ -65,7 +66,7 @@ class KleinanzeigenBot(SeleniumMixin):
             self.webdriver = None
 
     def get_version(self) -> str:
-        return importlib.metadata.version(__package__).removesuffix(".editable")
+        return __version__
 
     def run(self, args:list[str]) -> None:
         self.parse_args(args)
