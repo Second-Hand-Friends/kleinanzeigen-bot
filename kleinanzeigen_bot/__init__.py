@@ -63,7 +63,7 @@ class KleinanzeigenBot(SeleniumMixin):
             self.webdriver = None
 
     def get_version(self) -> str:
-        return importlib.metadata.version(__package__)
+        return importlib.metadata.version(__package__).removesuffix(".editable")
 
     def run(self, args:list[str]) -> None:
         self.parse_args(args)

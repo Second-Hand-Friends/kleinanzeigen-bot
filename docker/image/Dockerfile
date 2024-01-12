@@ -71,7 +71,7 @@ ENV PATH="/opt/upx:${PATH}"
 
 COPY kleinanzeigen_bot /opt/app/kleinanzeigen_bot
 COPY .git /opt/app/.git
-COPY README.md pdm.lock pyinstaller.spec pyproject.toml /opt/app/
+COPY README.md pdm.lock pyinstaller.spec pyproject.toml version.py /opt/app/
 
 RUN <<EOF
 

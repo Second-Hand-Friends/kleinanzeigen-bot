@@ -5,9 +5,9 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 #
 
-[build-system]
-requires = ["pdm-pep517"]
-build-backend = "pdm.pep517.api"
+[build-system] # https://backend.pdm-project.org/
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
 
 [project]
 name = "kleinanzeigen-bot"
@@ -52,8 +52,9 @@ Issues = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues"
 #####################
 # pdm https://github.com/pdm-project/pdm/
 #####################
-[tool.pdm]
-version = {use_scm = true}
+[tool.pdm.version] # https://backend.pdm-project.org/metadata/#dynamic-project-version
+source = "call"
+getter = "version:get_version"
 
 [tool.pdm.dev-dependencies]
 dev = [
