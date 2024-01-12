@@ -9,7 +9,7 @@ from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from typing import Any, Final
 
-import certifi
+import certifi, colorama
 from overrides import overrides
 from ruamel.yaml import YAML
 from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, TimeoutException, WebDriverException
@@ -27,6 +27,8 @@ from .selenium_mixin import SeleniumMixin
 LOG_ROOT:Final[logging.Logger] = logging.getLogger()
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot")
 LOG.setLevel(logging.INFO)
+
+colorama.init()
 
 
 class KleinanzeigenBot(SeleniumMixin):
@@ -131,7 +133,7 @@ class KleinanzeigenBot(SeleniumMixin):
             exe = "python -m kleinanzeigen_bot"
 
         print(textwrap.dedent(f"""\
-            Usage: {exe} COMMAND [OPTIONS]
+            Usage: {colorama.Fore.LIGHTMAGENTA_EX}{exe} COMMAND [OPTIONS]{colorama.Style.RESET_ALL}
 
             Commands:
               publish  - (re-)publishes ads
