@@ -90,7 +90,7 @@ jobs:
         python-version: "${{ matrix.PYTHON_VERSION }}"
 
 
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: __pypackages__
         key: ${{ runner.os }}-pypackages-${{ hashFiles('pdm.lock') }}
