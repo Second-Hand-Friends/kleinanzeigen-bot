@@ -83,7 +83,7 @@ jobs:
 
     - name: Create PR
       id: create-pr
-      uses: peter-evans/create-pull-request@v5 # https://github.com/peter-evans/create-pull-request
+      uses: peter-evans/create-pull-request@v6 # https://github.com/peter-evans/create-pull-request
       if: "${{ steps.update_deps.outputs.updates != '' }}"
       with:
         title: "chore: Update Python dependencies"
