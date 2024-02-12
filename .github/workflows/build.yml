@@ -237,7 +237,7 @@ jobs:
 
     - name: Delete untagged docker image
       continue-on-error: true
-      uses: actions/delete-package-versions@v4
+      uses: actions/delete-package-versions@v5
       with:
         token: ${{ github.token }}
         delete-only-untagged-versions: true
