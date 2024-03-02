@@ -27,7 +27,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
     - name: Generate GitHub Access Token
       uses: tibdex/github-app-token@v2 #https://github.com/tibdex/github-app-token
       id: generate_token
@@ -37,33 +36,29 @@ jobs:
         app_id: ${{ secrets.DEPS_UPDATER_APP_ID }}
         private_key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
 
+
     - name: Git Checkout
       uses: actions/checkout@v4 # https://github.com/actions/checkout
       with:
         token: ${{ steps.generate_token.outputs.token }}
 
+
     - uses: actions/setup-python@v5
       with:
         python-version: "${{ env.PYTHON_VERSION }}"
+
 
     - name: Install Python dependencies
       run: |
         set -eux
 
         python --version
-
         python -m pip install --upgrade pip
-
-        # pin packaging to 21.3 for now to prevent: packaging.specifiers.InvalidSpecifier: Invalid specifier: '>=3.4.*'
-        # see https://github.com/pdm-project/pdm/issues/1556
-        pip install --upgrade pdm packaging==21.3
-
-        # https://github.com/pdm-project/pdm/issues/728#issuecomment-1021771200
-        pip install -t __pypackages__/${{ env.PYTHON_VERSION }}/lib selenium
-
+        pip install --upgrade pdm
         pdm install -v
 
-    - name: Update Python Dependencies 
+
+    - name: Update Python dependencies 
       id: update_deps
       run: |
         set -euo pipefail
@@ -80,6 +75,7 @@ jobs:
           echo "$(echo "$updates" | grep Update | grep -v kleinanzeigen-bot)" >> "${GITHUB_OUTPUT}"
           echo "${delimiter}" >> "${GITHUB_OUTPUT}"
         fi
+
 
     - name: Create PR
       id: create-pr

@@ -37,7 +37,7 @@ dependencies = [
     "overrides~=7.4",
     "ruamel.yaml~=0.18",
     "pywin32==306; sys_platform == 'win32'",
-    "selenium~=4.15",
+    "selenium~=4.18",
     "selenium_stealth~=1.0",
     "wcmatch~=8.5",
     "webdriver_manager~=4.0"
@@ -65,12 +65,12 @@ dev = [
     "bandit~=1.7",
     "toml", # required by bandit
     "tomli", # required by bandit
-    "pydantic~=2.4",
+    "pydantic~=2.6",
     "pytest~=7.4",
-    "pyinstaller~=6.2",
+    "pyinstaller~=6.4",
     "psutil",
-    "pylint~=3.0",
-    "mypy~=1.7",
+    "pylint~=3.1",
+    "mypy~=1.8",
 ]
 
 [tool.pdm.scripts] # https://pdm-project.org/latest/usage/scripts/
