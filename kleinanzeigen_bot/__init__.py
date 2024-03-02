@@ -18,7 +18,7 @@ from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from wcmatch import glob
 
-from . import utils, resources, extract  # pylint: disable=W0406
+from . import utils, resources, extract
 from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get, parse_datetime
 from .selenium_mixin import SeleniumMixin
 from ._version import __version__

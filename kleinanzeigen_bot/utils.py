@@ -215,7 +215,7 @@ def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "
     if file_ext not in (".json", ".yaml", ".yml"):
         raise ValueError(f'Unsupported file type. The file name "{filename}" must end with *.json, *.yaml, or *.yml')
 
-    content = get_resource_as_string(module, filename)
+    content = get_resource_as_string(module, filename)  # pylint: disable=deprecated-method
     return json.loads(content) if filename.endswith(".json") else YAML().load(content)  # type: ignore[no-any-return] # mypy
 
 
