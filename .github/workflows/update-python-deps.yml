@@ -37,8 +37,8 @@ jobs:
         private_key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
 
 
-    - name: Git Checkout
-      uses: actions/checkout@v4 # https://github.com/actions/checkout
+    - name: Git checkout
+      uses: actions/checkout@v4  # https://github.com/actions/checkout
       with:
         token: ${{ steps.generate_token.outputs.token }}
 
@@ -78,8 +78,7 @@ jobs:
 
 
     - name: Create PR
-      id: create-pr
-      uses: peter-evans/create-pull-request@v6 # https://github.com/peter-evans/create-pull-request
+      uses: peter-evans/create-pull-request@v6  # https://github.com/peter-evans/create-pull-request
       if: "${{ steps.update_deps.outputs.updates != '' }}"
       with:
         title: "chore: Update Python dependencies"
