@@ -86,7 +86,7 @@ jobs:
 
 
     - name: "Install Python and PDM"  #         https://github.com/pdm-project/setup-pdm
-      uses: pdm-project/setup-pdm@v3
+      uses: pdm-project/setup-pdm@v4
       with:
         python-version: "${{ matrix.PYTHON_VERSION }}"
         cache: true
