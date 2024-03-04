@@ -40,7 +40,6 @@ dependencies = [
     "selenium~=4.18",
     "selenium_stealth~=1.0",
     "wcmatch~=8.5",
-    "webdriver_manager~=4.0"
 ]
 
 [project.urls]

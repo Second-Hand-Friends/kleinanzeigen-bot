@@ -3,35 +3,23 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import logging, os, shutil, time
+import logging, os, platform, shutil, time
 from collections.abc import Callable, Iterable
 from typing import Any, Final, TypeVar
 
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chromium.options import ChromiumOptions
 from selenium.webdriver.chromium.webdriver import ChromiumDriver
-from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 import selenium_stealth
-import webdriver_manager.core
-from webdriver_manager.chrome import ChromeDriverManager
-from webdriver_manager.core.driver_cache import DriverCacheManager
-from webdriver_manager.core.manager import DriverManager
-from webdriver_manager.core.os_manager import ChromeType, OSType, OperationSystemManager
-from webdriver_manager.microsoft import EdgeChromiumDriverManager
-
 from .utils import ensure, pause, T
 
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.selenium_mixin")
-
-DEFAULT_CHROMEDRIVER_PATH = "chromedriver"
-DEFAULT_EDGEDRIVER_PATH = "msedgedriver"
 
 
 class BrowserConfig:
@@ -102,51 +90,25 @@ class SeleniumMixin:
             LOG.info(" -> Chrome binary location: %s", self.browser_config.binary_location)
         return browser_options
 
-    def create_webdriver_session(self, *, use_preinstalled_webdriver:bool = True) -> None:
+    def create_webdriver_session(self) -> None:
         LOG.info("Creating WebDriver session...")
 
-        if not LOG.isEnabledFor(logging.DEBUG):
-            os.environ['WDM_LOG_LEVEL'] = '0'  # silence the web driver manager
-
-        # check if a chrome driver is present already
-        if use_preinstalled_webdriver and shutil.which(DEFAULT_CHROMEDRIVER_PATH):
-            LOG.info("Using pre-installed Chrome Driver [%s]", shutil.which(DEFAULT_CHROMEDRIVER_PATH))
-            self.webdriver = webdriver.Chrome(options = self._init_browser_options(webdriver.ChromeOptions()))
-        elif use_preinstalled_webdriver and shutil.which(DEFAULT_EDGEDRIVER_PATH):
-            LOG.info("Using pre-installed Edge Driver [%s]", shutil.which(DEFAULT_EDGEDRIVER_PATH))
-            self.webdriver = webdriver.ChromiumEdge(options = self._init_browser_options(webdriver.EdgeOptions()))
+        if self.browser_config.binary_location:
+            ensure(os.path.exists(self.browser_config.binary_location), f"Specified browser binary [{self.browser_config.binary_location}] does not exist.")
         else:
-            # determine browser major version
-            if self.browser_config.binary_location:
-                ensure(os.path.exists(self.browser_config.binary_location), f"Specified browser binary [{self.browser_config.binary_location}] does not exist.")
-                chrome_type, chrome_version = self.get_browser_version(self.browser_config.binary_location)
-            else:
-                browser_info = self.find_compatible_browser()
-                if browser_info is None:
-                    raise AssertionError("No supported browser found!")
-                chrome_path, chrome_type, chrome_version = browser_info
-                self.browser_config.binary_location = chrome_path
-            LOG.info("Using Browser: %s %s [%s]", chrome_type.upper(), chrome_version, self.browser_config.binary_location)
-            chrome_major_version = chrome_version.split(".", 1)[0]
+            self.browser_config.binary_location = self.get_compatible_browser()
 
-            # hack to specify the concrete browser version for which the driver shall be downloaded
-            webdriver_manager.core.driver.get_browser_version_from_os = lambda _: chrome_major_version
+        if "edge" in self.browser_config.binary_location.lower():
+            os.environ["MSEDGEDRIVER_TELEMETRY_OPTOUT"] = "1"  # https://docs.microsoft.com/en-us/microsoft-edge/privacy-whitepaper/#microsoft-edge-driver
+            browser_options = self._init_browser_options(webdriver.EdgeOptions())
+            browser_options.binary_location = self.browser_config.binary_location
+            self.webdriver = webdriver.Edge(options = browser_options)
+        else:
+            browser_options = self._init_browser_options(webdriver.ChromeOptions())
+            browser_options.binary_location = self.browser_config.binary_location
+            self.webdriver = webdriver.Chrome(options = browser_options)
 
-            # download and install matching chrome driver
-            webdriver_mgr: DriverManager
-            if chrome_type == ChromeType.MSEDGE:
-                webdriver_mgr = EdgeChromiumDriverManager(cache_manager = DriverCacheManager(valid_range = 14))
-                webdriver_path = webdriver_mgr.install()
-                env = os.environ.copy()
-                env["MSEDGEDRIVER_TELEMETRY_OPTOUT"] = "1"  # https://docs.microsoft.com/en-us/microsoft-edge/privacy-whitepaper/#microsoft-edge-driver
-                self.webdriver = webdriver.ChromiumEdge(
-                    service = EdgeService(webdriver_path, env = env),
-                    options = self._init_browser_options(webdriver.EdgeOptions())
-                )
-            else:
-                webdriver_mgr = ChromeDriverManager(chrome_type = chrome_type, cache_manager = DriverCacheManager(valid_range = 14))
-                webdriver_path = webdriver_mgr.install()
-                self.webdriver = webdriver.Chrome(service = ChromeService(webdriver_path), options = self._init_browser_options(webdriver.ChromeOptions()))
+        LOG.info(" -> Chrome driver: %s", self.webdriver.service.path)
 
         # workaround to support Edge, see https://github.com/diprajpatra/selenium-stealth/pull/25
         selenium_stealth.Driver = ChromiumDriver
@@ -159,48 +121,9 @@ class SeleniumMixin:
 
         LOG.info("New WebDriver session is: %s %s", self.webdriver.session_id, self.webdriver.command_executor._url)  # pylint: disable=protected-access
 
-    def get_browser_version(self, executable_path: str) -> tuple[ChromeType, str]:  # -> [ chrome_type, chrome_version ]
-        match OperationSystemManager.get_os_name():
-            case OSType.WIN:
-                import win32api  # pylint: disable=import-outside-toplevel,import-error
-                # pylint: disable=no-member
-                lang, codepage = win32api.GetFileVersionInfo(executable_path, "\\VarFileInfo\\Translation")[0]
-                product_name = win32api.GetFileVersionInfo(executable_path, f"\\StringFileInfo\\{lang:04X}{codepage:04X}\\ProductName")
-                product_version = win32api.GetFileVersionInfo(executable_path, f"\\StringFileInfo\\{lang:04X}{codepage:04X}\\ProductVersion")
-                # pylint: enable=no-member
-                match product_name:
-                    case "Chromium":
-                        return (ChromeType.CHROMIUM, product_version)
-                    case "Microsoft Edge":
-                        return (ChromeType.MSEDGE, product_version)
-                    case _:  # "Google Chrome"
-                        return (ChromeType.GOOGLE, product_version)
-
-            case OSType.LINUX:
-                version_cmd = webdriver_manager.core.utils.linux_browser_apps_to_cmd(f'"{executable_path}"')
-
-            case _:
-                version_cmd = f'"{executable_path}" --version'
-
-        filename = os.path.basename(executable_path).lower()
-        if "chromium" in filename:
-            return (
-                ChromeType.CHROMIUM,
-                webdriver_manager.core.utils.read_version_from_cmd(version_cmd, webdriver_manager.core.os_manager.PATTERN[ChromeType.CHROMIUM])
-            )
-        if "edge" in filename:
-            return (
-                ChromeType.MSEDGE,
-                webdriver_manager.core.utils.read_version_from_cmd(version_cmd, webdriver_manager.core.os_manager.PATTERN[ChromeType.MSEDGE])
-            )
-        return (
-            ChromeType.GOOGLE,
-            webdriver_manager.core.utils.read_version_from_cmd(version_cmd, webdriver_manager.core.os_manager.PATTERN[ChromeType.GOOGLE])
-        )
-
-    def find_compatible_browser(self) -> tuple[str, ChromeType, str] | None:  # -> [ browser_path, chrome_type, chrome_version ]
-        match OperationSystemManager.get_os_name():
-            case OSType.LINUX:
+    def get_compatible_browser(self) -> str | None:
+        match platform.system():
+            case "Linux":
                 browser_paths = [
                     shutil.which("chromium"),
                     shutil.which("chromium-browser"),
@@ -208,14 +131,14 @@ class SeleniumMixin:
                     shutil.which("microsoft-edge")
                 ]
 
-            case OSType.MAC:
+            case "Darwin":
                 browser_paths = [
                     "/Applications/Chromium.app/Contents/MacOS/Chromium",
                     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
                     "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
                 ]
 
-            case OSType.WIN:
+            case "Windows":
                 browser_paths = [
                     os.environ.get("ProgramFiles", "C:\\Program Files") + r'\Microsoft\Edge\Application\msedge.exe',
                     os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)") + r'\Microsoft\Edge\Application\msedge.exe',
@@ -239,10 +162,9 @@ class SeleniumMixin:
 
         for browser_path in browser_paths:
             if browser_path and os.path.isfile(browser_path):
-                return (browser_path, *self.get_browser_version(browser_path))
+                return browser_path
 
-        LOG.warning("Installed browser could not be detected")
-        return None
+        raise AssertionError("Installed browser could not be detected")
 
     def web_await(self, condition: Callable[[WebDriver], T], timeout:float = 5, exception_on_timeout: Callable[[], Exception] | None = None) -> T:
         """
