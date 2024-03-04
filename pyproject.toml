@@ -78,7 +78,7 @@ app     = "python -m kleinanzeigen_bot"
 compile.cmd = "python -O -m PyInstaller pyinstaller.spec --clean"
 compile.env = {PYTHONHASHSEED = "1", SOURCE_DATE_EPOCH = "0"} # https://pyinstaller.org/en/stable/advanced-topics.html#creating-a-reproducible-build
 format  = "autopep8 --recursive --in-place kleinanzeigen_bot tests --verbose"
-lint    = {shell = "pylint -v kleinanzeigen_bot tests && autopep8 -v --exit-code --recursive --diff kleinanzeigen_bot tests && echo No issues found."}
+lint    = {shell = "pylint -v src tests && autopep8 -v --exit-code --recursive --diff src tests && echo No issues found."}
 scan    = "bandit -c pyproject.toml -r kleinanzeigen_bot"
 test    = "python -m pytest --capture=tee-sys -v"
 utest   = "python -m pytest --capture=tee-sys -v -m 'not itest'"
@@ -215,7 +215,7 @@ max-public-methods = 30 # maximum number of public methods for a class (R0904)
 #####################
 [tool.pytest.ini_options]
 # https://docs.pytest.org/en/stable/reference.html#confval-addopts
-addopts = "--strict-markers -p no:cacheprovider --doctest-modules --ignore=__pypackages__ --ignore=kleinanzeigen_bot/__main__.py"
+addopts = "--strict-markers -p no:cacheprovider --doctest-modules --ignore=kleinanzeigen_bot/__main__.py"
 markers = [
     "itest: marks a test as an integration test (i.e. a test with external dependencies)"
 ]

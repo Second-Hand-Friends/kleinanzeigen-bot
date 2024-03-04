@@ -8,11 +8,11 @@ _LOCAL/
 /config.yaml
 /data
 /*.log
-kleinanzeigen_bot/_version.py
+/src/kleinanzeigen_bot/_version.py
 downloaded-ads
 
 # python
-/__pypackages__
+/.venv
 __pycache__
 /build
 /dist
