@@ -51,6 +51,7 @@ CHROMIUM_OPTIONS = TypeVar('CHROMIUM_OPTIONS', bound = ChromiumOptions)  # pylin
 class SeleniumMixin:
 
     def __init__(self) -> None:
+        os.environ["SE_AVOID_STATS"] = "true"  # see https://www.selenium.dev/documentation/selenium_manager/
         self.browser_config:Final[BrowserConfig] = BrowserConfig()
         self.webdriver:WebDriver = None
 
