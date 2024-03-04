@@ -85,15 +85,11 @@ jobs:
         fi
 
 
-    - uses: actions/setup-python@v5
+    - name: "Install Python and PDM"  #         https://github.com/pdm-project/setup-pdm
+      uses: pdm-project/setup-pdm@v3
       with:
         python-version: "${{ matrix.PYTHON_VERSION }}"
-
-
-    - uses: actions/cache@v4
-      with:
-        path: __pypackages__
-        key: ${{ runner.os }}-pypackages-${{ hashFiles('pdm.lock') }}
+        cache: true
 
 
     - name: "Install: Python dependencies"
@@ -103,6 +99,9 @@ jobs:
         python --version
         python -m pip install --upgrade pip
         pip install --upgrade pdm
+        if [[ ! -e .venv ]]; then
+          pdm venv create || true
+        fi
         pdm install -v
 
 

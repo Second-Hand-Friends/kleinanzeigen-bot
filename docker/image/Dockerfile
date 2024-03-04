@@ -60,7 +60,7 @@ RUN <<EOF
     git `# required by pdm to generate app version` \
 
   # upgrade pip
-  python -m pip install --upgrade pip \
+  python -m pip install --upgrade pip
 
   # install pdm
   pip install pdm
@@ -69,16 +69,14 @@ EOF
 
 ENV PATH="/opt/upx:${PATH}"
 
-COPY kleinanzeigen_bot /opt/app/kleinanzeigen_bot
-COPY .git /opt/app/.git
-COPY README.md pdm.lock pyinstaller.spec pyproject.toml version.py /opt/app/
+COPY . /opt/app/
 
 RUN <<EOF
 
   cd /opt/app
   ls -la .
   pdm install -v
-  ls -la kleinanzeigen_bot
+  ls -la src/kleinanzeigen_bot
   pdm run compile
   ls -l dist
 

@@ -47,7 +47,7 @@ if platform != "darwin":
 
 # https://github.com/pyinstaller/pyinstaller/blob/f563dce1e83fd5ec72a20dffd2ac24be3e647150/PyInstaller/building/build_main.py#L320
 analysis = Analysis(
-        ['kleinanzeigen_bot/__main__.py'],
+        ['src/kleinanzeigen_bot/__main__.py'],
         # pathex = [],
         # binaries = [],
         datas = datas,
