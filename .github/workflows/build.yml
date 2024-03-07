@@ -275,7 +275,7 @@ jobs:
         GH_DEBUG=1 gh release create "$RELEASE_NAME" \
           --title "$RELEASE_NAME" \
           --latest \
-          --notes "${{ github.event.head_commit.message }}" \
+          --notes ${{ toJSON(github.event.head_commit.message) }} \
           --target "${{ github.sha }}" \
           kleinanzeigen-bot-darwin-amd64 \
           kleinanzeigen-bot-linux-amd64 \
