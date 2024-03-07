@@ -18,7 +18,7 @@ from nodriver.core.config import Config
 from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
 
-from .utils import ensure, T
+from .utils import ensure, is_port_open, T
 
 
 LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.selenium_mixin")
@@ -79,6 +79,35 @@ class WebScrapingMixin:
             self.browser_config.binary_location = self.get_compatible_browser()
         LOG.info(" -> Chrome binary location: %s", self.browser_config.binary_location)
 
+        ########################################################
+        # check if an existing browser instance shall be used...
+        ########################################################
+        remote_host = "127.0.0.1"
+        remote_port = 0
+        for arg in self.browser_config.arguments:
+            if arg.startswith("--remote-debugging-host="):
+                remote_host = arg.split("=", 2)[1]
+            if arg.startswith("--remote-debugging-port="):
+                remote_port = int(arg.split("=", 2)[1])
+
+        if remote_port > 0:
+            LOG.info("Using existing browser process at %s:%s", remote_host, remote_port)
+            if not is_port_open(remote_host, remote_port):
+                raise AssertionError(f"Browser process not reachable at {remote_host}:{remote_port}. "
+                        + f"Start the browser with --remote-debugging-port={remote_port} or remove this port from your config.yaml")
+            cfg = Config(
+                browser_executable_path = self.browser_config.binary_location  # actually not necessary but nodriver fails without
+            )
+            cfg.host = remote_host
+            cfg.port = remote_port
+            self.browser = await nodriver.start(cfg)
+            LOG.info("New Browser session is %s", self.browser.websocket_url)
+            return
+
+        ########################################################
+        # configure and initialize new browser instance...
+        ########################################################
+
         # default_browser_args: @ https://github.com/ultrafunkamsterdam/nodriver/blob/main/nodriver/core/config.py
         # https://peter.sh/experiments/chromium-command-line-switches/
         # https://github.com/GoogleChrome/chrome-launcher/blob/main/docs/chrome-flags-for-tools.md
@@ -125,6 +154,7 @@ class WebScrapingMixin:
             browser_args = browser_args,
             user_data_dir = self.browser_config.user_data_dir
         )
+
         # already logged by nodriver:
         # LOG.debug("-> Effective browser arguments: \n\t\t%s", "\n\t\t".join(cfg.browser_args))
 

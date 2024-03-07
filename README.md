@@ -10,6 +10,10 @@
 1. [About](#about)
 1. [Installation](#installation)
 1. [Usage](#usage)
+1. [Configuration](#config)
+   1. [Main configuration](#main-config)
+   1. [Ad configuration](#ad-config)
+   1. [Using an existing browser window](#existing-browser)
 1. [Development Notes](#development)
 1. [License](#license)
 
@@ -206,11 +210,11 @@ Options:
 
 Limitation of `download`: It's only possible to extract the cheapest given shipping option.
 
-### Configuration
+## <a name="config"></a>Configuration
 
 All configuration files can be in YAML or JSON format.
 
-#### 1) Main configuration
+### <a name="main-config"></a>1) Main configuration
 
 When executing the app it by default looks for a `config.yaml` file in the current directory. If it does not exist it will be created automatically.
 
@@ -271,7 +275,7 @@ login:
 
 ```
 
-#### 2) Ad configuration
+### <a name="ad-config"></a>2) Ad configuration
 
 Each ad is described in a separate JSON or YAML file with prefix `ad_<filename>`. The prefix is configurable in config file.
 
@@ -333,6 +337,30 @@ created_on: # set automatically
 updated_on: # set automatically
 ```
 
+### <a name="existing-browser"></a>3) Using an existing browser window
+
+By default a new browser process will be launched. To reuse a manually launched browser window/process follow these steps:
+
+1. Manually launch your browser from the command line with the `--remote-debugging-port=<NUMBER>` flag.
+   You are free to choose an unused port number 1025 and 65535, e.g.:
+   - `chrome --remote-debugging-port=9222`
+   - `chromium --remote-debugging-port=9222`
+   - `msedge --remote-debugging-port=9222`
+
+   This runs the browser in debug mode which allows it to be remote controlled by the bot.
+
+1. In your config.yaml specify the same flag as browser argument, e.g.:
+   ```yaml
+   browser:
+     arguments:
+     - --remote-debugging-port=9222
+   ```
+
+1. When now publishing ads the manually launched browser will be re-used.
+
+> NOTE: If an existing browser is used all other settings configured under `browser` in your config.yaml file will ignored
+  because they are only used to programmatically configure/launch a dedicated browser instance.
+
 ## <a name="development"></a>Development Notes
 
 > Please read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing code. Thank you!
@@ -342,7 +370,7 @@ updated_on: # set automatically
   - unit tests: `pdm run utest`
   - integration tests: `pdm run itest`
   - all tests: `pdm run test`
-- Run linter: `pdm run lint`
+- Run syntax checks: `pdm run lint`
 - Create platform-specific executable: `pdm run compile`
 - Application bootstrap works like this:
   ```python
