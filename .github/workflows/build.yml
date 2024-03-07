@@ -67,6 +67,9 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+    - name: Show environment variables
+      run: env | sort
+
     - name: Git checkout
       uses: actions/checkout@v4  # https://github.com/actions/checkout
 
@@ -208,7 +211,7 @@ jobs:
 
 
     - name: Publish Docker image
-      if: ${{ github.ref_name == 'main' && matrix.PUBLISH_RELEASE && startsWith(matrix.os, 'ubuntu') && !env.ACT }}
+      if: ${{ github.repository_owner == 'Second-Hand-Friends' && github.ref_name == 'main' && matrix.PUBLISH_RELEASE && startsWith(matrix.os, 'ubuntu') && !env.ACT }}
       run: |
         set -eux
 
@@ -225,7 +228,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: 
       - build
-    if: ${{ github.ref_name == 'main' && !github.event.act }}
+    if: ${{ github.repository_owner == 'Second-Hand-Friends' && github.ref_name == 'main' && !github.event.act }}
     concurrency: publish-latest-release # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idconcurrency
 
     steps:
