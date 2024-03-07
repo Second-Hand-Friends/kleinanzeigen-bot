@@ -27,6 +27,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Show environment variables
+      run: env | sort
+
+
     - name: Generate GitHub Access Token
       uses: tibdex/github-app-token@v2 #https://github.com/tibdex/github-app-token
       id: generate_token
@@ -43,18 +47,23 @@ jobs:
         token: ${{ steps.generate_token.outputs.token }}
 
 
-    - uses: actions/setup-python@v5
+    - name: "Install Python and PDM"  #         https://github.com/pdm-project/setup-pdm
+      uses: pdm-project/setup-pdm@v4
       with:
         python-version: "${{ env.PYTHON_VERSION }}"
+        cache: true
 
 
-    - name: Install Python dependencies
+    - name: "Install: Python dependencies"
       run: |
         set -eux
 
         python --version
         python -m pip install --upgrade pip
         pip install --upgrade pdm
+        if [[ ! -e .venv ]]; then
+          pdm venv create || true
+        fi
         pdm install -v
 
 

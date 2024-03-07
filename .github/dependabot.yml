@@ -1,4 +1,4 @@
-# https://help.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -8,8 +8,8 @@ updates:
       day: monday
       time: "17:00"
     commit-message:
-      prefix: fix
-      prefix-development: chore
+      prefix: ci
+      prefix-development: ci
       include: scope
     labels:
       - pinned

@@ -1,10 +1,11 @@
-# https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning
+# https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/customizing-your-advanced-setup-for-code-scanning
 name: "CodeQL"
 
 on:
   push:
-    branches:
-    - '**'
+    branches-ignore: # build all branches except:
+    - 'dependabot/**'    # prevent GHA triggered twice (once for commit to the branch and once for opening/syncing the PR)
+    - 'dependencies/pdm' # prevent GHA triggered twice (once for commit to the branch and once for opening/syncing the PR)
     tags-ignore:
     - '**'
     paths-ignore:
@@ -37,19 +38,19 @@ jobs:
       security-events: write
 
     steps:
+    - name: Show environment variables
+      run: env | sort
+
+
     - name: Git checkout
       uses: actions/checkout@v4  # https://github.com/actions/checkout
 
 
-    - uses: actions/setup-python@v5
+    - name: "Install Python and PDM"  #         https://github.com/pdm-project/setup-pdm
+      uses: pdm-project/setup-pdm@v4
       with:
         python-version: "${{ env.PYTHON_VERSION }}"
-
-
-    - uses: actions/cache@v4
-      with:
-        path: __pypackages__
-        key: ${{ runner.os }}-pypackages-${{ hashFiles('pdm.lock') }}
+        cache: true
 
 
     - name: "Install: Python dependencies"
@@ -59,6 +60,9 @@ jobs:
         python --version
         python -m pip install --upgrade pip
         pip install --upgrade pdm
+        if [[ ! -e .venv ]]; then
+          pdm venv create || true
+        fi
         pdm install -v
 
 
