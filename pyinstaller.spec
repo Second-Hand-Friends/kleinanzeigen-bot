@@ -10,7 +10,6 @@ from PyInstaller.utils.hooks import collect_data_files
 
 datas = [
     * collect_data_files("kleinanzeigen_bot"),  # embeds *.yaml files
-    * collect_data_files("selenium_stealth"),  # embeds *.js files
 
     # required to get version info via 'importlib.metadata.version(__package__)'
     # but we use https://backend.pdm-project.org/metadata/#writing-dynamic-version-to-file

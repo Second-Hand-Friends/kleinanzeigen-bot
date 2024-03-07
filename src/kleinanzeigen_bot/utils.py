@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import copy, decimal, json, logging, os, re, secrets, sys, traceback, time
+import asyncio, copy, decimal, json, logging, os, re, sys, traceback, time
 from importlib.resources import read_text as get_resource_as_string
 from collections.abc import Callable, Sized
 from datetime import datetime
@@ -68,6 +68,18 @@ def is_frozen() -> bool:
     return getattr(sys, "frozen", False)
 
 
+def is_integer(obj:Any) -> bool:
+    try:
+        int(obj)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+async def ainput(prompt: str) -> str:
+    return await asyncio.to_thread(input, f'{prompt} ')
+
+
 def apply_defaults(
     target:dict[Any, Any],
     defaults:dict[Any, Any],
@@ -119,7 +131,7 @@ def configure_console_logging() -> None:
     stdout_log = logging.StreamHandler(sys.stderr)
     stdout_log.setLevel(logging.DEBUG)
     stdout_log.setFormatter(coloredlogs.ColoredFormatter("[%(levelname)s] %(message)s"))
-    stdout_log.addFilter(type("", (logging.Filter,), {
+    stdout_log.addFilter(type("", (logging.Filter,), {  # pyright: ignore
         "filter": lambda rec: rec.levelno <= logging.INFO
     }))
     LOG_ROOT.addHandler(stdout_log)
@@ -149,12 +161,6 @@ def on_exit() -> None:
 def on_sigint(_sig:int, _frame:FrameType | None) -> None:
     LOG.warning("Aborted on user request.")
     sys.exit(0)
-
-
-def pause(min_ms:int = 200, max_ms:int = 2000) -> None:
-    duration = max_ms <= min_ms and min_ms or secrets.randbelow(max_ms - min_ms) + min_ms
-    LOG.log(logging.INFO if duration > 1500 else logging.DEBUG, " ... pausing for %d ms ...", duration)
-    time.sleep(duration / 1000)
 
 
 def pluralize(noun:str, count:int | Sized, prefix_with_count:bool = True) -> str:
@@ -272,20 +278,3 @@ def parse_datetime(date:datetime | str | None) -> datetime | None:
     if isinstance(date, datetime):
         return date
     return datetime.fromisoformat(date)
-
-
-def extract_ad_id_from_ad_link(url: str) -> int:
-    """
-    Extracts the ID of an ad, given by its reference link.
-
-    :param url: the URL to the ad page
-    :return: the ad ID, a (ten-digit) integer number
-    """
-    num_part = url.split('/')[-1]  # suffix
-    id_part = num_part.split('-')[0]
-
-    try:
-        return int(id_part)
-    except ValueError:
-        print('The ad ID could not be extracted from the given ad reference!')
-        return -1

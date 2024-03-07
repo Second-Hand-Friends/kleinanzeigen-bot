@@ -3,24 +3,22 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import atexit, copy, getopt, importlib.metadata, json, logging, os, re, signal, shutil, sys, textwrap, time, urllib
+import asyncio, atexit, copy, getopt, importlib.metadata, json, logging, os, re, signal, shutil, sys, textwrap, time
+import urllib.parse as urllib_parse
+import urllib.request as urllib_request
 from collections.abc import Iterable
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from typing import Any, Final
 
-import certifi, colorama
+import colorama, nodriver
 from overrides import overrides
 from ruamel.yaml import YAML
-from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, TimeoutException, WebDriverException
-from selenium.webdriver.common.by import By
-from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.support import expected_conditions as EC
 from wcmatch import glob
 
 from . import utils, resources, extract
-from .utils import abspath, apply_defaults, ensure, is_frozen, pause, pluralize, safe_get, parse_datetime
-from .selenium_mixin import SeleniumMixin
+from .utils import abspath, ainput, apply_defaults, ensure, is_frozen, pluralize, safe_get, parse_datetime
+from .web_scraping_mixin import By, Element, Page, Is, WebScrapingMixin
 from ._version import __version__
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
@@ -32,13 +30,9 @@ LOG.setLevel(logging.INFO)
 colorama.init()
 
 
-class KleinanzeigenBot(SeleniumMixin):
+class KleinanzeigenBot(WebScrapingMixin):
 
     def __init__(self) -> None:
-
-        # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/207
-        # see https://github.com/pyinstaller/pyinstaller/issues/7229#issuecomment-1309383026
-        os.environ["SSL_CERT_FILE"] = certifi.where()
 
         super().__init__()
 
@@ -61,69 +55,69 @@ class KleinanzeigenBot(SeleniumMixin):
     def __del__(self) -> None:
         if self.file_log:
             LOG_ROOT.removeHandler(self.file_log)
-        if self.webdriver:
-            self.webdriver.quit()
-            self.webdriver = None
+        self.close_browser_session()
 
     def get_version(self) -> str:
         return __version__
 
-    def run(self, args:list[str]) -> None:
+    async def run(self, args:list[str]) -> None:
         self.parse_args(args)
-        match self.command:
-            case "help":
-                self.show_help()
-            case "version":
-                print(self.get_version())
-            case "verify":
-                self.configure_file_logging()
-                self.load_config()
-                self.load_ads()
-                LOG.info("############################################")
-                LOG.info("DONE: No configuration errors found.")
-                LOG.info("############################################")
-            case "publish":
-                self.configure_file_logging()
-                self.load_config()
+        try:
+            match self.command:
+                case "help":
+                    self.show_help()
+                case "version":
+                    print(self.get_version())
+                case "verify":
+                    self.configure_file_logging()
+                    self.load_config()
+                    self.load_ads()
+                    LOG.info("############################################")
+                    LOG.info("DONE: No configuration errors found.")
+                    LOG.info("############################################")
+                case "publish":
+                    self.configure_file_logging()
+                    self.load_config()
 
-                if not (self.ads_selector in {'all', 'new', 'due'} or re.compile(r'\d+[,\d+]*').search(self.ads_selector)):
-                    LOG.warning('You provided no ads selector. Defaulting to "due".')
-                    self.ads_selector = 'due'
+                    if not (self.ads_selector in {'all', 'new', 'due'} or re.compile(r'\d+[,\d+]*').search(self.ads_selector)):
+                        LOG.warning('You provided no ads selector. Defaulting to "due".')
+                        self.ads_selector = 'due'
 
-                if ads := self.load_ads():
-                    self.create_webdriver_session()
-                    self.login()
-                    self.publish_ads(ads)
-                else:
-                    LOG.info("############################################")
-                    LOG.info("DONE: No new/outdated ads found.")
-                    LOG.info("############################################")
-            case "delete":
-                self.configure_file_logging()
-                self.load_config()
-                if ads := self.load_ads():
-                    self.create_webdriver_session()
-                    self.login()
-                    self.delete_ads(ads)
-                else:
-                    LOG.info("############################################")
-                    LOG.info("DONE: No ads to delete found.")
-                    LOG.info("############################################")
-            case "download":
-                self.configure_file_logging()
-                # ad IDs depends on selector
-                if not (self.ads_selector in {'all', 'new'} or re.compile(r'\d+[,\d+]*').search(self.ads_selector)):
-                    LOG.warning('You provided no ads selector. Defaulting to "new".')
-                    self.ads_selector = 'new'
-                # start session
-                self.load_config()
-                self.create_webdriver_session()
-                self.login()
-                self.start_download_routine()  # call correct version of download
+                    if ads := self.load_ads():
+                        await self.create_browser_session()
+                        await self.login()
+                        await self.publish_ads(ads)
+                    else:
+                        LOG.info("############################################")
+                        LOG.info("DONE: No new/outdated ads found.")
+                        LOG.info("############################################")
+                case "delete":
+                    self.configure_file_logging()
+                    self.load_config()
+                    if ads := self.load_ads():
+                        await self.create_browser_session()
+                        await self.login()
+                        await self.delete_ads(ads)
+                    else:
+                        LOG.info("############################################")
+                        LOG.info("DONE: No ads to delete found.")
+                        LOG.info("############################################")
+                case "download":
+                    self.configure_file_logging()
+                    # ad IDs depends on selector
+                    if not (self.ads_selector in {'all', 'new'} or re.compile(r'\d+[,\d+]*').search(self.ads_selector)):
+                        LOG.warning('You provided no ads selector. Defaulting to "new".')
+                        self.ads_selector = 'new'
+                    self.load_config()
+                    await self.create_browser_session()
+                    await self.login()
+                    await self.download_ads()
 
-            case _:
-                LOG.error("Unknown command: %s", self.command)
-                sys.exit(2)
+                case _:
+                    LOG.error("Unknown command: %s", self.command)
+                    sys.exit(2)
+        finally:
+            self.close_browser_session()
 
     def show_help(self) -> None:
         if is_frozen():
@@ -200,6 +194,7 @@ class KleinanzeigenBot(SeleniumMixin):
                     self.delete_old_ads = False
                 case "-v" | "--verbose":
                     LOG.setLevel(logging.DEBUG)
+                    logging.getLogger("nodriver").setLevel(logging.INFO)
 
         match len(arguments):
             case 0:
@@ -290,6 +285,7 @@ class KleinanzeigenBot(SeleniumMixin):
                             continue
 
             ad_cfg["description"] = descr_prefix + (ad_cfg["description"] or "") + descr_suffix
+            ad_cfg["description"] = ad_cfg["description"].replace("@", "(at)")
             ensure(len(ad_cfg["description"]) <= 4000, f"Length of ad description including prefix and suffix exceeds 4000 chars. @ [{ad_file}]")
 
             # pylint: disable=cell-var-from-loop
@@ -311,6 +307,7 @@ class KleinanzeigenBot(SeleniumMixin):
                 ensure(not safe_get(ad_cfg, "price"), f"-> [price] must not be specified for GIVE_AWAY ad @ [{ad_file}]")
             elif ad_cfg["price_type"] == "FIXED":
                 assert_has_value("price")
+
             assert_one_of("shipping_type", {"PICKUP", "SHIPPING", "NOT_APPLICABLE"})
             assert_has_value("contact.name")
             assert_has_value("republication_interval")
@@ -326,9 +323,9 @@ class KleinanzeigenBot(SeleniumMixin):
 
             if ad_cfg["images"]:
                 images = []
+                ad_dir = os.path.dirname(ad_file)
                 for image_pattern in ad_cfg["images"]:
                     pattern_images = set()
-                    ad_dir = os.path.dirname(ad_file)
                     for image_file in glob.glob(image_pattern, root_dir = ad_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
                         _, image_file_ext = os.path.splitext(image_file)
                         ensure(image_file_ext.lower() in {".gif", ".jpg", ".jpeg", ".png"}, f"Unsupported image file type [{image_file}]")
@@ -376,133 +373,122 @@ class KleinanzeigenBot(SeleniumMixin):
             self.browser_config.user_data_dir = abspath(self.config["browser"]["user_data_dir"], relative_to = self.config_file_path)
         self.browser_config.profile_name = self.config["browser"]["profile_name"]
 
-    def login(self) -> None:
-        LOG.info("Checking if already logged in")
-        self.web_open(f"{self.root_url}")
+    async def login(self) -> None:
+        LOG.info("Checking if already logged in...")
+        await self.web_open(f"{self.root_url}")
 
-        if self.is_logged_in():
+        if await self.is_logged_in():
             LOG.info("Already logged in as [%s]. Skipping login.", self.config["login"]["username"])
             return
 
+        LOG.info("Opening login page...")
+        await self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
+
+        try:
+            await self.web_find(By.CSS_SELECTOR, "iframe[src*='captcha-delivery.com']", timeout = 2)
+            LOG.warning("############################################")
+            LOG.warning("# Captcha present! Please solve the captcha.")
+            LOG.warning("############################################")
+            await self.web_await(lambda: self.web_find(By.ID, "login-form") is not None, timeout = 5 * 60)
+        except TimeoutError:
+            pass
+
         LOG.info("Logging in as [%s]...", self.config["login"]["username"])
-        self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
-
-        # close redesign banner
-        try:
-            self.web_click(By.XPATH, '//*[@id="pre-launch-comms-interstitial-frontend"]//button[.//*[text()[contains(.,"nicht mehr anzeigen")]]]')
-        except NoSuchElementException:
-            pass
-
-        # accept privacy banner
-        try:
-            self.web_click(By.ID, "gdpr-banner-accept")
-        except NoSuchElementException:
-            pass
-
-        self.web_input(By.ID, "login-email", self.config["login"]["username"])
-        self.web_input(By.ID, "login-password", self.config["login"]["password"])
-
-        self.handle_captcha_if_present("login-recaptcha", "but DON'T click 'Einloggen'.")
-
-        self.web_click(By.ID, "login-submit")
+        await self.web_input(By.ID, "email", self.config["login"]["username"])
+        await self.web_input(By.ID, "password", self.config["login"]["password"])
+        await self.web_click(By.CSS_SELECTOR, "form#login-form button[type='submit']")
 
         try:
-            self.web_find(By.ID, "new-device-login", 4)
+            await self.web_find(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout = 4)
             LOG.warning("############################################")
-            LOG.warning("# Device verification message detected. Use the 'Login bestätigen' URL from the mentioned e-mail into the same browser tab.")
+            LOG.warning("# Device verification message detected. Please handle it.")
             LOG.warning("############################################")
-            input("Press ENTER when done...")
-        except NoSuchElementException:
+            await ainput("Press ENTER when done...")
+        except TimeoutError:
             pass
 
-    def is_logged_in(self) -> bool:
         try:
-            user_email_elem = self.web_find(By.ID, "user-email")
-            email_text = user_email_elem.text
-            if f"angemeldet als: {self.config['login']['username']}" == email_text:
+            LOG.info("Handling GDPR disclaimer...")
+            await self.web_find(By.ID, "gdpr-banner-accept", timeout = 10)
+            await self.web_click(By.ID, "gdpr-banner-cmp-button")
+            await self.web_click(By.CSS_SELECTOR, "#ConsentManagementPage button.Button-secondary", timeout = 10)
+        except TimeoutError:
+            pass
+
+    async def is_logged_in(self) -> bool:
+        try:
+            email = await self.web_text(By.ID, "user-email")
+            if f"angemeldet als: {self.config['login']['username']}" == email:
                 return True
-        except NoSuchElementException:
+        except TimeoutError:
             return False
         return False
 
-    def handle_captcha_if_present(self, captcha_element_id:str, msg:str) -> None:
-        try:
-            self.web_click(By.XPATH, f"//*[@id='{captcha_element_id}']")
-        except NoSuchElementException:
-            return
-
-        LOG.warning("############################################")
-        LOG.warning("# Captcha present! Please solve and close the captcha, %s", msg)
-        LOG.warning("############################################")
-        self.webdriver.switch_to.frame(self.web_find(By.CSS_SELECTOR, f"#{captcha_element_id} iframe"))
-        self.web_await(lambda _: self.webdriver.find_element(By.ID, "recaptcha-anchor").get_attribute("aria-checked") == "true", timeout = 5 * 60)
-        self.webdriver.switch_to.default_content()
-
-    def delete_ads(self, ad_cfgs:list[tuple[str, dict[str, Any], dict[str, Any]]]) -> None:
+    async def delete_ads(self, ad_cfgs:list[tuple[str, dict[str, Any], dict[str, Any]]]) -> None:
         count = 0
 
         for (ad_file, ad_cfg, _) in ad_cfgs:
             count += 1
             LOG.info("Processing %s/%s: '%s' from [%s]...", count, len(ad_cfgs), ad_cfg["title"], ad_file)
-            self.delete_ad(ad_cfg)
-            pause(2000, 4000)
+            await self.delete_ad(ad_cfg)
+            await self.web_sleep()
 
         LOG.info("############################################")
         LOG.info("DONE: Deleting %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    def delete_ad(self, ad_cfg: dict[str, Any]) -> bool:
+    async def delete_ad(self, ad_cfg: dict[str, Any]) -> bool:
         LOG.info("Deleting ad '%s' if already present...", ad_cfg["title"])
 
-        self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
-        csrf_token_elem = self.web_find(By.XPATH, "//meta[@name='_csrf']")
-        csrf_token = csrf_token_elem.get_attribute("content")
+        await self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
+        csrf_token_elem = await self.web_find(By.CSS_SELECTOR, "meta[name=_csrf]")
+        csrf_token = csrf_token_elem.attrs["content"]
         if csrf_token is None:
             raise AssertionError("Expected CSRF Token not found in HTML content!")
 
         if self.delete_ads_by_title:
-            published_ads = json.loads(self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT")["content"])["ads"]
+            published_ads = json.loads((await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
 
             for published_ad in published_ads:
                 published_ad_id = int(published_ad.get("id", -1))
                 published_ad_title = published_ad.get("title", "")
                 if ad_cfg["id"] == published_ad_id or ad_cfg["title"] == published_ad_title:
                     LOG.info(" -> deleting %s '%s'...", published_ad_id, published_ad_title)
-                    self.web_request(
+                    await self.web_request(
                         url = f"{self.root_url}/m-anzeigen-loeschen.json?ids={published_ad_id}",
                         method = "POST",
                         headers = {"x-csrf-token": csrf_token}
                     )
         elif ad_cfg["id"]:
-            self.web_request(
+            await self.web_request(
                 url = f"{self.root_url}/m-anzeigen-loeschen.json?ids={ad_cfg['id']}",
                 method = "POST",
                 headers = {"x-csrf-token": csrf_token},
                 valid_response_codes = [200, 404]
             )
 
-        pause(1500, 3000)
+        await self.web_sleep()
         ad_cfg["id"] = None
         return True
 
-    def publish_ads(self, ad_cfgs:list[tuple[str, dict[str, Any], dict[str, Any]]]) -> None:
+    async def publish_ads(self, ad_cfgs:list[tuple[str, dict[str, Any], dict[str, Any]]]) -> None:
         count = 0
 
         for (ad_file, ad_cfg, ad_cfg_orig) in ad_cfgs:
             count += 1
             LOG.info("Processing %s/%s: '%s' from [%s]...", count, len(ad_cfgs), ad_cfg["title"], ad_file)
-            self.publish_ad(ad_file, ad_cfg, ad_cfg_orig)
-            self.web_await(lambda _: self.webdriver.find_element(By.ID, "checking-done").is_displayed(), timeout = 5 * 60)
+            await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig)
+            await self.web_await(lambda: self.web_check(By.ID, "checking-done", Is.DISPLAYED), timeout = 5 * 60)
 
         LOG.info("############################################")
         LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    def publish_ad(self, ad_file:str, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any]) -> None:
-        self.assert_free_ad_limit_not_reached()
+    async def publish_ad(self, ad_file:str, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any]) -> None:
+        await self.assert_free_ad_limit_not_reached()
 
         if self.delete_old_ads:
-            self.delete_ad(ad_cfg)
+            await self.delete_ad(ad_cfg)
 
         LOG.info("Publishing ad '%s'...", ad_cfg["title"])
 
@@ -510,45 +496,44 @@ class KleinanzeigenBot(SeleniumMixin):
             LOG.debug(" -> effective ad meta:")
             YAML().dump(ad_cfg, sys.stdout)
 
-        self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html")
+        await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html")
 
         if ad_cfg["type"] == "WANTED":
-            self.web_click(By.ID, "adType2")
+            await self.web_click(By.ID, "adType2")
 
         #############################
         # set title
         #############################
-        self.web_input(By.ID, "postad-title", ad_cfg["title"])
+        await self.web_input(By.ID, "postad-title", ad_cfg["title"])
 
         #############################
         # set category
         #############################
-        self.__set_category(ad_file, ad_cfg)
+        await self.__set_category(ad_file, ad_cfg)
 
         #############################
         # set shipping type/options/costs
         #############################
         if ad_cfg["shipping_type"] == "PICKUP":
             try:
-                self.web_click(By.XPATH, '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/input[@type="radio"]')
-            except NoSuchElementException as ex:
+                await self.web_click(By.XPATH,
+                    '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/input[@type="radio"]')
+            except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg["shipping_options"]:
-            self.web_click(By.XPATH, '//*[contains(@class, "jsx-2623555103")]')
-            self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal--Button")]')
-            self.__set_shipping_options(ad_cfg)
+            await self.web_click(By.CSS_SELECTOR, '[class*="jsx-2623555103"]')
+            await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
+            await self.__set_shipping_options(ad_cfg)
         else:
             try:
-                self.web_click(By.XPATH, '//*[contains(@class, "jsx-2623555103")]')
-                self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal--Button")]')
-                self.web_click(By.XPATH, '//*[contains(@class, "CarrierOption--Main")]')
+                await self.web_click(By.CSS_SELECTOR, '[class*="jsx-2623555103"]')
+                await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
+                await self.web_click(By.CSS_SELECTOR, '[class*="CarrierOption--Main"]')
                 if ad_cfg["shipping_costs"]:
-                    self.web_input(By.XPATH,
-                        '//*[contains(@class, "IndividualShippingInput")]//input[@type="text"]',
-                        str.replace(ad_cfg["shipping_costs"], ".", ",")
+                    await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]', str.replace(ad_cfg["shipping_costs"], ".", ",")
                     )
-                self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
-            except NoSuchElementException as ex:
+                await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
+            except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
 
         #############################
@@ -557,11 +542,11 @@ class KleinanzeigenBot(SeleniumMixin):
         price_type = ad_cfg["price_type"]
         if price_type != "NOT_APPLICABLE":
             try:
-                self.web_select(By.XPATH, "//select[@id='price-type-react' or @id='micro-frontend-price-type' or @id='priceType']", price_type)
-            except NoSuchElementException:
+                await self.web_select(By.CSS_SELECTOR, "select#price-type-react, select#micro-frontend-price-type, select#priceType", price_type)
+            except TimeoutError:
                 pass
             if safe_get(ad_cfg, "price"):
-                self.web_input(By.XPATH, "//input[@id='post-ad-frontend-price' or @id='micro-frontend-price' or @id='pstad-price']", ad_cfg["price"])
+                await self.web_input(By.CSS_SELECTOR, "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price", ad_cfg["price"])
 
         #############################
         # set sell_directly
@@ -570,81 +555,80 @@ class KleinanzeigenBot(SeleniumMixin):
         try:
             if ad_cfg["shipping_type"] == "SHIPPING":
                 if sell_directly and ad_cfg["shipping_options"] and price_type in {"FIXED", "NEGOTIABLE"}:
-                    if not self.webdriver.find_element(By.ID, "radio-buy-now-yes").is_selected():
-                        self.web_click(By.XPATH, '//*[contains(@id, "radio-buy-now-yes")]')
-                elif not self.webdriver.find_element(By.ID, "radio-buy-now-no").is_selected():
-                    self.web_click(By.XPATH, '//*[contains(@id, "radio-buy-now-no")]')
-        except NoSuchElementException as ex:
+                    if not await self.web_check(By.ID, "radio-buy-now-yes", Is.SELECTED):
+                        await self.web_click(By.ID, 'radio-buy-now-yes')
+                elif not await self.web_check(By.ID, "radio-buy-now-no", Is.SELECTED):
+                    await self.web_click(By.ID, 'radio-buy-now-no')
+        except TimeoutError as ex:
             LOG.debug(ex, exc_info = True)
 
         #############################
         # set description
         #############################
-        self.web_execute("document.querySelector('#pstad-descrptn').value = `" + ad_cfg["description"].replace("`", "'") + "`")
+        await self.web_execute("document.querySelector('#pstad-descrptn').value = `" + ad_cfg["description"].replace("`", "'") + "`")
 
         #############################
         # set contact zipcode
         #############################
         if ad_cfg["contact"]["zipcode"]:
-            self.web_input(By.ID, "pstad-zip", ad_cfg["contact"]["zipcode"])
+            await self.web_input(By.ID, "pstad-zip", ad_cfg["contact"]["zipcode"])
 
         #############################
         # set contact street
         #############################
         if ad_cfg["contact"]["street"]:
             try:
-                if not self.webdriver.find_element(By.ID, "pstad-street").is_enabled():
-                    self.webdriver.find_element(By.ID, "addressVisibility").click()
-                    pause(2000)
-            except NoSuchElementException:
+                if await self.web_check(By.ID, "pstad-street", Is.DISABLED):
+                    await self.web_click(By.ID, "addressVisibility")
+                    await self.web_sleep()
+            except TimeoutError:
                 # ignore
                 pass
-            self.web_input(By.ID, "pstad-street", ad_cfg["contact"]["street"])
+            await self.web_input(By.ID, "pstad-street", ad_cfg["contact"]["street"])
 
         #############################
         # set contact name
         #############################
-        if ad_cfg["contact"]["name"] and not self.webdriver.find_element(By.ID, "postad-contactname").get_attribute("readonly"):
-            self.web_input(By.ID, "postad-contactname", ad_cfg["contact"]["name"])
+        if ad_cfg["contact"]["name"] and not await self.web_check(By.ID, "postad-contactname", Is.READONLY):
+            await self.web_input(By.ID, "postad-contactname", ad_cfg["contact"]["name"])
 
         #############################
         # set contact phone
         #############################
         if ad_cfg["contact"]["phone"]:
-            if self.webdriver.find_element(By.ID, "postad-phonenumber").is_displayed():
+            if await self.web_check(By.ID, "postad-phonenumber", Is.DISPLAYED):
                 try:
-                    if not self.webdriver.find_element(By.ID, "postad-phonenumber").is_enabled():
-                        self.webdriver.find_element(By.ID, "phoneNumberVisibility").click()
-                        pause(2000)
-                except NoSuchElementException:
+                    if await self.web_check(By.ID, "postad-phonenumber", Is.DISABLED):
+                        await self.web_click(By.ID, "phoneNumberVisibility")
+                        await self.web_sleep()
+                except TimeoutError:
                     # ignore
                     pass
-                self.web_input(By.ID, "postad-phonenumber", ad_cfg["contact"]["phone"])
+                await self.web_input(By.ID, "postad-phonenumber", ad_cfg["contact"]["phone"])
 
         #############################
         # upload images
         #############################
-        self.__upload_images(ad_cfg)
+        await self.__upload_images(ad_cfg)
 
         #############################
         # submit
         #############################
-        self.handle_captcha_if_present("postAd-recaptcha", "but DON'T click 'Anzeige aufgeben'.")
         try:
-            self.web_click(By.ID, "pstad-submit")
-        except NoSuchElementException:
+            await self.web_click(By.ID, "pstad-submit")
+        except TimeoutError:
             # https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/40
-            self.web_click(By.XPATH, "//fieldset[@id='postad-publish']//*[contains(text(),'Anzeige aufgeben')]")
-            self.web_click(By.ID, "imprint-guidance-submit")
+            await self.web_click(By.XPATH, "//fieldset[@id='postad-publish']//*[contains(text(),'Anzeige aufgeben')]")
+            await self.web_click(By.ID, "imprint-guidance-submit")
 
-        self.web_await(EC.url_contains("p-anzeige-aufgeben-bestaetigung.html?adId="), 20)
+        await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = 20)
 
         ad_cfg_orig["updated_on"] = datetime.utcnow().isoformat()
         if not ad_cfg["created_on"] and not ad_cfg["id"]:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
 
         # extract the ad id from the URL's query parameter
-        current_url_query_params = urllib.parse.parse_qs(urllib.parse.urlparse(self.webdriver.current_url).query)
+        current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(self.page.url).query)
         ad_id = int(current_url_query_params.get("adId", [])[0])
         ad_cfg_orig["id"] = ad_id
 
@@ -652,24 +636,25 @@ class KleinanzeigenBot(SeleniumMixin):
 
         utils.save_dict(ad_file, ad_cfg_orig)
 
-    def __set_category(self, ad_file:str, ad_cfg: dict[str, Any]) -> None:
+    async def __set_category(self, ad_file:str, ad_cfg: dict[str, Any]) -> None:
         # click on something to trigger automatic category detection
-        self.web_click(By.ID, "pstad-descrptn")
+        await self.web_click(By.ID, "pstad-descrptn")
 
+        is_category_auto_selected = False
         try:
-            self.web_find(By.XPATH, "//*[@id='postad-category-path'][text()]")
-            is_category_auto_selected = True
-        except NoSuchElementException:
-            is_category_auto_selected = False
+            if await self.web_text(By.ID, "postad-category-path"):
+                is_category_auto_selected = True
+        except TimeoutError:
+            pass
 
         if ad_cfg["category"]:
-            utils.pause(2000)  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
-            self.web_click(By.ID, "pstad-lnk-chngeCtgry")
-            self.web_find(By.ID, "postad-step1-sbmt")
+            await self.web_sleep()  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
+            await self.web_click(By.ID, "pstad-lnk-chngeCtgry")
+            await self.web_find(By.ID, "postad-step1-sbmt")
 
             category_url = f"{self.root_url}/p-kategorie-aendern.html#?path={ad_cfg['category']}"
-            self.web_open(category_url)
-            self.web_click(By.XPATH, "//*[@id='postad-step1-sbmt']/button")
+            await self.web_open(category_url)
+            await self.web_click(By.XPATH, "//*[@id='postad-step1-sbmt']/button")
         else:
             ensure(is_category_auto_selected, f"No category specified in [{ad_file}] and automatic category detection failed")
 
@@ -680,29 +665,27 @@ class KleinanzeigenBot(SeleniumMixin):
                 try:
                     # if the <select> element exists but is inside an invisible container, make the container visible
                     select_container_xpath = f"//div[@class='l-row' and descendant::select[@id='{special_attribute_key}']]"
-                    select_container = self.web_find(By.XPATH, select_container_xpath)
-                    if not select_container.is_displayed():
-                        self.web_execute(f"document.evaluate(\"{select_container_xpath}\"," +
-                            " document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.style.display = 'block';")
-                except BaseException:
+                    if not await self.web_check(By.XPATH, select_container_xpath, Is.DISPLAYED):
+                        await (await self.web_find(By.XPATH, select_container_xpath)).apply("elem => elem.singleNodeValue.style.display = 'block'")
+                except TimeoutError:
                     pass  # nosec
 
                 try:
-                    self.web_select(By.XPATH, f"//select[@id='{special_attribute_key}']", special_attribute_value)
-                except WebDriverException:
+                    await self.web_select(By.XPATH, f"//select[@id='{special_attribute_key}']", special_attribute_value)
+                except TimeoutError:
                     LOG.debug("Attribute field '%s' is not of kind dropdown, trying to input as plain text...", special_attribute_key)
                     try:
-                        self.web_input(By.ID, special_attribute_key, special_attribute_value)
-                    except WebDriverException:
+                        await self.web_input(By.ID, special_attribute_key, special_attribute_value)
+                    except TimeoutError:
                         LOG.debug("Attribute field '%s' is not of kind plain text, trying to input as radio button...", special_attribute_key)
                         try:
-                            self.web_click(By.XPATH, f"//*[@id='{special_attribute_key}']/option[@value='{special_attribute_value}']")
-                        except WebDriverException as ex:
+                            await self.web_click(By.XPATH, f"//*[@id='{special_attribute_key}']/option[@value='{special_attribute_value}']")
+                        except TimeoutError as ex:
                             LOG.debug("Attribute field '%s' is not of kind radio button.", special_attribute_key)
-                            raise NoSuchElementException(f"Failed to set special attribute [{special_attribute_key}]") from ex
+                            raise TimeoutError(f"Failed to set special attribute [{special_attribute_key}]") from ex
                 LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value)
 
-    def __set_shipping_options(self, ad_cfg: dict[str, Any]) -> None:
+    async def __set_shipping_options(self, ad_cfg: dict[str, Any]) -> None:
         try:
             shipping_option_mapping = {
                 "DHL_2": ("Klein", "Paket 2 kg"),
@@ -725,323 +708,98 @@ class KleinanzeigenBot(SeleniumMixin):
                 raise ValueError("You can only specify shipping options for one package size!")
 
             shipping_size, = unique_shipping_sizes
-            self.web_click(By.XPATH, f'//*[contains(@class, "SingleSelectionItem--Main")]//input[@type="radio" and @data-testid="{shipping_size}"]')
+            await self.web_click(By.CSS_SELECTOR, f'.SingleSelectionItem--Main input[type=radio][data-testid="{shipping_size}"]')
 
             for shipping_package in shipping_packages:
-                self.web_click(
+                await self.web_click(
                     By.XPATH,
                     '//*[contains(@class, "CarrierSelectionModal")]'
                     '//*[contains(@class, "CarrierOption")]'
                     f'//*[contains(@class, "CarrierOption--Main") and @data-testid="{shipping_package}"]'
                 )
 
-            self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
-        except NoSuchElementException as ex:
+            await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
+        except TimeoutError as ex:
             LOG.debug(ex, exc_info = True)
 
-    def __upload_images(self, ad_cfg: dict[str, Any]) -> None:
+    async def __upload_images(self, ad_cfg: dict[str, Any]) -> None:
         LOG.info(" -> found %s", pluralize("image", ad_cfg["images"]))
-        image_upload = self.web_find(By.XPATH, "//input[@type='file']")
-
-        def count_uploaded_images() -> int:
-            return len(self.webdriver.find_elements(By.CLASS_NAME, "imagebox-new-thumbnail"))
+        image_upload:Element = await self.web_find(By.CSS_SELECTOR, "input[type=file]")
 
         for image in ad_cfg["images"]:
             LOG.info(" -> uploading image [%s]", image)
-            previous_uploaded_images_count = count_uploaded_images()
-            attempt = 0
-            while attempt < 3 and previous_uploaded_images_count == count_uploaded_images():
-                image_upload.send_keys(image)
-                start_at = time.time()
-                while previous_uploaded_images_count == count_uploaded_images() and time.time() - start_at < 60:
-                    print(".", end = "", flush = True)
-                    time.sleep(1)
-                attempt += 1
-            print(flush = True)
+            await image_upload.send_file(image)
+            await self.web_sleep()
 
-            ensure(previous_uploaded_images_count < count_uploaded_images(), f"Couldn't upload image [{image}] within 60 seconds and 3 attempts")
-            LOG.debug("   => uploaded image within %i seconds", time.time() - start_at)
-            pause(2000)
-
-    def assert_free_ad_limit_not_reached(self) -> None:
+    async def assert_free_ad_limit_not_reached(self) -> None:
         try:
-            self.web_find(By.XPATH, '/html/body/div[1]/form/fieldset[6]/div[1]/header')
+            await self.web_find(By.XPATH, '/html/body/div[1]/form/fieldset[6]/div[1]/header', timeout = 2)
             raise AssertionError(f"Cannot publish more ads. The monthly limit of free ads of account {self.config['login']['username']} is reached.")
-        except NoSuchElementException:
+        except TimeoutError:
             pass
 
-    @overrides
-    def web_open(self, url:str, timeout:float = 15, reload_if_already_open:bool = False) -> None:
-        start_at = time.time()
-        super().web_open(url, timeout, reload_if_already_open)
-        pause(2000)
-
-        # reload the page until no fullscreen ad is displayed anymore
-        while True:
-            try:
-                self.web_find(By.XPATH, "/html/body/header[@id='site-header']", 2)
-                return
-            except NoSuchElementException as ex:
-                elapsed = time.time() - start_at
-                if elapsed < timeout:
-                    super().web_open(url, timeout - elapsed, True)
-                else:
-                    raise TimeoutException("Loading page failed, it still shows fullscreen ad.") from ex
-
-    def navigate_to_ad_page(self, id_:int | None = None, url:str | None = None) -> bool:
-        """
-        Navigates to an ad page specified with an ad ID; or alternatively by a given URL.
-
-        :param id_: if provided (and no url given), the ID is used to search for the ad to navigate to
-        :param url: if given, this URL is used instead of an id to find the ad page
-        :return: whether the navigation to the ad page was successful
-        """
-        if not (id_ or url):
-            raise UserWarning('This function needs either the "id_" or "url" parameter given!')
-        if url:
-            self.webdriver.get(url)  # navigate to URL directly given
-        else:
-            # enter the ad ID into the search bar
-            self.web_input(By.XPATH, '//*[@id="site-search-query"]', str(id_))
-            # navigate to ad page and wait
-            submit_button = self.webdriver.find_element(By.XPATH, '//*[@id="site-search-submit"]')
-            self.web_await(EC.element_to_be_clickable(submit_button), 15)
-            try:
-                submit_button.click()
-            except ElementClickInterceptedException:  # sometimes: special banner might pop up and intercept
-                LOG.warning('Waiting for unexpected element to close...')
-                pause(6000, 10000)
-                submit_button.click()
-        pause(1000, 2000)
-
-        # handle the case that invalid ad ID given
-        if self.webdriver.current_url.endswith('k0'):
-            LOG.error('There is no ad under the given ID.')
-            return False
-        try:  # close (warning) popup, if given
-            self.webdriver.find_element(By.CSS_SELECTOR, '#vap-ovrly-secure')
-            LOG.warning('A popup appeared.')
-            close_button = self.webdriver.find_element(By.CLASS_NAME, 'mfp-close')
-            close_button.click()
-            time.sleep(1)
-        except NoSuchElementException:
-            print('(no popup)')
-        return True
-
-    def download_images_from_ad_page(self, directory:str, ad_id:int, logger:logging.Logger) -> list[str]:
-        """
-        Downloads all images of an ad.
-
-        :param directory: the path of the directory created for this ad
-        :param ad_id: the ID of the ad to download the images from
-        :param logger: an initialized logger
-        :return: the relative paths for all downloaded images
-        """
-
-        n_images:int
-        img_paths = []
-        try:
-            image_box = self.webdriver.find_element(By.CSS_SELECTOR, '.galleryimage-large')
-
-            # if gallery image box exists, proceed with image fetching
-            n_images = 1
-
-            # determine number of images (1 ... N)
-            next_button:WebElement
-            try:  # check if multiple images given
-                # edge case: 'Virtueller Rundgang' div could be found by same CSS class
-                element_candidates = image_box.find_elements(By.CSS_SELECTOR, '.galleryimage--info')
-                image_counter = element_candidates[-1]
-                n_images = int(image_counter.text[2:])
-                logger.info('Found %d images.', n_images)
-                next_button = self.webdriver.find_element(By.CSS_SELECTOR, '.galleryimage--navigation--next')
-            except (NoSuchElementException, IndexError):
-                logger.info('Only one image found.')
-
-            # download all images from box
-            img_element = image_box.find_element(By.XPATH, './/div[1]/img')
-            img_fn_prefix = 'ad_' + str(ad_id) + '__img'
-
-            img_nr = 1
-            dl_counter = 0
-            while img_nr <= n_images:  # scrolling + downloading
-                current_img_url = img_element.get_attribute('src')  # URL of the image
-                if current_img_url is None:
-                    continue
-                file_ending = current_img_url.split('.')[-1].lower()
-                img_path = directory + '/' + img_fn_prefix + str(img_nr) + '.' + file_ending
-                if current_img_url.startswith('https'):  # verify https (for Bandit linter)
-                    urllib.request.urlretrieve(current_img_url, img_path)  # nosec B310
-                dl_counter += 1
-                img_paths.append(img_path.split('/')[-1])
-
-                # scroll to next image (if exists)
-                if img_nr < n_images:
-                    try:
-                        # click next button, wait, and reestablish reference
-                        next_button.click()
-                        self.web_await(lambda _: EC.staleness_of(img_element))
-                        new_div = self.webdriver.find_element(By.CSS_SELECTOR, f'div.galleryimage-element:nth-child({img_nr + 1})')
-                        img_element = new_div.find_element(By.XPATH, './/img')
-                    except NoSuchElementException:
-                        logger.error('NEXT button in image gallery somehow missing, abort image fetching.')
-                        break
-                img_nr += 1
-            logger.info('Downloaded %d image(s).', dl_counter)
-
-        except NoSuchElementException:  # some ads do not require images
-            logger.warning('No image area found. Continue without downloading images.')
-
-        return img_paths
-
-    def extract_ad_page_info(self, directory:str, id_:int) -> dict[str, Any]:
-        """
-        Extracts all necessary information from an ad´s page.
-
-        :param directory: the path of the ad´s previously created directory
-        :param id_: the ad ID, already extracted by a calling function
-        :return: a dictionary with the keys as given in an ad YAML, and their respective values
-        """
-        info:dict[str, Any] = {'active': True}
-
-        # extract basic info
-        info['type'] = 'OFFER' if 's-anzeige' in self.webdriver.current_url else 'WANTED'
-        title:str = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-title').text
-        LOG.info('Extracting information from ad with title \"%s\"', title)
-        info['title'] = title
-        descr:str = self.webdriver.find_element(By.XPATH, '//*[@id="viewad-description-text"]').text
-        info['description'] = descr
-
-        extractor = extract.AdExtractor(self.webdriver)
-
-        # extract category
-        info['category'] = extractor.extract_category_from_ad_page()
-
-        # get special attributes
-        info['special_attributes'] = extractor.extract_special_attributes_from_ad_page()
-
-        # process pricing
-        info['price'], info['price_type'] = extractor.extract_pricing_info_from_ad_page()
-
-        # process shipping
-        info['shipping_type'], info['shipping_costs'], info['shipping_options'] = extractor.extract_shipping_info_from_ad_page()
-        info['sell_directly'] = extractor.extract_sell_directly_from_ad_page()
-
-        # fetch images
-        info['images'] = self.download_images_from_ad_page(directory, id_, LOG)
-
-        # process address
-        info['contact'] = extractor.extract_contact_from_ad_page()
-
-        # process meta info
-        info['republication_interval'] = 7  # a default value for downloaded ads
-        info['id'] = id_
-
-        try:  # try different locations known for creation date element
-            creation_date = self.webdriver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section[2]/section/section/article/div[3]/div[2]/div[2]/'
-                                                                  'div[1]/span').text
-        except NoSuchElementException:
-            creation_date = self.webdriver.find_element(By.CSS_SELECTOR, '#viewad-extra-info > div:nth-child(1) > span:nth-child(2)').text
-
-        # convert creation date to ISO format
-        created_parts = creation_date.split('.')
-        creation_date = created_parts[2] + '-' + created_parts[1] + '-' + created_parts[0] + ' 00:00:00'
-        creation_date = datetime.fromisoformat(creation_date).isoformat()
-        info['created_on'] = creation_date
-        info['updated_on'] = None  # will be set later on
-
-        return info
-
-    def download_ad_page(self, id_:int) -> None:
-        """
-        Downloads an ad to a specific location, specified by config and ad ID.
-        NOTE: Requires that the driver session currently is on the ad page.
-
-        :param id_: the ad ID
-        """
-
-        # create sub-directory for ad(s) to download (if necessary):
-        relative_directory = 'downloaded-ads'
-        # make sure configured base directory exists
-        if not os.path.exists(relative_directory) or not os.path.isdir(relative_directory):
-            os.mkdir(relative_directory)
-            LOG.info('Created ads directory at /%s.', relative_directory)
-
-        new_base_dir = os.path.join(relative_directory, f'ad_{id_}')
-        if os.path.exists(new_base_dir):
-            LOG.info('Deleting current folder of ad...')
-            shutil.rmtree(new_base_dir)
-        os.mkdir(new_base_dir)
-        LOG.info('New directory for ad created at %s.', new_base_dir)
-
-        # call extraction function
-        info = self.extract_ad_page_info(new_base_dir, id_)
-        ad_file_path = new_base_dir + '/' + f'ad_{id_}.yaml'
-        utils.save_dict(ad_file_path, info)
-
-    def start_download_routine(self) -> None:
+    async def download_ads(self) -> None:
         """
         Determines which download mode was chosen with the arguments, and calls the specified download routine.
         This downloads either all, only unsaved (new), or specific ads given by ID.
         """
 
+        ad_extractor = extract.AdExtractor(self.browser)
+
         # use relevant download routine
         if self.ads_selector in {'all', 'new'}:  # explore ads overview for these two modes
             LOG.info('Scanning your ad overview...')
-            ext = extract.AdExtractor(self.webdriver)
-            refs = ext.extract_own_ads_references()
-            LOG.info('%d ads were found!', len(refs))
+            own_ad_urls = await ad_extractor.extract_own_ads_urls()
+            LOG.info('%d ads were found!', len(own_ad_urls))
 
             if self.ads_selector == 'all':  # download all of your adds
                 LOG.info('Start fetch task for all your ads!')
 
                 success_count = 0
                 # call download function for each ad page
-                for ref in refs:
-                    ref_ad_id: int = utils.extract_ad_id_from_ad_link(ref)
-                    if self.navigate_to_ad_page(url = ref):
-                        self.download_ad_page(ref_ad_id)
+                for add_url in own_ad_urls:
+                    ad_id = ad_extractor.extract_ad_id_from_ad_url(add_url)
+                    if await ad_extractor.naviagte_to_ad_page(add_url):
+                        await ad_extractor.download_ad(ad_id)
                         success_count += 1
-                LOG.info("%d of %d ads were downloaded from your profile.", success_count, len(refs))
+                LOG.info("%d of %d ads were downloaded from your profile.", success_count, len(own_ad_urls))
 
             elif self.ads_selector == 'new':  # download only unsaved ads
-                # determine ad IDs from links
-                ref_ad_ids = [utils.extract_ad_id_from_ad_link(r) for r in refs]
-                ref_pairs = list(zip(refs, ref_ad_ids))
-
                 # check which ads already saved
                 saved_ad_ids = []
                 ads = self.load_ads(ignore_inactive = False, check_id = False)  # do not skip because of existing IDs
-                for ad_ in ads:
-                    ad_id = int(ad_[2]['id'])
+                for ad in ads:
+                    ad_id = int(ad[2]['id'])
                     saved_ad_ids.append(ad_id)
+
+                # determine ad IDs from links
+                ad_id_by_url = {url:ad_extractor.extract_ad_id_from_ad_url(url) for url in own_ad_urls}
 
                 LOG.info('Start fetch task for your unsaved ads!')
                 new_count = 0
-                for ref_pair in ref_pairs:
+                for ad_url, ad_id in ad_id_by_url.items():
                     # check if ad with ID already saved
-                    id_: int = ref_pair[1]
-                    if id_ in saved_ad_ids:
-                        LOG.info('The ad with id %d has already been saved.', id_)
+                    if ad_id in saved_ad_ids:
+                        LOG.info('The ad with id %d has already been saved.', ad_id)
                         continue
 
-                    if self.navigate_to_ad_page(url = ref_pair[0]):
-                        self.download_ad_page(id_)
+                    if await ad_extractor.naviagte_to_ad_page(ad_url):
+                        await ad_extractor.download_ad(ad_id)
                         new_count += 1
                 LOG.info('%d new ad(s) were downloaded from your profile.', new_count)
 
         elif re.compile(r'\d+[,\d+]*').search(self.ads_selector):  # download ad(s) with specific id(s)
             ids = [int(n) for n in self.ads_selector.split(',')]
             LOG.info('Start fetch task for the ad(s) with the id(s):')
-            LOG.info(' | '.join([str(id_) for id_ in ids]))
+            LOG.info(' | '.join([str(ad_id) for ad_id in ids]))
 
-            for id_ in ids:  # call download routine for every id
-                exists = self.navigate_to_ad_page(id_)
+            for ad_id in ids:  # call download routine for every id
+                exists = await ad_extractor.naviagte_to_ad_page(ad_id)
                 if exists:
-                    self.download_ad_page(id_)
-                    LOG.info('Downloaded ad with id %d', id_)
+                    await ad_extractor.download_ad(ad_id)
+                    LOG.info('Downloaded ad with id %d', ad_id)
                 else:
-                    LOG.error('The page with the id %d does not exist!', id_)
+                    LOG.error('The page with the id %d does not exist!', ad_id)
 
 
 #############################
@@ -1065,7 +823,9 @@ def main(args:list[str]) -> None:
     sys.excepthook = utils.on_exception
     atexit.register(utils.on_exit)
 
-    KleinanzeigenBot().run(args)
+    bot = KleinanzeigenBot()
+    atexit.register(bot.close_browser_session)
+    nodriver.loop().run_until_complete(bot.run(args))
 
 
 if __name__ == "__main__":

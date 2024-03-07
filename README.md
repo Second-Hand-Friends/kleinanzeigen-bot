@@ -20,7 +20,7 @@
 
 It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https://github.com/Second-Hand-Friends/ebayKleinanzeigen) with the following advantages:
 - supports Microsoft Edge browser (Chromium based)
-- compatible chromedriver is installed automatically
+- does not require selenium and chromedrivers
 - better captcha handling
 - config:
   - use YAML or JSON for config files
@@ -29,7 +29,7 @@ It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https:/
   - reference categories by name (looked up from [categories.yaml](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml))
 - logging is configurable and colorized
 - provided as self-contained executable for Windows, Linux and macOS
-- source code is pylint checked and uses Python type hints
+- source code is pylint/bandit/mypy checked and uses Python type hints
 - CI builds
 
 
@@ -290,7 +290,7 @@ description: # can be multiline, see syntax here https://yaml-multiline.info/
 # or category ID (e.g. 161/27)
 category: Notebooks
 
-price:
+price: # without decimals, e.g. 75
 price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY
 
 special_attributes:
