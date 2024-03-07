@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import asyncio, copy, decimal, json, logging, os, re, sys, traceback, time
+import asyncio, copy, decimal, json, logging, os, re, socket, sys, traceback, time
 from importlib.resources import read_text as get_resource_as_string
 from collections.abc import Callable, Sized
 from datetime import datetime
@@ -74,6 +74,18 @@ def is_integer(obj:Any) -> bool:
         return True
     except (ValueError, TypeError):
         return False
+
+
+def is_port_open(host:str, port:int) -> bool:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1)
+        s.connect((host, port))
+        return True
+    except Exception:
+        return False
+    finally:
+        s.close()
 
 
 async def ainput(prompt: str) -> str:
