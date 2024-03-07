@@ -27,12 +27,7 @@ categories: []
 # browser configuration
 browser:
   # https://peter.sh/experiments/chromium-command-line-switches/
-  arguments:
-    # https://stackoverflow.com/a/50725918/5116073
-    - --disable-dev-shm-usage
-    - --no-sandbox
-    # --headless
-    # --start-maximized
+  arguments: []
   binary_location: # path to custom browser executable, if not specified will be looked up on PATH
   extensions: [] # a list of .crx extension files to be loaded
   use_private_window: true
