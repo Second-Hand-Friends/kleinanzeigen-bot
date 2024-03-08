@@ -23,9 +23,9 @@ RUN <<EOF
   apt-get update
 
   echo "#################################################"
-  echo "Install Chromium + Driver..."
+  echo "Install Chromium..."
   echo "#################################################"
-  apt-get install --no-install-recommends -y chromium chromium-driver
+  apt-get install --no-install-recommends -y chromium
 
   apt-get clean autoclean
   apt-get autoremove --purge -y
