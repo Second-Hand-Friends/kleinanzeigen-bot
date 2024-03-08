@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+#
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
+name: Stale issues
+
+on:
+  schedule:
+    - cron: '0 16 * * *'
+  workflow_dispatch:
+    # https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/
+
+permissions:
+  contents: write # only for delete-branch option
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Git checkout
+      uses: actions/checkout@v2  # https://github.com/actions/checkout
+
+    - name: Run stale action
+      uses: actions/stale@v9  # https://github.com/actions/stale
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        days-before-stale: 90
+        days-before-close: 14
+        stale-issue-message: >
+          This issue has been automatically marked as stale because it has not had
+          recent activity. It will be closed in 14 days if no further activity occurs.
+          If the issue is still valid, please add a respective comment to prevent this 
+          issue from being closed automatically. Thank you for your contributions.
+        stale-issue-label: stale
+        close-issue-label: wontfix
+        exempt-issue-labels: |
+          enhancement
+          pinned
+          security
+
+    - name: Run stale action
+      uses: actions/stale@v9  # https://github.com/actions/stale
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        days-before-stale: 360
+        days-before-close: 14
+        stale-issue-message: >
+          This issue has been automatically marked as stale because it has not had
+          recent activity. It will be closed in 14 days if no further activity occurs.
+          If the issue is still valid, please add a respective comment to prevent this 
+          issue from being closed automatically. Thank you for your contributions.
+        stale-issue-label: stale
+        close-issue-label: wontfix
+        only-labels: enhancement
+        exempt-issue-labels: |
+          pinned
+          security
