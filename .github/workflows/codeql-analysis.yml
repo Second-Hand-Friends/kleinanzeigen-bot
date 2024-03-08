@@ -10,8 +10,11 @@ on:
     - '**'
     paths-ignore:
     - '**/*.md'
+    - '.editorconfig'
+    - '.git*'
     - '.github/ISSUE_TEMPLATE/*'
     - '.github/workflows/build.yml'
+    - '.github/workflows/stale.yml'
     - '.github/workflows/update-python-deps.yml'
   pull_request:
     paths-ignore:
