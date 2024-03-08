@@ -310,7 +310,8 @@ class AdExtractor(WebScrapingMixin):
             match price_str.split()[-1]:
                 case '€':
                     price_type = 'FIXED'
-                    price = int(price_str.split()[0])
+                    # replace('.', '') is to remove the thousands separator before parsing as int
+                    price = int(price_str.replace('.', '').split()[0])
                 case 'VB':
                     price_type = 'NEGOTIABLE'
                     if not price_str == "VB":  # can be either 'X € VB', or just 'VB'
