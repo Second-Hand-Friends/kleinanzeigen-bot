@@ -64,12 +64,9 @@ dev = [
     "bandit",
     "toml", # required by bandit
     "tomli", # required by bandit
-
     "pytest",
-    "flaky", # used by pytest
-
+    "pytest-rerunfailures",
     "pyinstaller",
-
     "pylint",
     "mypy",
     "pyright",

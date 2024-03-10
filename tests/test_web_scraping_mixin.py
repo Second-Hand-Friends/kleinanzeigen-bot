@@ -3,11 +3,9 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import logging, os, time
-from typing import Any
+import logging, os
 
 import nodriver, pytest
-from flaky import flaky
 
 from kleinanzeigen_bot.web_scraping_mixin import WebScrapingMixin
 from kleinanzeigen_bot.utils import ensure
@@ -15,11 +13,6 @@ from kleinanzeigen_bot.utils import ensure
 if os.environ.get("CI"):
     logging.getLogger("kleinanzeigen_bot").setLevel(logging.DEBUG)
     logging.getLogger("nodriver").setLevel(logging.DEBUG)
-
-
-def delay_rerun(*args:Any) -> bool:  # pylint: disable=unused-argument
-    time.sleep(5)
-    return True
 
 
 async def atest_init() -> None:
@@ -35,7 +28,7 @@ async def atest_init() -> None:
         web_scraping_mixin.close_browser_session()
 
 
-@flaky(max_runs = 3, min_passes = 1, rerun_filter = delay_rerun)  # type: ignore[misc] # mypy
+@pytest.mark.flaky(reruns = 4, reruns_delay = 5)
 @pytest.mark.itest
 def test_init() -> None:
     nodriver.loop().run_until_complete(atest_init())
