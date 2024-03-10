@@ -111,7 +111,7 @@ jobs:
         if [[ ! -e .venv ]]; then
           pdm venv create || true
         fi
-        pdm install -v
+        pdm sync --clean -v
 
 
     - name: Display project metadata
