@@ -69,7 +69,7 @@ pyz = PYZ(
         # name = None
     )
 
-import shutil
+import os, shutil
 
 # https://github.com/pyinstaller/pyinstaller/blob/f563dce1e83fd5ec72a20dffd2ac24be3e647150/PyInstaller/building/api.py#L338
 exe = EXE(pyz,
@@ -94,7 +94,7 @@ exe = EXE(pyz,
         # contents_directory = "_internal",
         # using strip on windows results in "ImportError: Can't connect to HTTPS URL because the SSL module is not available."
         strip = not platform.startswith("win") and shutil.which("strip") is not None,
-        upx = shutil.which("upx") is not None,
+        upx = shutil.which("upx") is not None and not os.getenv("NO_UPX"),
         upx_exclude = [],
         runtime_tmpdir = None,
     )
