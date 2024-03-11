@@ -84,7 +84,7 @@ jobs:
       uses: vegardit/fast-apt-mirror.sh@v1
 
 
-    - name: Install Chromium Browser
+    - name: "Install: Chromium Browser"
       if: env.ACT == 'true' && startsWith(matrix.os, 'ubuntu')
       run: |
         if ! hash google-chrome &>/dev/null; then
@@ -94,7 +94,7 @@ jobs:
         fi
 
 
-    - name: "Install Python and PDM"  # https://github.com/pdm-project/setup-pdm
+    - name: "Install: Python and PDM"  # https://github.com/pdm-project/setup-pdm
       uses: pdm-project/setup-pdm@v4
       with:
         python-version: "${{ matrix.PYTHON_VERSION }}"
@@ -180,9 +180,15 @@ jobs:
 
         /tmp/upx/upx.exe --version
 
+
     - name: Build self-contained executable
       run: |
         set -eux
+
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          NO_UPX=1 pdm run compile
+          mv dist/kleinanzeigen-bot.exe dist/kleinanzeigen-bot-uncompressed.exe
+        fi
 
         pdm run compile
 
@@ -234,7 +240,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: 
       - build
-    if: ${{ github.repository_owner == 'Second-Hand-Friends' && github.ref_name == 'main' && !github.event.act }}
+    if: ${{ github.ref_name == 'main' && !github.event.act }}
     concurrency: publish-latest-release # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idconcurrency
 
     steps:
@@ -275,6 +281,7 @@ jobs:
 
         mv artifacts-macos-latest/kleinanzeigen-bot kleinanzeigen-bot-darwin-amd64
         mv artifacts-ubuntu-latest/kleinanzeigen-bot kleinanzeigen-bot-linux-amd64
+        mv artifacts-windows-latest/kleinanzeigen-bot-uncompressed.exe kleinanzeigen-bot-windows-amd64-uncompressed.exe
         mv artifacts-windows-latest/kleinanzeigen-bot.exe kleinanzeigen-bot-windows-amd64.exe
 
         # https://cli.github.com/manual/gh_release_create
@@ -285,7 +292,8 @@ jobs:
           --target "${{ github.sha }}" \
           kleinanzeigen-bot-darwin-amd64 \
           kleinanzeigen-bot-linux-amd64 \
-          kleinanzeigen-bot-windows-amd64.exe
+          kleinanzeigen-bot-windows-amd64.exe \
+          kleinanzeigen-bot-windows-amd64-uncompressed.exe
 
 
     - name: "Delete intermediate build artifacts"
