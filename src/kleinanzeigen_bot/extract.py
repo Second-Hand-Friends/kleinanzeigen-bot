@@ -247,7 +247,6 @@ class AdExtractor(WebScrapingMixin):
         info['contact'] = await self._extract_contact_from_ad_page()
 
         # process meta info
-        info['republication_interval'] = 7  # a default value for downloaded ads
         info['id'] = ad_id
 
         try:  # try different locations known for creation date element
