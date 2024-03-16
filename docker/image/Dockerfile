@@ -23,7 +23,13 @@ RUN <<EOF
   apt-get update
 
   echo "#################################################"
-  echo "Install Chromium..."
+  echo "Installing root CAs..."
+  echo "#################################################"
+  apt-get install --no-install-recommends -y ca-certificates
+  update-ca-certificates
+
+  echo "#################################################"
+  echo "Installing Chromium..."
   echo "#################################################"
   apt-get install --no-install-recommends -y chromium
 
