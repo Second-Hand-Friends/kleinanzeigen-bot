@@ -331,7 +331,7 @@ class AdExtractor(WebScrapingMixin):
         """
         ship_type, ship_costs, shipping_options = 'NOT_APPLICABLE', None, None
         try:
-            shipping_text = await self.web_text(By.ID, 'boxedarticle--details--shipping')
+            shipping_text = await self.web_text(By.CLASS_NAME, 'boxedarticle--details--shipping')
             # e.g. '+ Versand ab 5,49 €' OR 'Nur Abholung'
             if shipping_text == 'Nur Abholung':
                 ship_type = 'PICKUP'
