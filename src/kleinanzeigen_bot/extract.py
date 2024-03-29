@@ -314,7 +314,7 @@ class AdExtractor(WebScrapingMixin):
                 case 'VB':
                     price_type = 'NEGOTIABLE'
                     if not price_str == "VB":  # can be either 'X € VB', or just 'VB'
-                        price = int(price_str.split()[0])
+                        price = int(price_str.replace('.', '').split()[0])
                 case 'verschenken':
                     price_type = 'GIVE_AWAY'
                 case _:
