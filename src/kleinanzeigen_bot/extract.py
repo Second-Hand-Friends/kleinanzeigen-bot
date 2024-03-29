@@ -331,7 +331,7 @@ class AdExtractor(WebScrapingMixin):
         """
         ship_type, ship_costs, shipping_options = 'NOT_APPLICABLE', None, None
         try:
-            shipping_text = await self.web_text(By.ID, 'boxedarticle--details--shipping')
+            shipping_text = await self.web_text(By.CLASS_NAME, 'boxedarticle--details--shipping')
             # e.g. '+ Versand ab 5,49 €' OR 'Nur Abholung'
             if shipping_text == 'Nur Abholung':
                 ship_type = 'PICKUP'
@@ -350,9 +350,9 @@ class AdExtractor(WebScrapingMixin):
                     "Hermes_Päckchen": "4,50",
                     "Hermes_S": "4,95",
                     "DHL_5": "6,99",
-                    "Hermes_M": "5,95",
-                    "DHL_10": "9,49",
-                    "DHL_31,5": "16,49",
+                    "Hermes_M": "6,75",
+                    "DHL_10": "10,49",
+                    "DHL_31,5": "19,99",
                     "Hermes_L": "10,95",
                 }
                 for shipping_option, shipping_price in shipping_option_mapping.items():
