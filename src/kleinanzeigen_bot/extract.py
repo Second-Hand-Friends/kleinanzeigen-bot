@@ -183,6 +183,8 @@ class AdExtractor(WebScrapingMixin):
         :return: whether the navigation to the ad page was successful
         """
         if is_integer(id_or_url):
+            # navigate to start page, otherwise page can be None!
+            await self.web_open('https://www.kleinanzeigen.de/')
             # enter the ad ID into the search bar
             await self.web_input(By.ID, "site-search-query", id_or_url)
             # navigate to ad page and wait
