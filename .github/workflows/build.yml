@@ -77,7 +77,7 @@ jobs:
 
 
     - name: Start ClamAV daemon clamd
-      uses: toblux/start-clamd-github-action@v0.1
+      uses: toblux/start-clamd-github-action@v0.2
 
 
     - name: Configure Fast APT Mirror
