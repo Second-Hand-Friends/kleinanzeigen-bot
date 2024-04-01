@@ -30,7 +30,7 @@ It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https:/
   - use YAML or JSON for config files
   - one config file per ad
   - use globbing (wildcards) to select images from local disk via [wcmatch](https://facelessuser.github.io/wcmatch/glob/#syntax)
-  - reference categories by name (looked up from [categories.yaml](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml))
+  - reference categories by name (looked up from [categories.yaml](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml))
 - logging is configurable and colorized
 - provided as self-contained executable for Windows, Linux and macOS
 - source code is pylint/bandit/mypy checked and uses Python type hints
@@ -248,7 +248,7 @@ ad_defaults:
   republication_interval: 7 # every X days ads should be re-published
 
 # additional name to category ID mappings, see default list at
-# https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml
+# https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml
 categories:
  #Notebooks: 161/278 # Elektronik > Notebooks
  #Autoteile: 210/223/sonstige_autoteile # Auto, Rad & Boot > Autoteile & Reifen > Weitere Autoteile
@@ -289,7 +289,7 @@ type: # one of: OFFER, WANTED
 title:
 description: # can be multiline, see syntax here https://yaml-multiline.info/
 
-# built-in category name as specified in https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/kleinanzeigen_bot/resources/categories.yaml
+# built-in category name as specified in https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml
 # or custom category name as specified in config.yaml
 # or category ID (e.g. 161/27)
 category: Notebooks
