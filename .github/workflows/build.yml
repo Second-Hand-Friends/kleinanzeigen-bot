@@ -79,12 +79,12 @@ jobs:
       uses: vegardit/fast-apt-mirror.sh@v1
 
 
-    - name: Git checkout
-      uses: actions/checkout@v4  # https://github.com/actions/checkout
-
-
     - name: Start ClamAV daemon clamd
       uses: toblux/start-clamd-github-action@v0.2
+
+
+    - name: Git checkout
+      uses: actions/checkout@v4  # https://github.com/actions/checkout
 
 
     - name: "Install: Chromium Browser"
