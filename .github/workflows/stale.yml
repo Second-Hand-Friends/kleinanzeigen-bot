@@ -1,18 +1,13 @@
-# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
-# SPDX-License-Identifier: AGPL-3.0-or-later
-# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-#
 # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
 name: Stale issues
 
 on:
   schedule:
-    - cron: '0 16 * * *'
+    - cron: '0 16 * * 1'
   workflow_dispatch:
     # https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/
 
 permissions:
-  contents: write # only for delete-branch option
   issues: write
   pull-requests: write
 
@@ -42,7 +37,7 @@ jobs:
           pinned
           security
 
-    - name: Run stale action
+    - name: Run stale action (for enhancements)
       uses: actions/stale@v9  # https://github.com/actions/stale
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
