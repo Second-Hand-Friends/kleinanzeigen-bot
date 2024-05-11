@@ -166,7 +166,7 @@ class AdExtractor(WebScrapingMixin):
             if not multi_page:  # only one iteration for single-page overview
                 break
             # check if last page
-            nav_button:Element = (await self.web_find_all(By.CSS_SELECTOR, 'button.jsx-2828608826'))[-1]
+            nav_button:Element = (await self.web_find_all(By.CSS_SELECTOR, 'button.jsx-1553636621'))[-1]
             if nav_button.attrs['title'] != 'Nächste':
                 LOG.info('Last ad overview page explored.')
                 break
