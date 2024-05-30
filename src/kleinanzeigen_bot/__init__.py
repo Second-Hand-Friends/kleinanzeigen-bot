@@ -612,6 +612,19 @@ class KleinanzeigenBot(WebScrapingMixin):
         await self.__upload_images(ad_cfg)
 
         #############################
+        # wait for captcha
+        #############################
+        try:
+            await self.web_find(By.CSS_SELECTOR,"iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']", timeout=2)
+            LOG.warning("############################################")
+            LOG.warning("# Captcha present! Please solve the captcha.")
+            LOG.warning("############################################")
+            await self.web_scroll_page_down()
+            input("Press a key to continue...")
+        except TimeoutError:
+            pass
+
+        #############################
         # submit
         #############################
         try:
