@@ -373,7 +373,7 @@ class AdExtractor(WebScrapingMixin):
         :return: a boolean indicating whether the sell directly option is active (optional)
         """
         try:
-            buy_now_is_active:bool = (await self.web_text(By.ID, 'j-buy-now')) == "Direkt kaufen"
+            buy_now_is_active:bool = 'Direkt kaufen' in (await self.web_text(By.ID, 'payment-buttons-sidebar'))
             return buy_now_is_active
         except TimeoutError:
             return None
