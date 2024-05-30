@@ -49,43 +49,43 @@ Auto, Rad & Boot:
     Tuning & Styling: 210/223/tuning_styling
     Weitere Autoteile: 210/223/sonstige_autoteile
     Werkzeug: 210/223/werkzeug
-  Boote & Bootszubehör:
-    Bootsliegeplätze: 210/211/bootsliegeplaetze
+  Boote & BootszubehÃ¶r:
+    BootsliegeplÃ¤tze: 210/211/bootsliegeplaetze
     Bootstrailer: 210/211/bootstrailer
-    Bootszubehör: 210/211/bootszubehoer
+    BootszubehÃ¶r: 210/211/bootszubehoer
     Jetski: 210/211/jetski
     Kleinboote: 210/211/kleinboote
     Motorboote: 210/211/motorboote
     Schlauchboote: 210/211/schlauchboote
     Segelboote: 210/211/segelboote
     Weitere Boote: 210/211/andere
-  Fahrräder & Zubehör:
+  FahrrÃ¤der & ZubehÃ¶r:
     Damen: 210/217/damen
     Herren: 210/217/herren
     Kinder: 210/217/kinder
-    Weitere Fahrräder & Zubehör: 210/217/weiteres
-    Zubehör: 210/217/zubehoer
-  Motorradteile & Zubehör:
+    Weitere FahrrÃ¤der & ZubehÃ¶r: 210/217/weiteres
+    ZubehÃ¶r: 210/217/zubehoer
+  Motorradteile & ZubehÃ¶r:
     Ersatz- & Reparaturteile: 210/306/teile
     Motorradbekleidung: 210/306/kleidung
     Reifen & Felgen: 210/306/reifen_felgen
-  Motorräder & Motorroller:
+  MotorrÃ¤der & Motorroller:
     Mofas & Mopeds: 210/305/mofa
     Motorroller & Scooter: 210/305/roller
-    Motorräder: 210/305/motorrad
+    MotorrÃ¤der: 210/305/motorrad
     Quads: 210/305/quad
-  Nutzfahrzeuge & Anhänger:
+  Nutzfahrzeuge & AnhÃ¤nger:
     Agrarfahrzeuge: 210/276/agrarfahrzeuge
-    Anhänger: 210/276/anhaenger
+    AnhÃ¤nger: 210/276/anhaenger
     Baumaschinen: 210/276/baumaschinen
     Busse: 210/276/busse
     LKW: 210/276/lkw
-    Nutzfahrzeugteile & Zubehör: 210/276/zubehoer
+    Nutzfahrzeugteile & ZubehÃ¶r: 210/276/zubehoer
     Sattelzugmaschinen & Auflieger: 210/276/sattelzugmaschinen_auflieger
     Stapler: 210/276/stapler
     Traktoren: 210/276/traktoren
     Transporter: 210/276/transporter
-    Weitere Nutzfahrzeuge & Anhänger: 210/276/andere
+    Weitere Nutzfahrzeuge & AnhÃ¤nger: 210/276/andere
   Wohnwagen & -mobile:
     Alkoven: 210/220/alkoven
     Integrierter: 210/220/integrierter
@@ -105,14 +105,14 @@ Dienstleistungen:
     Reinigungsservice: 297/291/reingungsservice
     Reparaturen: 297/291/reparaturen
     Weitere Dienstleistungen Haus & Garten: 297/291/sonstige
-    Wohnungsauflösungen: 297/291/wohnungsaufloesungen
-  Künstler/-in & Musiker/-in: 297/292
+    WohnungsauflÃ¶sungen: 297/291/wohnungsaufloesungen
+  KÃ¼nstler/-in & Musiker/-in: 297/292
   Reise & Event: 297/294
   Tierbetreuung & Training: 297/295
   Umzug & Transport: 297/296
   Weitere Dienstleistungen: 297/298
 Eintrittskarten & Tickets:
-  Bahn & ÖPNV: 231/286
+  Bahn & Ã–PNV: 231/286
   Comedy & Kabarett: 231/254
   Gutscheine: 231/287
   Kinder: 231/252
@@ -123,7 +123,7 @@ Eintrittskarten & Tickets:
 Elektronik:
   Audio & Hifi:
     CD Player: 161/172/cd_player
-    Lautsprecher & Kopfhörer: 161/172/lautsprecher_kopfhoerer
+    Lautsprecher & KopfhÃ¶rer: 161/172/lautsprecher_kopfhoerer
     MP3 Player: 161/172/mp3_player
     Radio & Receiver: 161/172/radio_receiver
     Stereoanlagen: 161/172/stereoanlagen
@@ -131,13 +131,13 @@ Elektronik:
   Dienstleistungen Elektronik: 161/226
   Foto:
     Kamera: 161/245/camera
-    Kamera & Zubehör: 161/245/camera_and_equipment
+    Kamera & ZubehÃ¶r: 161/245/camera_and_equipment
     Objektiv: 161/245/lens
     Weiteres Foto: 161/245/other
-    Zubehör: 161/245/equipment
+    ZubehÃ¶r: 161/245/equipment
   Handy & Telefon:
     Apple: 161/173/apple
-    Faxgeräte: 161/173/faxgeraete
+    FaxgerÃ¤te: 161/173/faxgeraete
     Google: 161/173/google_handy
     HTC: 161/173/htc_handy
     Huawei: 161/173/huawai_handy
@@ -150,15 +150,15 @@ Elektronik:
     Telefone: 161/173/telefone
     Weitere Handys & Telefone: 161/173/sonstige
     Xiaomi: 161/173/xiaomi_handy
-  Haushaltsgeräte:
-    Haushaltskleingeräte: 161/176/haushaltskleingeraete
-    Herde & Backöfen: 161/176/herde_backoefen
+  HaushaltsgerÃ¤te:
+    HaushaltskleingerÃ¤te: 161/176/haushaltskleingeraete
+    Herde & BackÃ¶fen: 161/176/herde_backoefen
     Kaffee- & Espressomaschinen: 161/176/kaffee_espressomaschinen
-    Kühlschränke & Gefriergeräte: 161/176/kuehlschraenke_gefriergeraete
-    Spülmaschinen: 161/176/spuelmaschinen
+    KÃ¼hlschrÃ¤nke & GefriergerÃ¤te: 161/176/kuehlschraenke_gefriergeraete
+    SpÃ¼lmaschinen: 161/176/spuelmaschinen
     Staubsauger: 161/176/staubsauger
     Waschmaschinen & Trockner: 161/176/waschmaschinen_trockner
-    Weitere Haushaltsgeräte: 161/176/sonstige
+    Weitere HaushaltsgerÃ¤te: 161/176/sonstige
   Konsolen:
     PlayStation: 161/279/playstation
     Pocket Konsolen: 161/279/dsi_psp
@@ -166,10 +166,10 @@ Elektronik:
     Wii: 161/279/wii
     Xbox: 161/279/xbox
   Notebooks: 161/278
-  PC-Zubehör & Software:
+  PC-ZubehÃ¶r & Software:
     Drucker & Scanner: 161/225/drucker_scanner
     Festplatten & Laufwerke: 161/225/festplatten_laufwerke
-    Gehäuse: 161/225/gehaeuse
+    GehÃ¤use: 161/225/gehaeuse
     Grafikkarten: 161/225/grafikkarten
     Kabel & Adapter: 161/225/kabel_adapter
     Mainboards: 161/225/mainboards
@@ -180,7 +180,7 @@ Elektronik:
     Software: 161/225/software
     Speicher: 161/225/speicher
     Tastatur & Maus: 161/225/tastatur_maus
-    Weiteres PC-Zubehör: 161/225/sonstiges
+    Weiteres PC-ZubehÃ¶r: 161/225/sonstiges
   PCs: 161/228
   TV & Video:
     DVD-Player & Recorder: 161/175/dvdplayer_recorder
@@ -208,18 +208,18 @@ Familie, Kind & Baby:
     Bademode: 17/22/bademode
     Hemden: 17/22/hemden
     Hosen & Jeans: 17/22/hosen_jeans
-    Jacken & Mäntel: 17/22/jacken_mantel
-    Kleider & Röcke: 17/22/kleider_roecke
+    Jacken & MÃ¤ntel: 17/22/jacken_mantel
+    Kleider & RÃ¶cke: 17/22/kleider_roecke
     Kleidungspakete: 17/22/kleidungspakete
     Pullover & Strickjacken: 17/22/pullover_strickjacken
     Shirts & Tops: 17/22/shirts_tops
     Sportbekleidung: 17/22/sportbekleidung
     Weitere Baby- & Kinderkleidung: 17/22/sonstiges
-    Wäsche: 17/22/wasche
+    WÃ¤sche: 17/22/wasche
   Baby- & Kinderschuhe:
     Badeschuhe: 17/19/badeschuhe
     Ballerinas: 17/19/ballerinas
-    Halb- & Schnürschuhe: 17/19/halb_schnuerschuhe
+    Halb- & SchnÃ¼rschuhe: 17/19/halb_schnuerschuhe
     Hausschuhe: 17/19/hausschuhe
     Outdoor & Wanderschuhe: 17/19/outdoor_wanderschuhe
     Sandalen: 17/19/sandalen
@@ -230,12 +230,12 @@ Familie, Kind & Baby:
   Babyschalen & Kindersitze: 17/21
   Babysitter/-in & Kinderbetreuung: 17/237
   Kinderwagen & Buggys: 17/25
-  Kinderzimmermöbel:
+  KinderzimmermÃ¶bel:
     Betten & Wiegen: 17/20/betten_wiegen
-    Hochstühle & Laufställe: 17/20/hochstuehle_laufstaelle
-    Schränke & Kommoden: 17/20/schraenke_kommoden
-    Weitere Kinderzimmermöbel: 17/20/sonstige
-    Wickeltische & Zubehör: 17/20/wickeltische_zubehoer
+    HochstÃ¼hle & LaufstÃ¤lle: 17/20/hochstuehle_laufstaelle
+    SchrÃ¤nke & Kommoden: 17/20/schraenke_kommoden
+    Weitere KinderzimmermÃ¶bel: 17/20/sonstige
+    Wickeltische & ZubehÃ¶r: 17/20/wickeltische_zubehoer
     Wippen & Schaukeln: 17/20/wippen_schaukeln
   Spielzeug:
     Action- & Spielfiguren: 17/23/actionfiguren
@@ -248,7 +248,7 @@ Familie, Kind & Baby:
     Lernspielzeug: 17/23/lernspielzeug
     Playmobil: 17/23/playmobil
     Puppen: 17/23/puppen
-    Spielzeug für draußen: 17/23/spielzeug_draussen
+    Spielzeug fÃ¼r drauÃŸen: 17/23/spielzeug_draussen
     Spielzeugautos: 17/23/spielzeug_autos
     Stofftiere: 17/23/stofftiere
     Weiteres Spielzeug: 17/23/sonstiges
@@ -256,27 +256,27 @@ Familie, Kind & Baby:
 Freizeit, Hobby & Nachbarschaft:
   Esoterik & Spirituelles: 185/232
   Essen & Trinken: 185/248
-  Freizeitaktivitäten: 185/187
+  FreizeitaktivitÃ¤ten: 185/187
   Handarbeit, Basteln & Kunsthandwerk: 185/282
-  Kunst & Antiquitäten: 185/240
-  Künstler/-in & Musiker/-in: 185/191
+  Kunst & AntiquitÃ¤ten: 185/240
+  KÃ¼nstler/-in & Musiker/-in: 185/191
   Modellbau: 185/249
   Reise & Eventservices: 185/233
   Sammeln:
     Ansichts- & Postkarten: 185/234/ansichts_postkarten
     Autogramme: 185/234/autogramme
-    Bierkrüge & -gläser: 185/234/bierkruege_glaeser
+    BierkrÃ¼ge & -glÃ¤ser: 185/234/bierkruege_glaeser
     Briefmarken: 185/234/briefmarken
     Comics: 185/234/comics
     Flaggen: 185/234/flaggen
-    Münzen: 185/234/muenzen
+    MÃ¼nzen: 185/234/muenzen
     Porzellan: 185/234/porzellan
-    Puppen & Puppenzubehör: 185/234/puppen_puppenzubehoer
+    Puppen & PuppenzubehÃ¶r: 185/234/puppen_puppenzubehoer
     Sammelbilder & Sticker: 185/234/sammelbilder_sticker
     Sammelkartenspiele: 185/234/sammelkartenspiele
     Weiteres Sammeln: 185/234/sonstige
     Werbeartikel: 185/234/werbeartikel
-    Überraschungseier: 185/234/ueberraschungseier
+    Ãœberraschungseier: 185/234/ueberraschungseier
   Sport & Camping:
     Ballsport: 185/230/ballsport
     Camping & Outdoor: 185/230/camping
@@ -286,12 +286,12 @@ Freizeit, Hobby & Nachbarschaft:
     Wassersport: 185/230/wassersport
     Weiteres Sport & Camping: 185/230/sonstige
     Wintersport: 185/230/wintersport
-  Trödel: 185/250
+  TrÃ¶del: 185/250
   Verloren & Gefunden: 185/189
   Weiteres Freizeit, Hobby & Nachbarschaft: 185/242
 Haus & Garten:
   Badezimmer: 80/91
-  Büro: 80/93
+  BÃ¼ro: 80/93
   Dekoration:
     Bilder & Poster: 80/246/bilder_poster
     Kerzen & Kerzenhalter: 80/246/kerzen_kerzenhalter
@@ -305,40 +305,40 @@ Haus & Garten:
     Reinigungsservice: 80/239/reingungsservice
     Reparaturen: 80/239/reparaturen
     Weitere Dienstleistungen Haus & Garten: 80/239/sonstige
-    Wohnungsauflösungen: 80/239/wohnungsaufloesungen
-  Gartenzubehör & Pflanzen:
-    Blumentöpfe: 80/89/blumentoepfe
+    WohnungsauflÃ¶sungen: 80/239/wohnungsaufloesungen
+  GartenzubehÃ¶r & Pflanzen:
+    BlumentÃ¶pfe: 80/89/blumentoepfe
     Dekoration: 80/89/dekoration
-    Gartengeräte: 80/89/gartengeraete
-    Gartenmöbel: 80/89/gartenmoebel
+    GartengerÃ¤te: 80/89/gartengeraete
+    GartenmÃ¶bel: 80/89/gartenmoebel
     Pflanzen: 80/89/pflanzen
-    Weiteres Gartenzubehör & Pflanzen: 80/89/sonstige
+    Weiteres GartenzubehÃ¶r & Pflanzen: 80/89/sonstige
   Heimtextilien: 80/90
   Heimwerken: 80/84
-  Küche & Esszimmer:
+  KÃ¼che & Esszimmer:
     Besteck: 80/86/besteck
     Geschirr: 80/86/geschirr
-    Gläser: 80/86/glaeser
-    Kleingeräte: 80/86/kuechengeraete
-    Küchenschränke: 80/86/kuechenschraenke
-    Stühle: 80/86/stuehle
+    GlÃ¤ser: 80/86/glaeser
+    KleingerÃ¤te: 80/86/kuechengeraete
+    KÃ¼chenschrÃ¤nke: 80/86/kuechenschraenke
+    StÃ¼hle: 80/86/stuehle
     Tische: 80/86/tische
-    Weiteres Küche & Esszimmer: 80/86/sonstige
+    Weiteres KÃ¼che & Esszimmer: 80/86/sonstige
   Lampen & Licht: 80/82
   Schlafzimmer:
     Betten: 80/81/betten
     Lattenroste: 80/81/lattenroste
     Matratzen: 80/81/matratzen
     Nachttische: 80/81/nachttische
-    Schränke: 80/81/schraenke
+    SchrÃ¤nke: 80/81/schraenke
     Weiteres Schlafzimmer: 80/81/sonstiges
   Weiteres Haus & Garten: 80/87
   Wohnzimmer:
     Regale: 80/88/regale
-    Schränke & Schrankwände: 80/88/schraenke
-    Sitzmöbel: 80/88/sitzmoebel
+    SchrÃ¤nke & SchrankwÃ¤nde: 80/88/schraenke
+    SitzmÃ¶bel: 80/88/sitzmoebel
     Sofas & Sitzgarnituren: 80/88/sofas_sitzgarnituren
-    TV & Phonomöbel: 80/88/tv_moebel
+    TV & PhonomÃ¶bel: 80/88/tv_moebel
     Tische: 80/88/tische
     Weiteres Wohnzimmer: 80/88/sonstiges
 Haustiere:
@@ -370,7 +370,7 @@ Haustiere:
     Malteser: 130/134/malteser
     Mischlinge: 130/134/mischlinge
     Pudel: 130/134/pudel
-    Schäferhunde: 130/134/schaeferhund
+    SchÃ¤ferhunde: 130/134/schaeferhund
     Spitz: 130/134/spitz
     Terrier: 130/134/terrier
     Weitere Hunde: 130/134/sonstige
@@ -384,26 +384,26 @@ Haustiere:
     Hamster: 130/132/hamster
     Hasen & Kaninchen: 130/132/hasen_kaninchen
     Meerschweinchen: 130/132/meerschweinchen
-    Mäuse & Ratten: 130/132/maeuse_ratten
+    MÃ¤use & Ratten: 130/132/maeuse_ratten
     Weitere Kleintiere: 130/132/sonstige
   Nutztiere: 130/135
   Pferde:
-    Großpferde: 130/139/grosspferde
+    GroÃŸpferde: 130/139/grosspferde
     Kleinpferde & Ponys: 130/139/kleinpferde_ponys
   Tierbetreuung & Training: 130/133
   Vermisste Tiere:
     Entlaufen: 130/283/entlaufen
     Gefunden: 130/283/gefunden
-  Vögel: 130/243
-  Zubehör:
+  VÃ¶gel: 130/243
+  ZubehÃ¶r:
     Fische: 130/313/fische
     Hunde: 130/313/hunde
     Katzen: 130/313/katzen
     Kleintiere: 130/313/kleintiere
     Pferde: 130/313/pferde
     Reptilien: 130/313/reptilien
-    Vögel: 130/313/voegel
-    Weiteres Zubehör Haustiere: 130/313/sonstiges
+    VÃ¶gel: 130/313/voegel
+    Weiteres ZubehÃ¶r Haustiere: 130/313/sonstiges
 Immobilien:
   Auf Zeit & WG:
     Gemeinsames Zimmer: 195/199/shared_room
@@ -413,19 +413,19 @@ Immobilien:
   Ferien- & Auslandsimmobilien:
     Kaufen: 195/275/kaufen
     Mieten: 195/275/mieten
-  Garagen & Stellplätze:
+  Garagen & StellplÃ¤tze:
     Kaufen: 195/197/kaufen
     Mieten: 195/197/mieten
   Gewerbeimmobilien:
     Kaufen: 195/277/kaufen
     Mieten: 195/277/mieten
-  Grundstücke & Gärten:
-    Baugrundstück: 195/207/baugrundstueck
+  GrundstÃ¼cke & GÃ¤rten:
+    BaugrundstÃ¼ck: 195/207/baugrundstueck
     Garten: 195/207/garten
     Land-/Forstwirtschaft: 195/207/land_forstwirtschaft
-    Weitere Grundstücke & Gärten: 195/207/andere
-  Häuser zum Kauf: 195/208
-  Häuser zur Miete: 195/205
+    Weitere GrundstÃ¼cke & GÃ¤rten: 195/207/andere
+  HÃ¤user zum Kauf: 195/208
+  HÃ¤user zur Miete: 195/205
   Mietwohnungen: 195/203
   Umzug & Transport: 195/238
   Weitere Immobilien: 195/198
@@ -442,19 +442,19 @@ Jobs:
     Schlosser/-in: 102/111/schlosser
     Tischler/-in: 102/111/tischler
     Weitere Berufe: 102/111/weitere
-  Büroarbeit & Verwaltung:
+  BÃ¼roarbeit & Verwaltung:
     Buchhalter/-in: 102/114/buchhalter
-    Bürokaufmann/-frau: 102/114/buerokauf
+    BÃ¼rokaufmann/-frau: 102/114/buerokauf
     Sachbearbeiter/-in: 102/114/sachbearbeiter
-    Sekretär/-in: 102/114/sekretaer
+    SekretÃ¤r/-in: 102/114/sekretaer
     Weitere Berufe: 102/114/weitere
   Gastronomie & Tourismus:
     Barkeeper/-in: 102/110/barkeeper
     Hotelfachmann/-frau: 102/110/hotelfach
     Housekeeping: 102/110/zimmermaedchen
     Kellner/-in: 102/110/kellner
-    Koch/Köchin: 102/110/koch
-    Küchenhilfe: 102/110/kuechenhilfe
+    Koch/KÃ¶chin: 102/110/koch
+    KÃ¼chenhilfe: 102/110/kuechenhilfe
     Servicekraft: 102/110/servicekraft
     Weitere Berufe: 102/110/weitere
   Kundenservice & Call Center: 102/105
@@ -477,7 +477,7 @@ Jobs:
     Buchhalter/-in: 102/117/buchhalter
     Immobilienmakler/-in: 102/117/immobilienmakler
     Kaufmann/-frau: 102/117/kauffrau
-    Verkäufer/-in: 102/117/verkaeufer
+    VerkÃ¤ufer/-in: 102/117/verkaeufer
     Weitere Berufe: 102/117/weitere
   Weitere Jobs:
     Designer/-in & Grafiker/-in: 102/109/designer_grafiker
@@ -491,20 +491,20 @@ Mode & Beauty:
     Gesundheit: 153/224/gesundheit
     Haarpflege: 153/224/haarpflege
     Hand- & Nagelpflege: 153/224/handpflege
-    Körperpflege: 153/224/koerperpflege
+    KÃ¶rperpflege: 153/224/koerperpflege
     Make-Up & Gesichtspflege: 153/224/make_up
     Weiteres Beauty & Gesundheit: 153/224/sonstiges
   Damenbekleidung:
-    Anzüge: 153/154/anzuege
+    AnzÃ¼ge: 153/154/anzuege
     Bademode: 153/154/bademode
     Hemden & Blusen: 153/154/hemden_blusen
     Hochzeitsmode: 153/154/hochzeitsmode
     Hosen: 153/154/hosen
-    Jacken & Mäntel: 153/154/jacken_maentel
+    Jacken & MÃ¤ntel: 153/154/jacken_maentel
     Jeans: 153/154/jeans
-    Kostüme & Verkleidungen: 153/154/kostueme_verkleidungen
+    KostÃ¼me & Verkleidungen: 153/154/kostueme_verkleidungen
     Pullover: 153/154/pullover
-    Röcke & Kleider: 153/154/roecke_kleider
+    RÃ¶cke & Kleider: 153/154/roecke_kleider
     Shirts & Tops: 153/154/shirts_tops
     Shorts: 153/154/shorts
     Sportbekleidung: 153/154/sportbekleidung
@@ -512,7 +512,7 @@ Mode & Beauty:
     Weitere Damenbekleidung: 153/154/sonstige
   Damenschuhe:
     Ballerinas: 153/159/ballerinas
-    Halb- & Schnürschuhe: 153/159/halb_schnuerschuhe
+    Halb- & SchnÃ¼rschuhe: 153/159/halb_schnuerschuhe
     Hausschuhe: 153/159/hausschuhe
     Outdoor & Wanderschuhe: 153/159/outdoor_wanderschuhe
     Pumps & High Heels: 153/159/pumps
@@ -521,21 +521,21 @@ Mode & Beauty:
     Stiefel & Stiefeletten: 153/159/stiefel
     Weitere Schuhe: 153/159/sonstiges
   Herrenbekleidung:
-    Anzüge: 153/160/anzuege
+    AnzÃ¼ge: 153/160/anzuege
     Bademode: 153/160/bademode
     Hemden: 153/160/hemden
     Hochzeitsmode: 153/160/hochzeitsmode
     Hosen: 153/160/hosen
-    Jacken & Mäntel: 153/160/jacken_maentel
+    Jacken & MÃ¤ntel: 153/160/jacken_maentel
     Jeans: 153/160/jeans
-    Kostüme & Verkleidungen: 153/160/kostueme_verkleidungen
+    KostÃ¼me & Verkleidungen: 153/160/kostueme_verkleidungen
     Pullover: 153/160/pullover
     Shirts: 153/160/shirts
     Shorts: 153/160/shorts
     Sportbekleidung: 153/160/sportbekleidung
     Weitere Herrenbekleidung: 153/160/sonstige
   Herrenschuhe:
-    Halb- & Schnürschuhe: 153/158/halb_schnuerschuhe
+    Halb- & SchnÃ¼rschuhe: 153/158/halb_schnuerschuhe
     Hausschuhe: 153/158/hausschuhe
     Outdoor & Wanderschuhe: 153/158/outdoor_wanderschuhe
     Sandalen: 153/158/sandalen
@@ -543,33 +543,33 @@ Mode & Beauty:
     Stiefel & Stiefeletten: 153/158/stiefel
     Weitere Schuhe: 153/158/sonstiges
   Taschen & Accessoires:
-    Mützen, Schals & Handschuhe: 153/156/muetzen_schals_handschuhe
+    MÃ¼tzen, Schals & Handschuhe: 153/156/muetzen_schals_handschuhe
     Sonnenbrillen: 153/156/sonnenbrillen
-    Taschen & Rucksäcke: 153/156/taschen_rucksaecke
+    Taschen & RucksÃ¤cke: 153/156/taschen_rucksaecke
     Weitere Taschen & Accessoires: 153/156/sonstiges
   Uhren & Schmuck:
     Schmuck: 153/157/schmuck
     Uhren: 153/157/uhren
   Weiteres Mode & Beauty: 153/155
-Musik, Filme & Bücher:
-  Bücher & Zeitschriften:
-    Antiquarische Bücher: 73/76/antiquarische_buecher
-    Kinderbücher: 73/76/kinderbuecher
+Musik, Filme & BÃ¼cher:
+  BÃ¼cher & Zeitschriften:
+    Antiquarische BÃ¼cher: 73/76/antiquarische_buecher
+    KinderbÃ¼cher: 73/76/kinderbuecher
     Krimis & Thriller: 73/76/krimis_thriller
     Kunst & Kultur: 73/76/kunst_kultur
-    Sachbücher: 73/76/sachbuecher
+    SachbÃ¼cher: 73/76/sachbuecher
     Science Fiction: 73/76/science_fiction
     Unterhaltungsliteratur: 73/76/unterhaltungsliteratur
-    Weitere Bücher & Zeitschriften: 73/76/sonstige
-    Zeitgenössische Literatur & Klassiker: 73/76/zeitgenoessische_literatur_klassiker
+    Weitere BÃ¼cher & Zeitschriften: 73/76/sonstige
+    ZeitgenÃ¶ssische Literatur & Klassiker: 73/76/zeitgenoessische_literatur_klassiker
     Zeitschriften: 73/76/zeitschriften
-  Büro & Schreibwaren: 73/281
+  BÃ¼ro & Schreibwaren: 73/281
   Comics: 73/284
-  Fachbücher, Schule & Studium: 73/77
+  FachbÃ¼cher, Schule & Studium: 73/77
   Film & DVD: 73/79
   Musik & CDs: 73/78
   Musikinstrumente: 73/74
-  Weitere Musik, Filme & Bücher: 73/75
+  Weitere Musik, Filme & BÃ¼cher: 73/75
 Nachbarschaftshilfe:
   Nachbarschaftshilfe: 400/401
 Unterricht & Kurse:
