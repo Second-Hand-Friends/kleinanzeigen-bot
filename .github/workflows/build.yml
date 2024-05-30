@@ -49,7 +49,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - os: macos-latest
+        - os: macos-13    # X86
+          PYTHON_VERSION: "3.10"
+          PUBLISH_RELEASE: false
+        - os: macos-latest # ARM
           PYTHON_VERSION: "3.10"
           PUBLISH_RELEASE: false
         - os: ubuntu-latest
@@ -58,7 +61,10 @@ jobs:
         - os: windows-latest
           PYTHON_VERSION: "3.10"
           PUBLISH_RELEASE: false
-        - os: macos-latest
+        - os: macos-13    # X86
+          PYTHON_VERSION: "3.12.1"
+          PUBLISH_RELEASE: true
+        - os: macos-latest # ARM
           PYTHON_VERSION: "3.12.1"
           PUBLISH_RELEASE: true
         - os: ubuntu-latest
@@ -68,7 +74,7 @@ jobs:
           PYTHON_VERSION: "3.12.1"
           PUBLISH_RELEASE: true
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }} # https://github.com/actions/runner-images#available-images
 
     steps:
     - name: Show environment variables
@@ -101,7 +107,7 @@ jobs:
       uses: pdm-project/setup-pdm@v4
       with:
         python-version: "${{ matrix.PYTHON_VERSION }}"
-        cache: true
+        cache: ${{ !startsWith(matrix.os, 'macos') }} # https://github.com/pdm-project/setup-pdm/issues/55 
 
 
     - name: "Install: Python dependencies"
@@ -282,7 +288,8 @@ jobs:
       run: |
         set -eux
 
-        mv artifacts-macos-latest/kleinanzeigen-bot kleinanzeigen-bot-darwin-amd64
+        mv artifacts-macos-13/kleinanzeigen-bot kleinanzeigen-bot-darwin-amd64
+        mv artifacts-macos-latest/kleinanzeigen-bot kleinanzeigen-bot-darwin-arm64
         mv artifacts-ubuntu-latest/kleinanzeigen-bot kleinanzeigen-bot-linux-amd64
         mv artifacts-windows-latest/kleinanzeigen-bot-uncompressed.exe kleinanzeigen-bot-windows-amd64-uncompressed.exe
         mv artifacts-windows-latest/kleinanzeigen-bot.exe kleinanzeigen-bot-windows-amd64.exe
@@ -294,6 +301,7 @@ jobs:
           --notes ${{ toJSON(github.event.head_commit.message) }} \
           --target "${{ github.sha }}" \
           kleinanzeigen-bot-darwin-amd64 \
+          kleinanzeigen-bot-darwin-arm64 \
           kleinanzeigen-bot-linux-amd64 \
           kleinanzeigen-bot-windows-amd64.exe \
           kleinanzeigen-bot-windows-amd64-uncompressed.exe
