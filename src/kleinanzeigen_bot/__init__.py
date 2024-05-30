@@ -731,12 +731,15 @@ class KleinanzeigenBot(WebScrapingMixin):
                 to_be_clicked_shipping_packages = list(shipping_packages)
 
             for shipping_package in to_be_clicked_shipping_packages:
-                await self.web_click(
-                    By.XPATH,
-                    '//*[contains(@class, "CarrierSelectionModal")]'
-                    '//*[contains(@class, "CarrierOption")]'
-                    f'//*[contains(@class, "CarrierOption--Main") and @data-testid="{shipping_package}"]'
-                )
+                try:
+                    await self.web_click(
+                        By.XPATH,
+                        '//*[contains(@class, "CarrierSelectionModal")]'
+                        '//*[contains(@class, "CarrierOption")]'
+                        f'//*[contains(@class, "CarrierOption--Main") and @data-testid="{shipping_package}"]'
+                    )
+                except TimeoutError as ex:
+                    LOG.debug(ex, exc_info = True)
 
             await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
         except TimeoutError as ex:
