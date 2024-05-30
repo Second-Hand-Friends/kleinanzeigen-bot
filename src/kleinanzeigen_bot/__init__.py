@@ -711,7 +711,10 @@ class KleinanzeigenBot(WebScrapingMixin):
                 "Hermes_L": ("Groß", "L-Paket"),
             }
             try:
-                mapped_shipping_options = [shipping_option_mapping[option] for option in ad_cfg["shipping_options"]]
+                mapped_shipping_options = [
+                    shipping_option_mapping[option]
+                    for option in set(ad_cfg["shipping_options"])
+                ]
                 shipping_sizes, shipping_packages = zip(*mapped_shipping_options)
             except KeyError as ex:
                 raise KeyError(f"Unknown shipping option(s), please refer to the documentation/README: {ad_cfg['shipping_options']}") from ex
@@ -723,14 +726,31 @@ class KleinanzeigenBot(WebScrapingMixin):
             shipping_size, = unique_shipping_sizes
             await self.web_click(By.CSS_SELECTOR, f'.SingleSelectionItem--Main input[type=radio][data-testid="{shipping_size}"]')
 
-            for shipping_package in shipping_packages:
+            if shipping_size == "Klein":
+                # shipping size  `Klein` is preselected
+                # click on the button the next button to proceed
+                await self.web_click(
+                    By.XPATH,
+                    '//*[contains(@class, "ModalDialog--Actions")]'
+                    '//*[contains(@class, "Button-primary") and .//*[text()[contains(.,"Weiter")]]]')
+
+                # all options are preselected
+                # disable unwanted shipping packages
+                inverted_shipping_packages = [
+                    package for size, package in shipping_option_mapping.values()
+                    if size == shipping_size and package not in shipping_packages
+                ]
+                click_on_shipping_packages = inverted_shipping_packages
+            else:
+                click_on_shipping_packages = list(shipping_packages)
+
+            for shipping_package in click_on_shipping_packages:
                 await self.web_click(
                     By.XPATH,
                     '//*[contains(@class, "CarrierSelectionModal")]'
                     '//*[contains(@class, "CarrierOption")]'
                     f'//*[contains(@class, "CarrierOption--Main") and @data-testid="{shipping_package}"]'
                 )
-
             await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
         except TimeoutError as ex:
             LOG.debug(ex, exc_info = True)
