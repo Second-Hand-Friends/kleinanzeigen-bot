@@ -692,7 +692,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             "Hermes_S": ("Klein", "S-Paket"),
             "DHL_5": ("Mittel", "Paket 5 kg"),
             "Hermes_M": ("Mittel", "M-Paket"),
-            "DHL_10": ("Mittel", "Paket 10 kg"),
+            "DHL_10": ("Groß", "Paket 10 kg"),
             "DHL_31,5": ("Groß", "Paket 31,5 kg"),
             "Hermes_L": ("Groß", "L-Paket"),
         }
@@ -737,6 +737,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     '//*[contains(@class, "CarrierOption")]'
                     f'//*[contains(@class, "CarrierOption--Main") and @data-testid="{shipping_package}"]'
                 )
+
             await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
         except TimeoutError as ex:
             LOG.debug(ex, exc_info = True)
