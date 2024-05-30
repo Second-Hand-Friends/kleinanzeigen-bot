@@ -699,37 +699,60 @@ class KleinanzeigenBot(WebScrapingMixin):
                 LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value)
 
     async def __set_shipping_options(self, ad_cfg: dict[str, Any]) -> None:
+        shipping_options_mapping = {
+            "DHL_2": ("Klein", "Paket 2 kg"),
+            "Hermes_Päckchen": ("Klein", "Päckchen"),
+            "Hermes_S": ("Klein", "S-Paket"),
+            "DHL_5": ("Mittel", "Paket 5 kg"),
+            "Hermes_M": ("Mittel", "M-Paket"),
+            "DHL_10": ("Groß", "Paket 10 kg"),
+            "DHL_31,5": ("Groß", "Paket 31,5 kg"),
+            "Hermes_L": ("Groß", "L-Paket"),
+        }
         try:
-            shipping_option_mapping = {
-                "DHL_2": ("Klein", "Paket 2 kg"),
-                "Hermes_Päckchen": ("Klein", "Päckchen"),
-                "Hermes_S": ("Klein", "S-Paket"),
-                "DHL_5": ("Mittel", "Paket 5 kg"),
-                "Hermes_M": ("Mittel", "M-Paket"),
-                "DHL_10": ("Mittel", "Paket 10 kg"),
-                "DHL_31,5": ("Groß", "Paket 31,5 kg"),
-                "Hermes_L": ("Groß", "L-Paket"),
-            }
-            try:
-                mapped_shipping_options = [shipping_option_mapping[option] for option in ad_cfg["shipping_options"]]
-                shipping_sizes, shipping_packages = zip(*mapped_shipping_options)
-            except KeyError as ex:
-                raise KeyError(f"Unknown shipping option(s), please refer to the documentation/README: {ad_cfg['shipping_options']}") from ex
+            mapped_shipping_options = [
+                shipping_options_mapping[option]
+                for option in set(ad_cfg["shipping_options"])
+            ]
+        except KeyError as ex:
+            raise KeyError(f"Unknown shipping option(s), please refer to the documentation/README: {ad_cfg['shipping_options']}") from ex
 
-            unique_shipping_sizes = set(shipping_sizes)
-            if len(unique_shipping_sizes) > 1:
-                raise ValueError("You can only specify shipping options for one package size!")
+        shipping_sizes, shipping_packages = zip(*mapped_shipping_options)
 
-            shipping_size, = unique_shipping_sizes
-            await self.web_click(By.CSS_SELECTOR, f'.SingleSelectionItem--Main input[type=radio][data-testid="{shipping_size}"]')
+        try:
+            shipping_size, = set(shipping_sizes)
+        except ValueError as ex:
+            raise ValueError("You can only specify shipping options for one package size!") from ex
 
-            for shipping_package in shipping_packages:
+        try:
+            shipping_size_radio = await self.web_find(By.CSS_SELECTOR, f'.SingleSelectionItem--Main input[type=radio][data-testid="{shipping_size}"]')
+            shipping_size_radio_is_checked = hasattr(shipping_size_radio.attrs, "checked")
+
+            if shipping_size_radio_is_checked:
                 await self.web_click(
                     By.XPATH,
-                    '//*[contains(@class, "CarrierSelectionModal")]'
-                    '//*[contains(@class, "CarrierOption")]'
-                    f'//*[contains(@class, "CarrierOption--Main") and @data-testid="{shipping_package}"]'
-                )
+                    '//*[contains(@class, "ModalDialog--Actions")]'
+                    '//*[contains(@class, "Button-primary") and .//*[text()[contains(.,"Weiter")]]]')
+
+                unwanted_shipping_packages = [
+                    package for size, package in shipping_options_mapping.values()
+                    if size == shipping_size and package not in shipping_packages
+                ]
+                to_be_clicked_shipping_packages = unwanted_shipping_packages
+            else:
+                await self.web_click(By.CSS_SELECTOR, f'.SingleSelectionItem--Main input[type=radio][data-testid="{shipping_size}"]')
+                to_be_clicked_shipping_packages = list(shipping_packages)
+
+            for shipping_package in to_be_clicked_shipping_packages:
+                try:
+                    await self.web_click(
+                        By.XPATH,
+                        '//*[contains(@class, "CarrierSelectionModal")]'
+                        '//*[contains(@class, "CarrierOption")]'
+                        f'//*[contains(@class, "CarrierOption--Main") and @data-testid="{shipping_package}"]'
+                    )
+                except TimeoutError as ex:
+                    LOG.debug(ex, exc_info = True)
 
             await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
         except TimeoutError as ex:
