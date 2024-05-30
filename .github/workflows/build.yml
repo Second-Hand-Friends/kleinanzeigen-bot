@@ -91,10 +91,6 @@ jobs:
       uses: vegardit/fast-apt-mirror.sh@v1
 
 
-    - name: Start ClamAV daemon clamd
-      uses: toblux/start-clamd-github-action@v0.2
-
-
     - name: Git checkout
       uses: actions/checkout@v4  # https://github.com/actions/checkout
 
@@ -259,6 +255,20 @@ jobs:
     concurrency: publish-latest-release # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idconcurrency
 
     steps:
+    - name: "Show: GitHub context"
+      env:
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
+      run: echo $GITHUB_CONTEXT
+
+
+    - name: Show environment variables
+      run: env | sort
+
+
+    - name: Configure Fast APT Mirror
+      uses: vegardit/fast-apt-mirror.sh@v1
+
+
     - name: Git checkout 
       # only required by "gh release create" to prevent "fatal: Not a git repository"
       uses: actions/checkout@v4  #https://github.com/actions/checkout
@@ -278,6 +288,27 @@ jobs:
       uses: actions/download-artifact@v4
 
 
+    - name: Rename build artifacts
+      run: |
+        mv artifacts-macos-13/kleinanzeigen-bot kleinanzeigen-bot-darwin-amd64
+        mv artifacts-macos-latest/kleinanzeigen-bot kleinanzeigen-bot-darwin-arm64
+        mv artifacts-ubuntu-latest/kleinanzeigen-bot kleinanzeigen-bot-linux-amd64
+        mv artifacts-windows-latest/kleinanzeigen-bot-uncompressed.exe kleinanzeigen-bot-windows-amd64-uncompressed.exe
+        mv artifacts-windows-latest/kleinanzeigen-bot.exe kleinanzeigen-bot-windows-amd64.exe
+
+
+    - name: Install ClamAV
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clamav
+        sudo systemctl stop clamav-freshclam.service
+        sudo freshclam
+
+
+    - name: Scan build artifacts
+      run: clamscan kleinanzeigen-*
+
+
     - name: "Delete previous 'latest' release"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -293,12 +324,6 @@ jobs:
         RELEASE_NAME: latest
       run: |
         set -eux
-
-        mv artifacts-macos-13/kleinanzeigen-bot kleinanzeigen-bot-darwin-amd64
-        mv artifacts-macos-latest/kleinanzeigen-bot kleinanzeigen-bot-darwin-arm64
-        mv artifacts-ubuntu-latest/kleinanzeigen-bot kleinanzeigen-bot-linux-amd64
-        mv artifacts-windows-latest/kleinanzeigen-bot-uncompressed.exe kleinanzeigen-bot-windows-amd64-uncompressed.exe
-        mv artifacts-windows-latest/kleinanzeigen-bot.exe kleinanzeigen-bot-windows-amd64.exe
 
         # https://cli.github.com/manual/gh_release_create
         GH_DEBUG=1 gh release create "$RELEASE_NAME" \
