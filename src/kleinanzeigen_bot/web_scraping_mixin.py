@@ -533,7 +533,7 @@ class WebScrapingMixin:
                 await self.web_execute(f'window.scrollTo(0, {current_y_pos})')
                 time.sleep(scroll_length / scroll_speed / 2)  # double speed
 
-    async def web_select(self, selector_type:By, selector_value:str, selected_value:Any, timeout:int | float = 5) -> Element:
+    async def web_select(self, selector_type:By, selector_value:str, selected_value:Any, timeout:int | float = 5, dispatch_event:bool = False) -> Element:
         """
         Selects an <option/> of a <select/> HTML element.
 
@@ -546,12 +546,14 @@ class WebScrapingMixin:
             timeout_error_message = f"No clickable HTML element with selector: {selector_type}='{selector_value}' found"
         )
         elem = await self.web_find(selector_type, selector_value)
+        dispatch_event_str = "element.dispatchEvent(new Event('change', { bubbles: true }));" if dispatch_event else ""
         await elem.apply(f"""
             function (element) {{
               for(let i=0; i < element.options.length; i++)
                 {{
                   if(element.options[i].value == "{selected_value}") {{
                     element.selectedIndex = i;
+                    {dispatch_event_str}
                     break;
                 }}
               }}

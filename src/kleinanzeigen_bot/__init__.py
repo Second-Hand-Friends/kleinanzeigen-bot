@@ -542,7 +542,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         price_type = ad_cfg["price_type"]
         if price_type != "NOT_APPLICABLE":
             try:
-                await self.web_select(By.CSS_SELECTOR, "select#price-type-react, select#micro-frontend-price-type, select#priceType", price_type)
+                await self.web_select(By.CSS_SELECTOR, "select#price-type-react, select#micro-frontend-price-type, select#priceType", price_type, dispatch_event=True)
             except TimeoutError:
                 pass
             if safe_get(ad_cfg, "price"):
