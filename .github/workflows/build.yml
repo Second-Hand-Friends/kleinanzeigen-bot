@@ -77,6 +77,12 @@ jobs:
     runs-on: ${{ matrix.os }} # https://github.com/actions/runner-images#available-images
 
     steps:
+    - name: "Show: GitHub context"
+      env:
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
+      run: echo $GITHUB_CONTEXT
+
+
     - name: Show environment variables
       run: env | sort
 
