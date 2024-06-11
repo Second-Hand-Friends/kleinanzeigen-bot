@@ -291,7 +291,7 @@ class AdExtractor(WebScrapingMixin):
         belen_conf = await self.web_execute("window.BelenConf")
         special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"]["dimension108"]
         # Surrounding any word with " and add curly braces
-        special_attributes_fixed_str = "{" + re.sub('(\\w+)', '"\\g<1>"', special_attributes_str) + "}"        
+        special_attributes_fixed_str = "{" + re.sub('(\\w+)', '"\\g<1>"', special_attributes_str) + "}"
         special_attributes = json.loads(special_attributes_fixed_str)
         if not isinstance(special_attributes, dict):
             raise ValueError(
