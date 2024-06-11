@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import json, logging, os, shutil
+import json, logging, os, shutil, re
 import urllib.request as urllib_request
 from datetime import datetime
 from typing import Any, Final
@@ -290,7 +290,9 @@ class AdExtractor(WebScrapingMixin):
         """
         belen_conf = await self.web_execute("window.BelenConf")
         special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"]["dimension108"]
-        special_attributes = json.loads(special_attributes_str)
+        # Surrounding any word with " and add curly braces
+        special_attributes_fixed_str = "{" + re.sub('(\\w+)', '"\\g<1>"', special_attributes_str) + "}"
+        special_attributes = json.loads(special_attributes_fixed_str)
         if not isinstance(special_attributes, dict):
             raise ValueError(
                 "Failed to parse special attributes from ad page."
