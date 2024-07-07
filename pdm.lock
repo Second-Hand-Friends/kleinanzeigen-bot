@@ -4,8 +4,8 @@
 [metadata]
 groups = ["default", "dev"]
 strategy = ["cross_platform"]
-lock_version = "4.4.1"
-content_hash = "sha256:972db003e9620287083ed06898d1d1f948427aa9890a87024840ca5f71d9a7e2"
+lock_version = "4.4.2"
+content_hash = "sha256:0966c51271fe3e6554e908f21ae1f4b128d87ec265f472420a0621b651bc75ca"
 
 [[package]]
 name = "altgraph"
@@ -31,21 +31,21 @@ files = [
 
 [[package]]
 name = "autopep8"
-version = "2.2.0"
+version = "2.3.1"
 requires_python = ">=3.8"
 summary = "A tool that automatically formats Python code to conform to the PEP 8 style guide"
 dependencies = [
-    "pycodestyle>=2.11.0",
+    "pycodestyle>=2.12.0",
     "tomli; python_version < \"3.11\"",
 ]
 files = [
-    {file = "autopep8-2.2.0-py2.py3-none-any.whl", hash = "sha256:05418a981f038969d8bdcd5636bf15948db7555ae944b9f79b5a34b35f1370d4"},
-    {file = "autopep8-2.2.0.tar.gz", hash = "sha256:d306a0581163ac29908280ad557773a95a9bede072c0fafed6f141f5311f43c1"},
+    {file = "autopep8-2.3.1-py2.py3-none-any.whl", hash = "sha256:a203fe0fcad7939987422140ab17a930f684763bf7335bdb6709991dd7ef6c2d"},
+    {file = "autopep8-2.3.1.tar.gz", hash = "sha256:8d6c87eba648fdcfc83e29b788910b8643171c395d9c4bcf115ece035b9c9dda"},
 ]
 
 [[package]]
 name = "bandit"
-version = "1.7.8"
+version = "1.7.9"
 requires_python = ">=3.8"
 summary = "Security oriented static analyser for python code."
 dependencies = [
@@ -55,8 +55,8 @@ dependencies = [
     "stevedore>=1.20.0",
 ]
 files = [
-    {file = "bandit-1.7.8-py3-none-any.whl", hash = "sha256:509f7af645bc0cd8fd4587abc1a038fc795636671ee8204d502b933aee44f381"},
-    {file = "bandit-1.7.8.tar.gz", hash = "sha256:36de50f720856ab24a24dbaa5fee2c66050ed97c1477e0a1159deab1775eab6b"},
+    {file = "bandit-1.7.9-py3-none-any.whl", hash = "sha256:52077cb339000f337fb25f7e045995c4ad01511e716e5daac37014b9752de8ec"},
+    {file = "bandit-1.7.9.tar.gz", hash = "sha256:7c395a436743018f7be0a4cbb0a4ea9b902b6d87264ddecf8cfdc73b4f78ff61"},
 ]
 
 [[package]]
@@ -215,7 +215,7 @@ files = [
 
 [[package]]
 name = "mypy"
-version = "1.10.0"
+version = "1.10.1"
 requires_python = ">=3.8"
 summary = "Optional static typing for Python"
 dependencies = [
@@ -224,23 +224,23 @@ dependencies = [
     "typing-extensions>=4.1.0",
 ]
 files = [
-    {file = "mypy-1.10.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:da1cbf08fb3b851ab3b9523a884c232774008267b1f83371ace57f412fe308c2"},
-    {file = "mypy-1.10.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:12b6bfc1b1a66095ab413160a6e520e1dc076a28f3e22f7fb25ba3b000b4ef99"},
-    {file = "mypy-1.10.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9e36fb078cce9904c7989b9693e41cb9711e0600139ce3970c6ef814b6ebc2b2"},
-    {file = "mypy-1.10.0-cp310-cp310-musllinux_1_1_x86_64.whl", hash = "sha256:2b0695d605ddcd3eb2f736cd8b4e388288c21e7de85001e9f85df9187f2b50f9"},
-    {file = "mypy-1.10.0-cp310-cp310-win_amd64.whl", hash = "sha256:cd777b780312ddb135bceb9bc8722a73ec95e042f911cc279e2ec3c667076051"},
-    {file = "mypy-1.10.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:3be66771aa5c97602f382230165b856c231d1277c511c9a8dd058be4784472e1"},
-    {file = "mypy-1.10.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:8b2cbaca148d0754a54d44121b5825ae71868c7592a53b7292eeb0f3fdae95ee"},
-    {file = "mypy-1.10.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1ec404a7cbe9fc0e92cb0e67f55ce0c025014e26d33e54d9e506a0f2d07fe5de"},
-    {file = "mypy-1.10.0-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:e22e1527dc3d4aa94311d246b59e47f6455b8729f4968765ac1eacf9a4760bc7"},
-    {file = "mypy-1.10.0-cp311-cp311-win_amd64.whl", hash = "sha256:a87dbfa85971e8d59c9cc1fcf534efe664d8949e4c0b6b44e8ca548e746a8d53"},
-    {file = "mypy-1.10.0-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:a781f6ad4bab20eef8b65174a57e5203f4be627b46291f4589879bf4e257b97b"},
-    {file = "mypy-1.10.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:b808e12113505b97d9023b0b5e0c0705a90571c6feefc6f215c1df9381256e30"},
-    {file = "mypy-1.10.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:8f55583b12156c399dce2df7d16f8a5095291354f1e839c252ec6c0611e86e2e"},
-    {file = "mypy-1.10.0-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:4cf18f9d0efa1b16478c4c129eabec36148032575391095f73cae2e722fcf9d5"},
-    {file = "mypy-1.10.0-cp312-cp312-win_amd64.whl", hash = "sha256:bc6ac273b23c6b82da3bb25f4136c4fd42665f17f2cd850771cb600bdd2ebeda"},
-    {file = "mypy-1.10.0-py3-none-any.whl", hash = "sha256:f8c083976eb530019175aabadb60921e73b4f45736760826aa1689dda8208aee"},
-    {file = "mypy-1.10.0.tar.gz", hash = "sha256:3d087fcbec056c4ee34974da493a826ce316947485cef3901f511848e687c131"},
+    {file = "mypy-1.10.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:e36f229acfe250dc660790840916eb49726c928e8ce10fbdf90715090fe4ae02"},
+    {file = "mypy-1.10.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:51a46974340baaa4145363b9e051812a2446cf583dfaeba124af966fa44593f7"},
+    {file = "mypy-1.10.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:901c89c2d67bba57aaaca91ccdb659aa3a312de67f23b9dfb059727cce2e2e0a"},
+    {file = "mypy-1.10.1-cp310-cp310-musllinux_1_1_x86_64.whl", hash = "sha256:0cd62192a4a32b77ceb31272d9e74d23cd88c8060c34d1d3622db3267679a5d9"},
+    {file = "mypy-1.10.1-cp310-cp310-win_amd64.whl", hash = "sha256:a2cbc68cb9e943ac0814c13e2452d2046c2f2b23ff0278e26599224cf164e78d"},
+    {file = "mypy-1.10.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:bd6f629b67bb43dc0d9211ee98b96d8dabc97b1ad38b9b25f5e4c4d7569a0c6a"},
+    {file = "mypy-1.10.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:a1bbb3a6f5ff319d2b9d40b4080d46cd639abe3516d5a62c070cf0114a457d84"},
+    {file = "mypy-1.10.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b8edd4e9bbbc9d7b79502eb9592cab808585516ae1bcc1446eb9122656c6066f"},
+    {file = "mypy-1.10.1-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:6166a88b15f1759f94a46fa474c7b1b05d134b1b61fca627dd7335454cc9aa6b"},
+    {file = "mypy-1.10.1-cp311-cp311-win_amd64.whl", hash = "sha256:5bb9cd11c01c8606a9d0b83ffa91d0b236a0e91bc4126d9ba9ce62906ada868e"},
+    {file = "mypy-1.10.1-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:d8681909f7b44d0b7b86e653ca152d6dff0eb5eb41694e163c6092124f8246d7"},
+    {file = "mypy-1.10.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:378c03f53f10bbdd55ca94e46ec3ba255279706a6aacaecac52ad248f98205d3"},
+    {file = "mypy-1.10.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6bacf8f3a3d7d849f40ca6caea5c055122efe70e81480c8328ad29c55c69e93e"},
+    {file = "mypy-1.10.1-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:701b5f71413f1e9855566a34d6e9d12624e9e0a8818a5704d74d6b0402e66c04"},
+    {file = "mypy-1.10.1-cp312-cp312-win_amd64.whl", hash = "sha256:3c4c2992f6ea46ff7fce0072642cfb62af7a2484efe69017ed8b095f7b39ef31"},
+    {file = "mypy-1.10.1-py3-none-any.whl", hash = "sha256:71d8ac0b906354ebda8ef1673e5fde785936ac1f29ff6987c7483cfbd5a4235a"},
+    {file = "mypy-1.10.1.tar.gz", hash = "sha256:1f8f492d7db9e3593ef42d4f115f04e556130f2819ad33ab84551403e97dd4c0"},
 ]
 
 [[package]]
@@ -265,10 +265,10 @@ files = [
 
 [[package]]
 name = "nodriver"
-version = "0.29rc1"
+version = "0.30"
 requires_python = ">=3.9"
 git = "https://github.com/ultrafunkamsterdam/nodriver.git"
-revision = "57cb72b3878dc4d86a54cc7937645df9003a9c9e"
+revision = "688c948f51236a6414bab03c01af14f9e23e896e"
 summary = "    * Official successor of Undetected Chromedriver\n    * Can be made to work for for all chromium based browsers.\n    * Dropped selenium and chromedriver binary requirements.\n    * fully asynchronous == bizarre performance gains, and more granular control\n\n    Part of undetected-chromedriver, or merely the successor of it, this library is a full rewrite, providing a\n    fast framework for web automation, webscraping, bots and any other creative ideas which are normally\n    hindered by annoying anti bot systems like Captcha / CloudFlare / Imperva / hCaptcha and other\n    big corp \"ai\" money machines using your input to make even more $$ (http://tinyurl.com/bigcorp-ai-inputs)\n\n    The webdriver/selenium requirement is dropped entirely, since this library communicates directly to the browser.\n    Being fully asynchronous, this adds massive performance improvements and more detailed control possibilities.\n\n    As usual ( like undetected chromedriver) all config details and best practices are built-in, which means\n    up and running with just a line of code.\n\n    This makes it simple to use for quick prototyping, and perfect for interactive interpreter use (eg: IPython).\n\n\n    WARNING:\n       - results may vary due to many factors. No guarantees are given whatsoever.\n       - Running from bad IP or datacenter may still cause captcha's and/or other problems.\n       - With great power comes ... etc etc etc\n         no but SERIOUS: for your own benefit, make sure \"they\" have no reason for upscaling anti-bot measurements.\n         there might be one day it would not be feasible anymore to work up against big corp, and provide upgrades\n         and free libraries.\n\n"
 dependencies = [
     "deprecated",
@@ -338,27 +338,28 @@ files = [
 
 [[package]]
 name = "psutil"
-version = "5.9.8"
-requires_python = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*"
+version = "6.0.0"
+requires_python = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,>=2.7"
 summary = "Cross-platform lib for process and system monitoring in Python."
 files = [
-    {file = "psutil-5.9.8-cp36-abi3-macosx_10_9_x86_64.whl", hash = "sha256:aee678c8720623dc456fa20659af736241f575d79429a0e5e9cf88ae0605cc81"},
-    {file = "psutil-5.9.8-cp36-abi3-manylinux_2_12_i686.manylinux2010_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:8cb6403ce6d8e047495a701dc7c5bd788add903f8986d523e3e20b98b733e421"},
-    {file = "psutil-5.9.8-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d06016f7f8625a1825ba3732081d77c94589dca78b7a3fc072194851e88461a4"},
-    {file = "psutil-5.9.8-cp37-abi3-win32.whl", hash = "sha256:bc56c2a1b0d15aa3eaa5a60c9f3f8e3e565303b465dbf57a1b730e7a2b9844e0"},
-    {file = "psutil-5.9.8-cp37-abi3-win_amd64.whl", hash = "sha256:8db4c1b57507eef143a15a6884ca10f7c73876cdf5d51e713151c1236a0e68cf"},
-    {file = "psutil-5.9.8-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:d16bbddf0693323b8c6123dd804100241da461e41d6e332fb0ba6058f630f8c8"},
-    {file = "psutil-5.9.8.tar.gz", hash = "sha256:6be126e3225486dff286a8fb9a06246a5253f4c7c53b475ea5f5ac934e64194c"},
+    {file = "psutil-6.0.0-cp36-abi3-macosx_10_9_x86_64.whl", hash = "sha256:c588a7e9b1173b6e866756dde596fd4cad94f9399daf99ad8c3258b3cb2b47a0"},
+    {file = "psutil-6.0.0-cp36-abi3-manylinux_2_12_i686.manylinux2010_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:6ed2440ada7ef7d0d608f20ad89a04ec47d2d3ab7190896cd62ca5fc4fe08bf0"},
+    {file = "psutil-6.0.0-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5fd9a97c8e94059b0ef54a7d4baf13b405011176c3b6ff257c247cae0d560ecd"},
+    {file = "psutil-6.0.0-cp36-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e2e8d0054fc88153ca0544f5c4d554d42e33df2e009c4ff42284ac9ebdef4132"},
+    {file = "psutil-6.0.0-cp37-abi3-win32.whl", hash = "sha256:a495580d6bae27291324fe60cea0b5a7c23fa36a7cd35035a16d93bdcf076b9d"},
+    {file = "psutil-6.0.0-cp37-abi3-win_amd64.whl", hash = "sha256:33ea5e1c975250a720b3a6609c490db40dae5d83a4eb315170c4fe0d8b1f34b3"},
+    {file = "psutil-6.0.0-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:ffe7fc9b6b36beadc8c322f84e1caff51e8703b88eee1da46d1e3a6ae11b4fd0"},
+    {file = "psutil-6.0.0.tar.gz", hash = "sha256:8faae4f310b6d969fa26ca0545338b21f73c6b15db7c4a8d934a5482faa818f2"},
 ]
 
 [[package]]
 name = "pycodestyle"
-version = "2.11.1"
+version = "2.12.0"
 requires_python = ">=3.8"
 summary = "Python style guide checker"
 files = [
-    {file = "pycodestyle-2.11.1-py2.py3-none-any.whl", hash = "sha256:44fe31000b2d866f2e41841b18528a505fbd7fef9017b04eff4e2648a0fadc67"},
-    {file = "pycodestyle-2.11.1.tar.gz", hash = "sha256:41ba0e7afc9752dfb53ced5489e89f8186be00e599e712660695b7a75ff2663f"},
+    {file = "pycodestyle-2.12.0-py2.py3-none-any.whl", hash = "sha256:949a39f6b86c3e1515ba1787c2022131d165a8ad271b11370a8819aa070269e4"},
+    {file = "pycodestyle-2.12.0.tar.gz", hash = "sha256:442f950141b4f43df752dd303511ffded3a04c2b6fb7f65980574f0c31e6e79c"},
 ]
 
 [[package]]
@@ -373,7 +374,7 @@ files = [
 
 [[package]]
 name = "pyinstaller"
-version = "6.8.0"
+version = "6.9.0"
 requires_python = "<3.13,>=3.8"
 summary = "PyInstaller bundles a Python application and all its dependencies into a single package."
 dependencies = [
@@ -381,23 +382,23 @@ dependencies = [
     "macholib>=1.8; sys_platform == \"darwin\"",
     "packaging>=22.0",
     "pefile>=2022.5.30; sys_platform == \"win32\"",
-    "pyinstaller-hooks-contrib>=2024.6",
+    "pyinstaller-hooks-contrib>=2024.7",
     "pywin32-ctypes>=0.2.1; sys_platform == \"win32\"",
     "setuptools>=42.0.0",
 ]
 files = [
-    {file = "pyinstaller-6.8.0-py3-none-macosx_10_13_universal2.whl", hash = "sha256:5ff6bc2784c1026f8e2f04aa3760cbed41408e108a9d4cf1dd52ee8351a3f6e1"},
-    {file = "pyinstaller-6.8.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:39ac424d2ee2457d2ab11a5091436e75a0cccae207d460d180aa1fcbbafdd528"},
-    {file = "pyinstaller-6.8.0-py3-none-manylinux2014_i686.whl", hash = "sha256:355832a3acc7de90a255ecacd4b9f9e166a547a79c8905d49f14e3a75c1acdb9"},
-    {file = "pyinstaller-6.8.0-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:6303c7a009f47e6a96ef65aed49f41e36ece8d079b9193ca92fe807403e5fe80"},
-    {file = "pyinstaller-6.8.0-py3-none-manylinux2014_s390x.whl", hash = "sha256:2b71509468c811968c0b5decb5bbe85b6292ea52d7b1f26313d2aabb673fa9a5"},
-    {file = "pyinstaller-6.8.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:ff31c5b99e05a4384bbe2071df67ec8b2b347640a375eae9b40218be2f1754c6"},
-    {file = "pyinstaller-6.8.0-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:000c36b13fe4cd8d0d8c2bc855b1ddcf39867b5adf389e6b5ca45b25fa3e619d"},
-    {file = "pyinstaller-6.8.0-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:fe0af018d7d5077180e3144ada89a4da5df8d07716eb7e9482834a56dc57a4e8"},
-    {file = "pyinstaller-6.8.0-py3-none-win32.whl", hash = "sha256:d257f6645c7334cbd66f38a4fac62c3ad614cc46302b2b5d9f8cc48c563bce0e"},
-    {file = "pyinstaller-6.8.0-py3-none-win_amd64.whl", hash = "sha256:81cccfa9b16699b457f4788c5cc119b50f3cd4d0db924955f15c33f2ad27a50d"},
-    {file = "pyinstaller-6.8.0-py3-none-win_arm64.whl", hash = "sha256:1c3060a263758cf7f0144ab4c016097b20451b2469d468763414665db1bb743d"},
-    {file = "pyinstaller-6.8.0.tar.gz", hash = "sha256:3f4b6520f4423fe19bcc2fd63ab7238851ae2bdcbc98f25bc5d2f97cc62012e9"},
+    {file = "pyinstaller-6.9.0-py3-none-macosx_10_13_universal2.whl", hash = "sha256:5ced2e83acf222b936ea94abc5a5cc96588705654b39138af8fb321d9cf2b954"},
+    {file = "pyinstaller-6.9.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:f18a3d551834ef8fb7830d48d4cc1527004d0e6b51ded7181e78374ad6111846"},
+    {file = "pyinstaller-6.9.0-py3-none-manylinux2014_i686.whl", hash = "sha256:f2fc568de3d6d2a176716a3fc9f20da06d351e8bea5ddd10ecb5659fce3a05b0"},
+    {file = "pyinstaller-6.9.0-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:a0f378f64ad0655d11ade9fde7877e7573fd3d5066231608ce7dfa9040faecdd"},
+    {file = "pyinstaller-6.9.0-py3-none-manylinux2014_s390x.whl", hash = "sha256:7bf0c13c5a8560c89540746ae742f4f4b82290e95a6b478374d9f34959fe25d6"},
+    {file = "pyinstaller-6.9.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:da994aba14c5686db88796684de265a8665733b4df09b939f7ebdf097d18df72"},
+    {file = "pyinstaller-6.9.0-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:4e3e50743c091a06e6d01c59bdd6d03967b453ee5384a9e790759be4129db4a4"},
+    {file = "pyinstaller-6.9.0-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:b041be2fe78da47a269604d62c940d68c62f9a3913bdf64af4123f7689d47099"},
+    {file = "pyinstaller-6.9.0-py3-none-win32.whl", hash = "sha256:2bf4de17a1c63c0b797b38e13bfb4d03b5ee7c0a68e28b915a7eaacf6b76087f"},
+    {file = "pyinstaller-6.9.0-py3-none-win_amd64.whl", hash = "sha256:43709c70b1da8441a730327a8ed362bfcfdc3d42c1bf89f3e2b0a163cc4e7d33"},
+    {file = "pyinstaller-6.9.0-py3-none-win_arm64.whl", hash = "sha256:f15c1ef11ed5ceb32447dfbdab687017d6adbef7fc32aa359d584369bfe56eda"},
+    {file = "pyinstaller-6.9.0.tar.gz", hash = "sha256:f4a75c552facc2e2a370f1e422b971b5e5cdb4058ff38cea0235aa21fc0b378f"},
 ]
 
 [[package]]
@@ -416,7 +417,7 @@ files = [
 
 [[package]]
 name = "pylint"
-version = "3.2.3"
+version = "3.2.5"
 requires_python = ">=3.8.0"
 summary = "python code static checker"
 dependencies = [
@@ -432,8 +433,8 @@ dependencies = [
     "tomlkit>=0.10.1",
 ]
 files = [
-    {file = "pylint-3.2.3-py3-none-any.whl", hash = "sha256:b3d7d2708a3e04b4679e02d99e72329a8b7ee8afb8d04110682278781f889fa8"},
-    {file = "pylint-3.2.3.tar.gz", hash = "sha256:02f6c562b215582386068d52a30f520d84fdbcf2a95fc7e855b816060d048b60"},
+    {file = "pylint-3.2.5-py3-none-any.whl", hash = "sha256:32cd6c042b5004b8e857d727708720c54a676d1e22917cf1a2df9b4d4868abd6"},
+    {file = "pylint-3.2.5.tar.gz", hash = "sha256:e9b7171e242dcc6ebd0aaa7540481d1a72860748a0a7816b8fe6cf6c80a6fe7e"},
 ]
 
 [[package]]
@@ -447,15 +448,15 @@ files = [
 
 [[package]]
 name = "pyright"
-version = "1.1.366"
+version = "1.1.370"
 requires_python = ">=3.7"
 summary = "Command line wrapper for pyright"
 dependencies = [
     "nodeenv>=1.6.0",
 ]
 files = [
-    {file = "pyright-1.1.366-py3-none-any.whl", hash = "sha256:c09e73ccc894976bcd6d6a5784aa84d724dbd9ceb7b873b39d475ca61c2de071"},
-    {file = "pyright-1.1.366.tar.gz", hash = "sha256:10e4d60be411f6d960cd39b0b58bf2ff76f2c83b9aeb102ffa9d9fda2e1303cb"},
+    {file = "pyright-1.1.370-py3-none-any.whl", hash = "sha256:fc721601e480a69989775bfc210534a6ca0110ebd0c065244a8d3a151294fc61"},
+    {file = "pyright-1.1.370.tar.gz", hash = "sha256:d0d559d506fc41e3297f721aaa05a1b9f06beda5acc9ac64ca371ce94c28f960"},
 ]
 
 [[package]]
@@ -609,12 +610,12 @@ files = [
 
 [[package]]
 name = "setuptools"
-version = "70.0.0"
+version = "70.2.0"
 requires_python = ">=3.8"
 summary = "Easily download, build, install, upgrade, and uninstall Python packages"
 files = [
-    {file = "setuptools-70.0.0-py3-none-any.whl", hash = "sha256:54faa7f2e8d2d11bcd2c07bed282eef1046b5c080d1c32add737d7b5817b1ad4"},
-    {file = "setuptools-70.0.0.tar.gz", hash = "sha256:f211a66637b8fa059bb28183da127d4e86396c991a942b028c6650d4319c3fd0"},
+    {file = "setuptools-70.2.0-py3-none-any.whl", hash = "sha256:b8b8060bb426838fbe942479c90296ce976249451118ef566a5a0b7d8b78fb05"},
+    {file = "setuptools-70.2.0.tar.gz", hash = "sha256:bd63e505105011b25c3c11f753f7e3b8465ea739efddaccef8f0efac2137bac1"},
 ]
 
 [[package]]
