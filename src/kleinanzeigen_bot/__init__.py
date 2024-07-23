@@ -718,7 +718,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     pass  # nosec
 
                 try:
-                    await self.web_select(By.XPATH, f"//select[@id='{special_attribute_key}']", special_attribute_value)
+                    await self.web_select(By.XPATH, f"//select[contains(@id, '{special_attribute_key}')]", special_attribute_value)
                 except TimeoutError:
                     LOG.debug("Attribute field '%s' is not of kind dropdown, trying to input as plain text...", special_attribute_key)
                     try:
@@ -726,7 +726,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     except TimeoutError:
                         LOG.debug("Attribute field '%s' is not of kind plain text, trying to input as radio button...", special_attribute_key)
                         try:
-                            await self.web_click(By.XPATH, f"//*[@id='{special_attribute_key}']/option[@value='{special_attribute_value}']")
+                            await self.web_click(By.XPATH, f"//*[contains(@id, '{special_attribute_key}')]/option[@value='{special_attribute_value}']")
                         except TimeoutError as ex:
                             LOG.debug("Attribute field '%s' is not of kind radio button.", special_attribute_key)
                             raise TimeoutError(f"Failed to set special attribute [{special_attribute_key}]") from ex
