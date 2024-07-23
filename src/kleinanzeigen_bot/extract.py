@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import json, logging, os, shutil, re
+import logging, os, shutil
 import urllib.request as urllib_request
 from datetime import datetime
 from typing import Any, Final
@@ -290,15 +290,8 @@ class AdExtractor(WebScrapingMixin):
         """
         belen_conf = await self.web_execute("window.BelenConf")
         special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"]["dimension108"]
-        # Surrounding any word with " and add curly braces
-        special_attributes_fixed_str = "{" + re.sub('(\\w+)', '"\\g<1>"', special_attributes_str) + "}"
-        special_attributes = json.loads(special_attributes_fixed_str)
-        if not isinstance(special_attributes, dict):
-            raise ValueError(
-                "Failed to parse special attributes from ad page."
-                f"Expected a dictionary, but got a {type(special_attributes)}"
-            )
-        special_attributes = {k: v for k, v in special_attributes.items() if not k.endswith('.versand_s')}
+        special_attributes = dict(item.split(":") for item in special_attributes_str.split("|"))
+        special_attributes = {k: v for k, v in special_attributes.items() if not k.endswith('.versand_s') and k != "versand_s"}
         return special_attributes
 
     async def _extract_pricing_info_from_ad_page(self) -> tuple[float | None, str]:
