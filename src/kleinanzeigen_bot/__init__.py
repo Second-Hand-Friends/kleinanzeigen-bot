@@ -649,6 +649,35 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         utils.save_dict(ad_file, ad_cfg_orig)
 
+    async def __set_condition(self, condition_value: str) -> None:
+        condition_mapping = {
+            "new_with_tag": "Neu mit Etikett",
+            "new": "Neu",
+            "like_new": "Sehr Gut",
+            "alright": "Gut",
+            "ok": "In Ordnung",
+        }
+        mapped_condition = condition_mapping.get(condition_value)
+
+        try:
+            # Open condition dialog
+            await self.web_click(By.CSS_SELECTOR, '[class*="ConditionSelector"] button')
+        except TimeoutError:
+            LOG.debug("Unable to open condition dialog and select condition [%s]", condition_value, exc_info = True)
+            return
+
+        try:
+            # Click radio button
+            await self.web_click(By.CSS_SELECTOR, f'.SingleSelectionItem--Main input[type=radio][data-testid="{mapped_condition}"]')
+        except TimeoutError:
+            LOG.debug("Unable to select condition [%s]", condition_value, exc_info = True)
+
+        try:
+            # Click continue button
+            await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Bestätigen")]]]')
+        except TimeoutError as ex:
+            raise TimeoutError("Unable to close condition dialog") from ex
+
     async def __set_category(self, ad_file:str, ad_cfg: dict[str, Any]) -> None:
         # click on something to trigger automatic category detection
         await self.web_click(By.ID, "pstad-descrptn")
@@ -674,6 +703,11 @@ class KleinanzeigenBot(WebScrapingMixin):
         if ad_cfg["special_attributes"]:
             LOG.debug('Found %i special attributes', len(ad_cfg["special_attributes"]))
             for special_attribute_key, special_attribute_value in ad_cfg["special_attributes"].items():
+
+                if special_attribute_key == "condition_s":
+                    await self.__set_condition(special_attribute_value)
+                    continue
+
                 LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value)
                 try:
                     # if the <select> element exists but is inside an invisible container, make the container visible
