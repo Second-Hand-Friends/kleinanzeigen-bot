@@ -40,6 +40,7 @@ dependencies = [
     "psutil",
     "pywin32; sys_platform == 'win32'",
     "wcmatch",
+    "certifi>=2024.7.4",
 ]
 
 [project.urls]

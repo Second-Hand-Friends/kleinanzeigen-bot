@@ -11,7 +11,7 @@ from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from typing import Any, Final
 
-import colorama, nodriver
+import certifi, colorama, nodriver
 from overrides import overrides
 from ruamel.yaml import YAML
 from wcmatch import glob
@@ -33,6 +33,10 @@ colorama.init()
 class KleinanzeigenBot(WebScrapingMixin):
 
     def __init__(self) -> None:
+
+        # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/295
+        # see https://github.com/pyinstaller/pyinstaller/issues/7229#issuecomment-1309383026
+        os.environ["SSL_CERT_FILE"] = certifi.where()
 
         super().__init__()
 
@@ -615,7 +619,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         # wait for captcha
         #############################
         try:
-            await self.web_find(By.CSS_SELECTOR,"iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']", timeout=2)
+            await self.web_find(By.CSS_SELECTOR, "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']", timeout = 2)
             LOG.warning("############################################")
             LOG.warning("# Captcha present! Please solve the captcha.")
             LOG.warning("############################################")
