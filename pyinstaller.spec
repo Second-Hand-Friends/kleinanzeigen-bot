@@ -19,7 +19,6 @@ datas = [
 excluded_modules = [
     "_aix_support",
     "argparse",
-    "backports",
     "bz2",
     "cryptography.hazmat",
     "distutils",
