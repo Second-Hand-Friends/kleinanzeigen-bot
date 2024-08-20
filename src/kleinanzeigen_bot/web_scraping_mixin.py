@@ -117,6 +117,7 @@ class WebScrapingMixin:
             "--disable-domain-reliability",
             "--disable-sync",
             "--no-experiments",
+            "--disable-search-engine-choice-screen",
 
             "--disable-features=MediaRouter",
             "--use-mock-keychain",
