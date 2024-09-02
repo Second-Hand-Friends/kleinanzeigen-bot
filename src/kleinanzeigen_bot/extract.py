@@ -285,12 +285,13 @@ class AdExtractor(WebScrapingMixin):
     async def _extract_special_attributes_from_ad_page(self) -> dict[str, Any]:
         """
         Extracts the special attributes from an ad page.
+        If no items are available then special_attributes is empty
 
         :return: a dictionary (possibly empty) where the keys are the attribute names, mapped to their values
         """
         belen_conf = await self.web_execute("window.BelenConf")
         special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"]["dimension108"]
-        special_attributes = dict(item.split(":") for item in special_attributes_str.split("|"))
+        special_attributes = dict(item.split(":") for item in special_attributes_str.split("|") if ":" in item)
         special_attributes = {k: v for k, v in special_attributes.items() if not k.endswith('.versand_s') and k != "versand_s"}
         return special_attributes
 
