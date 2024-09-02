@@ -290,7 +290,7 @@ class AdExtractor(WebScrapingMixin):
         """
         belen_conf = await self.web_execute("window.BelenConf")
         special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"]["dimension108"]
-        special_attributes = dict(item.split(":") for item in special_attributes_str.split("|"))
+        special_attributes = dict(item.split(":") for item in special_attributes_str.split("|") if ":" in item)
         special_attributes = {k: v for k, v in special_attributes.items() if not k.endswith('.versand_s') and k != "versand_s"}
         return special_attributes
 
