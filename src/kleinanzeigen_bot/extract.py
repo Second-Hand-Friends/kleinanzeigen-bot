@@ -285,6 +285,7 @@ class AdExtractor(WebScrapingMixin):
     async def _extract_special_attributes_from_ad_page(self) -> dict[str, Any]:
         """
         Extracts the special attributes from an ad page.
+        If no items are available then special_attributes is empty
 
         :return: a dictionary (possibly empty) where the keys are the attribute names, mapped to their values
         """
