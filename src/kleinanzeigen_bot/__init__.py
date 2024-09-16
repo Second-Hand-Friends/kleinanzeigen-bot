@@ -12,7 +12,6 @@ from logging.handlers import RotatingFileHandler
 from typing import Any, Final
 
 import certifi, colorama, nodriver
-from overrides import overrides
 from ruamel.yaml import YAML
 from wcmatch import glob
 

@@ -18,32 +18,24 @@ datas = [
 
 excluded_modules = [
     "_aix_support",
+    "_pydecimal",
     "argparse",
     "bz2",
-    "cryptography.hazmat",
-    "distutils",
-    "doctest",
     "ftplib",
     "lzma",
-    "pep517",
-    "pdb",
-    "pip",
-    "pydoc",
-    "pydoc_data",
-    "optparse",
     "setuptools",
-    "six",
+    "smtplib",
     "statistics",
-    "test",
-    "unittest",
-    "xml.sax"
+    "tracemalloc",
+    "xml.sax",
+    "xmlrpc"
 ]
 
 from sys import platform
 if platform != "darwin":
     excluded_modules.append("_osx_support")
 
-# https://github.com/pyinstaller/pyinstaller/blob/f563dce1e83fd5ec72a20dffd2ac24be3e647150/PyInstaller/building/build_main.py#L320
+# https://github.com/pyinstaller/pyinstaller/blob/adceeab4c2901fba853b29f9ae2db7bb67667030/PyInstaller/building/build_main.py#L399
 analysis = Analysis(
         ['src/kleinanzeigen_bot/__main__.py'],
         # pathex = [],
@@ -58,10 +50,11 @@ analysis = Analysis(
         # win_no_prefer_redirets = False, # Deprecated
         # win_private_assemblies = False, # Deprecated
         # noarchive = False,
-        # module_collection_mode = None
+        # module_collection_mode = None,
+        # optimize = -1
     )
 
-# https://github.com/pyinstaller/pyinstaller/blob/f563dce1e83fd5ec72a20dffd2ac24be3e647150/PyInstaller/building/api.py#L51
+# https://github.com/pyinstaller/pyinstaller/blob/adceeab4c2901fba853b29f9ae2db7bb67667030/PyInstaller/building/api.py#L52
 pyz = PYZ(
         analysis.pure,  # tocs
         analysis.zipped_data,
@@ -70,7 +63,7 @@ pyz = PYZ(
 
 import os, shutil
 
-# https://github.com/pyinstaller/pyinstaller/blob/f563dce1e83fd5ec72a20dffd2ac24be3e647150/PyInstaller/building/api.py#L338
+# https://github.com/pyinstaller/pyinstaller/blob/adceeab4c2901fba853b29f9ae2db7bb67667030/PyInstaller/building/api.py#L363
 exe = EXE(pyz,
         analysis.scripts,
         analysis.binaries,
