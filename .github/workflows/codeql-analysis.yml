@@ -70,10 +70,9 @@ jobs:
 
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@v3  # https://github.com/github/codeql-action/blob/main/init/action.yml
       with:
         languages: python
-        setup-python-dependencies: false
 
 
     - name: Perform CodeQL Analysis
