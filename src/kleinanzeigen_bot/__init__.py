@@ -400,13 +400,9 @@ class KleinanzeigenBot(WebScrapingMixin):
         await self.handle_after_login_logic()
 
         # Sometimes a second login is required
-        try:
-            await self.web_find(By.TEXT, "Logge dich ein, um gebrauchte Schätze zu finden und zu verkaufen.", timeout = 10)
+        if not self.is_logged_in():
             await self.fill_login_data_and_send()
-        except TimeoutError:
-            pass
-
-        await self.handle_after_login_logic()
+            await self.handle_after_login_logic()
 
     async def fill_login_data_and_send(self) -> None:
         LOG.info("Logging in as [%s]...", self.config["login"]["username"])
