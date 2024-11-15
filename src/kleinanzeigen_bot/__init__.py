@@ -396,11 +396,21 @@ class KleinanzeigenBot(WebScrapingMixin):
         except TimeoutError:
             pass
 
+        await self.fill_login_data_and_send()
+        await self.handle_after_login_logic()
+
+        # Sometimes a second login is required
+        if not self.is_logged_in():
+            await self.fill_login_data_and_send()
+            await self.handle_after_login_logic()
+
+    async def fill_login_data_and_send(self) -> None:
         LOG.info("Logging in as [%s]...", self.config["login"]["username"])
         await self.web_input(By.ID, "email", self.config["login"]["username"])
         await self.web_input(By.ID, "password", self.config["login"]["password"])
         await self.web_click(By.CSS_SELECTOR, "form#login-form button[type='submit']")
 
+    async def handle_after_login_logic(self) -> None:
         try:
             await self.web_find(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout = 4)
             LOG.warning("############################################")
