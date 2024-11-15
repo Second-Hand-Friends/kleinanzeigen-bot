@@ -48,7 +48,7 @@ EOF
 ######################
 
 # https://hub.docker.com/_/python/tags?name=3-slim
-FROM python:3.12-slim AS build-image
+FROM python:3.13-slim AS build-image
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG LC_ALL=C

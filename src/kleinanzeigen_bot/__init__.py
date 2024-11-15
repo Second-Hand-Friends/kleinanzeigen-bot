@@ -3,7 +3,8 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import asyncio, atexit, copy, getopt, importlib.metadata, json, logging, os, re, signal, shutil, sys, textwrap, time
+import asyncio, atexit, copy, importlib.metadata, json, logging, os, re, signal, shutil, sys, textwrap, time
+import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 import urllib.request as urllib_request
 from collections.abc import Iterable
