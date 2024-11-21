@@ -392,10 +392,10 @@ class AdExtractor(WebScrapingMixin):
             contact['street'] = street
         except TimeoutError:
             LOG.info('No street given in the contact.')
-        # construct remaining address
-        address_halves = address_text.split(' - ')
-        address_left_parts = address_halves[0].split(' ')  # zip code and region/city
-        contact['zipcode'] = address_left_parts[0]
+
+        (zipcode, location) = address_text.split(" ", 1)
+        contact['zipcode'] = zipcode  # e.g. 19372
+        contact['location'] = location  # e.g. Mecklenburg-Vorpommern - Steinbeck
 
         contact_person_element:Element = await self.web_find(By.ID, 'viewad-contact')
         name_element = await self.web_find(By.CLASS_NAME, 'iconlist-text', parent = contact_person_element)
