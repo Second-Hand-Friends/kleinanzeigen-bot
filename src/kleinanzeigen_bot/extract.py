@@ -20,9 +20,10 @@ class AdExtractor(WebScrapingMixin):
     Wrapper class for ad extraction that uses an active bot´s browser session to extract specific elements from an ad page.
     """
 
-    def __init__(self, browser:Browser):
+    def __init__(self, browser:Browser, config:dict[str, Any]):
         super().__init__()
         self.browser = browser
+        self.config = config
 
     async def download_ad(self, ad_id:int) -> None:
         """
@@ -230,8 +231,9 @@ class AdExtractor(WebScrapingMixin):
         LOG.info('Extracting information from ad with title \"%s\"', title)
         info['title'] = title
 
-        descr:str = await self.web_text(By.ID, 'viewad-description-text')
-        info['description'] = descr
+        info['description'] = (await self.web_text(By.ID, 'viewad-description-text')).strip() \
+            .removeprefix((self.config["ad_defaults"]["description"]["prefix"] or "").strip()) \
+            .removesuffix((self.config["ad_defaults"]["description"]["suffix"] or "").strip())
 
         # extract category
         info['category'] = await self._extract_category_from_ad_page()

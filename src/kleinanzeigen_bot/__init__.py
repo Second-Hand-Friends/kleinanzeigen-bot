@@ -828,7 +828,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         This downloads either all, only unsaved (new), or specific ads given by ID.
         """
 
-        ad_extractor = extract.AdExtractor(self.browser)
+        ad_extractor = extract.AdExtractor(self.browser, self.config)
 
         # use relevant download routine
         if self.ads_selector in {'all', 'new'}:  # explore ads overview for these two modes
