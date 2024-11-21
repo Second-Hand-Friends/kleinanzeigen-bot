@@ -216,10 +216,10 @@ notes = [ "FIXME", "XXX", "TODO" ] # list of note tags to take in consideration
 # https://pylint.pycqa.org/en/latest/user_guide/configuration/all-options.html#design-checker
 # https://pylint.pycqa.org/en/latest/user_guide/checkers/features.html#design-checker-messages
 max-attributes = 15 # maximum number of instance attributes for a class (R0902)
-max-branches   = 30 # maximum number of branch for function / method body (R0912)
+max-branches   = 40 # maximum number of branch for function / method body (R0912)
 max-locals     = 30 # maximum number of local variables for function / method body (R0914)
 max-returns    = 10 # maximum number of return / yield for function / method body (R0911)
-max-statements = 100 # maximum number of statements in function / method body (R0915)
+max-statements = 150 # maximum number of statements in function / method body (R0915)
 max-public-methods = 30 # maximum number of public methods for a class (R0904)
 
 

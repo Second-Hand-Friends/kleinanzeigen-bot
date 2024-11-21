@@ -528,7 +528,15 @@ class KleinanzeigenBot(WebScrapingMixin):
         #############################
         # set shipping type/options/costs
         #############################
-        if ad_cfg["shipping_type"] == "PICKUP":
+        if ad_cfg["type"] == "WANTED":
+            # special handling for ads of type WANTED since shipping is a special attribute for these
+            if ad_cfg["shipping_type"] in {"PICKUP", "SHIPPING"}:
+                shipping_value = "ja" if ad_cfg["shipping_type"] == "SHIPPING" else "nein"
+                try:
+                    await self.web_select(By.XPATH, "//select[contains(@id, '.versand_s')]", shipping_value)
+                except TimeoutError:
+                    LOG.warning("Failed to set shipping attribute for type '%s'!", ad_cfg['shipping_type'])
+        elif ad_cfg["shipping_type"] == "PICKUP":
             try:
                 await self.web_click(By.XPATH,
                     '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/input[@type="radio"]')
