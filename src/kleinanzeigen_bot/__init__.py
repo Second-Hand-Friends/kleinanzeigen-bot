@@ -401,7 +401,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         await self.handle_after_login_logic()
 
         # Sometimes a second login is required
-        if not self.is_logged_in():
+        if not await self.is_logged_in():
             await self.fill_login_data_and_send()
             await self.handle_after_login_logic()
 
