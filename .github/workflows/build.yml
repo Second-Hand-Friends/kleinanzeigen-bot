@@ -129,8 +129,8 @@ jobs:
       run: pdm show
 
 
-    - name: Security scan
-      run: pdm run scan
+    - name: Security Audit
+      run: pdm run audit
 
 
     - name: Check code style
