@@ -5,6 +5,7 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 """
 import logging, os, shutil
 import urllib.request as urllib_request
+import mimetypes
 from datetime import datetime
 from typing import Any, Final
 
@@ -77,12 +78,15 @@ class AdExtractor(WebScrapingMixin):
                 current_img_url = img_element.attrs['src']  # URL of the image
                 if current_img_url is None:
                     continue
-                file_ending = current_img_url.split('.')[-1].lower()
-                img_path = directory + '/' + img_fn_prefix + str(img_nr) + '.' + file_ending
-                if current_img_url.startswith('https'):  # verify https (for Bandit linter)
-                    urllib_request.urlretrieve(current_img_url, img_path)  # nosec B310
-                dl_counter += 1
-                img_paths.append(img_path.split('/')[-1])
+
+                with urllib_request.urlopen(current_img_url) as response:  # nosec B310
+                    content_type = response.info().get_content_type()
+                    file_ending = mimetypes.guess_extension(content_type)
+                    img_path = f"{directory}/{img_fn_prefix}{img_nr}{file_ending}"
+                    with open(img_path, 'wb') as f:
+                        shutil.copyfileobj(response, f)
+                    dl_counter += 1
+                    img_paths.append(img_path.rsplit('/', maxsplit = 1)[-1])
 
                 # navigate to next image (if exists)
                 if img_nr < n_images:
