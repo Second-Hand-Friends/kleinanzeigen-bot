@@ -499,6 +499,10 @@ class KleinanzeigenBot(WebScrapingMixin):
         LOG.info("############################################")
 
     async def publish_ad(self, ad_file:str, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any]) -> None:
+        """
+        @param ad_cfg: the effective ad config (i.e. with default values applied etc.)
+        @param ad_cfg_orig: the ad config as present in the YAML file
+        """
         await self.assert_free_ad_limit_not_reached()
 
         if self.delete_old_ads:
