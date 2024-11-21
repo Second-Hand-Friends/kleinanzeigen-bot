@@ -79,7 +79,7 @@ compile.env = {PYTHONHASHSEED = "1", SOURCE_DATE_EPOCH = "0"} # https://pyinstal
 debug   = "python -m pdb -m kleinanzeigen_bot"
 format  = "autopep8 --recursive --in-place src tests --verbose"
 lint    = {shell = "pylint -v src tests && autopep8 -v --exit-code --recursive --diff src tests && mypy" }
-scan    = "bandit -c pyproject.toml -r src"
+audit   = "bandit -c pyproject.toml -r src"
 test    = "python -m pytest --capture=tee-sys -v"
 utest   = "python -m pytest --capture=tee-sys -v -m 'not itest'"
 itest   = "python -m pytest --capture=tee-sys -v -m 'itest'"
