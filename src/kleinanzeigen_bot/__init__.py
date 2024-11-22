@@ -53,8 +53,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         self.command = "help"
         self.ads_selector = "due"
-        self.delete_old_ads = True
-        self.delete_ads_by_title = False
+        self.keep_old_ads = False
 
     def __del__(self) -> None:
         if self.file_log:
@@ -195,7 +194,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 case "--force":
                     self.ads_selector = "all"
                 case "--keep-old":
-                    self.delete_old_ads = False
+                    self.keep_old_ads = True
                 case "-v" | "--verbose":
                     LOG.setLevel(logging.DEBUG)
                     logging.getLogger("nodriver").setLevel(logging.INFO)
@@ -462,7 +461,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         if csrf_token is None:
             raise AssertionError("Expected CSRF Token not found in HTML content!")
 
-        if self.delete_ads_by_title:
+        if self.config["publishing"]["delete_old_ads_by_title"]:
             published_ads = json.loads((await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
 
             for published_ad in published_ads:
@@ -507,7 +506,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         """
         await self.assert_free_ad_limit_not_reached()
 
-        if self.delete_old_ads:
+        if self.config["publishing"]["delete_old_ads"] == "BEFORE_PUBLISH" and not self.keep_old_ads:
             await self.delete_ad(ad_cfg)
 
         LOG.info("Publishing ad '%s'...", ad_cfg["title"])
@@ -676,6 +675,9 @@ class KleinanzeigenBot(WebScrapingMixin):
         LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
 
         utils.save_dict(ad_file, ad_cfg_orig)
+
+        if self.config["publishing"]["delete_old_ads"] == "AFTER_PUBLISH" and not self.keep_old_ads:
+            await self.delete_ad(ad_cfg)
 
     async def __set_condition(self, condition_value: str) -> None:
         condition_mapping = {
