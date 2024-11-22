@@ -319,7 +319,18 @@ class KleinanzeigenBot(WebScrapingMixin):
                 ad_cfg["id"] = int(ad_cfg["id"])
 
             if ad_cfg["category"]:
-                ad_cfg["category"] = self.categories.get(ad_cfg["category"], ad_cfg["category"])
+                resolved_category_id = self.categories.get(ad_cfg["category"])
+                if not resolved_category_id and ">" in ad_cfg["category"]:
+                    # this maps actually to the sonstiges/weiteres sub-category
+                    parent_category = ad_cfg["category"].rpartition(">")[0].strip()
+                    resolved_category_id = self.categories.get(parent_category)
+                    if resolved_category_id:
+                        LOG.warning(
+                            "Category [%s] unknown. Using category [%s] with ID [%s] instead.",
+                            ad_cfg["category"], parent_category, resolved_category_id)
+
+                if resolved_category_id:
+                    ad_cfg["category"] = resolved_category_id
 
             if ad_cfg["shipping_costs"]:
                 ad_cfg["shipping_costs"] = str(round(utils.parse_decimal(ad_cfg["shipping_costs"]), 2))
