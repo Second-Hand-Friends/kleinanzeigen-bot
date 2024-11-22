@@ -229,32 +229,18 @@ class AdExtractor(WebScrapingMixin):
         info['type'] = 'OFFER' if 's-anzeige' in self.page.url else 'WANTED'
         title:str = await self.web_text(By.ID, 'viewad-title')
         LOG.info('Extracting information from ad with title \"%s\"', title)
-        info['title'] = title
 
+        info['category'] = await self._extract_category_from_ad_page()
+        info['title'] = title
         info['description'] = (await self.web_text(By.ID, 'viewad-description-text')).strip() \
             .removeprefix((self.config["ad_defaults"]["description"]["prefix"] or "").strip()) \
             .removesuffix((self.config["ad_defaults"]["description"]["suffix"] or "").strip())
-
-        # extract category
-        info['category'] = await self._extract_category_from_ad_page()
-
-        # get special attributes
         info['special_attributes'] = await self._extract_special_attributes_from_ad_page()
-
-        # process pricing
         info['price'], info['price_type'] = await self._extract_pricing_info_from_ad_page()
-
-        # process shipping
         info['shipping_type'], info['shipping_costs'], info['shipping_options'] = await self._extract_shipping_info_from_ad_page()
         info['sell_directly'] = await self._extract_sell_directly_from_ad_page()
-
-        # fetch images
         info['images'] = await self._download_images_from_ad_page(directory, ad_id)
-
-        # process address
         info['contact'] = await self._extract_contact_from_ad_page()
-
-        # process meta info
         info['id'] = ad_id
 
         try:  # try different locations known for creation date element
