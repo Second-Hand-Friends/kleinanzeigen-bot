@@ -1,3 +1,5 @@
+Auto, Rad & Boot: 210/241
+
 Auto, Rad & Boot > Autos: 210/216/sonstige_autos
 Auto, Rad & Boot > Autos > Alfa Romeo: 210/216/alfa_romeo
 Auto, Rad & Boot > Autos > Audi: 210/216/audi
@@ -58,6 +60,42 @@ Auto, Rad & Boot > Boote & Bootszubehör > Bootstrailer: 210/211/bootstrailer
 Auto, Rad & Boot > Boote & Bootszubehör > Bootsliegeplätze: 210/211/bootsliegeplaetze
 Auto, Rad & Boot > Boote & Bootszubehör > Bootszubehör: 210/211/bootszubehoer
 
+Auto, Rad & Boot > Fahrräder & Zubehör: 210/217/weiteres
+Auto, Rad & Boot > Fahrräder & Zubehör > Damen: 210/217/damen
+Auto, Rad & Boot > Fahrräder & Zubehör > Herren: 210/217/herren
+Auto, Rad & Boot > Fahrräder & Zubehör > Kinder: 210/217/kinder
+Auto, Rad & Boot > Fahrräder & Zubehör > Zubehör: 210/217/zubehoer
+
+Auto, Rad & Boot > Motorräder & Motorroller > Mofas & Mopeds: 210/305/mofa
+Auto, Rad & Boot > Motorräder & Motorroller > Motorräder: 210/305/motorrad
+Auto, Rad & Boot > Motorräder & Motorroller > Motorroller & Scooter: 210/305/roller
+Auto, Rad & Boot > Motorräder & Motorroller > Quads: 210/305/quad
+
+Auto, Rad & Boot > Motorradteile & Zubehör > Ersatz- & Reparaturteile: 210/306/teile
+Auto, Rad & Boot > Motorradteile & Zubehör > Reifen & Felgen: 210/306/reifen_felgen
+Auto, Rad & Boot > Motorradteile & Zubehör > Motorradbekleidung: 210/306/kleidung
+
+Auto, Rad & Boot > Nutzfahrzeuge & Anhänger: 210/276/andere
+Auto, Rad & Boot > Nutzfahrzeuge & Anhänger > Agrarfahrzeuge: 210/276/agrarfahrzeuge
+Auto, Rad & Boot > Nutzfahrzeuge & Anhänger > Anhänger: 210/276/anhaenger
+Auto, Rad & Boot > Nutzfahrzeuge & Anhänger > Baumaschinen: 210/276/baumaschinen
+Auto, Rad & Boot > Nutzfahrzeuge & Anhänger > Busse: 210/276/busse
+Auto, Rad & Boot > Nutzfahrzeuge & Anhänger > LKW: 210/276/lkw
+Auto, Rad & Boot > Nutzfahrzeuge & Anhänger > Sattelzugmaschinen & Auflieger: 210/276/sattelzugmaschinen_auflieger
+Auto, Rad & Boot > Nutzfahrzeuge & Anhänger > Stapler: 210/276/stapler
+Auto, Rad & Boot > Nutzfahrzeuge & Anhänger > Traktoren: 210/276/traktoren
+Auto, Rad & Boot > Nutzfahrzeuge & Anhänger > Transporter: 210/276/transporter
+Auto, Rad & Boot > Nutzfahrzeuge & Anhänger > Nutzfahrzeugteile & Zubehör: 210/276/zubehoer
+
+Auto, Rad & Boot > Reparaturen & Dienstleistungen: 210/280
+
+Auto, Rad & Boot > Wohnwagen & -mobile: 210/220/andere
+Auto, Rad & Boot > Wohnwagen & -mobile > Alkoven: 210/220/alkoven
+Auto, Rad & Boot > Wohnwagen & -mobile > Integrierter: 210/220/integrierter
+Auto, Rad & Boot > Wohnwagen & -mobile > Kastenwagen: 210/220/kastenwagen
+Auto, Rad & Boot > Wohnwagen & -mobile > Teilintegrierter: 210/220/teilintegrierter
+Auto, Rad & Boot > Wohnwagen & -mobile > Wohnwagen: 210/220/wohnwagen
+
 Dienstleistungen: 297/298
 Dienstleistungen > Altenpflege: 297/288
 Dienstleistungen > Auto, Rad & Boot: 297/289
@@ -65,13 +103,12 @@ Dienstleistungen > Babysitter/-in & Kinderbetreuung: 297/290
 Dienstleistungen > Elektronik: 297/293
 
 Dienstleistungen > Haus & Garten: 297/291/sonstige
-Dienstleistungen > Haus & Garten/Bau & Handwerk: 297/291/bau_handwerk
-Dienstleistungen > Haus & Garten/Garten- & Landschaftsbau: 297/291/garten_landschaftsbau
-Dienstleistungen > Haus & Garten/Haushaltshilfe: 297/291/haushaltshilfe
-Dienstleistungen > Haus & Garten/Reinigungsservice: 297/291/reingungsservice
-Dienstleistungen > Haus & Garten/Reparaturen: 297/291/reparaturen
-Dienstleistungen > Haus & Garten/Wohnungsauflösungen: 297/291/wohnungsaufloesungen
-
+Dienstleistungen > Haus & Garten > Bau & Handwerk: 297/291/bau_handwerk
+Dienstleistungen > Haus & Garten > Garten- & Landschaftsbau: 297/291/garten_landschaftsbau
+Dienstleistungen > Haus & Garten > Haushaltshilfe: 297/291/haushaltshilfe
+Dienstleistungen > Haus & Garten > Reinigungsservice: 297/291/reingungsservice
+Dienstleistungen > Haus & Garten > Reparaturen: 297/291/reparaturen
+Dienstleistungen > Haus & Garten > Wohnungsauflösungen: 297/291/wohnungsaufloesungen
 Dienstleistungen > Künstler/-in & Musiker/-in: 297/292
 Dienstleistungen > Reise & Event: 297/294
 Dienstleistungen > Tierbetreuung & Training: 297/295
@@ -89,9 +126,9 @@ Eintrittskarten & Tickets > Theater & Musical: 231/251
 Elektronik: 161/168
 Elektronik > Audio & Hifi: 161/172/sonstiges
 Elektronik > Audio & Hifi > CD Player: 161/172/cd_player
-Elektronik > Audio & Hifi > Kopfhörer & Lautsprecher: 161/172/lautsprecher_kopfhoerer
+Elektronik > Audio & Hifi > Lautsprecher & Kopfhörer: 161/172/lautsprecher_kopfhoerer
 Elektronik > Audio & Hifi > MP3 Player: 161/172/mp3_player
-Elektronik > Audio & Hifi > Radios & Receiver: 161/172/radio_receiver
+Elektronik > Audio & Hifi > Radio & Receiver: 161/172/radio_receiver
 Elektronik > Audio & Hifi > Stereoanlagen: 161/172/stereoanlagen
 
 Elektronik > Dienstleistungen Elektronik: 161/226
@@ -100,7 +137,7 @@ Elektronik > Foto: 161/245/other
 Elektronik > Foto > Kamera: 161/245/camera
 Elektronik > Foto > Objektiv: 161/245/lens
 Elektronik > Foto > Zubehör: 161/245/equipment
-Elektronik > Foto > Kamera & Zubenhör: 161/245/camera_and_equipment
+Elektronik > Foto > Kamera & Zubehör: 161/245/camera_and_equipment
 
 Elektronik > Handy & Telefon: 161/173/sonstige
 Elektronik > Handy & Telefon > Apple: 161/173/apple
@@ -118,9 +155,9 @@ Elektronik > Handy & Telefon > Faxgeräte: 161/173/faxgeraete
 Elektronik > Handy & Telefon > Telefone: 161/173/telefone
 
 Elektronik > Haushaltsgeräte: 161/176/sonstige
-Elektronik > Haushaltsgeräte > Haushaltkleingeräte: 161/176/haushaltskleingeraete
+Elektronik > Haushaltsgeräte > Haushaltskleingeräte: 161/176/haushaltskleingeraete
 Elektronik > Haushaltsgeräte > Herde & Backöfen: 161/176/herde_backoefen
-Elektronik > Haushaltsgeräte > Kaffemaschinen & Espressomaschinen: 161/176/kaffee_espressomaschinen
+Elektronik > Haushaltsgeräte > Kaffee- & Espressomaschinen: 161/176/kaffee_espressomaschinen
 Elektronik > Haushaltsgeräte > Kühlschränke & Gefriergeräte: 161/176/kuehlschraenke_gefriergeraete
 Elektronik > Haushaltsgeräte > Spülmaschinen: 161/176/spuelmaschinen
 Elektronik > Haushaltsgeräte > Staubsauger: 161/176/staubsauger
@@ -129,7 +166,7 @@ Elektronik > Haushaltsgeräte > Waschmaschinen & Trockner: 161/176/waschmaschine
 Elektronik > Konsolen: 161/279/weitere
 Elektronik > Konsolen > Pocket Konsolen: 161/279/dsi_psp
 Elektronik > Konsolen > Playstation: 161/279/playstation
-Elektronik > Konsolen > XBox: 161/279/xbox
+Elektronik > Konsolen > Xbox: 161/279/xbox
 Elektronik > Konsolen > Wii: 161/279/wii
 
 Elektronik > Notebooks: 161/278
@@ -150,58 +187,63 @@ Elektronik > PC-Zubehör & Software > Software: 161/225/software
 Elektronik > PC-Zubehör & Software > Tastatur & Maus: 161/225/tastatur_maus
 
 Elektronik > Tablets Reader: 161/285/weitere
-Elektronik > Tablets Reader > iPad: 161/285/ipad
-Elektronik > Tablets Reader > Kindle: 161/285/kindle
-Elektronik > Tablets Reader > Samsung Tablets: 161/285/samsung_tablets
+Elektronik > Tablets & Reader > iPad: 161/285/ipad
+Elektronik > Tablets & Reader > Kindle: 161/285/kindle
+Elektronik > Tablets & Reader > Samsung Tablets: 161/285/samsung_tablets
 
 Elektronik > TV & Video: 161/175/weitere
 Elektronik > TV & Video > DVD-Player & Recorder: 161/175/dvdplayer_recorder
 Elektronik > TV & Video > Fernseher: 161/175/fernseher
-Elektronik > TV & Video > TV-Reciever: 161/175/tv_receiver
+Elektronik > TV & Video > TV-Receiver: 161/175/tv_receiver
 
 Elektronik > Videospiele: 161/227/sonstige
-Elektronik > Videospiele > DS(i) & PSP Spiele: 161/227/dsi_psp
+Elektronik > Videospiele > DS(i)- & PSP Spiele: 161/227/dsi_psp
 Elektronik > Videospiele > Nintendo Spiele: 161/227/nintendo
 Elektronik > Videospiele > PlayStation Spiele: 161/227/playstation
-Elektronik > Videospiele > XBox Spiele: 161/227/xbox
+Elektronik > Videospiele > Xbox Spiele: 161/227/xbox
 Elektronik > Videospiele > Wii Spiele: 161/227/wii
 Elektronik > Videospiele > PC Spiele: 161/227/pc_spiele
 
-Freizeit, Hobby & Nachbarschaft > Sammeln: 185/234/sonstige
-
-Mode & Beauty: 153/155
-Mode & Beauty > Beauty & Gesundheit: 153/224/sonstiges
-
-Mode & Beauty > Damenschuhe > Damenschuhe: 153/159/sonstiges
-Mode & Beauty > Damenschuhe > Ballerinas: 153/159/ballerinas
-Mode & Beauty > Damenschuhe > Halb- & Schnürschuhe: 153/159/halb_schnuerschuhe
-Mode & Beauty > Damenschuhe > Hausschuhe: 153/159/hausschuhe
-Mode & Beauty > Damenschuhe > Outdoor & Wanderschuhe: 153/159/outdoor_wanderschuhe
-Mode & Beauty > Damenschuhe > Pumps & High Heels: 153/159/pumps
-Mode & Beauty > Damenschuhe > Sandalen: 153/159/sandalen
-Mode & Beauty > Damenschuhe > Sneaker & Sportschuhe: 153/159/sneaker_sportschuhe
-Mode & Beauty > Damenschuhe > Stiefel & Stiefeletten: 153/159/stiefel
-
-Mode & Beauty > Herrenschuhe: 153/158/sonstiges
-Mode & Beauty > Halb- & Schnürschuhe: 153/158/halb_schnuerschuhe
-Mode & Beauty > Hausschuhe: 153/158/hausschuhe
-Mode & Beauty > Sandalen: 153/158/sandalen
-Mode & Beauty > Sneaker & Sportschuhe: 153/158/sneaker_sportschuhe
-Mode & Beauty > Stiefel & Stiefeletten: 153/158/stiefel
-Mode & Beauty > Outdoor & Wanderschuhe: 153/158/outdoor_wanderschuhe
-
-Mode & Beauty > Uhren & Schmuck > Schmuck: 153/157/schmuck
-Mode & Beauty > Uhren & Schmuck > Uhren: 153/157/uhren
-
 Familie, Kind & Baby: 17/18
 Familie, Kind & Baby > Altenpflege: 17/236
+
+Familie, Kind & Baby > Baby- & Kinderkleidung: 17/22/sonstiges
+Familie, Kind & Baby > Baby- & Kinderkleidung > Hosen & Jeans: 17/22/hosen_jeans
+Familie, Kind & Baby > Baby- & Kinderkleidung > Kleider & Röcke: 17/22/kleider_roecke
+Familie, Kind & Baby > Baby- & Kinderkleidung > Shirts & Tops: 17/22/shirts_tops
+Familie, Kind & Baby > Baby- & Kinderkleidung > Hemden: 17/22/hemden
+Familie, Kind & Baby > Baby- & Kinderkleidung > Jacken & Mäntel: 17/22/jacken_mantel
+Familie, Kind & Baby > Baby- & Kinderkleidung > Pullover & Strickjacken: 17/22/pullover_strickjacken
+Familie, Kind & Baby > Baby- & Kinderkleidung > Wäsche: 17/22/wasche
+Familie, Kind & Baby > Baby- & Kinderkleidung > Sportbekleidung: 17/22/sportbekleidung
+Familie, Kind & Baby > Baby- & Kinderkleidung > Bademode: 17/22/bademode
+Familie, Kind & Baby > Baby- & Kinderkleidung > Accessoires: 17/22/accessoires
+Familie, Kind & Baby > Baby- & Kinderkleidung > Kleidungspakete: 17/22/kleidungspakete
+
+Familie, Kind & Baby > Baby- & Kinderschuhe: 17/19/sonstiges
+Familie, Kind & Baby > Baby- & Kinderschuhe > Ballerinas: 17/19/ballerinas
+Familie, Kind & Baby > Baby- & Kinderschuhe > Halb- & Schnürschuhe: 17/19/halb_schnuerschuhe
+Familie, Kind & Baby > Baby- & Kinderschuhe > Hausschuhe: 17/19/hausschuhe
+Familie, Kind & Baby > Baby- & Kinderschuhe > Sandalen: 17/19/sandalen
+Familie, Kind & Baby > Baby- & Kinderschuhe > Outdoor & Wanderschuhe: 17/19/outdoor_wanderschuhe
+Familie, Kind & Baby > Baby- & Kinderschuhe > Sneaker & Sportschuhe: 17/19/sneaker_sportschuhe
+Familie, Kind & Baby > Baby- & Kinderschuhe > Stiefel & Stiefeletten: 17/19/stiefel_stiefeletten
+Familie, Kind & Baby > Baby- & Kinderschuhe > Badeschuhe: 17/19/badeschuhe
+
 Familie, Kind & Baby > Baby-Ausstattung: 17/258
 Familie, Kind & Baby > Babyschalen & Kindersitze: 17/21
 Familie, Kind & Baby > Babysitter/-in & Kinderbetreuung: 17/237
 Familie, Kind & Baby > Kinderwagen & Buggys: 17/25
 
+Familie, Kind & Baby > Kinderzimmermöbel: 17/20/sonstige
+Familie, Kind & Baby > Kinderzimmermöbel > Betten & Wiegen: 17/20/betten_wiegen
+Familie, Kind & Baby > Kinderzimmermöbel > Hochstühle & Laufställe: 17/20/hochstuehle_laufstaelle
+Familie, Kind & Baby > Kinderzimmermöbel > Schränke & Kommoden: 17/20/schraenke_kommoden
+Familie, Kind & Baby > Kinderzimmermöbel > Wickeltische & Zubehör: 17/20/wickeltische_zubehoer
+Familie, Kind & Baby > Kinderzimmermöbel > Wippen & Schaukeln: 17/20/wippen_schaukeln
+
 Familie, Kind & Baby > Spielzeug: 17/23/sonstiges
-Familie, Kind & Baby > Spielzeug > Action & Spielfiguren: 17/23/actionfiguren
+Familie, Kind & Baby > Spielzeug > Action- & Spielfiguren: 17/23/actionfiguren
 Familie, Kind & Baby > Spielzeug > Babyspielzeug: 17/23/babyspielzeug
 Familie, Kind & Baby > Spielzeug > Barbie & Co: 17/23/barbie
 Familie, Kind & Baby > Spielzeug > Dreirad & Co: 17/23/dreirad
@@ -215,20 +257,292 @@ Familie, Kind & Baby > Spielzeug > Spielzeugautos: 17/23/spielzeug_autos
 Familie, Kind & Baby > Spielzeug > Spielzeug für draußen: 17/23/spielzeug_draussen
 Familie, Kind & Baby > Spielzeug > Stofftiere: 17/23/stofftiere
 
+Freizeit, Hobby & Nachbarschaft: 185/242
+Freizeit, Hobby & Nachbarschaft > Esoterik & Spirituelles: 185/232
+Freizeit, Hobby & Nachbarschaft > Essen & Trinken: 185/248
+Freizeit, Hobby & Nachbarschaft > Freizeitaktivitäten: 185/187
+Freizeit, Hobby & Nachbarschaft > Handarbeit, Basteln & Kunsthandwerk: 185/282
+Freizeit, Hobby & Nachbarschaft > Kunst & Antiquitäten: 185/240
+Freizeit, Hobby & Nachbarschaft > Künstler/-in & Musiker/-in: 185/191
+Freizeit, Hobby & Nachbarschaft > Modellbau: 185/249
+Freizeit, Hobby & Nachbarschaft > Reise & Eventservices: 185/233
+
+Freizeit, Hobby & Nachbarschaft > Sammeln: 185/234/sonstige
+Freizeit, Hobby & Nachbarschaft > Sammeln > Ansichts- & Postkarten: 185/234/ansichts_postkarten
+Freizeit, Hobby & Nachbarschaft > Sammeln > Autogramme: 185/234/autogramme
+Freizeit, Hobby & Nachbarschaft > Sammeln > Bierkrüge & -gläser: 185/234/bierkruege_glaeser
+Freizeit, Hobby & Nachbarschaft > Sammeln > Briefmarken: 185/234/briefmarken
+Freizeit, Hobby & Nachbarschaft > Sammeln > Comics: 185/234/comics
+Freizeit, Hobby & Nachbarschaft > Sammeln > Flaggen: 185/234/flaggen
+Freizeit, Hobby & Nachbarschaft > Sammeln > Münzen: 185/234/muenzen
+Freizeit, Hobby & Nachbarschaft > Sammeln > Porzellan: 185/234/porzellan
+Freizeit, Hobby & Nachbarschaft > Sammeln > Puppen & Puppenzubehör: 185/234/puppen_puppenzubehoer
+Freizeit, Hobby & Nachbarschaft > Sammeln > Sammelbilder & Sticker: 185/234/sammelbilder_sticker
+Freizeit, Hobby & Nachbarschaft > Sammeln > Sammelkartenspiele: 185/234/sammelkartenspiele
+Freizeit, Hobby & Nachbarschaft > Sammeln > Überraschungseier: 185/234/ueberraschungseier
+Freizeit, Hobby & Nachbarschaft > Sammeln > Werbeartikel: 185/234/werbeartikel
+
+Freizeit, Hobby & Nachbarschaft > Sport & Camping: 185/230/sonstige
+Freizeit, Hobby & Nachbarschaft > Sport & Camping > Ballsport: 185/230/ballsport
+Freizeit, Hobby & Nachbarschaft > Sport & Camping > Camping & Outdoor: 185/230/camping
+Freizeit, Hobby & Nachbarschaft > Sport & Camping > Fitness: 185/230/fitness
+Freizeit, Hobby & Nachbarschaft > Sport & Camping > Radsport: 185/230/radsport
+Freizeit, Hobby & Nachbarschaft > Sport & Camping > Tanzen & Laufen: 185/230/tanzen_laufen
+Freizeit, Hobby & Nachbarschaft > Sport & Camping > Wassersport: 185/230/wassersport
+Freizeit, Hobby & Nachbarschaft > Sport & Camping > Wintersport: 185/230/wintersport
+
+Freizeit, Hobby & Nachbarschaft > Trödel: 185/250
+Freizeit, Hobby & Nachbarschaft > Verloren & Gefunden: 185/189
+
 Haus & Garten: 80/87
 Haus & Garten > Badezimmer: 80/91
 Haus & Garten > Büro: 80/93
+
+Haus & Garten > Dekoration: 80/246/weitere
+Haus & Garten > Dekoration > Bilder & Poster: 80/246/bilder_poster
+Haus & Garten > Dekoration > Kerzen & Kerzenhalter: 80/246/kerzen_kerzenhalter
+Haus & Garten > Dekoration > Spiegel: 80/246/spiegel
+Haus & Garten > Dekoration > Vasen: 80/246/vasen
+
+Haus & Garten > Dienstleistungen Haus & Garten: 80/239/sonstige
+Haus & Garten > Dienstleistungen Haus & Garten > Bau & Handwerk: 80/239/bau_handwerk
+Haus & Garten > Dienstleistungen Haus & Garten > Garten- & Landschaftsbau: 80/239/garten_landschaftsbau
+Haus & Garten > Dienstleistungen Haus & Garten > Haushaltshilfe: 80/239/haushaltshilfe
+Haus & Garten > Dienstleistungen Haus & Garten > Reinigungsservice: 80/239/reingungsservice
+Haus & Garten > Dienstleistungen Haus & Garten > Reparaturen: 80/239/reparaturen
+Haus & Garten > Dienstleistungen Haus & Garten > Wohnungsauflösungen: 80/239/wohnungsaufloesungen
+
+Haus & Garten > Gartenzubehör & Pflanzen: 80/89/sonstige
+Haus & Garten > Gartenzubehör & Pflanzen > Blumentöpfe: 80/89/blumentoepfe
+Haus & Garten > Gartenzubehör & Pflanzen > Dekoration: 80/89/dekoration
+Haus & Garten > Gartenzubehör & Pflanzen > Gartengeräte: 80/89/gartengeraete
+Haus & Garten > Gartenzubehör & Pflanzen > Gartenmöbel: 80/89/gartenmoebel
+Haus & Garten > Gartenzubehör & Pflanzen > Pflanzen: 80/89/pflanzen
+
 Haus & Garten > Heimtextilien: 80/90
 Haus & Garten > Heimwerken: 80/84
+
+Haus & Garten > Küche & Esszimmer: 80/86/sonstige
+Haus & Garten > Küche & Esszimmer > Besteck: 80/86/besteck
+Haus & Garten > Küche & Esszimmer > Geschirr: 80/86/geschirr
+Haus & Garten > Küche & Esszimmer > Gläser: 80/86/glaeser
+Haus & Garten > Küche & Esszimmer > Kleingeräte: 80/86/kuechengeraete
+Haus & Garten > Küche & Esszimmer > Küchenschränke: 80/86/kuechenschraenke
+Haus & Garten > Küche & Esszimmer > Stühle: 80/86/stuehle
+Haus & Garten > Küche & Esszimmer > Tische: 80/86/tische
+
 Haus & Garten > Lampen & Licht: 80/82
+
+Haus & Garten > Schlafzimmer: 80/81/sonstiges
+Haus & Garten > Schlafzimmer > Betten: 80/81/betten
+Haus & Garten > Schlafzimmer > Lattenroste: 80/81/lattenroste
+Haus & Garten > Schlafzimmer > Matratzen: 80/81/matratzen
+Haus & Garten > Schlafzimmer > Nachttische: 80/81/nachttische
+Haus & Garten > Schlafzimmer > Schränke: 80/81/schraenke
 
 Haus & Garten > Wohnzimmer: 80/88/sonstiges
 Haus & Garten > Wohnzimmer > Regale: 80/88/regale
-Haus & Garten > Wohnzimmer > Schränke & Schankwände: 80/88/schraenke
+Haus & Garten > Wohnzimmer > Schränke & Schrankwände: 80/88/schraenke
 Haus & Garten > Wohnzimmer > Sitzmöbel: 80/88/sitzmoebel
 Haus & Garten > Wohnzimmer > Sofas & Sitzgarnituren: 80/88/sofas_sitzgarnituren
 Haus & Garten > Wohnzimmer > Tische: 80/88/tische
 Haus & Garten > Wohnzimmer > TV & Phonomöbel: 80/88/tv_moebel
+
+Haustiere > Fische: 130/138/sonstige
+Haustiere > Fische > Aquariumfische: 130/138/aquarium
+Haustiere > Fische > Barsche: 130/138/barsche
+Haustiere > Fische > Diskusfische: 130/138/diskusfische
+Haustiere > Fische > Garnelen & Krebse: 130/138/garnelen_krebse
+Haustiere > Fische > Koi: 130/138/koi
+Haustiere > Fische > Schnecken: 130/138/schnecken
+Haustiere > Fische > Wasserpflanzen: 130/138/wasserpflanzen
+Haustiere > Fische > Welse: 130/138/welse
+
+Haustiere > Hunde: 130/134/sonstige
+Haustiere > Hunde > Mischlinge: 130/134/mischlinge
+Haustiere > Hunde > Beagle: 130/134/beagle
+Haustiere > Hunde > Bernhardiner: 130/134/bernhardiner
+Haustiere > Hunde > Border Collie: 130/134/border_collie
+Haustiere > Hunde > Boxer: 130/134/boxer
+Haustiere > Hunde > Cocker Spaniel: 130/134/cocker_spaniel
+Haustiere > Hunde > Collie: 130/134/collie
+Haustiere > Hunde > Dackel: 130/134/dackel
+Haustiere > Hunde > Dalmatiner: 130/134/dalmatiner
+Haustiere > Hunde > Dobermann: 130/134/dobermann
+Haustiere > Hunde > Dogge: 130/134/dogge
+Haustiere > Hunde > Golden Retriever: 130/134/goldenretriever
+Haustiere > Hunde > Husky: 130/134/husky
+Haustiere > Hunde > Jack Russell Terrier: 130/134/jack_russel_terrier
+Haustiere > Hunde > Labrador: 130/134/labrador
+Haustiere > Hunde > Malteser: 130/134/malteser
+Haustiere > Hunde > Pudel: 130/134/pudel
+Haustiere > Hunde > Schäferhunde: 130/134/schaeferhund
+Haustiere > Hunde > Spitz: 130/134/spitz
+Haustiere > Hunde > Terrier: 130/134/terrier
+
+Haustiere > Katzen: 130/136/sonstige
+Haustiere > Katzen > Britisch Kurzhaar: 130/136/britisch_kurzhaar
+Haustiere > Katzen > Hauskatze: 130/136/hauskatze
+Haustiere > Katzen > Maine Coon: 130/136/maine_coon
+Haustiere > Katzen > Siam: 130/136/siam
+
+Haustiere > Kleintiere: 130/132/sonstige
+Haustiere > Kleintiere > Hamster: 130/132/hamster
+Haustiere > Kleintiere > Hasen & Kaninchen: 130/132/hasen_kaninchen
+Haustiere > Kleintiere > Mäuse & Ratten: 130/132/maeuse_ratten
+Haustiere > Kleintiere > Meerschweinchen: 130/132/meerschweinchen
+
+Haustiere > Nutztiere: 130/135
+Haustiere > Pferde > Großpferde: 130/139/grosspferde
+Haustiere > Pferde > Kleinpferde & Ponys: 130/139/kleinpferde_ponys
+Haustiere > Tierbetreuung & Training: 130/133
+Haustiere > Vermisste Tiere > Entlaufen: 130/283/entlaufen
+Haustiere > Vermisste Tiere > Gefunden: 130/283/gefunden
+Haustiere > Vögel: 130/243
+
+Haustiere > Zubehör: 130/313/sonstiges
+Haustiere > Zubehör > Fische: 130/313/fische
+Haustiere > Zubehör > Hunde: 130/313/hunde
+Haustiere > Zubehör > Katzen: 130/313/katzen
+Haustiere > Zubehör > Kleintiere: 130/313/kleintiere
+Haustiere > Zubehör > Pferde: 130/313/pferde
+Haustiere > Zubehör > Reptilien: 130/313/reptilien
+Haustiere > Zubehör > Vögel: 130/313/voegel
+
+Immobilien: 195/198
+Immobilien > Auf Zeit & WG > Gesamte Unterkunft: 195/199/entire_accommodation
+Immobilien > Auf Zeit & WG > Privatzimmer: 195/199/private_room
+Immobilien > Auf Zeit & WG > Gemeinsames Zimmer: 195/199/shared_room
+Immobilien > Eigentumswohnungen: 195/196
+Immobilien > Ferien- & Auslandsimmobilien > Kaufen: 195/275/kaufen
+Immobilien > Ferien- & Auslandsimmobilien > Mieten: 195/275/mieten
+Immobilien > Garagen & Stellplätze > Kaufen: 195/197/kaufen
+Immobilien > Garagen & Stellplätze > Mieten: 195/197/mieten
+Immobilien > Gewerbeimmobilien > Kaufen: 195/277/kaufen
+Immobilien > Gewerbeimmobilien > Mieten: 195/277/mieten
+Immobilien > Grundstücke & Gärten: 195/207/andere
+Immobilien > Grundstücke & Gärten > Baugrundstück: 195/207/baugrundstueck
+Immobilien > Grundstücke & Gärten > Garten: 195/207/garten
+Immobilien > Grundstücke & Gärten > Land-/Forstwirtschaft: 195/207/land_forstwirtschaft
+Immobilien > Häuser zum Kauf: 195/208
+Immobilien > Häuser zur Miete: 195/205
+Immobilien > Mietwohnungen: 195/203
+Immobilien > Umzug & Transport: 195/238
+
+Jobs > Ausbildung: 102/118
+Jobs > Bau, Handwerk & Produktion: 102/111/weitere
+Jobs > Bau, Handwerk & Produktion > Bauhelfer/-in: 102/111/bauhelfer
+Jobs > Bau, Handwerk & Produktion > Dachdecker/-in: 102/111/dachdecker
+Jobs > Bau, Handwerk & Produktion > Elektriker/-in: 102/111/elektriker
+Jobs > Bau, Handwerk & Produktion > Fliesenleger/-in: 102/111/fliesenleger
+Jobs > Bau, Handwerk & Produktion > Maler/-in: 102/111/maler
+Jobs > Bau, Handwerk & Produktion > Maurer/-in: 102/111/maurer
+Jobs > Bau, Handwerk & Produktion > Produktionshelfer/-in: 102/111/produktionshelfer
+Jobs > Bau, Handwerk & Produktion > Schlosser/-in: 102/111/schlosser
+Jobs > Bau, Handwerk & Produktion > Tischler/-in: 102/111/tischler
+Jobs > Büroarbeit & Verwaltung: 102/114/weitere
+Jobs > Büroarbeit & Verwaltung > Buchhalter/-in: 102/114/buchhalter
+Jobs > Büroarbeit & Verwaltung > Bürokaufmann/-frau: 102/114/buerokauf
+Jobs > Büroarbeit & Verwaltung > Sachbearbeiter/-in: 102/114/sachbearbeiter
+Jobs > Büroarbeit & Verwaltung > Sekretär/-in: 102/114/sekretaer
+Jobs > Gastronomie & Tourismus: 102/110/weitere
+Jobs > Gastronomie & Tourismus > Barkeeper/-in: 102/110/barkeeper
+Jobs > Gastronomie & Tourismus > Hotelfachmann/-frau: 102/110/hotelfach
+Jobs > Gastronomie & Tourismus > Housekeeping: 102/110/zimmermaedchen
+Jobs > Gastronomie & Tourismus > Kellner/-in: 102/110/kellner
+Jobs > Gastronomie & Tourismus > Koch/Köchin: 102/110/koch
+Jobs > Gastronomie & Tourismus > Küchenhilfe: 102/110/kuechenhilfe
+Jobs > Gastronomie & Tourismus > Servicekraft: 102/110/servicekraft
+Jobs > Kundenservice & Call Center: 102/105
+Jobs > Mini- & Nebenjobs: 102/107
+Jobs > Praktika: 102/125
+Jobs > Sozialer Sektor & Pflege: 102/123/weitere
+Jobs > Sozialer Sektor & Pflege > Altenpfleger/-in: 102/123/altenpfleger
+Jobs > Sozialer Sektor & Pflege > Arzthelfer/-in: 102/123/artzhelfer
+Jobs > Sozialer Sektor & Pflege > Erzieher/-in: 102/123/erzieher
+Jobs > Sozialer Sektor & Pflege > Krankenpfleger/-in: 102/123/krankenschwester
+Jobs > Sozialer Sektor & Pflege > Physiotherapeut/-in: 102/123/physiotherapeut
+Jobs > Transport, Logistik & Verkehr: 102/247/weitere
+Jobs > Transport, Logistik & Verkehr > Kraftfahrer/-in: 102/247/kraftfahrer
+Jobs > Transport, Logistik & Verkehr > Kurierfahrer/-in: 102/247/kurierfahrer
+Jobs > Transport, Logistik & Verkehr > Lagerhelfer/-in: 102/247/lagerhelfer
+Jobs > Transport, Logistik & Verkehr > Staplerfahrer/-in: 102/247/staplerfahrer
+Jobs > Vertrieb, Einkauf & Verkauf: 102/117/weitere
+Jobs > Vertrieb, Einkauf & Verkauf > Buchhalter/-in: 102/117/buchhalter
+Jobs > Vertrieb, Einkauf & Verkauf > Immobilienmakler/-in: 102/117/immobilienmakler
+Jobs > Vertrieb, Einkauf & Verkauf > Kaufmann/-frau: 102/117/kauffrau
+Jobs > Vertrieb, Einkauf & Verkauf > Verkäufer/-in: 102/117/verkaeufer
+Jobs > Weitere Jobs: 102/109/weitere
+Jobs > Weitere Jobs > Designer/-in & Grafiker/-in: 102/109/designer_grafiker
+Jobs > Weitere Jobs > Friseur/-in: 102/109/friseur
+Jobs > Weitere Jobs > Haushaltshilfe: 102/109/haushaltshilfe
+Jobs > Weitere Jobs > Hausmeister/-in: 102/109/hausmeister
+Jobs > Weitere Jobs > Reinigungskraft: 102/109/reinigungskraft
+
+Mode & Beauty: 153/155
+
+Mode & Beauty > Beauty & Gesundheit: 153/224/sonstiges
+Mode & Beauty > Beauty & Gesundheit > Make-Up & Gesichtspflege: 153/224/make_up
+Mode & Beauty > Beauty & Gesundheit > Haarpflege: 153/224/haarpflege
+Mode & Beauty > Beauty & Gesundheit > Körperpflege: 153/224/koerperpflege
+Mode & Beauty > Beauty & Gesundheit > Hand- & Nagelpflege: 153/224/handpflege
+Mode & Beauty > Beauty & Gesundheit > Gesundheit: 153/224/gesundheit
+
+Mode & Beauty > Damenbekleidung: 153/154/sonstige
+Mode & Beauty > Damenbekleidung > Anzüge: 153/154/anzuege
+Mode & Beauty > Damenbekleidung > Bademode: 153/154/bademode
+Mode & Beauty > Damenbekleidung > Hemden & Blusen: 153/154/hemden_blusen
+Mode & Beauty > Damenbekleidung > Hochzeitsmode: 153/154/hochzeitsmode
+Mode & Beauty > Damenbekleidung > Hosen: 153/154/hosen
+Mode & Beauty > Damenbekleidung > Jacken & Mäntel: 153/154/jacken_maentel
+Mode & Beauty > Damenbekleidung > Jeans: 153/154/jeans
+Mode & Beauty > Damenbekleidung > Kostüme & Verkleidungen: 153/154/kostueme_verkleidungen
+Mode & Beauty > Damenbekleidung > Pullover: 153/154/pullover
+Mode & Beauty > Damenbekleidung > Röcke & Kleider: 153/154/roecke_kleider
+Mode & Beauty > Damenbekleidung > Shirts & Tops: 153/154/shirts_tops
+Mode & Beauty > Damenbekleidung > Shorts: 153/154/shorts
+Mode & Beauty > Damenbekleidung > Sportbekleidung: 153/154/sportbekleidung
+Mode & Beauty > Damenbekleidung > Umstandsmode: 153/154/umstandsmode
+
+Mode & Beauty > Damenschuhe: 153/159/sonstiges
+Mode & Beauty > Damenschuhe > Ballerinas: 153/159/ballerinas
+Mode & Beauty > Damenschuhe > Halb- & Schnürschuhe: 153/159/halb_schnuerschuhe
+Mode & Beauty > Damenschuhe > Hausschuhe: 153/159/hausschuhe
+Mode & Beauty > Damenschuhe > Outdoor & Wanderschuhe: 153/159/outdoor_wanderschuhe
+Mode & Beauty > Damenschuhe > Pumps & High Heels: 153/159/pumps
+Mode & Beauty > Damenschuhe > Sandalen: 153/159/sandalen
+Mode & Beauty > Damenschuhe > Sneaker & Sportschuhe: 153/159/sneaker_sportschuhe
+Mode & Beauty > Damenschuhe > Stiefel & Stiefeletten: 153/159/stiefel
+
+Mode & Beauty > Herrenbekleidung: 153/160/sonstige
+Mode & Beauty > Herrenbekleidung > Anzüge: 153/160/anzuege
+Mode & Beauty > Herrenbekleidung > Bademode: 153/160/bademode
+Mode & Beauty > Herrenbekleidung > Hemden: 153/160/hemden
+Mode & Beauty > Herrenbekleidung > Hochzeitsmode: 153/160/hochzeitsmode
+Mode & Beauty > Herrenbekleidung > Hosen: 153/160/hosen
+Mode & Beauty > Herrenbekleidung > Jacken & Mäntel: 153/160/jacken_maentel
+Mode & Beauty > Herrenbekleidung > Jeans: 153/160/jeans
+Mode & Beauty > Herrenbekleidung > Kostüme & Verkleidungen: 153/160/kostueme_verkleidungen
+Mode & Beauty > Herrenbekleidung > Pullover: 153/160/pullover
+Mode & Beauty > Herrenbekleidung > Shirts: 153/160/shirts
+Mode & Beauty > Herrenbekleidung > Shorts: 153/160/shorts
+Mode & Beauty > Herrenbekleidung > Sportbekleidung: 153/160/sportbekleidung
+
+Mode & Beauty > Herrenschuhe: 153/158/sonstiges
+Mode & Beauty > Herrenschuhe > Halb- & Schnürschuhe: 153/158/halb_schnuerschuhe
+Mode & Beauty > Herrenschuhe > Hausschuhe: 153/158/hausschuhe
+Mode & Beauty > Herrenschuhe > Sandalen: 153/158/sandalen
+Mode & Beauty > Herrenschuhe > Sneaker & Sportschuhe: 153/158/sneaker_sportschuhe
+Mode & Beauty > Herrenschuhe > Stiefel & Stiefeletten: 153/158/stiefel
+Mode & Beauty > Herrenschuhe > Outdoor & Wanderschuhe: 153/158/outdoor_wanderschuhe
+
+Mode & Beauty > Taschen & Accessoires: 153/156/sonstiges
+Mode & Beauty > Taschen & Accessoires > Mützen, Schals & Handschuhe: 153/156/muetzen_schals_handschuhe
+Mode & Beauty > Taschen & Accessoires > Sonnenbrillen: 153/156/sonnenbrillen
+Mode & Beauty > Taschen & Accessoires > Taschen & Rucksäcke: 153/156/taschen_rucksaecke
+
+Mode & Beauty > Uhren & Schmuck > Schmuck: 153/157/schmuck
+Mode & Beauty > Uhren & Schmuck > Uhren: 153/157/uhren
 
 Musik, Filme & Bücher: 73/75
 Musik, Filme & Bücher > Bücher & Zeitschriften: 73/76
