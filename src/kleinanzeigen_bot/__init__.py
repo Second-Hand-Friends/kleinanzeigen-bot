@@ -362,6 +362,8 @@ class KleinanzeigenBot(WebScrapingMixin):
         self.config = apply_defaults(config, config_defaults)
 
         self.categories = utils.load_dict_from_module(resources, "categories.yaml", "categories")
+        deprecated_categories = utils.load_dict_from_module(resources, "categories_old.yaml", "categories")
+        self.categories.update(deprecated_categories)
         if self.config["categories"]:
             self.categories.update(self.config["categories"])
         LOG.info(" -> found %s", pluralize("category", self.categories))
