@@ -224,7 +224,7 @@ Valid file extensions are `.json`, `.yaml` and `.yml`
 The following parameters can be configured:
 
 ```yaml
-# wild card patterns to select ad configuration files
+# glob (wildcard) patterns to select ad configuration files
 # if relative paths are specified, then they are relative to this configuration file
 ad_files:
   - "./**/ad_*.{json,yml,yaml}"
@@ -253,6 +253,11 @@ categories:
   Verschenken & Tauschen > Tauschen: 272/273
   Verschenken & Tauschen > Verleihen: 272/274
   Verschenken & Tauschen > Verschenken: 272/192
+
+# publishing configuration
+publishing:
+  delete_old_ads: "AFTER_PUBLISH" # one of: AFTER_PUBLISH, BEFORE_PUBLISH, NEVER
+  delete_old_ads_by_title: true # only works if delete_old_ads is set to BEFORE_PUBLISH
 
 # browser configuration
 browser:
