@@ -456,14 +456,14 @@ class KleinanzeigenBot(WebScrapingMixin):
         for (ad_file, ad_cfg, _) in ad_cfgs:
             count += 1
             LOG.info("Processing %s/%s: '%s' from [%s]...", count, len(ad_cfgs), ad_cfg["title"], ad_file)
-            await self.delete_ad(ad_cfg)
+            await self.delete_ad(ad_cfg, self.config["publishing"]["delete_old_ads_by_title"])
             await self.web_sleep()
 
         LOG.info("############################################")
         LOG.info("DONE: Deleting %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    async def delete_ad(self, ad_cfg: dict[str, Any]) -> bool:
+    async def delete_ad(self, ad_cfg: dict[str, Any], delete_old_ads_by_title: bool) -> bool:
         LOG.info("Deleting ad '%s' if already present...", ad_cfg["title"])
 
         await self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
@@ -472,7 +472,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         if csrf_token is None:
             raise AssertionError("Expected CSRF Token not found in HTML content!")
 
-        if self.config["publishing"]["delete_old_ads_by_title"]:
+        if delete_old_ads_by_title:
             published_ads = json.loads((await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
 
             for published_ad in published_ads:
@@ -518,7 +518,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         await self.assert_free_ad_limit_not_reached()
 
         if self.config["publishing"]["delete_old_ads"] == "BEFORE_PUBLISH" and not self.keep_old_ads:
-            await self.delete_ad(ad_cfg)
+            await self.delete_ad(ad_cfg, self.config["publishing"]["delete_old_ads_by_title"])
 
         LOG.info("Publishing ad '%s'...", ad_cfg["title"])
 
@@ -688,7 +688,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         utils.save_dict(ad_file, ad_cfg_orig)
 
         if self.config["publishing"]["delete_old_ads"] == "AFTER_PUBLISH" and not self.keep_old_ads:
-            await self.delete_ad(ad_cfg)
+            await self.delete_ad(ad_cfg, False)
 
     async def __set_condition(self, condition_value: str) -> None:
         condition_mapping = {
