@@ -555,7 +555,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         elif ad_cfg["shipping_type"] == "PICKUP":
             try:
                 await self.web_click(By.XPATH,
-                    '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/input[@type="radio"]')
+                    '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/../input[@type="radio"]')
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg["shipping_options"]:
