@@ -539,7 +539,12 @@ class KleinanzeigenBot(WebScrapingMixin):
         #############################
         # set category
         #############################
-        await self.__set_category(ad_file, ad_cfg)
+        await self.__set_category(ad_cfg['category'], ad_file)
+
+        #############################
+        # set special attributes
+        #############################
+        await self.__set_special_attributes(ad_cfg)
 
         #############################
         # set shipping type/options/costs
@@ -719,7 +724,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         except TimeoutError as ex:
             raise TimeoutError("Unable to close condition dialog") from ex
 
-    async def __set_category(self, ad_file:str, ad_cfg: dict[str, Any]) -> None:
+    async def __set_category(self, category: str | None, ad_file:str) -> None:
         # click on something to trigger automatic category detection
         await self.web_click(By.ID, "pstad-descrptn")
 
@@ -730,17 +735,18 @@ class KleinanzeigenBot(WebScrapingMixin):
         except TimeoutError:
             pass
 
-        if ad_cfg["category"]:
+        if category:
             await self.web_sleep()  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
             await self.web_click(By.ID, "pstad-lnk-chngeCtgry")
             await self.web_find(By.ID, "postad-step1-sbmt")
 
-            category_url = f"{self.root_url}/p-kategorie-aendern.html#?path={ad_cfg['category']}"
+            category_url = f"{self.root_url}/p-kategorie-aendern.html#?path={category}"
             await self.web_open(category_url)
             await self.web_click(By.XPATH, "//*[@id='postad-step1-sbmt']/button")
         else:
             ensure(is_category_auto_selected, f"No category specified in [{ad_file}] and automatic category detection failed")
 
+    async def __set_special_attributes(self, ad_cfg: dict[str, Any]) -> None:
         if ad_cfg["special_attributes"]:
             LOG.debug('Found %i special attributes', len(ad_cfg["special_attributes"]))
             for special_attribute_key, special_attribute_value in ad_cfg["special_attributes"].items():
