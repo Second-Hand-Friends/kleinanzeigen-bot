@@ -236,6 +236,10 @@ class AdExtractor(WebScrapingMixin):
             .removeprefix((self.config["ad_defaults"]["description"]["prefix"] or "").strip()) \
             .removesuffix((self.config["ad_defaults"]["description"]["suffix"] or "").strip())
         info['special_attributes'] = await self._extract_special_attributes_from_ad_page()
+        if "art_s" in info['special_attributes']:
+            # change e.g. category "161/172" to "161/172/lautsprecher_kopfhoerer"
+            info['category'] = f"{info['category']}/{info['special_attributes']['art_s']}"
+            del info['special_attributes']['art_s']
         info['price'], info['price_type'] = await self._extract_pricing_info_from_ad_page()
         info['shipping_type'], info['shipping_costs'], info['shipping_options'] = await self._extract_shipping_info_from_ad_page()
         info['sell_directly'] = await self._extract_sell_directly_from_ad_page()
@@ -282,7 +286,10 @@ class AdExtractor(WebScrapingMixin):
         :return: a dictionary (possibly empty) where the keys are the attribute names, mapped to their values
         """
         belen_conf = await self.web_execute("window.BelenConf")
+
+        # e.g. "art_s:lautsprecher_kopfhoerer|condition_s:like_new|versand_s:t"
         special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"]["dimension108"]
+
         special_attributes = dict(item.split(":") for item in special_attributes_str.split("|") if ":" in item)
         special_attributes = {k: v for k, v in special_attributes.items() if not k.endswith('.versand_s') and k != "versand_s"}
         return special_attributes
