@@ -506,6 +506,9 @@ class KleinanzeigenBot(WebScrapingMixin):
             await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig)
             await self.web_await(lambda: self.web_check(By.ID, "checking-done", Is.DISPLAYED), timeout = 5 * 60)
 
+            if self.config["publishing"]["delete_old_ads"] == "AFTER_PUBLISH" and not self.keep_old_ads:
+                await self.delete_ad(ad_cfg, False)
+
         LOG.info("############################################")
         LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
         LOG.info("############################################")
@@ -564,7 +567,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg["shipping_options"]:
-            await self.web_click(By.CSS_SELECTOR, '[class*="jsx-2623555103"]')
+            await self.web_click(By.CSS_SELECTOR, '[class*="jsx-963945432"]')
             await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
             await self.__set_shipping_options(ad_cfg)
         else:
@@ -691,9 +694,6 @@ class KleinanzeigenBot(WebScrapingMixin):
         LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
 
         utils.save_dict(ad_file, ad_cfg_orig)
-
-        if self.config["publishing"]["delete_old_ads"] == "AFTER_PUBLISH" and not self.keep_old_ads:
-            await self.delete_ad(ad_cfg, False)
 
     async def __set_condition(self, condition_value: str) -> None:
         condition_mapping = {
