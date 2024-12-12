@@ -6,7 +6,12 @@ labels: ["bug"]
 body:
   - type: markdown
     attributes:
-      value: Thanks for taking the time to fill out this bug report!
+      value: |
+        Thank you for taking the time to submit a bug report!
+
+        This project is run by volunteers, and we depend on users like you to improve it.
+
+        Please try to investigate the issue yourself, and if possible submit a pull request with a fix.
 
   - type: textarea
     id: expected-behaviour
