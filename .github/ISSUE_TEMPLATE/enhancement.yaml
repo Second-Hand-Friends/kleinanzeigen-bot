@@ -6,7 +6,12 @@ labels: [enhancement]
 body:
   - type: markdown
     attributes:
-      value: Thanks for taking the time to fill out this enhancement request!
+      value: |
+        Thanks for taking the time to fill out this enhancement request!
+
+        This project is run by volunteers, and we depend on users like you to improve it.
+
+        Please consider implementing the enhancement yourself and submitting a pull request with your changes.
 
   - type: textarea
     id: problem
