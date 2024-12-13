@@ -444,7 +444,7 @@ class KleinanzeigenBot(WebScrapingMixin):
     async def is_logged_in(self) -> bool:
         try:
             user_info = await self.web_text(By.ID, "user-email")
-            if self.config['login']['username'] in user_info:
+            if self.config['login']['username'].lower() in user_info.lower():
                 return True
         except TimeoutError:
             return False
