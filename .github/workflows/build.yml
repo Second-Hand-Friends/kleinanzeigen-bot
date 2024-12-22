@@ -83,7 +83,7 @@ jobs:
       run: echo $GITHUB_CONTEXT
 
 
-    - name: Show environment variables
+    - name: "Show: environment variables"
       run: env | sort
 
 
@@ -91,7 +91,7 @@ jobs:
       uses: vegardit/fast-apt-mirror.sh@v1
 
 
-    - name: Git checkout
+    - name: Git Checkout
       uses: actions/checkout@v4  # https://github.com/actions/checkout
 
 

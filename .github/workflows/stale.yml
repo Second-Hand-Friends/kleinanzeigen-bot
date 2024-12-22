@@ -3,7 +3,7 @@ name: Stale issues
 
 on:
   schedule:
-    - cron: '0 16 * * 1'
+    - cron: '0 15 1,15 * *'
   workflow_dispatch:
     # https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/
 
@@ -22,7 +22,6 @@ jobs:
     - name: Run stale action
       uses: actions/stale@v9  # https://github.com/actions/stale
       with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
         days-before-stale: 90
         days-before-close: 14
         stale-issue-message: >
@@ -40,7 +39,6 @@ jobs:
     - name: Run stale action (for enhancements)
       uses: actions/stale@v9  # https://github.com/actions/stale
       with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
         days-before-stale: 360
         days-before-close: 14
         stale-issue-message: >
