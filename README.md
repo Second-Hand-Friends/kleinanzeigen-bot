@@ -15,6 +15,7 @@
    1. [Ad configuration](#ad-config)
    1. [Using an existing browser window](#existing-browser)
 1. [Development Notes](#development)
+1. [Related Open-Source Projects](#related)
 1. [License](#license)
 
 
@@ -386,6 +387,17 @@ By default a new browser process will be launched. To reuse a manually launched 
           |-> executes main() function of 'kleinanzeigen_bot/__init__.py'
               |-> executes KleinanzeigenBot().run()
   ````
+
+
+## <a name="related"></a>Related Open-Source projects
+
+- [DanielWTE/ebay-kleinanzeigen-api](https://github.com/DanielWTE/ebay-kleinanzeigen-api) (Python) API interface to get random listings from kleinanzeigen.de
+- [f-rolf/ebaykleinanzeiger](https://github.com/f-rolf/ebaykleinanzeiger) (Python) Discord bot that watches search results
+- [r-unruh/kleinanzeigen-filter](https://github.com/r-unruh/kleinanzeigen-filter) (JavaScript) Chrome extension that filters out unwanted results from searches on kleinanzeigen.de
+- [simonsagstetter/Feinanzeigen](https://github.com/simonsagstetter/feinanzeigen) (JavaScript) Chrome extension that improves search on kleinanzeigen.de
+- [Superschnizel/Kleinanzeigen-Telegram-Bot](https://github.com/Superschnizel/Kleinanzeigen-Telegram-Bot) (Python) Telegram bot to scrape kleinanzeigen.de
+- [tillvogt/KleinanzeigenScraper](https://github.com/tillvogt/KleinanzeigenScraper) (Python) Webscraper which stores scraped info from kleinanzeigen.de in an SQL database
+- [TLINDEN/Kleingebäck](https://github.com/TLINDEN/kleingebaeck) (Go) kleinanzeigen.de Backup
 
 
 ## <a name="license"></a>License
