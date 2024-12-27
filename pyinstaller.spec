@@ -18,7 +18,6 @@ datas = [
 
 excluded_modules = [
     "_aix_support",
-    "_pydecimal",
     "argparse",
     "bz2",
     "ftplib",
