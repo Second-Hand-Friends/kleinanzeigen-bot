@@ -207,6 +207,7 @@ Options:
   --keep-old        - don't delete old ads on republication
   --config=<PATH>   - path to the config YAML or JSON file (DEFAULT: ./config.yaml)
   --logfile=<PATH>  - path to the logfile (DEFAULT: ./kleinanzeigen-bot.log)
+  --lang=en|de      - display language (STANDARD: system language if supported, otherwise English)
   -v, --verbose     - enables verbose output - only useful when troubleshooting issues
 ```
 
