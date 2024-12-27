@@ -11,7 +11,7 @@ from gettext import gettext as _
 from types import FrameType, ModuleType, TracebackType
 from typing import Any, Final, TypeVar
 
-import coloredlogs
+import colorama
 from ruamel.yaml import YAML
 from .i18n import get_translating_logger
 
@@ -154,17 +154,53 @@ def safe_get(a_map:dict[Any, Any], *keys:str) -> Any:
 
 def configure_console_logging() -> None:
 
-    class LevelTranslatingFormatter(coloredlogs.ColoredFormatter):  # type: ignore
+    class CustomFormatter(logging.Formatter):
+        LEVEL_COLORS = {
+            logging.DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
+            logging.INFO: colorama.Fore.BLACK + colorama.Style.BRIGHT,
+            logging.WARNING: colorama.Fore.YELLOW,
+            logging.ERROR: colorama.Fore.RED,
+            logging.CRITICAL: colorama.Fore.RED,
+        }
+        MESSAGE_COLORS = {
+            logging.DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
+            logging.INFO: colorama.Fore.RESET,
+            logging.WARNING: colorama.Fore.YELLOW,
+            logging.ERROR: colorama.Fore.RED,
+            logging.CRITICAL: colorama.Fore.RED + colorama.Style.BRIGHT,
+        }
+        VALUE_COLORS = {
+            logging.DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
+            logging.INFO: colorama.Fore.MAGENTA,
+            logging.WARNING: colorama.Fore.MAGENTA,
+            logging.ERROR: colorama.Fore.MAGENTA,
+            logging.CRITICAL: colorama.Fore.MAGENTA,
+        }
 
         def format(self, record:logging.LogRecord) -> str:
-            msg:str = super().format(record)
-            if record.levelno > logging.DEBUG:
-                levelname = _(record.levelname)
-                if levelname != record.levelname:
-                    msg = msg.replace(record.levelname, levelname, 1)
-            return msg
+            record = copy.deepcopy(record)
 
-    formatter = LevelTranslatingFormatter("[%(levelname)s] %(message)s")
+            level_color = self.LEVEL_COLORS.get(record.levelno, "")
+            msg_color = self.MESSAGE_COLORS.get(record.levelno, "")
+            value_color = self.VALUE_COLORS.get(record.levelno, "")
+
+            # translate and colorize log level name
+            levelname = _(record.levelname) if record.levelno > logging.DEBUG else record.levelname
+            record.levelname = f"{level_color}[{levelname}]{colorama.Style.RESET_ALL}"
+
+            # highlight message values enclosed by [...], "...", and '...'
+            record.msg = re.sub(
+                r"\[([^\]]+)\]|\"([^\"]+)\"|\'([^\']+)\'",
+                lambda match: f"[{value_color}{match.group(1) or match.group(2) or match.group(3)}{colorama.Fore.RESET}{msg_color}]",
+                str(record.msg),
+            )
+
+            # colorize message
+            record.msg = f"{msg_color}{record.msg}{colorama.Style.RESET_ALL}"
+
+            return super().format(record)
+
+    formatter = CustomFormatter("%(levelname)s %(message)s")
 
     stdout_log = logging.StreamHandler(sys.stderr)
     stdout_log.setLevel(logging.DEBUG)
