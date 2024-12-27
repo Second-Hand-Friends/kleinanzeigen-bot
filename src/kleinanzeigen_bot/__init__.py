@@ -137,8 +137,8 @@ class KleinanzeigenBot(WebScrapingMixin):
             Verwendung: {colorama.Fore.LIGHTMAGENTA_EX}{exe} BEFEHL [OPTIONEN]{colorama.Style.RESET_ALL}
 
             Befehle:
-              publish  - (erneutes) Veröffentlichen von Anzeigen
-              verify   - Überprüft der Konfigurationsdateien
+              publish  - (Wieder-)Veröffentlicht Anzeigen
+              verify   - Überprüft die Konfigurationsdateien
               delete   - Löscht Anzeigen
               download - Lädt eine oder mehrere Anzeigen herunter
               --
