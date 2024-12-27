@@ -265,12 +265,12 @@ class KleinanzeigenBot(WebScrapingMixin):
     def load_ads(self, *, ignore_inactive:bool = True, check_id:bool = True) -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
         LOG.info("Searching for ad config files...")
 
-        ad_files = set()
+        ad_files:dict[str, str] = {}
         data_root_dir = os.path.dirname(self.config_file_path)
         for file_pattern in self.config["ad_files"]:
             for ad_file in glob.glob(file_pattern, root_dir = data_root_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
                 if not str(ad_file).endswith('ad_fields.yaml'):
-                    ad_files.add(abspath(ad_file, relative_to = data_root_dir))
+                    ad_files[abspath(ad_file, relative_to = data_root_dir)] = ad_file
         LOG.info(" -> found %s", pluralize("ad config file", ad_files))
         if not ad_files:
             return []
@@ -288,24 +288,23 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         ad_fields = utils.load_dict_from_module(resources, "ad_fields.yaml")
         ads = []
-        for ad_file in sorted(ad_files):
-
+        for ad_file, ad_file_relative in sorted(ad_files.items()):
             ad_cfg_orig = utils.load_dict(ad_file, "ad")
             ad_cfg = copy.deepcopy(ad_cfg_orig)
             apply_defaults(ad_cfg, self.config["ad_defaults"], ignore = lambda k, _: k == "description", override = lambda _, v: v == "")
             apply_defaults(ad_cfg, ad_fields)
 
             if ignore_inactive and not ad_cfg["active"]:
-                LOG.info(" -> SKIPPED: inactive ad [%s]", ad_file)
+                LOG.info(" -> SKIPPED: inactive ad [%s]", ad_file_relative)
                 continue
 
             if use_specific_ads:
                 if ad_cfg["id"] not in ids:
-                    LOG.info(" -> SKIPPED: ad [%s] is not in list of given ids.", ad_file)
+                    LOG.info(" -> SKIPPED: ad [%s] is not in list of given ids.", ad_file_relative)
                     continue
             else:
                 if self.ads_selector == "new" and ad_cfg["id"] and check_id:
-                    LOG.info(" -> SKIPPED: ad [%s] is not new. already has an id assigned.", ad_file)
+                    LOG.info(" -> SKIPPED: ad [%s] is not new. already has an id assigned.", ad_file_relative)
                     continue
 
                 if self.ads_selector == "due":
@@ -320,7 +319,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                         ad_age = datetime.utcnow() - last_updated_on
                         if ad_age.days <= ad_cfg["republication_interval"]:
                             LOG.info(" -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
-                                ad_file,
+                                ad_file_relative,
                                 ad_age.days,
                                 ad_cfg["republication_interval"]
                             )
