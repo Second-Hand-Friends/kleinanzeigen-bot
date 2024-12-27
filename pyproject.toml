@@ -200,6 +200,7 @@ disable= [
     "broad-except",
     "consider-using-assignment-expr",
     "docstring-first-line-empty",
+    "global-statement",
     "missing-docstring",
     "multiple-imports",
     "multiple-statements",
@@ -215,11 +216,13 @@ notes = [ "FIXME", "XXX", "TODO" ] # list of note tags to take in consideration
 [tool.pylint.design]
 # https://pylint.pycqa.org/en/latest/user_guide/configuration/all-options.html#design-checker
 # https://pylint.pycqa.org/en/latest/user_guide/checkers/features.html#design-checker-messages
+max-args       = 6  # maximum number of arguments for function / method (R0913)
 max-attributes = 15 # maximum number of instance attributes for a class (R0902)
 max-branches   = 40 # maximum number of branch for function / method body (R0912)
 max-locals     = 30 # maximum number of local variables for function / method body (R0914)
-max-returns    = 10 # maximum number of return / yield for function / method body (R0911)
+max-returns    = 15 # maximum number of return / yield for function / method body (R0911)
 max-statements = 150 # maximum number of statements in function / method body (R0915)
+max-positional-arguments = 6 # maximum number of positional arguments for function / method (R0917)
 max-public-methods = 30 # maximum number of public methods for a class (R0904)
 
 

@@ -9,10 +9,15 @@ import mimetypes
 from datetime import datetime
 from typing import Any, Final
 
+from .i18n import get_translating_logger, pluralize
 from .utils import is_integer, parse_decimal, save_dict
 from .web_scraping_mixin import Browser, By, Element, Is, WebScrapingMixin
 
-LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.AdExtractor")
+__all__ = [
+    "AdExtractor",
+]
+
+LOG:Final[logging.Logger] = get_translating_logger(__name__)
 
 
 class AdExtractor(WebScrapingMixin):
@@ -42,7 +47,7 @@ class AdExtractor(WebScrapingMixin):
 
         new_base_dir = os.path.join(relative_directory, f'ad_{ad_id}')
         if os.path.exists(new_base_dir):
-            LOG.info('Deleting current folder of ad...')
+            LOG.info('Deleting current folder of ad %s...', ad_id)
             shutil.rmtree(new_base_dir)
         os.mkdir(new_base_dir)
         LOG.info('New directory for ad created at %s.', new_base_dir)
@@ -68,7 +73,7 @@ class AdExtractor(WebScrapingMixin):
             image_box = await self.web_find(By.CLASS_NAME, 'galleryimage-large')
 
             n_images = len(await self.web_find_all(By.CSS_SELECTOR, '.galleryimage-element[data-ix]', parent = image_box))
-            LOG.info('Found %d images.', n_images)
+            LOG.info('Found %s.', pluralize("image", n_images))
 
             img_element:Element = await self.web_find(By.CSS_SELECTOR, 'div:nth-child(1) > img', parent = image_box)
             img_fn_prefix = 'ad_' + str(ad_id) + '__img'
@@ -97,13 +102,13 @@ class AdExtractor(WebScrapingMixin):
                         new_div = await self.web_find(By.CSS_SELECTOR, f'div.galleryimage-element:nth-child({img_nr + 1})')
                         img_element = await self.web_find(By.TAG_NAME, 'img', parent = new_div)
                     except TimeoutError:
-                        LOG.error('NEXT button in image gallery somehow missing, abort image fetching.')
+                        LOG.error('NEXT button in image gallery somehow missing, aborting image fetching.')
                         break
                 img_nr += 1
-            LOG.info('Downloaded %d image(s).', dl_counter)
+            LOG.info('Downloaded %s.', pluralize("image", dl_counter))
 
         except TimeoutError:  # some ads do not require images
-            LOG.warning('No image area found. Continue without downloading images.')
+            LOG.warning('No image area found. Continuing without downloading images.')
 
         return img_paths
 
@@ -153,10 +158,10 @@ class AdExtractor(WebScrapingMixin):
                 parent = await self.web_find(By.CSS_SELECTOR, 'div:nth-of-type(1)', parent = pagination)))
         if n_buttons > 1:
             multi_page = True
-            LOG.info('It seems like you have many ads!')
+            LOG.info('It looks like you have many ads!')
         else:
             multi_page = False
-            LOG.info('It seems like all your ads fit on one overview page.')
+            LOG.info('It looks like all your ads fit on one overview page.')
 
         refs:list[str] = []
         while True:  # loop reference extraction until no more forward page
@@ -208,7 +213,7 @@ class AdExtractor(WebScrapingMixin):
         # close (warning) popup, if given
         try:
             await self.web_find(By.ID, 'vap-ovrly-secure')
-            LOG.warning('A popup appeared.')
+            LOG.warning('A popup appeared!')
             await self.web_click(By.CLASS_NAME, 'mfp-close')
             await self.web_sleep()
         except TimeoutError:

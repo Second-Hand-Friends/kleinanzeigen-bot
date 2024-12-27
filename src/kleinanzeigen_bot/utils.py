@@ -3,18 +3,20 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import asyncio, copy, decimal, json, logging, os, re, socket, sys, traceback, time
+import asyncio, copy, decimal, inspect, json, logging, os, re, socket, sys, traceback, time
 from importlib.resources import read_text as get_resource_as_string
-from collections.abc import Callable, Sized
+from collections.abc import Callable
 from datetime import datetime
+from gettext import gettext as _
 from types import FrameType, ModuleType, TracebackType
 from typing import Any, Final, TypeVar
 
 import coloredlogs
 from ruamel.yaml import YAML
+from .i18n import get_translating_logger
 
 LOG_ROOT:Final[logging.Logger] = logging.getLogger()
-LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot.utils")
+LOG:Final[logging.Logger] = get_translating_logger(__name__)
 
 # https://mypy.readthedocs.io/en/stable/generics.html#generic-functions
 T = TypeVar('T')
@@ -45,7 +47,7 @@ def ensure(condition:Any | bool | Callable[[], bool], error_message:str, timeout
     if not isinstance(condition, Callable):  # type: ignore[arg-type] # https://github.com/python/mypy/issues/6864
         if condition:
             return
-        raise AssertionError(error_message)
+        raise AssertionError(_(error_message))
 
     if timeout < 0:
         raise AssertionError("[timeout] must be >= 0")
@@ -56,8 +58,19 @@ def ensure(condition:Any | bool | Callable[[], bool], error_message:str, timeout
     while not condition():  # type: ignore[operator]
         elapsed = time.time() - start_at
         if elapsed >= timeout:
-            raise AssertionError(error_message)
+            raise AssertionError(_(error_message))
         time.sleep(poll_requency)
+
+
+def get_caller(depth: int = 1) -> inspect.FrameInfo | None:
+    stack = inspect.stack()
+    try:
+        for frame in stack[depth + 1:]:
+            if frame.function and frame.function != "<lambda>":
+                return frame
+        return None
+    finally:
+        del stack  # Clean up the stack to avoid reference cycles
 
 
 def is_frozen() -> bool:
@@ -140,17 +153,30 @@ def safe_get(a_map:dict[Any, Any], *keys:str) -> Any:
 
 
 def configure_console_logging() -> None:
+
+    class LevelTranslatingFormatter(coloredlogs.ColoredFormatter):  # type: ignore
+
+        def format(self, record:logging.LogRecord) -> str:
+            msg:str = super().format(record)
+            if record.levelno > logging.DEBUG:
+                levelname = _(record.levelname)
+                if levelname != record.levelname:
+                    msg = msg.replace(record.levelname, levelname, 1)
+            return msg
+
+    formatter = LevelTranslatingFormatter("[%(levelname)s] %(message)s")
+
     stdout_log = logging.StreamHandler(sys.stderr)
     stdout_log.setLevel(logging.DEBUG)
-    stdout_log.setFormatter(coloredlogs.ColoredFormatter("[%(levelname)s] %(message)s"))
-    stdout_log.addFilter(type("", (logging.Filter,), {  # pyright: ignore
+    stdout_log.addFilter(type("", (logging.Filter,), {
         "filter": lambda rec: rec.levelno <= logging.INFO
     }))
+    stdout_log.setFormatter(formatter)
     LOG_ROOT.addHandler(stdout_log)
 
     stderr_log = logging.StreamHandler(sys.stderr)
     stderr_log.setLevel(logging.WARNING)
-    stderr_log.setFormatter(coloredlogs.ColoredFormatter("[%(levelname)s] %(message)s"))
+    stderr_log.setFormatter(formatter)
     LOG_ROOT.addHandler(stderr_log)
 
 
@@ -175,29 +201,6 @@ def on_sigint(_sig:int, _frame:FrameType | None) -> None:
     sys.exit(0)
 
 
-def pluralize(noun:str, count:int | Sized, prefix_with_count:bool = True) -> str:
-    """
-    >>> pluralize("field", 1)
-    '1 field'
-    >>> pluralize("field", 2)
-    '2 fields'
-    >>> pluralize("field", 2, prefix_with_count = False)
-    'fields'
-    """
-    if isinstance(count, Sized):
-        count = len(count)
-
-    prefix = f"{count} " if prefix_with_count else ""
-
-    if count == 1:
-        return f"{prefix}{noun}"
-    if noun.endswith('s') or noun.endswith('sh') or noun.endswith('ch') or noun.endswith('x') or noun.endswith('z'):
-        return f"{prefix}{noun}es"
-    if noun.endswith('y'):
-        return f"{prefix}{noun[:-1]}ies"
-    return f"{prefix}{noun}s"
-
-
 def load_dict(filepath:str, content_label:str = "") -> dict[str, Any]:
     """
     :raises FileNotFoundError
@@ -209,12 +212,12 @@ def load_dict(filepath:str, content_label:str = "") -> dict[str, Any]:
 
 
 def load_dict_if_exists(filepath:str, content_label:str = "") -> dict[str, Any] | None:
-    filepath = os.path.abspath(filepath)
-    LOG.info("Loading %s[%s]...", content_label and content_label + " from " or "", filepath)
+    abs_filepath = os.path.abspath(filepath)
+    LOG.info("Loading %s[%s]...", content_label and content_label + _(" from ") or "", abs_filepath)
 
-    _, file_ext = os.path.splitext(filepath)
-    if file_ext not in [".json", ".yaml", ".yml"]:
-        raise ValueError(f'Unsupported file type. The file name "{filepath}" must end with *.json, *.yaml, or *.yml')
+    __, file_ext = os.path.splitext(filepath)
+    if file_ext not in (".json", ".yaml", ".yml"):
+        raise ValueError(_('Unsupported file type. The filename "%s" must end with *.json, *.yaml, or *.yml') % filepath)
 
     if not os.path.exists(filepath):
         return None
@@ -229,9 +232,9 @@ def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "
     """
     LOG.debug("Loading %s[%s.%s]...", content_label and content_label + " from " or "", module.__name__, filename)
 
-    _, file_ext = os.path.splitext(filename)
+    __, file_ext = os.path.splitext(filename)
     if file_ext not in (".json", ".yaml", ".yml"):
-        raise ValueError(f'Unsupported file type. The file name "{filename}" must end with *.json, *.yaml, or *.yml')
+        raise ValueError(f'Unsupported file type. The filename "{filename}" must end with *.json, *.yaml, or *.yml')
 
     content = get_resource_as_string(module, filename)  # pylint: disable=deprecated-method
     return json.loads(content) if filename.endswith(".json") else YAML().load(content)  # type: ignore[no-any-return] # mypy
