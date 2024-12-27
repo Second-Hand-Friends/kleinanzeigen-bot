@@ -79,15 +79,21 @@ jobs:
         set -euo pipefail
 
         exec 5>&1
-        updates=$(pdm update --update-all 2>&1 |tee /dev/fd/5)
+        updates=$(pdm update --update-all 2>&1 | tee /dev/fd/5)
 
         if git diff --exit-code pdm.lock; then
           echo "updates=" >> "$GITHUB_OUTPUT"
         else
+          updates="$(echo "$updates" | grep Update | grep -v kleinanzeigen-bot)"
+          if [[ $(wc -l <<< "$updates") -eq 1 ]]; then
+            echo "title=$(echo "$updates" | head -n 1)" >> "${GITHUB_OUTPUT}"
+          else
+            echo "title=Update Python dependencies" >> "${GITHUB_OUTPUT}"
+          fi
           # https://github.com/orgs/community/discussions/26288#discussioncomment-3876281
           delimiter="$(openssl rand -hex 8)"
           echo "updates<<${delimiter}" >> "${GITHUB_OUTPUT}"
-          echo "$(echo "$updates" | grep Update | grep -v kleinanzeigen-bot)" >> "${GITHUB_OUTPUT}"
+          echo "$updates" >> "${GITHUB_OUTPUT}"
           echo "${delimiter}" >> "${GITHUB_OUTPUT}"
         fi
 
@@ -96,7 +102,7 @@ jobs:
       uses: peter-evans/create-pull-request@v7  # https://github.com/peter-evans/create-pull-request
       if: "${{ steps.update_deps.outputs.updates != '' }}"
       with:
-        title: "chore: Update Python dependencies"
+        title: "chore: ${{ steps.update_deps.outputs.title }}"
         author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
         committer: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
         commit-message: "chore: Update Python dependencies"
