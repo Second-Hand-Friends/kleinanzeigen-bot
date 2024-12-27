@@ -218,7 +218,7 @@ jobs:
 
     - name: Upload self-contained executable
       uses: actions/upload-artifact@v4
-      if: github.ref_name == 'main' && matrix.PUBLISH_RELEASE && !env.ACT
+      if: (github.ref_name == 'main' || github.ref_name == 'release') && matrix.PUBLISH_RELEASE && !env.ACT
       with:
         name: artifacts-${{ matrix.os }}
         path: dist/kleinanzeigen-bot*
@@ -366,7 +366,24 @@ jobs:
     if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
 
-    concurrency: dependabot-pr-auto-merge
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+    - name: Merge Dependabot PR
+      env:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        PR_URL: ${{github.event.pull_request.html_url}}
+      run: gh pr merge --auto --rebase "$PR_URL"
+
+
+  ###########################################################
+  pdm-pr-auto-merge:
+  ###########################################################
+    needs: build
+    if: github.event_name == 'pull_request' && github.actor == 'kleinanzeigen-bot-tu[bot]' && github.head_ref == 'dependencies/pdm'
+    runs-on: ubuntu-latest
 
     permissions:
       contents: write
@@ -377,5 +394,4 @@ jobs:
       env:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         PR_URL: ${{github.event.pull_request.html_url}}
-      run: |
-        gh pr merge --auto --rebase "$PR_URL"
+      run: gh pr merge --auto --rebase "$PR_URL"
