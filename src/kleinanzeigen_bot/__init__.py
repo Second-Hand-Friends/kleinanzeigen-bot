@@ -160,8 +160,8 @@ class KleinanzeigenBot(WebScrapingMixin):
               --force           - Alias für '--ads=all'
               --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
               --config=<PATH>   - Pfad zur YAML- oder JSON-Konfigurationsdatei (STANDARD: ./config.yaml)
-              --lang=en|de      - Anzeigesprache (STANDARD: Systemsprache, wenn unterstützt, sonst Englisch)
               --logfile=<PATH>  - Pfad zur Protokolldatei (STANDARD: ./kleinanzeigen-bot.log)
+              --lang=en|de      - Anzeigesprache (STANDARD: Systemsprache, wenn unterstützt, sonst Englisch)
               -v, --verbose     - Aktiviert detaillierte Ausgabe – nur nützlich zur Fehlerbehebung
             """))
         else:
@@ -193,7 +193,7 @@ class KleinanzeigenBot(WebScrapingMixin):
               --keep-old        - don't delete old ads on republication
               --config=<PATH>   - path to the config YAML or JSON file (DEFAULT: ./config.yaml)
               --logfile=<PATH>  - path to the logfile (DEFAULT: ./kleinanzeigen-bot.log)
-              --lang=en|de      - Displaylanguage (STANDARD: Systemlangauge if supported, otherwise English)
+              --lang=en|de      - display language (STANDARD: system language if supported, otherwise English)
               -v, --verbose     - enables verbose output - only useful when troubleshooting issues
             """))
 
