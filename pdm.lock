@@ -21,15 +21,15 @@ files = [
 
 [[package]]
 name = "astroid"
-version = "3.3.7"
+version = "3.3.8"
 requires_python = ">=3.9.0"
 summary = "An abstract syntax tree for Python with inference support."
 dependencies = [
     "typing-extensions>=4.0.0; python_version < \"3.11\"",
 ]
 files = [
-    {file = "astroid-3.3.7-py3-none-any.whl", hash = "sha256:e1ea2c358a3c760ef583d4963e773100fa2c693b27ed158a1d0e81adb4436903"},
-    {file = "astroid-3.3.7.tar.gz", hash = "sha256:29fe1df7ef64dc17a54dbfad67b40b445340fcdba7c4012e7ecc9270c9b2f5b6"},
+    {file = "astroid-3.3.8-py3-none-any.whl", hash = "sha256:187ccc0c248bfbba564826c26f070494f7bc964fd286b6d9fff4420e55de828c"},
+    {file = "astroid-3.3.8.tar.gz", hash = "sha256:a88c7994f914a4ea8572fac479459f4955eeccc877be3f2d959a33273b0cf40b"},
 ]
 
 [[package]]
@@ -487,7 +487,7 @@ files = [
 
 [[package]]
 name = "pyinstaller-hooks-contrib"
-version = "2024.10"
+version = "2024.11"
 requires_python = ">=3.8"
 summary = "Community maintained hooks for PyInstaller"
 dependencies = [
@@ -496,17 +496,17 @@ dependencies = [
     "setuptools>=42.0.0",
 ]
 files = [
-    {file = "pyinstaller_hooks_contrib-2024.10-py3-none-any.whl", hash = "sha256:ad47db0e153683b4151e10d231cb91f2d93c85079e78d76d9e0f57ac6c8a5e10"},
-    {file = "pyinstaller_hooks_contrib-2024.10.tar.gz", hash = "sha256:8a46655e5c5b0186b5e527399118a9b342f10513eb1425c483fa4f6d02e8800c"},
+    {file = "pyinstaller_hooks_contrib-2024.11-py3-none-any.whl", hash = "sha256:2781d121a1ee961152ba7287a262c65a1078da30c9ef7621cb8c819326884fd5"},
+    {file = "pyinstaller_hooks_contrib-2024.11.tar.gz", hash = "sha256:84399af6b4b902030958063df25f657abbff249d0f329c5344928355c9833ab4"},
 ]
 
 [[package]]
 name = "pylint"
-version = "3.3.2"
+version = "3.3.3"
 requires_python = ">=3.9.0"
 summary = "python code static checker"
 dependencies = [
-    "astroid<=3.4.0-dev0,>=3.3.5",
+    "astroid<=3.4.0-dev0,>=3.3.8",
     "colorama>=0.4.5; sys_platform == \"win32\"",
     "dill>=0.2; python_version < \"3.11\"",
     "dill>=0.3.6; python_version >= \"3.11\"",
@@ -519,8 +519,8 @@ dependencies = [
     "typing-extensions>=3.10.0; python_version < \"3.10\"",
 ]
 files = [
-    {file = "pylint-3.3.2-py3-none-any.whl", hash = "sha256:77f068c287d49b8683cd7c6e624243c74f92890f767f106ffa1ddf3c0a54cb7a"},
-    {file = "pylint-3.3.2.tar.gz", hash = "sha256:9ec054ec992cd05ad30a6df1676229739a73f8feeabf3912c995d17601052b01"},
+    {file = "pylint-3.3.3-py3-none-any.whl", hash = "sha256:26e271a2bc8bce0fc23833805a9076dd9b4d5194e2a02164942cb3cdc37b4183"},
+    {file = "pylint-3.3.3.tar.gz", hash = "sha256:07c607523b17e6d16e2ae0d7ef59602e332caa762af64203c24b41c27139f36a"},
 ]
 
 [[package]]
