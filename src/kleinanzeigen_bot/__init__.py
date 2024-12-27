@@ -9,6 +9,7 @@ import urllib.parse as urllib_parse
 import urllib.request as urllib_request
 from collections.abc import Iterable
 from datetime import datetime
+from gettext import gettext as _
 from logging.handlers import RotatingFileHandler
 from typing import Any, Final
 
@@ -17,14 +18,15 @@ from ruamel.yaml import YAML
 from wcmatch import glob
 
 from . import utils, resources, extract
-from .utils import abspath, ainput, apply_defaults, ensure, is_frozen, pluralize, safe_get, parse_datetime
+from .i18n import Locale, get_current_locale, set_current_locale, get_translating_logger, pluralize
+from .utils import abspath, ainput, apply_defaults, ensure, is_frozen, safe_get, parse_datetime
 from .web_scraping_mixin import By, Element, Page, Is, WebScrapingMixin
 from ._version import __version__
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
 LOG_ROOT:Final[logging.Logger] = logging.getLogger()
-LOG:Final[logging.Logger] = logging.getLogger("kleinanzeigen_bot")
+LOG:Final[logging.Logger] = get_translating_logger(__name__)
 LOG.setLevel(logging.INFO)
 
 colorama.init()
@@ -130,7 +132,40 @@ class KleinanzeigenBot(WebScrapingMixin):
         else:
             exe = "python -m kleinanzeigen_bot"
 
-        print(textwrap.dedent(f"""\
+        if get_current_locale().language == "de":
+            print(textwrap.dedent(f"""\
+            Verwendung: {colorama.Fore.LIGHTMAGENTA_EX}{exe} BEFEHL [OPTIONEN]{colorama.Style.RESET_ALL}
+
+            Befehle:
+              publish  - (erneutes) Veröffentlichen von Anzeigen
+              verify   - Überprüft der Konfigurationsdateien
+              delete   - Löscht Anzeigen
+              download - Lädt eine oder mehrere Anzeigen herunter
+              --
+              help     - Zeigt diese Hilfe an (Standardbefehl)
+              version  - Zeigt die Version der Anwendung an
+
+            Optionen:
+              --ads=all|due|new|<id(s)> (publish) - Gibt an, welche Anzeigen (erneut) veröffentlicht werden sollen (STANDARD: due)
+                    Mögliche Werte:
+                    * all: Veröffentlicht alle Anzeigen erneut, ignoriert republication_interval
+                    * due: Veröffentlicht alle neuen Anzeigen und erneut entsprechend dem republication_interval
+                    * new: Veröffentlicht nur neue Anzeigen (d.h. Anzeigen ohne ID in der Konfigurationsdatei)
+                    * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs an, die veröffentlicht werden sollen, z. B. "--ads=1,2,3", ignoriert republication_interval
+              --ads=all|new|<id(s)> (download) - Gibt an, welche Anzeigen heruntergeladen werden sollen (STANDARD: new)
+                    Mögliche Werte:
+                    * all: Lädt alle Anzeigen aus Ihrem Profil herunter
+                    * new: Lädt Anzeigen aus Ihrem Profil herunter, die lokal noch nicht gespeichert sind
+                    * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs zum Herunterladen an, z. B. "--ads=1,2,3"
+              --force           - Alias für '--ads=all'
+              --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
+              --config=<PATH>   - Pfad zur YAML- oder JSON-Konfigurationsdatei (STANDARD: ./config.yaml)
+              --lang=en|de      - Anzeigesprache (STANDARD: Systemsprache, wenn unterstützt, sonst Englisch)
+              --logfile=<PATH>  - Pfad zur Protokolldatei (STANDARD: ./kleinanzeigen-bot.log)
+              -v, --verbose     - Aktiviert detaillierte Ausgabe – nur nützlich zur Fehlerbehebung
+            """))
+        else:
+            print(textwrap.dedent(f"""\
             Usage: {colorama.Fore.LIGHTMAGENTA_EX}{exe} COMMAND [OPTIONS]{colorama.Style.RESET_ALL}
 
             Commands:
@@ -158,8 +193,9 @@ class KleinanzeigenBot(WebScrapingMixin):
               --keep-old        - don't delete old ads on republication
               --config=<PATH>   - path to the config YAML or JSON file (DEFAULT: ./config.yaml)
               --logfile=<PATH>  - path to the logfile (DEFAULT: ./kleinanzeigen-bot.log)
+              --lang=en|de      - Displaylanguage (STANDARD: Systemlangauge if supported, otherwise English)
               -v, --verbose     - enables verbose output - only useful when troubleshooting issues
-        """))
+            """))
 
     def parse_args(self, args:list[str]) -> None:
         try:
@@ -170,11 +206,12 @@ class KleinanzeigenBot(WebScrapingMixin):
                 "help",
                 "keep-old",
                 "logfile=",
+                "lang=",
                 "verbose"
             ])
         except getopt.error as ex:
             LOG.error(ex.msg)
-            LOG.error("Use --help to display available options")
+            LOG.error("Use --help to display available options.")
             sys.exit(2)
 
         for option, value in options:
@@ -195,6 +232,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                     self.ads_selector = "all"
                 case "--keep-old":
                     self.keep_old_ads = True
+                case "--lang":
+                    set_current_locale(Locale.of(value))
                 case "-v" | "--verbose":
                     LOG.setLevel(logging.DEBUG)
                     logging.getLogger("nodriver").setLevel(logging.INFO)
@@ -244,7 +283,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         if re.compile(r'\d+[,\d+]*').search(self.ads_selector):
             ids = [int(n) for n in self.ads_selector.split(',')]
             use_specific_ads = True
-            LOG.info('Start fetch task for the ad(s) with the id(s):')
+            LOG.info('Start fetch task for the ad(s) with id(s):')
             LOG.info(' | '.join([str(id_) for id_ in ids]))
 
         ad_fields = utils.load_dict_from_module(resources, "ad_fields.yaml")
@@ -261,7 +300,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 continue
 
             if use_specific_ads:
-                if not ad_cfg["id"] in ids:
+                if ad_cfg["id"] not in ids:
                     LOG.info(" -> SKIPPED: ad [%s] is not in list of given ids.", ad_file)
                     continue
             else:
@@ -362,7 +401,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     def load_config(self) -> None:
         config_defaults = utils.load_dict_from_module(resources, "config_defaults.yaml")
-        config = utils.load_dict_if_exists(self.config_file_path, "config")
+        config = utils.load_dict_if_exists(self.config_file_path, _("config"))
 
         if config is None:
             LOG.warning("Config file %s does not exist. Creating it with default values...", self.config_file_path)
@@ -427,7 +466,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         try:
             await self.web_find(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout = 4)
             LOG.warning("############################################")
-            LOG.warning("# Device verification message detected. Please handle it.")
+            LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
             LOG.warning("############################################")
             await ainput("Press ENTER when done...")
         except TimeoutError:
@@ -460,7 +499,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             await self.web_sleep()
 
         LOG.info("############################################")
-        LOG.info("DONE: Deleting %s", pluralize("ad", count))
+        LOG.info("DONE: Deleted %s", pluralize("ad", count))
         LOG.info("############################################")
 
     async def delete_ad(self, ad_cfg: dict[str, Any], delete_old_ads_by_title: bool) -> bool:
@@ -469,8 +508,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         await self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
         csrf_token_elem = await self.web_find(By.CSS_SELECTOR, "meta[name=_csrf]")
         csrf_token = csrf_token_elem.attrs["content"]
-        if csrf_token is None:
-            raise AssertionError("Expected CSRF Token not found in HTML content!")
+        ensure(csrf_token is not None, "Expected CSRF Token not found in HTML content!")
 
         if delete_old_ads_by_title:
             published_ads = json.loads((await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
@@ -666,7 +704,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.warning("# Captcha present! Please solve the captcha.")
             LOG.warning("############################################")
             await self.web_scroll_page_down()
-            input("Press a key to continue...")
+            input(_("Press a key to continue..."))
         except TimeoutError:
             pass
 
@@ -722,7 +760,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             # Click continue button
             await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Bestätigen")]]]')
         except TimeoutError as ex:
-            raise TimeoutError("Unable to close condition dialog") from ex
+            raise TimeoutError(_("Unable to close condition dialog!")) from ex
 
     async def __set_category(self, category: str | None, ad_file:str) -> None:
         # click on something to trigger automatic category detection
@@ -867,10 +905,10 @@ class KleinanzeigenBot(WebScrapingMixin):
         if self.ads_selector in {'all', 'new'}:  # explore ads overview for these two modes
             LOG.info('Scanning your ad overview...')
             own_ad_urls = await ad_extractor.extract_own_ads_urls()
-            LOG.info('%d ads were found!', len(own_ad_urls))
+            LOG.info('%s found.', pluralize("ad", len(own_ad_urls)))
 
             if self.ads_selector == 'all':  # download all of your adds
-                LOG.info('Start fetch task for all your ads!')
+                LOG.info('Starting download of all ads...')
 
                 success_count = 0
                 # call download function for each ad page
@@ -892,7 +930,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 # determine ad IDs from links
                 ad_id_by_url = {url:ad_extractor.extract_ad_id_from_ad_url(url) for url in own_ad_urls}
 
-                LOG.info('Start fetch task for your unsaved ads!')
+                LOG.info("Starting download of not yet downloaded ads...")
                 new_count = 0
                 for ad_url, ad_id in ad_id_by_url.items():
                     # check if ad with ID already saved
@@ -903,11 +941,11 @@ class KleinanzeigenBot(WebScrapingMixin):
                     if await ad_extractor.naviagte_to_ad_page(ad_url):
                         await ad_extractor.download_ad(ad_id)
                         new_count += 1
-                LOG.info('%d new ad(s) were downloaded from your profile.', new_count)
+                LOG.info('%s were downloaded from your profile.', pluralize("new ad", new_count))
 
         elif re.compile(r'\d+[,\d+]*').search(self.ads_selector):  # download ad(s) with specific id(s)
             ids = [int(n) for n in self.ads_selector.split(',')]
-            LOG.info('Start fetch task for the ad(s) with the id(s):')
+            LOG.info('Starting download of ad(s) with the id(s):')
             LOG.info(' | '.join([str(ad_id) for ad_id in ids]))
 
             for ad_id in ids:  # call download routine for every id
@@ -932,7 +970,7 @@ def main(args:list[str]) -> None:
         |_|\_\_|\___|_|_| |_|\__,_|_| |_/___\___|_|\__, |\___|_| |_|    |_.__/ \___/ \__|
                                                    |___/
                                  https://github.com/Second-Hand-Friends/kleinanzeigen-bot
-        """), flush = True)
+        """)[1:], flush = True)  # [1:] removes the first empty blank line
 
     utils.configure_console_logging()
 

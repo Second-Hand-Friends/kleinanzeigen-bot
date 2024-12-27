@@ -8,12 +8,13 @@ from typing import cast
 
 import nodriver, pytest
 
-from kleinanzeigen_bot.web_scraping_mixin import WebScrapingMixin
 from kleinanzeigen_bot.utils import ensure
+from kleinanzeigen_bot.i18n import get_translating_logger
+from kleinanzeigen_bot.web_scraping_mixin import WebScrapingMixin
 
 if os.environ.get("CI"):
-    logging.getLogger("kleinanzeigen_bot").setLevel(logging.DEBUG)
-    logging.getLogger("nodriver").setLevel(logging.DEBUG)
+    get_translating_logger("kleinanzeigen_bot").setLevel(logging.DEBUG)
+    get_translating_logger("nodriver").setLevel(logging.DEBUG)
 
 
 async def atest_init() -> None:
