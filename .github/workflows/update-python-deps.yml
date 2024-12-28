@@ -77,6 +77,7 @@ jobs:
       id: update_deps
       run: |
         set -euo pipefail
+        set -x
 
         exec 5>&1
         updates=$(pdm update --update-all 2>&1 | tee /dev/fd/5)
@@ -84,7 +85,7 @@ jobs:
         if git diff --exit-code pdm.lock; then
           echo "updates=" >> "$GITHUB_OUTPUT"
         else
-          updates="$(echo "$updates" | grep Update | grep -v kleinanzeigen-bot)"
+          updates="$(echo "$updates" | grep Update | grep -v kleinanzeigen-bot || true)"
           if [[ $(wc -l <<< "$updates") -eq 1 ]]; then
             echo "title=$(echo "$updates" | head -n 1)" >> "${GITHUB_OUTPUT}"
           else
