@@ -20,7 +20,9 @@ authors = [
 license = {text = "AGPL-3.0-or-later"}
 
 classifiers = [  # https://pypi.org/classifiers/
-    "Development Status :: 4 - Beta",
+    "Private :: Do Not Upload",
+
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Operating System :: OS Independent",
 
@@ -28,6 +30,7 @@ classifiers = [  # https://pypi.org/classifiers/
     "Topic :: Office/Business",
 
     "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10"
 ]
 requires-python = ">=3.10,<3.14"
@@ -53,7 +56,7 @@ Issues = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues"
 #####################
 [tool.pdm.version] # https://backend.pdm-project.org/metadata/#dynamic-project-version
 source = "call"
-getter = "version:get_version"
+getter = "version:get_version" # uses get_version() of <project_root>/version.py
 write_to = "kleinanzeigen_bot/_version.py"
 write_template = "__version__ = '{}'\n"
 
