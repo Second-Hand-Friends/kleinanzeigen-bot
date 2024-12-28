@@ -29,7 +29,7 @@ LOG_ROOT:Final[logging.Logger] = logging.getLogger()
 LOG:Final[logging.Logger] = get_translating_logger(__name__)
 LOG.setLevel(logging.INFO)
 
-colorama.init()
+colorama.just_fix_windows_console()
 
 
 class KleinanzeigenBot(WebScrapingMixin):
@@ -163,7 +163,7 @@ class KleinanzeigenBot(WebScrapingMixin):
               --logfile=<PATH>  - Pfad zur Protokolldatei (STANDARD: ./kleinanzeigen-bot.log)
               --lang=en|de      - Anzeigesprache (STANDARD: Systemsprache, wenn unterstützt, sonst Englisch)
               -v, --verbose     - Aktiviert detaillierte Ausgabe – nur nützlich zur Fehlerbehebung
-            """))
+            """.rstrip()))
         else:
             print(textwrap.dedent(f"""\
             Usage: {colorama.Fore.LIGHTMAGENTA_EX}{exe} COMMAND [OPTIONS]{colorama.Style.RESET_ALL}
@@ -195,7 +195,7 @@ class KleinanzeigenBot(WebScrapingMixin):
               --logfile=<PATH>  - path to the logfile (DEFAULT: ./kleinanzeigen-bot.log)
               --lang=en|de      - display language (STANDARD: system language if supported, otherwise English)
               -v, --verbose     - enables verbose output - only useful when troubleshooting issues
-            """))
+            """.rstrip()))
 
     def parse_args(self, args:list[str]) -> None:
         try:
