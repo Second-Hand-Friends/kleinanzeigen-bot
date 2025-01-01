@@ -312,6 +312,7 @@ jobs:
 
     - name: "Determine release name"
       id: release
+      if: github.event_name != 'schedule'
       run: |
         case "$GITHUB_REF_NAME" in
           main)
@@ -324,6 +325,7 @@ jobs:
 
 
     - name: "Delete previous '${{ steps.release.outputs.name }}' release"
+      if: steps.release.outputs.name && steps.release.outputs.name != ''
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         RELEASE_NAME: ${{ steps.release.outputs.name }}
@@ -333,6 +335,7 @@ jobs:
 
 
     - name: "Create '${{ steps.release.outputs.name }}' Release"
+      if: steps.release.outputs.name && steps.release.outputs.name != ''
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         RELEASE_NAME: ${{ steps.release.outputs.name }}
