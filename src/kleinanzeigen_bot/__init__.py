@@ -491,17 +491,20 @@ class KleinanzeigenBot(WebScrapingMixin):
     async def delete_ads(self, ad_cfgs:list[tuple[str, dict[str, Any], dict[str, Any]]]) -> None:
         count = 0
 
+        published_ads = json.loads(
+            (await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
+
         for (ad_file, ad_cfg, _) in ad_cfgs:
             count += 1
             LOG.info("Processing %s/%s: '%s' from [%s]...", count, len(ad_cfgs), ad_cfg["title"], ad_file)
-            await self.delete_ad(ad_cfg, self.config["publishing"]["delete_old_ads_by_title"])
+            await self.delete_ad(ad_cfg, self.config["publishing"]["delete_old_ads_by_title"], published_ads)
             await self.web_sleep()
 
         LOG.info("############################################")
         LOG.info("DONE: Deleted %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    async def delete_ad(self, ad_cfg: dict[str, Any], delete_old_ads_by_title: bool) -> bool:
+    async def delete_ad(self, ad_cfg: dict[str, Any], delete_old_ads_by_title: bool, published_ads: list[dict[str, Any]]) -> bool:
         LOG.info("Deleting ad '%s' if already present...", ad_cfg["title"])
 
         await self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
@@ -510,7 +513,6 @@ class KleinanzeigenBot(WebScrapingMixin):
         ensure(csrf_token is not None, "Expected CSRF Token not found in HTML content!")
 
         if delete_old_ads_by_title:
-            published_ads = json.loads((await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
 
             for published_ad in published_ads:
                 published_ad_id = int(published_ad.get("id", -1))
@@ -537,28 +539,38 @@ class KleinanzeigenBot(WebScrapingMixin):
     async def publish_ads(self, ad_cfgs:list[tuple[str, dict[str, Any], dict[str, Any]]]) -> None:
         count = 0
 
+        published_ads = json.loads(
+            (await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
+
         for (ad_file, ad_cfg, ad_cfg_orig) in ad_cfgs:
+            LOG.info("Processing %s/%s: '%s' from [%s]...", count + 1, len(ad_cfgs), ad_cfg["title"], ad_file)
+
+            if [x for x in published_ads if x["id"] == ad_cfg["id"] and x["state"] == "paused"]:
+                LOG.info("Skipping because ad is reserved")
+                continue
+
             count += 1
-            LOG.info("Processing %s/%s: '%s' from [%s]...", count, len(ad_cfgs), ad_cfg["title"], ad_file)
-            await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig)
+
+            await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads)
             await self.web_await(lambda: self.web_check(By.ID, "checking-done", Is.DISPLAYED), timeout = 5 * 60)
 
             if self.config["publishing"]["delete_old_ads"] == "AFTER_PUBLISH" and not self.keep_old_ads:
-                await self.delete_ad(ad_cfg, False)
+                await self.delete_ad(ad_cfg, False, published_ads)
 
         LOG.info("############################################")
         LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    async def publish_ad(self, ad_file:str, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any]) -> None:
+    async def publish_ad(self, ad_file:str, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any], published_ads: list[dict[str, Any]]) -> None:
         """
         @param ad_cfg: the effective ad config (i.e. with default values applied etc.)
         @param ad_cfg_orig: the ad config as present in the YAML file
+        @param published_ads: json list of published ads
         """
         await self.assert_free_ad_limit_not_reached()
 
         if self.config["publishing"]["delete_old_ads"] == "BEFORE_PUBLISH" and not self.keep_old_ads:
-            await self.delete_ad(ad_cfg, self.config["publishing"]["delete_old_ads_by_title"])
+            await self.delete_ad(ad_cfg, self.config["publishing"]["delete_old_ads_by_title"], published_ads)
 
         LOG.info("Publishing ad '%s'...", ad_cfg["title"])
 
