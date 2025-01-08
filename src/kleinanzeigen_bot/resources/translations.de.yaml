@@ -80,6 +80,7 @@ kleinanzeigen_bot/__init__.py:
 
   publish_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
+    "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
     "DONE: (Re-)published %s": "FERTIG: %s (erneut) veröffentlicht"
     "ad": "Anzeige"
 
