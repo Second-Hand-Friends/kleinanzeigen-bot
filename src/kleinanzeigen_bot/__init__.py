@@ -545,7 +545,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         for (ad_file, ad_cfg, ad_cfg_orig) in ad_cfgs:
             LOG.info("Processing %s/%s: '%s' from [%s]...", count + 1, len(ad_cfgs), ad_cfg["title"], ad_file)
 
-            if list(filter(lambda x: x["id"] == ad_cfg["id"] and x["state"] == "paused", published_ads)):
+            if [x for x in published_ads if x["id"] == ad_cfg["id"] and x["state"] == "paused"]:
                 LOG.info("Skipping because ad is reserved")
                 continue
 
