@@ -729,6 +729,11 @@ class KleinanzeigenBot(WebScrapingMixin):
             await self.web_click(By.XPATH, "//fieldset[@id='postad-publish']//*[contains(text(),'Anzeige aufgeben')]")
             await self.web_click(By.ID, "imprint-guidance-submit")
 
+        # check for no image question
+        image_hint_xpath = '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Ohne Bild veröffentlichen")]]]'
+        if not ad_cfg["images"] and await self.web_check(By.XPATH, image_hint_xpath, Is.DISPLAYED):
+            await self.web_click(By.XPATH, image_hint_xpath)
+
         await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = 20)
 
         ad_cfg_orig["updated_on"] = datetime.utcnow().isoformat()
