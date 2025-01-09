@@ -34,6 +34,9 @@ __all__ = [
 
 LOG:Final[logging.Logger] = get_translating_logger(__name__)
 
+# see https://api.jquery.com/category/selectors/
+METACHAR_ESCAPER:Final[dict[int, str]] = str.maketrans({ch: f'\\{ch}' for ch in '!"#$%&\'()*+,./:;<=>?@[\\]^`{|}~'})
+
 
 class By(enum.Enum):
     ID = enum.auto()
@@ -361,15 +364,17 @@ class WebScrapingMixin:
         """
         match selector_type:
             case By.ID:
+                escaped_id = selector_value.translate(METACHAR_ESCAPER)
                 return await self.web_await(
-                    lambda: self.page.query_selector(f"#{selector_value}", parent),
+                    lambda: self.page.query_selector(f"#{escaped_id}", parent),
                     timeout = timeout,
                     timeout_error_message = f"No HTML element found with ID '{selector_value}' within {timeout} seconds.")
             case By.CLASS_NAME:
+                escaped_classname = selector_value.translate(METACHAR_ESCAPER)
                 return await self.web_await(
-                    lambda: self.page.query_selector(f".{selector_value}", parent),
+                    lambda: self.page.query_selector(f".{escaped_classname}", parent),
                     timeout = timeout,
-                    timeout_error_message = f"No HTML element found with ID '{selector_value}' within {timeout} seconds.")
+                    timeout_error_message = f"No HTML element found with CSS class '{selector_value}' within {timeout} seconds.")
             case By.TAG_NAME:
                 return await self.web_await(
                     lambda: self.page.query_selector(selector_value, parent),
@@ -404,8 +409,9 @@ class WebScrapingMixin:
         """
         match selector_type:
             case By.CLASS_NAME:
+                escaped_classname = selector_value.translate(METACHAR_ESCAPER)
                 return await self.web_await(
-                    lambda: self.page.query_selector_all(f".{selector_value}", parent),
+                    lambda: self.page.query_selector_all(f".{escaped_classname}", parent),
                     timeout = timeout,
                     timeout_error_message = f"No HTML elements found with CSS class '{selector_value}' within {timeout} seconds.")
             case By.CSS_SELECTOR:
