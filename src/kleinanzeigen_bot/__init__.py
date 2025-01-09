@@ -616,7 +616,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg["shipping_options"]:
-            await self.web_click(By.CSS_SELECTOR, '[class*="jsx-963945432"]')
+            await self.web_click(By.XPATH, '//button[contains(@aria-label, "Dialog mit Optionen öffnen")]')
             await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
             await self.__set_shipping_options(ad_cfg)
         else:
