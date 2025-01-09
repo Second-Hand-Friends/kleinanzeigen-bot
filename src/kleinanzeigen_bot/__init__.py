@@ -821,14 +821,14 @@ class KleinanzeigenBot(WebScrapingMixin):
                     raise TimeoutError(f"Failed to set special attribute [{special_attribute_key}] (not found)") from ex
 
                 # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/368
-                elem_id = getattr(special_attr_elem.attrs, 'id' )
+                elem_id = getattr(special_attr_elem.attrs, 'id')
                 elem_id = ''.join(['\\' + c if c in '!"#$%&\'()*+,./:;<=>?@[\\]^`{|}~' else c for c in elem_id])
 
                 try:
                     if special_attr_elem.local_name == 'select':
                         LOG.debug("Attribute field '%s' seems to be a select...", special_attribute_key)
                         await self.web_select(By.ID, elem_id, special_attribute_value)
-                    elif getattr(special_attr_elem.attrs, 'type' ) == 'checkbox':
+                    elif getattr(special_attr_elem.attrs, 'type') == 'checkbox':
                         LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
                         await self.web_click(By.ID, elem_id)
                     else:
