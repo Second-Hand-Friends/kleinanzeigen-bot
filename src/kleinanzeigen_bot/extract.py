@@ -245,6 +245,9 @@ class AdExtractor(WebScrapingMixin):
             # change e.g. category "161/172" to "161/172/lautsprecher_kopfhoerer"
             info['category'] = f"{info['category']}/{info['special_attributes']['art_s']}"
             del info['special_attributes']['art_s']
+        if "schaden_s" in info['special_attributes']:
+            # change f to  'nein' and 't' to 'ja'
+            info['special_attributes']['schaden_s'] = info['special_attributes']['schaden_s'].translate(str.maketrans({'t': 'ja', 'f': 'nein'}))
         info['price'], info['price_type'] = await self._extract_pricing_info_from_ad_page()
         info['shipping_type'], info['shipping_costs'], info['shipping_options'] = await self._extract_shipping_info_from_ad_page()
         info['sell_directly'] = await self._extract_sell_directly_from_ad_page()
