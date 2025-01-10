@@ -8,6 +8,7 @@ import urllib.request as urllib_request
 import mimetypes
 from datetime import datetime
 from typing import Any, Final
+import json
 
 from .i18n import get_translating_logger, pluralize
 from .utils import is_integer, parse_decimal, save_dict
@@ -347,23 +348,35 @@ class AdExtractor(WebScrapingMixin):
                 ship_type = 'SHIPPING'
                 ship_costs = float(parse_decimal(shipping_price_parts[-2]))
 
-                # extract shipping options
-                # It is only possible the extract the cheapest shipping option,
-                # as the other options are not shown
+                # reading shipping option from kleinanzeigen
+                # and find the right one by price
+                shipping_costs = json.loads(
+                    (await self.web_request("https://gateway.kleinanzeigen.de/postad/api/v1/shipping-options?posterType=PRIVATE"))
+                    ["content"])["data"]["shippingOptionsResponse"]["options"]
+
+                internal_shipping_opt = [x for x in shipping_costs if x["priceInEuroCent"] == ship_costs * 100]
+
+                if not internal_shipping_opt:
+                    return 'NOT_APPLICABLE', ship_costs, shipping_options
+
+                # map to internal shipping identifiers used by kleinanzeigen-bot
                 shipping_option_mapping = {
-                    "DHL_2": "5,49",
-                    "Hermes_Päckchen": "4,50",
-                    "Hermes_S": "4,95",
-                    "DHL_5": "6,99",
-                    "Hermes_M": "6,75",
-                    "DHL_10": "10,49",
-                    "DHL_31,5": "19,99",
-                    "Hermes_L": "10,95",
+                    "DHL_001": "DHL_2",
+                    "DHL_002": "DHL_5",
+                    "DHL_003": "DHL_10",
+                    "DHL_004": "DHL_31,5",
+                    "DHL_005": "DHL_20",
+                    "HERMES_001": "Hermes_Päckchen",
+                    "HERMES_002": "Hermes_S",
+                    "HERMES_003": "Hermes_M",
+                    "HERMES_004": "Hermes_L"
                 }
-                for shipping_option, shipping_price in shipping_option_mapping.items():
-                    if shipping_price in shipping_text:
-                        shipping_options = [shipping_option]
-                        break
+
+                shipping_option = shipping_option_mapping.get(internal_shipping_opt[0]['id'])
+                if not shipping_option:
+                    return 'NOT_APPLICABLE', ship_costs, shipping_options
+
+                shipping_options = [shipping_option]
         except TimeoutError:  # no pricing box -> no shipping given
             ship_type = 'NOT_APPLICABLE'
 

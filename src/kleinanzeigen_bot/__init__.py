@@ -621,7 +621,8 @@ class KleinanzeigenBot(WebScrapingMixin):
             await self.__set_shipping_options(ad_cfg)
         else:
             try:
-                await self.web_click(By.CSS_SELECTOR, '[class*="jsx-2623555103"]')
+                await self.web_click(By.XPATH,
+                                     '//*[contains(@class, "ShippingSection")]//*//button[contains(@aria-label, "Dialog mit Optionen öffnen")]')
                 await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
                 await self.web_click(By.CSS_SELECTOR, '[class*="CarrierOption--Main"]')
                 if ad_cfg["shipping_costs"]:
@@ -852,6 +853,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             "DHL_5": ("Mittel", "Paket 5 kg"),
             "Hermes_M": ("Mittel", "M-Paket"),
             "DHL_10": ("Groß", "Paket 10 kg"),
+            "DHL_20": ("Groß", "Paket 20 kg"),
             "DHL_31,5": ("Groß", "Paket 31,5 kg"),
             "Hermes_L": ("Groß", "L-Paket"),
         }

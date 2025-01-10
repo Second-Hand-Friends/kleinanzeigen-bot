@@ -323,6 +323,7 @@ shipping_costs: # e.g. 2.95
 # - Hermes_M
 # possible package types for size L:
 # - DHL_10
+# - DHL_20
 # - DHL_31,5
 # - Hermes_L
 shipping_options: []
