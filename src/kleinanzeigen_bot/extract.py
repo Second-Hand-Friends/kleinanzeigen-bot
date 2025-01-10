@@ -8,7 +8,7 @@ import urllib.request as urllib_request
 import mimetypes
 from datetime import datetime
 from typing import Any, Final
-from . import json
+import json
 
 from .i18n import get_translating_logger, pluralize
 from .utils import is_integer, parse_decimal, save_dict
@@ -352,9 +352,9 @@ class AdExtractor(WebScrapingMixin):
                 # and find the right one by price
                 shipping_costs = json.loads(
                     (await self.web_request("https://gateway.kleinanzeigen.de/postad/api/v1/shipping-options?posterType=PRIVATE"))
-                        ["content"])["data"]["shippingOptionsResponse"]["options"]
+                    ["content"])["data"]["shippingOptionsResponse"]["options"]
 
-                internal_shipping_opt = [x for x in shipping_costs if x["priceInEuroCent"] == ship_costs*100]
+                internal_shipping_opt = [x for x in shipping_costs if x["priceInEuroCent"] == ship_costs * 100]
 
                 if not internal_shipping_opt:
                     return 'NOT_APPLICABLE', ship_costs, shipping_options
