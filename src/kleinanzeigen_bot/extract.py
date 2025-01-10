@@ -372,10 +372,11 @@ class AdExtractor(WebScrapingMixin):
                     "HERMES_004": "Hermes_L"
                 }
 
-                shipping_options = [shipping_option_mapping.get(internal_shipping_opt[0]['id'])]
-                if not shipping_options:
+                shipping_option = shipping_option_mapping.get(internal_shipping_opt[0]['id'])
+                if not shipping_option:
                     return 'NOT_APPLICABLE', ship_costs, shipping_options
 
+                shipping_options = [shipping_option]
         except TimeoutError:  # no pricing box -> no shipping given
             ship_type = 'NOT_APPLICABLE'
 
