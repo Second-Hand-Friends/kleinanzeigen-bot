@@ -87,7 +87,7 @@ jobs:
         else
           updates="$(echo "$updates" | grep Update | grep -v kleinanzeigen-bot || true)"
           if [[ $(wc -l <<< "$updates") -eq 1 ]]; then
-            echo "title=$(echo "$updates" | head -n 1)" >> "${GITHUB_OUTPUT}"
+            echo "title=$(echo "$updates" | head -n 1 | sed 's/ successful//')" >> "${GITHUB_OUTPUT}"
           else
             echo "title=Update Python dependencies" >> "${GITHUB_OUTPUT}"
           fi
@@ -106,7 +106,7 @@ jobs:
         title: "chore: ${{ steps.update_deps.outputs.title }}"
         author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
         committer: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
-        commit-message: "chore: Update Python dependencies"
+        commit-message: "chore: ${{ steps.update_deps.outputs.title }}"
         body: ${{ steps.update_deps.outputs.updates }}
         add-paths: pdm.lock
         branch: dependencies/pdm
