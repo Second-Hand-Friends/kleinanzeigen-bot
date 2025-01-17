@@ -668,6 +668,18 @@ class KleinanzeigenBot(WebScrapingMixin):
         #############################
         if ad_cfg["contact"]["zipcode"]:
             await self.web_input(By.ID, "pstad-zip", ad_cfg["contact"]["zipcode"])
+            # Set city if location is specified
+            if ad_cfg["contact"].get("location"):
+                try:
+                    await self.web_sleep(1)  # Wait for city dropdown to populate
+                    options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
+                    for option in options:
+                        option_text = await self.web_text(By.CSS_SELECTOR, "option", parent=option)
+                        if option_text == ad_cfg["contact"]["location"]:
+                            await self.web_select(By.ID, "pstad-citychsr", option_text)
+                            break
+                except TimeoutError:
+                    LOG.debug("Could not set city from location")
 
         #############################
         # set contact street
