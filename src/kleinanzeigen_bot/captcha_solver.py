@@ -75,7 +75,7 @@ class CaptchaSolver(WebScrapingMixin):
                 self._recognizer.dynamic_energy_threshold = False
                 audio = self._recognizer.record(source)
 
-            return self._recognizer.recognize_google(audio)
+            return "".join(self._recognizer.recognize_google(audio))
 
         except Exception as ex:
             LOG.debug(ex, exc_info=True)
