@@ -52,7 +52,7 @@ class CaptchaSolver(WebScrapingMixin):
             LOG.debug(ex, exc_info = True)
             return False
 
-    async def _process_audio_challenge(self, audio_url: str):
+    async def _process_audio_challenge(self, audio_url: str) -> str | None:
         """Process audio challenge and return the recognized text.
 
        @param audio_url: URL of the audio file to process
@@ -70,17 +70,16 @@ class CaptchaSolver(WebScrapingMixin):
 
             AudioSegment.from_mp3(mp3_file).export(wav_file, format="wav")
 
-            # Disable dynamic energy threshold to avoid failed reCAPTCHA audio transcription due to static noise
-            self._recognizer.dynamic_energy_threshold = False
-
             with speech_recognition.AudioFile(wav_file) as source:
+                # Disable dynamic energy threshold to avoid failed reCAPTCHA audio transcription due to static noise
+                self._recognizer.dynamic_energy_threshold = False
                 audio = self._recognizer.record(source)
 
-                return self._recognizer.recognize_google(audio)
+            return self._recognizer.recognize_google(audio)
 
         except Exception as ex:
             LOG.debug(ex, exc_info=True)
-            return
+            return None
         finally:
             for path in (mp3_file, wav_file):
                 if os.path.exists(path):
