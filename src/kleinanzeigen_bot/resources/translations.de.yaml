@@ -87,7 +87,8 @@ kleinanzeigen_bot/__init__.py:
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
     "Failed to set shipping attribute for type '%s'!": "Fehler beim setzen des Versandattributs für den Typ '%s'!"
-    "# Captcha present! Please solve the captcha.": "# Captcha vorhanden! Bitte lösen Sie das Captcha."
+    "# Captcha present! Trying to solve it...": "# Captcha vorhanden! Versuche zu lösen..."
+    "Captcha could not be solved, you have to solve it manually!": "Captcha konnte nicht gelöst werden, Sie müssen es manuell lösen!"
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
     " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
 

@@ -21,7 +21,9 @@ from . import utils, resources, extract
 from .i18n import Locale, get_current_locale, set_current_locale, get_translating_logger, pluralize
 from .utils import abspath, ainput, apply_defaults, ensure, is_frozen, safe_get, parse_datetime
 from .web_scraping_mixin import By, Element, Page, Is, WebScrapingMixin
+from .captcha_solver import CaptchaSolver
 from ._version import __version__
+
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
@@ -713,10 +715,15 @@ class KleinanzeigenBot(WebScrapingMixin):
         try:
             await self.web_find(By.CSS_SELECTOR, "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']", timeout = 2)
             LOG.warning("############################################")
-            LOG.warning("# Captcha present! Please solve the captcha.")
+            LOG.warning("# Captcha present! Trying to solve it...")
             LOG.warning("############################################")
             await self.web_scroll_page_down()
-            input(_("Press a key to continue..."))
+
+            solver = CaptchaSolver()
+            if not await solver.solve_captcha():
+                LOG.info("Captcha could not be solved, you have to solve it manually.")
+                input(_("Press a key to continue..."))
+
         except TimeoutError:
             pass
 
@@ -924,7 +931,6 @@ class KleinanzeigenBot(WebScrapingMixin):
         Determines which download mode was chosen with the arguments, and calls the specified download routine.
         This downloads either all, only unsaved (new), or specific ads given by ID.
         """
-
         ad_extractor = extract.AdExtractor(self.browser, self.config)
 
         # use relevant download routine
