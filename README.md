@@ -21,12 +21,12 @@
 
 ## <a name="about"></a>About
 
-**kleinanzeigen-bot** is a console based application to ease publishing of ads to [kleinanzeigen.de](https://kleinanzeigen.de).
+**kleinanzeigen-bot** is a console-based application to simplify the process of publishing ads on kleinanzeigen.de.
 
-It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https://github.com/Second-Hand-Friends/ebayKleinanzeigen) with the following advantages:
+It is a spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https://github.com/Second-Hand-Friends/ebayKleinanzeigen) with the following enhancements:
 - multi-language support (DE/EN)
 - supports Microsoft Edge browser (Chromium based)
-- does not require Selenium and chromedrivers
+- does not require [Selenium](https://www.selenium.dev/) and [ChromeDrivers](https://developer.chrome.com/docs/chromedriver/)
 - better captcha handling
 - config:
   - use YAML or JSON for config files
@@ -35,8 +35,23 @@ It is the spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https:/
   - reference categories by name (looked up from [categories.yaml](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml))
 - logging is configurable and colorized
 - provided as self-contained executable for Windows, Linux and macOS
-- source code is pylint/bandit/mypy checked and uses Python type hints
+- source code is Pylint/Bandit/mypy checked and uses [Python type hints](https://docs.python.org/3/library/typing.html)
 - CI builds
+
+
+### ⚠️ Legal Disclaimer
+
+The use of this program could violate the terms of service of kleinanzeigen.de applicable at the time of use.
+It is your responsibility to ensure the legal compliance of its use.
+The developers assume no liability for any damages or legal consequences.
+Use is at your own risk. Any unlawful use is strictly prohibited.
+
+### ⚠️ Rechtliche Hinweise
+
+Die Nutzung dieses Programms könnte gegen die zum Zeitpunkt der Nutzung geltenden Nutzungsbedingungen von kleinanzeigen.de verstoßen.
+Es liegt in Ihrer Verantwortung, die rechtliche Zulässigkeit der Nutzung zu prüfen.
+Die Entwickler übernehmen keinerlei Haftung für mögliche Schäden oder rechtliche Konsequenzen.
+Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist untersagt.
 
 
 ## <a name="installation"></a>Installation
