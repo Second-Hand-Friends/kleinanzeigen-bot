@@ -339,7 +339,22 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         RELEASE_NAME: ${{ steps.release.outputs.name }}
-        COMMIT_MSG: ${{ github.event.head_commit.message }} # https://stackoverflow.com/a/78420438/5116073
+        COMMIT_MSG: | # https://stackoverflow.com/a/78420438/5116073
+          ${{ github.event.head_commit.message }}
+
+          ---
+          #### ⚠️ Rechtlicher Hinweis
+          <p>Die Nutzung dieses Programms könnte gegen die zum Zeitpunkt der Verwendung gültigen Nutzungsbedingungen von kleinanzeigen.de verstoßen.
+          Es liegt in Ihrer Verantwortung, die rechtliche Zulässigkeit der Nutzung zu prüfen.
+          Die Entwickler übernehmen keinerlei Haftung für mögliche Schäden oder rechtliche Konsequenzen.
+          Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist untersagt.</p>
+
+          #### ⚠️ Legal notice
+          <p>The use of this program could violate the terms of service of kleinanzeigen.de valid at the time of use.
+          It is your responsibility to ensure the legal compliance of its use.
+          The developers assume no liability for any damages or legal consequences.
+          Use is at your own risk. Any unlawful use is strictly prohibited.</p>
+
       # https://cli.github.com/manual/gh_release_create
       run: |
         GH_DEBUG=1 gh release create "$RELEASE_NAME" \
