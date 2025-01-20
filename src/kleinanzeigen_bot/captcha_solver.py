@@ -1,4 +1,4 @@
-import os, logging, tempfile, random
+import os, logging, tempfile, uuid
 import urllib.request
 
 from typing import Final
@@ -59,14 +59,19 @@ class CaptchaSolver(WebScrapingMixin):
        @return: recognized text from the audio file
        """
 
+        # checking src for little more security
+        if not audio_url.lower().startswith('http'):
+            return None
+
         # get temporary directory and create temporary files
         tmp_dir = tempfile.gettempdir()
-        tmp_name = random.randrange(1,1000)
+        tmp_name = uuid.uuid4().hex
 
         mp3_file, wav_file = os.path.join(tmp_dir, f'{tmp_name}.mp3'), os.path.join(tmp_dir, f'{tmp_name}.wav')
 
         try:
-            urllib.request.urlretrieve(audio_url, mp3_file)
+            # url should start with http
+            urllib.request.urlretrieve(audio_url, mp3_file)  # nosec
 
             AudioSegment.from_mp3(mp3_file).export(wav_file, format="wav")
 
