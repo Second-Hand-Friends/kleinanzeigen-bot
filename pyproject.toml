@@ -5,7 +5,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 #
 
-[build-system] # https://backend.pdm-project.org/
+[build-system]  # https://backend.pdm-project.org/
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
@@ -15,33 +15,33 @@ dynamic = ["version"]
 description = "Command line tool to publish ads on kleinanzeigen.de"
 readme = "README.md"
 authors = [
-    {name = "sebthom", email = "sebthom@users.noreply.github.com"},
+  {name = "sebthom", email = "sebthom@users.noreply.github.com"},
 ]
 license = {text = "AGPL-3.0-or-later"}
 
 classifiers = [  # https://pypi.org/classifiers/
-    "Private :: Do Not Upload",
+  "Private :: Do Not Upload",
 
-    "Development Status :: 5 - Production/Stable",
-    "Environment :: Console",
-    "Operating System :: OS Independent",
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Operating System :: OS Independent",
 
-    "Intended Audience :: End Users/Desktop",
-    "Topic :: Office/Business",
+  "Intended Audience :: End Users/Desktop",
+  "Topic :: Office/Business",
 
-    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10"
+  "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10"
 ]
 requires-python = ">=3.10,<3.14"
 dependencies = [
-    "certifi",
-    "colorama",
-    "jaraco.text", # required by pkg_resources during runtime
-    "nodriver @ git+https://github.com/ultrafunkamsterdam/nodriver.git",
-    "ruamel.yaml",
-    "psutil",
-    "wcmatch",
+  "certifi",
+  "colorama",
+  "jaraco.text", # required by pkg_resources during runtime
+  "nodriver @ git+https://github.com/ultrafunkamsterdam/nodriver.git",
+  "ruamel.yaml",
+  "psutil",
+  "wcmatch",
 ]
 
 [project.urls]
@@ -54,30 +54,30 @@ Issues = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues"
 #####################
 # pdm https://github.com/pdm-project/pdm/
 #####################
-[tool.pdm.version] # https://backend.pdm-project.org/metadata/#dynamic-project-version
+[tool.pdm.version]  # https://backend.pdm-project.org/metadata/#dynamic-project-version
 source = "call"
-getter = "version:get_version" # uses get_version() of <project_root>/version.py
+getter = "version:get_version"  # uses get_version() of <project_root>/version.py
 write_to = "kleinanzeigen_bot/_version.py"
 write_template = "__version__ = '{}'\n"
 
 [tool.pdm.dev-dependencies]
 dev = [
-    "autopep8",
-    "bandit",
-    "toml", # required by bandit
-    "tomli", # required by bandit
-    "pytest",
-    "pytest-rerunfailures",
-    "pyinstaller",
-    "pylint",
-    "mypy",
-    "pyright",
+  "autopep8",
+  "bandit",
+  "toml", # required by bandit
+  "tomli", # required by bandit
+  "pytest",
+  "pytest-rerunfailures",
+  "pyinstaller",
+  "pylint",
+  "mypy",
+  "pyright",
 ]
 
-[tool.pdm.scripts] # https://pdm-project.org/latest/usage/scripts/
-app     = "python -m kleinanzeigen_bot"
+[tool.pdm.scripts]  # https://pdm-project.org/latest/usage/scripts/
+app   = "python -m kleinanzeigen_bot"
 compile.cmd = "python -O -m PyInstaller pyinstaller.spec --clean"
-compile.env = {PYTHONHASHSEED = "1", SOURCE_DATE_EPOCH = "0"} # https://pyinstaller.org/en/stable/advanced-topics.html#creating-a-reproducible-build
+compile.env = {PYTHONHASHSEED = "1", SOURCE_DATE_EPOCH = "0"}  # https://pyinstaller.org/en/stable/advanced-topics.html#creating-a-reproducible-build
 debug   = "python -m pdb -m kleinanzeigen_bot"
 format  = "autopep8 --recursive --in-place src tests --verbose"
 lint    = {shell = "pylint -v src tests && autopep8 -v --exit-code --recursive --diff src tests && mypy" }
@@ -95,11 +95,11 @@ itest   = "python -m pytest --capture=tee-sys -v -m 'itest'"
 [tool.autopep8]
 max_line_length = 160
 ignore = [ # https://github.com/hhatto/autopep8#features
-    "E124", # Don't change indention of multi-line statements
-    "E128", # Don't change indention of multi-line statements
-    "E231", # Don't add whitespace after colon (:) on type declaration
-    "E251", # Don't remove whitespace around parameter '=' sign.
-    "E401" # Don't put imports on separate lines
+  "E124",  # Don't change indention of multi-line statements
+  "E128",  # Don't change indention of multi-line statements
+  "E231",  # Don't add whitespace after colon (:) on type declaration
+  "E251",  # Don't remove whitespace around parameter '=' sign.
+  "E401"   # Don't put imports on separate lines
 ]
 aggressive = 3
 
@@ -156,32 +156,32 @@ persistent = "no"
 
 # https://pylint.pycqa.org/en/latest/user_guide/checkers/extensions.html
 load-plugins = [
-    "pylint.extensions.bad_builtin",
-    #"pylint.extensions.broad_try_clause",
-    "pylint.extensions.check_elif",
-    "pylint.extensions.code_style",
-    "pylint.extensions.comparison_placement",
-    #"pylint.extensions.confusing_elif",
-    "pylint.extensions.consider_ternary_expression",
-    "pylint.extensions.consider_refactoring_into_while_condition",
-    "pylint.extensions.dict_init_mutate",
-    "pylint.extensions.docstyle",
-    #"pylint.extensions.docparams",
-    "pylint.extensions.dunder",
-    "pylint.extensions.empty_comment",
-    "pylint.extensions.eq_without_hash",
-    "pylint.extensions.for_any_all",
-    #"pylint.extensions.magic_value",
-    #"pylint.extensions.mccabe",
-    "pylint.extensions.set_membership",
-    "pylint.extensions.no_self_use",
-    "pylint.extensions.overlapping_exceptions",
-    "pylint.extensions.private_import",
-    "pylint.extensions.redefined_loop_name",
-    "pylint.extensions.redefined_variable_type",
-    "pylint.extensions.set_membership",
-    "pylint.extensions.typing",
-    #"pylint.extensions.while_used"
+  "pylint.extensions.bad_builtin",
+  #"pylint.extensions.broad_try_clause",
+  "pylint.extensions.check_elif",
+  "pylint.extensions.code_style",
+  "pylint.extensions.comparison_placement",
+  #"pylint.extensions.confusing_elif",
+  "pylint.extensions.consider_ternary_expression",
+  "pylint.extensions.consider_refactoring_into_while_condition",
+  "pylint.extensions.dict_init_mutate",
+  "pylint.extensions.docstyle",
+  #"pylint.extensions.docparams",
+  "pylint.extensions.dunder",
+  "pylint.extensions.empty_comment",
+  "pylint.extensions.eq_without_hash",
+  "pylint.extensions.for_any_all",
+  #"pylint.extensions.magic_value",
+  #"pylint.extensions.mccabe",
+  "pylint.extensions.set_membership",
+  "pylint.extensions.no_self_use",
+  "pylint.extensions.overlapping_exceptions",
+  "pylint.extensions.private_import",
+  "pylint.extensions.redefined_loop_name",
+  "pylint.extensions.redefined_variable_type",
+  "pylint.extensions.set_membership",
+  "pylint.extensions.typing",
+  #"pylint.extensions.while_used"
 ]
 
 [tool.pylint.basic]
@@ -190,42 +190,42 @@ good-names = ["i", "j", "k", "v", "by", "ex", "fd", "_", "T"]
 [tool.pylint.format]
 # https://pylint.pycqa.org/en/latest/technical_reference/features.html#format-checker
 # https://pylint.pycqa.org/en/latest/user_guide/checkers/features.html#format-checker-messages
-max-line-length = 160   # maximum number of characters on a single line (C0301)
-max-module-lines = 2000 # maximum number of lines in a module (C0302)
+max-line-length  = 160   # maximum number of characters on a single line (C0301)
+max-module-lines = 2000  # maximum number of lines in a module (C0302)
 
 [tool.pylint.logging]
 logging-modules = "logging"
 
 [tool.pylint.messages_control]
 # https://pylint.pycqa.org/en/latest/technical_reference/features.html#messages-control-options
-disable= [
-    "broad-except",
-    "consider-using-assignment-expr",
-    "docstring-first-line-empty",
-    "global-statement",
-    "missing-docstring",
-    "multiple-imports",
-    "multiple-statements",
-    "no-self-use",
-    "no-member", # pylint cannot find async methods from super class
-    "too-few-public-methods"
+disable = [
+  "broad-except",
+  "consider-using-assignment-expr",
+  "docstring-first-line-empty",
+  "global-statement",
+  "missing-docstring",
+  "multiple-imports",
+  "multiple-statements",
+  "no-self-use",
+  "no-member",  # pylint cannot find async methods from super class
+  "too-few-public-methods"
 ]
 
 [tool.pylint.miscelaneous]
 # https://pylint.pycqa.org/en/latest/user_guide/configuration/all-options.html#miscellaneous-checker
-notes = [ "FIXME", "XXX", "TODO" ] # list of note tags to take in consideration
+notes = [ "FIXME", "XXX", "TODO" ]  # list of note tags to take in consideration
 
 [tool.pylint.design]
 # https://pylint.pycqa.org/en/latest/user_guide/configuration/all-options.html#design-checker
 # https://pylint.pycqa.org/en/latest/user_guide/checkers/features.html#design-checker-messages
-max-args       = 6  # maximum number of arguments for function / method (R0913)
-max-attributes = 15 # maximum number of instance attributes for a class (R0902)
-max-branches   = 40 # maximum number of branch for function / method body (R0912)
-max-locals     = 30 # maximum number of local variables for function / method body (R0914)
-max-returns    = 15 # maximum number of return / yield for function / method body (R0911)
-max-statements = 150 # maximum number of statements in function / method body (R0915)
-max-positional-arguments = 6 # maximum number of positional arguments for function / method (R0917)
-max-public-methods = 30 # maximum number of public methods for a class (R0904)
+max-args       = 6   # max. number of args for function / method (R0913)
+max-attributes = 15  # max. number of instance attrs for a class (R0902)
+max-branches   = 40  # max. number of branch for function / method body (R0912)
+max-locals     = 30  # max. number of local vars for function / method body (R0914)
+max-returns    = 15  # max. number of return / yield for function / method body (R0911)
+max-statements = 150 # max. number of statements in function / method body (R0915)
+max-public-methods = 30  # max. number of public methods for a class (R0904)
+max-positional-arguments = 6  # max. number of positional args for function / method (R0917)
 
 
 #####################
@@ -236,5 +236,5 @@ max-public-methods = 30 # maximum number of public methods for a class (R0904)
 # https://docs.pytest.org/en/stable/reference.html#confval-addopts
 addopts = "--strict-markers -p no:cacheprovider --doctest-modules --ignore=kleinanzeigen_bot/__main__.py"
 markers = [
-    "itest: marks a test as an integration test (i.e. a test with external dependencies)"
+  "itest: marks a test as an integration test (i.e. a test with external dependencies)"
 ]
