@@ -281,11 +281,11 @@ class KleinanzeigenBot(WebScrapingMixin):
         if ad_cfg["id"]:
             current_hash = calculate_content_hash(ad_cfg)
             stored_hash = ad_cfg_orig.get("content_hash")
-            
+
             LOG.debug(" -> Hash-Vergleich für [%s]:", ad_file_relative)
             LOG.debug("    Gespeicherter Hash: %s", stored_hash)
             LOG.debug("    Aktueller Hash: %s", current_hash)
-            
+
             if stored_hash and current_hash == stored_hash:
                 # No changes - check republication interval
                 ad_age = datetime.utcnow() - last_updated_on
