@@ -54,6 +54,9 @@ Issues = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues"
 #####################
 # pdm https://github.com/pdm-project/pdm/
 #####################
+[tool.pdm]
+distribution = false
+
 [tool.pdm.version]  # https://backend.pdm-project.org/metadata/#dynamic-project-version
 source = "call"
 getter = "version:get_version"  # uses get_version() of <project_root>/version.py
