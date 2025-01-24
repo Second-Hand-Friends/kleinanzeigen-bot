@@ -269,6 +269,11 @@ class AdExtractor(WebScrapingMixin):
         info['created_on'] = creation_date
         info['updated_on'] = None  # will be set later on
 
+        # Berechne den initialen Hash für die heruntergeladene Anzeige
+        from kleinanzeigen_bot import KleinanzeigenBot
+        bot = KleinanzeigenBot()
+        info['content_hash'] = bot.calculate_content_hash(info)
+
         return info
 
     async def _extract_category_from_ad_page(self) -> str:

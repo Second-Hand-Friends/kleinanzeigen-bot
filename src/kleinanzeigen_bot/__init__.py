@@ -262,6 +262,38 @@ class KleinanzeigenBot(WebScrapingMixin):
         LOG.info("App version: %s", self.get_version())
         LOG.info("Python version: %s", sys.version)
 
+    def calculate_content_hash(self, ad_cfg: dict[str, Any]) -> str:
+        """Berechnet einen Hash für die durch den Nutzer veränderbaren Felder der Anzeige."""
+        import hashlib
+
+        # Relevante Felder für den Hash
+        content = {
+            "active": bool(ad_cfg.get("active", True)),  # Konvertiere explizit zu bool
+            "type": str(ad_cfg.get("type", "")),  # Konvertiere explizit zu string
+            "title": str(ad_cfg.get("title", "")),
+            "description": str(ad_cfg.get("description", "")),
+            "category": str(ad_cfg.get("category", "")),
+            "price": str(ad_cfg.get("price", "")),  # Preis immer als String
+            "price_type": str(ad_cfg.get("price_type", "")),
+            "special_attributes": dict(ad_cfg.get("special_attributes", {})),  # Kopiere das Dict
+            "shipping_type": str(ad_cfg.get("shipping_type", "")),
+            "shipping_costs": str(ad_cfg.get("shipping_costs", "")),
+            "shipping_options": sorted([str(x) for x in (ad_cfg.get("shipping_options") or [])]),  # Konvertiere zu Liste und sortiere
+            "sell_directly": bool(ad_cfg.get("sell_directly", False)),  # Konvertiere explizit zu bool
+            "images": sorted([os.path.basename(img) if isinstance(img, str) else str(img) for img in ad_cfg.get("images", [])]),  # Nur Dateinamen
+            "contact": {
+                "name": str(ad_cfg.get("contact", {}).get("name", "")),
+                "street": str(ad_cfg.get("contact", {}).get("street", "None")),  # Explizit "None" als String für None-Werte
+                "zipcode": str(ad_cfg.get("contact", {}).get("zipcode", "")),
+                "phone": str(ad_cfg.get("contact", {}).get("phone", ""))
+            }
+        }
+        
+        # Erstelle einen sortierten JSON-String für konsistente Hashes
+        content_str = json.dumps(content, sort_keys=True)
+        LOG.debug("Hash-Inhalt: %s", content_str)
+        return hashlib.sha256(content_str.encode()).hexdigest()
+
     def load_ads(self, *, ignore_inactive:bool = True, check_id:bool = True) -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
         LOG.info("Searching for ad config files...")
 
@@ -316,14 +348,29 @@ class KleinanzeigenBot(WebScrapingMixin):
                         last_updated_on = None
 
                     if last_updated_on:
-                        ad_age = datetime.utcnow() - last_updated_on
-                        if ad_age.days <= ad_cfg["republication_interval"]:
-                            LOG.info(" -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
-                                ad_file_relative,
-                                ad_age.days,
-                                ad_cfg["republication_interval"]
-                            )
-                            continue
+                        # Prüfe zuerst auf Änderungen
+                        if ad_cfg["id"]:
+                            current_hash = self.calculate_content_hash(ad_cfg)
+                            stored_hash = ad_cfg_orig.get("content_hash")
+                            
+                            LOG.debug(" -> Hash-Vergleich für [%s]:", ad_file_relative)
+                            LOG.debug("    Gespeicherter Hash: %s", stored_hash)
+                            LOG.debug("    Aktueller Hash: %s", current_hash)
+                            
+                            if stored_hash and current_hash == stored_hash:
+                                # Keine Änderungen - prüfe das republication_interval
+                                ad_age = datetime.utcnow() - last_updated_on
+                                if ad_age.days <= ad_cfg["republication_interval"]:
+                                    LOG.info(" -> ÜBERSPRUNGEN: Anzeige [%s] wurde vor %d Tagen veröffentlicht. Wiederveröffentlichung ist erst nach %s Tagen erforderlich",
+                                        ad_file_relative,
+                                        ad_age.days,
+                                        ad_cfg["republication_interval"]
+                                    )
+                                    continue
+                            else:
+                                LOG.info(" -> Änderungen in Anzeige [%s] erkannt, wird neu veröffentlicht", ad_file_relative)
+                                # Aktualisiere den Hash in der Original-Konfiguration
+                                ad_cfg_orig["content_hash"] = current_hash
 
             ad_cfg["description"] = descr_prefix + (ad_cfg["description"] or "") + descr_suffix
             ad_cfg["description"] = ad_cfg["description"].replace("@", "(at)")
@@ -749,14 +796,16 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = 20)
 
-        ad_cfg_orig["updated_on"] = datetime.utcnow().isoformat()
-        if not ad_cfg["created_on"] and not ad_cfg["id"]:
-            ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
-
         # extract the ad id from the URL's query parameter
         current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(self.page.url).query)
         ad_id = int(current_url_query_params.get("adId", [])[0])
         ad_cfg_orig["id"] = ad_id
+
+        # Aktualisiere den Content-Hash nach erfolgreicher Veröffentlichung
+        ad_cfg_orig["content_hash"] = self.calculate_content_hash(ad_cfg)
+        ad_cfg_orig["updated_on"] = datetime.utcnow().isoformat()
+        if not ad_cfg["created_on"] and not ad_cfg["id"]:
+            ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
 
         LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
 
