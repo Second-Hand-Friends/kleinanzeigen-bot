@@ -296,6 +296,7 @@ browser:
 login:
   username: ""
   password: ""
+```
 
 ### <a name="ad-config"></a>2) Ad configuration
 
