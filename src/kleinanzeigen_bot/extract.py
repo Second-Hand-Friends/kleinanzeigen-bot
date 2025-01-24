@@ -11,7 +11,7 @@ from typing import Any, Final
 import json
 
 from .i18n import get_translating_logger, pluralize
-from .utils import is_integer, parse_decimal, save_dict
+from .utils import is_integer, parse_decimal, save_dict, calculate_content_hash
 from .web_scraping_mixin import Browser, By, Element, Is, WebScrapingMixin
 
 __all__ = [
@@ -270,9 +270,7 @@ class AdExtractor(WebScrapingMixin):
         info['updated_on'] = None  # will be set later on
 
         # Berechne den initialen Hash für die heruntergeladene Anzeige
-        from kleinanzeigen_bot import KleinanzeigenBot
-        bot = KleinanzeigenBot()
-        info['content_hash'] = bot.calculate_content_hash(info)
+        info['content_hash'] = calculate_content_hash(info)
 
         return info
 
