@@ -113,6 +113,12 @@ kleinanzeigen_bot/__init__.py:
     'Downloaded ad with id %d': 'Anzeige mit der ID %d heruntergeladen'
     'The page with the id %d does not exist!': 'Die Seite mit der ID %d existiert nicht!'
 
+  __check_ad_republication:
+    "Hash comparison for [%s]:": "Hash-Vergleich für [%s]:"
+    "    Stored hash: %s": "    Gespeicherter Hash: %s"
+    "    Current hash: %s": "    Aktueller Hash: %s"
+    "Changes detected in ad [%s], will republish": "Änderungen in Anzeige [%s] erkannt, wird neu veröffentlicht"
+
 
 #################################################
 kleinanzeigen_bot/extract.py:

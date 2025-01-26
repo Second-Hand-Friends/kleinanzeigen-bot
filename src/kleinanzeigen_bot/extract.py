@@ -269,7 +269,7 @@ class AdExtractor(WebScrapingMixin):
         info['created_on'] = creation_date
         info['updated_on'] = None  # will be set later on
 
-        # Berechne den initialen Hash für die heruntergeladene Anzeige
+        # Calculate the initial hash for the downloaded ad
         info['content_hash'] = calculate_content_hash(info)
 
         return info

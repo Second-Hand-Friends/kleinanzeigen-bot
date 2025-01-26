@@ -282,23 +282,23 @@ class KleinanzeigenBot(WebScrapingMixin):
             current_hash = calculate_content_hash(ad_cfg)
             stored_hash = ad_cfg_orig.get("content_hash")
 
-            LOG.debug(" -> Hash-Vergleich für [%s]:", ad_file_relative)
-            LOG.debug("    Gespeicherter Hash: %s", stored_hash)
-            LOG.debug("    Aktueller Hash: %s", current_hash)
+            LOG.debug("Hash comparison for [%s]:", ad_file_relative)
+            LOG.debug("    Stored hash: %s", stored_hash)
+            LOG.debug("    Current hash: %s", current_hash)
 
             if stored_hash and current_hash == stored_hash:
                 # No changes - check republication interval
                 ad_age = datetime.utcnow() - last_updated_on
                 if ad_age.days <= ad_cfg["republication_interval"]:
                     LOG.info(
-                        " -> ÜBERSPRUNGEN: Anzeige [%s] wurde vor %d Tagen veröffentlicht. Wiederveröffentlichung ist erst nach %s Tagen erforderlich",
+                        " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
                         ad_file_relative,
                         ad_age.days,
                         ad_cfg["republication_interval"]
                     )
                     return False
             else:
-                LOG.info(" -> Änderungen in Anzeige [%s] erkannt, wird neu veröffentlicht", ad_file_relative)
+                LOG.info("Changes detected in ad [%s], will republish", ad_file_relative)
                 # Update hash in original configuration
                 ad_cfg_orig["content_hash"] = current_hash
                 return True
@@ -791,7 +791,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         if not ad_cfg["created_on"] and not ad_cfg["id"]:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
 
-        LOG.info(" -> ERFOLG: Anzeige mit ID %s veröffentlicht", ad_id)
+        LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
 
         utils.save_dict(ad_file, ad_cfg_orig)
 
