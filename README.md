@@ -22,22 +22,7 @@
 ## <a name="about"></a>About
 
 **kleinanzeigen-bot** is a console-based application to simplify the process of publishing ads on kleinanzeigen.de.
-
-It is a spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https://github.com/Second-Hand-Friends/ebayKleinanzeigen) with the following enhancements:
-- multi-language support (DE/EN)
-- supports Microsoft Edge browser (Chromium based)
-- does not require [Selenium](https://www.selenium.dev/) and [ChromeDrivers](https://developer.chrome.com/docs/chromedriver/)
-- better captcha handling
-- config:
-  - use YAML or JSON for config files
-  - one config file per ad
-  - use globbing (wildcards) to select images from local disk via [wcmatch](https://facelessuser.github.io/wcmatch/glob/#syntax)
-  - reference categories by name (looked up from [categories.yaml](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml))
-- logging is configurable and colorized
-- provided as self-contained executable for Windows, Linux and macOS
-- source code is Pylint/Bandit/mypy checked and uses [Python type hints](https://docs.python.org/3/library/typing.html)
-- CI builds
-
+It is a spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https://github.com/Second-Hand-Friends/ebayKleinanzeigen).
 
 ### ⚠️ Legal Disclaimer
 
