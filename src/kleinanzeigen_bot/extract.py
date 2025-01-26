@@ -11,7 +11,7 @@ from typing import Any, Final
 import json
 
 from .i18n import get_translating_logger, pluralize
-from .utils import is_integer, parse_decimal, save_dict
+from .utils import is_integer, parse_decimal, save_dict, calculate_content_hash
 from .web_scraping_mixin import Browser, By, Element, Is, WebScrapingMixin
 
 __all__ = [
@@ -268,6 +268,9 @@ class AdExtractor(WebScrapingMixin):
         creation_date = datetime.fromisoformat(creation_date).isoformat()
         info['created_on'] = creation_date
         info['updated_on'] = None  # will be set later on
+
+        # Calculate the initial hash for the downloaded ad
+        info['content_hash'] = calculate_content_hash(info)
 
         return info
 

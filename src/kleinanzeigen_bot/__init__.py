@@ -19,7 +19,7 @@ from wcmatch import glob
 
 from . import utils, resources, extract
 from .i18n import Locale, get_current_locale, set_current_locale, get_translating_logger, pluralize
-from .utils import abspath, ainput, apply_defaults, ensure, is_frozen, safe_get, parse_datetime
+from .utils import abspath, ainput, apply_defaults, ensure, is_frozen, safe_get, parse_datetime, calculate_content_hash
 from .web_scraping_mixin import By, Element, Page, Is, WebScrapingMixin
 from ._version import __version__
 
@@ -262,6 +262,49 @@ class KleinanzeigenBot(WebScrapingMixin):
         LOG.info("App version: %s", self.get_version())
         LOG.info("Python version: %s", sys.version)
 
+    def __check_ad_republication(self, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any], ad_file_relative: str) -> bool:
+        """
+        Check if an ad needs to be republished based on changes and republication interval.
+        Returns True if the ad should be republished.
+        """
+        if ad_cfg["updated_on"]:
+            last_updated_on = parse_datetime(ad_cfg["updated_on"])
+        elif ad_cfg["created_on"]:
+            last_updated_on = parse_datetime(ad_cfg["created_on"])
+        else:
+            return True
+
+        if not last_updated_on:
+            return True
+
+        # Check for changes first
+        if ad_cfg["id"]:
+            current_hash = calculate_content_hash(ad_cfg)
+            stored_hash = ad_cfg_orig.get("content_hash")
+
+            LOG.debug("Hash comparison for [%s]:", ad_file_relative)
+            LOG.debug("    Stored hash: %s", stored_hash)
+            LOG.debug("    Current hash: %s", current_hash)
+
+            if stored_hash and current_hash == stored_hash:
+                # No changes - check republication interval
+                ad_age = datetime.utcnow() - last_updated_on
+                if ad_age.days <= ad_cfg["republication_interval"]:
+                    LOG.info(
+                        " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
+                        ad_file_relative,
+                        ad_age.days,
+                        ad_cfg["republication_interval"]
+                    )
+                    return False
+            else:
+                LOG.info("Changes detected in ad [%s], will republish", ad_file_relative)
+                # Update hash in original configuration
+                ad_cfg_orig["content_hash"] = current_hash
+                return True
+
+        return True
+
     def load_ads(self, *, ignore_inactive:bool = True, check_id:bool = True) -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
         LOG.info("Searching for ad config files...")
 
@@ -275,8 +318,10 @@ class KleinanzeigenBot(WebScrapingMixin):
         if not ad_files:
             return []
 
-        descr_prefix = self.config["ad_defaults"]["description"]["prefix"] or ""
-        descr_suffix = self.config["ad_defaults"]["description"]["suffix"] or ""
+        description_config = {
+            "prefix": self.config["ad_defaults"]["description"]["prefix"] or "",
+            "suffix": self.config["ad_defaults"]["description"]["suffix"] or ""
+        }
 
         ids = []
         use_specific_ads = False
@@ -308,24 +353,10 @@ class KleinanzeigenBot(WebScrapingMixin):
                     continue
 
                 if self.ads_selector == "due":
-                    if ad_cfg["updated_on"]:
-                        last_updated_on = parse_datetime(ad_cfg["updated_on"])
-                    elif ad_cfg["created_on"]:
-                        last_updated_on = parse_datetime(ad_cfg["created_on"])
-                    else:
-                        last_updated_on = None
+                    if not self.__check_ad_republication(ad_cfg, ad_cfg_orig, ad_file_relative):
+                        continue
 
-                    if last_updated_on:
-                        ad_age = datetime.utcnow() - last_updated_on
-                        if ad_age.days <= ad_cfg["republication_interval"]:
-                            LOG.info(" -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
-                                ad_file_relative,
-                                ad_age.days,
-                                ad_cfg["republication_interval"]
-                            )
-                            continue
-
-            ad_cfg["description"] = descr_prefix + (ad_cfg["description"] or "") + descr_suffix
+            ad_cfg["description"] = description_config["prefix"] + (ad_cfg["description"] or "") + description_config["suffix"]
             ad_cfg["description"] = ad_cfg["description"].replace("@", "(at)")
             ensure(len(ad_cfg["description"]) <= 4000, f"Length of ad description including prefix and suffix exceeds 4000 chars. @ [{ad_file}]")
 
@@ -749,14 +780,16 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = 20)
 
-        ad_cfg_orig["updated_on"] = datetime.utcnow().isoformat()
-        if not ad_cfg["created_on"] and not ad_cfg["id"]:
-            ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
-
         # extract the ad id from the URL's query parameter
         current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(self.page.url).query)
         ad_id = int(current_url_query_params.get("adId", [])[0])
         ad_cfg_orig["id"] = ad_id
+
+        # Update content hash after successful publication
+        ad_cfg_orig["content_hash"] = calculate_content_hash(ad_cfg)
+        ad_cfg_orig["updated_on"] = datetime.utcnow().isoformat()
+        if not ad_cfg["created_on"] and not ad_cfg["id"]:
+            ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
 
         LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
 
