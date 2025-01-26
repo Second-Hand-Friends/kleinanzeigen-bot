@@ -153,6 +153,7 @@ def set_current_locale(new_locale:Locale) -> None:
 
 def pluralize(noun:str, count:int | Sized, prefix_with_count:bool = True) -> str:
     """
+    >>> set_current_locale(Locale("en"))  # Setup for doctests
     >>> pluralize("field", 1)
     '1 field'
     >>> pluralize("field", 2)
