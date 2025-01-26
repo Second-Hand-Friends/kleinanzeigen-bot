@@ -281,7 +281,6 @@ browser:
 login:
   username: ""
   password: ""
-
 ```
 
 ### <a name="ad-config"></a>2) Ad configuration
@@ -342,9 +341,11 @@ contact:
 
 republication_interval: # every X days the ad should be re-published
 
-id: # set automatically
-created_on: # set automatically
-updated_on: # set automatically
+# The following fields are automatically managed by the bot:
+id: # the ID assigned by kleinanzeigen.de
+created_on: # ISO timestamp when the ad was first published
+updated_on: # ISO timestamp when the ad was last published
+content_hash: # hash of the ad content, used to detect changes
 ```
 
 ### <a name="existing-browser"></a>3) Using an existing browser window
