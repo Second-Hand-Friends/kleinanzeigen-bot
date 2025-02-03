@@ -22,6 +22,11 @@ __pycache__
 /.pdm-build/
 /.pdm-python
 
+# test coverage
+/.coverage
+/htmlcov/
+/coverage.xml
+
 # Eclipse
 /.project
 /.pydevproject

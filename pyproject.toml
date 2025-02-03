@@ -60,20 +60,6 @@ getter = "version:get_version"  # uses get_version() of <project_root>/version.p
 write_to = "kleinanzeigen_bot/_version.py"
 write_template = "__version__ = '{}'\n"
 
-[tool.pdm.dev-dependencies]
-dev = [
-  "autopep8",
-  "bandit",
-  "toml", # required by bandit
-  "tomli", # required by bandit
-  "pytest",
-  "pytest-rerunfailures",
-  "pyinstaller",
-  "pylint",
-  "mypy",
-  "pyright",
-]
-
 [tool.pdm.scripts]  # https://pdm-project.org/latest/usage/scripts/
 app   = "python -m kleinanzeigen_bot"
 compile.cmd = "python -O -m PyInstaller pyinstaller.spec --clean"
@@ -234,7 +220,22 @@ max-positional-arguments = 6  # max. number of positional args for function / me
 #####################
 [tool.pytest.ini_options]
 # https://docs.pytest.org/en/stable/reference.html#confval-addopts
-addopts = "--strict-markers -p no:cacheprovider --doctest-modules --ignore=kleinanzeigen_bot/__main__.py"
+addopts = "--strict-markers -p no:cacheprovider --doctest-modules --cov=kleinanzeigen_bot --cov-report=term-missing --ignore=kleinanzeigen_bot/__main__.py"
 markers = [
   "itest: marks a test as an integration test (i.e. a test with external dependencies)"
+]
+
+[dependency-groups]
+dev = [
+    "autopep8",
+    "bandit",
+    "toml",
+    "tomli",
+    "pytest",
+    "pytest-rerunfailures",
+    "pyinstaller",
+    "pylint",
+    "mypy",
+    "pyright",
+    "pytest-cov>=6.0.0",
 ]
