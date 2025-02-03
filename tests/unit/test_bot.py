@@ -6,6 +6,7 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 import pytest
 from kleinanzeigen_bot import KleinanzeigenBot
 
+
 class TestKleinanzeigenBot:
     @pytest.fixture
     def bot(self) -> KleinanzeigenBot:

@@ -4,8 +4,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
 import logging
+from typing import Any, Final
+
 import pytest
-from typing import Any, Dict, Final
 
 from kleinanzeigen_bot import utils
 from kleinanzeigen_bot.i18n import get_translating_logger
@@ -15,8 +16,9 @@ utils.configure_console_logging()
 LOG:Final[logging.Logger] = get_translating_logger("kleinanzeigen_bot")
 LOG.setLevel(logging.DEBUG)
 
+
 @pytest.fixture
-def sample_config() -> Dict[str, Any]:
+def sample_config() -> dict[str, Any]:
     return {
         "login": {
             "username": "test_user",
@@ -39,8 +41,9 @@ def sample_config() -> Dict[str, Any]:
         "ad_files": ["ads/*.yaml"]
     }
 
+
 @pytest.fixture
-def sample_ad_config() -> Dict[str, Any]:
+def sample_ad_config() -> dict[str, Any]:
     return {
         "title": "Test Item",
         "description": "Test Description",
