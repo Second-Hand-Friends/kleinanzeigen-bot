@@ -347,15 +347,15 @@ def calculate_content_hash(ad_cfg: dict[str, Any]) -> str:
         "category": str(ad_cfg.get("category", "")),
         "price": str(ad_cfg.get("price", "")),  # Price always as string
         "price_type": str(ad_cfg.get("price_type", "")),
-        "special_attributes": dict(ad_cfg.get("special_attributes", {})),  # Copy the dict
+        "special_attributes": dict(ad_cfg.get("special_attributes") or {}),  # Handle None case
         "shipping_type": str(ad_cfg.get("shipping_type", "")),
         "shipping_costs": str(ad_cfg.get("shipping_costs", "")),
-        "shipping_options": sorted([str(x) for x in (ad_cfg.get("shipping_options") or [])]),  # Convert to list and sort
+        "shipping_options": sorted([str(x) for x in (ad_cfg.get("shipping_options") or [])]),  # Handle None case
         "sell_directly": bool(ad_cfg.get("sell_directly", False)),  # Explicitly convert to bool
-        "images": sorted([os.path.basename(img) if isinstance(img, str) else str(img) for img in ad_cfg.get("images", [])]),  # Only filenames
+        "images": sorted([os.path.basename(str(img)) if img is not None else "" for img in (ad_cfg.get("images") or [])]),  # Handle None values in images
         "contact": {
             "name": str(ad_cfg.get("contact", {}).get("name", "")),
-            "street": str(ad_cfg.get("contact", {}).get("street", "None")),  # Explicitly "None" as string for None values
+            "street": str(ad_cfg.get("contact", {}).get("street", "")),  # Changed from "None" to empty string for consistency
             "zipcode": str(ad_cfg.get("contact", {}).get("zipcode", "")),
             "phone": str(ad_cfg.get("contact", {}).get("phone", ""))
         }
