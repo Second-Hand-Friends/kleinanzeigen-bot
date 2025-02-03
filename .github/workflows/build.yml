@@ -16,6 +16,7 @@ on:
     - '**'
     paths-ignore:
     - '**/*.md'
+    - '.act*'
     - '.editorconfig'
     - '.git*'
     - '.github/*.yml'
@@ -26,6 +27,7 @@ on:
   pull_request:
     paths-ignore:
     - '**/*.md'
+    - '.act*'
     - '.editorconfig'
     - '.git*'
     - '.github/*.yml'

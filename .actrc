@@ -6,4 +6,4 @@
 -W .github/workflows/build.yml
 -j build
 --matrix os:ubuntu-latest
---matrix PYTHON_VERSION:3.12.1
+--matrix PYTHON_VERSION:3.13.1
