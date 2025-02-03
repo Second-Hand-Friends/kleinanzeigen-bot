@@ -33,21 +33,21 @@ def test_ensure() -> None:
 def test_calculate_content_hash_with_none_values() -> None:
     """Test calculate_content_hash with None values in the ad configuration."""
     ad_cfg = {
-        # Minimale Konfiguration mit None-Werten wie im Bug-Report beschrieben
+        # Minimal configuration with None values as described in bug report
         "id": "123456789",
         "created_on": "2022-07-19T07:30:20.489289",
         "updated_on": "2025-01-22T19:46:46.735896",
-        "title": "Test Anzeige",
-        "description": "Test Beschreibung",
-        "images": [None, "/path/to/image.jpg", None],  # None-Werte in der images Liste
-        "shipping_options": None,  # None statt Liste
-        "special_attributes": None,  # None statt Dictionary
+        "title": "Test Ad",
+        "description": "Test Description",
+        "images": [None, "/path/to/image.jpg", None],  # List containing None values
+        "shipping_options": None,  # None instead of list
+        "special_attributes": None,  # None instead of dictionary
         "contact": {
-            "street": None  # None-Wert in contact
+            "street": None  # None value in contact
         }
     }
 
-    # Sollte keinen TypeError werfen
+    # Should not raise TypeError
     hash_value = utils.calculate_content_hash(ad_cfg)
     assert isinstance(hash_value, str)
-    assert len(hash_value) == 64  # SHA-256 Hash ist 64 Zeichen lang
+    assert len(hash_value) == 64  # SHA-256 hash is 64 characters long
