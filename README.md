@@ -33,8 +33,8 @@ Use is at your own risk. Any unlawful use is strictly prohibited.
 
 ### ⚠️ Rechtliche Hinweise
 
-Die Nutzung dieses Programms könnte gegen die zum Zeitpunkt der Nutzung geltenden Nutzungsbedingungen von kleinanzeigen.de verstoßen.
-Es liegt in Ihrer Verantwortung, die rechtliche Zulässigkeit der Nutzung zu prüfen.
+Die Verwendung dieses Programms kann unter Umständen gegen die zum jeweiligen Zeitpunkt bei kleinanzeigen.de geltenden Nutzungsbedingungen verstoßen.
+Es liegt in Ihrer Verantwortung, die rechtliche Zulässigkeit der Nutzung dieses Programms zu prüfen.
 Die Entwickler übernehmen keinerlei Haftung für mögliche Schäden oder rechtliche Konsequenzen.
 Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist untersagt.
 
