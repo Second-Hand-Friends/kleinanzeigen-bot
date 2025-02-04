@@ -4,6 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
 import json
+import os
 from typing import Any, TypedDict
 from unittest.mock import MagicMock, AsyncMock, patch, call
 import pytest
@@ -591,10 +592,14 @@ class TestAdExtractorDownload:
                 patch('kleinanzeigen_bot.extract.save_dict', autospec=True) as mock_save_dict, \
                 patch.object(extractor, '_extract_ad_page_info', new_callable=AsyncMock) as mock_extract:
 
+            base_dir = 'downloaded-ads'
+            ad_dir = os.path.join(base_dir, 'ad_12345')
+            yaml_path = os.path.join(ad_dir, 'ad_12345.yaml')
+
             # Configure mocks for directory checks
-            existing_paths = {'downloaded-ads', 'downloaded-ads/ad_12345'}
+            existing_paths = {base_dir, ad_dir}
             mock_exists.side_effect = lambda path: path in existing_paths
-            mock_isdir.side_effect = lambda path: path == 'downloaded-ads'
+            mock_isdir.side_effect = lambda path: path == base_dir
 
             mock_extract.return_value = {
                 "title": "Test Advertisement Title",
@@ -613,11 +618,11 @@ class TestAdExtractorDownload:
 
             # Verify the correct functions were called
             mock_extract.assert_called_once()
-            mock_rmtree.assert_called_once_with('downloaded-ads/ad_12345')
-            mock_mkdir.assert_called_once_with('downloaded-ads/ad_12345')
+            mock_rmtree.assert_called_once_with(ad_dir)
+            mock_mkdir.assert_called_once_with(ad_dir)
             mock_makedirs.assert_not_called()  # Directory already exists
             mock_save_dict.assert_called_once_with(
-                'downloaded-ads/ad_12345/ad_12345.yaml',
+                yaml_path,
                 mock_extract.return_value
             )
 
@@ -639,6 +644,10 @@ class TestAdExtractorDownload:
                 patch('shutil.rmtree') as mock_rmtree, \
                 patch('kleinanzeigen_bot.extract.save_dict', autospec=True) as mock_save_dict, \
                 patch.object(extractor, '_extract_ad_page_info', new_callable=AsyncMock) as mock_extract:
+
+            base_dir = 'downloaded-ads'
+            ad_dir = os.path.join(base_dir, 'ad_12345')
+            yaml_path = os.path.join(ad_dir, 'ad_12345.yaml')
 
             # Configure mocks for directory checks
             mock_exists.return_value = False
@@ -663,11 +672,11 @@ class TestAdExtractorDownload:
             mock_extract.assert_called_once()
             mock_rmtree.assert_not_called()  # No directory to remove
             mock_mkdir.assert_has_calls([
-                call('downloaded-ads'),
-                call('downloaded-ads/ad_12345')
+                call(base_dir),
+                call(ad_dir)
             ])
             mock_makedirs.assert_not_called()  # Using mkdir instead
             mock_save_dict.assert_called_once_with(
-                'downloaded-ads/ad_12345/ad_12345.yaml',
+                yaml_path,
                 mock_extract.return_value
             )
