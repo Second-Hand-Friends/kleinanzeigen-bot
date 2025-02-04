@@ -3,9 +3,9 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import json, os, tempfile
+import json
 from typing import Any, TypedDict
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock, patch, call
 import pytest
 from kleinanzeigen_bot.extract import AdExtractor
 from kleinanzeigen_bot.web_scraping_mixin import Browser, By, Element
@@ -583,23 +583,43 @@ class TestAdExtractorDownload:
     @pytest.mark.asyncio
     async def test_download_ad_existing_directory(self, extractor: AdExtractor) -> None:
         """Test downloading an ad when the directory already exists."""
-        # Create a temporary directory for testing
-        with tempfile.TemporaryDirectory() as temp_dir:
-            test_dir = os.path.join(temp_dir, "downloaded-ads", "ad_12345")
-            os.makedirs(test_dir, exist_ok=True)
+        with patch('os.path.exists') as mock_exists, \
+                patch('os.path.isdir') as mock_isdir, \
+                patch('os.makedirs') as mock_makedirs, \
+                patch('os.mkdir') as mock_mkdir, \
+                patch('shutil.rmtree') as mock_rmtree, \
+                patch('kleinanzeigen_bot.extract.save_dict', autospec=True) as mock_save_dict, \
+                patch.object(extractor, '_extract_ad_page_info', new_callable=AsyncMock) as mock_extract:
 
-            with patch.object(extractor, '_extract_ad_page_info', new_callable=AsyncMock) as mock_extract:
-                mock_extract.return_value = {
-                    "title": "Test Advertisement Title",  # Longer title that meets validation
-                    "description": "Test Description",
-                    "price": 100,
-                    "images": []
+            # Configure mocks for directory checks
+            existing_paths = {'downloaded-ads', 'downloaded-ads/ad_12345'}
+            mock_exists.side_effect = lambda path: path in existing_paths
+            mock_isdir.side_effect = lambda path: path == 'downloaded-ads'
+
+            mock_extract.return_value = {
+                "title": "Test Advertisement Title",
+                "description": "Test Description",
+                "price": 100,
+                "images": [],
+                "contact": {
+                    "name": "Test User",
+                    "street": "Test Street 123",
+                    "zipcode": "12345",
+                    "location": "Test City"
                 }
+            }
 
-                await extractor.download_ad(12345)
-                mock_extract.assert_called_once()
+            await extractor.download_ad(12345)
 
-            # Directory cleanup is handled automatically by tempfile.TemporaryDirectory
+            # Verify the correct functions were called
+            mock_extract.assert_called_once()
+            mock_rmtree.assert_called_once_with('downloaded-ads/ad_12345')
+            mock_mkdir.assert_called_once_with('downloaded-ads/ad_12345')
+            mock_makedirs.assert_not_called()  # Directory already exists
+            mock_save_dict.assert_called_once_with(
+                'downloaded-ads/ad_12345/ad_12345.yaml',
+                mock_extract.return_value
+            )
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
@@ -612,13 +632,42 @@ class TestAdExtractorDownload:
     @pytest.mark.asyncio
     async def test_download_ad(self, extractor: AdExtractor) -> None:
         """Test downloading an entire ad."""
-        with patch.object(extractor, '_extract_ad_page_info', new_callable=AsyncMock) as mock_extract:
+        with patch('os.path.exists') as mock_exists, \
+                patch('os.path.isdir') as mock_isdir, \
+                patch('os.makedirs') as mock_makedirs, \
+                patch('os.mkdir') as mock_mkdir, \
+                patch('shutil.rmtree') as mock_rmtree, \
+                patch('kleinanzeigen_bot.extract.save_dict', autospec=True) as mock_save_dict, \
+                patch.object(extractor, '_extract_ad_page_info', new_callable=AsyncMock) as mock_extract:
+
+            # Configure mocks for directory checks
+            mock_exists.return_value = False
+            mock_isdir.return_value = False
+
             mock_extract.return_value = {
-                "title": "Test Advertisement Title",  # Longer title that meets validation
+                "title": "Test Advertisement Title",
                 "description": "Test Description",
                 "price": 100,
-                "images": []
+                "images": [],
+                "contact": {
+                    "name": "Test User",
+                    "street": "Test Street 123",
+                    "zipcode": "12345",
+                    "location": "Test City"
+                }
             }
 
             await extractor.download_ad(12345)
+
+            # Verify the correct functions were called
             mock_extract.assert_called_once()
+            mock_rmtree.assert_not_called()  # No directory to remove
+            mock_mkdir.assert_has_calls([
+                call('downloaded-ads'),
+                call('downloaded-ads/ad_12345')
+            ])
+            mock_makedirs.assert_not_called()  # Using mkdir instead
+            mock_save_dict.assert_called_once_with(
+                'downloaded-ads/ad_12345/ad_12345.yaml',
+                mock_extract.return_value
+            )
