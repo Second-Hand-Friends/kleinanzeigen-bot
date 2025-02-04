@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import json, os
+import json, os, tempfile
 from typing import Any, TypedDict
 from unittest.mock import MagicMock, AsyncMock, patch
 import pytest
@@ -583,19 +583,23 @@ class TestAdExtractorDownload:
     @pytest.mark.asyncio
     async def test_download_ad_existing_directory(self, extractor: AdExtractor) -> None:
         """Test downloading an ad when the directory already exists."""
-        # Create directory that should be deleted
-        os.makedirs("downloaded-ads/ad_12345", exist_ok=True)
+        # Create a temporary directory for testing
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_dir = os.path.join(temp_dir, "downloaded-ads", "ad_12345")
+            os.makedirs(test_dir, exist_ok=True)
 
-        with patch.object(extractor, '_extract_ad_page_info', new_callable=AsyncMock) as mock_extract:
-            mock_extract.return_value = {
-                "title": "Test Ad",
-                "description": "Test Description",
-                "price": 100,
-                "images": []
-            }
+            with patch.object(extractor, '_extract_ad_page_info', new_callable=AsyncMock) as mock_extract:
+                mock_extract.return_value = {
+                    "title": "Test Advertisement Title",  # Longer title that meets validation
+                    "description": "Test Description",
+                    "price": 100,
+                    "images": []
+                }
 
-            await extractor.download_ad(12345)
-            mock_extract.assert_called_once()
+                await extractor.download_ad(12345)
+                mock_extract.assert_called_once()
+
+            # Directory cleanup is handled automatically by tempfile.TemporaryDirectory
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
@@ -610,7 +614,7 @@ class TestAdExtractorDownload:
         """Test downloading an entire ad."""
         with patch.object(extractor, '_extract_ad_page_info', new_callable=AsyncMock) as mock_extract:
             mock_extract.return_value = {
-                "title": "Test Ad",
+                "title": "Test Advertisement Title",  # Longer title that meets validation
                 "description": "Test Description",
                 "price": 100,
                 "images": []
