@@ -238,15 +238,12 @@ dev = [
     "bandit",
     "toml",
     "tomli",
-    "pytest",
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.25.3",
     "pytest-rerunfailures",
     "pyinstaller",
     "pylint",
     "mypy",
     "pyright",
     "pytest-cov>=6.0.0",
-]
-test = [
-    "pytest>=8.3.4",
-    "pytest-asyncio>=0.25.3",
 ]
