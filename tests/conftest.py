@@ -68,8 +68,6 @@ def sample_config() -> dict[str, Any]:
 
 
 @pytest.fixture
-# pylint: disable=redefined-outer-name
-# This disable is needed because test_bot depends on sample_config fixture
 def test_bot(sample_config: dict[str, Any]) -> KleinanzeigenBot:
     """Provides a fresh KleinanzeigenBot instance for all test classes.
 
@@ -92,8 +90,6 @@ def browser_mock() -> MagicMock:
 
 
 @pytest.fixture
-# pylint: disable=redefined-outer-name
-# This disable is needed because log_file_path depends on test_data_dir fixture
 def log_file_path(test_data_dir: str) -> str:
     """Provides a temporary path for log files.
 
@@ -104,8 +100,6 @@ def log_file_path(test_data_dir: str) -> str:
 
 
 @pytest.fixture
-# pylint: disable=redefined-outer-name
-# This disable is needed because test_extractor depends on browser_mock and sample_config fixtures
 def test_extractor(browser_mock: MagicMock, sample_config: dict[str, Any]) -> AdExtractor:
     """Provides a fresh AdExtractor instance for testing.
 
