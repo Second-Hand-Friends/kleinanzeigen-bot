@@ -231,9 +231,9 @@ class TestKleinanzeigenBotCommandLine:
 
     def test_parse_args_handles_config_path(self, test_bot: KleinanzeigenBot, test_data_dir: str) -> None:
         """Verify that config path is set correctly."""
-        config_path = os.path.join(test_data_dir, "custom_config.yaml")
-        test_bot.parse_args(["dummy", "--config", config_path])
-        assert test_bot.config_file_path == os.path.abspath(config_path)
+        config_path = Path(test_data_dir) / "custom_config.yaml"
+        test_bot.parse_args(["dummy", "--config", str(config_path)])
+        assert test_bot.config_file_path == str(config_path.absolute())
 
 
 class TestKleinanzeigenBotConfiguration:
@@ -246,8 +246,8 @@ class TestKleinanzeigenBotConfiguration:
         sample_config: dict[str, Any]
     ) -> None:
         """Verify that loading a missing config file creates default config."""
-        config_path = os.path.join(str(test_data_dir), "missing_config.yaml")
-        test_bot.config_file_path = config_path
+        config_path = Path(test_data_dir) / "missing_config.yaml"
+        test_bot.config_file_path = str(config_path)
 
         # Add categories to sample config
         sample_config_with_categories = sample_config.copy()
@@ -266,7 +266,7 @@ class TestKleinanzeigenBotConfiguration:
 
             test_bot.load_config()
             mock_warning.assert_called_once()
-            mock_save.assert_called_once_with(config_path, sample_config_with_categories)
+            mock_save.assert_called_once_with(str(config_path), sample_config_with_categories)
 
             # Verify categories were loaded
             assert test_bot.categories == {'cat1': 'id1', 'cat2': 'id2'}
@@ -274,7 +274,7 @@ class TestKleinanzeigenBotConfiguration:
 
     def test_load_config_validates_required_fields(self, test_bot: KleinanzeigenBot, test_data_dir: str) -> None:
         """Verify that config validation checks required fields."""
-        config_path = os.path.join(str(test_data_dir), "config.yaml")
+        config_path = Path(test_data_dir) / "config.yaml"
         config_content = """
 login:
   username: testuser
@@ -282,9 +282,9 @@ login:
 browser:
   arguments: []
 """
-        with open(config_path, 'w', encoding='utf-8') as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             f.write(config_content)
-        test_bot.config_file_path = config_path
+        test_bot.config_file_path = str(config_path)
 
         with pytest.raises(AssertionError) as exc_info:
             test_bot.load_config()
@@ -556,14 +556,14 @@ class TestKleinanzeigenBotCommands:
     @pytest.mark.asyncio
     async def test_verify_command(self, test_bot: KleinanzeigenBot, tmp_path: Any) -> None:
         """Test verify command with minimal config."""
-        config_path = os.path.join(tmp_path, "config.yaml")
+        config_path = Path(tmp_path) / "config.yaml"
         with open(config_path, "w", encoding="utf-8") as f:
             f.write("""
 login:
     username: test
     password: test
 """)
-        test_bot.config_file_path = config_path
+        test_bot.config_file_path = str(config_path)
         await test_bot.run(['script.py', 'verify'])
         assert test_bot.config['login']['username'] == 'test'
 
@@ -630,7 +630,7 @@ class TestKleinanzeigenBotAdConfiguration:
 
     def test_load_config_with_categories(self, test_bot: KleinanzeigenBot, tmp_path: Any) -> None:
         """Test loading config with custom categories."""
-        config_path = os.path.join(tmp_path, "config.yaml")
+        config_path = Path(tmp_path) / "config.yaml"
         with open(config_path, "w", encoding="utf-8") as f:
             f.write("""
 login:
@@ -639,16 +639,17 @@ login:
 categories:
     custom_cat: custom_id
 """)
-        test_bot.config_file_path = config_path
+        test_bot.config_file_path = str(config_path)
         test_bot.load_config()
         assert 'custom_cat' in test_bot.categories
         assert test_bot.categories['custom_cat'] == 'custom_id'
 
     def test_load_ads_with_missing_title(self, test_bot: KleinanzeigenBot, tmp_path: Any, minimal_ad_config: dict[str, Any]) -> None:
         """Test loading ads with missing title."""
-        ad_dir = os.path.join(tmp_path, "ads")
-        os.makedirs(ad_dir)
-        ad_file = os.path.join(ad_dir, "test_ad.yaml")
+        temp_path = Path(tmp_path)
+        ad_dir = temp_path / "ads"
+        ad_dir.mkdir()
+        ad_file = ad_dir / "test_ad.yaml"
 
         # Create a minimal config with empty title to trigger validation
         ad_cfg = create_ad_config(
@@ -659,16 +660,19 @@ categories:
         with open(ad_file, "w", encoding="utf-8") as f:
             yaml.dump(ad_cfg, f)
 
-        test_bot.config['ad_files'] = [str(Path(ad_dir) / "*.yaml")]
+        # Set config file path to tmp_path and use relative path for ad_files
+        test_bot.config_file_path = str(temp_path / "config.yaml")
+        test_bot.config['ad_files'] = ["ads/*.yaml"]
         with pytest.raises(AssertionError) as exc_info:
             test_bot.load_ads()
         assert "must be at least 10 characters long" in str(exc_info.value)
 
     def test_load_ads_with_invalid_price_type(self, test_bot: KleinanzeigenBot, tmp_path: Any, minimal_ad_config: dict[str, Any]) -> None:
         """Test loading ads with invalid price type."""
-        ad_dir = os.path.join(tmp_path, "ads")
-        os.makedirs(ad_dir)
-        ad_file = os.path.join(ad_dir, "test_ad.yaml")
+        temp_path = Path(tmp_path)
+        ad_dir = temp_path / "ads"
+        ad_dir.mkdir()
+        ad_file = ad_dir / "test_ad.yaml"
 
         # Create config with invalid price type
         ad_cfg = create_ad_config(
@@ -679,16 +683,19 @@ categories:
         with open(ad_file, "w", encoding="utf-8") as f:
             yaml.dump(ad_cfg, f)
 
-        test_bot.config['ad_files'] = [str(Path(ad_dir) / "*.yaml")]
+        # Set config file path to tmp_path and use relative path for ad_files
+        test_bot.config_file_path = str(temp_path / "config.yaml")
+        test_bot.config['ad_files'] = ["ads/*.yaml"]
         with pytest.raises(AssertionError) as exc_info:
             test_bot.load_ads()
         assert "property [price_type] must be one of:" in str(exc_info.value)
 
     def test_load_ads_with_invalid_shipping_type(self, test_bot: KleinanzeigenBot, tmp_path: Any, minimal_ad_config: dict[str, Any]) -> None:
         """Test loading ads with invalid shipping type."""
-        ad_dir = os.path.join(tmp_path, "ads")
-        os.makedirs(ad_dir)
-        ad_file = os.path.join(ad_dir, "test_ad.yaml")
+        temp_path = Path(tmp_path)
+        ad_dir = temp_path / "ads"
+        ad_dir.mkdir()
+        ad_file = ad_dir / "test_ad.yaml"
 
         # Create config with invalid shipping type
         ad_cfg = create_ad_config(
@@ -699,16 +706,19 @@ categories:
         with open(ad_file, "w", encoding="utf-8") as f:
             yaml.dump(ad_cfg, f)
 
-        test_bot.config['ad_files'] = [str(Path(ad_dir) / "*.yaml")]
+        # Set config file path to tmp_path and use relative path for ad_files
+        test_bot.config_file_path = str(temp_path / "config.yaml")
+        test_bot.config['ad_files'] = ["ads/*.yaml"]
         with pytest.raises(AssertionError) as exc_info:
             test_bot.load_ads()
         assert "property [shipping_type] must be one of:" in str(exc_info.value)
 
     def test_load_ads_with_invalid_price_config(self, test_bot: KleinanzeigenBot, tmp_path: Any, minimal_ad_config: dict[str, Any]) -> None:
         """Test loading ads with invalid price configuration."""
-        ad_dir = os.path.join(tmp_path, "ads")
-        os.makedirs(ad_dir)
-        ad_file = os.path.join(ad_dir, "test_ad.yaml")
+        temp_path = Path(tmp_path)
+        ad_dir = temp_path / "ads"
+        ad_dir.mkdir()
+        ad_file = ad_dir / "test_ad.yaml"
 
         # Create config with price for GIVE_AWAY type
         ad_cfg = create_ad_config(
@@ -720,16 +730,19 @@ categories:
         with open(ad_file, "w", encoding="utf-8") as f:
             yaml.dump(ad_cfg, f)
 
-        test_bot.config['ad_files'] = [str(Path(ad_dir) / "*.yaml")]
+        # Set config file path to tmp_path and use relative path for ad_files
+        test_bot.config_file_path = str(temp_path / "config.yaml")
+        test_bot.config['ad_files'] = ["ads/*.yaml"]
         with pytest.raises(AssertionError) as exc_info:
             test_bot.load_ads()
         assert "must not be specified for GIVE_AWAY ad" in str(exc_info.value)
 
     def test_load_ads_with_missing_price(self, test_bot: KleinanzeigenBot, tmp_path: Any, minimal_ad_config: dict[str, Any]) -> None:
         """Test loading ads with missing price for FIXED price type."""
-        ad_dir = os.path.join(tmp_path, "ads")
-        os.makedirs(ad_dir)
-        ad_file = os.path.join(ad_dir, "test_ad.yaml")
+        temp_path = Path(tmp_path)
+        ad_dir = temp_path / "ads"
+        ad_dir.mkdir()
+        ad_file = ad_dir / "test_ad.yaml"
 
         # Create config with FIXED price type but no price
         ad_cfg = create_ad_config(
@@ -741,16 +754,19 @@ categories:
         with open(ad_file, "w", encoding="utf-8") as f:
             yaml.dump(ad_cfg, f)
 
-        test_bot.config['ad_files'] = [str(Path(ad_dir) / "*.yaml")]
+        # Set config file path to tmp_path and use relative path for ad_files
+        test_bot.config_file_path = str(temp_path / "config.yaml")
+        test_bot.config['ad_files'] = ["ads/*.yaml"]
         with pytest.raises(AssertionError) as exc_info:
             test_bot.load_ads()
         assert "not specified" in str(exc_info.value)
 
     def test_load_ads_with_invalid_category(self, test_bot: KleinanzeigenBot, tmp_path: Any, minimal_ad_config: dict[str, Any]) -> None:
         """Test loading ads with invalid category."""
-        ad_dir = os.path.join(tmp_path, "ads")
-        os.makedirs(ad_dir)
-        ad_file = os.path.join(ad_dir, "test_ad.yaml")
+        temp_path = Path(tmp_path)
+        ad_dir = temp_path / "ads"
+        ad_dir.mkdir()
+        ad_file = ad_dir / "test_ad.yaml"
 
         # Create config with invalid category and empty description to prevent auto-detection
         ad_cfg = create_ad_config(
@@ -770,7 +786,9 @@ categories:
         with open(ad_file, "w", encoding="utf-8") as f:
             yaml.dump(ad_cfg, f)
 
-        test_bot.config['ad_files'] = [str(Path(ad_dir) / "*.yaml")]
+        # Set config file path to tmp_path and use relative path for ad_files
+        test_bot.config_file_path = str(temp_path / "config.yaml")
+        test_bot.config['ad_files'] = ["ads/*.yaml"]
         with pytest.raises(AssertionError) as exc_info:
             test_bot.load_ads()
         assert "property [description] not specified" in str(exc_info.value)
@@ -855,14 +873,19 @@ class TestKleinanzeigenBotAdRepublication:
             description="Changed description"
         )
 
-        # Create a temporary YAML file for testing
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_file:
-            yaml.dump(ad_cfg, temp_file)
-            temp_path = temp_file.name
+        # Create a temporary directory and file
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            ad_dir = temp_path / "ads"
+            ad_dir.mkdir()
+            ad_file = ad_dir / "test_ad.yaml"
 
-        try:
-            # Configure the bot to use our temporary file
-            test_bot.config['ad_files'] = [str(Path(temp_path).parent / "*.yaml")]
+            with open(ad_file, "w", encoding="utf-8") as f:
+                yaml.dump(ad_cfg, f)
+
+            # Set config file path and use relative path for ad_files
+            test_bot.config_file_path = str(temp_path / "config.yaml")
+            test_bot.config['ad_files'] = ["ads/*.yaml"]
 
             # Mock the loading of the original ad configuration
             with patch('kleinanzeigen_bot.utils.load_dict', side_effect=[
@@ -871,8 +894,6 @@ class TestKleinanzeigenBotAdRepublication:
             ]):
                 ads_to_publish = test_bot.load_ads()
                 assert len(ads_to_publish) == 1
-        finally:
-            os.unlink(temp_path)
 
     def test_check_ad_republication_no_changes(self, test_bot: KleinanzeigenBot, base_ad_config: dict[str, Any]) -> None:
         """Test that unchanged ads within interval are not marked for republication."""
@@ -931,7 +952,7 @@ class TestKleinanzeigenBotShippingOptions:
         }
 
         # Create temporary file path
-        ad_file = os.path.join(tmp_path, "test_ad.yaml")
+        ad_file = Path(tmp_path) / "test_ad.yaml"
 
         # Mock the necessary web interaction methods
         with patch.object(test_bot, 'web_click', new_callable=AsyncMock), \
@@ -965,13 +986,13 @@ class TestKleinanzeigenBotShippingOptions:
                 mock_check.return_value = True
 
                 # Test through the public interface by publishing an ad
-                await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads)
+                await test_bot.publish_ad(str(ad_file), ad_cfg, ad_cfg_orig, published_ads)
 
             # Verify that web_find was called the expected number of times
             assert mock_find.await_count >= 3
 
             # Verify the file was created in the temporary directory
-            assert os.path.exists(ad_file)
+            assert ad_file.exists()
 
 
 class TestKleinanzeigenBotUrlConstruction:
