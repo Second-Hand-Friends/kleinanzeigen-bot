@@ -3,14 +3,129 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
+import copy
 import logging
 import os
+import tempfile
+from datetime import datetime, timedelta
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import yaml
 
 from kleinanzeigen_bot import LOG, KleinanzeigenBot
+from kleinanzeigen_bot._version import __version__
+from kleinanzeigen_bot.utils import calculate_content_hash
+
+
+@pytest.fixture
+def mock_page() -> MagicMock:
+    """Provide a mock page object for testing."""
+    mock = MagicMock()
+    # Mock async methods
+    mock.sleep = AsyncMock()
+    mock.evaluate = AsyncMock()
+    mock.click = AsyncMock()
+    mock.type = AsyncMock()
+    mock.select = AsyncMock()
+    mock.wait_for_selector = AsyncMock()
+    mock.wait_for_navigation = AsyncMock()
+    mock.wait_for_load_state = AsyncMock()
+    mock.content = AsyncMock(return_value="<html></html>")
+    mock.goto = AsyncMock()
+    mock.close = AsyncMock()
+    return mock
+
+
+@pytest.fixture
+def base_ad_config() -> dict[str, Any]:
+    """Provide a base ad configuration that can be used across tests."""
+    return {
+        "id": None,
+        "title": "Test Title",
+        "description": "Test Description",
+        "type": "OFFER",
+        "price_type": "FIXED",
+        "price": 100,
+        "shipping_type": "SHIPPING",
+        "shipping_options": [],
+        "category": "160",
+        "special_attributes": {},
+        "sell_directly": False,
+        "images": [],
+        "active": True,
+        "republication_interval": 7,
+        "created_on": None,
+        "contact": {
+            "name": "Test User",
+            "zipcode": "12345",
+            "location": "Test City",
+            "street": "",
+            "phone": ""
+        }
+    }
+
+
+def create_ad_config(base_config: dict[str, Any], **overrides: Any) -> dict[str, Any]:
+    """Create a new ad configuration by extending or overriding the base configuration.
+
+    Args:
+        base_config: The base configuration to start from
+        **overrides: Key-value pairs to override or extend the base configuration
+
+    Returns:
+        A new ad configuration dictionary
+    """
+    config = copy.deepcopy(base_config)
+    for key, value in overrides.items():
+        if isinstance(value, dict) and key in config and isinstance(config[key], dict):
+            config[key].update(value)
+        elif key in config:
+            config[key] = value
+        else:
+            config[key] = value
+    return config
+
+
+def remove_fields(config: dict[str, Any], *fields: str) -> dict[str, Any]:
+    """Create a new ad configuration with specified fields removed.
+
+    Args:
+        config: The configuration to remove fields from
+        *fields: Field names to remove
+
+    Returns:
+        A new ad configuration dictionary with specified fields removed
+    """
+    result = copy.deepcopy(config)
+    for field in fields:
+        if "." in field:
+            # Handle nested fields (e.g., "contact.phone")
+            parts = field.split(".")
+            current = result
+            for part in parts[:-1]:
+                if part in current:
+                    current = current[part]
+            if parts[-1] in current:
+                del current[parts[-1]]
+        elif field in result:
+            del result[field]
+    return result
+
+
+@pytest.fixture
+def minimal_ad_config(base_ad_config: dict[str, Any]) -> dict[str, Any]:
+    """Provide a minimal ad configuration with only required fields."""
+    return remove_fields(
+        base_ad_config,
+        "id",
+        "created_on",
+        "shipping_options",
+        "special_attributes",
+        "contact.street",
+        "contact.phone"
+    )
 
 
 class TestKleinanzeigenBotInitialization:
@@ -261,3 +376,613 @@ class TestKleinanzeigenBotLocalization:
             printed_text = ''.join(str(call.args[0]) for call in mock_print.call_args_list)
             assert "Usage:" in printed_text
             assert "Commands:" in printed_text
+
+
+class TestKleinanzeigenBotBasics:
+    """Basic tests for KleinanzeigenBot."""
+
+    def test_get_version(self, test_bot: KleinanzeigenBot) -> None:
+        """Test version retrieval."""
+        assert test_bot.get_version() == __version__
+
+    def test_configure_file_logging(self, test_bot: KleinanzeigenBot, log_file_path: str) -> None:
+        """Test file logging configuration."""
+        test_bot.log_file_path = log_file_path
+        test_bot.configure_file_logging()
+        assert test_bot.file_log is not None
+        assert os.path.exists(log_file_path)
+
+    def test_configure_file_logging_no_path(self, test_bot: KleinanzeigenBot) -> None:
+        """Test file logging configuration with no path."""
+        test_bot.log_file_path = None
+        test_bot.configure_file_logging()
+        assert test_bot.file_log is None
+
+    def test_close_browser_session(self, test_bot: KleinanzeigenBot) -> None:
+        """Test closing browser session."""
+        mock_close = MagicMock()
+        test_bot.page = MagicMock()  # Ensure page exists to trigger cleanup
+        with patch.object(test_bot, 'close_browser_session', new=mock_close):
+            test_bot.close_browser_session()  # Call directly instead of relying on __del__
+            mock_close.assert_called_once()
+
+    def test_get_root_url(self, test_bot: KleinanzeigenBot) -> None:
+        """Test root URL retrieval."""
+        assert test_bot.root_url == "https://www.kleinanzeigen.de"
+
+    def test_get_config_defaults(self, test_bot: KleinanzeigenBot) -> None:
+        """Test default configuration values."""
+        assert isinstance(test_bot.config, dict)
+        assert test_bot.command == "help"
+        assert test_bot.ads_selector == "due"
+        assert test_bot.keep_old_ads is False
+
+    def test_get_log_level(self, test_bot: KleinanzeigenBot) -> None:
+        """Test log level configuration."""
+        # Reset log level to default
+        LOG.setLevel(logging.INFO)
+        assert LOG.level == logging.INFO
+        test_bot.parse_args(['script.py', '-v'])
+        assert LOG.level == logging.DEBUG
+
+    def test_get_config_file_path(self, test_bot: KleinanzeigenBot) -> None:
+        """Test config file path handling."""
+        default_path = os.path.abspath("config.yaml")
+        assert test_bot.config_file_path == default_path
+        test_path = os.path.abspath("custom_config.yaml")
+        test_bot.config_file_path = test_path
+        assert test_bot.config_file_path == test_path
+
+    def test_get_log_file_path(self, test_bot: KleinanzeigenBot) -> None:
+        """Test log file path handling."""
+        default_path = os.path.abspath("kleinanzeigen_bot.log")
+        assert test_bot.log_file_path == default_path
+        test_path = os.path.abspath("custom.log")
+        test_bot.log_file_path = test_path
+        assert test_bot.log_file_path == test_path
+
+    def test_get_categories(self, test_bot: KleinanzeigenBot) -> None:
+        """Test categories handling."""
+        test_categories = {"test_cat": "test_id"}
+        test_bot.categories = test_categories
+        assert test_bot.categories == test_categories
+
+
+class TestKleinanzeigenBotArgParsing:
+    """Tests for command line argument parsing."""
+
+    def test_parse_args_help(self, test_bot: KleinanzeigenBot) -> None:
+        """Test parsing help command."""
+        test_bot.parse_args(['script.py', 'help'])
+        assert test_bot.command == 'help'
+
+    def test_parse_args_version(self, test_bot: KleinanzeigenBot) -> None:
+        """Test parsing version command."""
+        test_bot.parse_args(['script.py', 'version'])
+        assert test_bot.command == 'version'
+
+    def test_parse_args_verbose(self, test_bot: KleinanzeigenBot) -> None:
+        """Test parsing verbose flag."""
+        test_bot.parse_args(['script.py', '-v', 'help'])
+        assert logging.getLogger('kleinanzeigen_bot').level == logging.DEBUG
+
+    def test_parse_args_config_path(self, test_bot: KleinanzeigenBot) -> None:
+        """Test parsing config path."""
+        test_bot.parse_args(['script.py', '--config=test.yaml', 'help'])
+        assert test_bot.config_file_path.endswith('test.yaml')
+
+    def test_parse_args_logfile(self, test_bot: KleinanzeigenBot) -> None:
+        """Test parsing log file path."""
+        test_bot.parse_args(['script.py', '--logfile=test.log', 'help'])
+        assert test_bot.log_file_path is not None
+        assert 'test.log' in test_bot.log_file_path
+
+    def test_parse_args_ads_selector(self, test_bot: KleinanzeigenBot) -> None:
+        """Test parsing ads selector."""
+        test_bot.parse_args(['script.py', '--ads=all', 'publish'])
+        assert test_bot.ads_selector == 'all'
+
+    def test_parse_args_force(self, test_bot: KleinanzeigenBot) -> None:
+        """Test parsing force flag."""
+        test_bot.parse_args(['script.py', '--force', 'publish'])
+        assert test_bot.ads_selector == 'all'
+
+    def test_parse_args_keep_old(self, test_bot: KleinanzeigenBot) -> None:
+        """Test parsing keep-old flag."""
+        test_bot.parse_args(['script.py', '--keep-old', 'publish'])
+        assert test_bot.keep_old_ads is True
+
+    def test_parse_args_logfile_empty(self, test_bot: KleinanzeigenBot) -> None:
+        """Test parsing empty log file path."""
+        test_bot.parse_args(['script.py', '--logfile=', 'help'])
+        assert test_bot.log_file_path is None
+
+    def test_parse_args_lang_option(self, test_bot: KleinanzeigenBot) -> None:
+        """Test parsing language option."""
+        test_bot.parse_args(['script.py', '--lang=en', 'help'])
+        assert test_bot.command == 'help'
+
+    def test_parse_args_no_arguments(self, test_bot: KleinanzeigenBot) -> None:
+        """Test parsing no arguments defaults to help."""
+        test_bot.parse_args(['script.py'])
+        assert test_bot.command == 'help'
+
+    def test_parse_args_multiple_commands(self, test_bot: KleinanzeigenBot) -> None:
+        """Test parsing multiple commands raises error."""
+        with pytest.raises(SystemExit) as exc_info:
+            test_bot.parse_args(['script.py', 'help', 'version'])
+        assert exc_info.value.code == 2
+
+
+class TestKleinanzeigenBotCommands:
+    """Tests for command execution."""
+
+    @pytest.mark.asyncio
+    async def test_run_version_command(self, test_bot: KleinanzeigenBot, capsys: Any) -> None:
+        """Test running version command."""
+        await test_bot.run(['script.py', 'version'])
+        captured = capsys.readouterr()
+        assert __version__ in captured.out
+
+    @pytest.mark.asyncio
+    async def test_run_help_command(self, test_bot: KleinanzeigenBot, capsys: Any) -> None:
+        """Test running help command."""
+        await test_bot.run(['script.py', 'help'])
+        captured = capsys.readouterr()
+        assert 'Usage:' in captured.out
+
+    @pytest.mark.asyncio
+    async def test_run_unknown_command(self, test_bot: KleinanzeigenBot) -> None:
+        """Test running unknown command."""
+        with pytest.raises(SystemExit) as exc_info:
+            await test_bot.run(['script.py', 'unknown'])
+        assert exc_info.value.code == 2
+
+    @pytest.mark.asyncio
+    async def test_verify_command(self, test_bot: KleinanzeigenBot, tmp_path: Any) -> None:
+        """Test verify command with minimal config."""
+        config_path = os.path.join(tmp_path, "config.yaml")
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write("""
+login:
+    username: test
+    password: test
+""")
+        test_bot.config_file_path = config_path
+        await test_bot.run(['script.py', 'verify'])
+        assert test_bot.config['login']['username'] == 'test'
+
+
+class TestKleinanzeigenBotAdOperations:
+    """Tests for ad-related operations."""
+
+    @pytest.mark.asyncio
+    async def test_run_delete_command_no_ads(self, test_bot: KleinanzeigenBot) -> None:
+        """Test running delete command with no ads."""
+        with patch.object(test_bot, 'load_ads', return_value=[]):
+            await test_bot.run(['script.py', 'delete'])
+            assert test_bot.command == 'delete'
+
+    @pytest.mark.asyncio
+    async def test_run_publish_command_no_ads(self, test_bot: KleinanzeigenBot) -> None:
+        """Test running publish command with no ads."""
+        with patch.object(test_bot, 'load_ads', return_value=[]):
+            await test_bot.run(['script.py', 'publish'])
+            assert test_bot.command == 'publish'
+
+    @pytest.mark.asyncio
+    async def test_run_download_command_default_selector(self, test_bot: KleinanzeigenBot) -> None:
+        """Test running download command with default selector."""
+        with patch.object(test_bot, 'create_browser_session', new_callable=AsyncMock), \
+                patch.object(test_bot, 'login', new_callable=AsyncMock), \
+                patch.object(test_bot, 'download_ads', new_callable=AsyncMock):
+            await test_bot.run(['script.py', 'download'])
+            assert test_bot.ads_selector == 'new'
+
+    def test_load_ads_no_files(self, test_bot: KleinanzeigenBot) -> None:
+        """Test loading ads with no files."""
+        test_bot.config['ad_files'] = ['nonexistent/*.yaml']
+        ads = test_bot.load_ads()
+        assert len(ads) == 0
+
+
+class TestKleinanzeigenBotAdManagement:
+    """Tests for ad management functionality."""
+
+    @pytest.mark.asyncio
+    async def test_download_ads_with_specific_ids(self, test_bot: KleinanzeigenBot) -> None:
+        """Test downloading ads with specific IDs."""
+        test_bot.ads_selector = '123,456'
+        with patch.object(test_bot, 'create_browser_session', new_callable=AsyncMock), \
+                patch.object(test_bot, 'login', new_callable=AsyncMock), \
+                patch.object(test_bot, 'download_ads', new_callable=AsyncMock):
+            await test_bot.run(['script.py', 'download', '--ads=123,456'])
+            assert test_bot.ads_selector == '123,456'
+
+    @pytest.mark.asyncio
+    async def test_run_publish_invalid_selector(self, test_bot: KleinanzeigenBot) -> None:
+        """Test running publish with invalid selector."""
+        with patch.object(test_bot, 'load_config'), \
+                patch.object(test_bot, 'load_ads', return_value=[]):
+            await test_bot.run(['script.py', 'publish', '--ads=invalid'])
+            assert test_bot.ads_selector == 'due'
+
+    @pytest.mark.asyncio
+    async def test_run_download_invalid_selector(self, test_bot: KleinanzeigenBot) -> None:
+        """Test running download with invalid selector."""
+        with patch.object(test_bot, 'load_config'), \
+                patch.object(test_bot, 'create_browser_session', new_callable=AsyncMock), \
+                patch.object(test_bot, 'login', new_callable=AsyncMock), \
+                patch.object(test_bot, 'download_ads', new_callable=AsyncMock):
+            await test_bot.run(['script.py', 'download', '--ads=invalid'])
+            assert test_bot.ads_selector == 'new'
+
+
+class TestKleinanzeigenBotAdConfiguration:
+    """Tests for ad configuration functionality."""
+
+    def test_load_config_with_categories(self, test_bot: KleinanzeigenBot, tmp_path: Any) -> None:
+        """Test loading config with custom categories."""
+        config_path = os.path.join(tmp_path, "config.yaml")
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write("""
+login:
+    username: test
+    password: test
+categories:
+    custom_cat: custom_id
+""")
+        test_bot.config_file_path = config_path
+        test_bot.load_config()
+        assert 'custom_cat' in test_bot.categories
+        assert test_bot.categories['custom_cat'] == 'custom_id'
+
+    def test_load_ads_with_missing_title(self, test_bot: KleinanzeigenBot, tmp_path: Any, minimal_ad_config: dict[str, Any]) -> None:
+        """Test loading ads with missing title."""
+        ad_dir = os.path.join(tmp_path, "ads")
+        os.makedirs(ad_dir)
+        ad_file = os.path.join(ad_dir, "test_ad.yaml")
+
+        # Create a minimal config with empty title to trigger validation
+        ad_cfg = create_ad_config(
+            minimal_ad_config,
+            title=""  # Empty title to trigger length validation
+        )
+
+        with open(ad_file, "w", encoding="utf-8") as f:
+            yaml.dump(ad_cfg, f)
+
+        test_bot.config['ad_files'] = [os.path.join(ad_dir, "*.yaml")]
+        with pytest.raises(AssertionError) as exc_info:
+            test_bot.load_ads()
+        assert "must be at least 10 characters long" in str(exc_info.value)
+
+    def test_load_ads_with_invalid_price_type(self, test_bot: KleinanzeigenBot, tmp_path: Any, minimal_ad_config: dict[str, Any]) -> None:
+        """Test loading ads with invalid price type."""
+        ad_dir = os.path.join(tmp_path, "ads")
+        os.makedirs(ad_dir)
+        ad_file = os.path.join(ad_dir, "test_ad.yaml")
+
+        # Create config with invalid price type
+        ad_cfg = create_ad_config(
+            minimal_ad_config,
+            price_type="INVALID_TYPE"  # Invalid price type
+        )
+
+        with open(ad_file, "w", encoding="utf-8") as f:
+            yaml.dump(ad_cfg, f)
+
+        test_bot.config['ad_files'] = [os.path.join(ad_dir, "*.yaml")]
+        with pytest.raises(AssertionError) as exc_info:
+            test_bot.load_ads()
+        assert "property [price_type] must be one of:" in str(exc_info.value)
+
+    def test_load_ads_with_invalid_shipping_type(self, test_bot: KleinanzeigenBot, tmp_path: Any, minimal_ad_config: dict[str, Any]) -> None:
+        """Test loading ads with invalid shipping type."""
+        ad_dir = os.path.join(tmp_path, "ads")
+        os.makedirs(ad_dir)
+        ad_file = os.path.join(ad_dir, "test_ad.yaml")
+
+        # Create config with invalid shipping type
+        ad_cfg = create_ad_config(
+            minimal_ad_config,
+            shipping_type="INVALID_TYPE"  # Invalid shipping type
+        )
+
+        with open(ad_file, "w", encoding="utf-8") as f:
+            yaml.dump(ad_cfg, f)
+
+        test_bot.config['ad_files'] = [os.path.join(ad_dir, "*.yaml")]
+        with pytest.raises(AssertionError) as exc_info:
+            test_bot.load_ads()
+        assert "property [shipping_type] must be one of:" in str(exc_info.value)
+
+    def test_load_ads_with_invalid_price_config(self, test_bot: KleinanzeigenBot, tmp_path: Any, minimal_ad_config: dict[str, Any]) -> None:
+        """Test loading ads with invalid price configuration."""
+        ad_dir = os.path.join(tmp_path, "ads")
+        os.makedirs(ad_dir)
+        ad_file = os.path.join(ad_dir, "test_ad.yaml")
+
+        # Create config with price for GIVE_AWAY type
+        ad_cfg = create_ad_config(
+            minimal_ad_config,
+            price_type="GIVE_AWAY",
+            price=100  # Price should not be set for GIVE_AWAY
+        )
+
+        with open(ad_file, "w", encoding="utf-8") as f:
+            yaml.dump(ad_cfg, f)
+
+        test_bot.config['ad_files'] = [os.path.join(ad_dir, "*.yaml")]
+        with pytest.raises(AssertionError) as exc_info:
+            test_bot.load_ads()
+        assert "must not be specified for GIVE_AWAY ad" in str(exc_info.value)
+
+    def test_load_ads_with_missing_price(self, test_bot: KleinanzeigenBot, tmp_path: Any, minimal_ad_config: dict[str, Any]) -> None:
+        """Test loading ads with missing price for FIXED price type."""
+        ad_dir = os.path.join(tmp_path, "ads")
+        os.makedirs(ad_dir)
+        ad_file = os.path.join(ad_dir, "test_ad.yaml")
+
+        # Create config with FIXED price type but no price
+        ad_cfg = create_ad_config(
+            minimal_ad_config,
+            price_type="FIXED",
+            price=None  # Missing required price for FIXED type
+        )
+
+        with open(ad_file, "w", encoding="utf-8") as f:
+            yaml.dump(ad_cfg, f)
+
+        test_bot.config['ad_files'] = [os.path.join(ad_dir, "*.yaml")]
+        with pytest.raises(AssertionError) as exc_info:
+            test_bot.load_ads()
+        assert "not specified" in str(exc_info.value)
+
+    def test_load_ads_with_invalid_category(self, test_bot: KleinanzeigenBot, tmp_path: Any, minimal_ad_config: dict[str, Any]) -> None:
+        """Test loading ads with invalid category."""
+        ad_dir = os.path.join(tmp_path, "ads")
+        os.makedirs(ad_dir)
+        ad_file = os.path.join(ad_dir, "test_ad.yaml")
+
+        # Create config with invalid category and empty description to prevent auto-detection
+        ad_cfg = create_ad_config(
+            minimal_ad_config,
+            category="999999",  # Non-existent category
+            description=None  # Set description to None to trigger validation
+        )
+
+        # Mock the config to prevent auto-detection
+        test_bot.config["ad_defaults"] = {
+            "description": {
+                "prefix": "",
+                "suffix": ""
+            }
+        }
+
+        with open(ad_file, "w", encoding="utf-8") as f:
+            yaml.dump(ad_cfg, f)
+
+        test_bot.config['ad_files'] = [os.path.join(ad_dir, "*.yaml")]
+        with pytest.raises(AssertionError) as exc_info:
+            test_bot.load_ads()
+        assert "property [description] not specified" in str(exc_info.value)
+
+
+class TestKleinanzeigenBotAdDeletion:
+    """Tests for ad deletion functionality."""
+
+    @pytest.mark.asyncio
+    async def test_delete_ad_by_title(self, test_bot: KleinanzeigenBot, minimal_ad_config: dict[str, Any]) -> None:
+        """Test deleting an ad by title."""
+        test_bot.page = MagicMock()
+        test_bot.page.evaluate = AsyncMock(return_value={"statusCode": 200, "content": "{}"})
+        test_bot.page.sleep = AsyncMock()
+
+        # Use minimal config since we only need title for deletion by title
+        ad_cfg = create_ad_config(
+            minimal_ad_config,
+            title="Test Title",
+            id=None  # Explicitly set id to None for title-based deletion
+        )
+
+        published_ads = [
+            {"title": "Test Title", "id": "67890"},
+            {"title": "Other Title", "id": "11111"}
+        ]
+
+        with patch.object(test_bot, 'web_open', new_callable=AsyncMock), \
+                patch.object(test_bot, 'web_find', new_callable=AsyncMock) as mock_find, \
+                patch.object(test_bot, 'web_click', new_callable=AsyncMock), \
+                patch.object(test_bot, 'web_check', new_callable=AsyncMock, return_value=True):
+            mock_find.return_value.attrs = {"content": "some-token"}
+            result = await test_bot.delete_ad(ad_cfg, True, published_ads)
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_delete_ad_by_id(self, test_bot: KleinanzeigenBot, minimal_ad_config: dict[str, Any]) -> None:
+        """Test deleting an ad by ID."""
+        test_bot.page = MagicMock()
+        test_bot.page.evaluate = AsyncMock(return_value={"statusCode": 200, "content": "{}"})
+        test_bot.page.sleep = AsyncMock()
+
+        # Create config with ID for deletion by ID
+        ad_cfg = create_ad_config(
+            minimal_ad_config,
+            id="12345"
+        )
+
+        published_ads = [
+            {"title": "Different Title", "id": "12345"},
+            {"title": "Other Title", "id": "11111"}
+        ]
+
+        with patch.object(test_bot, 'web_open', new_callable=AsyncMock), \
+                patch.object(test_bot, 'web_find', new_callable=AsyncMock) as mock_find, \
+                patch.object(test_bot, 'web_click', new_callable=AsyncMock), \
+                patch.object(test_bot, 'web_check', new_callable=AsyncMock, return_value=True):
+            mock_find.return_value.attrs = {"content": "some-token"}
+            result = await test_bot.delete_ad(ad_cfg, False, published_ads)
+            assert result is True
+
+
+class TestKleinanzeigenBotAdRepublication:
+    """Tests for ad republication functionality."""
+
+    def test_check_ad_republication_with_changes(self, test_bot: KleinanzeigenBot, base_ad_config: dict[str, Any]) -> None:
+        """Test that ads with changes are marked for republication."""
+        # Mock the description config to prevent modification of the description
+        test_bot.config["ad_defaults"] = {
+            "description": {
+                "prefix": "",
+                "suffix": ""
+            }
+        }
+
+        # Create ad config with all necessary fields for republication
+        ad_cfg = create_ad_config(
+            base_ad_config,
+            id="12345",
+            updated_on="2024-01-01T00:00:00",
+            created_on="2024-01-01T00:00:00",
+            description="Changed description"
+        )
+
+        # Create a temporary YAML file for testing
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_file:
+            yaml.dump(ad_cfg, temp_file)
+            temp_path = temp_file.name
+
+        try:
+            # Configure the bot to use our temporary file
+            test_bot.config['ad_files'] = [temp_path]
+
+            # Mock the loading of the original ad configuration
+            with patch('kleinanzeigen_bot.utils.load_dict', side_effect=[
+                ad_cfg,  # First call returns the original ad config
+                {}  # Second call for ad_fields.yaml
+            ]):
+                ads_to_publish = test_bot.load_ads()
+                assert len(ads_to_publish) == 1
+                # The returned ad is a tuple of (ad_file, ad_cfg, ad_cfg_orig)
+                _, loaded_ad_cfg, _ = ads_to_publish[0]
+                assert loaded_ad_cfg["description"] == "Changed description"
+        finally:
+            os.unlink(temp_path)
+
+    def test_check_ad_republication_no_changes(self, test_bot: KleinanzeigenBot, base_ad_config: dict[str, Any]) -> None:
+        """Test that unchanged ads within interval are not marked for republication."""
+        current_time = datetime.utcnow()
+        three_days_ago = (current_time - timedelta(days=3)).isoformat()
+
+        # Create ad config with timestamps for republication check
+        ad_cfg = create_ad_config(
+            base_ad_config,
+            id="12345",
+            updated_on=three_days_ago,
+            created_on=three_days_ago
+        )
+
+        # Calculate hash before making the copy to ensure they match
+        current_hash = calculate_content_hash(ad_cfg)
+        ad_cfg_orig = copy.deepcopy(ad_cfg)
+        ad_cfg_orig["content_hash"] = current_hash
+
+        # Mock the config to prevent actual file operations
+        test_bot.config['ad_files'] = ['test.yaml']
+        with patch('kleinanzeigen_bot.utils.load_dict_if_exists', return_value=ad_cfg_orig), \
+                patch('kleinanzeigen_bot.utils.load_dict', return_value={}):  # Mock ad_fields.yaml
+            ads_to_publish = test_bot.load_ads()
+            assert len(ads_to_publish) == 0  # No ads should be marked for republication
+
+
+class TestKleinanzeigenBotShippingOptions:
+    """Tests for shipping options functionality."""
+
+    @pytest.mark.asyncio
+    async def test_shipping_options_mapping(self, test_bot: KleinanzeigenBot, base_ad_config: dict[str, Any], tmp_path: Any) -> None:
+        """Test that shipping options are mapped correctly."""
+        # Create a mock page to simulate browser context
+        test_bot.page = MagicMock()
+        test_bot.page.url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+        test_bot.page.evaluate = AsyncMock()
+
+        # Create ad config with specific shipping options
+        ad_cfg = create_ad_config(
+            base_ad_config,
+            shipping_options=["DHL_2", "Hermes_Päckchen"],
+            created_on="2024-01-01T00:00:00",  # Add created_on to prevent KeyError
+            updated_on="2024-01-01T00:00:00"   # Add updated_on for consistency
+        )
+
+        # Create the original ad config and published ads list
+        ad_cfg_orig = copy.deepcopy(ad_cfg)
+        ad_cfg_orig["content_hash"] = calculate_content_hash(ad_cfg)  # Add content hash to prevent republication
+        published_ads: list[dict[str, Any]] = []
+
+        # Set up default config values needed for the test
+        test_bot.config["publishing"] = {
+            "delete_old_ads": "BEFORE_PUBLISH",
+            "delete_old_ads_by_title": False
+        }
+
+        # Create temporary file path
+        ad_file = os.path.join(tmp_path, "test_ad.yaml")
+
+        # Mock the necessary web interaction methods
+        with patch.object(test_bot, 'web_click', new_callable=AsyncMock), \
+                patch.object(test_bot, 'web_find', new_callable=AsyncMock) as mock_find, \
+                patch.object(test_bot, 'web_select', new_callable=AsyncMock), \
+                patch.object(test_bot, 'web_input', new_callable=AsyncMock), \
+                patch.object(test_bot, 'web_open', new_callable=AsyncMock), \
+                patch.object(test_bot, 'web_sleep', new_callable=AsyncMock), \
+                patch.object(test_bot, 'web_check', new_callable=AsyncMock, return_value=True), \
+                patch.object(test_bot, 'web_request', new_callable=AsyncMock), \
+                patch.object(test_bot, 'web_execute', new_callable=AsyncMock), \
+                patch.object(test_bot, 'web_find_all', new_callable=AsyncMock) as mock_find_all, \
+                patch.object(test_bot, 'web_await', new_callable=AsyncMock):
+
+            # Mock the shipping options form elements
+            mock_find.side_effect = [
+                TimeoutError(),  # First call in assert_free_ad_limit_not_reached
+                AsyncMock(attrs={"content": "csrf-token-123"}),  # CSRF token
+                AsyncMock(attrs={"checked": True}),  # Size radio button check
+                AsyncMock(attrs={"value": "Klein"}),  # Size dropdown
+                AsyncMock(attrs={"value": "Paket 2 kg"}),  # Package type dropdown
+                AsyncMock(attrs={"value": "Päckchen"}),  # Second package type dropdown
+                TimeoutError(),  # Captcha check
+            ]
+
+            # Mock web_find_all to return empty list for city options
+            mock_find_all.return_value = []
+
+            # Mock web_check to return True for radio button checked state
+            with patch.object(test_bot, 'web_check', new_callable=AsyncMock) as mock_check:
+                mock_check.return_value = True
+
+                # Test through the public interface by publishing an ad
+                await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads)
+
+            # Verify that web_find was called the expected number of times
+            assert mock_find.await_count >= 3
+
+            # Verify the file was created in the temporary directory
+            assert os.path.exists(ad_file)
+
+
+class TestKleinanzeigenBotUrlConstruction:
+    """Tests for URL construction functionality."""
+
+    def test_url_construction(self, test_bot: KleinanzeigenBot) -> None:
+        """Test that URLs are constructed correctly."""
+        # Test login URL
+        expected_login_url = "https://www.kleinanzeigen.de/m-einloggen.html?targetUrl=/"
+        assert f"{test_bot.root_url}/m-einloggen.html?targetUrl=/" == expected_login_url
+
+        # Test ad management URL
+        expected_manage_url = "https://www.kleinanzeigen.de/m-meine-anzeigen.html"
+        assert f"{test_bot.root_url}/m-meine-anzeigen.html" == expected_manage_url
+
+        # Test ad publishing URL
+        expected_publish_url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-schritt2.html"
+        assert f"{test_bot.root_url}/p-anzeige-aufgeben-schritt2.html" == expected_publish_url

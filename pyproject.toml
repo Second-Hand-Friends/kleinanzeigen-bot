@@ -197,6 +197,12 @@ disable = [
   "too-few-public-methods"
 ]
 
+[tool.pylint.tests]
+# Configuration specific to test files
+disable = [
+  "redefined-outer-name"  # Allow pytest fixtures to be used as parameters
+]
+
 [tool.pylint.miscelaneous]
 # https://pylint.pycqa.org/en/latest/user_guide/configuration/all-options.html#miscellaneous-checker
 notes = [ "FIXME", "XXX", "TODO" ]  # list of note tags to take in consideration
@@ -246,4 +252,5 @@ dev = [
     "mypy",
     "pyright",
     "pytest-cov>=6.0.0",
+    "types-PyYAML"  # Type stubs for PyYAML
 ]
