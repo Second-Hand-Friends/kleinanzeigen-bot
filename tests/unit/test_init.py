@@ -7,6 +7,7 @@ import copy
 import logging
 import os
 import tempfile
+from collections.abc import Generator
 from datetime import datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -126,6 +127,19 @@ def minimal_ad_config(base_ad_config: dict[str, Any]) -> dict[str, Any]:
         "contact.street",
         "contact.phone"
     )
+
+
+@pytest.fixture
+def mock_config_setup(test_bot: KleinanzeigenBot) -> Generator[None]:
+    """Provide a centralized mock configuration setup for tests.
+    This fixture mocks load_config and other essential configuration-related methods."""
+    with patch.object(test_bot, 'load_config'), \
+            patch.object(test_bot, 'create_browser_session', new_callable=AsyncMock), \
+            patch.object(test_bot, 'login', new_callable=AsyncMock), \
+            patch.object(test_bot, 'web_request', new_callable=AsyncMock) as mock_request:
+        # Mock the web request for published ads
+        mock_request.return_value = {"content": '{"ads": []}'}
+        yield
 
 
 class TestKleinanzeigenBotInitialization:
@@ -557,25 +571,23 @@ class TestKleinanzeigenBotAdOperations:
     """Tests for ad-related operations."""
 
     @pytest.mark.asyncio
-    async def test_run_delete_command_no_ads(self, test_bot: KleinanzeigenBot) -> None:
+    async def test_run_delete_command_no_ads(self, test_bot: KleinanzeigenBot, mock_config_setup: None) -> None:  # pylint: disable=unused-argument
         """Test running delete command with no ads."""
         with patch.object(test_bot, 'load_ads', return_value=[]):
             await test_bot.run(['script.py', 'delete'])
             assert test_bot.command == 'delete'
 
     @pytest.mark.asyncio
-    async def test_run_publish_command_no_ads(self, test_bot: KleinanzeigenBot) -> None:
+    async def test_run_publish_command_no_ads(self, test_bot: KleinanzeigenBot, mock_config_setup: None) -> None:  # pylint: disable=unused-argument
         """Test running publish command with no ads."""
         with patch.object(test_bot, 'load_ads', return_value=[]):
             await test_bot.run(['script.py', 'publish'])
             assert test_bot.command == 'publish'
 
     @pytest.mark.asyncio
-    async def test_run_download_command_default_selector(self, test_bot: KleinanzeigenBot) -> None:
+    async def test_run_download_command_default_selector(self, test_bot: KleinanzeigenBot, mock_config_setup: None) -> None:  # pylint: disable=unused-argument
         """Test running download command with default selector."""
-        with patch.object(test_bot, 'create_browser_session', new_callable=AsyncMock), \
-                patch.object(test_bot, 'login', new_callable=AsyncMock), \
-                patch.object(test_bot, 'download_ads', new_callable=AsyncMock):
+        with patch.object(test_bot, 'download_ads', new_callable=AsyncMock):
             await test_bot.run(['script.py', 'download'])
             assert test_bot.ads_selector == 'new'
 
@@ -590,30 +602,24 @@ class TestKleinanzeigenBotAdManagement:
     """Tests for ad management functionality."""
 
     @pytest.mark.asyncio
-    async def test_download_ads_with_specific_ids(self, test_bot: KleinanzeigenBot) -> None:
+    async def test_download_ads_with_specific_ids(self, test_bot: KleinanzeigenBot, mock_config_setup: None) -> None:  # pylint: disable=unused-argument
         """Test downloading ads with specific IDs."""
         test_bot.ads_selector = '123,456'
-        with patch.object(test_bot, 'create_browser_session', new_callable=AsyncMock), \
-                patch.object(test_bot, 'login', new_callable=AsyncMock), \
-                patch.object(test_bot, 'download_ads', new_callable=AsyncMock):
+        with patch.object(test_bot, 'download_ads', new_callable=AsyncMock):
             await test_bot.run(['script.py', 'download', '--ads=123,456'])
             assert test_bot.ads_selector == '123,456'
 
     @pytest.mark.asyncio
-    async def test_run_publish_invalid_selector(self, test_bot: KleinanzeigenBot) -> None:
+    async def test_run_publish_invalid_selector(self, test_bot: KleinanzeigenBot, mock_config_setup: None) -> None:  # pylint: disable=unused-argument
         """Test running publish with invalid selector."""
-        with patch.object(test_bot, 'load_config'), \
-                patch.object(test_bot, 'load_ads', return_value=[]):
+        with patch.object(test_bot, 'load_ads', return_value=[]):
             await test_bot.run(['script.py', 'publish', '--ads=invalid'])
             assert test_bot.ads_selector == 'due'
 
     @pytest.mark.asyncio
-    async def test_run_download_invalid_selector(self, test_bot: KleinanzeigenBot) -> None:
+    async def test_run_download_invalid_selector(self, test_bot: KleinanzeigenBot, mock_config_setup: None) -> None:  # pylint: disable=unused-argument
         """Test running download with invalid selector."""
-        with patch.object(test_bot, 'load_config'), \
-                patch.object(test_bot, 'create_browser_session', new_callable=AsyncMock), \
-                patch.object(test_bot, 'login', new_callable=AsyncMock), \
-                patch.object(test_bot, 'download_ads', new_callable=AsyncMock):
+        with patch.object(test_bot, 'download_ads', new_callable=AsyncMock):
             await test_bot.run(['script.py', 'download', '--ads=invalid'])
             assert test_bot.ads_selector == 'new'
 
