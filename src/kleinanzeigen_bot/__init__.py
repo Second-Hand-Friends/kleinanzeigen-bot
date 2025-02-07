@@ -359,7 +359,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             ad_cfg["description"] = description_config["prefix"] + (ad_cfg["description"] or "") + description_config["suffix"]
             ad_cfg["description"] = ad_cfg["description"].replace("@", "(at)")
             ensure(len(ad_cfg["description"]) <= 4000, f"Length of ad description including prefix and suffix exceeds 4000 chars. Description length: {
-                len(ad_cfg["description"])} chars. @ [{ad_file}]")
+                   len(ad_cfg['description'])} chars. @ {ad_file}")
 
             # pylint: disable=cell-var-from-loop
             def assert_one_of(path:str, allowed:Iterable[str]) -> None:
