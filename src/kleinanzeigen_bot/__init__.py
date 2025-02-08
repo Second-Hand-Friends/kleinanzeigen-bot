@@ -3,8 +3,8 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import asyncio, atexit, copy, importlib.metadata, json, logging, os, re, signal, shutil, sys, textwrap, time
 import getopt  # pylint: disable=deprecated-module
+import asyncio, atexit, copy, importlib.metadata, json, logging, os, re, shutil, signal, sys, textwrap, time
 import urllib.parse as urllib_parse
 import urllib.request as urllib_request
 from collections.abc import Iterable
@@ -17,15 +17,16 @@ import certifi, colorama, nodriver
 from ruamel.yaml import YAML
 from wcmatch import glob
 
-from . import utils, resources, extract
-from .i18n import Locale, get_current_locale, set_current_locale, get_translating_logger, pluralize
-from .utils import abspath, ainput, apply_defaults, ensure, is_frozen, safe_get, parse_datetime, calculate_content_hash
-from .web_scraping_mixin import By, Element, Page, Is, WebScrapingMixin
+from . import extract, resources, utils
 from ._version import __version__
+from .i18n import Locale, get_current_locale, get_translating_logger, pluralize, set_current_locale
+from .logging import get_logger
+from .utils import abspath, ainput, apply_defaults, calculate_content_hash, ensure, is_frozen, parse_datetime, safe_get
+from .web_scraping_mixin import By, Element, Is, Page, WebScrapingMixin
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
-LOG_ROOT:Final[logging.Logger] = logging.getLogger()
+LOG_ROOT:Final[logging.Logger] = get_logger()
 LOG:Final[logging.Logger] = get_translating_logger(__name__)
 LOG.setLevel(logging.INFO)
 

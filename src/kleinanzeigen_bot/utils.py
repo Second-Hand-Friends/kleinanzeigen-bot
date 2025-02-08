@@ -3,20 +3,20 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import asyncio, copy, decimal, inspect, json, logging, os, re, socket, sys, traceback, time, hashlib
-from importlib.resources import read_text as get_resource_as_string
+import asyncio, copy, decimal, hashlib, inspect, json, logging, os, re, socket, sys, time
 from collections.abc import Callable
 from datetime import datetime
 from gettext import gettext as _
+from importlib.resources import read_text as get_resource_as_string
 from types import FrameType, ModuleType, TracebackType
 from typing import Any, Final, TypeVar
 
 import colorama
 from ruamel.yaml import YAML
-from .i18n import get_translating_logger
 
-LOG_ROOT:Final[logging.Logger] = logging.getLogger()
-LOG:Final[logging.Logger] = get_translating_logger(__name__)
+from .logging import LOG_ROOT, get_logger
+
+LOG: Final[logging.Logger] = get_logger(__name__)
 
 # https://mypy.readthedocs.io/en/stable/generics.html#generic-functions
 T = TypeVar('T')
@@ -90,8 +90,8 @@ def is_integer(obj:Any) -> bool:
 
 
 def is_port_open(host:str, port:int) -> bool:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(1)
         s.connect((host, port))
         return True
@@ -153,88 +153,58 @@ def safe_get(a_map:dict[Any, Any], *keys:str) -> Any:
 
 
 def configure_console_logging() -> None:
-
+    """Configure console logging with colors and formatting."""
     class CustomFormatter(logging.Formatter):
         LEVEL_COLORS = {
-            logging.DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
-            logging.INFO: colorama.Fore.BLACK + colorama.Style.BRIGHT,
+            logging.DEBUG: colorama.Fore.BLUE,
+            logging.INFO: colorama.Fore.GREEN,
             logging.WARNING: colorama.Fore.YELLOW,
             logging.ERROR: colorama.Fore.RED,
-            logging.CRITICAL: colorama.Fore.RED,
-        }
-        MESSAGE_COLORS = {
-            logging.DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
-            logging.INFO: colorama.Fore.RESET,
-            logging.WARNING: colorama.Fore.YELLOW,
-            logging.ERROR: colorama.Fore.RED,
-            logging.CRITICAL: colorama.Fore.RED + colorama.Style.BRIGHT,
-        }
-        VALUE_COLORS = {
-            logging.DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
-            logging.INFO: colorama.Fore.MAGENTA,
-            logging.WARNING: colorama.Fore.MAGENTA,
-            logging.ERROR: colorama.Fore.MAGENTA,
             logging.CRITICAL: colorama.Fore.MAGENTA,
         }
 
-        def format(self, record:logging.LogRecord) -> str:
-            record = copy.deepcopy(record)
-
-            level_color = self.LEVEL_COLORS.get(record.levelno, "")
-            msg_color = self.MESSAGE_COLORS.get(record.levelno, "")
-            value_color = self.VALUE_COLORS.get(record.levelno, "")
-
-            # translate and colorize log level name
-            levelname = _(record.levelname) if record.levelno > logging.DEBUG else record.levelname
-            record.levelname = f"{level_color}[{levelname}]{colorama.Style.RESET_ALL}"
-
-            # highlight message values enclosed by [...], "...", and '...'
-            record.msg = re.sub(
-                r"\[([^\]]+)\]|\"([^\"]+)\"|\'([^\']+)\'",
-                lambda match: f"[{value_color}{match.group(1) or match.group(2) or match.group(3)}{colorama.Fore.RESET}{msg_color}]",
-                str(record.msg),
-            )
-
-            # colorize message
-            record.msg = f"{msg_color}{record.msg}{colorama.Style.RESET_ALL}"
-
-            return super().format(record)
+        def format(self, record: logging.LogRecord) -> str:
+            try:
+                record = copy.deepcopy(record)
+                level_color = self.LEVEL_COLORS.get(record.levelno, "")
+                record.levelname = f"{level_color}[{record.levelname}]{colorama.Style.RESET_ALL}"
+                return super().format(record)
+            except Exception:
+                return str(record.msg)
 
     formatter = CustomFormatter("%(levelname)s %(message)s")
 
+    class InfoFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return record.levelno <= logging.INFO
+
     stdout_log = logging.StreamHandler(sys.stderr)
     stdout_log.setLevel(logging.DEBUG)
-    stdout_log.addFilter(type("", (logging.Filter,), {
-        "filter": lambda rec: rec.levelno <= logging.INFO
-    }))
+    stdout_log.addFilter(InfoFilter())
     stdout_log.setFormatter(formatter)
     LOG_ROOT.addHandler(stdout_log)
 
-    stderr_log = logging.StreamHandler(sys.stderr)
-    stderr_log.setLevel(logging.WARNING)
-    stderr_log.setFormatter(formatter)
-    LOG_ROOT.addHandler(stderr_log)
 
-
-def on_exception(ex_type:type[BaseException], ex_value:Any, ex_traceback:TracebackType | None) -> None:
+def on_exception(ex_type: type[BaseException], ex_value: BaseException, ex_traceback: TracebackType | None) -> None:
+    """Handle uncaught exceptions."""
     if issubclass(ex_type, KeyboardInterrupt):
         sys.__excepthook__(ex_type, ex_value, ex_traceback)
-    elif LOG.isEnabledFor(logging.DEBUG) or isinstance(ex_value, (AttributeError, ImportError, NameError, TypeError)):
-        LOG.error("".join(traceback.format_exception(ex_type, ex_value, ex_traceback)))
-    elif isinstance(ex_value, AssertionError):
-        LOG.error(ex_value)
+    elif LOG.isEnabledFor(logging.DEBUG):
+        LOG.error("", exc_info=(ex_type, ex_value, ex_traceback))
     else:
         LOG.error("%s: %s", ex_type.__name__, ex_value)
 
 
 def on_exit() -> None:
+    """Handle cleanup on exit."""
     for handler in LOG_ROOT.handlers:
         handler.flush()
 
 
-def on_sigint(_sig:int, _frame:FrameType | None) -> None:
-    LOG.warning("Aborted on user request.")
-    sys.exit(0)
+def on_sigint(_sig: int, _frame: FrameType | None) -> None:
+    """Handle interrupt signal."""
+    LOG.warning(_("Aborted on user request."))
+    sys.exit(1)
 
 
 def load_dict(filepath:str, content_label:str = "") -> dict[str, Any]:
