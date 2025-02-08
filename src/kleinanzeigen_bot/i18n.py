@@ -3,26 +3,39 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import ctypes, gettext, inspect, locale, logging, os, sys
+import ctypes, locale, logging, os
 from collections.abc import Sized
 from typing import Any, Final, NamedTuple
 
-from . import resources, utils  # pylint: disable=cyclic-import
+from .logging import get_logger
 
 __all__ = [
     "Locale",
     "get_translating_logger",
 ]
 
-LOG_ROOT:Final[logging.Logger] = logging.getLogger()
-LOG:Final[logging.Logger] = logging.getLogger(__name__)
+LOG: Final[logging.Logger] = get_logger(__name__)
+
+
+def _get_windows_ui_language() -> str | None:
+    """Get the Windows UI language code. Only works on Windows."""
+    try:
+        # We need to access windll only on Windows, so we do the import here
+        if not hasattr(ctypes, "windll"):  # Not on Windows
+            return None
+        # Access Windows-specific attributes through getattr to satisfy type checker
+        windll: Any = getattr(ctypes, "windll")
+        lang_code = windll.kernel32.GetUserDefaultUILanguage()
+        return locale.windows_locale.get(lang_code, "en_US")
+    except Exception:
+        LOG.warning("Error detecting language on Windows", exc_info=True)
+        return None
 
 
 class Locale(NamedTuple):
-
-    language:str  # Language code (e.g., "en", "de")
-    region:str | None = None  # Region code (e.g., "US", "DE")
-    encoding:str = "UTF-8"  # Encoding format (e.g., "UTF-8")
+    language: str  # Language code (e.g., "en", "de")
+    region: str | None = None  # Region code (e.g., "US", "DE")
+    encoding: str = "UTF-8"  # Encoding format (e.g., "UTF-8")
 
     def __str__(self) -> str:
         """
@@ -65,89 +78,27 @@ class Locale(NamedTuple):
 
 
 def _detect_locale() -> Locale:
-    """
-    Detects the system language, returning a tuple of (language, region, encoding).
-    - On macOS/Linux, it uses the LANG environment variable.
-    - On Windows, it uses the Windows API via ctypes to get the default UI language.
-
-    Returns:
-        (language, region, encoding): e.g. ("en", "US", "UTF-8")
-    """
+    """Detects the system language."""
     lang = os.environ.get("LANG", None)
-
     if not lang and os.name == "nt":  # Windows
-        try:
-            lang = locale.windows_locale.get(ctypes.windll.kernel32.GetUserDefaultUILanguage(), "en_US")  # type: ignore[attr-defined,unused-ignore] # mypy
-        except Exception:
-            LOG.warning("Error detecting language on Windows", exc_info = True)
-
+        lang = _get_windows_ui_language()
     return Locale.of(lang) if lang else Locale("en", "US", "UTF-8")
 
 
 _CURRENT_LOCALE: Locale = _detect_locale()
-_TRANSLATIONS: dict[str, Any] | None = None
-
-
-def translate(text:object, caller: inspect.FrameInfo | None) -> str:
-    text = str(text)
-    if not caller:
-        return text
-
-    global _TRANSLATIONS
-    if _TRANSLATIONS is None:
-        try:
-            _TRANSLATIONS = utils.load_dict_from_module(resources, f"translations.{_CURRENT_LOCALE[0]}.yaml")
-        except FileNotFoundError:
-            _TRANSLATIONS = {}
-
-    if not _TRANSLATIONS:
-        return text
-
-    module_name = caller.frame.f_globals.get('__name__')  # pylint: disable=redefined-outer-name
-    file_basename = os.path.splitext(os.path.basename(caller.filename))[0]
-    if module_name and module_name.endswith(f".{file_basename}"):
-        module_name = module_name[:-(len(file_basename) + 1)]
-    file_key = f"{file_basename}.py" if module_name == file_basename else f"{module_name}/{file_basename}.py"
-    translation = utils.safe_get(_TRANSLATIONS,
-        file_key,
-        caller.function,
-        text
-    )
-    return translation if translation else text
-
-
-_original_gettext = gettext.gettext
-gettext.gettext = lambda message: translate(_original_gettext(message), utils.get_caller())
-for module_name, module in sys.modules.items():
-    if module is None or module_name in sys.builtin_module_names:
-        continue
-    if hasattr(module, '_') and getattr(module, '_') is _original_gettext:
-        setattr(module, '_', gettext.gettext)
-    if hasattr(module, 'gettext') and getattr(module, 'gettext') is _original_gettext:
-        setattr(module, 'gettext', gettext.gettext)
 
 
 def get_translating_logger(name: str | None = None) -> logging.Logger:
-
-    class TranslatingLogger(logging.Logger):
-
-        def _log(self, level: int, msg: object, *args: Any, **kwargs: Any) -> None:
-            if level != logging.DEBUG:  # debug messages should not be translated
-                msg = translate(msg, utils.get_caller(2))
-            super()._log(level, msg, *args, **kwargs)
-
-    logging.setLoggerClass(TranslatingLogger)
-    return logging.getLogger(name)
+    """Returns a logger that translates messages before logging them."""
+    return get_logger(name)
 
 
 def get_current_locale() -> Locale:
     return _CURRENT_LOCALE
 
 
-def set_current_locale(new_locale:Locale) -> None:
-    global _CURRENT_LOCALE, _TRANSLATIONS
-    if new_locale.language != _CURRENT_LOCALE.language:
-        _TRANSLATIONS = None
+def set_current_locale(new_locale: Locale) -> None:
+    global _CURRENT_LOCALE
     _CURRENT_LOCALE = new_locale
 
 
@@ -161,8 +112,6 @@ def pluralize(noun:str, count:int | Sized, prefix_with_count:bool = True) -> str
     >>> pluralize("field", 2, prefix_with_count = False)
     'fields'
     """
-    noun = translate(noun, utils.get_caller())
-
     if isinstance(count, Sized):
         count = len(count)
 
