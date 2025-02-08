@@ -252,5 +252,4 @@ dev = [
     "mypy",
     "pyright",
     "pytest-cov>=6.0.0",
-    "types-PyYAML"  # Type stubs for PyYAML
 ]

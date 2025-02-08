@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:356e13face83e7104560d4e0d864a48d6c78c73bb1d24986ee0a507cbbaf7d91"
+content_hash = "sha256:eeb2e2b29f41422186150efb5be83083ce617f6e3b303c0995a6e31d523383a4"
 
 [[metadata.targets]]
 requires_python = ">=3.10,<3.14"
@@ -970,17 +970,6 @@ groups = ["dev"]
 files = [
     {file = "tomlkit-0.13.2-py3-none-any.whl", hash = "sha256:7a974427f6e119197f670fbbbeae7bef749a6c14e793db934baefc1b5f03efde"},
     {file = "tomlkit-0.13.2.tar.gz", hash = "sha256:fff5fe59a87295b278abd31bec92c15d9bc4a06885ab12bcea52c71119392e79"},
-]
-
-[[package]]
-name = "types-pyyaml"
-version = "6.0.12.20241230"
-requires_python = ">=3.8"
-summary = "Typing stubs for PyYAML"
-groups = ["dev"]
-files = [
-    {file = "types_PyYAML-6.0.12.20241230-py3-none-any.whl", hash = "sha256:fa4d32565219b68e6dee5f67534c722e53c00d1cfc09c435ef04d7353e1e96e6"},
-    {file = "types_pyyaml-6.0.12.20241230.tar.gz", hash = "sha256:7f07622dbd34bb9c8b264fe860a17e0efcad00d50b5f27e93984909d9363498c"},
 ]
 
 [[package]]

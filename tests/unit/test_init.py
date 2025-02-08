@@ -1,5 +1,5 @@
 """
-SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+SPDX-FileCopyrightText: © Jens Bergmann and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
@@ -14,7 +14,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import yaml
+from ruamel.yaml import YAML
 
 from kleinanzeigen_bot import LOG, KleinanzeigenBot
 from kleinanzeigen_bot._version import __version__
@@ -657,6 +657,7 @@ categories:
             title=""  # Empty title to trigger length validation
         )
 
+        yaml = YAML()
         with open(ad_file, "w", encoding="utf-8") as f:
             yaml.dump(ad_cfg, f)
 
@@ -680,6 +681,7 @@ categories:
             price_type="INVALID_TYPE"  # Invalid price type
         )
 
+        yaml = YAML()
         with open(ad_file, "w", encoding="utf-8") as f:
             yaml.dump(ad_cfg, f)
 
@@ -703,6 +705,7 @@ categories:
             shipping_type="INVALID_TYPE"  # Invalid shipping type
         )
 
+        yaml = YAML()
         with open(ad_file, "w", encoding="utf-8") as f:
             yaml.dump(ad_cfg, f)
 
@@ -727,6 +730,7 @@ categories:
             price=100  # Price should not be set for GIVE_AWAY
         )
 
+        yaml = YAML()
         with open(ad_file, "w", encoding="utf-8") as f:
             yaml.dump(ad_cfg, f)
 
@@ -751,6 +755,7 @@ categories:
             price=None  # Missing required price for FIXED type
         )
 
+        yaml = YAML()
         with open(ad_file, "w", encoding="utf-8") as f:
             yaml.dump(ad_cfg, f)
 
@@ -783,6 +788,7 @@ categories:
             }
         }
 
+        yaml = YAML()
         with open(ad_file, "w", encoding="utf-8") as f:
             yaml.dump(ad_cfg, f)
 
@@ -880,6 +886,7 @@ class TestKleinanzeigenBotAdRepublication:
             ad_dir.mkdir()
             ad_file = ad_dir / "test_ad.yaml"
 
+            yaml = YAML()
             with open(ad_file, "w", encoding="utf-8") as f:
                 yaml.dump(ad_cfg, f)
 
