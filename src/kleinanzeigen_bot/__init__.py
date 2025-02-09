@@ -238,7 +238,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     set_current_locale(Locale.of(value))
                 case "-v" | "--verbose":
                     LOG.setLevel(logging.DEBUG)
-                    logging.getLogger("nodriver").setLevel(logging.INFO)
+                    get_logger("nodriver").setLevel(logging.INFO)
 
         match len(arguments):
             case 0:
