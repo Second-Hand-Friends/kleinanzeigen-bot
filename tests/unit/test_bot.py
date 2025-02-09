@@ -3,11 +3,12 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import pytest
+import gc, pytest
 from kleinanzeigen_bot import KleinanzeigenBot
 
 
 class TestKleinanzeigenBot:
+
     @pytest.fixture
     def bot(self) -> KleinanzeigenBot:
         return KleinanzeigenBot()
@@ -31,3 +32,19 @@ class TestKleinanzeigenBot:
         version = bot.get_version()
         assert isinstance(version, str)
         assert len(version) > 0
+
+    def test_file_log_closed_after_bot_shutdown(self) -> None:
+        """Ensure the file log handler is properly closed after the bot is deleted"""
+
+        # Directly instantiate the bot to control its lifecycle within the test
+        bot = KleinanzeigenBot()
+
+        bot.configure_file_logging()
+        file_log = bot.file_log
+        assert not file_log.stream.closed  # type: ignore[union-attr]
+
+        # Delete and garbage collect the bot instance to ensure the destructor (__del__) is called
+        del bot
+        gc.collect()
+
+        assert file_log.stream is None  # type: ignore[union-attr]

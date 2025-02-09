@@ -60,6 +60,7 @@ class KleinanzeigenBot(WebScrapingMixin):
     def __del__(self) -> None:
         if self.file_log:
             LOG_ROOT.removeHandler(self.file_log)
+            self.file_log.close()
         self.close_browser_session()
 
     def get_version(self) -> str:
@@ -279,7 +280,8 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         # Check for changes first
         if ad_cfg["id"]:
-            current_hash = calculate_content_hash(ad_cfg)
+            # Calculate hash on original config to match what was stored
+            current_hash = calculate_content_hash(ad_cfg_orig)
             stored_hash = ad_cfg_orig.get("content_hash")
 
             LOG.debug("Hash comparison for [%s]:", ad_file_relative)
@@ -709,7 +711,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     await self.web_sleep(1)  # Wait for city dropdown to populate
                     options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
                     for option in options:
-                        option_text = await self.web_text(By.CSS_SELECTOR, "option", parent=option)
+                        option_text = await self.web_text(By.CSS_SELECTOR, "option", parent = option)
                         if option_text == ad_cfg["contact"]["location"]:
                             await self.web_select(By.ID, "pstad-citychsr", option_text)
                             break
@@ -790,7 +792,8 @@ class KleinanzeigenBot(WebScrapingMixin):
         ad_cfg_orig["id"] = ad_id
 
         # Update content hash after successful publication
-        ad_cfg_orig["content_hash"] = calculate_content_hash(ad_cfg)
+        # Calculate hash on original config to ensure consistent comparison on restart
+        ad_cfg_orig["content_hash"] = calculate_content_hash(ad_cfg_orig)
         ad_cfg_orig["updated_on"] = datetime.utcnow().isoformat()
         if not ad_cfg["created_on"] and not ad_cfg["id"]:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
