@@ -318,11 +318,6 @@ class KleinanzeigenBot(WebScrapingMixin):
         if not ad_files:
             return []
 
-        description_config = {
-            "prefix": self.config["ad_defaults"]["description"]["prefix"] or "",
-            "suffix": self.config["ad_defaults"]["description"]["suffix"] or ""
-        }
-
         ids = []
         use_specific_ads = False
         if re.compile(r'\d+[,\d+]*').search(self.ads_selector):
@@ -356,10 +351,18 @@ class KleinanzeigenBot(WebScrapingMixin):
                     if not self.__check_ad_republication(ad_cfg, ad_cfg_orig, ad_file_relative):
                         continue
 
-            ad_cfg["description"] = description_config["prefix"] + (ad_cfg["description"] or "") + description_config["suffix"]
+            # Get prefix/suffix from ad config if present, otherwise use defaults
+            prefix = ad_cfg.get("description_prefix", self.config["ad_defaults"]["description"]["prefix"] or "")
+            suffix = ad_cfg.get("description_suffix", self.config["ad_defaults"]["description"]["suffix"] or "")
+
+            # Combine description parts
+            ad_cfg["description"] = prefix + (ad_cfg["description"] or "") + suffix
             ad_cfg["description"] = ad_cfg["description"].replace("@", "(at)")
-            ensure(len(ad_cfg["description"]) <= 4000, f"""Length of ad description including prefix and suffix exceeds 4000 chars. Description length: {
-                   len(ad_cfg['description'])} chars. @ {ad_file}""")
+
+            # Validate total length
+            ensure(len(ad_cfg["description"]) <= 4000,
+                   f"""Length of ad description including prefix and suffix exceeds 4000 chars. Description length: {
+                   len(ad_cfg["description"])} chars. @ {ad_file}.""")
 
             # pylint: disable=cell-var-from-loop
             def assert_one_of(path:str, allowed:Iterable[str]) -> None:
