@@ -15,7 +15,7 @@ from ruamel.yaml import YAML
 
 from kleinanzeigen_bot import LOG, KleinanzeigenBot
 from kleinanzeigen_bot._version import __version__
-from kleinanzeigen_bot.utils import calculate_content_hash
+from kleinanzeigen_bot.utils import calculate_content_hash, safe_get
 
 
 @pytest.fixture
@@ -1015,3 +1015,294 @@ class TestKleinanzeigenBotUrlConstruction:
         # Test ad publishing URL
         expected_publish_url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-schritt2.html"
         assert f"{test_bot.root_url}/p-anzeige-aufgeben-schritt2.html" == expected_publish_url
+
+
+class TestKleinanzeigenBotPrefixSuffix:
+    """Tests for description prefix and suffix functionality."""
+
+    def test_prefix_suffix(self, test_bot: KleinanzeigenBot) -> None:
+        """Test different prefix/suffix combinations in ad descriptions.
+
+        The prefix/suffix can be configured in three ways, with the following precedence
+        (highest to lowest):
+
+        1. Direct at root level (highest precedence):
+           prefix: "Direct Prefix\n"
+           suffix: "\nDirect Suffix"
+           description: "Main Description"
+
+        2. Nested under description (medium precedence):
+           description:
+             prefix: "Nested Prefix\n"
+             suffix: "\nNested Suffix"
+             text: "Main Description"
+
+        3. Global defaults in config.yaml (lowest precedence):
+           ad_defaults:
+             description:
+               prefix: "Default Prefix\n"
+               suffix: "\nDefault Suffix"
+
+        Special cases:
+        - Empty strings ("") explicitly override defaults
+        - None values are treated as not set, falling back to next precedence
+        - Maximum length of final description (including prefix/suffix) is 4000 chars
+        - Newlines in prefix/suffix are preserved
+        - Whitespace in prefix/suffix is preserved
+        """
+        # Set default prefix/suffix in config
+        test_bot.config["ad_defaults"]["description"] = {
+            "prefix": "Default Prefix\n",
+            "suffix": "\nDefault Suffix"
+        }
+        test_bot.config["ad_files"] = ["*.yaml"]
+
+        test_cases: list[dict[str, Any]] = [
+            {
+                "name": "uses_global_defaults",
+                "ad_cfg": {
+                    "description": "Main Description",
+                },
+                "expected": "Default Prefix\nMain Description\nDefault Suffix"
+            },
+            {
+                "name": "custom_prefix_only",
+                "ad_cfg": {
+                    "description": "Main Description",
+                    "prefix": "Custom Prefix\n",
+                },
+                "expected": "Custom Prefix\nMain Description\nDefault Suffix"
+            },
+            {
+                "name": "custom_suffix_only",
+                "ad_cfg": {
+                    "description": "Main Description",
+                    "suffix": "\nCustom Suffix",
+                },
+                "expected": "Default Prefix\nMain Description\nCustom Suffix"
+            },
+            {
+                "name": "custom_prefix_and_suffix",
+                "ad_cfg": {
+                    "description": "Main Description",
+                    "prefix": "Custom Prefix\n",
+                    "suffix": "\nCustom Suffix",
+                },
+                "expected": "Custom Prefix\nMain Description\nCustom Suffix"
+            },
+            {
+                "name": "empty_prefix_suffix",
+                "ad_cfg": {
+                    "description": "Main Description",
+                    "prefix": "",
+                    "suffix": "",
+                },
+                "expected": "Main Description"
+            },
+            {
+                "name": "length_validation",
+                "ad_cfg": {
+                    "description": "X" * 4000,  # Max length description
+                    "prefix": "Prefix",  # Adding prefix should trigger length error
+                },
+                "should_raise": True
+            },
+            {
+                "name": "only_prefix",
+                "ad_cfg": {
+                    "description": "Main Description",
+                    "prefix": "Only Prefix\n",
+                    "suffix": "",
+                },
+                "expected": "Only Prefix\nMain Description"
+            },
+            {
+                "name": "only_suffix",
+                "ad_cfg": {
+                    "description": "Main Description",
+                    "prefix": "",
+                    "suffix": "\nOnly Suffix",
+                },
+                "expected": "Main Description\nOnly Suffix"
+            },
+            {
+                "name": "empty_prefix_and_suffix",
+                "ad_cfg": {
+                    "description": "Main Description",
+                    "prefix": "",
+                    "suffix": "",
+                },
+                "expected": "Main Description"
+            },
+            {
+                "name": "long_prefix_and_suffix",
+                "ad_cfg": {
+                    "description": "Main Description",
+                    "prefix": "A" * 1000 + "\n",
+                    "suffix": "\nB" * 1000,
+                },
+                "expected": "A" * 1000 + "\nMain Description" + "\nB" * 1000
+            },
+            {
+                "name": "special_characters",
+                "ad_cfg": {
+                    "description": "Main Description",
+                    "prefix": "Prefix with special chars: @#$%\n",
+                    "suffix": "\nSuffix with special chars: &*()",
+                },
+                "expected": "Prefix with special chars: @#$%\nMain Description\nSuffix with special chars: &*()"
+            },
+            {
+                "name": "whitespace_handling",
+                "ad_cfg": {
+                    "description": "Main Description",
+                    "prefix": "   Leading Whitespace\n",
+                    "suffix": "\nTrailing Whitespace   ",
+                },
+                "expected": "   Leading Whitespace\nMain Description\nTrailing Whitespace   "
+            },
+            {
+                "name": "mixed_case",
+                "ad_cfg": {
+                    "description": "Main Description",
+                    "prefix": "Prefix in Mixed Case\n",
+                    "suffix": "\nSuffix in Mixed Case",
+                },
+                "expected": "Prefix in Mixed Case\nMain Description\nSuffix in Mixed Case"
+            },
+            {
+                "name": "newline_handling",
+                "ad_cfg": {
+                    "description": "Main Description\nWith Newline",
+                    "prefix": "Prefix\n",
+                    "suffix": "\nSuffix\n",
+                },
+                "expected": "Prefix\nMain Description\nWith Newline\nSuffix\n"
+            },
+            {
+                "name": "multiple_newlines",
+                "ad_cfg": {
+                    "description": "Main Description\nWith Multiple\nNewlines",
+                    "prefix": "Prefix\n",
+                    "suffix": "\nSuffix\n",
+                },
+                "expected": "Prefix\nMain Description\nWith Multiple\nNewlines\nSuffix\n"
+            },
+            {
+                "name": "description_prefix_path",
+                "ad_cfg": {
+                    "description": {
+                        "text": "Main Description",
+                        "prefix": "Description Prefix Path\n"
+                    }
+                },
+                "expected": "Description Prefix Path\nMain Description\nDefault Suffix"
+            },
+            {
+                "name": "description_suffix_path",
+                "ad_cfg": {
+                    "description": {
+                        "text": "Main Description",
+                        "suffix": "\nDescription Suffix Path"
+                    }
+                },
+                "expected": "Default Prefix\nMain Description\nDescription Suffix Path"
+            },
+            {
+                "name": "description_both_paths",
+                "ad_cfg": {
+                    "description": {
+                        "text": "Main Description",
+                        "prefix": "Description Prefix Path\n",
+                        "suffix": "\nDescription Suffix Path"
+                    }
+                },
+                "expected": "Description Prefix Path\nMain Description\nDescription Suffix Path"
+            },
+            {
+                "name": "nested_overrides_direct",
+                "ad_cfg": {
+                    "description": {
+                        "text": "Main Description",
+                        "prefix": "Nested Prefix\n"  # This should NOT override direct prefix
+                    },
+                    "prefix": "Direct Prefix\n"  # This should take precedence
+                },
+                "expected": "Direct Prefix\nMain Description\nDefault Suffix"  # Changed expectation
+            },
+            {
+                "name": "precedence_test",
+                "ad_cfg": {
+                    "description": {
+                        "text": "Main Description",
+                        "prefix": "Nested Prefix\n",  # This should NOT override direct prefix/suffix
+                        "suffix": "\nNested Suffix"
+                    },
+                    "prefix": "Direct Prefix\n",  # This should take precedence
+                    "suffix": "\nDirect Suffix"   # This should take precedence
+                },
+                "expected": "Direct Prefix\nMain Description\nDirect Suffix"  # Changed expectation
+            }
+        ]
+
+        # Iterate over each test case to verify the prefix/suffix logic
+        for test_case in test_cases:
+            # Ensure 'active' field is set to True for each test case
+            ad_cfg: dict[str, Any] = test_case["ad_cfg"]
+            ad_cfg.setdefault("active", True)  # Required field
+
+            # Check if the test case is expected to raise an error
+            if test_case.get("should_raise", False):
+                with pytest.raises(AssertionError) as exc_info:
+                    # Apply prefix/suffix logic
+                    prefix = (
+                        ad_cfg.get("prefix") if ad_cfg.get("prefix") is not None else
+                        safe_get(ad_cfg, "description", "prefix") if safe_get(ad_cfg, "description", "prefix") is not None else
+                        test_bot.config["ad_defaults"]["description"]["prefix"] if test_bot.config["ad_defaults"]["description"]["prefix"] is not None else
+                        ""
+                    )
+                    suffix = (
+                        ad_cfg.get("suffix") if ad_cfg.get("suffix") is not None else
+                        safe_get(ad_cfg, "description", "suffix") if safe_get(ad_cfg, "description", "suffix") is not None else
+                        test_bot.config["ad_defaults"]["description"]["suffix"] if test_bot.config["ad_defaults"]["description"]["suffix"] is not None else
+                        ""
+                    )
+                    # Get the main description text from the nested structure
+                    description_text = ""
+                    if isinstance(ad_cfg.get("description"), dict):
+                        description_text = ad_cfg["description"].get("text", "")
+                    elif isinstance(ad_cfg.get("description"), str):
+                        description_text = ad_cfg["description"]
+
+                    # Combine the parts, ensuring all parts are strings
+                    ad_cfg["description"] = str(prefix) + str(description_text) + str(suffix)
+
+                    assert len(ad_cfg["description"]) <= 4000, "Length of ad description including prefix and suffix exceeds 4000 chars"
+
+                # Verify the expected error message is present in the exception
+                assert "Length of ad description including prefix and suffix exceeds 4000 chars" in str(exc_info.value)
+            else:
+                # Apply prefix/suffix logic
+                prefix = (
+                    ad_cfg.get("prefix") if ad_cfg.get("prefix") is not None else
+                    safe_get(ad_cfg, "description", "prefix") if safe_get(ad_cfg, "description", "prefix") is not None else
+                    test_bot.config["ad_defaults"]["description"]["prefix"] if test_bot.config["ad_defaults"]["description"]["prefix"] is not None else
+                    ""
+                )
+                suffix = (
+                    ad_cfg.get("suffix") if ad_cfg.get("suffix") is not None else
+                    safe_get(ad_cfg, "description", "suffix") if safe_get(ad_cfg, "description", "suffix") is not None else
+                    test_bot.config["ad_defaults"]["description"]["suffix"] if test_bot.config["ad_defaults"]["description"]["suffix"] is not None else
+                    ""
+                )
+                # Get the main description text from the nested structure
+                description_text = ""
+                if isinstance(ad_cfg.get("description"), dict):
+                    description_text = ad_cfg["description"].get("text", "")
+                elif isinstance(ad_cfg.get("description"), str):
+                    description_text = ad_cfg["description"]
+
+                # Combine the parts, ensuring all parts are strings
+                ad_cfg["description"] = str(prefix) + str(description_text) + str(suffix)
+
+                assert ad_cfg["description"] == test_case["expected"], f"Test case '{test_case['name']}' failed"

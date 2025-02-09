@@ -354,8 +354,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                         continue
 
             # Get prefix/suffix from ad config if present, otherwise use defaults
-            prefix = ad_cfg.get("description_prefix", self.config["ad_defaults"]["description"]["prefix"] or "")
-            suffix = ad_cfg.get("description_suffix", self.config["ad_defaults"]["description"]["suffix"] or "")
+            prefix = ad_cfg.get("prefix", self.config["ad_defaults"]["description"]["prefix"] or "")
+            suffix = ad_cfg.get("suffix", self.config["ad_defaults"]["description"]["suffix"] or "")
 
             # Combine description parts
             ad_cfg["description"] = prefix + (ad_cfg["description"] or "") + suffix
