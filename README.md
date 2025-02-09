@@ -302,6 +302,9 @@ description: # can be multiline, see syntax here https://yaml-multiline.info/
 # or category ID (e.g. 161/27)
 category: Notebooks
 
+prefix: # optional prefix to be added to the description overriding the default prefix
+suffix: # optional suffix to be added to the description overriding the default suffix
+
 price: # without decimals, e.g. 75
 price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY
 
