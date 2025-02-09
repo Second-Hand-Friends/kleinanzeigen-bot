@@ -226,7 +226,7 @@ max-positional-arguments = 6  # max. number of positional args for function / me
 #####################
 [tool.pytest.ini_options]
 # https://docs.pytest.org/en/stable/reference.html#confval-addopts
-addopts = "--strict-markers -p no:cacheprovider --doctest-modules --cov=kleinanzeigen_bot --cov-report=term-missing --ignore=kleinanzeigen_bot/__main__.py"
+addopts = "--strict-markers -p no:cacheprovider --doctest-modules --cov=kleinanzeigen_bot --cov-report=term-missing --cov-report=xml --ignore=kleinanzeigen_bot/__main__.py"
 markers = [
   "itest: marks a test as an integration test (i.e. a test with external dependencies)",
   "asyncio: mark test as async"
@@ -247,9 +247,9 @@ dev = [
     "pytest>=8.3.4",
     "pytest-asyncio>=0.25.3",
     "pytest-rerunfailures",
+    "pytest-cov>=6.0.0",
     "pyinstaller",
     "pylint",
     "mypy",
     "pyright",
-    "pytest-cov>=6.0.0",
 ]

@@ -1,0 +1,62 @@
+name: Test Coverage
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+    - '**/*.md'
+    - '.act*'
+    - '.editorconfig'
+    - '.git*'
+    - '.github/*.yml'
+    - '.github/ISSUE_TEMPLATE/*'
+    - '.github/workflows/codeql-analysis.yml'
+    - '.github/workflows/stale.yml'
+    - '.github/workflows/update-python-deps.yml'
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    permissions:
+      # Required for PR comments
+      pull-requests: write
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Required for coverage comparison with base branch
+
+    - name: "Install: Python and PDM"
+      uses: pdm-project/setup-pdm@v4
+      with:
+        python-version: "3.10"
+        cache: true
+
+    - name: "Install: Python dependencies"
+      run: |
+        set -e
+        python -m pip install --upgrade pip
+        pip install --upgrade pdm
+
+        # Better error handling for venv creation
+        if [[ ! -e .venv ]]; then
+          pdm venv create || echo "Virtual environment creation failed..."
+        fi
+
+        # Ensure clean environment and verbose output for better debugging
+        pdm sync --clean -v || {
+          echo "PDM sync failed. Checking package conflicts..."
+          pdm list --graph
+          exit 1
+        }
+
+    - name: Run tests with coverage
+      run: |
+        pdm run test
+
+    - name: Coverage Comment
+      uses: py-cov-action/python-coverage-comment-action@v3
+      with:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        MINIMUM_GREEN: 80
+        MINIMUM_ORANGE: 60
