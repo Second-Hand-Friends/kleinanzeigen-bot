@@ -279,7 +279,8 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         # Check for changes first
         if ad_cfg["id"]:
-            current_hash = calculate_content_hash(ad_cfg)
+            # Calculate hash on original config to match what was stored
+            current_hash = calculate_content_hash(ad_cfg_orig)
             stored_hash = ad_cfg_orig.get("content_hash")
 
             LOG.debug("Hash comparison for [%s]:", ad_file_relative)
@@ -787,7 +788,8 @@ class KleinanzeigenBot(WebScrapingMixin):
         ad_cfg_orig["id"] = ad_id
 
         # Update content hash after successful publication
-        ad_cfg_orig["content_hash"] = calculate_content_hash(ad_cfg)
+        # Calculate hash on original config to ensure consistent comparison on restart
+        ad_cfg_orig["content_hash"] = calculate_content_hash(ad_cfg_orig)
         ad_cfg_orig["updated_on"] = datetime.utcnow().isoformat()
         if not ad_cfg["created_on"] and not ad_cfg["id"]:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
