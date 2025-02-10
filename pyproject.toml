@@ -256,7 +256,6 @@ dev = [
 
 [tool.coverage.run]
 parallel = true
-source = ["kleinanzeigen_bot"]
 branch = true
 relative_files = true
 
