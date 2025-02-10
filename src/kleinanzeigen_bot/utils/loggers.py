@@ -5,6 +5,7 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 """
 import copy, logging, re, sys
 from gettext import gettext as _
+from logging import Logger, DEBUG, INFO, WARNING, ERROR, CRITICAL
 from logging.handlers import RotatingFileHandler
 from typing import Any, Final  # @UnusedImport
 
@@ -23,10 +24,6 @@ __all__ = [
     "is_debug"
 ]
 
-Logger = logging.Logger
-DEBUG:Final[int] = logging.DEBUG
-INFO:Final[int] = logging.INFO
-
 LOG_ROOT:Final[logging.Logger] = logging.getLogger()
 
 
@@ -34,25 +31,25 @@ def configure_console_logging() -> None:
 
     class CustomFormatter(logging.Formatter):
         LEVEL_COLORS = {
-            logging.DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
-            logging.INFO: colorama.Fore.BLACK + colorama.Style.BRIGHT,
-            logging.WARNING: colorama.Fore.YELLOW,
-            logging.ERROR: colorama.Fore.RED,
-            logging.CRITICAL: colorama.Fore.RED,
+            DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
+            INFO: colorama.Fore.BLACK + colorama.Style.BRIGHT,
+            WARNING: colorama.Fore.YELLOW,
+            ERROR: colorama.Fore.RED,
+            CRITICAL: colorama.Fore.RED,
         }
         MESSAGE_COLORS = {
-            logging.DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
-            logging.INFO: colorama.Fore.RESET,
-            logging.WARNING: colorama.Fore.YELLOW,
-            logging.ERROR: colorama.Fore.RED,
-            logging.CRITICAL: colorama.Fore.RED + colorama.Style.BRIGHT,
+            DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
+            INFO: colorama.Fore.RESET,
+            WARNING: colorama.Fore.YELLOW,
+            ERROR: colorama.Fore.RED,
+            CRITICAL: colorama.Fore.RED + colorama.Style.BRIGHT,
         }
         VALUE_COLORS = {
-            logging.DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
-            logging.INFO: colorama.Fore.MAGENTA,
-            logging.WARNING: colorama.Fore.MAGENTA,
-            logging.ERROR: colorama.Fore.MAGENTA,
-            logging.CRITICAL: colorama.Fore.MAGENTA,
+            DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
+            INFO: colorama.Fore.MAGENTA,
+            WARNING: colorama.Fore.MAGENTA,
+            ERROR: colorama.Fore.MAGENTA,
+            CRITICAL: colorama.Fore.MAGENTA,
         }
 
         def format(self, record:logging.LogRecord) -> str:
@@ -63,7 +60,7 @@ def configure_console_logging() -> None:
             value_color = self.VALUE_COLORS.get(record.levelno, "")
 
             # translate and colorize log level name
-            levelname = _(record.levelname) if record.levelno > logging.DEBUG else record.levelname
+            levelname = _(record.levelname) if record.levelno > DEBUG else record.levelname
             record.levelname = f"{level_color}[{levelname}]{colorama.Style.RESET_ALL}"
 
             # highlight message values enclosed by [...], "...", and '...'
@@ -81,15 +78,15 @@ def configure_console_logging() -> None:
     formatter = CustomFormatter("%(levelname)s %(message)s")
 
     stdout_log = logging.StreamHandler(sys.stderr)
-    stdout_log.setLevel(logging.DEBUG)
+    stdout_log.setLevel(DEBUG)
     stdout_log.addFilter(type("", (logging.Filter,), {
-        "filter": lambda rec: rec.levelno <= logging.INFO
+        "filter": lambda rec: rec.levelno <= INFO
     }))
     stdout_log.setFormatter(formatter)
     LOG_ROOT.addHandler(stdout_log)
 
     stderr_log = logging.StreamHandler(sys.stderr)
-    stderr_log.setLevel(logging.WARNING)
+    stderr_log.setLevel(WARNING)
     stderr_log.setFormatter(formatter)
     LOG_ROOT.addHandler(stderr_log)
 
@@ -128,7 +125,7 @@ def configure_file_logging(log_file_path:str) -> LogFileHandle:
         backupCount = 10,
         encoding = "utf-8"
     )
-    fh.setLevel(logging.DEBUG)
+    fh.setLevel(DEBUG)
     fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
     LOG_ROOT.addHandler(fh)
     return LogFileHandle(log_file_path, fh, LOG_ROOT)
@@ -147,7 +144,7 @@ def get_logger(name: str | None = None) -> logging.Logger:
     class TranslatingLogger(logging.Logger):
 
         def _log(self, level: int, msg: object, *args: Any, **kwargs: Any) -> None:
-            if level != logging.DEBUG:  # debug messages should not be translated
+            if level != DEBUG:  # debug messages should not be translated
                 msg = i18n.translate(msg, reflect.get_caller(2))
             super()._log(level, msg, *args, **kwargs)
 
@@ -156,4 +153,4 @@ def get_logger(name: str | None = None) -> logging.Logger:
 
 
 def is_debug(logger:Logger) -> bool:
-    return logger.isEnabledFor(logging.DEBUG)
+    return logger.isEnabledFor(DEBUG)
