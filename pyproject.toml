@@ -253,3 +253,20 @@ dev = [
     "mypy",
     "pyright",
 ]
+
+[tool.coverage.run]
+parallel = true
+source = ["kleinanzeigen_bot"]
+branch = true
+relative_files = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+    "raise ImportError",
+]

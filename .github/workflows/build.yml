@@ -112,7 +112,7 @@ jobs:
       uses: pdm-project/setup-pdm@v4
       with:
         python-version: "${{ matrix.PYTHON_VERSION }}"
-        cache: ${{ !startsWith(matrix.os, 'macos') }} # https://github.com/pdm-project/setup-pdm/issues/55 
+        cache: ${{ !startsWith(matrix.os, 'macos') }} # https://github.com/pdm-project/setup-pdm/issues/55
 
 
     - name: "Install: Python dependencies"
@@ -140,22 +140,35 @@ jobs:
       run: pdm run lint
 
 
-    - name: Run unit tests
-      run: pdm run utest
-
-
-    - name: Run integration tests
+    - name: Run unit tests with coverage
       run: |
         set -eux
+        # Use a unique coverage file name for each matrix combination and test type
+        export COVERAGE_FILE=".coverage.unit.${{ matrix.os }}-${{ matrix.PYTHON_VERSION }}"
+        pdm run utest
 
+    - name: Run integration tests with coverage
+      run: |
+        set -eux
+        export COVERAGE_FILE=".coverage.itest.${{ matrix.os }}-${{ matrix.PYTHON_VERSION }}"
         case "${{ matrix.os }}" in
-           ubuntu-*) 
+           ubuntu-*)
               sudo apt-get install --no-install-recommends -y xvfb
               xvfb-run pdm run itest
               ;;
            *) pdm run itest
               ;;
         esac
+
+    - name: Store coverage files
+      if: github.event_name == 'pull_request'  # Only store coverage on PRs
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-${{ matrix.os }}-${{ matrix.PYTHON_VERSION }}
+        path: |
+          .coverage.unit.${{ matrix.os }}-${{ matrix.PYTHON_VERSION }}
+          .coverage.itest.${{ matrix.os }}-${{ matrix.PYTHON_VERSION }}
+        include-hidden-files: true
 
 
     - name: Run app from source
@@ -252,7 +265,7 @@ jobs:
   publish-release:
   ###########################################################
     runs-on: ubuntu-latest
-    needs: 
+    needs:
       - build
     if: (github.ref_name == 'main' || github.ref_name == 'release') && !github.event.act
     concurrency: publish-${{ github.ref_name }}-release # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idconcurrency
@@ -272,7 +285,7 @@ jobs:
       uses: vegardit/fast-apt-mirror.sh@v1
 
 
-    - name: Git Checkout 
+    - name: Git Checkout
       # only required by "gh release create" to prevent "fatal: Not a git repository"
       uses: actions/checkout@v4  # https://github.com/actions/checkout
 
@@ -415,3 +428,44 @@ jobs:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         PR_URL: ${{github.event.pull_request.html_url}}
       run: gh pr merge --auto --rebase "$PR_URL"
+
+
+  ###########################################################
+  merge-coverage:
+  ###########################################################
+    needs: build
+    if: github.event_name == 'pull_request'  # Only run on PRs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Install: Python and PDM"
+        uses: pdm-project/setup-pdm@v4
+        with:
+          python-version: "3.10"
+          cache: true
+
+      - name: "Install coverage dependencies"
+        run: |
+          pdm add coverage
+
+      - uses: actions/download-artifact@v4
+        id: download
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+
+      - name: Combine coverage files
+        run: |
+          pdm run coverage combine
+          pdm run coverage xml
+          pdm run coverage report
+
+      - name: Store combined coverage data
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage-comment-action
+          path: |
+            .coverage
+            coverage.xml
+            python-coverage-comment-action.txt
