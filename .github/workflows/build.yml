@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot
 #
-# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
+# https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
 name: Build
 
 on:
@@ -79,6 +79,7 @@ jobs:
           PUBLISH_RELEASE: true
 
     runs-on: ${{ matrix.os }} # https://github.com/actions/runner-images#available-images
+    timeout-minutes: 10
 
     steps:
     - name: "Show: GitHub context"
@@ -112,7 +113,7 @@ jobs:
       uses: pdm-project/setup-pdm@v4
       with:
         python-version: "${{ matrix.PYTHON_VERSION }}"
-        cache: ${{ !startsWith(matrix.os, 'macos') }} # https://github.com/pdm-project/setup-pdm/issues/55 
+        cache: ${{ !startsWith(matrix.os, 'macos') }}  # https://github.com/pdm-project/setup-pdm/issues/55
 
 
     - name: "Install: Python dependencies"
@@ -252,6 +253,7 @@ jobs:
   publish-release:
   ###########################################################
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: 
       - build
     if: (github.ref_name == 'main' || github.ref_name == 'release') && !github.event.act
@@ -341,7 +343,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         RELEASE_NAME: ${{ steps.release.outputs.name }}
-        COMMIT_MSG: | # https://stackoverflow.com/a/78420438/5116073
+        COMMIT_MSG: |  # https://stackoverflow.com/a/78420438/5116073
           ${{ github.event.head_commit.message }}
 
           ---
@@ -385,6 +387,7 @@ jobs:
     needs: build
     if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     permissions:
       contents: write
@@ -404,6 +407,7 @@ jobs:
     needs: build
     if: github.event_name == 'pull_request' && github.actor == 'kleinanzeigen-bot-tu[bot]' && github.head_ref == 'dependencies/pdm'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     permissions:
       contents: write

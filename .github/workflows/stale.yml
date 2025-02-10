@@ -1,4 +1,4 @@
-# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
+# https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
 name: Stale issues
 
 on:
@@ -14,6 +14,7 @@ permissions:
 jobs:
   stale:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
     - name: Git checkout
