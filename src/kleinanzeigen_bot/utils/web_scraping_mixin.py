@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import asyncio, enum, inspect, json, logging, os, platform, secrets, shutil, time
+import asyncio, enum, inspect, json, os, platform, secrets, shutil, time
 from collections.abc import Callable, Coroutine, Iterable
 from gettext import gettext as _
 from typing import cast, Any, Final
@@ -19,8 +19,8 @@ from nodriver.core.config import Config
 from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
 
-from .i18n import get_translating_logger
-from .utils import ensure, is_port_open, T
+from . import loggers, net
+from .misc import ensure, T
 
 __all__ = [
     "Browser",
@@ -32,7 +32,7 @@ __all__ = [
     "WebScrapingMixin",
 ]
 
-LOG:Final[logging.Logger] = get_translating_logger(__name__)
+LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 # see https://api.jquery.com/category/selectors/
 METACHAR_ESCAPER:Final[dict[int, str]] = str.maketrans({ch: f'\\{ch}' for ch in '!"#$%&\'()*+,./:;<=>?@[\\]^`{|}~'})
@@ -95,7 +95,7 @@ class WebScrapingMixin:
 
         if remote_port > 0:
             LOG.info("Using existing browser process at %s:%s", remote_host, remote_port)
-            ensure(is_port_open(remote_host, remote_port),
+            ensure(net.is_port_open(remote_host, remote_port),
                 f"Browser process not reachable at {remote_host}:{remote_port}. " +
                 f"Start the browser with --remote-debugging-port={remote_port} or remove this port from your config.yaml")
             cfg = Config(
@@ -146,7 +146,7 @@ class WebScrapingMixin:
             LOG.info(" -> Custom Browser argument: %s", browser_arg)
             browser_args.append(browser_arg)
 
-        if not LOG.isEnabledFor(logging.DEBUG):
+        if not loggers.is_debug(LOG):
             browser_args.append("--log-level=3")  # INFO: 0, WARNING: 1, ERROR: 2, FATAL: 3
 
         if self.browser_config.user_data_dir:
@@ -483,7 +483,7 @@ class WebScrapingMixin:
 
     async def web_sleep(self, min_ms:int = 1000, max_ms:int = 2500) -> None:
         duration = max_ms <= min_ms and min_ms or secrets.randbelow(max_ms - min_ms) + min_ms
-        LOG.log(logging.INFO if duration > 1500 else logging.DEBUG, " ... pausing for %d ms ...", duration)
+        LOG.log(loggers.INFO if duration > 1500 else loggers.DEBUG, " ... pausing for %d ms ...", duration)
         await self.page.sleep(duration / 1000)
 
     async def web_request(self, url:str, method:str = "GET", valid_response_codes:int | Iterable[int] = 200,

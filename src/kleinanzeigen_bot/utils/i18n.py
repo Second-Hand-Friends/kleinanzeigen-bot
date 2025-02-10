@@ -7,14 +7,18 @@ import ctypes, gettext, inspect, locale, logging, os, sys
 from collections.abc import Sized
 from typing import Any, Final, NamedTuple
 
-from . import resources, utils  # pylint: disable=cyclic-import
+from kleinanzeigen_bot import resources
+from . import reflect
+from . import dicts
 
 __all__ = [
     "Locale",
-    "get_translating_logger",
+    "get_current_locale",
+    "pluralize",
+    "set_current_locale",
+    "translate"
 ]
 
-LOG_ROOT:Final[logging.Logger] = logging.getLogger()
 LOG:Final[logging.Logger] = logging.getLogger(__name__)
 
 
@@ -96,7 +100,7 @@ def translate(text:object, caller: inspect.FrameInfo | None) -> str:
     global _TRANSLATIONS
     if _TRANSLATIONS is None:
         try:
-            _TRANSLATIONS = utils.load_dict_from_module(resources, f"translations.{_CURRENT_LOCALE[0]}.yaml")
+            _TRANSLATIONS = dicts.load_dict_from_module(resources, f"translations.{_CURRENT_LOCALE[0]}.yaml")
         except FileNotFoundError:
             _TRANSLATIONS = {}
 
@@ -108,7 +112,7 @@ def translate(text:object, caller: inspect.FrameInfo | None) -> str:
     if module_name and module_name.endswith(f".{file_basename}"):
         module_name = module_name[:-(len(file_basename) + 1)]
     file_key = f"{file_basename}.py" if module_name == file_basename else f"{module_name}/{file_basename}.py"
-    translation = utils.safe_get(_TRANSLATIONS,
+    translation = dicts.safe_get(_TRANSLATIONS,
         file_key,
         caller.function,
         text
@@ -116,8 +120,9 @@ def translate(text:object, caller: inspect.FrameInfo | None) -> str:
     return translation if translation else text
 
 
+# replace gettext.gettext with custom _translate function
 _original_gettext = gettext.gettext
-gettext.gettext = lambda message: translate(_original_gettext(message), utils.get_caller())
+gettext.gettext = lambda message: translate(_original_gettext(message), reflect.get_caller())
 for module_name, module in sys.modules.items():
     if module is None or module_name in sys.builtin_module_names:
         continue
@@ -125,19 +130,6 @@ for module_name, module in sys.modules.items():
         setattr(module, '_', gettext.gettext)
     if hasattr(module, 'gettext') and getattr(module, 'gettext') is _original_gettext:
         setattr(module, 'gettext', gettext.gettext)
-
-
-def get_translating_logger(name: str | None = None) -> logging.Logger:
-
-    class TranslatingLogger(logging.Logger):
-
-        def _log(self, level: int, msg: object, *args: Any, **kwargs: Any) -> None:
-            if level != logging.DEBUG:  # debug messages should not be translated
-                msg = translate(msg, utils.get_caller(2))
-            super()._log(level, msg, *args, **kwargs)
-
-    logging.setLoggerClass(TranslatingLogger)
-    return logging.getLogger(name)
 
 
 def get_current_locale() -> Locale:
@@ -161,7 +153,7 @@ def pluralize(noun:str, count:int | Sized, prefix_with_count:bool = True) -> str
     >>> pluralize("field", 2, prefix_with_count = False)
     'fields'
     """
-    noun = translate(noun, utils.get_caller())
+    noun = translate(noun, reflect.get_caller())
 
     if isinstance(count, Sized):
         count = len(count)

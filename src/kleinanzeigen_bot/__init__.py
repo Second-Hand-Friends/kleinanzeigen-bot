@@ -17,16 +17,18 @@ import certifi, colorama, nodriver
 from ruamel.yaml import YAML
 from wcmatch import glob
 
-from . import utils, resources, extract
-from .i18n import Locale, get_current_locale, set_current_locale, get_translating_logger, pluralize
-from .utils import abspath, ainput, apply_defaults, ensure, is_frozen, safe_get, parse_datetime, calculate_content_hash
-from .web_scraping_mixin import By, Element, Page, Is, WebScrapingMixin
+from . import extract, resources
+from .ads import calculate_content_hash
+from .utils import dicts, error_handlers, loggers, misc
+from .utils.files import abspath
+from .utils.i18n import Locale, get_current_locale, set_current_locale, pluralize
+from .utils.misc import ainput, ensure, is_frozen, parse_datetime, parse_decimal
+from .utils.web_scraping_mixin import By, Element, Page, Is, WebScrapingMixin
 from ._version import __version__
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
-LOG_ROOT:Final[logging.Logger] = logging.getLogger()
-LOG:Final[logging.Logger] = get_translating_logger(__name__)
+LOG:Final[logging.Logger] = loggers.get_logger(__name__)
 LOG.setLevel(logging.INFO)
 
 colorama.just_fix_windows_console()
@@ -59,7 +61,8 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     def __del__(self) -> None:
         if self.file_log:
-            LOG_ROOT.removeHandler(self.file_log)
+            self.file_log.flush()
+            loggers.LOG_ROOT.removeHandler(self.file_log)
             self.file_log.close()
         self.close_browser_session()
 
@@ -258,7 +261,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         self.file_log = RotatingFileHandler(filename = self.log_file_path, maxBytes = 10 * 1024 * 1024, backupCount = 10, encoding = "utf-8")
         self.file_log.setLevel(logging.DEBUG)
         self.file_log.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
-        LOG_ROOT.addHandler(self.file_log)
+        loggers.LOG_ROOT.addHandler(self.file_log)
 
         LOG.info("App version: %s", self.get_version())
         LOG.info("Python version: %s", sys.version)
@@ -333,13 +336,13 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.info('Start fetch task for the ad(s) with id(s):')
             LOG.info(' | '.join([str(id_) for id_ in ids]))
 
-        ad_fields = utils.load_dict_from_module(resources, "ad_fields.yaml")
+        ad_fields = dicts.load_dict_from_module(resources, "ad_fields.yaml")
         ads = []
         for ad_file, ad_file_relative in sorted(ad_files.items()):
-            ad_cfg_orig = utils.load_dict(ad_file, "ad")
+            ad_cfg_orig = dicts.load_dict(ad_file, "ad")
             ad_cfg = copy.deepcopy(ad_cfg_orig)
-            apply_defaults(ad_cfg, self.config["ad_defaults"], ignore = lambda k, _: k == "description", override = lambda _, v: v == "")
-            apply_defaults(ad_cfg, ad_fields)
+            dicts.apply_defaults(ad_cfg, self.config["ad_defaults"], ignore = lambda k, _: k == "description", override = lambda _, v: v == "")
+            dicts.apply_defaults(ad_cfg, ad_fields)
 
             if ignore_inactive and not ad_cfg["active"]:
                 LOG.info(" -> SKIPPED: inactive ad [%s]", ad_file_relative)
@@ -365,13 +368,13 @@ class KleinanzeigenBot(WebScrapingMixin):
 
             # pylint: disable=cell-var-from-loop
             def assert_one_of(path:str, allowed:Iterable[str]) -> None:
-                ensure(safe_get(ad_cfg, *path.split(".")) in allowed, f"-> property [{path}] must be one of: {allowed} @ [{ad_file}]")
+                ensure(dicts.safe_get(ad_cfg, *path.split(".")) in allowed, f"-> property [{path}] must be one of: {allowed} @ [{ad_file}]")
 
             def assert_min_len(path:str, minlen:int) -> None:
-                ensure(len(safe_get(ad_cfg, *path.split("."))) >= minlen, f"-> property [{path}] must be at least {minlen} characters long @ [{ad_file}]")
+                ensure(len(dicts.safe_get(ad_cfg, *path.split("."))) >= minlen, f"-> property [{path}] must be at least {minlen} characters long @ [{ad_file}]")
 
             def assert_has_value(path:str) -> None:
-                ensure(safe_get(ad_cfg, *path.split(".")), f"-> property [{path}] not specified @ [{ad_file}]")
+                ensure(dicts.safe_get(ad_cfg, *path.split(".")), f"-> property [{path}] not specified @ [{ad_file}]")
             # pylint: enable=cell-var-from-loop
 
             assert_one_of("type", {"OFFER", "WANTED"})
@@ -379,7 +382,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             assert_has_value("description")
             assert_one_of("price_type", {"FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"})
             if ad_cfg["price_type"] == "GIVE_AWAY":
-                ensure(not safe_get(ad_cfg, "price"), f"-> [price] must not be specified for GIVE_AWAY ad @ [{ad_file}]")
+                ensure(not dicts.safe_get(ad_cfg, "price"), f"-> [price] must not be specified for GIVE_AWAY ad @ [{ad_file}]")
             elif ad_cfg["price_type"] == "FIXED":
                 assert_has_value("price")
 
@@ -405,7 +408,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     ad_cfg["category"] = resolved_category_id
 
             if ad_cfg["shipping_costs"]:
-                ad_cfg["shipping_costs"] = str(round(utils.parse_decimal(ad_cfg["shipping_costs"]), 2))
+                ad_cfg["shipping_costs"] = str(round(misc.parse_decimal(ad_cfg["shipping_costs"]), 2))
 
             if ad_cfg["images"]:
                 images = []
@@ -433,18 +436,18 @@ class KleinanzeigenBot(WebScrapingMixin):
         return ads
 
     def load_config(self) -> None:
-        config_defaults = utils.load_dict_from_module(resources, "config_defaults.yaml")
-        config = utils.load_dict_if_exists(self.config_file_path, _("config"))
+        config_defaults = dicts.load_dict_from_module(resources, "config_defaults.yaml")
+        config = dicts.load_dict_if_exists(self.config_file_path, _("config"))
 
         if config is None:
             LOG.warning("Config file %s does not exist. Creating it with default values...", self.config_file_path)
-            utils.save_dict(self.config_file_path, config_defaults)
+            dicts.save_dict(self.config_file_path, config_defaults)
             config = {}
 
-        self.config = apply_defaults(config, config_defaults)
+        self.config = dicts.apply_defaults(config, config_defaults)
 
-        self.categories = utils.load_dict_from_module(resources, "categories.yaml", "categories")
-        deprecated_categories = utils.load_dict_from_module(resources, "categories_old.yaml", "categories")
+        self.categories = dicts.load_dict_from_module(resources, "categories.yaml", "categories")
+        deprecated_categories = dicts.load_dict_from_module(resources, "categories_old.yaml", "categories")
         self.categories.update(deprecated_categories)
         if self.config["categories"]:
             self.categories.update(self.config["categories"])
@@ -675,7 +678,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 await self.web_select(By.CSS_SELECTOR, "select#price-type-react, select#micro-frontend-price-type, select#priceType", price_type)
             except TimeoutError:
                 pass
-            if safe_get(ad_cfg, "price"):
+            if dicts.safe_get(ad_cfg, "price"):
                 await self.web_input(By.CSS_SELECTOR, "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price", ad_cfg["price"])
 
         #############################
@@ -797,7 +800,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
 
-        utils.save_dict(ad_file, ad_cfg_orig)
+        dicts.save_dict(ad_file, ad_cfg_orig)
 
     async def __set_condition(self, condition_value: str) -> None:
         condition_mapping = {
@@ -1047,11 +1050,11 @@ def main(args:list[str]) -> None:
                                  https://github.com/Second-Hand-Friends/kleinanzeigen-bot
         """)[1:], flush = True)  # [1:] removes the first empty blank line
 
-    utils.configure_console_logging()
+    loggers.configure_console_logging()
 
-    signal.signal(signal.SIGINT, utils.on_sigint)  # capture CTRL+C
-    sys.excepthook = utils.on_exception
-    atexit.register(utils.on_exit)
+    signal.signal(signal.SIGINT, error_handlers.on_sigint)  # capture CTRL+C
+    sys.excepthook = error_handlers.on_exception
+    atexit.register(loggers.flush_all_handlers)
 
     bot = KleinanzeigenBot()
     atexit.register(bot.close_browser_session)
@@ -1059,6 +1062,6 @@ def main(args:list[str]) -> None:
 
 
 if __name__ == "__main__":
-    utils.configure_console_logging()
+    loggers.configure_console_logging()
     LOG.error("Direct execution not supported. Use 'pdm run app'")
     sys.exit(1)
