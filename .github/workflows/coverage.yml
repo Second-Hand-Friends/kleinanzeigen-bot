@@ -2,8 +2,6 @@
 name: Post coverage comment
 
 on:
-  pull_request:
-    types: [opened, synchronize]
   workflow_run:
     workflows: [Build]
     types: [completed]
