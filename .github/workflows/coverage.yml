@@ -3,7 +3,7 @@ name: Post coverage comment
 
 on:
   workflow_run:
-    workflows: ["build"]
+    workflows: ["Build"]
     types:
       - completed
 
