@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:eeb2e2b29f41422186150efb5be83083ce617f6e3b303c0995a6e31d523383a4"
+content_hash = "sha256:644b3393421aa20370626fe7573bb0dd9dcc74695f15a4f47c7259d438a46281"
 
 [[metadata.targets]]
 requires_python = ">=3.10,<3.14"
@@ -488,7 +488,7 @@ version = "0.39"
 requires_python = ">=3.9"
 git = "https://github.com/ultrafunkamsterdam/nodriver.git"
 revision = "ebcda701a48e1c320b80c86af2b128098aeb837f"
-summary = "\n    [Docs here](https://ultrafunkamsterdam.github.io/nodriver)\n\n    * Official successor of Undetected Chromedriver\n    * Can be made to work for for all chromium based browsers.\n    * Dropped selenium and chromedriver binary requirements.\n    * fully asynchronous == bizarre performance gains, and more granular control\n\n    Part of undetected-chromedriver, or merely the successor of it, this library is a full rewrite, providing a\n    fast framework for web automation, webscraping, bots and any other creative ideas which are normally\n    hindered by annoying anti bot systems like Captcha / CloudFlare / Imperva / hCaptcha and other\n    big corp \"ai\" money machines using your input to make even more $$ (http://tinyurl.com/bigcorp-ai-inputs)\n\n    The webdriver/selenium requirement is dropped entirely, since this library communicates directly to the browser.\n    Being fully asynchronous, this adds massive performance improvements and more detailed control possibilities.\n\n    As usual ( like undetected chromedriver) all config details and best practices are built-in, which means\n    up and running with just a line of code.\n\n    This makes it simple to use for quick prototyping, and perfect for interactive interpreter use (eg: IPython).\n\n\n    WARNING:\n       - results may vary due to many factors. No guarantees are given whatsoever.\n       - Running from bad IP or datacenter may still cause captcha's and/or other problems.\n       - With great power comes ... etc etc etc\n         no but SERIOUS: for your own benefit, make sure \"they\" have no reason for upscaling anti-bot measurements.\n         there might be one day it would not be feasible anymore to work up against big corp, and provide upgrades\n         and free libraries.\n\n"
+summary = "\r\n    [Docs here](https://ultrafunkamsterdam.github.io/nodriver)\r\n\r\n    * Official successor of Undetected Chromedriver\r\n    * Can be made to work for for all chromium based browsers.\r\n    * Dropped selenium and chromedriver binary requirements.\r\n    * fully asynchronous == bizarre performance gains, and more granular control\r\n\r\n    Part of undetected-chromedriver, or merely the successor of it, this library is a full rewrite, providing a\r\n    fast framework for web automation, webscraping, bots and any other creative ideas which are normally\r\n    hindered by annoying anti bot systems like Captcha / CloudFlare / Imperva / hCaptcha and other\r\n    big corp \"ai\" money machines using your input to make even more $$ (http://tinyurl.com/bigcorp-ai-inputs)\r\n\r\n    The webdriver/selenium requirement is dropped entirely, since this library communicates directly to the browser.\r\n    Being fully asynchronous, this adds massive performance improvements and more detailed control possibilities.\r\n\r\n    As usual ( like undetected chromedriver) all config details and best practices are built-in, which means\r\n    up and running with just a line of code.\r\n\r\n    This makes it simple to use for quick prototyping, and perfect for interactive interpreter use (eg: IPython).\r\n\r\n\r\n    WARNING:\r\n       - results may vary due to many factors. No guarantees are given whatsoever.\r\n       - Running from bad IP or datacenter may still cause captcha's and/or other problems.\r\n       - With great power comes ... etc etc etc\r\n         no but SERIOUS: for your own benefit, make sure \"they\" have no reason for upscaling anti-bot measurements.\r\n         there might be one day it would not be feasible anymore to work up against big corp, and provide upgrades\r\n         and free libraries.\r\n\r\n"
 groups = ["default"]
 dependencies = [
     "deprecated",
@@ -904,22 +904,12 @@ files = [
 ]
 
 [[package]]
-name = "toml"
-version = "0.10.2"
-requires_python = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
-summary = "Python Library for Tom's Obvious, Minimal Language"
-groups = ["dev"]
-files = [
-    {file = "toml-0.10.2-py2.py3-none-any.whl", hash = "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b"},
-    {file = "toml-0.10.2.tar.gz", hash = "sha256:b3bda1d108d5dd99f4a20d24d9c348e91c4db7ab1b749200bded2f839ccbe68f"},
-]
-
-[[package]]
 name = "tomli"
 version = "2.2.1"
 requires_python = ">=3.8"
 summary = "A lil' TOML parser"
 groups = ["dev"]
+marker = "python_version < \"3.11\""
 files = [
     {file = "tomli-2.2.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:678e4fa69e4575eb77d103de3df8a895e1591b48e740211bd1067378c69e8249"},
     {file = "tomli-2.2.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:023aa114dd824ade0100497eb2318602af309e5a55595f76b626d6d9f3b7b0a6"},
