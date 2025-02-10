@@ -3,14 +3,13 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import asyncio, atexit, copy, importlib.metadata, json, logging, os, re, signal, shutil, sys, textwrap, time
+import asyncio, atexit, copy, importlib.metadata, json, os, re, signal, shutil, sys, textwrap, time
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 import urllib.request as urllib_request
 from collections.abc import Iterable
 from datetime import datetime
 from gettext import gettext as _
-from logging.handlers import RotatingFileHandler
 from typing import Any, Final
 
 import certifi, colorama, nodriver
@@ -28,8 +27,8 @@ from ._version import __version__
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
-LOG:Final[logging.Logger] = loggers.get_logger(__name__)
-LOG.setLevel(logging.INFO)
+LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
+LOG.setLevel(loggers.INFO)
 
 colorama.just_fix_windows_console()
 
@@ -51,7 +50,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         self.categories:dict[str, str] = {}
 
-        self.file_log:logging.FileHandler | None = None
+        self.file_log:loggers.LogFileHandle | None = None
         log_file_basename = is_frozen() and os.path.splitext(os.path.basename(sys.executable))[0] or self.__module__
         self.log_file_path:str | None = abspath(f"{log_file_basename}.log")
 
@@ -61,9 +60,8 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     def __del__(self) -> None:
         if self.file_log:
-            self.file_log.flush()
-            loggers.LOG_ROOT.removeHandler(self.file_log)
             self.file_log.close()
+            self.file_log = None
         self.close_browser_session()
 
     def get_version(self) -> str:
@@ -239,8 +237,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                 case "--lang":
                     set_current_locale(Locale.of(value))
                 case "-v" | "--verbose":
-                    LOG.setLevel(logging.DEBUG)
-                    logging.getLogger("nodriver").setLevel(logging.INFO)
+                    LOG.setLevel(loggers.DEBUG)
+                    loggers.get_logger("nodriver").setLevel(loggers.INFO)
 
         match len(arguments):
             case 0:
@@ -258,10 +256,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             return
 
         LOG.info("Logging to [%s]...", self.log_file_path)
-        self.file_log = RotatingFileHandler(filename = self.log_file_path, maxBytes = 10 * 1024 * 1024, backupCount = 10, encoding = "utf-8")
-        self.file_log.setLevel(logging.DEBUG)
-        self.file_log.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
-        loggers.LOG_ROOT.addHandler(self.file_log)
+        self.file_log = loggers.configure_file_logging(self.log_file_path)
 
         LOG.info("App version: %s", self.get_version())
         LOG.info("Python version: %s", sys.version)
@@ -611,7 +606,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         LOG.info("Publishing ad '%s'...", ad_cfg["title"])
 
-        if LOG.isEnabledFor(logging.DEBUG):
+        if loggers.is_debug(LOG):
             LOG.debug(" -> effective ad meta:")
             YAML().dump(ad_cfg, sys.stdout)
 
