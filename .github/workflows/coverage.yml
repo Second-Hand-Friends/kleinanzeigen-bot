@@ -12,21 +12,19 @@ on:
 
 jobs:
   coverage:
-    # Remove the if condition temporarily for testing
-    # if: github.event.workflow_run.event == 'pull_request'
     name: Post coverage comment
     runs-on: ubuntu-latest
-    # permissions:
-    #   # Gives the action the necessary permissions for publishing new
-    #   # comments in pull requests.
-    #   pull-requests: write
-    #   # Gives the action the necessary permissions for editing existing
-    #   # comments (to avoid publishing multiple comments in the same PR)
-    #   contents: write
-    #   # Gives the action the necessary permissions for looking up the
-    #   # workflow that launched this workflow, and download the related
-    #   # artifact that contains the comment to be published
-    #   actions: read
+    permissions:
+      # Gives the action the necessary permissions for publishing new
+      # comments in pull requests.
+      pull-requests: write
+      # Gives the action the necessary permissions for editing existing
+      # comments (to avoid publishing multiple comments in the same PR)
+      contents: write
+      # Gives the action the necessary permissions for looking up the
+      # workflow that launched this workflow, and download the related
+      # artifact that contains the comment to be published
+      actions: read
     steps:
       - name: Debug workflow trigger
         env:
