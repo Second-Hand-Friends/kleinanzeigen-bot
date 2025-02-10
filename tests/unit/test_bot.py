@@ -41,10 +41,11 @@ class TestKleinanzeigenBot:
 
         bot.configure_file_logging()
         file_log = bot.file_log
-        assert not file_log.stream.closed  # type: ignore[union-attr]
+        assert file_log is not None
+        assert not file_log.is_closed()
 
         # Delete and garbage collect the bot instance to ensure the destructor (__del__) is called
         del bot
         gc.collect()
 
-        assert file_log.stream is None  # type: ignore[union-attr]
+        assert file_log.is_closed()
