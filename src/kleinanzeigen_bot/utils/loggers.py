@@ -5,6 +5,7 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 """
 import copy, logging, re, sys
 from gettext import gettext as _
+from logging.handlers import RotatingFileHandler
 from typing import Any, Final  # @UnusedImport
 
 import colorama
@@ -12,12 +13,14 @@ from . import i18n, reflect
 
 __all__ = [
     "Logger",
-    "LOG_ROOT",
+    "LogFileHandle",
     "DEBUG",
     "INFO",
     "configure_console_logging",
+    "configure_file_logging",
     "flush_all_handlers",
-    "get_logger"
+    "get_logger",
+    "is_debug"
 ]
 
 Logger = logging.Logger
@@ -89,6 +92,46 @@ def configure_console_logging() -> None:
     stderr_log.setLevel(logging.WARNING)
     stderr_log.setFormatter(formatter)
     LOG_ROOT.addHandler(stderr_log)
+
+
+class LogFileHandle:
+    """Encapsulates a log file handler with close and status methods."""
+
+    def __init__(self, file_path: str, handler: RotatingFileHandler, logger: logging.Logger):
+        self.file_path = file_path
+        self._handler:RotatingFileHandler | None = handler
+        self._logger = logger
+
+    def close(self) -> None:
+        """Flushes, removes, and closes the log handler."""
+        if self._handler:
+            self._handler.flush()
+            self._logger.removeHandler(self._handler)
+            self._handler.close()
+            self._handler = None
+
+    def is_closed(self) -> bool:
+        """Returns whether the log handler has been closed."""
+        return not self._handler
+
+
+def configure_file_logging(log_file_path:str) -> LogFileHandle:
+    """
+    Sets up a file logger and returns a callable to flush, remove, and close it.
+
+    @param log_file_path: Path to the log file.
+    @return: Callable[[], None]: A function that cleans up the log handler.
+    """
+    fh = RotatingFileHandler(
+        filename = log_file_path,
+        maxBytes = 10 * 1024 * 1024,  # 10 MB
+        backupCount = 10,
+        encoding = "utf-8"
+    )
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+    LOG_ROOT.addHandler(fh)
+    return LogFileHandle(log_file_path, fh, LOG_ROOT)
 
 
 def flush_all_handlers() -> None:

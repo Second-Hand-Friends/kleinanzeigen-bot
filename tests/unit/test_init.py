@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: © Jens Bergmann and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import copy, logging, os, tempfile
+import copy, os, tempfile
 from collections.abc import Generator
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -16,6 +16,7 @@ from ruamel.yaml import YAML
 from kleinanzeigen_bot import LOG, KleinanzeigenBot
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.ads import calculate_content_hash
+from kleinanzeigen_bot.utils import loggers
 
 
 @pytest.fixture
@@ -224,7 +225,7 @@ class TestKleinanzeigenBotCommandLine:
     def test_parse_args_handles_verbose_flag(self, test_bot: KleinanzeigenBot) -> None:
         """Verify that verbose flag sets correct log level."""
         test_bot.parse_args(["dummy", "--verbose"])
-        assert LOG.level == logging.DEBUG
+        assert loggers.is_debug(LOG)
 
     def test_parse_args_handles_config_path(self, test_bot: KleinanzeigenBot, test_data_dir: str) -> None:
         """Verify that config path is set correctly."""
@@ -432,10 +433,10 @@ class TestKleinanzeigenBotBasics:
     def test_get_log_level(self, test_bot: KleinanzeigenBot) -> None:
         """Test log level configuration."""
         # Reset log level to default
-        LOG.setLevel(logging.INFO)
-        assert LOG.level == logging.INFO
+        LOG.setLevel(loggers.INFO)
+        assert not loggers.is_debug(LOG)
         test_bot.parse_args(['script.py', '-v'])
-        assert LOG.level == logging.DEBUG
+        assert loggers.is_debug(LOG)
 
     def test_get_config_file_path(self, test_bot: KleinanzeigenBot) -> None:
         """Test config file path handling."""
@@ -476,7 +477,7 @@ class TestKleinanzeigenBotArgParsing:
     def test_parse_args_verbose(self, test_bot: KleinanzeigenBot) -> None:
         """Test parsing verbose flag."""
         test_bot.parse_args(['script.py', '-v', 'help'])
-        assert logging.getLogger('kleinanzeigen_bot').level == logging.DEBUG
+        assert loggers.is_debug(loggers.get_logger('kleinanzeigen_bot'))
 
     def test_parse_args_config_path(self, test_bot: KleinanzeigenBot) -> None:
         """Test parsing config path."""
