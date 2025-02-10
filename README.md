@@ -292,23 +292,23 @@ Parameter values specified in the `ad_defaults` section of the `config.yaml` fil
 The following parameters can be configured:
 
 ```yaml
-active: # true or false
-type: # one of: OFFER, WANTED
+active: # true or false (default: true)
+type: # one of: OFFER, WANTED (default: OFFER)
 title:
 description: # can be multiline, see syntax here https://yaml-multiline.info/
 
 # built-in category name as specified in https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml
 # or custom category name as specified in config.yaml
-# or category ID (e.g. 161/27)
-category: Notebooks
+# or category ID (e.g. 161/278)
+category: # e.g. "Elektronik > Notebooks"
 
 price: # without decimals, e.g. 75
-price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY
+price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY (default: NEGOTIABLE)
 
 special_attributes:
   # haus_mieten.zimmer_d: value # Zimmer
 
-shipping_type: # one of: PICKUP, SHIPPING, NOT_APPLICABLE
+shipping_type: # one of: PICKUP, SHIPPING, NOT_APPLICABLE (default: SHIPPING)
 shipping_costs: # e.g. 2.95
 
 # specify shipping options / packages
@@ -326,7 +326,7 @@ shipping_costs: # e.g. 2.95
 # - DHL_31,5
 # - Hermes_L
 shipping_options: []
-sell_directly: # true or false, requires shipping_options to take effect
+sell_directly: # true or false, requires shipping_options to take effect (default: false)
 
 # list of wildcard patterns to select images
 # if relative paths are specified, then they are relative to this ad configuration file
@@ -339,7 +339,7 @@ contact:
   zipcode:
   phone: "" # IMPORTANT: surround phone number with quotes to prevent removal of leading zeros
 
-republication_interval: # every X days the ad should be re-published
+republication_interval: # every X days the ad should be re-published (default: 7)
 
 # The following fields are automatically managed by the bot:
 id: # the ID assigned by kleinanzeigen.de
