@@ -2,6 +2,8 @@
 name: Post coverage comment
 
 on:
+  pull_request:
+    types: [opened, synchronize]
   workflow_run:
     workflows: [Build]
     types: [completed]
@@ -10,7 +12,7 @@ jobs:
   coverage:
     name: Post coverage comment
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure' }}
     permissions:
       # Gives the action the necessary permissions for publishing new
       # comments in pull requests.
