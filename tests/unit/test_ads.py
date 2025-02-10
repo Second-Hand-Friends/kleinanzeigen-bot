@@ -3,31 +3,7 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import pytest
-from kleinanzeigen_bot import utils
-
-
-def test_ensure() -> None:
-    utils.ensure(True, "TRUE")
-    utils.ensure("Some Value", "TRUE")
-    utils.ensure(123, "TRUE")
-    utils.ensure(-123, "TRUE")
-    utils.ensure(lambda: True, "TRUE")
-
-    with pytest.raises(AssertionError):
-        utils.ensure(False, "FALSE")
-
-    with pytest.raises(AssertionError):
-        utils.ensure(0, "FALSE")
-
-    with pytest.raises(AssertionError):
-        utils.ensure("", "FALSE")
-
-    with pytest.raises(AssertionError):
-        utils.ensure(None, "FALSE")
-
-    with pytest.raises(AssertionError):
-        utils.ensure(lambda: False, "FALSE", timeout = 2)
+from kleinanzeigen_bot import ads
 
 
 def test_calculate_content_hash_with_none_values() -> None:
@@ -48,6 +24,6 @@ def test_calculate_content_hash_with_none_values() -> None:
     }
 
     # Should not raise TypeError
-    hash_value = utils.calculate_content_hash(ad_cfg)
+    hash_value = ads.calculate_content_hash(ad_cfg)
     assert isinstance(hash_value, str)
     assert len(hash_value) == 64  # SHA-256 hash is 64 characters long

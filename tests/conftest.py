@@ -3,21 +3,21 @@ SPDX-FileCopyrightText: © Jens Bergmann and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import logging, os
+import os
 from typing import Any, Final
 from unittest.mock import MagicMock
 
 import pytest
 
-from kleinanzeigen_bot import KleinanzeigenBot, utils
+from kleinanzeigen_bot import KleinanzeigenBot
+from kleinanzeigen_bot.utils import loggers
 from kleinanzeigen_bot.extract import AdExtractor
-from kleinanzeigen_bot.i18n import get_translating_logger
-from kleinanzeigen_bot.web_scraping_mixin import Browser
+from kleinanzeigen_bot.utils.web_scraping_mixin import Browser
 
-utils.configure_console_logging()
+loggers.configure_console_logging()
 
-LOG: Final[logging.Logger] = get_translating_logger("kleinanzeigen_bot")
-LOG.setLevel(logging.DEBUG)
+LOG:Final[loggers.Logger] = loggers.get_logger("kleinanzeigen_bot")
+LOG.setLevel(loggers.DEBUG)
 
 
 @pytest.fixture
@@ -85,7 +85,7 @@ def browser_mock() -> MagicMock:
     This mock is configured with the Browser spec to ensure it has all
     the required methods and attributes of a real Browser instance.
     """
-    return MagicMock(spec=Browser)
+    return MagicMock(spec = Browser)
 
 
 @pytest.fixture

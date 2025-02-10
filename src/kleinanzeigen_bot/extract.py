@@ -3,22 +3,20 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import logging, os, shutil
+import json, mimetypes, os, shutil
 import urllib.request as urllib_request
-import mimetypes
 from datetime import datetime
 from typing import Any, Final
-import json
 
-from .i18n import get_translating_logger, pluralize
-from .utils import is_integer, parse_decimal, save_dict, calculate_content_hash
-from .web_scraping_mixin import Browser, By, Element, Is, WebScrapingMixin
+from .ads import calculate_content_hash
+from .utils import dicts, i18n, loggers, misc, reflect
+from .utils.web_scraping_mixin import Browser, By, Element, Is, WebScrapingMixin
 
 __all__ = [
     "AdExtractor",
 ]
 
-LOG:Final[logging.Logger] = get_translating_logger(__name__)
+LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 
 class AdExtractor(WebScrapingMixin):
@@ -56,7 +54,7 @@ class AdExtractor(WebScrapingMixin):
         # call extraction function
         info = await self._extract_ad_page_info(new_base_dir, ad_id)
         ad_file_path = new_base_dir + '/' + f'ad_{ad_id}.yaml'
-        save_dict(ad_file_path, info)
+        dicts.save_dict(ad_file_path, info)
 
     async def _download_images_from_ad_page(self, directory:str, ad_id:int) -> list[str]:
         """
@@ -74,7 +72,7 @@ class AdExtractor(WebScrapingMixin):
             image_box = await self.web_find(By.CLASS_NAME, 'galleryimage-large')
 
             n_images = len(await self.web_find_all(By.CSS_SELECTOR, '.galleryimage-element[data-ix]', parent = image_box))
-            LOG.info('Found %s.', pluralize("image", n_images))
+            LOG.info('Found %s.', i18n.pluralize("image", n_images))
 
             img_element:Element = await self.web_find(By.CSS_SELECTOR, 'div:nth-child(1) > img', parent = image_box)
             img_fn_prefix = 'ad_' + str(ad_id) + '__img'
@@ -106,7 +104,7 @@ class AdExtractor(WebScrapingMixin):
                         LOG.error('NEXT button in image gallery somehow missing, aborting image fetching.')
                         break
                 img_nr += 1
-            LOG.info('Downloaded %s.', pluralize("image", dl_counter))
+            LOG.info('Downloaded %s.', i18n.pluralize("image", dl_counter))
 
         except TimeoutError:  # some ads do not require images
             LOG.warning('No image area found. Continuing without downloading images.')
@@ -193,7 +191,7 @@ class AdExtractor(WebScrapingMixin):
         Navigates to an ad page specified with an ad ID; or alternatively by a given URL.
         :return: whether the navigation to the ad page was successful
         """
-        if is_integer(id_or_url):
+        if reflect.is_integer(id_or_url):
             # navigate to start page, otherwise page can be None!
             await self.web_open('https://www.kleinanzeigen.de/')
             # enter the ad ID into the search bar
@@ -349,7 +347,7 @@ class AdExtractor(WebScrapingMixin):
             elif '€' in shipping_text:
                 shipping_price_parts = shipping_text.split(' ')
                 ship_type = 'SHIPPING'
-                ship_costs = float(parse_decimal(shipping_price_parts[-2]))
+                ship_costs = float(misc.parse_decimal(shipping_price_parts[-2]))
 
                 # reading shipping option from kleinanzeigen
                 # and find the right one by price

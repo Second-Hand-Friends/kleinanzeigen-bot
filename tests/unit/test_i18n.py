@@ -5,7 +5,7 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 """
 import pytest
 from _pytest.monkeypatch import MonkeyPatch  # pylint: disable=import-private-name
-from kleinanzeigen_bot import i18n
+from kleinanzeigen_bot.utils import i18n
 
 
 @pytest.mark.parametrize("lang, expected", [
