@@ -135,3 +135,17 @@ def test_get_description_affixes(
 def test_get_description_affixes_edge_cases(config: dict[str, Any], prefix: bool, expected: str) -> None:
     """Test edge cases for description affix handling."""
     assert description.get_description_affixes(config, prefix) == expected
+
+
+@pytest.mark.parametrize("config,expected", [
+    (None, ""),  # Test with None
+    ([], ""),    # Test with an empty list
+    ("string", ""),  # Test with a string
+    (123, ""),   # Test with an integer
+    (3.14, ""),  # Test with a float
+    (set(), ""),  # Test with an empty set
+])
+def test_get_description_affixes_edge_cases_non_dict(config: Any, expected: str) -> None:
+    """Test get_description_affixes function with non-dict inputs."""
+    result = description.get_description_affixes(config, prefix=True)
+    assert result == expected
