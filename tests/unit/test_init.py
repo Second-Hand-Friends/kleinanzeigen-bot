@@ -85,6 +85,11 @@ def create_ad_config(base_config: dict[str, Any], **overrides: Any) -> dict[str,
             config[key] = value
         else:
             config[key] = value
+
+    # Only check length if description is a string
+    if isinstance(config.get("description"), str):
+        assert len(config["description"]) <= 4000, "Length of ad description including prefix and suffix exceeds 4000 chars"
+
     return config
 
 
@@ -1016,3 +1021,40 @@ class TestKleinanzeigenBotUrlConstruction:
         # Test ad publishing URL
         expected_publish_url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-schritt2.html"
         assert f"{test_bot.root_url}/p-anzeige-aufgeben-schritt2.html" == expected_publish_url
+
+
+class TestKleinanzeigenBotPrefixSuffix:
+    """Tests for description prefix and suffix functionality."""
+    # pylint: disable=protected-access
+
+    def test_description_prefix_suffix_handling(
+        self,
+        test_bot: KleinanzeigenBot,
+        description_test_cases: list[tuple[dict[str, Any], str, str]]
+    ) -> None:
+        """Test handling of description prefix/suffix in various configurations."""
+        for config, raw_description, expected_description in description_test_cases:
+            test_bot.config = config
+            ad_cfg = {"description": raw_description, "active": True}
+            # Access private method using the correct name mangling
+            description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+            assert description == expected_description
+
+    def test_description_length_validation(self, test_bot: KleinanzeigenBot) -> None:
+        """Test that long descriptions with affixes raise appropriate error."""
+        test_bot.config = {
+            "ad_defaults": {
+                "description_prefix": "P" * 1000,
+                "description_suffix": "S" * 1000
+            }
+        }
+        ad_cfg = {
+            "description": "D" * 2001,  # This plus affixes will exceed 4000 chars
+            "active": True
+        }
+
+        with pytest.raises(AssertionError) as exc_info:
+            getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+
+        assert "Length of ad description including prefix and suffix exceeds 4000 chars" in str(exc_info.value)
+        assert "Description length: 4001" in str(exc_info.value)
