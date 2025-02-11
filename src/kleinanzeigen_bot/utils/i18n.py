@@ -8,8 +8,7 @@ from collections.abc import Sized
 from typing import Any, Final, NamedTuple
 
 from kleinanzeigen_bot import resources
-from . import reflect
-from . import dicts
+from . import dicts, reflect
 
 __all__ = [
     "Locale",
