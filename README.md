@@ -236,9 +236,10 @@ ad_files:
 ad_defaults:
   active: true
   type: OFFER # one of: OFFER, WANTED
-  description:
+
   description_prefix: ""
   description_suffix: ""
+
   price_type: NEGOTIABLE # one of: FIXED, NEGOTIABLE, GIVE_AWAY, NOT_APPLICABLE
   shipping_type: SHIPPING # one of: PICKUP, SHIPPING, NOT_APPLICABLE
   shipping_costs: # e.g. 2.95

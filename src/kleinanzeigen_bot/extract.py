@@ -8,8 +8,8 @@ import urllib.request as urllib_request
 from datetime import datetime
 from typing import Any, Final
 
-from .ads import calculate_content_hash
-from .utils import dicts, i18n, loggers, misc, reflect, description
+from .ads import calculate_content_hash, get_description_affixes
+from .utils import dicts, i18n, loggers, misc, reflect
 from .utils.web_scraping_mixin import Browser, By, Element, Is, WebScrapingMixin
 
 __all__ = [
@@ -241,8 +241,8 @@ class AdExtractor(WebScrapingMixin):
         raw_description = (await self.web_text(By.ID, 'viewad-description-text')).strip()
 
         # Get prefix and suffix from config
-        prefix = description.get_description_affixes(self.config, prefix=True)
-        suffix = description.get_description_affixes(self.config, prefix=False)
+        prefix = get_description_affixes(self.config, prefix=True)
+        suffix = get_description_affixes(self.config, prefix=False)
 
         # Remove prefix and suffix if present
         description_text = raw_description

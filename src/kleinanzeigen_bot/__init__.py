@@ -17,8 +17,8 @@ from ruamel.yaml import YAML
 from wcmatch import glob
 
 from . import extract, resources
-from .ads import calculate_content_hash
-from .utils import dicts, error_handlers, loggers, misc, description
+from .ads import calculate_content_hash, get_description_affixes
+from .utils import dicts, error_handlers, loggers, misc
 from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, set_current_locale, pluralize
 from .utils.misc import ainput, ensure, is_frozen, parse_datetime, parse_decimal
@@ -1063,7 +1063,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             else dicts.safe_get(ad_cfg, "description", "prefix")
             if dicts.safe_get(ad_cfg, "description", "prefix") is not None
             # 3. Global prefix from config
-            else description.get_description_affixes(self.config, prefix=True)
+            else get_description_affixes(self.config, prefix=True)
         )
 
         # Get suffix with precedence
@@ -1074,7 +1074,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             else dicts.safe_get(ad_cfg, "description", "suffix")
             if dicts.safe_get(ad_cfg, "description", "suffix") is not None
             # 3. Global suffix from config
-            else description.get_description_affixes(self.config, prefix=False)
+            else get_description_affixes(self.config, prefix=False)
         )
 
         # Combine the parts
