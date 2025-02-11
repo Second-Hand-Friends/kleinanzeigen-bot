@@ -775,9 +775,12 @@ class KleinanzeigenBot(WebScrapingMixin):
             await self.web_click(By.ID, "imprint-guidance-submit")
 
         # check for no image question
-        image_hint_xpath = '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Ohne Bild veröffentlichen")]]]'
-        if not ad_cfg["images"] and await self.web_check(By.XPATH, image_hint_xpath, Is.DISPLAYED):
-            await self.web_click(By.XPATH, image_hint_xpath)
+        try:
+            image_hint_xpath = '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Ohne Bild veröffentlichen")]]]'
+            if not ad_cfg["images"] and await self.web_check(By.XPATH, image_hint_xpath, Is.DISPLAYED):
+                await self.web_click(By.XPATH, image_hint_xpath)
+        except TimeoutError:
+            pass  # nosec
 
         await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = 20)
 
@@ -785,6 +788,14 @@ class KleinanzeigenBot(WebScrapingMixin):
         current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(self.page.url).query)
         ad_id = int(current_url_query_params.get("adId", [])[0])
         ad_cfg_orig["id"] = ad_id
+
+        # check for approval message
+        try:
+            approval_link_xpath = '//*[contains(@id, "not-completed")]//*//a[contains(@class, "to-my-ads-link")]'
+            if await self.web_check(By.XPATH, approval_link_xpath, Is.DISPLAYED):
+                await self.web_click(By.XPATH, approval_link_xpath)
+        except TimeoutError:
+            pass  # nosec
 
         # Update content hash after successful publication
         # Calculate hash on original config to ensure consistent comparison on restart
