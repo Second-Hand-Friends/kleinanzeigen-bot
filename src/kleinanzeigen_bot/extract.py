@@ -168,7 +168,7 @@ class AdExtractor(WebScrapingMixin):
             list_items = await self.web_find_all(By.CLASS_NAME, 'cardbox',
                     parent = await self.web_find(By.ID, 'my-manageitems-adlist'))
             refs += [
-                (await self.web_find(By.CSS_SELECTOR, 'article > section > section:nth-of-type(2) > h2 > div > a', parent = li)).attrs['href']
+                (await self.web_find(By.CSS_SELECTOR, 'article > section > section:nth-of-type(2) > h3 > div > a', parent = li)).attrs['href']
                 for li in list_items
             ]
 
