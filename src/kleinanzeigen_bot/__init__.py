@@ -18,7 +18,7 @@ from wcmatch import glob
 
 from . import extract, resources
 from .ads import calculate_content_hash
-from .utils import dicts, error_handlers, loggers, misc
+from .utils import dicts, error_handlers, loggers, misc, description
 from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, set_current_locale, pluralize
 from .utils.misc import ainput, ensure, is_frozen, parse_datetime, parse_decimal
@@ -696,7 +696,8 @@ class KleinanzeigenBot(WebScrapingMixin):
         #############################
         # set description
         #############################
-        await self.web_execute("document.querySelector('#pstad-descrptn').value = `" + ad_cfg["description"].replace("`", "'") + "`")
+        description = self.__get_description_with_affixes(ad_cfg)
+        await self.web_execute("document.querySelector('#pstad-descrptn').value = `" + description.replace("`", "'") + "`")
 
         #############################
         # set contact zipcode
@@ -1032,10 +1033,64 @@ class KleinanzeigenBot(WebScrapingMixin):
                 else:
                     LOG.error('The page with the id %d does not exist!', ad_id)
 
+    def __get_description_with_affixes(self, ad_cfg: dict[str, Any]) -> str:
+        """Get the complete description with prefix and suffix applied.
+
+        Precedence (highest to lowest):
+        1. Direct ad-level affixes (description_prefix/suffix)
+        2. Legacy nested ad-level affixes (description.prefix/suffix)
+        3. Global flattened affixes (ad_defaults.description_prefix/suffix)
+        4. Legacy global nested affixes (ad_defaults.description.prefix/suffix)
+
+        Args:
+            ad_cfg: The ad configuration dictionary
+
+        Returns:
+            The complete description with prefix and suffix applied
+        """
+        # Get the main description text
+        description_text = ""
+        if isinstance(ad_cfg.get("description"), dict):
+            description_text = ad_cfg["description"].get("text", "")
+        elif isinstance(ad_cfg.get("description"), str):
+            description_text = ad_cfg["description"]
+
+        # Get prefix with precedence
+        prefix = (
+            # 1. Direct ad-level prefix
+            ad_cfg.get("description_prefix") if ad_cfg.get("description_prefix") is not None
+            # 2. Legacy nested ad-level prefix
+            else dicts.safe_get(ad_cfg, "description", "prefix")
+            if dicts.safe_get(ad_cfg, "description", "prefix") is not None
+            # 3. Global prefix from config
+            else description.get_description_affixes(self.config, prefix=True)
+        )
+
+        # Get suffix with precedence
+        suffix = (
+            # 1. Direct ad-level suffix
+            ad_cfg.get("description_suffix") if ad_cfg.get("description_suffix") is not None
+            # 2. Legacy nested ad-level suffix
+            else dicts.safe_get(ad_cfg, "description", "suffix")
+            if dicts.safe_get(ad_cfg, "description", "suffix") is not None
+            # 3. Global suffix from config
+            else description.get_description_affixes(self.config, prefix=False)
+        )
+
+        # Combine the parts
+        final_description = str(prefix) + str(description_text) + str(suffix)
+
+        # Validate length
+        ensure(len(final_description) <= 4000,
+               f"Length of ad description including prefix and suffix exceeds 4000 chars. Description length: {len(final_description)} chars.")
+
+        return final_description
 
 #############################
 # main entry point
 #############################
+
+
 def main(args:list[str]) -> None:
     if "version" not in args:
         print(textwrap.dedent(r"""

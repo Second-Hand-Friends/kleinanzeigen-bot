@@ -237,8 +237,8 @@ ad_defaults:
   active: true
   type: OFFER # one of: OFFER, WANTED
   description:
-    prefix: ""
-    suffix: ""
+  description_prefix: ""
+  description_suffix: ""
   price_type: NEGOTIABLE # one of: FIXED, NEGOTIABLE, GIVE_AWAY, NOT_APPLICABLE
   shipping_type: SHIPPING # one of: PICKUP, SHIPPING, NOT_APPLICABLE
   shipping_costs: # e.g. 2.95
@@ -297,13 +297,13 @@ type: # one of: OFFER, WANTED (default: OFFER)
 title:
 description: # can be multiline, see syntax here https://yaml-multiline.info/
 
+description_prefix: # optional prefix to be added to the description overriding the default prefix
+description_suffix: # optional suffix to be added to the description overriding the default suffix
+
 # built-in category name as specified in https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml
 # or custom category name as specified in config.yaml
 # or category ID (e.g. 161/278)
 category: # e.g. "Elektronik > Notebooks"
-
-prefix: # optional prefix to be added to the description overriding the default prefix
-suffix: # optional suffix to be added to the description overriding the default suffix
 
 price: # without decimals, e.g. 75
 price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY (default: NEGOTIABLE)
@@ -351,7 +351,35 @@ updated_on: # ISO timestamp when the ad was last published
 content_hash: # hash of the ad content, used to detect changes
 ```
 
-### <a name="existing-browser"></a>3) Using an existing browser window
+### <a name="description-prefix-suffix"></a>3) Description Prefix and Suffix
+
+You can add prefix and suffix text to your ad descriptions in two ways:
+
+#### New Format (Recommended)
+
+In your config.yaml file you can specify a `description_prefix` and `description_suffix` under the `ad_defaults` section.
+
+```yaml
+ad_defaults:
+  description_prefix: "Prefix text"
+  description_suffix: "Suffix text"
+```
+
+#### Legacy Format
+
+In your ad configuration file you can specify a `description_prefix` and `description_suffix` under the `description` section.
+
+```yaml
+description:
+  prefix: "Prefix text"
+  suffix: "Suffix text"
+```
+
+#### Precedence
+
+The new format has precedence over the legacy format. If you specify both the new and the legacy format in your config, the new format will be used. We recommend using the new format as it is more flexible and easier to manage.
+
+### <a name="existing-browser"></a>4) Using an existing browser window
 
 By default a new browser process will be launched. To reuse a manually launched browser window/process follow these steps:
 
