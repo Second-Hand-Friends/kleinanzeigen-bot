@@ -5,9 +5,9 @@ ad_files:
 ad_defaults:
   active: true
   type: OFFER # one of: OFFER, WANTED
-  description:
-    prefix: ""
-    suffix: ""
+  description_prefix: "" # prefix for the ad description
+  description_suffix: "" # suffix for the ad description
+
   price_type: NEGOTIABLE # one of: FIXED, NEGOTIABLE, GIVE_AWAY, NOT_APPLICABLE
   shipping_type: SHIPPING # one of: PICKUP, SHIPPING, NOT_APPLICABLE
   sell_directly: false # requires shipping_options to take effect

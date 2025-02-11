@@ -8,7 +8,7 @@ import urllib.request as urllib_request
 from datetime import datetime
 from typing import Any, Final
 
-from .ads import calculate_content_hash
+from .ads import calculate_content_hash, get_description_affixes
 from .utils import dicts, i18n, loggers, misc, reflect
 from .utils.web_scraping_mixin import Browser, By, Element, Is, WebScrapingMixin
 
@@ -236,9 +236,23 @@ class AdExtractor(WebScrapingMixin):
 
         info['category'] = await self._extract_category_from_ad_page()
         info['title'] = title
-        info['description'] = (await self.web_text(By.ID, 'viewad-description-text')).strip() \
-            .removeprefix((self.config["ad_defaults"]["description"]["prefix"] or "").strip()) \
-            .removesuffix((self.config["ad_defaults"]["description"]["suffix"] or "").strip())
+
+        # Get raw description text
+        raw_description = (await self.web_text(By.ID, 'viewad-description-text')).strip()
+
+        # Get prefix and suffix from config
+        prefix = get_description_affixes(self.config, prefix=True)
+        suffix = get_description_affixes(self.config, prefix=False)
+
+        # Remove prefix and suffix if present
+        description_text = raw_description
+        if prefix and description_text.startswith(prefix.strip()):
+            description_text = description_text[len(prefix.strip()):]
+        if suffix and description_text.endswith(suffix.strip()):
+            description_text = description_text[:-len(suffix.strip())]
+
+        info['description'] = description_text.strip()
+
         info['special_attributes'] = await self._extract_special_attributes_from_ad_page()
         if "art_s" in info['special_attributes']:
             # change e.g. category "161/172" to "161/172/lautsprecher_kopfhoerer"
