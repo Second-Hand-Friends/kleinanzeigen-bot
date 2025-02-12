@@ -16,22 +16,8 @@ getopt.py:
 #################################################
 kleinanzeigen_bot/__init__.py:
 #################################################
-  run:
-    "DONE: No configuration errors found.": "FERTIG: Keine Konfigurationsfehler gefunden."
-    'You provided no ads selector. Defaulting to "due".': 'Es wurden keine Anzeigen-Selektor angegeben. Es wird "due" verwendet.'
-    "DONE: No new/outdated ads found.": "FERTIG: Keine neuen/veralteten Anzeigen gefunden."
-    "DONE: No ads to delete found.": "FERTIG: Keine zu löschnenden Anzeigen gefunden."
-    'You provided no ads selector. Defaulting to "new".': 'Es wurden keine Anzeigen-Selektor angegeben. Es wird "new" verwendet.'
-    "Unknown command: %s" : "Unbekannter Befehl: %s"
-
-  show_help:
-    "Usage:": "Verwendung:"
-    "COMMAND [OPTIONS]" : "BEFEHL [OPTIONEN]"
-    "Commands:": "Befehle"
-
-  parse_args:
-    "Use --help to display available options.": "Mit --help können die verfügbaren Optionen angezeigt werden."
-    "More than one command given: %s": "Mehr als ein Befehl angegeben: %s"
+  module:
+    "Direct execution not supported. Use 'pdm run app'": "Direkte Ausführung nicht unterstützt. Bitte 'pdm run app' verwenden"
 
   configure_file_logging:
     "Logging to [%s]...": "Protokollierung in [%s]..."
@@ -45,10 +31,8 @@ kleinanzeigen_bot/__init__.py:
     "Start fetch task for the ad(s) with id(s):": "Starte Abrufaufgabe für die Anzeige(n) mit ID(s):"
     " -> SKIPPED: inactive ad [%s]": " -> ÜBERSPRUNGEN: inaktive Anzeige [%s]"
     " -> SKIPPED: ad [%s] is not in list of given ids.": " -> ÜBERSPRUNGEN: Anzeige [%s] ist nicht in der Liste der angegebenen IDs."
-    " -> SKIPPED: ad [%s] is not new. already has an id assigned.":
-      " -> ÜBERSPRUNGEN: Anzeige [%s] ist nicht neu. Eine ID wurde bereits zugewiesen."
-    " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days":
-      " -> ÜBERSPRUNGEN: Anzeige [%s] wurde zuletzt vor %d Tagen veröffentlicht. Eine erneute Veröffentlichung ist nur alle %s Tage erforderlich."
+    " -> SKIPPED: ad [%s] is not new. already has an id assigned.": " -> ÜBERSPRUNGEN: Anzeige [%s] ist nicht neu. Eine ID wurde bereits zugewiesen."
+    "Category [%s] unknown. Using category [%s] with ID [%s] instead.": "Kategorie [%s] unbekannt. Verwende stattdessen Kategorie [%s] mit ID [%s]."
     "Loaded %s": "%s geladen"
     "ad": "Anzeige"
 
@@ -56,16 +40,17 @@ kleinanzeigen_bot/__init__.py:
     " -> found %s": "-> %s gefunden"
     "category": "Kategorie"
     "config": "Konfiguration"
+    "Config file %s does not exist. Creating it with default values...": "Konfigurationsdatei %s existiert nicht. Erstelle sie mit Standardwerten..."
 
   login:
     "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
     "Already logged in as [%s]. Skipping login.": "Bereits eingeloggt als [%s]. Überspringe Anmeldung."
     "Opening login page...": "Öffne Anmeldeseite..."
-    "Captcha present! Please solve the captcha.": "Captcha vorhanden! Bitte lösen Sie das Captcha."
+    "# Captcha present! Please solve the captcha.": "# Captcha vorhanden! Bitte lösen Sie das Captcha."
+    "Logging in as [%s]...": "Anmeldung als [%s]..."
 
   handle_after_login_logic:
-    "# Device verification message detected. Please follow the instruction displayed in the Browser.":
-      "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
+    "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
     "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
     "Handling GDPR disclaimer...": "Verarbeite DSGVO-Hinweis..."
 
@@ -77,6 +62,7 @@ kleinanzeigen_bot/__init__.py:
   delete_ad:
     "Deleting ad '%s' if already present...": "Lösche Anzeige '%s', falls bereits vorhanden..."
     "Expected CSRF Token not found in HTML content!": "Erwartetes CSRF-Token wurde im HTML-Inhalt nicht gefunden!"
+    " -> deleting %s '%s'...": " -> lösche %s '%s'..."
 
   publish_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
@@ -90,34 +76,66 @@ kleinanzeigen_bot/__init__.py:
     "# Captcha present! Please solve the captcha.": "# Captcha vorhanden! Bitte lösen Sie das Captcha."
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
     " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
+    " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
+    "Could not set city from location": "Stadt konnte nicht aus dem Standort gesetzt werden"
 
   __set_condition:
     "Unable to close condition dialog!": "Kann den Dialog für Artikelzustand nicht schließen!"
+    "Unable to open condition dialog and select condition [%s]": "Zustandsdialog konnte nicht geöffnet und Zustand [%s] nicht ausgewählt werden"
+    "Unable to select condition [%s]": "Zustand [%s] konnte nicht ausgewählt werden"
 
   __upload_images:
     " -> found %s": "-> %s gefunden"
     "image": "Bild"
     " -> uploading image [%s]": " -> Lade Bild [%s] hoch"
 
-  download_ads:
-    "Scanning your ad overview...": "Scanne Anzeigenübersicht..."
-    '%s found!': '%s gefunden.'
-    "ad": "Anzeige"
-    "Starting download of all ads...": "Starte den Download aller Anzeigen..."
-    '%d of %d ads were downloaded from your profile.': '%d von %d Anzeigen wurden aus Ihrem Profil heruntergeladen.'
-    "Starting download of not yet downloaded ads...": "Starte den Download noch nicht heruntergeladener Anzeigen..."
-    'The ad with id %d has already been saved.': 'Die Anzeige mit der ID %d wurde bereits gespeichert.'
-    '%s were downloaded from your profile.': '%s wurden aus Ihrem Profil heruntergeladen.'
-    "new ad": "neue Anzeige"
-    'Starting download of ad(s) with the id(s):': 'Starte Download der Anzeige(n) mit den ID(s):'
-    'Downloaded ad with id %d': 'Anzeige mit der ID %d heruntergeladen'
-    'The page with the id %d does not exist!': 'Die Seite mit der ID %d existiert nicht!'
-
   __check_ad_republication:
     "Hash comparison for [%s]:": "Hash-Vergleich für [%s]:"
     "    Stored hash: %s": "    Gespeicherter Hash: %s"
     "    Current hash: %s": "    Aktueller Hash: %s"
     "Changes detected in ad [%s], will republish": "Änderungen in Anzeige [%s] erkannt, wird neu veröffentlicht"
+    " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days": " -> ÜBERSPRUNGEN: Anzeige [%s] wurde zuletzt vor %d Tagen veröffentlicht. Eine erneute Veröffentlichung ist nur alle %s Tage erforderlich"
+
+  __set_special_attributes:
+    "Found %i special attributes": "%i spezielle Attribute gefunden"
+    "Setting special attribute [%s] to [%s]...": "Setze spezielles Attribut [%s] auf [%s]..."
+    "Successfully set attribute field [%s] to [%s]...": "Attributfeld [%s] erfolgreich auf [%s] gesetzt..."
+    "Attribute field '%s' could not be found.": "Attributfeld '%s' konnte nicht gefunden werden."
+    "Attribute field '%s' seems to be a select...": "Attributfeld '%s' scheint ein Auswahlfeld zu sein..."
+    "Attribute field '%s' is not of kind radio button.": "Attributfeld '%s' ist kein Radiobutton."
+    "Attribute field '%s' seems to be a checkbox...": "Attributfeld '%s' scheint eine Checkbox zu sein..."
+    "Attribute field '%s' seems to be a text input...": "Attributfeld '%s' scheint ein Texteingabefeld zu sein..."
+
+  download_ads:
+    "Scanning your ad overview...": "Scanne Anzeigenübersicht..."
+    "Starting download of all ads...": "Starte den Download aller Anzeigen..."
+    "%d of %d ads were downloaded from your profile.": "%d von %d Anzeigen wurden aus Ihrem Profil heruntergeladen."
+    "Starting download of not yet downloaded ads...": "Starte den Download noch nicht heruntergeladener Anzeigen..."
+    "The ad with id %d has already been saved.": "Die Anzeige mit der ID %d wurde bereits gespeichert."
+    "%s were downloaded from your profile.": "%s wurden aus Ihrem Profil heruntergeladen."
+    "new ad": "neue Anzeige"
+    "Starting download of ad(s) with the id(s):": "Starte Download der Anzeige(n) mit den ID(s):"
+    "Downloaded ad with id %d": "Anzeige mit der ID %d heruntergeladen"
+    "The page with the id %d does not exist!": "Die Seite mit der ID %d existiert nicht!"
+    "%s found.": "%s gefunden."
+    "ad": "Anzeige"
+
+  parse_args:
+    "Use --help to display available options.": "Mit --help können die verfügbaren Optionen angezeigt werden."
+    "More than one command given: %s": "Mehr als ein Befehl angegeben: %s"
+
+  run:
+    "DONE: No configuration errors found.": "FERTIG: Keine Konfigurationsfehler gefunden."
+    "You provided no ads selector. Defaulting to \"due\".": "Es wurden keine Anzeigen-Selektor angegeben. Es wird \"due\" verwendet."
+    "DONE: No new/outdated ads found.": "FERTIG: Keine neuen/veralteten Anzeigen gefunden."
+    "DONE: No ads to delete found.": "FERTIG: Keine zu löschnenden Anzeigen gefunden."
+    "You provided no ads selector. Defaulting to \"new\".": "Es wurden keine Anzeigen-Selektor angegeben. Es wird \"new\" verwendet."
+    "Unknown command: %s": "Unbekannter Befehl: %s"
+    "%s found.": "%s gefunden."
+    " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
+
+  fill_login_data_and_send:
+    "Logging in as [%s]...": "Anmeldung als [%s]..."
 
 
 #################################################
@@ -130,15 +148,12 @@ kleinanzeigen_bot/extract.py:
 
   _download_images_from_ad_page:
     "Found %s.": "%s gefunden."
-    "NEXT button in image gallery is missing, aborting image fetching.":
-       "NEXT-Schaltfläche in der Bildergalerie fehlt, Bildabruf abgebrochen."
     "Downloaded %s.": "%s heruntergeladen."
-    "No image area found. Continue without downloading images.":
-      "Kein Bildbereich gefunden. Fahre fort ohne Bilder herunterzuladen."
+    "NEXT button in image gallery somehow missing, aborting image fetching.": "WEITER-Button in der Bildergalerie fehlt, breche Bildabruf ab."
+    "No image area found. Continuing without downloading images.": "Keine Bildbereiche gefunden. Fahre ohne Bilder-Download fort."
 
   extract_ad_id_from_ad_url:
-    "The ad ID could not be extracted from the given URL %s":
-      "Die Anzeigen-ID konnte nicht aus der angegebenen URL extrahiert werden: %s"
+    "The ad ID could not be extracted from the given URL %s": "Die Anzeigen-ID konnte nicht aus der angegebenen URL extrahiert werden: %s"
 
   extract_own_ads_urls:
     "There are currently no ads on your profile!": "Derzeit gibt es keine Anzeigen auf deinem Profil!"
@@ -151,58 +166,82 @@ kleinanzeigen_bot/extract.py:
     "A popup appeared!": "Ein Popup ist erschienen!"
 
   _extract_ad_page_info:
-    'Extracting information from ad with title \"%s\"': 'Extrahiere Informationen aus der Anzeige mit dem Titel "%s"'
+    "Extracting information from ad with title \"%s\"": "Extrahiere Informationen aus der Anzeige mit dem Titel \"%s\""
+    "NEXT button in image gallery somehow missing, aborting image fetching.": "WEITER-Button in der Bildergalerie fehlt, breche Bildabruf ab."
+    "No image area found. Continuing without downloading images.": "Keine Bildbereiche gefunden. Fahre ohne Bilder-Download fort."
 
   _extract_contact_from_ad_page:
-    'No street given in the contact.': 'Keine Straße in den Kontaktdaten angegeben.'
+    "No street given in the contact.": "Keine Straße in den Kontaktdaten angegeben."
+
 
 #################################################
-kleinanzeigen_bot/utils.py:
+kleinanzeigen_bot/utils/i18n.py:
 #################################################
-  format:
-    "ERROR": "FEHLER"
-    "WARNING": "WARNUNG"
-    "CRITICAL": "KRITISCH"
+  _detect_locale:
+    "Error detecting language on Windows": "Fehler bei der Spracherkennung unter Windows"
 
+
+#################################################
+kleinanzeigen_bot/utils/error_handlers.py:
+#################################################
+  on_sigint:
+    "Aborted on user request.": "Auf Benutzeranfrage abgebrochen."
+  handle_error:
+    "%s: %s": "%s: %s"
+  on_exception:
+    "%s: %s": "%s: %s"
+
+#################################################
+kleinanzeigen_bot/utils/dicts.py:
+#################################################
   load_dict_if_exists:
     "Loading %s[%s]...": "Lade %s[%s]..."
-    " from ": " aus "
-    'Unsupported file type. The file name "%s" must end with *.json, *.yaml, or *.yml':
-      'Nicht unterstützter Dateityp. Der Dateiname "%s" muss mit *.json, *.yaml oder *.yml enden.'
-
+    "Loading %s[%s.%s]...": "Lade %s[%s.%s]..."
+    " from ": " von "
+    "Unsupported file type. The filename \"%s\" must end with *.json, *.yaml, or *.yml": "Nicht unterstützter Dateityp. Der Dateiname \"%s\" muss mit *.json, *.yaml oder *.yml enden"
   save_dict:
     "Saving [%s]...": "Speichere [%s]..."
-
-  on_sigint:
-    "Aborted on user request.": "Auf Benutzerwunsch abgebrochen."
-
+  load_dict_from_module:
+    "Loading %s[%s.%s]...": "Lade %s[%s.%s]..."
 
 #################################################
-kleinanzeigen_bot/web_scraping_mixin.py:
+kleinanzeigen_bot/utils/web_scraping_mixin.py:
 #################################################
   create_browser_session:
-    "Creating Browser session...": "Erstelle Browsersitzung..."
-    " -> Browser binary location: %s": " -> Speicherort der Browser-Binärdatei: %s"
-    "Using existing browser process at %s:%s": "Verwende bestehenden Browser-Prozess unter %s:%s"
-    "New Browser session is %s": "Neue Browsersitzung ist %s"
-    " -> Browser profile name: %s": " -> Browser-Profilname: %s"
-    " -> Custom Browser argument: %s": " -> Benutzerdefiniertes Browser-Argument: %s"
-    " -> Browser user data dir: %s": " -> Benutzerdatenverzeichnis des Browsers: %s"
-    " -> Setting chrome prefs [%s]...": " -> Setze Chrome-Einstellungen [%s]..."
-    " -> Adding Browser extension: [%s]": " -> Füge Browser-Erweiterung hinzu: [%s]"
-
-  get_compatible_browser:
-    "Installed browser for OS %s could not be detected": "Installierter Browser für OS %s konnte nicht erkannt werden"
+    "Creating Browser session...": "Erstelle Browser-Sitzung..."
+    "Closing Browser session...": "Schließe Browser-Sitzung..."
     "Installed browser could not be detected": "Installierter Browser konnte nicht erkannt werden"
+    "Installed browser for OS %s could not be detected": "Installierter Browser für Betriebssystem %s konnte nicht erkannt werden"
+    "Using existing browser process at %s:%s": "Verwende existierenden Browser-Prozess unter %s:%s"
+    "New Browser session is %s": "Neue Browser-Sitzung ist %s"
+    " -> Browser binary location: %s": " -> Browser-Programmpfad: %s"
+    " -> Browser profile name: %s": " -> Browser-Profilname: %s"
+    " -> Browser user data dir: %s": " -> Browser-Benutzerdatenverzeichnis: %s"
+    " -> Custom Browser argument: %s": " -> Benutzerdefiniertes Browser-Argument: %s"
+    " -> Setting chrome prefs [%s]...": " -> Setze Chrome-Einstellungen [%s]..."
+    " -> Opening [%s]...": " -> Öffne [%s]..."
+    " -> Adding Browser extension: [%s]": " -> Füge Browser-Erweiterung hinzu: [%s]"
+    " -> HTTP %s [%s]...": " -> HTTP %s [%s]..."
+    "  => skipping, [%s] is already open": "  => überspringe, [%s] ist bereits geöffnet"
 
   web_check:
     "Unsupported attribute: %s": "Nicht unterstütztes Attribut: %s"
 
   web_find:
-    "Unsupported selector type: %s": "Nicht unterstützter Selektortyp: %s"
+    "Unsupported selector type: %s": "Nicht unterstützter Selektor-Typ: %s"
 
   web_find_all:
-    "Unsupported selector type: %s": "Nicht unterstützter Selektortyp: %s"
+    "Unsupported selector type: %s": "Nicht unterstützter Selektor-Typ: %s"
+  close_browser_session:
+    "Closing Browser session...": "Schließe Browser-Sitzung..."
 
-  web_sleep:
-    " ... pausing for %d ms ...": " ... pausiere für %d ms ..."
+  get_compatible_browser:
+    "Installed browser could not be detected": "Installierter Browser konnte nicht erkannt werden"
+    "Installed browser for OS %s could not be detected": "Installierter Browser für Betriebssystem %s konnte nicht erkannt werden"
+
+  web_open:
+    "  => skipping, [%s] is already open": "  => überspringe, [%s] ist bereits geöffnet"
+    " -> Opening [%s]...": " -> Öffne [%s]..."
+
+  web_request:
+    " -> HTTP %s [%s]...": " -> HTTP %s [%s]..."
