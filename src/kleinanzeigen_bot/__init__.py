@@ -655,7 +655,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 await self.web_click(By.XPATH, '//*[contains(@class, "ShippingSection")]//*//button[contains(@class, "SelectionButton")]')
                 await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
                 await self.__set_shipping_options(ad_cfg)
-            except TimeoutError as ex:
+            except TimeoutError:
                 # try to set special attribute selector (then we have a commercial account)
                 shipping_value = "ja" if ad_cfg["shipping_type"] == "SHIPPING" else "nein"
                 await self.web_select(By.XPATH, "//select[contains(@id, '.versand_s')]", shipping_value)
