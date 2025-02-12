@@ -1,6 +1,6 @@
 # kleinanzeigen-bot
 
-[![Build Status](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/workflows/Build/badge.svg "GitHub Actions")](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/actions?query=workflow%3A%22Build%22)
+[![Build Status](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/actions/workflows/build.yml/badge.svg)](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/actions/workflows/build.yml)
 [![License](https://img.shields.io/github/license/Second-Hand-Friends/kleinanzeigen-bot.svg?color=blue)](LICENSE.txt)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.1%20adopted-ff69b4.svg)](CODE_OF_CONDUCT.md)
 [![Maintainability](https://api.codeclimate.com/v1/badges/77b4ed9cc0dd8cfe373c/maintainability)](https://codeclimate.com/github/Second-Hand-Friends/kleinanzeigen-bot/maintainability)
