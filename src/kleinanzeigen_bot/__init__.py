@@ -644,33 +644,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                     await self.web_select(By.XPATH, "//select[contains(@id, '.versand_s')]", shipping_value)
                 except TimeoutError:
                     LOG.warning("Failed to set shipping attribute for type '%s'!", ad_cfg['shipping_type'])
-        elif ad_cfg["shipping_type"] == "PICKUP":
-            try:
-                await self.web_click(By.XPATH,
-                    '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/../input[@type="radio"]')
-            except TimeoutError as ex:
-                LOG.debug(ex, exc_info = True)
-        elif ad_cfg["shipping_options"]:
-            try:
-                await self.web_click(By.XPATH, '//*[contains(@class, "ShippingSection")]//*//button[contains(@class, "SelectionButton")]')
-                await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
-                await self.__set_shipping_options(ad_cfg)
-            except TimeoutError:
-                # try to set special attribute selector (then we have a commercial account)
-                shipping_value = "ja" if ad_cfg["shipping_type"] == "SHIPPING" else "nein"
-                await self.web_select(By.XPATH, "//select[contains(@id, '.versand_s')]", shipping_value)
         else:
-            try:
-                await self.web_click(By.XPATH,
-                                     '//*[contains(@class, "ShippingSection")]//*//button[contains(@class, "SelectionButton")]')
-                await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
-                await self.web_click(By.CSS_SELECTOR, '[class*="CarrierOption--Main"]')
-                if ad_cfg["shipping_costs"]:
-                    await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]', str.replace(ad_cfg["shipping_costs"], ".", ",")
-                    )
-                await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
-            except TimeoutError as ex:
-                LOG.debug(ex, exc_info = True)
+            await self.__set_shipping(ad_cfg)
 
         #############################
         # set price
@@ -908,6 +883,36 @@ class KleinanzeigenBot(WebScrapingMixin):
                     LOG.debug("Attribute field '%s' is not of kind radio button.", special_attribute_key)
                     raise TimeoutError(f"Failed to set special attribute [{special_attribute_key}]") from ex
                 LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value)
+
+    async def __set_shipping(self, ad_cfg: dict[str, Any]) -> None:
+        if ad_cfg["shipping_type"] == "PICKUP":
+            try:
+                await self.web_click(By.XPATH,
+                    '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/../input[@type="radio"]')
+            except TimeoutError as ex:
+                LOG.debug(ex, exc_info = True)
+        elif ad_cfg["shipping_options"]:
+            special_shipping_selector = '//select[contains(@id, ".versand_s")]'
+            if await self.web_check(By.XPATH, special_shipping_selector, Is.DISPLAYED):
+                # try to set special attribute selector (then we have a commercial account)
+                shipping_value = "ja" if ad_cfg["shipping_type"] == "SHIPPING" else "nein"
+                await self.web_select(By.XPATH, special_shipping_selector, shipping_value)
+            else:
+                await self.web_click(By.XPATH, '//*[contains(@class, "ShippingSection")]//*//button[contains(@class, "SelectionButton")]')
+                await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
+                await self.__set_shipping_options(ad_cfg)
+        else:
+            try:
+                await self.web_click(By.XPATH,
+                                     '//*[contains(@class, "ShippingSection")]//*//button[contains(@class, "SelectionButton")]')
+                await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
+                await self.web_click(By.CSS_SELECTOR, '[class*="CarrierOption--Main"]')
+                if ad_cfg["shipping_costs"]:
+                    await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]', str.replace(ad_cfg["shipping_costs"], ".", ",")
+                    )
+                await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
+            except TimeoutError as ex:
+                LOG.debug(ex, exc_info = True)
 
     async def __set_shipping_options(self, ad_cfg: dict[str, Any]) -> None:
         shipping_options_mapping = {
