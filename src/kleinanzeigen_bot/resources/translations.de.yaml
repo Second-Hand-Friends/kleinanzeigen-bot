@@ -22,12 +22,26 @@ kleinanzeigen_bot/__init__.py:
     "DONE: No new/outdated ads found.": "FERTIG: Keine neuen/veralteten Anzeigen gefunden."
     "DONE: No ads to delete found.": "FERTIG: Keine zu löschnenden Anzeigen gefunden."
     'You provided no ads selector. Defaulting to "new".': 'Es wurden keine Anzeigen-Selektor angegeben. Es wird "new" verwendet.'
-    "Unknown command: %s" : "Unbekannter Befehl: %s"
-
-  show_help:
-    "Usage:": "Verwendung:"
-    "COMMAND [OPTIONS]" : "BEFEHL [OPTIONEN]"
-    "Commands:": "Befehle"
+    "Unknown command: %s": "Unbekannter Befehl: %s"
+    "Direct execution not supported. Use 'pdm run app'": "Direkte Ausführung nicht unterstützt. Bitte 'pdm run app' verwenden"
+    "Config file %s does not exist. Creating it with default values...": "Konfigurationsdatei %s existiert nicht. Erstelle sie mit Standardwerten..."
+    "Category [%s] unknown. Using category [%s] with ID [%s] instead.": "Kategorie [%s] unbekannt. Verwende stattdessen Kategorie [%s] mit ID [%s]"
+    "Found %i special attributes": "%i spezielle Attribute gefunden"
+    " -> deleting %s '%s'...": " -> lösche %s '%s'..."
+    " -> effective ad meta:": " -> effektive Anzeigendetails:"
+    "Could not set city from location": "Stadt konnte nicht aus dem Standort gesetzt werden"
+    "Successfully set attribute field [%s] to [%s]...": "Attributfeld [%s] erfolgreich auf [%s] gesetzt..."
+    "Setting special attribute [%s] to [%s]...": "Setze spezielles Attribut [%s] auf [%s]..."
+    "Attribute field '%s' seems to be a checkbox...": "Attributfeld '%s' scheint eine Checkbox zu sein..."
+    "Attribute field '%s' seems to be a select...": "Attributfeld '%s' scheint ein Auswahlfeld zu sein..."
+    "Attribute field '%s' seems to be a text input...": "Attributfeld '%s' scheint ein Textfeld zu sein..."
+    "Attribute field '%s' is not of kind radio button.": "Attributfeld '%s' ist kein Radiobutton."
+    "Attribute field '%s' could not be found.": "Attributfeld '%s' konnte nicht gefunden werden."
+    "Unable to open condition dialog and select condition [%s]": "Dialog für Artikelzustand konnte nicht geöffnet und Zustand [%s] nicht ausgewählt werden"
+    "Unable to select condition [%s]": "Artikelzustand [%s] konnte nicht ausgewählt werden"
+    "Logging in as [%s]...": "Anmeldung als [%s]..."
+    "############################################": "############################################"
+    "%s found.": "%s gefunden."
 
   parse_args:
     "Use --help to display available options.": "Mit --help können die verfügbaren Optionen angezeigt werden."
@@ -61,7 +75,7 @@ kleinanzeigen_bot/__init__.py:
     "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
     "Already logged in as [%s]. Skipping login.": "Bereits eingeloggt als [%s]. Überspringe Anmeldung."
     "Opening login page...": "Öffne Anmeldeseite..."
-    "Captcha present! Please solve the captcha.": "Captcha vorhanden! Bitte lösen Sie das Captcha."
+    "# Captcha present! Please solve the captcha.": "# Captcha vorhanden! Bitte lösen Sie das Captcha."
 
   handle_after_login_logic:
     "# Device verification message detected. Please follow the instruction displayed in the Browser.":
@@ -101,7 +115,6 @@ kleinanzeigen_bot/__init__.py:
 
   download_ads:
     "Scanning your ad overview...": "Scanne Anzeigenübersicht..."
-    '%s found!': '%s gefunden.'
     "ad": "Anzeige"
     "Starting download of all ads...": "Starte den Download aller Anzeigen..."
     '%d of %d ads were downloaded from your profile.': '%d von %d Anzeigen wurden aus Ihrem Profil heruntergeladen.'
@@ -130,10 +143,10 @@ kleinanzeigen_bot/extract.py:
 
   _download_images_from_ad_page:
     "Found %s.": "%s gefunden."
-    "NEXT button in image gallery is missing, aborting image fetching.":
-       "NEXT-Schaltfläche in der Bildergalerie fehlt, Bildabruf abgebrochen."
+    "NEXT button in image gallery somehow missing, aborting image fetching.":
+      "NEXT-Schaltfläche in der Bildergalerie fehlt irgendwie, Bildabruf abgebrochen."
     "Downloaded %s.": "%s heruntergeladen."
-    "No image area found. Continue without downloading images.":
+    "No image area found. Continuing without downloading images.":
       "Kein Bildbereich gefunden. Fahre fort ohne Bilder herunterzuladen."
 
   extract_ad_id_from_ad_url:
@@ -151,34 +164,38 @@ kleinanzeigen_bot/extract.py:
     "A popup appeared!": "Ein Popup ist erschienen!"
 
   _extract_ad_page_info:
-    'Extracting information from ad with title \"%s\"': 'Extrahiere Informationen aus der Anzeige mit dem Titel "%s"'
+    'Extracting information from ad with title "%s"': 'Extrahiere Informationen aus der Anzeige mit dem Titel "%s"'
 
   _extract_contact_from_ad_page:
     'No street given in the contact.': 'Keine Straße in den Kontaktdaten angegeben.'
 
 #################################################
-kleinanzeigen_bot/utils.py:
+kleinanzeigen_bot/utils/dicts.py:
 #################################################
-  format:
-    "ERROR": "FEHLER"
-    "WARNING": "WARNUNG"
-    "CRITICAL": "KRITISCH"
-
   load_dict_if_exists:
     "Loading %s[%s]...": "Lade %s[%s]..."
+    "Loading %s[%s.%s]...": "Lade %s[%s.%s]..."
     " from ": " aus "
-    'Unsupported file type. The file name "%s" must end with *.json, *.yaml, or *.yml':
-      'Nicht unterstützter Dateityp. Der Dateiname "%s" muss mit *.json, *.yaml oder *.yml enden.'
-
+    'Unsupported file type. The filename "%s" must end with *.json, *.yaml, or *.yml':
+      'Nicht unterstützter Dateityp. Der Dateiname "%s" muss mit *.json, *.yaml oder *.yml enden'
   save_dict:
     "Saving [%s]...": "Speichere [%s]..."
 
+#################################################
+kleinanzeigen_bot/utils/error_handlers.py:
+#################################################
   on_sigint:
     "Aborted on user request.": "Auf Benutzerwunsch abgebrochen."
-
+    "%s: %s": "%s: %s"
 
 #################################################
-kleinanzeigen_bot/web_scraping_mixin.py:
+kleinanzeigen_bot/utils/i18n.py:
+#################################################
+  _detect_locale:
+    "Error detecting language on Windows": "Fehler beim Erkennen der Sprache unter Windows"
+
+#################################################
+kleinanzeigen_bot/utils/web_scraping_mixin.py:
 #################################################
   create_browser_session:
     "Creating Browser session...": "Erstelle Browsersitzung..."
@@ -190,6 +207,10 @@ kleinanzeigen_bot/web_scraping_mixin.py:
     " -> Browser user data dir: %s": " -> Benutzerdatenverzeichnis des Browsers: %s"
     " -> Setting chrome prefs [%s]...": " -> Setze Chrome-Einstellungen [%s]..."
     " -> Adding Browser extension: [%s]": " -> Füge Browser-Erweiterung hinzu: [%s]"
+    "Closing Browser session...": "Schließe Browsersitzung..."
+    " -> Opening [%s]...": " -> Öffne [%s]..."
+    " -> HTTP %s [%s]...": " -> HTTP %s [%s]..."
+    "  => skipping, [%s] is already open": "  => überspringe, [%s] ist bereits geöffnet"
 
   get_compatible_browser:
     "Installed browser for OS %s could not be detected": "Installierter Browser für OS %s konnte nicht erkannt werden"
@@ -203,6 +224,3 @@ kleinanzeigen_bot/web_scraping_mixin.py:
 
   web_find_all:
     "Unsupported selector type: %s": "Nicht unterstützter Selektortyp: %s"
-
-  web_sleep:
-    " ... pausing for %d ms ...": " ... pausiere für %d ms ..."
