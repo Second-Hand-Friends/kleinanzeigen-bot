@@ -964,18 +964,25 @@ class TestKleinanzeigenBotShippingOptions:
         # Create temporary file path
         ad_file = Path(tmp_path) / "test_ad.yaml"
 
+        # Mock web_execute to handle all JavaScript calls
+        async def mock_web_execute(script: str) -> Any:
+            if script == 'document.body.scrollHeight':
+                return 0  # Return integer to prevent scrolling loop
+            return None
+
         # Mock the necessary web interaction methods
-        with patch.object(test_bot, 'web_click', new_callable = AsyncMock), \
-                patch.object(test_bot, 'web_find', new_callable = AsyncMock) as mock_find, \
+        with patch.object(test_bot, 'web_execute', side_effect=mock_web_execute), \
+                patch.object(test_bot, 'web_click', new_callable=AsyncMock), \
+                patch.object(test_bot, 'web_find', new_callable=AsyncMock) as mock_find, \
                 patch.object(test_bot, 'web_select', new_callable = AsyncMock), \
                 patch.object(test_bot, 'web_input', new_callable = AsyncMock), \
                 patch.object(test_bot, 'web_open', new_callable = AsyncMock), \
                 patch.object(test_bot, 'web_sleep', new_callable = AsyncMock), \
                 patch.object(test_bot, 'web_check', new_callable = AsyncMock, return_value = True), \
                 patch.object(test_bot, 'web_request', new_callable = AsyncMock), \
-                patch.object(test_bot, 'web_execute', new_callable = AsyncMock), \
                 patch.object(test_bot, 'web_find_all', new_callable = AsyncMock) as mock_find_all, \
-                patch.object(test_bot, 'web_await', new_callable = AsyncMock):
+                patch.object(test_bot, 'web_await', new_callable = AsyncMock), \
+                patch('builtins.input', return_value=""):  # Mock the input function
 
             # Mock the shipping options form elements
             mock_find.side_effect = [
