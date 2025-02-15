@@ -107,3 +107,98 @@ def test_extractor(browser_mock: MagicMock, sample_config: dict[str, Any]) -> Ad
         - sample_config: Used to initialize the extractor with a valid configuration
     """
     return AdExtractor(browser_mock, sample_config)
+
+
+@pytest.fixture
+def description_test_cases() -> list[tuple[dict[str, Any], str, str]]:
+    """Provides test cases for description prefix/suffix handling.
+
+    Returns tuples of (config, raw_description, expected_description)
+    """
+    return [
+        # Test case 1: New flattened format
+        (
+            {
+                "ad_defaults": {
+                    "description_prefix": "Global Prefix\n",
+                    "description_suffix": "\nGlobal Suffix"
+                }
+            },
+            "Original Description",  # Raw description without affixes
+            "Global Prefix\nOriginal Description\nGlobal Suffix"  # Expected with affixes
+        ),
+        # Test case 2: Legacy nested format
+        (
+            {
+                "ad_defaults": {
+                    "description": {
+                        "prefix": "Legacy Prefix\n",
+                        "suffix": "\nLegacy Suffix"
+                    }
+                }
+            },
+            "Original Description",
+            "Legacy Prefix\nOriginal Description\nLegacy Suffix"
+        ),
+        # Test case 3: Both formats - new format takes precedence
+        (
+            {
+                "ad_defaults": {
+                    "description_prefix": "New Prefix\n",
+                    "description_suffix": "\nNew Suffix",
+                    "description": {
+                        "prefix": "Legacy Prefix\n",
+                        "suffix": "\nLegacy Suffix"
+                    }
+                }
+            },
+            "Original Description",
+            "New Prefix\nOriginal Description\nNew Suffix"
+        ),
+        # Test case 4: Empty config
+        (
+            {"ad_defaults": {}},
+            "Original Description",
+            "Original Description"
+        ),
+        # Test case 5: None values in config
+        (
+            {
+                "ad_defaults": {
+                    "description_prefix": None,
+                    "description_suffix": None,
+                    "description": {
+                        "prefix": None,
+                        "suffix": None
+                    }
+                }
+            },
+            "Original Description",
+            "Original Description"
+        ),
+        # Test case 6: Non-string values in config
+        (
+            {
+                "ad_defaults": {
+                    "description_prefix": 123,
+                    "description_suffix": True,
+                    "description": {
+                        "prefix": [],
+                        "suffix": {}
+                    }
+                }
+            },
+            "Original Description",
+            "Original Description"
+        )
+    ]
+
+
+@pytest.fixture
+def mock_web_text_responses() -> list[str]:
+    """Provides common mock responses for web_text calls."""
+    return [
+        "Test Title",  # Title
+        "Test Description",  # Description
+        "03.02.2025"  # Creation date
+    ]

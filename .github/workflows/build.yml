@@ -24,6 +24,7 @@ on:
     - '.github/workflows/codeql-analysis.yml'
     - '.github/workflows/stale.yml'
     - '.github/workflows/update-python-deps.yml'
+    - '.github/workflows/validate-pr.yml'
   pull_request:
     paths-ignore:
     - '**/*.md'

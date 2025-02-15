@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: © Jens Bergmann and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import copy, logging, os, tempfile
+import copy, os, tempfile
 from collections.abc import Generator
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -16,6 +16,7 @@ from ruamel.yaml import YAML
 from kleinanzeigen_bot import LOG, KleinanzeigenBot
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.ads import calculate_content_hash
+from kleinanzeigen_bot.utils import loggers
 
 
 @pytest.fixture
@@ -84,6 +85,11 @@ def create_ad_config(base_config: dict[str, Any], **overrides: Any) -> dict[str,
             config[key] = value
         else:
             config[key] = value
+
+    # Only check length if description is a string
+    if isinstance(config.get("description"), str):
+        assert len(config["description"]) <= 4000, "Length of ad description including prefix and suffix exceeds 4000 chars"
+
     return config
 
 
@@ -224,7 +230,7 @@ class TestKleinanzeigenBotCommandLine:
     def test_parse_args_handles_verbose_flag(self, test_bot: KleinanzeigenBot) -> None:
         """Verify that verbose flag sets correct log level."""
         test_bot.parse_args(["dummy", "--verbose"])
-        assert LOG.level == logging.DEBUG
+        assert loggers.is_debug(LOG)
 
     def test_parse_args_handles_config_path(self, test_bot: KleinanzeigenBot, test_data_dir: str) -> None:
         """Verify that config path is set correctly."""
@@ -432,10 +438,10 @@ class TestKleinanzeigenBotBasics:
     def test_get_log_level(self, test_bot: KleinanzeigenBot) -> None:
         """Test log level configuration."""
         # Reset log level to default
-        LOG.setLevel(logging.INFO)
-        assert LOG.level == logging.INFO
+        LOG.setLevel(loggers.INFO)
+        assert not loggers.is_debug(LOG)
         test_bot.parse_args(['script.py', '-v'])
-        assert LOG.level == logging.DEBUG
+        assert loggers.is_debug(LOG)
 
     def test_get_config_file_path(self, test_bot: KleinanzeigenBot) -> None:
         """Test config file path handling."""
@@ -476,7 +482,7 @@ class TestKleinanzeigenBotArgParsing:
     def test_parse_args_verbose(self, test_bot: KleinanzeigenBot) -> None:
         """Test parsing verbose flag."""
         test_bot.parse_args(['script.py', '-v', 'help'])
-        assert logging.getLogger('kleinanzeigen_bot').level == logging.DEBUG
+        assert loggers.is_debug(loggers.get_logger('kleinanzeigen_bot'))
 
     def test_parse_args_config_path(self, test_bot: KleinanzeigenBot) -> None:
         """Test parsing config path."""
@@ -958,18 +964,25 @@ class TestKleinanzeigenBotShippingOptions:
         # Create temporary file path
         ad_file = Path(tmp_path) / "test_ad.yaml"
 
+        # Mock web_execute to handle all JavaScript calls
+        async def mock_web_execute(script: str) -> Any:
+            if script == 'document.body.scrollHeight':
+                return 0  # Return integer to prevent scrolling loop
+            return None
+
         # Mock the necessary web interaction methods
-        with patch.object(test_bot, 'web_click', new_callable = AsyncMock), \
-                patch.object(test_bot, 'web_find', new_callable = AsyncMock) as mock_find, \
+        with patch.object(test_bot, 'web_execute', side_effect=mock_web_execute), \
+                patch.object(test_bot, 'web_click', new_callable=AsyncMock), \
+                patch.object(test_bot, 'web_find', new_callable=AsyncMock) as mock_find, \
                 patch.object(test_bot, 'web_select', new_callable = AsyncMock), \
                 patch.object(test_bot, 'web_input', new_callable = AsyncMock), \
                 patch.object(test_bot, 'web_open', new_callable = AsyncMock), \
                 patch.object(test_bot, 'web_sleep', new_callable = AsyncMock), \
                 patch.object(test_bot, 'web_check', new_callable = AsyncMock, return_value = True), \
                 patch.object(test_bot, 'web_request', new_callable = AsyncMock), \
-                patch.object(test_bot, 'web_execute', new_callable = AsyncMock), \
                 patch.object(test_bot, 'web_find_all', new_callable = AsyncMock) as mock_find_all, \
-                patch.object(test_bot, 'web_await', new_callable = AsyncMock):
+                patch.object(test_bot, 'web_await', new_callable = AsyncMock), \
+                patch('builtins.input', return_value=""):  # Mock the input function
 
             # Mock the shipping options form elements
             mock_find.side_effect = [
@@ -1015,3 +1028,40 @@ class TestKleinanzeigenBotUrlConstruction:
         # Test ad publishing URL
         expected_publish_url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-schritt2.html"
         assert f"{test_bot.root_url}/p-anzeige-aufgeben-schritt2.html" == expected_publish_url
+
+
+class TestKleinanzeigenBotPrefixSuffix:
+    """Tests for description prefix and suffix functionality."""
+    # pylint: disable=protected-access
+
+    def test_description_prefix_suffix_handling(
+        self,
+        test_bot: KleinanzeigenBot,
+        description_test_cases: list[tuple[dict[str, Any], str, str]]
+    ) -> None:
+        """Test handling of description prefix/suffix in various configurations."""
+        for config, raw_description, expected_description in description_test_cases:
+            test_bot.config = config
+            ad_cfg = {"description": raw_description, "active": True}
+            # Access private method using the correct name mangling
+            description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+            assert description == expected_description
+
+    def test_description_length_validation(self, test_bot: KleinanzeigenBot) -> None:
+        """Test that long descriptions with affixes raise appropriate error."""
+        test_bot.config = {
+            "ad_defaults": {
+                "description_prefix": "P" * 1000,
+                "description_suffix": "S" * 1000
+            }
+        }
+        ad_cfg = {
+            "description": "D" * 2001,  # This plus affixes will exceed 4000 chars
+            "active": True
+        }
+
+        with pytest.raises(AssertionError) as exc_info:
+            getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+
+        assert "Length of ad description including prefix and suffix exceeds 4000 chars" in str(exc_info.value)
+        assert "Description length: 4001" in str(exc_info.value)

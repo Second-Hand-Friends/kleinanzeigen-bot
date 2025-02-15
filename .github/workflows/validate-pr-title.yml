@@ -1,0 +1,47 @@
+# https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
+name: "Validate PR Title"
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+jobs:
+  build:
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Validate semantic PR title"
+        uses: amannn/action-semantic-pull-request@v5 # https://github.com/amannn/action-semantic-pull-request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # https://mazer.dev/en/git/best-practices/git-semantic-commits/
+          # https://github.com/commitizen/conventional-commit-types/blob/master/index.json
+          types: |
+            build
+            ci
+            chore
+            docs
+            fix
+            enh
+            feat
+            refact
+            revert
+            perf
+            style
+            test
+          scopes: |
+            deps
+            i18n
+          requireScope: false
+
+      - name: "Label PR"
+        uses: srvaroa/labeler@v1.13.0 # https://github.com/srvaroa/labeler
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"

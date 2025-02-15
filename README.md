@@ -1,6 +1,6 @@
 # kleinanzeigen-bot
 
-[![Build Status](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/workflows/Build/badge.svg "GitHub Actions")](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/actions?query=workflow%3A%22Build%22)
+[![Build Status](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/actions/workflows/build.yml/badge.svg)](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/actions/workflows/build.yml)
 [![License](https://img.shields.io/github/license/Second-Hand-Friends/kleinanzeigen-bot.svg?color=blue)](LICENSE.txt)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.1%20adopted-ff69b4.svg)](CODE_OF_CONDUCT.md)
 [![Maintainability](https://api.codeclimate.com/v1/badges/77b4ed9cc0dd8cfe373c/maintainability)](https://codeclimate.com/github/Second-Hand-Friends/kleinanzeigen-bot/maintainability)
@@ -236,9 +236,10 @@ ad_files:
 ad_defaults:
   active: true
   type: OFFER # one of: OFFER, WANTED
-  description:
-    prefix: ""
-    suffix: ""
+
+  description_prefix: ""
+  description_suffix: ""
+
   price_type: NEGOTIABLE # one of: FIXED, NEGOTIABLE, GIVE_AWAY, NOT_APPLICABLE
   shipping_type: SHIPPING # one of: PICKUP, SHIPPING, NOT_APPLICABLE
   shipping_costs: # e.g. 2.95
@@ -297,6 +298,9 @@ type: # one of: OFFER, WANTED (default: OFFER)
 title:
 description: # can be multiline, see syntax here https://yaml-multiline.info/
 
+description_prefix: # optional prefix to be added to the description overriding the default prefix
+description_suffix: # optional suffix to be added to the description overriding the default suffix
+
 # built-in category name as specified in https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml
 # or custom category name as specified in config.yaml
 # or category ID (e.g. 161/278)
@@ -348,7 +352,35 @@ updated_on: # ISO timestamp when the ad was last published
 content_hash: # hash of the ad content, used to detect changes
 ```
 
-### <a name="existing-browser"></a>3) Using an existing browser window
+### <a name="description-prefix-suffix"></a>3) Description Prefix and Suffix
+
+You can add prefix and suffix text to your ad descriptions in two ways:
+
+#### New Format (Recommended)
+
+In your config.yaml file you can specify a `description_prefix` and `description_suffix` under the `ad_defaults` section.
+
+```yaml
+ad_defaults:
+  description_prefix: "Prefix text"
+  description_suffix: "Suffix text"
+```
+
+#### Legacy Format
+
+In your ad configuration file you can specify a `description_prefix` and `description_suffix` under the `description` section.
+
+```yaml
+description:
+  prefix: "Prefix text"
+  suffix: "Suffix text"
+```
+
+#### Precedence
+
+The new format has precedence over the legacy format. If you specify both the new and the legacy format in your config, the new format will be used. We recommend using the new format as it is more flexible and easier to manage.
+
+### <a name="existing-browser"></a>4) Using an existing browser window
 
 By default a new browser process will be launched. To reuse a manually launched browser window/process follow these steps:
 

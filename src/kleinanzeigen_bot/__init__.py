@@ -3,14 +3,13 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import asyncio, atexit, copy, importlib.metadata, json, logging, os, re, signal, shutil, sys, textwrap, time
+import asyncio, atexit, copy, importlib.metadata, json, os, re, signal, shutil, sys, textwrap, time
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 import urllib.request as urllib_request
 from collections.abc import Iterable
 from datetime import datetime
 from gettext import gettext as _
-from logging.handlers import RotatingFileHandler
 from typing import Any, Final
 
 import certifi, colorama, nodriver
@@ -18,7 +17,7 @@ from ruamel.yaml import YAML
 from wcmatch import glob
 
 from . import extract, resources
-from .ads import calculate_content_hash
+from .ads import calculate_content_hash, get_description_affixes
 from .utils import dicts, error_handlers, loggers, misc
 from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, set_current_locale, pluralize
@@ -28,8 +27,8 @@ from ._version import __version__
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
-LOG:Final[logging.Logger] = loggers.get_logger(__name__)
-LOG.setLevel(logging.INFO)
+LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
+LOG.setLevel(loggers.INFO)
 
 colorama.just_fix_windows_console()
 
@@ -51,7 +50,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         self.categories:dict[str, str] = {}
 
-        self.file_log:logging.FileHandler | None = None
+        self.file_log:loggers.LogFileHandle | None = None
         log_file_basename = is_frozen() and os.path.splitext(os.path.basename(sys.executable))[0] or self.__module__
         self.log_file_path:str | None = abspath(f"{log_file_basename}.log")
 
@@ -61,9 +60,8 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     def __del__(self) -> None:
         if self.file_log:
-            self.file_log.flush()
-            loggers.LOG_ROOT.removeHandler(self.file_log)
             self.file_log.close()
+            self.file_log = None
         self.close_browser_session()
 
     def get_version(self) -> str:
@@ -239,8 +237,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                 case "--lang":
                     set_current_locale(Locale.of(value))
                 case "-v" | "--verbose":
-                    LOG.setLevel(logging.DEBUG)
-                    logging.getLogger("nodriver").setLevel(logging.INFO)
+                    LOG.setLevel(loggers.DEBUG)
+                    loggers.get_logger("nodriver").setLevel(loggers.INFO)
 
         match len(arguments):
             case 0:
@@ -258,10 +256,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             return
 
         LOG.info("Logging to [%s]...", self.log_file_path)
-        self.file_log = RotatingFileHandler(filename = self.log_file_path, maxBytes = 10 * 1024 * 1024, backupCount = 10, encoding = "utf-8")
-        self.file_log.setLevel(logging.DEBUG)
-        self.file_log.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
-        loggers.LOG_ROOT.addHandler(self.file_log)
+        self.file_log = loggers.configure_file_logging(self.log_file_path)
 
         LOG.info("App version: %s", self.get_version())
         LOG.info("Python version: %s", sys.version)
@@ -323,11 +318,6 @@ class KleinanzeigenBot(WebScrapingMixin):
         if not ad_files:
             return []
 
-        description_config = {
-            "prefix": self.config["ad_defaults"]["description"]["prefix"] or "",
-            "suffix": self.config["ad_defaults"]["description"]["suffix"] or ""
-        }
-
         ids = []
         use_specific_ads = False
         if re.compile(r'\d+[,\d+]*').search(self.ads_selector):
@@ -361,10 +351,18 @@ class KleinanzeigenBot(WebScrapingMixin):
                     if not self.__check_ad_republication(ad_cfg, ad_cfg_orig, ad_file_relative):
                         continue
 
-            ad_cfg["description"] = description_config["prefix"] + (ad_cfg["description"] or "") + description_config["suffix"]
+            # Get prefix/suffix from ad config if present, otherwise use defaults
+            prefix = ad_cfg.get("prefix", self.config["ad_defaults"]["description"]["prefix"] or "")
+            suffix = ad_cfg.get("suffix", self.config["ad_defaults"]["description"]["suffix"] or "")
+
+            # Combine description parts
+            ad_cfg["description"] = prefix + (ad_cfg["description"] or "") + suffix
             ad_cfg["description"] = ad_cfg["description"].replace("@", "(at)")
-            ensure(len(ad_cfg["description"]) <= 4000, f"""Length of ad description including prefix and suffix exceeds 4000 chars. Description length: {
-                   len(ad_cfg['description'])} chars. @ {ad_file}""")
+
+            # Validate total length
+            ensure(len(ad_cfg["description"]) <= 4000,
+                   f"""Length of ad description including prefix and suffix exceeds 4000 chars. Description length: {
+                   len(ad_cfg["description"])} chars. @ {ad_file}.""")
 
             # pylint: disable=cell-var-from-loop
             def assert_one_of(path:str, allowed:Iterable[str]) -> None:
@@ -611,7 +609,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         LOG.info("Publishing ad '%s'...", ad_cfg["title"])
 
-        if LOG.isEnabledFor(logging.DEBUG):
+        if loggers.is_debug(LOG):
             LOG.debug(" -> effective ad meta:")
             YAML().dump(ad_cfg, sys.stdout)
 
@@ -646,28 +644,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                     await self.web_select(By.XPATH, "//select[contains(@id, '.versand_s')]", shipping_value)
                 except TimeoutError:
                     LOG.warning("Failed to set shipping attribute for type '%s'!", ad_cfg['shipping_type'])
-        elif ad_cfg["shipping_type"] == "PICKUP":
-            try:
-                await self.web_click(By.XPATH,
-                    '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/../input[@type="radio"]')
-            except TimeoutError as ex:
-                LOG.debug(ex, exc_info = True)
-        elif ad_cfg["shipping_options"]:
-            await self.web_click(By.XPATH, '//*[contains(@class, "ShippingSection")]//*//button[contains(@class, "SelectionButton")]')
-            await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
-            await self.__set_shipping_options(ad_cfg)
         else:
-            try:
-                await self.web_click(By.XPATH,
-                                     '//*[contains(@class, "ShippingSection")]//*//button[contains(@class, "SelectionButton")]')
-                await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
-                await self.web_click(By.CSS_SELECTOR, '[class*="CarrierOption--Main"]')
-                if ad_cfg["shipping_costs"]:
-                    await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]', str.replace(ad_cfg["shipping_costs"], ".", ",")
-                    )
-                await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
-            except TimeoutError as ex:
-                LOG.debug(ex, exc_info = True)
+            await self.__set_shipping(ad_cfg)
 
         #############################
         # set price
@@ -698,7 +676,8 @@ class KleinanzeigenBot(WebScrapingMixin):
         #############################
         # set description
         #############################
-        await self.web_execute("document.querySelector('#pstad-descrptn').value = `" + ad_cfg["description"].replace("`", "'") + "`")
+        description = self.__get_description_with_affixes(ad_cfg)
+        await self.web_execute("document.querySelector('#pstad-descrptn').value = `" + description.replace("`", "'") + "`")
 
         #############################
         # set contact zipcode
@@ -780,9 +759,12 @@ class KleinanzeigenBot(WebScrapingMixin):
             await self.web_click(By.ID, "imprint-guidance-submit")
 
         # check for no image question
-        image_hint_xpath = '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Ohne Bild veröffentlichen")]]]'
-        if not ad_cfg["images"] and await self.web_check(By.XPATH, image_hint_xpath, Is.DISPLAYED):
-            await self.web_click(By.XPATH, image_hint_xpath)
+        try:
+            image_hint_xpath = '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Ohne Bild veröffentlichen")]]]'
+            if not ad_cfg["images"] and await self.web_check(By.XPATH, image_hint_xpath, Is.DISPLAYED):
+                await self.web_click(By.XPATH, image_hint_xpath)
+        except TimeoutError:
+            pass  # nosec
 
         await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = 20)
 
@@ -790,6 +772,14 @@ class KleinanzeigenBot(WebScrapingMixin):
         current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(self.page.url).query)
         ad_id = int(current_url_query_params.get("adId", [])[0])
         ad_cfg_orig["id"] = ad_id
+
+        # check for approval message
+        try:
+            approval_link_xpath = '//*[contains(@id, "not-completed")]//*//a[contains(@class, "to-my-ads-link")]'
+            if await self.web_check(By.XPATH, approval_link_xpath, Is.DISPLAYED):
+                await self.web_click(By.XPATH, approval_link_xpath)
+        except TimeoutError:
+            pass  # nosec
 
         # Update content hash after successful publication
         # Calculate hash on original config to ensure consistent comparison on restart
@@ -893,6 +883,36 @@ class KleinanzeigenBot(WebScrapingMixin):
                     LOG.debug("Attribute field '%s' is not of kind radio button.", special_attribute_key)
                     raise TimeoutError(f"Failed to set special attribute [{special_attribute_key}]") from ex
                 LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value)
+
+    async def __set_shipping(self, ad_cfg: dict[str, Any]) -> None:
+        if ad_cfg["shipping_type"] == "PICKUP":
+            try:
+                await self.web_click(By.XPATH,
+                    '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/../input[@type="radio"]')
+            except TimeoutError as ex:
+                LOG.debug(ex, exc_info = True)
+        elif ad_cfg["shipping_options"]:
+            await self.web_click(By.XPATH, '//*[contains(@class, "ShippingSection")]//*//button[contains(@class, "SelectionButton")]')
+            await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
+            await self.__set_shipping_options(ad_cfg)
+        else:
+            try:
+                special_shipping_selector = '//select[contains(@id, ".versand_s")]'
+                if await self.web_check(By.XPATH, special_shipping_selector, Is.DISPLAYED):
+                    # try to set special attribute selector (then we have a commercial account)
+                    shipping_value = "ja" if ad_cfg["shipping_type"] == "SHIPPING" else "nein"
+                    await self.web_select(By.XPATH, special_shipping_selector, shipping_value)
+                else:
+                    await self.web_click(By.XPATH,
+                                         '//*[contains(@class, "ShippingSection")]//*//button[contains(@class, "SelectionButton")]')
+                    await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
+                    await self.web_click(By.CSS_SELECTOR, '[class*="CarrierOption--Main"]')
+                    if ad_cfg["shipping_costs"]:
+                        await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]', str.replace(ad_cfg["shipping_costs"], ".", ",")
+                        )
+                    await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
+            except TimeoutError as ex:
+                LOG.debug(ex, exc_info = True)
 
     async def __set_shipping_options(self, ad_cfg: dict[str, Any]) -> None:
         shipping_options_mapping = {
@@ -1034,10 +1054,64 @@ class KleinanzeigenBot(WebScrapingMixin):
                 else:
                     LOG.error('The page with the id %d does not exist!', ad_id)
 
+    def __get_description_with_affixes(self, ad_cfg: dict[str, Any]) -> str:
+        """Get the complete description with prefix and suffix applied.
+
+        Precedence (highest to lowest):
+        1. Direct ad-level affixes (description_prefix/suffix)
+        2. Legacy nested ad-level affixes (description.prefix/suffix)
+        3. Global flattened affixes (ad_defaults.description_prefix/suffix)
+        4. Legacy global nested affixes (ad_defaults.description.prefix/suffix)
+
+        Args:
+            ad_cfg: The ad configuration dictionary
+
+        Returns:
+            The complete description with prefix and suffix applied
+        """
+        # Get the main description text
+        description_text = ""
+        if isinstance(ad_cfg.get("description"), dict):
+            description_text = ad_cfg["description"].get("text", "")
+        elif isinstance(ad_cfg.get("description"), str):
+            description_text = ad_cfg["description"]
+
+        # Get prefix with precedence
+        prefix = (
+            # 1. Direct ad-level prefix
+            ad_cfg.get("description_prefix") if ad_cfg.get("description_prefix") is not None
+            # 2. Legacy nested ad-level prefix
+            else dicts.safe_get(ad_cfg, "description", "prefix")
+            if dicts.safe_get(ad_cfg, "description", "prefix") is not None
+            # 3. Global prefix from config
+            else get_description_affixes(self.config, prefix=True)
+        )
+
+        # Get suffix with precedence
+        suffix = (
+            # 1. Direct ad-level suffix
+            ad_cfg.get("description_suffix") if ad_cfg.get("description_suffix") is not None
+            # 2. Legacy nested ad-level suffix
+            else dicts.safe_get(ad_cfg, "description", "suffix")
+            if dicts.safe_get(ad_cfg, "description", "suffix") is not None
+            # 3. Global suffix from config
+            else get_description_affixes(self.config, prefix=False)
+        )
+
+        # Combine the parts
+        final_description = str(prefix) + str(description_text) + str(suffix)
+
+        # Validate length
+        ensure(len(final_description) <= 4000,
+               f"Length of ad description including prefix and suffix exceeds 4000 chars. Description length: {len(final_description)} chars.")
+
+        return final_description
 
 #############################
 # main entry point
 #############################
+
+
 def main(args:list[str]) -> None:
     if "version" not in args:
         print(textwrap.dedent(r"""
