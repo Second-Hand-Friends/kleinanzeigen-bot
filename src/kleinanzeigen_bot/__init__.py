@@ -351,13 +351,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                     if not self.__check_ad_republication(ad_cfg, ad_cfg_orig, ad_file_relative):
                         continue
 
-            # Get prefix/suffix from ad config if present, otherwise use defaults
-            prefix = ad_cfg.get("prefix", self.config["ad_defaults"]["description"]["prefix"] or "")
-            suffix = ad_cfg.get("suffix", self.config["ad_defaults"]["description"]["suffix"] or "")
-
-            # Combine description parts
-            ad_cfg["description"] = prefix + (ad_cfg["description"] or "") + suffix
-            ad_cfg["description"] = ad_cfg["description"].replace("@", "(at)")
+            # Get description with prefix/suffix from ad config if present, otherwise use defaults
+            ad_cfg["description"] = self.__get_description_with_affixes(ad_cfg)
 
             # Validate total length
             ensure(len(ad_cfg["description"]) <= 4000,
@@ -1098,8 +1093,9 @@ class KleinanzeigenBot(WebScrapingMixin):
             else get_description_affixes(self.config, prefix=False)
         )
 
-        # Combine the parts
+        # Combine the parts and replace @ with (at)
         final_description = str(prefix) + str(description_text) + str(suffix)
+        final_description = final_description.replace("@", "(at)")
 
         # Validate length
         ensure(len(final_description) <= 4000,
