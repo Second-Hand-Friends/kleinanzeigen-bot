@@ -5,7 +5,6 @@
 name: Post coverage comment
 
 on:
-  workflow_dispatch:
   workflow_run:
     workflows: ["Build"]
     types:
@@ -28,19 +27,6 @@ jobs:
       # artifact that contains the comment to be published
       actions: read
     steps:
-      - name: Debug workflow trigger
-        env:
-          GITHUB_CONTEXT: ${{ toJSON(github) }}
-          WORKFLOW_RUN_CONTEXT: ${{ toJSON(github.event.workflow_run) }}
-        run: |
-          echo "Full GitHub context:"
-          echo "$GITHUB_CONTEXT"
-          echo "Workflow run context:"
-          echo "$WORKFLOW_RUN_CONTEXT"
-          echo "Event name: ${{ github.event.workflow_run.event }}"
-          echo "Workflow name: ${{ github.event.workflow_run.name }}"
-          echo "Conclusion: ${{ github.event.workflow_run.conclusion }}"
-
       # DO NOT run actions/checkout here, for security reasons
       # For details, refer to https://securitylab.github.com/research/github-actions-preventing-pwn-requests/
       - name: Post comment
