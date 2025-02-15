@@ -1,14 +1,15 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot
-#
-# .github/workflows/coverage.yml
+
 name: Post coverage comment
 
 on:
+  workflow_dispatch:
   workflow_run:
-    workflows: [Build]
-    types: [completed]
+    workflows: ["Build"]
+    types:
+      - completed
 
 jobs:
   coverage:
