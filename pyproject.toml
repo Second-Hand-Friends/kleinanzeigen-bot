@@ -266,3 +266,7 @@ filterwarnings = [
   "ignore:Exception ignored in:pytest.PytestUnraisableExceptionWarning",
   "ignore::DeprecationWarning"
 ]
+
+[tool.coverage.run]
+branch = true
+relative_files = true
