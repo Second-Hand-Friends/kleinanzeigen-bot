@@ -71,6 +71,7 @@ kleinanzeigen_bot/__init__.py:
     "ad": "Anzeige"
     "Skipping publishing callout": "Veröffentlichungsscript überspringen"
     "Interval Reached! Calling comamnd:": "Intervall erreicht! Folgender Befehl wird ausgeführt:"
+    " -> %s": " -> %s"
 
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."

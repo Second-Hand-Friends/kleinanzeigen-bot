@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import asyncio, atexit, copy, importlib.metadata, json, os, re, signal, shutil, sys, textwrap, time, subprocess
+import asyncio, atexit, copy, importlib.metadata, json, os, re, signal, shutil, sys, textwrap, time
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 import urllib.request as urllib_request
@@ -581,11 +581,11 @@ class KleinanzeigenBot(WebScrapingMixin):
 
             count += 1
 
-            if self.config["publishing"]["callout"] is not "":
-                if count % self.config["publishing"]["callout"]["intervall"] == 0:
+            if self.config["publishing"]["callout"] != "":
+                if (count % self.config["publishing"]["callout"]["intervall"] == 0) | self.config["publishing"]["callout"]["intervall"] == 1:
                     LOG.info("Interval Reached! Calling comamnd:")
-                    LOG.info(" -> " + self.config["publishing"]["callout"]["command"])
-                    LOG.info(subprocess.Popen(self.config["publishing"]["callout"]["command"], shell=True, stdout=subprocess.PIPE).stdout.read())
+                    LOG.info(" -> %s", self.config["publishing"]["callout"]["command"])
+                    LOG.info(os.popen(self.config["publishing"]["callout"]["command"]).read())
                     time.sleep(self.config["publishing"]["callout"]["sleep"])
                 else:
                     LOG.info("Skipping publishing callout")
