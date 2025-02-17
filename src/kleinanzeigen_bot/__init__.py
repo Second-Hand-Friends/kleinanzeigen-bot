@@ -1080,6 +1080,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             if dicts.safe_get(ad_cfg, "description", "prefix") is not None
             # 3. Global prefix from config
             else get_description_affixes(self.config, prefix=True)
+            or ""  # Default to empty string if all sources are None
         )
 
         # Get suffix with precedence
@@ -1091,6 +1092,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             if dicts.safe_get(ad_cfg, "description", "suffix") is not None
             # 3. Global suffix from config
             else get_description_affixes(self.config, prefix=False)
+            or ""  # Default to empty string if all sources are None
         )
 
         # Combine the parts and replace @ with (at)

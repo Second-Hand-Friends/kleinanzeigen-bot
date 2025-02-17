@@ -253,9 +253,9 @@ addopts = """
   --ignore=data
   --ignore=dist
   --ignore=src/kleinanzeigen_bot/__main__.py
-  --cov=kleinanzeigen_bot
+  --cov=src/kleinanzeigen_bot
   --cov-report=term-missing
-  """
+"""
 markers = [
   "itest: marks a test as an integration test (i.e. a test with external dependencies)",
   "asyncio: mark test as async"
