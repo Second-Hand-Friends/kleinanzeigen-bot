@@ -29,6 +29,10 @@ categories: {}
 publishing:
   delete_old_ads: "AFTER_PUBLISH" # one of: AFTER_PUBLISH, BEFORE_PUBLISH, NEVER
   delete_old_ads_by_title: true # only works if delete_old_ads is set to BEFORE_PUBLISH
+  callout:
+    intervall: 10 # number of publishings before the command is executed again
+    command: "" # command which is executed e.g. VPN reconnect to get a new IP: "\"C:\Program Files\Windscribe\windscribe-cli.exe\" connect \"De\""
+    sleep: 5 # number of seconds to sleep after the command has been executed
 
 # browser configuration
 browser:

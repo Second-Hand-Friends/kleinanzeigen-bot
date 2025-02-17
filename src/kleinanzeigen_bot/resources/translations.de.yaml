@@ -69,6 +69,8 @@ kleinanzeigen_bot/__init__.py:
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
     "DONE: (Re-)published %s": "FERTIG: %s (erneut) veröffentlicht"
     "ad": "Anzeige"
+    "Skipping publishing callout": "Veröffentlichungsscript überspringen"
+    "Interval Reached! Calling comamnd:": "Intervall erreicht! Folgender Befehl wird ausgeführt:"
 
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
