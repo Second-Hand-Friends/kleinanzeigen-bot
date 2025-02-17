@@ -1065,3 +1065,118 @@ class TestKleinanzeigenBotPrefixSuffix:
 
         assert "Length of ad description including prefix and suffix exceeds 4000 chars" in str(exc_info.value)
         assert "Description length: 4001" in str(exc_info.value)
+
+
+class TestKleinanzeigenBotDescriptionHandling:
+    """Tests for description handling functionality."""
+
+    def test_description_without_main_config_description(self, test_bot: KleinanzeigenBot) -> None:
+        """Test that description works correctly when description is missing from main config."""
+        # Set up config without any description fields
+        test_bot.config = {
+            'ad_defaults': {
+                # No description field at all
+            }
+        }
+
+        # Test with a simple ad config
+        ad_cfg = {
+            "description": "Test Description",
+            "active": True
+        }
+
+        # The description should be returned as-is without any prefix/suffix
+        description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+        assert description == "Test Description"
+
+    def test_description_with_only_new_format_affixes(self, test_bot: KleinanzeigenBot) -> None:
+        """Test that description works with only new format affixes in config."""
+        test_bot.config = {
+            'ad_defaults': {
+                'description_prefix': 'Prefix: ',
+                'description_suffix': ' :Suffix'
+            }
+        }
+
+        ad_cfg = {
+            "description": "Test Description",
+            "active": True
+        }
+
+        description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+        assert description == "Prefix: Test Description :Suffix"
+
+    def test_description_with_mixed_config_formats(self, test_bot: KleinanzeigenBot) -> None:
+        """Test that description works with both old and new format affixes in config."""
+        test_bot.config = {
+            'ad_defaults': {
+                'description_prefix': 'New Prefix: ',
+                'description_suffix': ' :New Suffix',
+                'description': {
+                    'prefix': 'Old Prefix: ',
+                    'suffix': ' :Old Suffix'
+                }
+            }
+        }
+
+        ad_cfg = {
+            "description": "Test Description",
+            "active": True
+        }
+
+        description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+        assert description == "New Prefix: Test Description :New Suffix"
+
+    def test_description_with_ad_level_affixes(self, test_bot: KleinanzeigenBot) -> None:
+        """Test that ad-level affixes take precedence over config affixes."""
+        test_bot.config = {
+            'ad_defaults': {
+                'description_prefix': 'Config Prefix: ',
+                'description_suffix': ' :Config Suffix'
+            }
+        }
+
+        ad_cfg = {
+            "description": "Test Description",
+            "description_prefix": "Ad Prefix: ",
+            "description_suffix": " :Ad Suffix",
+            "active": True
+        }
+
+        description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+        assert description == "Ad Prefix: Test Description :Ad Suffix"
+
+    def test_description_with_none_values(self, test_bot: KleinanzeigenBot) -> None:
+        """Test that None values in affixes are handled correctly."""
+        test_bot.config = {
+            'ad_defaults': {
+                'description_prefix': None,
+                'description_suffix': None,
+                'description': {
+                    'prefix': None,
+                    'suffix': None
+                }
+            }
+        }
+
+        ad_cfg = {
+            "description": "Test Description",
+            "active": True
+        }
+
+        description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+        assert description == "Test Description"
+
+    def test_description_with_email_replacement(self, test_bot: KleinanzeigenBot) -> None:
+        """Test that @ symbols in description are replaced with (at)."""
+        test_bot.config = {
+            'ad_defaults': {}
+        }
+
+        ad_cfg = {
+            "description": "Contact: test@example.com",
+            "active": True
+        }
+
+        description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+        assert description == "Contact: test(at)example.com"
