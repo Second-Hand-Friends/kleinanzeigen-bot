@@ -966,16 +966,13 @@ class KleinanzeigenBot(WebScrapingMixin):
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
 
-            #await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Bestätigen")]]]')
         except TimeoutError as ex:
             LOG.debug(ex, exc_info = True)
-        
         try:
             # Click apply button
             await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Bestätigen")]]]')
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close shipping dialog!")) from ex
-            
     async def __upload_images(self, ad_cfg: dict[str, Any]) -> None:
         LOG.info(" -> found %s", pluralize("image", ad_cfg["images"]))
         image_upload:Element = await self.web_find(By.CSS_SELECTOR, "input[type=file]")
