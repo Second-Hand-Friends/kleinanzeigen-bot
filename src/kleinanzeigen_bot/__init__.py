@@ -887,8 +887,8 @@ class KleinanzeigenBot(WebScrapingMixin):
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg["shipping_options"]:
-            await self.web_click(By.XPATH, '//*[contains(@class, "ShippingSection")]//*//button[contains(@class, "SelectionButton")]')
-            await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
+            await self.web_click(By.XPATH, '//*[contains(@class, "SubSection")]//*//button[contains(@class, "SelectionButton")]')
+            await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal"]')
             await self.__set_shipping_options(ad_cfg)
         else:
             try:
@@ -900,7 +900,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 else:
                     await self.web_click(By.XPATH,
                                          '//*[contains(@class, "ShippingSection")]//*//button[contains(@class, "SelectionButton")]')
-                    await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal--Button"]')
+                    await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal"]')
                     await self.web_click(By.CSS_SELECTOR, '[class*="CarrierOption--Main"]')
                     if ad_cfg["shipping_costs"]:
                         await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]', str.replace(ad_cfg["shipping_costs"], ".", ",")
@@ -966,10 +966,16 @@ class KleinanzeigenBot(WebScrapingMixin):
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
 
-            await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
+            #await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Bestätigen")]]]')
         except TimeoutError as ex:
             LOG.debug(ex, exc_info = True)
-
+        
+        try:
+            # Click apply button
+            await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Bestätigen")]]]')
+        except TimeoutError as ex:
+            raise TimeoutError(_("Unable to close shipping dialog!")) from ex
+            
     async def __upload_images(self, ad_cfg: dict[str, Any]) -> None:
         LOG.info(" -> found %s", pluralize("image", ad_cfg["images"]))
         image_upload:Element = await self.web_find(By.CSS_SELECTOR, "input[type=file]")
