@@ -140,6 +140,8 @@ kleinanzeigen_bot/__init__.py:
   fill_login_data_and_send:
     "Logging in as [%s]...": "Anmeldung als [%s]..."
 
+  __set_shipping_options:
+    "Unable to close shipping dialog!": "Versanddialog konnte nicht geschlossen werden!"
 
 #################################################
 kleinanzeigen_bot/extract.py:
