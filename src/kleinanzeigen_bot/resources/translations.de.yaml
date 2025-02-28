@@ -24,6 +24,12 @@ kleinanzeigen_bot/__init__.py:
     "App version: %s": "App Version: %s"
     "Python version: %s": "Python Version: %s"
 
+  __check_ad_changed:
+    "Hash comparison for [%s]:": "Hash-Vergleich für [%s]:"
+    "    Stored hash: %s": "    Gespeicherter Hash: %s"
+    "    Current hash: %s": "    Aktueller Hash: %s"
+    "Changes detected in ad [%s], will republish": "Änderungen in Anzeige [%s] erkannt, wird erneut veröffentlicht"
+
   load_ads:
     "Searching for ad config files...": "Suche nach Anzeigendateien..."
     " -> found %s": "-> %s gefunden"
@@ -90,11 +96,8 @@ kleinanzeigen_bot/__init__.py:
     " -> uploading image [%s]": " -> Lade Bild [%s] hoch"
 
   __check_ad_republication:
-    "Hash comparison for [%s]:": "Hash-Vergleich für [%s]:"
-    "    Stored hash: %s": "    Gespeicherter Hash: %s"
-    "    Current hash: %s": "    Aktueller Hash: %s"
-    "Changes detected in ad [%s], will republish": "Änderungen in Anzeige [%s] erkannt, wird neu veröffentlicht"
-    " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days": " -> ÜBERSPRUNGEN: Anzeige [%s] wurde zuletzt vor %d Tagen veröffentlicht. Eine erneute Veröffentlichung ist nur alle %s Tage erforderlich"
+    "Changes detected in ad [%s], will republish": "Änderungen in Anzeige [%s] erkannt, wird erneut veröffentlicht"
+    " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days": " -> ÜBERSPRUNGEN: Anzeige [%s] wurde zuletzt vor %d Tagen veröffentlicht. Erneute Veröffentlichung ist erst nach %s Tagen erforderlich"
 
   __set_special_attributes:
     "Found %i special attributes": "%i spezielle Attribute gefunden"
