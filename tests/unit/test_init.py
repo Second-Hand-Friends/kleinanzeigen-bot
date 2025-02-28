@@ -199,6 +199,9 @@ class TestKleinanzeigenBotCommandLine:
         (["publish", "--keep-old"], "publish", "due", True),
         (["publish", "--ads=all", "--keep-old"], "publish", "all", True),
         (["download", "--ads=new"], "download", "new", False),
+        (["publish", "--ads=changed"], "publish", "changed", False),
+        (["publish", "--ads=changed,due"], "publish", "changed,due", False),
+        (["publish", "--ads=changed,new"], "publish", "changed,new", False),
         (["version"], "version", "due", False),
     ])
     def test_parse_args_handles_valid_arguments(
@@ -1180,3 +1183,113 @@ class TestKleinanzeigenBotDescriptionHandling:
 
         description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
         assert description == "Contact: test(at)example.com"
+
+
+class TestKleinanzeigenBotChangedAds:
+    """Tests for the 'changed' ads selector functionality."""
+
+    def test_load_ads_with_changed_selector(self, test_bot: KleinanzeigenBot, base_ad_config: dict[str, Any]) -> None:
+        """Test that only changed ads are loaded when using the 'changed' selector."""
+        # Set up the bot with the 'changed' selector
+        test_bot.ads_selector = "changed"
+        test_bot.config["ad_defaults"] = {
+            "description": {
+                "prefix": "",
+                "suffix": ""
+            }
+        }
+
+        # Create a changed ad
+        changed_ad = create_ad_config(
+            base_ad_config,
+            id="12345",
+            title="Changed Ad",
+            updated_on="2024-01-01T00:00:00",
+            created_on="2024-01-01T00:00:00",
+            active=True
+        )
+
+        # Calculate hash for changed_ad and add it to the config
+        # Then modify the ad to simulate a change
+        changed_hash = calculate_content_hash(changed_ad)
+        changed_ad["content_hash"] = changed_hash
+        # Now modify the ad to make it "changed"
+        changed_ad["title"] = "Changed Ad - Modified"
+
+        # Create temporary directory and file
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            ad_dir = temp_path / "ads"
+            ad_dir.mkdir()
+
+            # Write the ad file
+            yaml = YAML()
+            changed_file = ad_dir / "changed_ad.yaml"
+            with open(changed_file, "w", encoding="utf-8") as f:
+                yaml.dump(changed_ad, f)
+
+            # Set config file path and use relative path for ad_files
+            test_bot.config_file_path = str(temp_path / "config.yaml")
+            test_bot.config['ad_files'] = ["ads/*.yaml"]
+
+            # Mock the loading of the ad configuration
+            with patch('kleinanzeigen_bot.utils.dicts.load_dict', side_effect=[
+                changed_ad,  # First call returns the changed ad
+                {}          # Second call for ad_fields.yaml
+            ]):
+                ads_to_publish = test_bot.load_ads()
+
+                # The changed ad should be loaded
+                assert len(ads_to_publish) == 1
+                assert ads_to_publish[0][1]["title"] == "Changed Ad - Modified"
+
+    def test_load_ads_with_due_selector_includes_all_due_ads(self, test_bot: KleinanzeigenBot, base_ad_config: dict[str, Any]) -> None:
+        """Test that 'due' selector includes all ads that are due for republication, regardless of changes."""
+        # Set up the bot with the 'due' selector
+        test_bot.ads_selector = "due"
+        test_bot.config["ad_defaults"] = {
+            "description": {
+                "prefix": "",
+                "suffix": ""
+            }
+        }
+
+        # Create a changed ad that is also due for republication
+        current_time = datetime.utcnow()
+        old_date = (current_time - timedelta(days=10)).isoformat()  # Past republication interval
+
+        changed_ad = create_ad_config(
+            base_ad_config,
+            id="12345",
+            title="Changed Ad",
+            updated_on=old_date,
+            created_on=old_date,
+            republication_interval=7,  # Due for republication after 7 days
+            active=True
+        )
+
+        # Create temporary directory and file
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            ad_dir = temp_path / "ads"
+            ad_dir.mkdir()
+
+            # Write the ad file
+            yaml = YAML()
+            ad_file = ad_dir / "changed_ad.yaml"
+            with open(ad_file, "w", encoding="utf-8") as f:
+                yaml.dump(changed_ad, f)
+
+            # Set config file path and use relative path for ad_files
+            test_bot.config_file_path = str(temp_path / "config.yaml")
+            test_bot.config['ad_files'] = ["ads/*.yaml"]
+
+            # Mock the loading of the ad configuration
+            with patch('kleinanzeigen_bot.utils.dicts.load_dict', side_effect=[
+                changed_ad,  # First call returns the changed ad
+                {}          # Second call for ad_fields.yaml
+            ]):
+                ads_to_publish = test_bot.load_ads()
+
+                # The changed ad should be loaded with 'due' selector because it's due for republication
+                assert len(ads_to_publish) == 1

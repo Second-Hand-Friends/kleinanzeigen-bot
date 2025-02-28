@@ -86,7 +86,9 @@ class KleinanzeigenBot(WebScrapingMixin):
                     self.configure_file_logging()
                     self.load_config()
 
-                    if not (self.ads_selector in {'all', 'new', 'due'} or re.compile(r'\d+[,\d+]*').search(self.ads_selector)):
+                    if not (self.ads_selector in {'all', 'new', 'due', 'changed'} or
+                            any(selector in self.ads_selector.split(',') for selector in ('all', 'new', 'due', 'changed')) or
+                            re.compile(r'\d+[,\d+]*').search(self.ads_selector)):
                         LOG.warning('You provided no ads selector. Defaulting to "due".')
                         self.ads_selector = 'due'
 
@@ -148,12 +150,14 @@ class KleinanzeigenBot(WebScrapingMixin):
               version  - Zeigt die Version der Anwendung an
 
             Optionen:
-              --ads=all|due|new|<id(s)> (publish) - Gibt an, welche Anzeigen (erneut) veröffentlicht werden sollen (STANDARD: due)
+              --ads=all|due|new|changed|<id(s)> (publish) - Gibt an, welche Anzeigen (erneut) veröffentlicht werden sollen (STANDARD: due)
                     Mögliche Werte:
                     * all: Veröffentlicht alle Anzeigen erneut, ignoriert republication_interval
                     * due: Veröffentlicht alle neuen Anzeigen und erneut entsprechend dem republication_interval
                     * new: Veröffentlicht nur neue Anzeigen (d.h. Anzeigen ohne ID in der Konfigurationsdatei)
+                    * changed: Veröffentlicht nur Anzeigen, die seit der letzten Veröffentlichung geändert wurden
                     * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs an, die veröffentlicht werden sollen, z. B. "--ads=1,2,3", ignoriert republication_interval
+                    * Kombinationen: Sie können mehrere Selektoren mit Kommas kombinieren, z. B. "--ads=changed,due" um sowohl geänderte als auch fällige Anzeigen zu veröffentlichen
               --ads=all|new|<id(s)> (download) - Gibt an, welche Anzeigen heruntergeladen werden sollen (STANDARD: new)
                     Mögliche Werte:
                     * all: Lädt alle Anzeigen aus Ihrem Profil herunter
@@ -180,12 +184,14 @@ class KleinanzeigenBot(WebScrapingMixin):
               version  - displays the application version
 
             Options:
-              --ads=all|due|new|<id(s)> (publish) - specifies which ads to (re-)publish (DEFAULT: due)
+              --ads=all|due|new|changed|<id(s)> (publish) - specifies which ads to (re-)publish (DEFAULT: due)
                     Possible values:
                     * all: (re-)publish all ads ignoring republication_interval
                     * due: publish all new ads and republish ads according the republication_interval
                     * new: only publish new ads (i.e. ads that have no id in the config file)
+                    * changed: only publish ads that have been modified since last publication
                     * <id(s)>: provide one or several ads by ID to (re-)publish, like e.g. "--ads=1,2,3" ignoring republication_interval
+                    * Combinations: You can combine multiple selectors with commas, e.g. "--ads=changed,due" to publish both changed and due ads
               --ads=all|new|<id(s)> (download) - specifies which ads to download (DEFAULT: new)
                     Possible values:
                     * all: downloads all ads from your profile
@@ -261,10 +267,12 @@ class KleinanzeigenBot(WebScrapingMixin):
         LOG.info("App version: %s", self.get_version())
         LOG.info("Python version: %s", sys.version)
 
-    def __check_ad_republication(self, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any], ad_file_relative: str) -> bool:
+    def __check_ad_republication(self, ad_cfg: dict[str, Any], ad_file_relative: str) -> bool:
         """
-        Check if an ad needs to be republished based on changes and republication interval.
-        Returns True if the ad should be republished.
+        Check if an ad needs to be republished based on republication interval.
+        Returns True if the ad should be republished based on the interval.
+
+        Note: This method no longer checks for content changes. Use __check_ad_changed for that.
         """
         if ad_cfg["updated_on"]:
             last_updated_on = parse_datetime(ad_cfg["updated_on"])
@@ -276,34 +284,43 @@ class KleinanzeigenBot(WebScrapingMixin):
         if not last_updated_on:
             return True
 
-        # Check for changes first
-        if ad_cfg["id"]:
-            # Calculate hash on original config to match what was stored
-            current_hash = calculate_content_hash(ad_cfg_orig)
-            stored_hash = ad_cfg_orig.get("content_hash")
-
-            LOG.debug("Hash comparison for [%s]:", ad_file_relative)
-            LOG.debug("    Stored hash: %s", stored_hash)
-            LOG.debug("    Current hash: %s", current_hash)
-
-            if stored_hash and current_hash == stored_hash:
-                # No changes - check republication interval
-                ad_age = datetime.utcnow() - last_updated_on
-                if ad_age.days <= ad_cfg["republication_interval"]:
-                    LOG.info(
-                        " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
-                        ad_file_relative,
-                        ad_age.days,
-                        ad_cfg["republication_interval"]
-                    )
-                    return False
-            else:
-                LOG.info("Changes detected in ad [%s], will republish", ad_file_relative)
-                # Update hash in original configuration
-                ad_cfg_orig["content_hash"] = current_hash
-                return True
+        # Check republication interval
+        ad_age = datetime.utcnow() - last_updated_on
+        if ad_age.days <= ad_cfg["republication_interval"]:
+            LOG.info(
+                " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
+                ad_file_relative,
+                ad_age.days,
+                ad_cfg["republication_interval"]
+            )
+            return False
 
         return True
+
+    def __check_ad_changed(self, ad_cfg: dict[str, Any], ad_cfg_orig: dict[str, Any], ad_file_relative: str) -> bool:
+        """
+        Check if an ad has been changed since last publication.
+        Returns True if the ad has been changed.
+        """
+        if not ad_cfg["id"]:
+            # New ads are not considered "changed"
+            return False
+
+        # Calculate hash on original config to match what was stored
+        current_hash = calculate_content_hash(ad_cfg_orig)
+        stored_hash = ad_cfg_orig.get("content_hash")
+
+        LOG.debug("Hash comparison for [%s]:", ad_file_relative)
+        LOG.debug("    Stored hash: %s", stored_hash)
+        LOG.debug("    Current hash: %s", current_hash)
+
+        if stored_hash and current_hash != stored_hash:
+            LOG.info("Changes detected in ad [%s], will republish", ad_file_relative)
+            # Update hash in original configuration
+            ad_cfg_orig["content_hash"] = current_hash
+            return True
+
+        return False
 
     def load_ads(self, *, ignore_inactive:bool = True, check_id:bool = True) -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
         LOG.info("Searching for ad config files...")
@@ -320,6 +337,8 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         ids = []
         use_specific_ads = False
+        selectors = self.ads_selector.split(',')
+
         if re.compile(r'\d+[,\d+]*').search(self.ads_selector):
             ids = [int(n) for n in self.ads_selector.split(',')]
             use_specific_ads = True
@@ -343,13 +362,31 @@ class KleinanzeigenBot(WebScrapingMixin):
                     LOG.info(" -> SKIPPED: ad [%s] is not in list of given ids.", ad_file_relative)
                     continue
             else:
-                if self.ads_selector == "new" and ad_cfg["id"] and check_id:
-                    LOG.info(" -> SKIPPED: ad [%s] is not new. already has an id assigned.", ad_file_relative)
-                    continue
+                # Check if ad should be included based on selectors
+                should_include = False
 
-                if self.ads_selector == "due":
-                    if not self.__check_ad_republication(ad_cfg, ad_cfg_orig, ad_file_relative):
-                        continue
+                # Check for 'changed' selector
+                if "changed" in selectors and self.__check_ad_changed(ad_cfg, ad_cfg_orig, ad_file_relative):
+                    should_include = True
+
+                # Check for 'new' selector
+                if "new" in selectors and (not ad_cfg["id"] or not check_id):
+                    should_include = True
+                elif "new" in selectors and ad_cfg["id"] and check_id:
+                    LOG.info(" -> SKIPPED: ad [%s] is not new. already has an id assigned.", ad_file_relative)
+
+                # Check for 'due' selector
+                if "due" in selectors:
+                    # For 'due' selector, check if the ad is due for republication based on interval
+                    if self.__check_ad_republication(ad_cfg, ad_file_relative):
+                        should_include = True
+
+                # Check for 'all' selector (always include)
+                if "all" in selectors:
+                    should_include = True
+
+                if not should_include:
+                    continue
 
             # Get description with prefix/suffix from ad config if present, otherwise use defaults
             ad_cfg["description"] = self.__get_description_with_affixes(ad_cfg)
