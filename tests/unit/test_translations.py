@@ -356,23 +356,23 @@ def test_no_obsolete_translations(lang: str) -> None:
                     continue
                 obsolete_items.append((module, function, trans_message))
 
+    # Fail the test if obsolete translations are found
     if obsolete_items:
-        obsolete_str = f"\nPlease remove the following obsolete translations for language [{lang}]:\n"
-        by_module: defaultdict[str, defaultdict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+        obsolete_str = f"\nObsolete translations found for language [{lang}]:\n"
+
+        # Group by module and function for better readability
+        by_module: defaultdict[str, defaultdict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
+
         for module, function, message in obsolete_items:
-            if module not in by_module:
-                by_module[module] = defaultdict(set)
-            if function not in by_module[module]:
-                by_module[module][function] = set()
-            by_module[module][function].add(message)
+            by_module[module][function].append(message)
 
         for module, functions in sorted(by_module.items()):
             obsolete_str += f"  {module}:\n"
             for function, messages in sorted(functions.items()):
-                if function:
-                    obsolete_str += f"    {function}:\n"
+                obsolete_str += f"    {function}:\n"
                 for message in sorted(messages):
                     obsolete_str += f'      "{message}"\n'
+
         raise AssertionError(obsolete_str)
 
 

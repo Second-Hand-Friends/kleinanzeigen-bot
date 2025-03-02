@@ -19,6 +19,10 @@ kleinanzeigen_bot/__init__.py:
   module:
     "Direct execution not supported. Use 'pdm run app'": "Direkte Ausführung nicht unterstützt. Bitte 'pdm run app' verwenden"
 
+  __del__:
+    "Browser session not properly closed. Use 'await bot.close_browser_session()' explicitly.": "Browser-Sitzung nicht ordnungsgemäß geschlossen. Verwenden Sie explizit 'await bot.close_browser_session()'."
+    "Error closing browser session: %s": "Fehler beim Schließen der Browser-Sitzung: %s"
+
   configure_file_logging:
     "Logging to [%s]...": "Protokollierung in [%s]..."
     "App version: %s": "App Version: %s"
@@ -136,12 +140,16 @@ kleinanzeigen_bot/__init__.py:
     "Unknown command: %s": "Unbekannter Befehl: %s"
     "%s found.": "%s gefunden."
     " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
+    "Error closing browser session: %s": "Fehler beim Schließen der Browser-Sitzung: %s"
 
   fill_login_data_and_send:
     "Logging in as [%s]...": "Anmeldung als [%s]..."
 
   __set_shipping_options:
     "Unable to close shipping dialog!": "Versanddialog konnte nicht geschlossen werden!"
+
+  cleanup_browser_session:
+    "Error closing browser session: %s": "Fehler beim Schließen der Browser-Sitzung: %s"
 
 #################################################
 kleinanzeigen_bot/extract.py:
@@ -158,20 +166,21 @@ kleinanzeigen_bot/extract.py:
     "No image area found. Continuing without downloading images.": "Keine Bildbereiche gefunden. Fahre ohne Bilder-Download fort."
 
   extract_ad_id_from_ad_url:
-    "The ad ID could not be extracted from the given URL %s": "Die Anzeigen-ID konnte nicht aus der angegebenen URL extrahiert werden: %s"
+    "The ad ID could not be extracted from a None URL": "Die Anzeigen-ID konnte nicht aus einer None-URL extrahiert werden"
+    "The ad ID could not be extracted from the given URL %s": "Die Anzeigen-ID konnte nicht aus der angegebenen URL %s extrahiert werden"
 
   extract_own_ads_urls:
-    "There are currently no ads on your profile!": "Derzeit gibt es keine Anzeigen auf deinem Profil!"
-    "It looks like you have many ads!": "Es scheint viele Anzeigen zu geben!"
-    "It looks like all your ads fit on one overview page.": "Alle Anzeigen scheinen auf eine Übersichtsseite zu passen."
-    "Last ad overview page explored.": "Letzte Anzeigenübersichtsseite gesichtet."
+    "There are currently no ads on your profile!": "Es gibt derzeit keine Anzeigen in deinem Profil!"
+    "It looks like you have many ads!": "Es sieht so aus, als hättest du viele Anzeigen!"
+    "It looks like all your ads fit on one overview page.": "Es sieht so aus, als würden alle deine Anzeigen auf eine Übersichtsseite passen."
+    "Last ad overview page explored.": "Letzte Übersichtsseite erkundet."
 
   naviagte_to_ad_page:
     "There is no ad under the given ID.": "Es gibt keine Anzeige unter der angegebenen ID."
     "A popup appeared!": "Ein Popup ist erschienen!"
 
   _extract_ad_page_info:
-    "Extracting information from ad with title \"%s\"": "Extrahiere Informationen aus der Anzeige mit dem Titel \"%s\""
+    "Extracting information from ad with title \"%s\"": "Extrahiere Informationen aus Anzeige mit Titel \"%s\""
     "NEXT button in image gallery somehow missing, aborting image fetching.": "WEITER-Button in der Bildergalerie fehlt, breche Bildabruf ab."
     "No image area found. Continuing without downloading images.": "Keine Bildbereiche gefunden. Fahre ohne Bilder-Download fort."
 
@@ -191,10 +200,12 @@ kleinanzeigen_bot/utils/error_handlers.py:
 #################################################
   on_sigint:
     "Aborted on user request.": "Auf Benutzeranfrage abgebrochen."
+    "Error while handling SIGINT: %s": "Fehler bei der Behandlung von SIGINT: %s"
   handle_error:
     "%s: %s": "%s: %s"
   on_exception:
     "%s: %s": "%s: %s"
+    "Error while handling exception: %s": "Fehler bei der Behandlung einer Ausnahme: %s"
 
 #################################################
 kleinanzeigen_bot/utils/dicts.py:

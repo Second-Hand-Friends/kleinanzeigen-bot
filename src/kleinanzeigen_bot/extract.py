@@ -118,6 +118,15 @@ class AdExtractor(WebScrapingMixin):
         :param url: the URL to the ad page
         :return: the ad ID, a (ten-digit) integer number
         """
+        # Handle None values
+        if url is None:
+            LOG.warning('The ad ID could not be extracted from a None URL')
+            return -1
+
+        # Remove query parameters if present
+        if '?' in url:
+            url = url.split('?')[0]
+
         num_part = url.split('/')[-1]  # suffix
         id_part = num_part.split('-')[0]
 
