@@ -84,7 +84,7 @@ compile.cmd = "python -O -m PyInstaller pyinstaller.spec --clean"
 compile.env = {PYTHONHASHSEED = "1", SOURCE_DATE_EPOCH = "0"}  # https://pyinstaller.org/en/stable/advanced-topics.html#creating-a-reproducible-build
 debug   = "python -m pdb -m kleinanzeigen_bot"
 format  = "autopep8 --recursive --in-place src tests --verbose"
-lint = { shell = "errors=0; pylint -v src tests || { echo 'pylint fehlgeschlagen\n'; errors=1; }; autopep8 -v --in-place --recursive src tests || { echo 'autopep8 fehlgeschlagen\n'; errors=1; }; mypy src tests || { echo 'mypy fehlgeschlagen\n'; errors=1; }; exit $errors" }
+lint = {shell = "pylint -v src tests && autopep8 -v --exit-code --recursive --diff src tests && mypy" }
 audit   = "bandit -c pyproject.toml -r src"
 test    = "python -m pytest --capture=tee-sys -v"
 utest   = "python -m pytest --capture=tee-sys -v -m 'not itest'"
