@@ -5,17 +5,12 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 
 Tests for KleinanzeigenBot ad loading, validation, and republication functionality.
 """
-# Standard library imports
+import json, os, re, tempfile
 from datetime import datetime, timedelta
-import json
-import os
 from pathlib import Path
-import re
-import tempfile
-from typing import Any, cast, Type, TYPE_CHECKING
-from unittest.mock import patch, MagicMock, AsyncMock, Mock
+from typing import TYPE_CHECKING, Any, Type, cast
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
-# Third-party imports
 import pytest
 from ruamel.yaml import YAML
 

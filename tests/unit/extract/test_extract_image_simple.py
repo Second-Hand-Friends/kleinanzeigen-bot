@@ -5,8 +5,8 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 
 This module contains simple tests for image extraction in extract.py.
 """
-from typing import Any, Dict, List
 import tempfile
+from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

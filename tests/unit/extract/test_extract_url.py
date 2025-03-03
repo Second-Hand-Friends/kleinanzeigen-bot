@@ -13,7 +13,6 @@ import pytest
 from kleinanzeigen_bot.extract import AdExtractor
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
-
 # Remove global pytestmark to avoid warnings on non-async tests
 # pytestmark = pytest.mark.asyncio
 

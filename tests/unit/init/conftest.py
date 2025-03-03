@@ -7,16 +7,11 @@ This file contains fixtures for the init tests.
 """
 from __future__ import annotations
 
-import os
-import sys
-import types
-import logging
-import functools
-import warnings
-from collections.abc import Callable, Generator, AsyncGenerator
+import functools, logging, os, sys, types, warnings
+from collections.abc import AsyncGenerator, Callable, Generator
 from pathlib import Path
 from typing import Any, TypeVar, cast
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 

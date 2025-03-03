@@ -5,8 +5,8 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 
 Tests for KleinanzeigenBot localization and help text functionality.
 """
-from unittest.mock import patch
 from typing import Protocol
+from unittest.mock import patch
 
 # Use Protocol for KleinanzeigenBot to provide better type hints
 

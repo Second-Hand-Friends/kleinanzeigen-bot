@@ -3,11 +3,10 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import gc
+import gc, logging
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
-from unittest.mock import patch, MagicMock
-import logging
+from typing import TYPE_CHECKING, Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 

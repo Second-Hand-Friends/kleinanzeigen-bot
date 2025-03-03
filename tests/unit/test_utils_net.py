@@ -6,7 +6,7 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 This module contains tests for the net.py utility module.
 """
 import socket
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from kleinanzeigen_bot.utils import net
 

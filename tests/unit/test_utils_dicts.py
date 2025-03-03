@@ -5,11 +5,10 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 
 This module contains tests for the dicts.py utility module.
 """
-import json
+import json, types
 from pathlib import Path
-import types
 from typing import Any, cast
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from ruamel.yaml import YAML

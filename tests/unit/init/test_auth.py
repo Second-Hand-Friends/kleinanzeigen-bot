@@ -6,8 +6,8 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 Tests for authentication functionality in KleinanzeigenBot.
 """
 
+from typing import Any, Awaitable, Callable, Optional
 from unittest.mock import AsyncMock, patch
-from typing import Any, Optional, Callable, Awaitable
 
 import pytest
 

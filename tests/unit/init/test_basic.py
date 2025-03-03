@@ -5,8 +5,8 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 
 Tests for basic KleinanzeigenBot initialization and version functionality.
 """
-from unittest.mock import MagicMock, patch, AsyncMock
 from typing import Any, Callable, Coroutine, cast
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 

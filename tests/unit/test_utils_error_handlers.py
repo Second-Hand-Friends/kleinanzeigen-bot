@@ -6,7 +6,7 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 This module contains tests for the error_handlers.py utility module.
 """
 import signal
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from kleinanzeigen_bot.utils import error_handlers
 

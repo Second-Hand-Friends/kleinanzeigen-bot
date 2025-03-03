@@ -5,15 +5,14 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 """
 import os
 from pathlib import Path
-from typing import Any, Final, cast, Protocol, Dict, List, Awaitable, Optional, TYPE_CHECKING, Type, Union
-from unittest.mock import patch, MagicMock, AsyncMock
+from typing import TYPE_CHECKING, Any, Awaitable, Dict, Final, List, Optional, Protocol, Type, Union, cast
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-import psutil
+import psutil, pytest
 
+from kleinanzeigen_bot.extract import AdExtractor
 from kleinanzeigen_bot.utils import loggers
 from kleinanzeigen_bot.utils.web_scraping_mixin import Browser
-from kleinanzeigen_bot.extract import AdExtractor
 
 # Import the actual KleinanzeigenBot class for type checking
 if TYPE_CHECKING:

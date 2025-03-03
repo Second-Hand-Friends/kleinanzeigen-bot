@@ -16,12 +16,12 @@ The tests work by:
 4. Verifying no unused translations exist
 """
 import ast, os
+from collections import defaultdict
 from dataclasses import dataclass
 from importlib.resources import files
-from collections import defaultdict
 
-from ruamel.yaml import YAML
 import pytest
+from ruamel.yaml import YAML
 
 from kleinanzeigen_bot import resources
 

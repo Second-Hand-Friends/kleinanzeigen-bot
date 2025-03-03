@@ -7,8 +7,8 @@ Tests for KleinanzeigenBot logging functionality.
 """
 import os
 from pathlib import Path
-from unittest.mock import patch
 from typing import Any, Optional
+from unittest.mock import patch
 
 import pytest
 from pytest import FixtureRequest

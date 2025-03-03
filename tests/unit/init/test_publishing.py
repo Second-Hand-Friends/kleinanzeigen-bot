@@ -7,27 +7,22 @@ Tests for KleinanzeigenBot publishing functionality.
 """
 from __future__ import annotations
 
-import os
-import unittest
-from typing import Any, cast, List, Dict, Tuple, Optional, TypeVar, Protocol, Awaitable, TYPE_CHECKING
+import inspect, os, tempfile, unittest
 from collections.abc import Callable
-from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock, PropertyMock, call
 from io import StringIO
-import tempfile
-import inspect
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Awaitable, Dict, List, Optional, Protocol, Tuple, TypeVar, cast
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, call, patch
 
 import pytest
 from pytest import MonkeyPatch
 
-# Import the Protocol instead of the actual class
-from kleinanzeigen_bot.utils.web_scraping_mixin import Is
 from kleinanzeigen_bot.utils import loggers
 from kleinanzeigen_bot.utils.i18n import pluralize
-from kleinanzeigen_bot.utils.web_scraping_mixin import By
 
+# Import the Protocol instead of the actual class
+from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is
 from tests.conftest import KleinanzeigenBotProtocol, create_awaitable_mock
-
 
 # Get the logger
 LOG = loggers.get_logger(__name__)

@@ -5,8 +5,8 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 
 This module contains tests for the web_scraping_mixin.py utility module.
 """
-from unittest.mock import patch, MagicMock, AsyncMock
-from typing import Any, Optional, cast, Literal
+from typing import Any, Literal, Optional, cast
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 

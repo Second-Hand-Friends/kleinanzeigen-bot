@@ -5,7 +5,7 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 
 This module contains simple tests for URL extraction in extract.py.
 """
-from typing import Dict, Optional, Any
+from typing import Any, Dict, Optional
 from unittest.mock import MagicMock, patch
 
 import pytest

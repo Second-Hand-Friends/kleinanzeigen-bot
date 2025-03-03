@@ -5,17 +5,17 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 
 Tests for KleinanzeigenBot command line argument parsing and command execution.
 """
-from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock, call
-from io import StringIO
-from typing import Any, cast, Callable, TYPE_CHECKING
 import sys
+from io import StringIO
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable, cast
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
-from kleinanzeigen_bot.utils import loggers
 from kleinanzeigen_bot._version import __version__
-from tests.conftest import create_awaitable_mock, KleinanzeigenBotProtocol
+from kleinanzeigen_bot.utils import loggers
+from tests.conftest import KleinanzeigenBotProtocol, create_awaitable_mock
 
 # Get the logger
 LOG = loggers.get_logger(__name__)
