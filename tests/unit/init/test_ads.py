@@ -437,12 +437,14 @@ def test_load_ads_with_valid_ads(test_bot: KleinanzeigenBotProtocol, tmp_path: P
 
     # Configure the bot
     test_bot.config = {
-        "ad_files": [str(ads_dir / "*.yaml")],
+        "ads_dir": str(ads_dir),
+        "ad_files": ["**/*.yaml"],  # Use recursive glob pattern
         "ad_defaults": {
             "description_prefix": "",
             "description_suffix": ""
         }
     }
+    test_bot.config_file_path = str(tmp_path / "config.yaml")
 
     # Set force to True to bypass the republication check
     test_bot.force = True
@@ -474,12 +476,14 @@ def test_load_ads_with_invalid_ads(test_bot: KleinanzeigenBotProtocol, tmp_path:
 
     # Configure the bot
     test_bot.config = {
-        "ad_files": [str(ads_dir / "*.yaml")],
+        "ads_dir": str(ads_dir),
+        "ad_files": ["**/*.yaml"],  # Use recursive glob pattern
         "ad_defaults": {
             "description_prefix": "",
             "description_suffix": ""
         }
     }
+    test_bot.config_file_path = str(tmp_path / "config.yaml")
 
     # Load the ads, which should raise an AssertionError
     with pytest.raises(AssertionError) as excinfo:
@@ -519,12 +523,14 @@ def test_load_ads_with_inactive_ads(test_bot: KleinanzeigenBotProtocol, tmp_path
 
     # Configure the bot
     test_bot.config = {
-        "ad_files": [str(ads_dir / "*.yaml")],
+        "ads_dir": str(ads_dir),
+        "ad_files": ["**/*.yaml"],  # Use recursive glob pattern
         "ad_defaults": {
             "description_prefix": "",
             "description_suffix": ""
         }
     }
+    test_bot.config_file_path = str(tmp_path / "config.yaml")
 
     # Load the ads
     ads = test_bot.load_ads()
