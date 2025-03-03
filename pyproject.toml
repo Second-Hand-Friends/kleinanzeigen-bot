@@ -281,7 +281,6 @@ combine_as_imports = true
 combine_star = true
 multi_line_output = 3
 force_grid_wrap = 0
-from_first = true
 ensure_newline_before_comments = true
 no_lines_before = ["LOCALFOLDER"]
 combine_straight_imports = true
