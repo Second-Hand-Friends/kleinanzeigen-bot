@@ -56,6 +56,7 @@ dev = [
   "pylint",
   "mypy",
   "pyright",
+  "isort>=5.13.2",
   # security:
   "bandit",
   # packaging:
@@ -83,8 +84,13 @@ app     = "python -m kleinanzeigen_bot"
 compile.cmd = "python -O -m PyInstaller pyinstaller.spec --clean"
 compile.env = {PYTHONHASHSEED = "1", SOURCE_DATE_EPOCH = "0"}  # https://pyinstaller.org/en/stable/advanced-topics.html#creating-a-reproducible-build
 debug   = "python -m pdb -m kleinanzeigen_bot"
-format  = "autopep8 --recursive --in-place src tests --verbose"
-lint    = {shell = "pylint -v src tests && autopep8 -v --exit-code --recursive --diff src tests && mypy" }
+format  = { shell = "git diff --name-only --diff-filter=ACMR HEAD | grep -E '\\.py$' | xargs -r isort --om --jobs 4 && autopep8 --recursive --in-place src tests --verbose" }
+lint = { shell = """errors=0;
+git diff --name-only --diff-filter=ACMR HEAD | grep -E '\\.py$' | xargs -r isort --om --jobs 4 || { echo 'isort fehlgeschlagen\n'; errors=1; };
+pylint -v src tests || { echo 'pylint fehlgeschlagen\n'; errors=1; };
+autopep8 -v --in-place --recursive src tests || { echo 'autopep8 fehlgeschlagen\n'; errors=1; };
+mypy src tests || { echo 'mypy fehlgeschlagen\n'; errors=1; };
+exit $errors""" }
 audit   = "bandit -c pyproject.toml -r src"
 test    = "python -m pytest --capture=tee-sys -v"
 utest   = "python -m pytest --capture=tee-sys -v -m 'not itest'"
@@ -266,3 +272,16 @@ filterwarnings = [
   "ignore:Exception ignored in:pytest.PytestUnraisableExceptionWarning",
   "ignore::DeprecationWarning"
 ]
+
+# Add isort configuration to format imports
+[tool.isort]
+profile = "black"
+line_length = 160
+combine_as_imports = true
+combine_star = true
+multi_line_output = 3
+force_grid_wrap = 0
+from_first = true
+ensure_newline_before_comments = true
+no_lines_before = ["LOCALFOLDER"]
+combine_straight_imports = true
