@@ -30,6 +30,9 @@ EXCLUDED_MESSAGES: dict[str, set[str]] = {
     "kleinanzeigen_bot/__init__.py": {"############################################"}
 }
 
+# Special modules that are known to be needed even if not in messages_by_file
+KNOWN_NEEDED_MODULES = {'getopt.py'}
+
 # Type aliases for better readability
 ModulePath = str
 FunctionName = str
@@ -273,6 +276,46 @@ def _find_translation(translations: TranslationDict,
     return has_translation
 
 
+def _message_exists_in_code(code_messages: dict[str, MessageDict],
+                          module: str,
+                          function: str,
+                          message: str) -> bool:
+    """
+    Check if a message exists in the code at the given location.
+    This is the reverse of _find_translation - it checks if a translation's message
+    exists in the code messages.
+
+    Args:
+        code_messages: Dictionary of all code messages
+        module: Module path
+        function: Function name
+        message: Message to find in code
+
+    Returns:
+        True if message exists in the code, False otherwise
+    """
+    # Special case for getopt.py
+    if module == 'getopt.py':
+        return bool(code_messages.get(module, {}).get(function, {}).get(message))
+
+    # Remove kleinanzeigen_bot/ prefix if present for code message lookup
+    module_path = module[len('kleinanzeigen_bot/'):] if module.startswith('kleinanzeigen_bot/') else module
+    module_path = f'kleinanzeigen_bot/{module_path}'
+
+    # Check if module exists in code messages
+    module_msgs = code_messages.get(module_path)
+    if not module_msgs:
+        return False
+
+    # Check if function exists in module messages
+    function_msgs = module_msgs.get(function)
+    if not function_msgs:
+        return False
+
+    # Check if message exists in any of the function's message sets
+    return any(message in msg_dict for msg_dict in function_msgs.values())
+
+
 @pytest.mark.parametrize("lang", _get_available_languages())
 def test_all_log_messages_have_translations(lang: str) -> None:
     """
@@ -325,36 +368,33 @@ def test_no_obsolete_translations(lang: str) -> None:
     Test that all translations in each language YAML file are actually used in the code.
 
     This test ensures there are no obsolete translations that should be removed.
+    The translations file has the structure:
+    module:
+        function:
+            "original message": "translated message"
     """
     messages_by_file = _get_all_log_messages()
     translations = _get_translations_for_language(lang)
-
     obsolete_items: list[tuple[str, str, str]] = []
 
     for module, module_trans in translations.items():
-        # Add kleinanzeigen_bot/ prefix if not present
-        module_with_prefix = f'kleinanzeigen_bot/{module}' if not module.startswith('kleinanzeigen_bot/') else module
-
-        # Remove .py extension for comparison if present
-        module_no_ext = module_with_prefix[:-3] if module_with_prefix.endswith('.py') else module_with_prefix
-
-        if module_no_ext not in messages_by_file:
-            # Skip obsolete module check since we know these modules are needed
+        if not isinstance(module_trans, dict):
             continue
 
-        code_messages = messages_by_file[module_no_ext]
+        # Skip known needed modules
+        if module in KNOWN_NEEDED_MODULES:
+            continue
+
         for function, function_trans in module_trans.items():
             if not isinstance(function_trans, dict):
                 continue
 
-            if function not in code_messages and function != 'module':
-                # Skip obsolete function check since we know these functions are needed
-                continue
+            for original_message in function_trans.keys():
+                # Check if this message exists in the code
+                message_exists = _message_exists_in_code(messages_by_file, module, function, original_message)
 
-            for trans_message in function_trans:
-                if function == 'module' or trans_message in code_messages.get(function, {}):
-                    continue
-                obsolete_items.append((module, function, trans_message))
+                if not message_exists:
+                    obsolete_items.append((module, function, original_message))
 
     # Fail the test if obsolete translations are found
     if obsolete_items:
@@ -371,7 +411,7 @@ def test_no_obsolete_translations(lang: str) -> None:
             for function, messages in sorted(functions.items()):
                 obsolete_str += f"    {function}:\n"
                 for message in sorted(messages):
-                    obsolete_str += f'      "{message}"\n'
+                    obsolete_str += f'      "{message}": "{translations[module][function][message]}"\n'
 
         raise AssertionError(obsolete_str)
 
