@@ -4,6 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 
 Tests for KleinanzeigenBot ad loading, validation, and republication functionality.
+These tests focus on the bot's setup and configuration handling of ads.
 """
 import json, os, re, tempfile
 from datetime import datetime, timedelta
