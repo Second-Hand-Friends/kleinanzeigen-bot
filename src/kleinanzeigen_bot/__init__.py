@@ -62,7 +62,17 @@ class KleinanzeigenBot(WebScrapingMixin):
         if self.file_log:
             self.file_log.close()
             self.file_log = None
-        self.close_browser_session()
+
+        # Close browser session if it exists
+        if hasattr(self, 'browser') and self.browser is not None:
+            try:
+                self.close_browser_session()
+            except Exception as e:
+                LOG.warning("Error closing browser session: %s", e)
+
+        # Set attributes to None directly (cleanup)
+        self.page = None  # pyright: ignore
+        self.browser = None  # pyright: ignore
 
     def get_version(self) -> str:
         return __version__
@@ -126,7 +136,11 @@ class KleinanzeigenBot(WebScrapingMixin):
                     LOG.error("Unknown command: %s", self.command)
                     sys.exit(2)
         finally:
-            self.close_browser_session()
+            # Properly await the close_browser_session call
+            try:
+                await self.cleanup_browser_session()
+            except Exception as e:
+                LOG.warning("Error closing browser session: %s", e)
 
     def show_help(self) -> None:
         if is_frozen():
@@ -157,7 +171,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                     * new: Veröffentlicht nur neue Anzeigen (d.h. Anzeigen ohne ID in der Konfigurationsdatei)
                     * changed: Veröffentlicht nur Anzeigen, die seit der letzten Veröffentlichung geändert wurden
                     * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs an, die veröffentlicht werden sollen, z. B. "--ads=1,2,3", ignoriert republication_interval
-                    * Kombinationen: Sie können mehrere Selektoren mit Kommas kombinieren, z. B. "--ads=changed,due" um sowohl geänderte als auch fällige Anzeigen zu veröffentlichen
+                    * Kombinationen: Sie können mehrere Selektoren mit Kommas kombinieren, z. B. "--ads=changed,due"
+                      um sowohl geänderte als auch fällige Anzeigen zu veröffentlichen
               --ads=all|new|<id(s)> (download) - Gibt an, welche Anzeigen heruntergeladen werden sollen (STANDARD: new)
                     Mögliche Werte:
                     * all: Lädt alle Anzeigen aus Ihrem Profil herunter
@@ -401,10 +416,13 @@ class KleinanzeigenBot(WebScrapingMixin):
                 ensure(dicts.safe_get(ad_cfg, *path.split(".")) in allowed, f"-> property [{path}] must be one of: {allowed} @ [{ad_file}]")
 
             def assert_min_len(path:str, minlen:int) -> None:
-                ensure(len(dicts.safe_get(ad_cfg, *path.split("."))) >= minlen, f"-> property [{path}] must be at least {minlen} characters long @ [{ad_file}]")
+                value = dicts.safe_get(ad_cfg, *path.split("."))
+                ensure(value is not None, f"-> property [{path}] not specified @ [{ad_file}]")
+                ensure(len(value) >= minlen, f"-> property [{path}] must be at least {minlen} characters long @ [{ad_file}]")
 
             def assert_has_value(path:str) -> None:
                 ensure(dicts.safe_get(ad_cfg, *path.split(".")), f"-> property [{path}] not specified @ [{ad_file}]")
+
             # pylint: enable=cell-var-from-loop
 
             assert_one_of("type", {"OFFER", "WANTED"})
@@ -580,7 +598,6 @@ class KleinanzeigenBot(WebScrapingMixin):
         ensure(csrf_token is not None, "Expected CSRF Token not found in HTML content!")
 
         if delete_old_ads_by_title:
-
             for published_ad in published_ads:
                 published_ad_id = int(published_ad.get("id", -1))
                 published_ad_title = published_ad.get("title", "")
@@ -1146,6 +1163,17 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         return final_description
 
+    async def cleanup_browser_session(self) -> None:
+        """
+        Asynchronous method to clean up browser resources.
+        """
+        try:
+            if hasattr(self, 'browser') and self.browser is not None:
+                # close_browser_session doesn't return a value, so we don't need to await its result
+                self.close_browser_session()
+        except Exception as e:
+            LOG.warning("Error closing browser session: %s", e)
+
 #############################
 # main entry point
 #############################
@@ -1170,8 +1198,18 @@ def main(args:list[str]) -> None:
     atexit.register(loggers.flush_all_handlers)
 
     bot = KleinanzeigenBot()
-    atexit.register(bot.close_browser_session)
-    nodriver.loop().run_until_complete(bot.run(args))
+
+    # Define an async function that runs the bot and properly closes the browser session
+    async def run_and_cleanup() -> None:
+        try:
+            await bot.run(args)
+        finally:
+            # Ensure browser session is properly closed
+            if hasattr(bot, 'browser') and bot.browser is not None:
+                bot.close_browser_session()
+
+    # Run the async function
+    nodriver.loop().run_until_complete(run_and_cleanup())
 
 
 if __name__ == "__main__":
