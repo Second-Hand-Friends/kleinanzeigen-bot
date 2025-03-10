@@ -3,8 +3,19 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import asyncio, atexit, copy, importlib.metadata, json, os, re, signal, shutil, sys, textwrap, time
+import asyncio
+import atexit
+import copy
 import getopt  # pylint: disable=deprecated-module
+import importlib.metadata
+import json
+import os
+import re
+import shutil
+import signal
+import sys
+import textwrap
+import time
 import urllib.parse as urllib_parse
 import urllib.request as urllib_request
 from collections.abc import Iterable
@@ -17,13 +28,13 @@ from ruamel.yaml import YAML
 from wcmatch import glob
 
 from . import extract, resources
+from ._version import __version__
 from .ads import calculate_content_hash, get_description_affixes
 from .utils import dicts, error_handlers, loggers, misc
 from .utils.files import abspath
-from .utils.i18n import Locale, get_current_locale, set_current_locale, pluralize
+from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
 from .utils.misc import ainput, ensure, is_frozen, parse_datetime, parse_decimal
-from .utils.web_scraping_mixin import By, Element, Page, Is, WebScrapingMixin
-from ._version import __version__
+from .utils.web_scraping_mixin import By, Element, Is, Page, WebScrapingMixin
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
@@ -928,23 +939,24 @@ class KleinanzeigenBot(WebScrapingMixin):
             await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal"]')
             await self.__set_shipping_options(ad_cfg)
         else:
-            try:
-                special_shipping_selector = '//select[contains(@id, ".versand_s")]'
-                if await self.web_check(By.XPATH, special_shipping_selector, Is.DISPLAYED):
-                    # try to set special attribute selector (then we have a commercial account)
-                    shipping_value = "ja" if ad_cfg["shipping_type"] == "SHIPPING" else "nein"
-                    await self.web_select(By.XPATH, special_shipping_selector, shipping_value)
-                else:
+            special_shipping_selector = '//select[contains(@id, ".versand_s")]'
+            if await self.web_check(By.XPATH, special_shipping_selector, Is.DISPLAYED):
+                # try to set special attribute selector (then we have a commercial account)
+                shipping_value = "ja" if ad_cfg["shipping_type"] == "SHIPPING" else "nein"
+                await self.web_select(By.XPATH, special_shipping_selector, shipping_value)
+            elif ad_cfg["shipping_costs"]:
+                try:
+                    # no options. only costs. Set custom shipping cost
                     await self.web_click(By.XPATH,
                                          '//*[contains(@class, "SubSection")]//*//button[contains(@class, "SelectionButton")]')
-                    await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal"]')
-                    await self.web_click(By.CSS_SELECTOR, '[class*="CarrierOption--Main"]')
-                    if ad_cfg["shipping_costs"]:
-                        await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]', str.replace(ad_cfg["shipping_costs"], ".", ",")
-                        )
+                    await self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(text(),"Andere Versandmethoden")]')
+                    await self.web_click(By.XPATH, '//*[contains(@class, "CarrierOption--Main") and contains(@data-testid, "Individueller Versand")]')
+                    await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]',
+                                         str.replace(ad_cfg["shipping_costs"], ".", ","))
                     await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
-            except TimeoutError as ex:
-                LOG.debug(ex, exc_info = True)
+                except TimeoutError as ex:
+                    LOG.debug(ex, exc_info = True)
+                    raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 
     async def __set_shipping_options(self, ad_cfg: dict[str, Any]) -> None:
         shipping_options_mapping = {
