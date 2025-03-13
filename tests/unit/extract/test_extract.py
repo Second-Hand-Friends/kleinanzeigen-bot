@@ -72,7 +72,6 @@ class TestAdExtractorPricing:
         ],
     )
     @pytest.mark.asyncio
-    # pylint: disable=protected-access
     async def test_extract_pricing_info(
         self, test_extractor: AdExtractor, price_text: str, expected_price: int | None, expected_type: str
     ) -> None:
@@ -83,7 +82,6 @@ class TestAdExtractorPricing:
             assert price_type == expected_type
 
     @pytest.mark.asyncio
-    # pylint: disable=protected-access
     async def test_extract_pricing_info_timeout(self, test_extractor: AdExtractor) -> None:
         """Test price extraction when element is not found"""
         with patch.object(test_extractor, 'web_text', new_callable = AsyncMock, side_effect = TimeoutError):
@@ -104,7 +102,6 @@ class TestAdExtractorShipping:
         ],
     )
     @pytest.mark.asyncio
-    # pylint: disable=protected-access
     async def test_extract_shipping_info(
         self, test_extractor: AdExtractor, shipping_text: str, expected_type: str, expected_cost: float | None
     ) -> None:
@@ -135,7 +132,6 @@ class TestAdExtractorShipping:
                 assert options is None
 
     @pytest.mark.asyncio
-    # pylint: disable=protected-access
     async def test_extract_shipping_info_with_options(self, test_extractor: AdExtractor) -> None:
         """Test shipping info extraction with shipping options."""
         shipping_response = {
@@ -301,7 +297,6 @@ class TestAdExtractorNavigation:
 
 class TestAdExtractorContent:
     """Tests for content extraction functionality."""
-    # pylint: disable=protected-access
 
     @pytest.fixture
     def extractor_with_config(self) -> AdExtractor:
@@ -438,7 +433,6 @@ class TestAdExtractorCategory:
         return AdExtractor(browser_mock, config_mock)
 
     @pytest.mark.asyncio
-    # pylint: disable=protected-access
     async def test_extract_category(self, extractor: AdExtractor) -> None:
         """Test category extraction from breadcrumb."""
         category_line = MagicMock()
@@ -462,7 +456,6 @@ class TestAdExtractorCategory:
             mock_web_find.assert_any_call(By.CSS_SELECTOR, 'a:nth-of-type(3)', parent = category_line)
 
     @pytest.mark.asyncio
-    # pylint: disable=protected-access
     async def test_extract_special_attributes_empty(self, extractor: AdExtractor) -> None:
         """Test extraction of special attributes when empty."""
         with patch.object(extractor, 'web_execute', new_callable = AsyncMock) as mock_web_execute:
@@ -494,7 +487,6 @@ class TestAdExtractorContact:
         return AdExtractor(browser_mock, config_mock)
 
     @pytest.mark.asyncio
-    # pylint: disable=protected-access
     async def test_extract_contact_info(self, extractor: AdExtractor) -> None:
         """Test extraction of contact information."""
         with patch.object(extractor, 'page', MagicMock()), \
@@ -522,7 +514,6 @@ class TestAdExtractorContact:
             assert contact_info["phone"] is None
 
     @pytest.mark.asyncio
-    # pylint: disable=protected-access
     async def test_extract_contact_info_timeout(self, extractor: AdExtractor) -> None:
         """Test contact info extraction when elements are not found."""
         with patch.object(extractor, 'page', MagicMock()), \
@@ -533,7 +524,6 @@ class TestAdExtractorContact:
                 await extractor._extract_contact_from_ad_page()
 
     @pytest.mark.asyncio
-    # pylint: disable=protected-access
     async def test_extract_contact_info_with_phone(self, extractor: AdExtractor) -> None:
         """Test extraction of contact information including phone number."""
         with patch.object(extractor, 'page', MagicMock()), \
@@ -625,7 +615,6 @@ class TestAdExtractorDownload:
             assert actual_call[0][1] == mock_extract.return_value
 
     @pytest.mark.asyncio
-    # pylint: disable=protected-access
     async def test_download_images_no_images(self, extractor: AdExtractor) -> None:
         """Test image download when no images are found."""
         with patch.object(extractor, 'web_find', new_callable = AsyncMock, side_effect = TimeoutError):

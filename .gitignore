@@ -8,6 +8,7 @@ _LOCAL/
 /config.yaml
 /data
 /*.log
+**/*.log
 /src/kleinanzeigen_bot/_version.py
 downloaded-ads
 
@@ -24,6 +25,7 @@ __pycache__
 
 # test coverage
 /.coverage
+**/.coverage
 /htmlcov/
 /coverage.xml
 

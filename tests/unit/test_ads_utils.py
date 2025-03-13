@@ -2,6 +2,9 @@
 SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+
+Unit tests for utility functions in the ads module.
+These tests focus on standalone helper functions that don't require bot initialization.
 """
 from typing import Any
 

@@ -4,6 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
 import pytest
+
 from kleinanzeigen_bot.utils import misc
 
 

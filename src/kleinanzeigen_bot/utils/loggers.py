@@ -7,7 +7,7 @@ import copy, logging, re, sys
 from gettext import gettext as _
 from logging import Logger, DEBUG, INFO, WARNING, ERROR, CRITICAL
 from logging.handlers import RotatingFileHandler
-from typing import Any, Final  # @UnusedImport
+from typing import Any, Final
 
 import colorama
 from . import i18n, reflect
@@ -92,24 +92,33 @@ def configure_console_logging() -> None:
 
 
 class LogFileHandle:
-    """Encapsulates a log file handler with close and status methods."""
+    """Handle for a log file handler."""
 
-    def __init__(self, file_path: str, handler: RotatingFileHandler, logger: logging.Logger):
-        self.file_path = file_path
-        self._handler:RotatingFileHandler | None = handler
-        self._logger = logger
+    def __init__(
+        self,
+        handler: logging.FileHandler | RotatingFileHandler,
+        log_file_path: str,
+    ):
+        """Initialize the log file handle.
+
+        Args:
+            handler: The log file handler.
+            log_file_path: The path to the log file.
+        """
+        self.handler: logging.FileHandler | RotatingFileHandler | None = handler
+        self.log_file_path = log_file_path
 
     def close(self) -> None:
         """Flushes, removes, and closes the log handler."""
-        if self._handler:
-            self._handler.flush()
-            self._logger.removeHandler(self._handler)
-            self._handler.close()
-            self._handler = None
+        if self.handler:
+            self.handler.flush()
+            LOG_ROOT.removeHandler(self.handler)
+            self.handler.close()
+            self.handler = None
 
     def is_closed(self) -> bool:
         """Returns whether the log handler has been closed."""
-        return not self._handler
+        return not self.handler
 
 
 def configure_file_logging(log_file_path:str) -> LogFileHandle:
@@ -117,18 +126,18 @@ def configure_file_logging(log_file_path:str) -> LogFileHandle:
     Sets up a file logger and returns a callable to flush, remove, and close it.
 
     @param log_file_path: Path to the log file.
-    @return: Callable[[], None]: A function that cleans up the log handler.
+    @return: LogFileHandle: An object that can be used to clean up the log handler.
     """
-    fh = RotatingFileHandler(
-        filename = log_file_path,
-        maxBytes = 10 * 1024 * 1024,  # 10 MB
-        backupCount = 10,
-        encoding = "utf-8"
+    # Use standard FileHandler instead of RotatingFileHandler to avoid compatibility issues with Python 3.13
+    fh = logging.FileHandler(
+        filename=log_file_path,
+        encoding="utf-8",
+        mode="a"
     )
     fh.setLevel(DEBUG)
     fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
     LOG_ROOT.addHandler(fh)
-    return LogFileHandle(log_file_path, fh, LOG_ROOT)
+    return LogFileHandle(fh, log_file_path)
 
 
 def flush_all_handlers() -> None:
