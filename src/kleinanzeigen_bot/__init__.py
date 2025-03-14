@@ -925,7 +925,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg["shipping_options"]:
             await self.web_click(By.XPATH, '//*[contains(@class, "SubSection")]//*//button[contains(@class, "SelectionButton")]')
-            await self.web_click(By.CSS_SELECTOR, '[class*="CarrierSelectionModal"]')
+            await self.web_click(By.XPATH,
+                                 '//*[contains(@class, "CarrierSelectionModal")]//button[contains(text(),"Andere Versandmethoden")]')
             await self.__set_shipping_options(ad_cfg)
         else:
             special_shipping_selector = '//select[contains(@id, ".versand_s")]'
@@ -979,11 +980,6 @@ class KleinanzeigenBot(WebScrapingMixin):
             shipping_size_radio_is_checked = hasattr(shipping_size_radio.attrs, "checked")
 
             if shipping_size_radio_is_checked:
-                await self.web_click(
-                    By.XPATH,
-                    '//*[contains(@class, "ModalDialog--Actions")]'
-                    '//*[contains(@class, "Button-primary") and .//*[text()[contains(.,"Weiter")]]]')
-
                 unwanted_shipping_packages = [
                     package for size, package in shipping_options_mapping.values()
                     if size == shipping_size and package not in shipping_packages
@@ -992,6 +988,11 @@ class KleinanzeigenBot(WebScrapingMixin):
             else:
                 await self.web_click(By.CSS_SELECTOR, f'.SingleSelectionItem--Main input[type=radio][data-testid="{shipping_size}"]')
                 to_be_clicked_shipping_packages = list(shipping_packages)
+
+            await self.web_click(
+                By.XPATH,
+                '//*[contains(@class, "ModalDialog--Actions")]'
+                '//button[.//*[text()[contains(.,"Weiter")]]]')
 
             for shipping_package in to_be_clicked_shipping_packages:
                 try:
@@ -1008,7 +1009,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.debug(ex, exc_info = True)
         try:
             # Click apply button
-            await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Bestätigen")]]]')
+            await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 
