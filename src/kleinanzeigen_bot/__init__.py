@@ -831,6 +831,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             "like_new": "Sehr Gut",
             "alright": "Gut",
             "ok": "In Ordnung",
+            "defect": "Defekt",
         }
         mapped_condition = condition_mapping.get(condition_value)
 
