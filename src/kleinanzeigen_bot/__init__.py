@@ -935,16 +935,19 @@ class KleinanzeigenBot(WebScrapingMixin):
                 # try to set special attribute selector (then we have a commercial account)
                 shipping_value = "ja" if ad_cfg["shipping_type"] == "SHIPPING" else "nein"
                 await self.web_select(By.XPATH, special_shipping_selector, shipping_value)
-            elif ad_cfg["shipping_costs"]:
+            else:
                 try:
                     # no options. only costs. Set custom shipping cost
-                    await self.web_click(By.XPATH,
-                                         '//*[contains(@class, "SubSection")]//*//button[contains(@class, "SelectionButton")]')
-                    await self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(text(),"Andere Versandmethoden")]')
-                    await self.web_click(By.XPATH, '//*[contains(@class, "CarrierOption--Main") and contains(@data-testid, "Individueller Versand")]')
-                    await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]',
-                                         str.replace(ad_cfg["shipping_costs"], ".", ","))
-                    await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
+                    if not ad_cfg["shipping_costs"] is None:
+                        await self.web_click(By.XPATH,
+                                             '//*[contains(@class, "SubSection")]//*//button[contains(@class, "SelectionButton")]')
+                        await self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(text(),"Andere Versandmethoden")]')
+                        await self.web_click(By.XPATH, '//*[contains(@class, "CarrierOption--Main") and contains(@data-testid, "Individueller Versand")]')
+
+                        if ad_cfg["shipping_costs"]:
+                            await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]',
+                                             str.replace(ad_cfg["shipping_costs"], ".", ","))
+                        await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
                     raise TimeoutError(_("Unable to close shipping dialog!")) from ex
