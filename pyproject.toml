@@ -38,7 +38,7 @@ dependencies = [
   "certifi",
   "colorama",
   "jaraco.text", # required by pkg_resources during runtime
-  "nodriver @ git+https://github.com/ultrafunkamsterdam/nodriver.git",
+  "nodriver==0.39.0", # 0.40-0.44 have issues starting browsers and evaluating self.web_execute("window.BelenConf") fails
   "ruamel.yaml",
   "psutil",
   "wcmatch",
