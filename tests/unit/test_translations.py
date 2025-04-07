@@ -62,6 +62,7 @@ def _get_function_name(node: ast.AST) -> str:
     Returns:
         The function name or "module" for module-level code
     """
+
     def find_parent_context(n: ast.AST) -> tuple[str | None, str | None]:
         """Find the containing class and function names."""
         class_name = None
@@ -83,7 +84,7 @@ def _get_function_name(node: ast.AST) -> str:
     return "module"  # For module-level code
 
 
-def _extract_log_messages(file_path: str) -> MessageDict:
+def _extract_log_messages(file_path: str, exclude_debug:bool = False) -> MessageDict:
     """
     Extract all translatable messages from a Python file with their function context.
 
@@ -93,8 +94,8 @@ def _extract_log_messages(file_path: str) -> MessageDict:
     Returns:
         Dictionary mapping function names to their messages
     """
-    with open(file_path, 'r', encoding='utf-8') as file:
-        tree = ast.parse(file.read(), filename=file_path)
+    with open(file_path, 'r', encoding = 'utf-8') as file:
+        tree = ast.parse(file.read(), filename = file_path)
 
     # Add parent references for context tracking
     for parent in ast.walk(tree):
@@ -125,9 +126,9 @@ def _extract_log_messages(file_path: str) -> MessageDict:
 
         # Extract messages from various call types
         if (isinstance(node.func, ast.Attribute) and
-            isinstance(node.func.value, ast.Name) and
-            node.func.value.id in {'LOG', 'logger', 'logging'} and
-                node.func.attr in {'debug', 'info', 'warning', 'error', 'critical'}):
+                isinstance(node.func.value, ast.Name) and
+                node.func.value.id in {'LOG', 'logger', 'logging'} and
+                node.func.attr in {None if exclude_debug else 'debug', 'info', 'warning', 'error', 'critical'}):
             if node.args:
                 msg = extract_string_value(node.args[0])
                 if msg:
@@ -154,7 +155,7 @@ def _extract_log_messages(file_path: str) -> MessageDict:
     return messages
 
 
-def _get_all_log_messages() -> dict[str, MessageDict]:
+def _get_all_log_messages(exclude_debug:bool = False) -> dict[str, MessageDict]:
     """
     Get all translatable messages from all Python files in the project.
 
@@ -191,7 +192,7 @@ def _get_all_log_messages() -> dict[str, MessageDict]:
                 relative_path = os.path.relpath(file_path, src_dir)
                 if relative_path.startswith('resources/'):
                     continue
-                messages = _extract_log_messages(file_path)
+                messages = _extract_log_messages(file_path, exclude_debug)
                 if messages:
                     module_path = os.path.join('kleinanzeigen_bot', relative_path)
                     module_path = module_path.replace(os.sep, '/')
@@ -226,7 +227,7 @@ def _get_translations_for_language(lang: str) -> TranslationDict:
     Returns:
         Dictionary containing all translations for the language
     """
-    yaml = YAML(typ='safe')
+    yaml = YAML(typ = 'safe')
     translation_file = f"translations.{lang}.yaml"
     print(f"Loading translations from {translation_file}")
     content = files(resources).joinpath(translation_file).read_text()
@@ -323,7 +324,7 @@ def test_all_log_messages_have_translations(lang: str) -> None:
 
     This test ensures that no untranslated messages exist in the codebase.
     """
-    messages_by_file = _get_all_log_messages()
+    messages_by_file = _get_all_log_messages(exclude_debug = True)
     translations = _get_translations_for_language(lang)
 
     missing_translations = []
@@ -373,7 +374,7 @@ def test_no_obsolete_translations(lang: str) -> None:
         function:
             "original message": "translated message"
     """
-    messages_by_file = _get_all_log_messages()
+    messages_by_file = _get_all_log_messages(exclude_debug = False)
     translations = _get_translations_for_language(lang)
     obsolete_items: list[tuple[str, str, str]] = []
 
