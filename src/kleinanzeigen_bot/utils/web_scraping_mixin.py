@@ -347,13 +347,21 @@ class WebScrapingMixin:
         await self.web_sleep()
         return elem
 
-    async def web_execute(self, javascript:str) -> Any:
+    async def web_execute(self, jscode:str) -> Any:
         """
         Executes the given JavaScript code in the context of the current page.
 
         :return: The javascript's return value
         """
-        return await self.page.evaluate(javascript, await_promise = True, return_by_value = True)
+        result = await self.page.evaluate(jscode, await_promise = True, return_by_value = True)
+
+        # debug log the jscode but avoid excessive debug logging of window.scrollTo calls
+        _prev_jscode:str = getattr(self.__class__.web_execute, "_prev_jscode", "")
+        if not (jscode == _prev_jscode or (jscode.startswith("window.scrollTo") and _prev_jscode.startswith("window.scrollTo"))):
+            LOG.debug("web_execute(`%s`) = `%s`", jscode, result)
+        self.__class__.web_execute._prev_jscode = jscode  # type: ignore[attr-defined]  # pylint: disable=protected-access
+
+        return result
 
     async def web_find(self, selector_type:By, selector_value:str, *, parent:Element = None, timeout:int | float = 5) -> Element:
         """
@@ -463,7 +471,7 @@ class WebScrapingMixin:
         if not reload_if_already_open and self.page and url == self.page.url:
             LOG.debug("  => skipping, [%s] is already open", url)
             return
-        self.page = await self.browser.get(url, new_tab = False, new_window = False)
+        self.page = await self.browser.get(url = url, new_tab = False, new_window = False)
         await self.web_await(lambda: self.web_execute("document.readyState == 'complete'"), timeout = timeout,
                 timeout_error_message = f"Page did not finish loading within {timeout} seconds.")
 
