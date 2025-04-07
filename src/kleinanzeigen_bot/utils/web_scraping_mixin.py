@@ -353,7 +353,7 @@ class WebScrapingMixin:
 
         :return: The javascript's return value
         """
-        return await self.page.evaluate(javascript, True)
+        return await self.page.evaluate(javascript, await_promise = True, return_by_value = True)
 
     async def web_find(self, selector_type:By, selector_value:str, *, parent:Element = None, timeout:int | float = 5) -> Element:
         """
@@ -388,13 +388,13 @@ class WebScrapingMixin:
             case By.TEXT:
                 ensure(not parent, f"Specifying a parent element currently not supported with selector type: {selector_type}")
                 return await self.web_await(
-                    lambda: self.page.find_element_by_text(selector_value, True),
+                    lambda: self.page.find_element_by_text(selector_value, best_match = True),
                     timeout = timeout,
                     timeout_error_message = f"No HTML element found containing text '{selector_value}' within {timeout} seconds.")
             case By.XPATH:
                 ensure(not parent, f"Specifying a parent element currently not supported with selector type: {selector_type}")
                 return await self.web_await(
-                    lambda: self.page.find_element_by_text(selector_value, True),
+                    lambda: self.page.find_element_by_text(selector_value, best_match = True),
                     timeout = timeout,
                     timeout_error_message = f"No HTML element found using XPath '{selector_value}' within {timeout} seconds.")
 
@@ -463,7 +463,7 @@ class WebScrapingMixin:
         if not reload_if_already_open and self.page and url == self.page.url:
             LOG.debug("  => skipping, [%s] is already open", url)
             return
-        self.page = await self.browser.get(url, False, False)
+        self.page = await self.browser.get(url, new_tab = False, new_window = False)
         await self.web_await(lambda: self.web_execute("document.readyState == 'complete'"), timeout = timeout,
                 timeout_error_message = f"Page did not finish loading within {timeout} seconds.")
 
@@ -506,7 +506,7 @@ class WebScrapingMixin:
                     content: responseText
                 }}
             }}))
-        """, await_promise = True))
+        """, await_promise = True, return_by_value = True))
         if isinstance(valid_response_codes, int):
             valid_response_codes = [valid_response_codes]
         ensure(
