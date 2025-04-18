@@ -153,7 +153,7 @@ class AdExtractor(WebScrapingMixin):
             LOG.warning('There are currently no ads on your profile!')
             return []
 
-        n_buttons = len(await self.web_find_all(By.CSS_SELECTOR, 'button',
+        n_buttons = len(await self.web_find_all(By.CSS_SELECTOR, 'em',
                 parent = await self.web_find(By.CSS_SELECTOR, 'div:nth-of-type(1)', parent = pagination)))
         if n_buttons > 1:
             multi_page = True
