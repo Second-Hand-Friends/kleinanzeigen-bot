@@ -162,6 +162,13 @@ kleinanzeigen_bot/extract.py:
     "Last ad overview page explored (no enabled \"Nächste\" button found).": "Letzte Anzeigenübersichtsseite erkundet (kein aktivierter \"Nächste\"-Button gefunden)."
     "No pagination controls found after scrolling/waiting. Assuming last page.": "Keine Paginierungssteuerung nach dem Scrollen/Warten gefunden. Es wird von der letzten Seite ausgegangen."
     "No ad URLs were extracted.": "Es wurden keine Anzeigen-URLs extrahiert."
+    "Could not find ad list container or items on page %s.": "Anzeigenlistencontainer oder Elemente auf Seite %s nicht gefunden."
+    "Error during pagination detection: %s": "Fehler bei der Paginierungserkennung: %s"
+    "Error during pagination navigation: %s": "Fehler bei der Paginierungsnavigation: %s"
+    "Error extracting refs on page %s: %s": "Fehler beim Extrahieren der Referenzen auf Seite %s: %s"
+    "Extracting ads from page %s...": "Extrahiere Anzeigen von Seite %s..."
+    "Found %s ad items on page %s.": "%s Anzeigen-Elemente auf Seite %s gefunden."
+    "Successfully extracted %s refs from page %s.": "%s Referenzen von Seite %s erfolgreich extrahiert."
 
   naviagte_to_ad_page:
     "There is no ad under the given ID.": "Es gibt keine Anzeige unter der angegebenen ID."
