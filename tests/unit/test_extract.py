@@ -261,42 +261,65 @@ class TestAdExtractorNavigation:
     @pytest.mark.asyncio
     async def test_extract_own_ads_urls(self, test_extractor: AdExtractor) -> None:
         """Test extraction of own ads URLs - basic test."""
-        with patch.object(test_extractor, 'web_open', new_callable = AsyncMock), \
-                patch.object(test_extractor, 'web_sleep', new_callable = AsyncMock), \
-                patch.object(test_extractor, 'web_find', new_callable = AsyncMock) as mock_web_find, \
-                patch.object(test_extractor, 'web_find_all', new_callable = AsyncMock) as mock_web_find_all, \
-                patch.object(test_extractor, 'web_scroll_page_down', new_callable = AsyncMock), \
-                patch.object(test_extractor, 'web_execute', new_callable = AsyncMock):
+        with patch.object(test_extractor, 'web_open', new_callable=AsyncMock), \
+                patch.object(test_extractor, 'web_sleep', new_callable=AsyncMock), \
+                patch.object(test_extractor, 'web_find', new_callable=AsyncMock) as mock_web_find, \
+                patch.object(test_extractor, 'web_find_all', new_callable=AsyncMock) as mock_web_find_all, \
+                patch.object(test_extractor, 'web_scroll_page_down', new_callable=AsyncMock), \
+                patch.object(test_extractor, 'web_execute', new_callable=AsyncMock):
 
-            # Setup mock objects for DOM elements
-            splitpage = MagicMock()
-            pagination_section = MagicMock()
-            pagination = MagicMock()
-            pagination_div = MagicMock()
-            ad_list = MagicMock()
-            cardbox = MagicMock()
-            link = MagicMock()
-            link.attrs = {'href': '/s-anzeige/test/12345'}
+            # --- Setup mock objects for DOM elements ---
+            # Mocks needed for the actual execution flow
+            ad_list_container_mock = MagicMock()
+            pagination_section_mock = MagicMock()
+            cardbox_mock = MagicMock()    # Represents the <li> element
+            link_mock = MagicMock()      # Represents the <a> element
+            link_mock.attrs = {'href': '/s-anzeige/test/12345'}    # Configure the desired output
 
-            # Setup mock responses for web_find
+            # Mocks for elements potentially checked but maybe not strictly needed for output
+            # (depending on how robust the mocking is)
+            # next_button_mock = MagicMock() # If needed for multi_page logic
+
+            # --- Setup mock responses for web_find and web_find_all in CORRECT ORDER ---
+
+            # 1. Initial find for ad list container (before loop)
+            # 2. Find for pagination section (pagination check)
+            # 3. Find for ad list container (inside loop)
+            # 4. Find for the link (inside list comprehension)
             mock_web_find.side_effect = [
-                splitpage,  # .l-splitpage
-                pagination_section,  # section:nth-of-type(4)
-                pagination,  # div > div:nth-of-type(2) > div:nth-of-type(2) > div
-                pagination_div,  # div:nth-of-type(1)
-                ad_list,  # my-manageitems-adlist
-                link  # article > section > section:nth-of-type(2) > h2 > div > a
+                ad_list_container_mock,          # Call 1: find #my-manageitems-adlist (before loop)
+                pagination_section_mock,         # Call 2: find .Pagination
+                ad_list_container_mock,          # Call 3: find #my-manageitems-adlist (inside loop)
+                link_mock                        # Call 4: find 'div.manageitems-item-ad h3 a.text-onSurface'
+                # Add more mocks here if the pagination navigation logic calls web_find again
             ]
 
-            # Setup mock responses for web_find_all
+            # 1. Find all 'Nächste' buttons (pagination check) - Return empty list for single page test case
+            # 2. Find all '.cardbox' elements (inside loop)
             mock_web_find_all.side_effect = [
-                [MagicMock()],  # buttons in pagination
-                [cardbox]  # cardbox elements
+                [],                              # Call 1: find 'button[aria-label="Nächste"]' -> No next button = single page
+                [cardbox_mock]                   # Call 2: find .cardbox -> One ad item
+                # Add more mocks here if pagination navigation calls web_find_all
             ]
 
-            # Execute test and verify results
+            # --- Execute test and verify results ---
             refs = await test_extractor.extract_own_ads_urls()
-            assert refs == ['/s-anzeige/test/12345']
+
+            # --- Assertions ---
+            assert refs == ['/s-anzeige/test/12345']  # Now it should match
+
+            # Optional: Verify calls were made as expected
+            mock_web_find.assert_has_calls([
+                call(By.ID, 'my-manageitems-adlist'),
+                call(By.CSS_SELECTOR, '.Pagination', timeout=10),
+                call(By.ID, 'my-manageitems-adlist'),
+                call(By.CSS_SELECTOR, 'div.manageitems-item-ad h3 a.text-onSurface', parent=cardbox_mock),
+            ], any_order=False)  # Check order if important
+
+            mock_web_find_all.assert_has_calls([
+                call(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent=pagination_section_mock),
+                call(By.CLASS_NAME, 'cardbox', parent=ad_list_container_mock),
+            ], any_order=False)
 
 
 class TestAdExtractorContent:
