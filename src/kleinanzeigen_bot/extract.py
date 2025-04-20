@@ -162,7 +162,7 @@ class AdExtractor(WebScrapingMixin):
                     LOG.info('Next button found but is disabled. Assuming single effective page.')
 
             else:
-                LOG.info('No "Nächste" button found within pagination. Assuming single page.')
+                LOG.info('No "Naechste" button found within pagination. Assuming single page.')
         except TimeoutError:
             # This will now correctly trigger only if the '.Pagination' div itself is not found
             LOG.info('No pagination controls found. Assuming single page.')
@@ -222,7 +222,7 @@ class AdExtractor(WebScrapingMixin):
                     # Wait for page load - consider waiting for a specific element on the new page instead of fixed sleep
                     await self.web_sleep(3000, 4000)
                 else:
-                    LOG.info('Last ad overview page explored (no enabled "Nächste" button found).')
+                    LOG.info('Last ad overview page explored (no enabled "Naechste" button found).')
                     break
             except TimeoutError:
                 # This might happen if pagination disappears on the last page after loading
