@@ -167,14 +167,14 @@ class AdExtractor(WebScrapingMixin):
             # This will now correctly trigger only if the '.Pagination' div itself is not found
             LOG.info('No pagination controls found. Assuming single page.')
         except Exception as e:
-            LOG.error(f"Error during pagination detection: {e}", exc_info=True)
+            LOG.error("Error during pagination detection: %s", e, exc_info=True)
             LOG.info('Assuming single page due to error during pagination check.')
         # --- End Pagination Handling ---
 
         refs:list[str] = []
         current_page = 1
         while True:  # Loop reference extraction
-            LOG.info(f"Extracting ads from page {current_page}...")
+            LOG.info("Extracting ads from page %s...", current_page)
             # scroll down to load dynamically if necessary
             await self.web_scroll_page_down()
             await self.web_sleep(2000, 3000)  # Consider replacing with explicit waits
@@ -183,9 +183,9 @@ class AdExtractor(WebScrapingMixin):
             try:
                 ad_list_container = await self.web_find(By.ID, 'my-manageitems-adlist')
                 list_items = await self.web_find_all(By.CLASS_NAME, 'cardbox', parent=ad_list_container)
-                LOG.info(f"Found {len(list_items)} ad items on page {current_page}.")
+                LOG.info("Found %s ad items on page %s.", len(list_items), current_page)
             except TimeoutError:
-                LOG.warning(f"Could not find ad list container or items on page {current_page}.")
+                LOG.warning("Could not find ad list container or items on page %s.", current_page)
                 break  # Stop if ads disappear
 
             # Extract references using the CORRECTED selector
@@ -195,10 +195,10 @@ class AdExtractor(WebScrapingMixin):
                     for li in list_items
                 ]
                 refs.extend(page_refs)
-                LOG.info(f"Successfully extracted {len(page_refs)} refs from page {current_page}.")
+                LOG.info("Successfully extracted %s refs from page %s.", len(page_refs), current_page)
             except Exception as e:
                 # Log the error if extraction fails for some items, but try to continue
-                LOG.error(f"Error extracting refs on page {current_page}: {e}", exc_info=True)
+                LOG.error("Error extracting refs on page %s: %s", current_page, e, exc_info=True)
 
             if not multi_page:  # only one iteration for single-page overview
                 break
@@ -229,7 +229,7 @@ class AdExtractor(WebScrapingMixin):
                 LOG.info("No pagination controls found after scrolling/waiting. Assuming last page.")
                 break
             except Exception as e:
-                LOG.error(f"Error during pagination navigation: {e}", exc_info=True)
+                LOG.error("Error during pagination navigation: %s", e, exc_info=True)
                 break
             # --- End Navigation ---
 
