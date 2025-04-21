@@ -157,7 +157,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                     * new: Veröffentlicht nur neue Anzeigen (d.h. Anzeigen ohne ID in der Konfigurationsdatei)
                     * changed: Veröffentlicht nur Anzeigen, die seit der letzten Veröffentlichung geändert wurden
                     * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs an, die veröffentlicht werden sollen, z. B. "--ads=1,2,3", ignoriert republication_interval
-                    * Kombinationen: Sie können mehrere Selektoren mit Kommas kombinieren, z. B. "--ads=changed,due" um sowohl geänderte als auch fällige Anzeigen zu veröffentlichen
+                    * Kombinationen: Sie können mehrere Selektoren mit Kommas kombinieren, z. B. "--ads=changed,due" um sowohl geänderte als auch
+                      fällige Anzeigen zu veröffentlichen
               --ads=all|new|<id(s)> (download) - Gibt an, welche Anzeigen heruntergeladen werden sollen (STANDARD: new)
                     Mögliche Werte:
                     * all: Lädt alle Anzeigen aus Ihrem Profil herunter
@@ -401,7 +402,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                 ensure(dicts.safe_get(ad_cfg, *path.split(".")) in allowed, f"-> property [{path}] must be one of: {allowed} @ [{ad_file}]")
 
             def assert_min_len(path:str, minlen:int) -> None:
-                ensure(len(dicts.safe_get(ad_cfg, *path.split("."))) >= minlen, f"-> property [{path}] must be at least {minlen} characters long @ [{ad_file}]")
+                ensure(len(dicts.safe_get(ad_cfg, *path.split("."))) >= minlen,
+                       f"-> property [{path}] must be at least {minlen} characters long @ [{ad_file}]")
 
             def assert_has_value(path:str) -> None:
                 ensure(dicts.safe_get(ad_cfg, *path.split(".")), f"-> property [{path}] not specified @ [{ad_file}]")
