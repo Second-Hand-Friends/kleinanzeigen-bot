@@ -942,7 +942,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                         await self.web_click(By.XPATH,
                                              '//*[contains(@class, "SubSection")]//*//button[contains(@class, "SelectionButton")]')
                         await self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(text(),"Andere Versandmethoden")]')
-                        await self.web_click(By.XPATH, '//*[contains(@class, "CarrierOption--Main") and contains(@data-testid, "Individueller Versand")]')
+                        await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
 
                         if ad_cfg["shipping_costs"]:
                             await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]',
