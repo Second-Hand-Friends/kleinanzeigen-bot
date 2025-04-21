@@ -135,54 +135,106 @@ class AdExtractor(WebScrapingMixin):
         """
         # navigate to "your ads" page
         await self.web_open('https://www.kleinanzeigen.de/m-meine-anzeigen.html')
-        await self.web_sleep(2000, 3000)
+        await self.web_sleep(2000, 3000)  # Consider replacing with explicit waits later
 
-        # collect ad references:
-        pagination_section = await self.web_find(By.CSS_SELECTOR, 'section:nth-of-type(4)',
-                parent = await self.web_find(By.CSS_SELECTOR, '.l-splitpage'))
-
-        # scroll down to load dynamically
-        await self.web_scroll_page_down()
-        await self.web_sleep(2000, 3000)
-
-        # detect multi-page
+        # Try to find the main ad list container first
         try:
-            pagination = await self.web_find(By.CSS_SELECTOR, 'div > div:nth-of-type(2) > div:nth-of-type(2) > div',
-                    parent = pagination_section)
-        except TimeoutError:  # 0 ads - no pagination area
-            LOG.warning('There are currently no ads on your profile!')
+            ad_list_container = await self.web_find(By.ID, 'my-manageitems-adlist')
+        except TimeoutError:
+            LOG.warning('Ad list container #my-manageitems-adlist not found. Maybe no ads present?')
             return []
 
-        n_buttons = len(await self.web_find_all(By.CSS_SELECTOR, 'em',
-                parent = await self.web_find(By.CSS_SELECTOR, 'div:nth-of-type(1)', parent = pagination)))
-        if n_buttons > 1:
-            multi_page = True
-            LOG.info('It looks like you have many ads!')
-        else:
-            multi_page = False
-            LOG.info('It looks like all your ads fit on one overview page.')
+        # --- Pagination handling ---
+        multi_page = False
+        try:
+            # Correct selector: Use uppercase '.Pagination'
+            pagination_section = await self.web_find(By.CSS_SELECTOR, '.Pagination', timeout=10)  # Increased timeout slightly
+            # Correct selector: Use 'aria-label'
+            # Also check if the button is actually present AND potentially enabled (though enabled check isn't strictly necessary here, only for clicking later)
+            next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent=pagination_section)
+            if next_buttons:
+                # Check if at least one 'Nächste' button is not disabled (optional but good practice)
+                enabled_next_buttons = [btn for btn in next_buttons if not btn.attrs.get('disabled')]
+                if enabled_next_buttons:
+                    multi_page = True
+                    LOG.info('Multiple ad pages detected.')
+                else:
+                    LOG.info('Next button found but is disabled. Assuming single effective page.')
+
+            else:
+                LOG.info('No "Naechste" button found within pagination. Assuming single page.')
+        except TimeoutError:
+            # This will now correctly trigger only if the '.Pagination' div itself is not found
+            LOG.info('No pagination controls found. Assuming single page.')
+        except Exception as e:
+            LOG.error("Error during pagination detection: %s", e, exc_info=True)
+            LOG.info('Assuming single page due to error during pagination check.')
+        # --- End Pagination Handling ---
 
         refs:list[str] = []
-        while True:  # loop reference extraction until no more forward page
-            # extract references
-            list_items = await self.web_find_all(By.CLASS_NAME, 'cardbox',
-                    parent = await self.web_find(By.ID, 'my-manageitems-adlist'))
-            refs += [
-                (await self.web_find(By.CSS_SELECTOR, 'article > section > section:nth-of-type(2) > h3 > div > a', parent = li)).attrs['href']
-                for li in list_items
-            ]
+        current_page = 1
+        while True:  # Loop reference extraction
+            LOG.info("Extracting ads from page %s...", current_page)
+            # scroll down to load dynamically if necessary
+            await self.web_scroll_page_down()
+            await self.web_sleep(2000, 3000)  # Consider replacing with explicit waits
+
+            # Re-find the ad list container on the current page/state
+            try:
+                ad_list_container = await self.web_find(By.ID, 'my-manageitems-adlist')
+                list_items = await self.web_find_all(By.CLASS_NAME, 'cardbox', parent=ad_list_container)
+                LOG.info("Found %s ad items on page %s.", len(list_items), current_page)
+            except TimeoutError:
+                LOG.warning("Could not find ad list container or items on page %s.", current_page)
+                break  # Stop if ads disappear
+
+            # Extract references using the CORRECTED selector
+            try:
+                page_refs = [
+                    (await self.web_find(By.CSS_SELECTOR, 'div.manageitems-item-ad h3 a.text-onSurface', parent=li)).attrs['href']
+                    for li in list_items
+                ]
+                refs.extend(page_refs)
+                LOG.info("Successfully extracted %s refs from page %s.", len(page_refs), current_page)
+            except Exception as e:
+                # Log the error if extraction fails for some items, but try to continue
+                LOG.error("Error extracting refs on page %s: %s", current_page, e, exc_info=True)
 
             if not multi_page:  # only one iteration for single-page overview
                 break
-            # check if last page
-            nav_button:Element = (await self.web_find_all(By.CSS_SELECTOR, 'button.jsx-1553636621'))[-1]
-            if nav_button.attrs['title'] != 'Nächste':
-                LOG.info('Last ad overview page explored.')
+
+            # --- Navigate to next page ---
+            try:
+                # Find the pagination section again (scope might have changed after scroll/wait)
+                pagination_section = await self.web_find(By.CSS_SELECTOR, '.Pagination', timeout=5)
+                # Find the "Next" button using the correct aria-label selector and ensure it's not disabled
+                next_button_element = None
+                possible_next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent=pagination_section)
+                for btn in possible_next_buttons:
+                    if not btn.attrs.get('disabled'):  # Check if the button is enabled
+                        next_button_element = btn
+                        break  # Found an enabled next button
+
+                if next_button_element:
+                    LOG.info("Navigating to next page...")
+                    await next_button_element.click()
+                    current_page += 1
+                    # Wait for page load - consider waiting for a specific element on the new page instead of fixed sleep
+                    await self.web_sleep(3000, 4000)
+                else:
+                    LOG.info('Last ad overview page explored (no enabled "Naechste" button found).')
+                    break
+            except TimeoutError:
+                # This might happen if pagination disappears on the last page after loading
+                LOG.info("No pagination controls found after scrolling/waiting. Assuming last page.")
                 break
-            # navigate to next overview page
-            await nav_button.click()
-            await self.web_sleep(2000, 3000)
-            await self.web_scroll_page_down()
+            except Exception as e:
+                LOG.error("Error during pagination navigation: %s", e, exc_info=True)
+                break
+            # --- End Navigation ---
+
+        if not refs:
+            LOG.warning('No ad URLs were extracted.')
 
         return refs
 

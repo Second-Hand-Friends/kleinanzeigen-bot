@@ -152,10 +152,23 @@ kleinanzeigen_bot/extract.py:
     "The ad ID could not be extracted from the given URL %s": "Die Anzeigen-ID konnte nicht aus der angegebenen URL %s extrahiert werden"
 
   extract_own_ads_urls:
-    "There are currently no ads on your profile!": "Es gibt derzeit keine Anzeigen in deinem Profil!"
-    "It looks like you have many ads!": "Es sieht so aus, als hättest du viele Anzeigen!"
-    "It looks like all your ads fit on one overview page.": "Es sieht so aus, als würden alle deine Anzeigen auf eine Übersichtsseite passen."
-    "Last ad overview page explored.": "Letzte Übersichtsseite erkundet."
+    "Ad list container #my-manageitems-adlist not found. Maybe no ads present?": "Anzeigenlistencontainer #my-manageitems-adlist nicht gefunden. Vielleicht sind keine Anzeigen vorhanden?"
+    "Multiple ad pages detected.": "Mehrere Anzeigenseiten erkannt."
+    "Next button found but is disabled. Assuming single effective page.": "Weiter-Button gefunden, aber deaktiviert. Es wird von einer einzelnen effektiven Seite ausgegangen."
+    "No \"Naechste\" button found within pagination. Assuming single page.": "Kein \"Nächste\"-Button in der Paginierung gefunden. Es wird von einer einzelnen Seite ausgegangen."
+    "No pagination controls found. Assuming single page.": "Keine Paginierungssteuerung gefunden. Es wird von einer einzelnen Seite ausgegangen."
+    "Assuming single page due to error during pagination check.": "Es wird von einer einzelnen Seite ausgegangen wegen eines Fehlers bei der Paginierungsprüfung."
+    "Navigating to next page...": "Navigiere zur nächsten Seite..."
+    "Last ad overview page explored (no enabled \"Naechste\" button found).": "Letzte Anzeigenübersichtsseite erkundet (kein aktivierter \"Nächste\"-Button gefunden)."
+    "No pagination controls found after scrolling/waiting. Assuming last page.": "Keine Paginierungssteuerung nach dem Scrollen/Warten gefunden. Es wird von der letzten Seite ausgegangen."
+    "No ad URLs were extracted.": "Es wurden keine Anzeigen-URLs extrahiert."
+    "Could not find ad list container or items on page %s.": "Anzeigenlistencontainer oder Elemente auf Seite %s nicht gefunden."
+    "Error during pagination detection: %s": "Fehler bei der Paginierungserkennung: %s"
+    "Error during pagination navigation: %s": "Fehler bei der Paginierungsnavigation: %s"
+    "Error extracting refs on page %s: %s": "Fehler beim Extrahieren der Referenzen auf Seite %s: %s"
+    "Extracting ads from page %s...": "Extrahiere Anzeigen von Seite %s..."
+    "Found %s ad items on page %s.": "%s Anzeigen-Elemente auf Seite %s gefunden."
+    "Successfully extracted %s refs from page %s.": "%s Referenzen von Seite %s erfolgreich extrahiert."
 
   naviagte_to_ad_page:
     "There is no ad under the given ID.": "Es gibt keine Anzeige unter der angegebenen ID."
