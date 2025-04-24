@@ -11,7 +11,7 @@ from kleinanzeigen_bot.utils import i18n
 
 
 @pytest.mark.parametrize("lang, expected", [
-    (None, i18n._detect_locale()),  # expect whatever the system returns
+    (None, ("en", "US", "UTF-8")),  # Test always US language code
     ("fr", ("fr", None, "UTF-8")),  # Test with just a language code
     ("fr_CA", ("fr", "CA", "UTF-8")),  # Test with language + region, no encoding
     ("pt_BR.iso8859-1", ("pt", "BR", "ISO8859-1")),  # Test with language + region + encoding
