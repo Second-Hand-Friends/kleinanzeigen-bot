@@ -265,6 +265,14 @@ publishing:
   delete_old_ads: "AFTER_PUBLISH" # one of: AFTER_PUBLISH, BEFORE_PUBLISH, NEVER
   delete_old_ads_by_title: true # only works if delete_old_ads is set to BEFORE_PUBLISH
 
+# captcha-Handling (optional)
+# To ensure that the bot does not require manual confirmation after a captcha, but instead automatically pauses for a defined period and then restarts, you can enable the captcha section:
+
+captcha:
+  auto_restart: true        # true  = Bot aborts run at Captcha and restarts later
+                            # false = (Default) Captcha must be solved manually
+  restart_delay_h: 6        # Length of the captcha break in hours
+
 # browser configuration
 browser:
   # https://peter.sh/experiments/chromium-command-line-switches/

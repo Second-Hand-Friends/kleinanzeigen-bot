@@ -773,7 +773,17 @@ class KleinanzeigenBot(WebScrapingMixin):
         # wait for captcha
         #############################
         try:
-            await self.web_find(By.CSS_SELECTOR, "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']", timeout = 2)
+            await self.web_find(
+                By.CSS_SELECTOR,
+                "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']",
+                timeout=2)
+
+            if self.config.get("captcha", {}).get("auto_restart", False):
+                LOG.warning("Captcha recognized – auto-restart enabled, abort run…")
+                from kleinanzeigen_bot.utils.exceptions import CaptchaEncountered
+                raise CaptchaEncountered()
+
+            # Fallback: manuell
             LOG.warning("############################################")
             LOG.warning("# Captcha present! Please solve the captcha.")
             LOG.warning("############################################")
