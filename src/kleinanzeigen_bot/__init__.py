@@ -15,7 +15,7 @@ from typing import Any, Final
 import certifi, colorama, nodriver
 from ruamel.yaml import YAML
 from wcmatch import glob
-from kleinanzeigen_bot.utils.exceptions import CaptchaEncountered
+from .utils.exceptions import CaptchaEncountered
 
 from . import extract, resources
 from ._version import __version__

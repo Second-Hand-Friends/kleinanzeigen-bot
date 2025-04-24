@@ -12,6 +12,11 @@ getopt.py:
   short_has_arg:
     "option -%s not recognized": "Option -%s unbekannt"
 
+#################################################
+kleinanzeigen_bot/__main__.py:
+#################################################
+  module:
+    "[INFO] Captcha detected. Sleeping %(h)s h before restart...": "[INFO] Captcha erkannt. Warte %(h)s h bis zum Neustart..."
 
 #################################################
 kleinanzeigen_bot/__init__.py:

@@ -7,11 +7,9 @@ import pytest
 from _pytest.monkeypatch import MonkeyPatch  # pylint: disable=import-private-name
 from kleinanzeigen_bot.utils import i18n
 
-# pylint: disable=protected-access
-
 
 @pytest.mark.parametrize("lang, expected", [
-    (None, ("en", "US", "UTF-8")),  # Test always US language code
+    (None, ("en", "US", "UTF-8")),  # Test with no LANG variable (should default to ("en", "US", "UTF-8"))
     ("fr", ("fr", None, "UTF-8")),  # Test with just a language code
     ("fr_CA", ("fr", "CA", "UTF-8")),  # Test with language + region, no encoding
     ("pt_BR.iso8859-1", ("pt", "BR", "ISO8859-1")),  # Test with language + region + encoding
@@ -27,7 +25,7 @@ def test_detect_locale(monkeypatch: MonkeyPatch, lang: str | None, expected: i18
         monkeypatch.setenv("LANG", lang)
 
     # Call the function and compare the result to the expected output.
-    result = i18n._detect_locale()
+    result = i18n._detect_locale()  # pylint: disable=protected-access
     assert result == expected, f"For LANG={lang}, expected {expected} but got {result}"
 
 

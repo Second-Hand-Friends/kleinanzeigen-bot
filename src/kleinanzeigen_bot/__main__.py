@@ -6,11 +6,12 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 import sys
 import time
 from pathlib import Path
+from gettext import gettext as _
+
 import ruamel.yaml as _yaml
 
 import kleinanzeigen_bot
 from kleinanzeigen_bot.utils.exceptions import CaptchaEncountered
-
 
 DEFAULT_DELAY_H = 6
 
@@ -46,6 +47,6 @@ while True:
 
     except CaptchaEncountered:
         delay_h = _read_restart_delay()
-        print(f"[INFO] Captcha detected. Sleeping {delay_h} h before restart…")
+        print(_("[INFO] Captcha detected. Sleeping %(h)s h before restart...") % {"h": delay_h})
         time.sleep(delay_h * 3600)
         # loop continues and starts a fresh run
