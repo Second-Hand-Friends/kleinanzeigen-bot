@@ -6,10 +6,11 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 import sys
 import time
 from pathlib import Path
+import ruamel.yaml as _yaml
 
 import kleinanzeigen_bot
 from kleinanzeigen_bot.utils.exceptions import CaptchaEncountered
-import ruamel.yaml as _yaml
+
 
 DEFAULT_DELAY_H = 6
 
@@ -40,8 +41,8 @@ def _read_restart_delay(fallback: int = DEFAULT_DELAY_H) -> int:
 while True:
     try:
         kleinanzeigen_bot.main(sys.argv)          # runs & returns when finished
-        sys.exit(0)
-        break                                     # normal exit, stop loop
+        sys.exit(0)                               # prevents closing issues
+        # break                                   # normal exit, stop loop
 
     except CaptchaEncountered:
         delay_h = _read_restart_delay()
