@@ -269,9 +269,9 @@ publishing:
 # To ensure that the bot does not require manual confirmation after a captcha, but instead automatically pauses for a defined period and then restarts, you can enable the captcha section:
 
 captcha:
-  auto_restart: true        # true  = Bot aborts run at Captcha and restarts later
-                            # false = (Default) Captcha must be solved manually
-  restart_delay_h: 6        # Length of the captcha break in hours
+  auto_restart: true  # If true, the bot aborts when a Captcha appears and retries publishing later
+                      # If false (default), the Captcha must be solved manually to continue
+  restart_delay_h: 6  # Time in hours to wait before retrying after a Captcha was encountered (default: 6 hours)
 
 # browser configuration
 browser:

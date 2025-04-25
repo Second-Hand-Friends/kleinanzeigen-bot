@@ -3,8 +3,7 @@ SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-import sys
-import time
+import sys, time
 from pathlib import Path
 from gettext import gettext as _
 
@@ -28,8 +27,8 @@ def _read_restart_delay(fallback: int = DEFAULT_DELAY_H) -> int:
     """Read captcha.restart_delay_h from YAML config or return fallback."""
     cfg_file = _get_cfg_path(sys.argv)
     try:
-        with cfg_file.open(encoding="utf-8") as fh:
-            data = _yaml.YAML(typ="safe").load(fh) or {}
+        with cfg_file.open(encoding = "utf-8") as fh:
+            data = _yaml.YAML(typ = "safe").load(fh) or {}
         return int(data.get("captcha", {}).get("restart_delay_h", fallback))
     except Exception as ex:  # noqa: BLE001
         print(f"[WARN] Config read error ({ex}) – falling back to {fallback} h")
@@ -41,9 +40,8 @@ def _read_restart_delay(fallback: int = DEFAULT_DELAY_H) -> int:
 # --------------------------------------------------------------------------- #
 while True:
     try:
-        kleinanzeigen_bot.main(sys.argv)          # runs & returns when finished
-        sys.exit(0)                               # prevents closing issues
-        # break                                   # normal exit, stop loop
+        kleinanzeigen_bot.main(sys.argv)  # runs & returns when finished
+        sys.exit(0)  # not using `break` to prevent process closing issues
 
     except CaptchaEncountered:
         delay_h = _read_restart_delay()
