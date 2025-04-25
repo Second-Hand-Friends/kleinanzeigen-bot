@@ -781,7 +781,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
             if self.config.get("captcha", {}).get("auto_restart", False):
                 LOG.warning("Captcha recognized - auto-restart enabled, abort run...")
-                raise CaptchaEncountered()
+                raise CaptchaEncountered(misc.parse_duration(self.config.get("captcha", {}).get("restart_delay", "6h")))
 
             # Fallback: manuell
             LOG.warning("############################################")

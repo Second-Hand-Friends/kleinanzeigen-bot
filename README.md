@@ -271,7 +271,7 @@ publishing:
 captcha:
   auto_restart: true  # If true, the bot aborts when a Captcha appears and retries publishing later
                       # If false (default), the Captcha must be solved manually to continue
-  restart_delay_h: 6  # Time in hours to wait before retrying after a Captcha was encountered (default: 6 hours)
+  restart_delay: 1h 30m  # Time to wait before retrying after a Captcha was encountered (default: 6h)
 
 # browser configuration
 browser:

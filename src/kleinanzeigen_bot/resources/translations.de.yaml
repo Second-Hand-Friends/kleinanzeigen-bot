@@ -16,7 +16,7 @@ getopt.py:
 kleinanzeigen_bot/__main__.py:
 #################################################
   module:
-    "[INFO] Captcha detected. Sleeping %(h)s h before restart...": "[INFO] Captcha erkannt. Warte %(h)s h bis zum Neustart..."
+    "[INFO] Captcha detected. Sleeping %s before restart...": "[INFO] Captcha erkannt. Warte %s h bis zum Neustart..."
 
 #################################################
 kleinanzeigen_bot/__init__.py:
