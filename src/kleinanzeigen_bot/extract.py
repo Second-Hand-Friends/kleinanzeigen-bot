@@ -122,9 +122,12 @@ class AdExtractor(WebScrapingMixin):
         id_part = num_part.split('-')[0]
 
         try:
+            path = url.split('?', 1)[0]  # Remove query string if present
+            last_segment = path.rstrip('/').split('/')[-1]  # Get last path component
+            id_part = last_segment.split('-')[0]  # Extract part before first hyphen
             return int(id_part)
-        except ValueError:
-            LOG.warning('The ad ID could not be extracted from the given URL %s', url)
+        except (IndexError, ValueError) as ex:
+            LOG.warning("Failed to extract ad ID from URL '%s': %s", url, ex)
             return -1
 
     async def extract_own_ads_urls(self) -> list[str]:

@@ -155,7 +155,7 @@ kleinanzeigen_bot/extract.py:
     "No image area found. Continuing without downloading images.": "Keine Bildbereiche gefunden. Fahre ohne Bilder-Download fort."
 
   extract_ad_id_from_ad_url:
-    "The ad ID could not be extracted from the given URL %s": "Die Anzeigen-ID konnte nicht aus der angegebenen URL %s extrahiert werden"
+    "Failed to extract ad ID from URL '%s': %s": "Fehler beim Extrahieren der Anzeigen-ID aus der URL '%s': %s"
 
   extract_own_ads_urls:
     "Ad list container #my-manageitems-adlist not found. Maybe no ads present?": "Anzeigenlistencontainer #my-manageitems-adlist nicht gefunden. Vielleicht sind keine Anzeigen vorhanden?"
