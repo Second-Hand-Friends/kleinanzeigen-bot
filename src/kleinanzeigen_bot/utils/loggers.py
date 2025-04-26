@@ -28,6 +28,9 @@ LOG_ROOT:Final[logging.Logger] = logging.getLogger()
 
 
 def configure_console_logging() -> None:
+    # if a StreamHandler already exists, do not append it again
+    if any(isinstance(h, logging.StreamHandler) for h in LOG_ROOT.handlers):
+        return
 
     class CustomFormatter(logging.Formatter):
         LEVEL_COLORS = {

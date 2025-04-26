@@ -20,6 +20,7 @@ from . import extract, resources
 from ._version import __version__
 from .ads import calculate_content_hash, get_description_affixes
 from .utils import dicts, error_handlers, loggers, misc
+from .utils.exceptions import CaptchaEncountered
 from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
 from .utils.misc import ainput, ensure, is_frozen, parse_datetime, parse_decimal
@@ -773,7 +774,16 @@ class KleinanzeigenBot(WebScrapingMixin):
         # wait for captcha
         #############################
         try:
-            await self.web_find(By.CSS_SELECTOR, "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']", timeout = 2)
+            await self.web_find(
+                By.CSS_SELECTOR,
+                "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']",
+                timeout = 2)
+
+            if self.config.get("captcha", {}).get("auto_restart", False):
+                LOG.warning("Captcha recognized - auto-restart enabled, abort run...")
+                raise CaptchaEncountered(misc.parse_duration(self.config.get("captcha", {}).get("restart_delay", "6h")))
+
+            # Fallback: manuell
             LOG.warning("############################################")
             LOG.warning("# Captcha present! Please solve the captcha.")
             LOG.warning("############################################")
@@ -1128,7 +1138,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             else dicts.safe_get(ad_cfg, "description", "prefix")
             if dicts.safe_get(ad_cfg, "description", "prefix") is not None
             # 3. Global prefix from config
-            else get_description_affixes(self.config, prefix=True)
+            else get_description_affixes(self.config, prefix = True)
             or ""  # Default to empty string if all sources are None
         )
 
@@ -1140,7 +1150,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             else dicts.safe_get(ad_cfg, "description", "suffix")
             if dicts.safe_get(ad_cfg, "description", "suffix") is not None
             # 3. Global suffix from config
-            else get_description_affixes(self.config, prefix=False)
+            else get_description_affixes(self.config, prefix = False)
             or ""  # Default to empty string if all sources are None
         )
 
