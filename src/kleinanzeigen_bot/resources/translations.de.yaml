@@ -12,6 +12,11 @@ getopt.py:
   short_has_arg:
     "option -%s not recognized": "Option -%s unbekannt"
 
+#################################################
+kleinanzeigen_bot/__main__.py:
+#################################################
+  module:
+    "[INFO] Captcha detected. Sleeping %s before restart...": "[INFO] Captcha erkannt. Warte %s h bis zum Neustart..."
 
 #################################################
 kleinanzeigen_bot/__init__.py:
@@ -78,6 +83,7 @@ kleinanzeigen_bot/__init__.py:
     " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
     " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
     "Could not set city from location": "Stadt konnte nicht aus dem Standort gesetzt werden"
+    "Captcha recognized - auto-restart enabled, abort run...": "Captcha erkannt - Auto-Neustart aktiviert, Durchlauf wird beendet..."
 
   __set_condition:
     "Unable to close condition dialog!": "Kann den Dialog für Artikelzustand nicht schließen!"
