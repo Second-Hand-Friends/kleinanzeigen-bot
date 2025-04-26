@@ -26,6 +26,12 @@ ad_defaults:
 #   Jobs > Praktika: 102/125
 categories: {}
 
+download:
+  # if true, all shipping options matching the size will be stored
+  store_all_matching_shipping_options: false
+  # list of shipping options to exclude, e.g. ["DHL_2", "DHL_5"]
+  excluded_shipping_options: []
+
 publishing:
   delete_old_ads: "AFTER_PUBLISH"  # one of: AFTER_PUBLISH, BEFORE_PUBLISH, NEVER
   delete_old_ads_by_title: true  # only works if delete_old_ads is set to BEFORE_PUBLISH

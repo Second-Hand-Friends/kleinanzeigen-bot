@@ -422,11 +422,6 @@ class AdExtractor(WebScrapingMixin):
                     (await self.web_request("https://gateway.kleinanzeigen.de/postad/api/v1/shipping-options?posterType=PRIVATE"))
                     ["content"])["data"]["shippingOptionsResponse"]["options"]
 
-                internal_shipping_opt = [x for x in shipping_costs if x["priceInEuroCent"] == ship_costs * 100]
-
-                if not internal_shipping_opt:
-                    return "NOT_APPLICABLE", ship_costs, shipping_options
-
                 # map to internal shipping identifiers used by kleinanzeigen-bot
                 shipping_option_mapping = {
                     "DHL_001": "DHL_2",
@@ -440,11 +435,41 @@ class AdExtractor(WebScrapingMixin):
                     "HERMES_004": "Hermes_L"
                 }
 
-                shipping_option = shipping_option_mapping.get(internal_shipping_opt[0]["id"])
-                if not shipping_option:
-                    return "NOT_APPLICABLE", ship_costs, shipping_options
+                # Convert Euro to cents and round to nearest integer
+                price_in_cent = round(ship_costs * 100)
 
-                shipping_options = [shipping_option]
+                # Get excluded shipping options from config
+                excluded_options = self.config.get("download", {}).get("excluded_shipping_options", [])
+
+                # If store_all_matching_shipping_options is enabled, get all options for the same size
+                if self.config.get("download", {}).get("store_all_matching_shipping_options", False):
+                    # Find all options with the same price to determine the package size
+                    matching_options = [opt for opt in shipping_costs if opt["priceInEuroCent"] == price_in_cent]
+                    if not matching_options:
+                        return 'NOT_APPLICABLE', ship_costs, shipping_options
+
+                    # Use the package size of the first matching option
+                    matching_size = matching_options[0]["packageSize"]
+
+                    # Get all options of the same size
+                    shipping_options = [
+                        shipping_option_mapping[opt["id"]]
+                        for opt in shipping_costs
+                        if opt["packageSize"] == matching_size
+                        and opt["id"] in shipping_option_mapping
+                        and shipping_option_mapping[opt["id"]] not in excluded_options
+                    ]
+                else:
+                    # Only use the matching option if it's not excluded
+                    matching_option = next((x for x in shipping_costs if x["priceInEuroCent"] == price_in_cent), None)
+                    if not matching_option:
+                        return 'NOT_APPLICABLE', ship_costs, shipping_options
+
+                    shipping_option = shipping_option_mapping.get(matching_option["id"])
+                    if not shipping_option or shipping_option in excluded_options:
+                        return 'NOT_APPLICABLE', ship_costs, shipping_options
+                    shipping_options = [shipping_option]
+
         except TimeoutError:  # no pricing box -> no shipping given
             ship_type = "NOT_APPLICABLE"
 
