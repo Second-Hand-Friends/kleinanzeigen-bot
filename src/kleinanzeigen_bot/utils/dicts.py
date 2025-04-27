@@ -96,7 +96,7 @@ def save_dict(filepath:str, content:dict[str, Any]) -> None:
             yaml.indent(mapping = 2, sequence = 4, offset = 2)
             yaml.representer.add_representer(str,  # use YAML | block style for multi-line strings
                 lambda dumper, data:
-                    dumper.represent_scalar('tag:yaml.org,2002:str', data, style = '|' if '\n' in data else None)
+                    dumper.represent_scalar("tag:yaml.org,2002:str", data, style = "|" if "\n" in data else None)
             )
             yaml.allow_duplicate_keys = False
             yaml.explicit_start = False

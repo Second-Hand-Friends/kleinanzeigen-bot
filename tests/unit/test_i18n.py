@@ -13,7 +13,7 @@ from kleinanzeigen_bot.utils import i18n
     ("fr_CA", ("fr", "CA", "UTF-8")),  # Test with language + region, no encoding
     ("pt_BR.iso8859-1", ("pt", "BR", "ISO8859-1")),  # Test with language + region + encoding
 ])
-def test_detect_locale(monkeypatch: MonkeyPatch, lang: str | None, expected: i18n.Locale) -> None:
+def test_detect_locale(monkeypatch:MonkeyPatch, lang:str | None, expected:i18n.Locale) -> None:
     """
     Pytest test case to verify detect_system_language() behavior under various LANG values.
     """
@@ -49,7 +49,7 @@ def test_pluralize(
     noun:str,
     count:int,
     prefix_with_count:bool,
-    expected: str
+    expected:str
 ) -> None:
     i18n.set_current_locale(i18n.Locale(lang, "US", "UTF_8"))
 
