@@ -243,16 +243,15 @@ max-positional-arguments = 6  # max. number of positional args for function / me
 # https://pypi.org/project/pytest/
 #####################
 [tool.pytest.ini_options]
+testpaths = [
+  "src",
+  "tests"
+]
 # https://docs.pytest.org/en/stable/reference.html#confval-addopts
 addopts = """
   --strict-markers
   -p no:cacheprovider
   --doctest-modules
-  --ignore=_LOCAL
-  --ignore=docker
-  --ignore=data
-  --ignore=dist
-  --ignore=src/kleinanzeigen_bot/__main__.py
   --cov=src/kleinanzeigen_bot
   --cov-report=term-missing
 """
