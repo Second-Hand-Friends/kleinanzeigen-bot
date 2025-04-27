@@ -1,14 +1,13 @@
-"""
-SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import pytest
 from _pytest.monkeypatch import MonkeyPatch  # pylint: disable=import-private-name
+
 from kleinanzeigen_bot.utils import i18n
 
 
-@pytest.mark.parametrize("lang, expected", [
+@pytest.mark.parametrize(("lang", "expected"), [
     (None, ("en", "US", "UTF-8")),  # Test with no LANG variable (should default to ("en", "US", "UTF-8"))
     ("fr", ("fr", None, "UTF-8")),  # Test with just a language code
     ("fr_CA", ("fr", "CA", "UTF-8")),  # Test with language + region, no encoding
@@ -29,7 +28,7 @@ def test_detect_locale(monkeypatch: MonkeyPatch, lang: str | None, expected: i18
     assert result == expected, f"For LANG={lang}, expected {expected} but got {result}"
 
 
-@pytest.mark.parametrize("lang, noun, count, prefix_with_count, expected", [
+@pytest.mark.parametrize(("lang", "noun", "count", "prefix_with_count", "expected"), [
     ("en", "field", 1, True, "1 field"),
     ("en", "field", 2, True, "2 fields"),
     ("en", "field", 2, False, "fields"),
@@ -54,5 +53,5 @@ def test_pluralize(
 ) -> None:
     i18n.set_current_locale(i18n.Locale(lang, "US", "UTF_8"))
 
-    result = i18n.pluralize(noun, count, prefix_with_count)
+    result = i18n.pluralize(noun, count, prefix_with_count = prefix_with_count)
     assert result == expected, f"For LANG={lang}, expected {expected} but got {result}"

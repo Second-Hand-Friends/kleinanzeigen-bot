@@ -1,30 +1,26 @@
-"""
-SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""
-import asyncio, atexit, copy, importlib.metadata, json, os, re, signal, shutil, sys, textwrap, time
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import atexit, copy, json, os, re, signal, sys, textwrap  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
-import urllib.request as urllib_request
 from collections.abc import Iterable
-from datetime import datetime
 from gettext import gettext as _
 from typing import Any, Final
 
-import certifi, colorama, nodriver
+import certifi, colorama, nodriver  # isort: skip
 from ruamel.yaml import YAML
 from wcmatch import glob
 
 from . import extract, resources
 from ._version import __version__
-from .ads import calculate_content_hash, get_description_affixes
+from .ads import MAX_DESCRIPTION_LENGTH, calculate_content_hash, get_description_affixes
 from .utils import dicts, error_handlers, loggers, misc
 from .utils.exceptions import CaptchaEncountered
 from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
 from .utils.misc import ainput, ensure, is_frozen, parse_datetime, parse_decimal
-from .utils.web_scraping_mixin import By, Element, Is, Page, WebScrapingMixin
+from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
@@ -287,7 +283,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             return True
 
         # Check republication interval
-        ad_age = datetime.utcnow() - last_updated_on
+        ad_age = misc.now() - last_updated_on
         if ad_age.days <= ad_cfg["republication_interval"]:
             LOG.info(
                 " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
@@ -391,15 +387,15 @@ class KleinanzeigenBot(WebScrapingMixin):
                     continue
 
             # Get description with prefix/suffix from ad config if present, otherwise use defaults
-            description = self.__get_description_with_affixes(ad_cfg)
+            ad_cfg["description"] = self.__get_description_with_affixes(ad_cfg)
 
             # Validate total length
-            ensure(len(description) <= 4000,
-                   f"Length of ad description including prefix and suffix exceeds 4000 chars. "
-                   f"Description length: {len(description)} chars. @ {ad_file}.")
+            ensure(len(ad_cfg["description"]) <= MAX_DESCRIPTION_LENGTH,
+                   f"""Length of ad description including prefix and suffix exceeds {MAX_DESCRIPTION_LENGTH} chars. Description length: {
+                   len(ad_cfg["description"])} chars. @ {ad_file}.""")
 
-            # pylint: disable=cell-var-from-loop
             def assert_one_of(path:str, allowed:Iterable[str]) -> None:
+                # ruff: noqa: B023 function-uses-loop-variable
                 ensure(dicts.safe_get(ad_cfg, *path.split(".")) in allowed, f"-> property [{path}] must be one of: {allowed} @ [{ad_file}]")
 
             def assert_min_len(path:str, minlen:int) -> None:
@@ -441,7 +437,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     ad_cfg["category"] = resolved_category_id
 
             if ad_cfg["shipping_costs"]:
-                ad_cfg["shipping_costs"] = str(round(misc.parse_decimal(ad_cfg["shipping_costs"]), 2))
+                ad_cfg["shipping_costs"] = str(round(parse_decimal(ad_cfg["shipping_costs"]), 2))
 
             if ad_cfg["images"]:
                 images = []
@@ -551,7 +547,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     async def is_logged_in(self) -> bool:
         try:
-            user_info = await self.web_text(By.CLASS_NAME, "mr-medium")
+            user_info = await self.web_text(By.ID, "user-email")
             if self.config['login']['username'].lower() in user_info.lower():
                 return True
         except TimeoutError:
@@ -564,17 +560,17 @@ class KleinanzeigenBot(WebScrapingMixin):
         published_ads = json.loads(
             (await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
 
-        for (ad_file, ad_cfg, _) in ad_cfgs:
+        for (ad_file, ad_cfg, _ad_cfg_orig) in ad_cfgs:
             count += 1
             LOG.info("Processing %s/%s: '%s' from [%s]...", count, len(ad_cfgs), ad_cfg["title"], ad_file)
-            await self.delete_ad(ad_cfg, self.config["publishing"]["delete_old_ads_by_title"], published_ads)
+            await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = self.config["publishing"]["delete_old_ads_by_title"])
             await self.web_sleep()
 
         LOG.info("############################################")
         LOG.info("DONE: Deleted %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    async def delete_ad(self, ad_cfg: dict[str, Any], delete_old_ads_by_title: bool, published_ads: list[dict[str, Any]]) -> bool:
+    async def delete_ad(self, ad_cfg: dict[str, Any], published_ads: list[dict[str, Any]], *, delete_old_ads_by_title: bool) -> bool:
         LOG.info("Deleting ad '%s' if already present...", ad_cfg["title"])
 
         await self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
@@ -625,7 +621,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             await self.web_await(lambda: self.web_check(By.ID, "checking-done", Is.DISPLAYED), timeout = 5 * 60)
 
             if self.config["publishing"]["delete_old_ads"] == "AFTER_PUBLISH" and not self.keep_old_ads:
-                await self.delete_ad(ad_cfg, False, published_ads)
+                await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = False)
 
         LOG.info("############################################")
         LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
@@ -640,7 +636,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         await self.assert_free_ad_limit_not_reached()
 
         if self.config["publishing"]["delete_old_ads"] == "BEFORE_PUBLISH" and not self.keep_old_ads:
-            await self.delete_ad(ad_cfg, self.config["publishing"]["delete_old_ads_by_title"], published_ads)
+            await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = self.config["publishing"]["delete_old_ads_by_title"])
 
         LOG.info("Publishing ad '%s'...", ad_cfg["title"])
 
@@ -828,7 +824,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         # Update content hash after successful publication
         # Calculate hash on original config to ensure consistent comparison on restart
         ad_cfg_orig["content_hash"] = calculate_content_hash(ad_cfg_orig)
-        ad_cfg_orig["updated_on"] = datetime.utcnow().isoformat()
+        ad_cfg_orig["updated_on"] = misc.now().isoformat()
         if not ad_cfg["created_on"] and not ad_cfg["id"]:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
 
@@ -914,11 +910,11 @@ class KleinanzeigenBot(WebScrapingMixin):
                     raise TimeoutError(f"Failed to set special attribute [{special_attribute_key}] (not found)") from ex
 
                 try:
-                    elem_id = getattr(special_attr_elem.attrs, 'id')
+                    elem_id = special_attr_elem.attrs.id
                     if special_attr_elem.local_name == 'select':
                         LOG.debug("Attribute field '%s' seems to be a select...", special_attribute_key)
                         await self.web_select(By.ID, elem_id, special_attribute_value)
-                    elif getattr(special_attr_elem.attrs, 'type') == 'checkbox':
+                    elif special_attr_elem.attrs.type == 'checkbox':
                         LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
                         await self.web_click(By.ID, elem_id)
                     else:
@@ -950,7 +946,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             else:
                 try:
                     # no options. only costs. Set custom shipping cost
-                    if not ad_cfg["shipping_costs"] is None:
+                    if ad_cfg["shipping_costs"] is not None:
                         await self.web_click(By.XPATH,
                                              '//*[contains(@class, "SubSection")]//*//button[contains(@class, "SelectionButton")]')
                         await self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(text(),"Andere Versandmethoden")]')
@@ -984,7 +980,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         except KeyError as ex:
             raise KeyError(f"Unknown shipping option(s), please refer to the documentation/README: {ad_cfg['shipping_options']}") from ex
 
-        shipping_sizes, shipping_packages = zip(*mapped_shipping_options)
+        shipping_sizes, shipping_packages = zip(*mapped_shipping_options, strict=False)
 
         try:
             shipping_size, = set(shipping_sizes)
@@ -1159,8 +1155,9 @@ class KleinanzeigenBot(WebScrapingMixin):
         final_description = final_description.replace("@", "(at)")
 
         # Validate length
-        ensure(len(final_description) <= 4000,
-               f"Length of ad description including prefix and suffix exceeds 4000 chars. Description length: {len(final_description)} chars.")
+        ensure(len(final_description) <= MAX_DESCRIPTION_LENGTH,
+               f"Length of ad description including prefix and suffix exceeds {MAX_DESCRIPTION_LENGTH} chars. "
+               f"Description length: {len(final_description)} chars.")
 
         return final_description
 
@@ -1184,20 +1181,12 @@ def main(args:list[str]) -> None:
     loggers.configure_console_logging()
 
     signal.signal(signal.SIGINT, error_handlers.on_sigint)  # capture CTRL+C
-
-    # sys.excepthook = error_handlers.on_exception
-    # -> commented out because it causes PyInstaller to log "[PYI-28040:ERROR] Failed to execute script '__main__' due to unhandled exception!",
-    #    despite the exceptions being properly processed by our custom error_handlers.on_exception callback.
-    #    We now handle exceptions explicitly using a top-level try/except block.
-
+    sys.excepthook = error_handlers.on_exception
     atexit.register(loggers.flush_all_handlers)
 
-    try:
-        bot = KleinanzeigenBot()
-        atexit.register(bot.close_browser_session)
-        nodriver.loop().run_until_complete(bot.run(args))
-    except Exception:
-        error_handlers.on_exception(*sys.exc_info())
+    bot = KleinanzeigenBot()
+    atexit.register(bot.close_browser_session)
+    nodriver.loop().run_until_complete(bot.run(args))
 
 
 if __name__ == "__main__":

@@ -1,22 +1,16 @@
-"""
-SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""
-import sys, traceback
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import sys, traceback  # isort: skip
 from types import FrameType, TracebackType
-from typing import Final
+from typing import Any, Final
 
 from . import loggers
 
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 
-def on_exception(ex_type: type[BaseException] | None, ex_value: BaseException | None, ex_traceback: TracebackType | None) -> None:
-    if ex_type is None or ex_value is None:
-        LOG.error("Unknown exception occurred (missing exception info): ex_type=%s, ex_value=%s", ex_type, ex_value)
-        return
-
+def on_exception(ex_type:type[BaseException], ex_value:Any, ex_traceback:TracebackType | None) -> None:
     if issubclass(ex_type, KeyboardInterrupt):
         sys.__excepthook__(ex_type, ex_value, ex_traceback)
     elif loggers.is_debug(LOG) or isinstance(ex_value, (AttributeError, ImportError, NameError, TypeError)):

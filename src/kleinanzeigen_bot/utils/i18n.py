@@ -1,13 +1,12 @@
-"""
-SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""
-import ctypes, gettext, inspect, locale, logging, os, sys
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import ctypes, gettext, inspect, locale, logging, os, sys  # isort: skip
 from collections.abc import Sized
 from typing import Any, Final, NamedTuple
 
 from kleinanzeigen_bot import resources
+
 from . import dicts, reflect
 
 __all__ = [
@@ -96,7 +95,7 @@ def translate(text:object, caller: inspect.FrameInfo | None) -> str:
     if not caller:
         return text
 
-    global _TRANSLATIONS
+    global _TRANSLATIONS  # noqa: PLW0603 Using the global statement to update `...` is discouraged
     if _TRANSLATIONS is None:
         try:
             _TRANSLATIONS = dicts.load_dict_from_module(resources, f"translations.{_CURRENT_LOCALE[0]}.yaml")
@@ -125,10 +124,10 @@ gettext.gettext = lambda message: translate(_original_gettext(message), reflect.
 for module_name, module in sys.modules.items():
     if module is None or module_name in sys.builtin_module_names:
         continue
-    if hasattr(module, '_') and getattr(module, '_') is _original_gettext:
-        setattr(module, '_', gettext.gettext)
-    if hasattr(module, 'gettext') and getattr(module, 'gettext') is _original_gettext:
-        setattr(module, 'gettext', gettext.gettext)
+    if hasattr(module, '_') and module._ is _original_gettext:
+        module._ = gettext.gettext  # type: ignore[attr-defined]
+    if hasattr(module, 'gettext') and module.gettext is _original_gettext:
+        module.gettext = gettext.gettext  # type: ignore[attr-defined]
 
 
 def get_current_locale() -> Locale:
@@ -136,13 +135,13 @@ def get_current_locale() -> Locale:
 
 
 def set_current_locale(new_locale:Locale) -> None:
-    global _CURRENT_LOCALE, _TRANSLATIONS
+    global _CURRENT_LOCALE, _TRANSLATIONS  # noqa: PLW0603 Using the global statement to update `...` is discouraged
     if new_locale.language != _CURRENT_LOCALE.language:
         _TRANSLATIONS = None
     _CURRENT_LOCALE = new_locale
 
 
-def pluralize(noun:str, count:int | Sized, prefix_with_count:bool = True) -> str:
+def pluralize(noun:str, count:int | Sized, *, prefix_with_count:bool = True) -> str:
     """
     >>> set_current_locale(Locale("en"))  # Setup for doctests
     >>> pluralize("field", 1)
@@ -189,7 +188,7 @@ def pluralize(noun:str, count:int | Sized, prefix_with_count:bool = True) -> str
         return f"{prefix}{noun}e"  # Hund -> Hunde
 
     # English
-    if len(noun) < 2:
+    if len(noun) < 2:  # noqa: PLR2004 Magic value used in comparison
         return f"{prefix}{noun}s"
     if noun.endswith(('s', 'sh', 'ch', 'x', 'z')):
         return f"{prefix}{noun}es"

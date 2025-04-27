@@ -1,16 +1,15 @@
-"""
-SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""
-import copy, json, os
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import copy, json, os  # isort: skip
 from collections.abc import Callable
-from importlib.resources import read_text as get_resource_as_string
 from gettext import gettext as _
+from importlib.resources import read_text as get_resource_as_string
 from types import ModuleType
 from typing import Any, Final
 
 from ruamel.yaml import YAML
+
 from . import files, loggers  # pylint: disable=cyclic-import
 
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
@@ -112,9 +111,9 @@ def safe_get(a_map:dict[Any, Any], *keys:str) -> Any:
     'some_value'
     """
     if a_map:
-        for key in keys:
-            try:
+        try:
+            for key in keys:
                 a_map = a_map[key]
-            except (KeyError, TypeError):
-                return None
+        except (KeyError, TypeError):
+            return None
     return a_map

@@ -1,26 +1,24 @@
-"""
-SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""
-import asyncio, enum, inspect, json, os, platform, secrets, shutil, time
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import asyncio, enum, inspect, json, os, platform, secrets, shutil  # isort: skip
 from collections.abc import Callable, Coroutine, Iterable
 from gettext import gettext as _
-from typing import cast, Any, Final
+from typing import Any, Final, cast
 
 try:
     from typing import Never  # type: ignore[attr-defined,unused-ignore] # mypy
 except ImportError:
     from typing import NoReturn as Never  # Python <3.11
 
-import nodriver, psutil
+import nodriver, psutil  # isort: skip
 from nodriver.core.browser import Browser
 from nodriver.core.config import Config
 from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
 
 from . import loggers, net
-from .misc import ensure, T
+from .misc import T, ensure
 
 __all__ = [
     "Browser",
@@ -70,8 +68,8 @@ class WebScrapingMixin:
 
     def __init__(self) -> None:
         self.browser_config:Final[BrowserConfig] = BrowserConfig()
-        self.browser:Browser = None  # pyright: ignore
-        self.page:Page = None  # pyright: ignore
+        self.browser:Browser = None  # pyright: ignore[reportAttributeAccessIssue]
+        self.page:Page = None  # pyright: ignore[reportAttributeAccessIssue]
 
     async def create_browser_session(self) -> None:
         LOG.info("Creating Browser session...")
@@ -96,7 +94,7 @@ class WebScrapingMixin:
         if remote_port > 0:
             LOG.info("Using existing browser process at %s:%s", remote_host, remote_port)
             ensure(net.is_port_open(remote_host, remote_port),
-                f"Browser process not reachable at {remote_host}:{remote_port}. " +
+                f"Browser process not reachable at {remote_host}:{remote_port}. "
                 f"Start the browser with --remote-debugging-port={remote_port} or remove this port from your config.yaml")
             cfg = Config(
                 browser_executable_path = self.browser_config.binary_location  # actually not necessary but nodriver fails without
@@ -208,14 +206,14 @@ class WebScrapingMixin:
     def close_browser_session(self) -> None:
         if self.browser:
             LOG.debug("Closing Browser session...")
-            self.page = None  # pyright: ignore
-            browser_process = psutil.Process(self.browser._process_pid)  # pylint: disable=protected-access
+            self.page = None  # pyright: ignore[reportAttributeAccessIssue]
+            browser_process = psutil.Process(self.browser._process_pid)  # noqa: SLF001 Private member accessed
             browser_children:list[psutil.Process] = browser_process.children()
             self.browser.stop()
             for p in browser_children:
                 if p.is_running():
                     p.kill()  # terminate orphaned browser processes
-            self.browser = None  # pyright: ignore
+            self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
 
     def get_compatible_browser(self) -> str:
         match platform.system():
@@ -236,15 +234,15 @@ class WebScrapingMixin:
 
             case "Windows":
                 browser_paths = [
-                    os.environ.get("ProgramFiles", "C:\\Program Files") + r'\Microsoft\Edge\Application\msedge.exe',
-                    os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)") + r'\Microsoft\Edge\Application\msedge.exe',
+                    os.environ.get("PROGRAMFILES", "C:\\Program Files") + r'\Microsoft\Edge\Application\msedge.exe',
+                    os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)") + r'\Microsoft\Edge\Application\msedge.exe',
 
-                    os.environ["ProgramFiles"] + r'\Chromium\Application\chrome.exe',
-                    os.environ["ProgramFiles(x86)"] + r'\Chromium\Application\chrome.exe',
+                    os.environ["PROGRAMFILES"] + r'\Chromium\Application\chrome.exe',
+                    os.environ["PROGRAMFILES(X86)"] + r'\Chromium\Application\chrome.exe',
                     os.environ["LOCALAPPDATA"] + r'\Chromium\Application\chrome.exe',
 
-                    os.environ["ProgramFiles"] + r'\Chrome\Application\chrome.exe',
-                    os.environ["ProgramFiles(x86)"] + r'\Chrome\Application\chrome.exe',
+                    os.environ["PROGRAMFILES"] + r'\Chrome\Application\chrome.exe',
+                    os.environ["PROGRAMFILES(X86)"] + r'\Chrome\Application\chrome.exe',
                     os.environ["LOCALAPPDATA"] + r'\Chrome\Application\chrome.exe',
 
                     shutil.which("msedge.exe"),
@@ -277,7 +275,7 @@ class WebScrapingMixin:
             ex:Exception | None = None
             try:
                 result_raw = condition()
-                result:T = (await result_raw) if inspect.isawaitable(result_raw) else result_raw
+                result:T = cast(T, await result_raw if inspect.isawaitable(result_raw) else result_raw)
                 if result:
                     return result
             except Exception as ex1:
@@ -359,11 +357,11 @@ class WebScrapingMixin:
         _prev_jscode:str = getattr(self.__class__.web_execute, "_prev_jscode", "")
         if not (jscode == _prev_jscode or (jscode.startswith("window.scrollTo") and _prev_jscode.startswith("window.scrollTo"))):
             LOG.debug("web_execute(`%s`) = `%s`", jscode, result)
-        self.__class__.web_execute._prev_jscode = jscode  # type: ignore[attr-defined]  # pylint: disable=protected-access
+        self.__class__.web_execute._prev_jscode = jscode  # type: ignore[attr-defined]  # noqa: SLF001 Private member accessed
 
         return result
 
-    async def web_find(self, selector_type:By, selector_value:str, *, parent:Element = None, timeout:int | float = 5) -> Element:
+    async def web_find(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float = 5) -> Element:
         """
         Locates an HTML element by the given selector type and value.
 
@@ -408,7 +406,7 @@ class WebScrapingMixin:
 
         raise AssertionError(_("Unsupported selector type: %s") % selector_type)
 
-    async def web_find_all(self, selector_type:By, selector_value:str, *, parent:Element = None, timeout:int | float = 5) -> list[Element]:
+    async def web_find_all(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float = 5) -> list[Element]:
         """
         Locates an HTML element by ID.
 
@@ -460,7 +458,7 @@ class WebScrapingMixin:
         await self.web_sleep()
         return input_field
 
-    async def web_open(self, url:str, *, timeout:int | float = 15000, reload_if_already_open:bool = False) -> None:
+    async def web_open(self, url:str, *, timeout:int | float = 15_000, reload_if_already_open:bool = False) -> None:
         """
         :param url: url to open in browser
         :param timeout: timespan in seconds within the page needs to be loaded
@@ -475,7 +473,7 @@ class WebScrapingMixin:
         await self.web_await(lambda: self.web_execute("document.readyState == 'complete'"), timeout = timeout,
                 timeout_error_message = f"Page did not finish loading within {timeout} seconds.")
 
-    async def web_text(self, selector_type:By, selector_value:str, *, parent:Element = None, timeout:int | float = 5) -> str:
+    async def web_text(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float = 5) -> str:
         return str(await (await self.web_find(selector_type, selector_value, parent = parent, timeout = timeout)).apply("""
             function (elem) {
                 let sel = window.getSelection()
@@ -489,10 +487,11 @@ class WebScrapingMixin:
             }
         """))
 
-    async def web_sleep(self, min_ms:int = 1000, max_ms:int = 2500) -> None:
+    async def web_sleep(self, min_ms:int = 1_000, max_ms:int = 2_500) -> None:
         duration = max_ms <= min_ms and min_ms or secrets.randbelow(max_ms - min_ms) + min_ms
-        LOG.log(loggers.INFO if duration > 1500 else loggers.DEBUG, " ... pausing for %d ms ...", duration)
-        await self.page.sleep(duration / 1000)
+        LOG.log(loggers.INFO if duration > 1_500 else loggers.DEBUG,  # noqa: PLR2004 Magic value used in comparison
+                " ... pausing for %d ms ...", duration)
+        await self.page.sleep(duration / 1_000)
 
     async def web_request(self, url:str, method:str = "GET", valid_response_codes:int | Iterable[int] = 200,
             headers:dict[str, str] | None = None) -> dict[str, Any]:
@@ -524,7 +523,7 @@ class WebScrapingMixin:
         return response
     # pylint: enable=dangerous-default-value
 
-    async def web_scroll_page_down(self, scroll_length: int = 10, scroll_speed: int = 10000, scroll_back_top: bool = False) -> None:
+    async def web_scroll_page_down(self, scroll_length: int = 10, scroll_speed: int = 10_000, *, scroll_back_top: bool = False) -> None:
         """
         Smoothly scrolls the current web page down.
 
@@ -537,13 +536,13 @@ class WebScrapingMixin:
         while current_y_pos < bottom_y_pos:  # scroll in steps until bottom reached
             current_y_pos += scroll_length
             await self.web_execute(f'window.scrollTo(0, {current_y_pos})')  # scroll one step
-            time.sleep(scroll_length / scroll_speed)
+            await asyncio.sleep(scroll_length / scroll_speed)
 
         if scroll_back_top:  # scroll back to top in same style
             while current_y_pos > 0:
                 current_y_pos -= scroll_length
                 await self.web_execute(f'window.scrollTo(0, {current_y_pos})')
-                time.sleep(scroll_length / scroll_speed / 2)  # double speed
+                await asyncio.sleep(scroll_length / scroll_speed / 2)  # double speed
 
     async def web_select(self, selector_type:By, selector_value:str, selected_value:Any, timeout:int | float = 5) -> Element:
         """

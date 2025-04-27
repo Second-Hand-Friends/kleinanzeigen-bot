@@ -10,8 +10,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from kleinanzeigen_bot import KleinanzeigenBot
-from kleinanzeigen_bot.utils import loggers
 from kleinanzeigen_bot.extract import AdExtractor
+from kleinanzeigen_bot.utils import loggers
 from kleinanzeigen_bot.utils.web_scraping_mixin import Browser
 
 loggers.configure_console_logging()
