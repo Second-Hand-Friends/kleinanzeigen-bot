@@ -186,13 +186,11 @@ kleinanzeigen_bot/extract.py:
   _extract_contact_from_ad_page:
     "No street given in the contact.": "Keine Straße in den Kontaktdaten angegeben."
 
-
 #################################################
 kleinanzeigen_bot/utils/i18n.py:
 #################################################
   _detect_locale:
     "Error detecting language on Windows": "Fehler bei der Spracherkennung unter Windows"
-
 
 #################################################
 kleinanzeigen_bot/utils/error_handlers.py:
