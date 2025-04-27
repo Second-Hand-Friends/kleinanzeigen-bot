@@ -42,7 +42,7 @@ class AdExtractor(WebScrapingMixin):
             os.mkdir(relative_directory)
             LOG.info("Created ads directory at ./%s.", relative_directory)
 
-        new_base_dir = os.path.join(relative_directory, f'ad_{ad_id}')
+        new_base_dir = os.path.join(relative_directory, f"ad_{ad_id}")
         if os.path.exists(new_base_dir):
             LOG.info("Deleting current folder of ad %s...", ad_id)
             shutil.rmtree(new_base_dir)
@@ -51,7 +51,7 @@ class AdExtractor(WebScrapingMixin):
 
         # call extraction function
         info = await self._extract_ad_page_info(new_base_dir, ad_id)
-        ad_file_path = new_base_dir + "/" + f'ad_{ad_id}.yaml'
+        ad_file_path = new_base_dir + "/" + f"ad_{ad_id}.yaml"
         dicts.save_dict(ad_file_path, info)
 
     async def _download_images_from_ad_page(self, directory:str, ad_id:int) -> list[str]:
@@ -96,7 +96,7 @@ class AdExtractor(WebScrapingMixin):
                     try:
                         # click next button, wait, and re-establish reference
                         await (await self.web_find(By.CLASS_NAME, "galleryimage--navigation--next")).click()
-                        new_div = await self.web_find(By.CSS_SELECTOR, f'div.galleryimage-element:nth-child({img_nr + 1})')
+                        new_div = await self.web_find(By.CSS_SELECTOR, f"div.galleryimage-element:nth-child({img_nr + 1})")
                         img_element = await self.web_find(By.TAG_NAME, "img", parent = new_div)
                     except TimeoutError:
                         LOG.error("NEXT button in image gallery somehow missing, aborting image fetching.")

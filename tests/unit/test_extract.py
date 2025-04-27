@@ -380,7 +380,7 @@ class TestAdExtractorContent:
         ):
             try:
                 info = await test_extractor._extract_ad_page_info("/some/dir", 12345)
-                assert info["description"] == ""
+                assert not info["description"]
             except TimeoutError:
                 # This is also acceptable - depends on how we want to handle timeouts
                 pass

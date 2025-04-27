@@ -224,7 +224,7 @@ class PreferDoubleQuotesRule(FormatterRule):
             raw = new_lines[start_line]
             # apply shift so we match against current edited line
             idx = starting_col_offset + shift
-            if idx >= len(raw) or raw[idx] not in ("'", "r", "u", "b", "f", "R", "U", "B", "F"):
+            if idx >= len(raw) or raw[idx] not in {"'", "r", "u", "b", "f", "R", "U", "B", "F"}:
                 continue
 
             # match literal at that column
