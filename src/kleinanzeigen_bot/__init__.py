@@ -1184,12 +1184,20 @@ def main(args:list[str]) -> None:
     loggers.configure_console_logging()
 
     signal.signal(signal.SIGINT, error_handlers.on_sigint)  # capture CTRL+C
-    sys.excepthook = error_handlers.on_exception
+
+    # sys.excepthook = error_handlers.on_exception
+    # -> commented out because it causes PyInstaller to log "[PYI-28040:ERROR] Failed to execute script '__main__' due to unhandled exception!",
+    #    despite the exceptions being properly processed by our custom error_handlers.on_exception callback.
+    #    We now handle exceptions explicitly using a top-level try/except block.
+
     atexit.register(loggers.flush_all_handlers)
 
-    bot = KleinanzeigenBot()
-    atexit.register(bot.close_browser_session)
-    nodriver.loop().run_until_complete(bot.run(args))
+    try:
+        bot = KleinanzeigenBot()
+        atexit.register(bot.close_browser_session)
+        nodriver.loop().run_until_complete(bot.run(args))
+    except Exception:
+        error_handlers.on_exception(*sys.exc_info())
 
 
 if __name__ == "__main__":

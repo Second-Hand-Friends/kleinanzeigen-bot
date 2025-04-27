@@ -5,14 +5,18 @@ SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanze
 """
 import sys, traceback
 from types import FrameType, TracebackType
-from typing import Any, Final
+from typing import Final
 
 from . import loggers
 
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 
-def on_exception(ex_type:type[BaseException], ex_value:Any, ex_traceback:TracebackType | None) -> None:
+def on_exception(ex_type: type[BaseException] | None, ex_value: BaseException | None, ex_traceback: TracebackType | None) -> None:
+    if ex_type is None or ex_value is None:
+        LOG.error("Unknown exception occurred (missing exception info): ex_type=%s, ex_value=%s", ex_type, ex_value)
+        return
+
     if issubclass(ex_type, KeyboardInterrupt):
         sys.__excepthook__(ex_type, ex_value, ex_traceback)
     elif loggers.is_debug(LOG) or isinstance(ex_value, (AttributeError, ImportError, NameError, TypeError)):
