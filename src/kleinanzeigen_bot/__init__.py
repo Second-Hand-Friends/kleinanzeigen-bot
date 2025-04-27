@@ -391,12 +391,12 @@ class KleinanzeigenBot(WebScrapingMixin):
                     continue
 
             # Get description with prefix/suffix from ad config if present, otherwise use defaults
-            ad_cfg["description"] = self.__get_description_with_affixes(ad_cfg)
+            description = self.__get_description_with_affixes(ad_cfg)
 
             # Validate total length
-            ensure(len(ad_cfg["description"]) <= 4000,
-                   f"""Length of ad description including prefix and suffix exceeds 4000 chars. Description length: {
-                   len(ad_cfg["description"])} chars. @ {ad_file}.""")
+            ensure(len(description) <= 4000,
+                   f"Length of ad description including prefix and suffix exceeds 4000 chars. "
+                   f"Description length: {len(description)} chars. @ {ad_file}.")
 
             # pylint: disable=cell-var-from-loop
             def assert_one_of(path:str, allowed:Iterable[str]) -> None:
@@ -551,7 +551,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     async def is_logged_in(self) -> bool:
         try:
-            user_info = await self.web_text(By.ID, "user-email")
+            user_info = await self.web_text(By.CLASS_NAME, "mr-medium")
             if self.config['login']['username'].lower() in user_info.lower():
                 return True
         except TimeoutError:
