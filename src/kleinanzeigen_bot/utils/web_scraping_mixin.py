@@ -33,7 +33,7 @@ __all__ = [
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 # see https://api.jquery.com/category/selectors/
-METACHAR_ESCAPER:Final[dict[int, str]] = str.maketrans({ch: f'\\{ch}' for ch in '!"#$%&\'()*+,./:;<=>?@[\\]^`{|}~'})
+METACHAR_ESCAPER:Final[dict[int, str]] = str.maketrans({ch: f"\\{ch}" for ch in '!"#$%&\'()*+,./:;<=>?@[\\]^`{|}~'})
 
 
 class By(enum.Enum):
@@ -535,13 +535,13 @@ class WebScrapingMixin:
         bottom_y_pos:int = await self.web_execute("document.body.scrollHeight")  # get bottom position
         while current_y_pos < bottom_y_pos:  # scroll in steps until bottom reached
             current_y_pos += scroll_length
-            await self.web_execute(f'window.scrollTo(0, {current_y_pos})')  # scroll one step
+            await self.web_execute(f"window.scrollTo(0, {current_y_pos})")  # scroll one step
             await asyncio.sleep(scroll_length / scroll_speed)
 
         if scroll_back_top:  # scroll back to top in same style
             while current_y_pos > 0:
                 current_y_pos -= scroll_length
-                await self.web_execute(f'window.scrollTo(0, {current_y_pos})')
+                await self.web_execute(f"window.scrollTo(0, {current_y_pos})")
                 await asyncio.sleep(scroll_length / scroll_speed / 2)  # double speed
 
     async def web_select(self, selector_type:By, selector_value:str, selected_value:Any, timeout:int | float = 5) -> Element:

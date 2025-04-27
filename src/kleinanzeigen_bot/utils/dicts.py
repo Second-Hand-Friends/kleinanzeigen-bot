@@ -61,7 +61,7 @@ def load_dict_if_exists(filepath:str, content_label:str = "") -> dict[str, Any] 
     LOG.info("Loading %s[%s]...", content_label and content_label + _(" from ") or "", abs_filepath)
 
     __, file_ext = os.path.splitext(filepath)
-    if file_ext not in (".json", ".yaml", ".yml"):
+    if file_ext not in {".json", ".yaml", ".yml"}:
         raise ValueError(_('Unsupported file type. The filename "%s" must end with *.json, *.yaml, or *.yml') % filepath)
 
     if not os.path.exists(filepath):
@@ -78,7 +78,7 @@ def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "
     LOG.debug("Loading %s[%s.%s]...", content_label and content_label + " from " or "", module.__name__, filename)
 
     __, file_ext = os.path.splitext(filename)
-    if file_ext not in (".json", ".yaml", ".yml"):
+    if file_ext not in {".json", ".yaml", ".yml"}:
         raise ValueError(f'Unsupported file type. The filename "{filename}" must end with *.json, *.yaml, or *.yml')
 
     content = get_resource_as_string(module, filename)  # pylint: disable=deprecated-method
