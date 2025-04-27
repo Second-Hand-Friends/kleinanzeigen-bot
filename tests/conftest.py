@@ -1,8 +1,6 @@
-"""
-SPDX-FileCopyrightText: © Jens Bergmann and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""
+# SPDX-FileCopyrightText: © Jens Bergmann and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import os
 from typing import Any, Final
 from unittest.mock import MagicMock
@@ -21,7 +19,7 @@ LOG.setLevel(loggers.DEBUG)
 
 
 @pytest.fixture
-def test_data_dir(tmp_path: str) -> str:
+def test_data_dir(tmp_path:str) -> str:
     """Provides a temporary directory for test data.
 
     This fixture uses pytest's built-in tmp_path fixture to create a temporary
@@ -41,33 +39,33 @@ def sample_config() -> dict[str, Any]:
     - Publishing settings
     """
     return {
-        'login': {
-            'username': 'testuser',
-            'password': 'testpass'
+        "login": {
+            "username": "testuser",
+            "password": "testpass"
         },
-        'browser': {
-            'arguments': [],
-            'binary_location': None,
-            'extensions': [],
-            'use_private_window': True,
-            'user_data_dir': None,
-            'profile_name': None
+        "browser": {
+            "arguments": [],
+            "binary_location": None,
+            "extensions": [],
+            "use_private_window": True,
+            "user_data_dir": None,
+            "profile_name": None
         },
-        'ad_defaults': {
-            'description': {
-                'prefix': 'Test Prefix',
-                'suffix': 'Test Suffix'
+        "ad_defaults": {
+            "description": {
+                "prefix": "Test Prefix",
+                "suffix": "Test Suffix"
             }
         },
-        'publishing': {
-            'delete_old_ads': 'BEFORE_PUBLISH',
-            'delete_old_ads_by_title': False
+        "publishing": {
+            "delete_old_ads": "BEFORE_PUBLISH",
+            "delete_old_ads_by_title": False
         }
     }
 
 
 @pytest.fixture
-def test_bot(sample_config: dict[str, Any]) -> KleinanzeigenBot:
+def test_bot(sample_config:dict[str, Any]) -> KleinanzeigenBot:
     """Provides a fresh KleinanzeigenBot instance for all test classes.
 
     Dependencies:
@@ -89,7 +87,7 @@ def browser_mock() -> MagicMock:
 
 
 @pytest.fixture
-def log_file_path(test_data_dir: str) -> str:
+def log_file_path(test_data_dir:str) -> str:
     """Provides a temporary path for log files.
 
     Dependencies:
@@ -99,7 +97,7 @@ def log_file_path(test_data_dir: str) -> str:
 
 
 @pytest.fixture
-def test_extractor(browser_mock: MagicMock, sample_config: dict[str, Any]) -> AdExtractor:
+def test_extractor(browser_mock:MagicMock, sample_config:dict[str, Any]) -> AdExtractor:
     """Provides a fresh AdExtractor instance for testing.
 
     Dependencies:

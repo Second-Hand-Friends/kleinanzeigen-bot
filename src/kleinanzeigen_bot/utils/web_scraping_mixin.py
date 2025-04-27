@@ -165,7 +165,7 @@ class WebScrapingMixin:
         prefs_file = os.path.join(profile_dir, "Preferences")
         if not os.path.exists(prefs_file):
             LOG.info(" -> Setting chrome prefs [%s]...", prefs_file)
-            with open(prefs_file, "w", encoding = 'UTF-8') as fd:
+            with open(prefs_file, "w", encoding = "UTF-8") as fd:
                 json.dump({
                     "credentials_enable_service": False,
                     "enable_do_not_track": True,
@@ -234,16 +234,16 @@ class WebScrapingMixin:
 
             case "Windows":
                 browser_paths = [
-                    os.environ.get("PROGRAMFILES", "C:\\Program Files") + r'\Microsoft\Edge\Application\msedge.exe',
-                    os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)") + r'\Microsoft\Edge\Application\msedge.exe',
+                    os.environ.get("PROGRAMFILES", "C:\\Program Files") + r"\Microsoft\Edge\Application\msedge.exe",
+                    os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)") + r"\Microsoft\Edge\Application\msedge.exe",
 
-                    os.environ["PROGRAMFILES"] + r'\Chromium\Application\chrome.exe',
-                    os.environ["PROGRAMFILES(X86)"] + r'\Chromium\Application\chrome.exe',
-                    os.environ["LOCALAPPDATA"] + r'\Chromium\Application\chrome.exe',
+                    os.environ["PROGRAMFILES"] + r"\Chromium\Application\chrome.exe",
+                    os.environ["PROGRAMFILES(X86)"] + r"\Chromium\Application\chrome.exe",
+                    os.environ["LOCALAPPDATA"] + r"\Chromium\Application\chrome.exe",
 
-                    os.environ["PROGRAMFILES"] + r'\Chrome\Application\chrome.exe',
-                    os.environ["PROGRAMFILES(X86)"] + r'\Chrome\Application\chrome.exe',
-                    os.environ["LOCALAPPDATA"] + r'\Chrome\Application\chrome.exe',
+                    os.environ["PROGRAMFILES"] + r"\Chrome\Application\chrome.exe",
+                    os.environ["PROGRAMFILES(X86)"] + r"\Chrome\Application\chrome.exe",
+                    os.environ["LOCALAPPDATA"] + r"\Chrome\Application\chrome.exe",
 
                     shutil.which("msedge.exe"),
                     shutil.which("chromium.exe"),
@@ -259,8 +259,8 @@ class WebScrapingMixin:
 
         raise AssertionError(_("Installed browser could not be detected"))
 
-    async def web_await(self, condition: Callable[[], T | Never | Coroutine[Any, Any, T | Never]], *,
-            timeout:int | float = 5, timeout_error_message: str = "") -> T:
+    async def web_await(self, condition:Callable[[], T | Never | Coroutine[Any, Any, T | Never]], *,
+            timeout:int | float = 5, timeout_error_message:str = "") -> T:
         """
         Blocks/waits until the given condition is met.
 
@@ -523,7 +523,7 @@ class WebScrapingMixin:
         return response
     # pylint: enable=dangerous-default-value
 
-    async def web_scroll_page_down(self, scroll_length: int = 10, scroll_speed: int = 10_000, *, scroll_back_top: bool = False) -> None:
+    async def web_scroll_page_down(self, scroll_length:int = 10, scroll_speed:int = 10_000, *, scroll_back_top:bool = False) -> None:
         """
         Smoothly scrolls the current web page down.
 
@@ -532,7 +532,7 @@ class WebScrapingMixin:
         :param scroll_back_top: whether to scroll the page back to the top after scrolling to the bottom
         """
         current_y_pos = 0
-        bottom_y_pos: int = await self.web_execute('document.body.scrollHeight')  # get bottom position
+        bottom_y_pos:int = await self.web_execute("document.body.scrollHeight")  # get bottom position
         while current_y_pos < bottom_y_pos:  # scroll in steps until bottom reached
             current_y_pos += scroll_length
             await self.web_execute(f'window.scrollTo(0, {current_y_pos})')  # scroll one step

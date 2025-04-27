@@ -26,12 +26,12 @@ from ruamel.yaml import YAML
 from kleinanzeigen_bot import resources
 
 # Messages that are intentionally not translated (internal/debug messages)
-EXCLUDED_MESSAGES: dict[str, set[str]] = {
+EXCLUDED_MESSAGES:dict[str, set[str]] = {
     "kleinanzeigen_bot/__init__.py": {"############################################"}
 }
 
 # Special modules that are known to be needed even if not in messages_by_file
-KNOWN_NEEDED_MODULES = {'getopt.py'}
+KNOWN_NEEDED_MODULES = {"getopt.py"}
 
 # Type aliases for better readability
 ModulePath = str
@@ -45,12 +45,12 @@ MissingDict = dict[FunctionName, dict[Message, set[Message]]]
 @dataclass
 class MessageLocation:
     """Represents the location of a message in the codebase."""
-    module: str
-    function: str
-    message: str
+    module:str
+    function:str
+    message:str
 
 
-def _get_function_name(node: ast.AST) -> str:
+def _get_function_name(node:ast.AST) -> str:
     """
     Get the name of the function containing this AST node.
     This matches i18n.py's behavior which only uses the function name for translation lookups.
@@ -63,14 +63,14 @@ def _get_function_name(node: ast.AST) -> str:
         The function name or "module" for module-level code
     """
 
-    def find_parent_context(n: ast.AST) -> tuple[str | None, str | None]:
+    def find_parent_context(n:ast.AST) -> tuple[str | None, str | None]:
         """Find the containing class and function names."""
         class_name = None
         function_name = None
         current = n
 
-        while hasattr(current, '_parent'):
-            current = getattr(current, '_parent')
+        while hasattr(current, "_parent"):
+            current = getattr(current, "_parent")
             if isinstance(current, ast.ClassDef) and not class_name:
                 class_name = current.name
             elif isinstance(current, ast.FunctionDef) or isinstance(current, ast.AsyncFunctionDef) and not function_name:
@@ -84,7 +84,7 @@ def _get_function_name(node: ast.AST) -> str:
     return "module"  # For module-level code
 
 
-def _extract_log_messages(file_path: str, exclude_debug:bool = False) -> MessageDict:
+def _extract_log_messages(file_path:str, exclude_debug:bool = False) -> MessageDict:
     """
     Extract all translatable messages from a Python file with their function context.
 
@@ -94,27 +94,27 @@ def _extract_log_messages(file_path: str, exclude_debug:bool = False) -> Message
     Returns:
         Dictionary mapping function names to their messages
     """
-    with open(file_path, 'r', encoding = 'utf-8') as file:
+    with open(file_path, "r", encoding = "utf-8") as file:
         tree = ast.parse(file.read(), filename = file_path)
 
     # Add parent references for context tracking
     for parent in ast.walk(tree):
         for child in ast.iter_child_nodes(parent):
-            setattr(child, '_parent', parent)
+            setattr(child, "_parent", parent)
 
-    messages: MessageDict = defaultdict(lambda: defaultdict(set))
+    messages:MessageDict = defaultdict(lambda: defaultdict(set))
 
-    def add_message(function: str, msg: str) -> None:
+    def add_message(function:str, msg:str) -> None:
         """Add a message to the messages dictionary."""
         if function not in messages:
             messages[function] = defaultdict(set)
         if msg not in messages[function]:
             messages[function][msg] = {msg}
 
-    def extract_string_value(node: ast.AST) -> str | None:
+    def extract_string_value(node:ast.AST) -> str | None:
         """Safely extract string value from an AST node."""
         if isinstance(node, ast.Constant):
-            value = getattr(node, 'value', None)
+            value = getattr(node, "value", None)
             return value if isinstance(value, str) else None
         return None
 
@@ -127,24 +127,24 @@ def _extract_log_messages(file_path: str, exclude_debug:bool = False) -> Message
         # Extract messages from various call types
         if (isinstance(node.func, ast.Attribute) and
                 isinstance(node.func.value, ast.Name) and
-                node.func.value.id in {'LOG', 'logger', 'logging'} and
-                node.func.attr in {None if exclude_debug else 'debug', 'info', 'warning', 'error', 'exception', 'critical'}):
+                node.func.value.id in {"LOG", "logger", "logging"} and
+                node.func.attr in {None if exclude_debug else "debug", "info", "warning", "error", "exception", "critical"}):
             if node.args:
                 msg = extract_string_value(node.args[0])
                 if msg:
                     add_message(function_name, msg)
 
         # Handle gettext calls
-        elif ((isinstance(node.func, ast.Name) and node.func.id == '_') or
-              (isinstance(node.func, ast.Attribute) and node.func.attr == 'gettext')):
+        elif ((isinstance(node.func, ast.Name) and node.func.id == "_") or
+              (isinstance(node.func, ast.Attribute) and node.func.attr == "gettext")):
             if node.args:
                 msg = extract_string_value(node.args[0])
                 if msg:
                     add_message(function_name, msg)
 
         # Handle other translatable function calls
-        elif isinstance(node.func, ast.Name) and node.func.id in {'ainput', 'pluralize', 'ensure'}:
-            arg_index = 0 if node.func.id == 'ainput' else 1
+        elif isinstance(node.func, ast.Name) and node.func.id in {"ainput", "pluralize", "ensure"}:
+            arg_index = 0 if node.func.id == "ainput" else 1
             if len(node.args) > arg_index:
                 msg = extract_string_value(node.args[arg_index])
                 if msg:
@@ -162,10 +162,10 @@ def _get_all_log_messages(exclude_debug:bool = False) -> dict[str, MessageDict]:
     Returns:
         Dictionary mapping module paths to their function messages
     """
-    src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'src', 'kleinanzeigen_bot')
+    src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "src", "kleinanzeigen_bot")
     print(f"\nScanning for messages in directory: {src_dir}")
 
-    messages_by_file: dict[str, MessageDict] = {
+    messages_by_file:dict[str, MessageDict] = {
         # Special case for getopt.py which is imported
         "getopt.py": {
             "do_longs": {
@@ -187,15 +187,15 @@ def _get_all_log_messages(exclude_debug:bool = False) -> dict[str, MessageDict]:
 
     for root, _, filenames in os.walk(src_dir):
         for filename in filenames:
-            if filename.endswith('.py'):
+            if filename.endswith(".py"):
                 file_path = os.path.join(root, filename)
                 relative_path = os.path.relpath(file_path, src_dir)
-                if relative_path.startswith('resources/'):
+                if relative_path.startswith("resources/"):
                     continue
                 messages = _extract_log_messages(file_path, exclude_debug)
                 if messages:
-                    module_path = os.path.join('kleinanzeigen_bot', relative_path)
-                    module_path = module_path.replace(os.sep, '/')
+                    module_path = os.path.join("kleinanzeigen_bot", relative_path)
+                    module_path = module_path.replace(os.sep, "/")
                     messages_by_file[module_path] = messages
 
     return messages_by_file
@@ -217,7 +217,7 @@ def _get_available_languages() -> list[str]:
     return sorted(languages)
 
 
-def _get_translations_for_language(lang: str) -> TranslationDict:
+def _get_translations_for_language(lang:str) -> TranslationDict:
     """
     Get translations for a specific language from its YAML file.
 
@@ -227,7 +227,7 @@ def _get_translations_for_language(lang: str) -> TranslationDict:
     Returns:
         Dictionary containing all translations for the language
     """
-    yaml = YAML(typ = 'safe')
+    yaml = YAML(typ = "safe")
     translation_file = f"translations.{lang}.yaml"
     print(f"Loading translations from {translation_file}")
     content = files(resources).joinpath(translation_file).read_text()
@@ -235,10 +235,10 @@ def _get_translations_for_language(lang: str) -> TranslationDict:
     return translations
 
 
-def _find_translation(translations: TranslationDict,
-                     module: str,
-                     function: str,
-                     message: str) -> bool:
+def _find_translation(translations:TranslationDict,
+                     module:str,
+                     function:str,
+                     message:str) -> bool:
     """
     Check if a translation exists for a given message in the exact location where i18n.py will look.
     This matches the lookup logic in i18n.py which uses dicts.safe_get().
@@ -253,11 +253,11 @@ def _find_translation(translations: TranslationDict,
         True if translation exists in the correct location, False otherwise
     """
     # Special case for getopt.py
-    if module == 'getopt.py':
+    if module == "getopt.py":
         return bool(translations.get(module, {}).get(function, {}).get(message))
 
     # Add kleinanzeigen_bot/ prefix if not present
-    module_path = f'kleinanzeigen_bot/{module}' if not module.startswith('kleinanzeigen_bot/') else module
+    module_path = f'kleinanzeigen_bot/{module}' if not module.startswith("kleinanzeigen_bot/") else module
 
     # Check if module exists in translations
     module_trans = translations.get(module_path, {})
@@ -277,10 +277,10 @@ def _find_translation(translations: TranslationDict,
     return has_translation
 
 
-def _message_exists_in_code(code_messages: dict[str, MessageDict],
-                          module: str,
-                          function: str,
-                          message: str) -> bool:
+def _message_exists_in_code(code_messages:dict[str, MessageDict],
+                          module:str,
+                          function:str,
+                          message:str) -> bool:
     """
     Check if a message exists in the code at the given location.
     This is the reverse of _find_translation - it checks if a translation's message
@@ -296,11 +296,11 @@ def _message_exists_in_code(code_messages: dict[str, MessageDict],
         True if message exists in the code, False otherwise
     """
     # Special case for getopt.py
-    if module == 'getopt.py':
+    if module == "getopt.py":
         return bool(code_messages.get(module, {}).get(function, {}).get(message))
 
     # Remove kleinanzeigen_bot/ prefix if present for code message lookup
-    module_path = module[len('kleinanzeigen_bot/'):] if module.startswith('kleinanzeigen_bot/') else module
+    module_path = module[len("kleinanzeigen_bot/"):] if module.startswith("kleinanzeigen_bot/") else module
     module_path = f'kleinanzeigen_bot/{module_path}'
 
     # Check if module exists in code messages
@@ -318,7 +318,7 @@ def _message_exists_in_code(code_messages: dict[str, MessageDict],
 
 
 @pytest.mark.parametrize("lang", _get_available_languages())
-def test_all_log_messages_have_translations(lang: str) -> None:
+def test_all_log_messages_have_translations(lang:str) -> None:
     """
     Test that all translatable messages in the code have translations for each language.
 
@@ -345,7 +345,7 @@ def test_all_log_messages_have_translations(lang: str) -> None:
         def make_inner_dict() -> defaultdict[str, set[str]]:
             return defaultdict(set)
 
-        by_module: defaultdict[str, defaultdict[str, set[str]]] = defaultdict(make_inner_dict)
+        by_module:defaultdict[str, defaultdict[str, set[str]]] = defaultdict(make_inner_dict)
 
         for loc in missing_translations:
             assert isinstance(loc.module, str), "Module must be a string"
@@ -364,7 +364,7 @@ def test_all_log_messages_have_translations(lang: str) -> None:
 
 
 @pytest.mark.parametrize("lang", _get_available_languages())
-def test_no_obsolete_translations(lang: str) -> None:
+def test_no_obsolete_translations(lang:str) -> None:
     """
     Test that all translations in each language YAML file are actually used in the code.
 
@@ -376,7 +376,7 @@ def test_no_obsolete_translations(lang: str) -> None:
     """
     messages_by_file = _get_all_log_messages(exclude_debug = False)
     translations = _get_translations_for_language(lang)
-    obsolete_items: list[tuple[str, str, str]] = []
+    obsolete_items:list[tuple[str, str, str]] = []
 
     for module, module_trans in translations.items():
         if not isinstance(module_trans, dict):
@@ -402,7 +402,7 @@ def test_no_obsolete_translations(lang: str) -> None:
         obsolete_str = f"\nObsolete translations found for language [{lang}]:\n"
 
         # Group by module and function for better readability
-        by_module: defaultdict[str, defaultdict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
+        by_module:defaultdict[str, defaultdict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
 
         for module, function, message in obsolete_items:
             by_module[module][function].append(message)

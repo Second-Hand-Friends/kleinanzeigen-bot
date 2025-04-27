@@ -42,7 +42,7 @@ class Locale(NamedTuple):
         return f"{self.language}{region_part}{encoding_part}"
 
     @staticmethod
-    def of(locale_string: str) -> 'Locale':
+    def of(locale_string:str) -> "Locale":
         """
         >>> Locale.of("en_US.UTF-8")
         Locale(language='en', region='US', encoding='UTF-8')
@@ -86,11 +86,11 @@ def _detect_locale() -> Locale:
     return Locale.of(lang) if lang else Locale("en", "US", "UTF-8")
 
 
-_CURRENT_LOCALE: Locale = _detect_locale()
-_TRANSLATIONS: dict[str, Any] | None = None
+_CURRENT_LOCALE:Locale = _detect_locale()
+_TRANSLATIONS:dict[str, Any] | None = None
 
 
-def translate(text:object, caller: inspect.FrameInfo | None) -> str:
+def translate(text:object, caller:inspect.FrameInfo | None) -> str:
     text = str(text)
     if not caller:
         return text
@@ -105,7 +105,7 @@ def translate(text:object, caller: inspect.FrameInfo | None) -> str:
     if not _TRANSLATIONS:
         return text
 
-    module_name = caller.frame.f_globals.get('__name__')  # pylint: disable=redefined-outer-name
+    module_name = caller.frame.f_globals.get("__name__")  # pylint: disable=redefined-outer-name
     file_basename = os.path.splitext(os.path.basename(caller.filename))[0]
     if module_name and module_name.endswith(f".{file_basename}"):
         module_name = module_name[:-(len(file_basename) + 1)]
@@ -124,9 +124,9 @@ gettext.gettext = lambda message: translate(_original_gettext(message), reflect.
 for module_name, module in sys.modules.items():
     if module is None or module_name in sys.builtin_module_names:
         continue
-    if hasattr(module, '_') and module._ is _original_gettext:
+    if hasattr(module, "_") and module._ is _original_gettext:
         module._ = gettext.gettext  # type: ignore[attr-defined]
-    if hasattr(module, 'gettext') and module.gettext is _original_gettext:
+    if hasattr(module, "gettext") and module.gettext is _original_gettext:
         module.gettext = gettext.gettext  # type: ignore[attr-defined]
 
 
@@ -190,8 +190,8 @@ def pluralize(noun:str, count:int | Sized, *, prefix_with_count:bool = True) -> 
     # English
     if len(noun) < 2:  # noqa: PLR2004 Magic value used in comparison
         return f"{prefix}{noun}s"
-    if noun.endswith(('s', 'sh', 'ch', 'x', 'z')):
+    if noun.endswith(("s", "sh", "ch", "x", "z")):
         return f"{prefix}{noun}es"
-    if noun.endswith('y') and noun[-2].lower() not in "aeiou":
+    if noun.endswith("y") and noun[-2].lower() not in "aeiou":
         return f"{prefix}{noun[:-1]}ies"
     return f"{prefix}{noun}s"

@@ -122,9 +122,9 @@ def test_calculate_content_hash_with_none_values() -> None:
     )
 ])
 def test_get_description_affixes(
-    config: dict[str, Any],
-    prefix: bool,
-    expected: str
+    config:dict[str, Any],
+    prefix:bool,
+    expected:str
 ) -> None:
     """Test get_description_affixes function with various inputs."""
     result = ads.get_description_affixes(config, prefix = prefix)
@@ -157,7 +157,7 @@ def test_get_description_affixes(
         ""
     )
 ])
-def test_get_description_affixes_edge_cases(config: dict[str, Any], prefix: bool, expected: str) -> None:
+def test_get_description_affixes_edge_cases(config:dict[str, Any], prefix:bool, expected:str) -> None:
     """Test edge cases for description affix handling."""
     assert ads.get_description_affixes(config, prefix = prefix) == expected
 
@@ -170,7 +170,7 @@ def test_get_description_affixes_edge_cases(config: dict[str, Any], prefix: bool
     (3.14, ""),      # Test with a float
     (set(), ""),     # Test with an empty set
 ])
-def test_get_description_affixes_edge_cases_non_dict(config: Any, expected: str) -> None:
+def test_get_description_affixes_edge_cases_non_dict(config:Any, expected:str) -> None:
     """Test get_description_affixes function with non-dict inputs."""
-    result = ads.get_description_affixes(config, prefix=True)
+    result = ads.get_description_affixes(config, prefix = True)
     assert result == expected

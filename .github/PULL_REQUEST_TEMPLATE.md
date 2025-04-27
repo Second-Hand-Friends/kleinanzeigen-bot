@@ -20,8 +20,8 @@ Select the type(s) of change(s) included in this pull request:
 Before requesting a review, confirm the following:
 - [ ] I have reviewed my changes to ensure they meet the project's standards.
 - [ ] I have tested my changes and ensured that all tests pass  (`pdm run test`).
+- [ ] I have formatted the code (`pdm run format`).
 - [ ] I have verified that linting passes (`pdm run lint`).
-- [ ] I have run security scans and addressed any identified issues (`pdm run audit`).
 - [ ] I have updated documentation where necessary.
 
 By submitting this pull request, I confirm that you can use, modify, copy, and redistribute this contribution, under the terms of your choice.

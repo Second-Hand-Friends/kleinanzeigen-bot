@@ -11,6 +11,6 @@ class KleinanzeigenBotError(RuntimeError):
 class CaptchaEncountered(KleinanzeigenBotError):
     """Raised when a Captcha was detected and auto-restart is enabled."""
 
-    def __init__(self, restart_delay: timedelta) -> None:
+    def __init__(self, restart_delay:timedelta) -> None:
         super().__init__()
         self.restart_delay = restart_delay
