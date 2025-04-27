@@ -257,7 +257,7 @@ def _find_translation(translations:TranslationDict,
         return bool(translations.get(module, {}).get(function, {}).get(message))
 
     # Add kleinanzeigen_bot/ prefix if not present
-    module_path = f'kleinanzeigen_bot/{module}' if not module.startswith("kleinanzeigen_bot/") else module
+    module_path = f"kleinanzeigen_bot/{module}" if not module.startswith("kleinanzeigen_bot/") else module
 
     # Check if module exists in translations
     module_trans = translations.get(module_path, {})
@@ -301,7 +301,7 @@ def _message_exists_in_code(code_messages:dict[str, MessageDict],
 
     # Remove kleinanzeigen_bot/ prefix if present for code message lookup
     module_path = module[len("kleinanzeigen_bot/"):] if module.startswith("kleinanzeigen_bot/") else module
-    module_path = f'kleinanzeigen_bot/{module_path}'
+    module_path = f"kleinanzeigen_bot/{module_path}"
 
     # Check if module exists in code messages
     module_msgs = code_messages.get(module_path)

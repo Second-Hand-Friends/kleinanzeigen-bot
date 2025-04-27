@@ -83,8 +83,8 @@ compile.cmd = "python -O -m PyInstaller pyinstaller.spec --clean"
 compile.env = {PYTHONHASHSEED = "1", SOURCE_DATE_EPOCH = "0"}  # https://pyinstaller.org/en/stable/advanced-topics.html#creating-a-reproducible-build
 debug   = "python -m pdb -m kleinanzeigen_bot"
 format  = {shell = "autopep8 --recursive --in-place scripts src tests --verbose && python scripts/post_autopep8.py scripts src tests" }
-lint    = {shell = "ruff check && mypy && basedpyright" }
-fix     = {shell = "ruff check --fix" }
+lint    = {shell = "ruff check --preview && mypy && basedpyright" }
+fix     = {shell = "ruff check --preview --fix" }
 test    = "python -m pytest --capture=tee-sys -v"
 utest   = "python -m pytest --capture=tee-sys -v -m 'not itest'"
 itest   = "python -m pytest --capture=tee-sys -v -m 'itest'"
@@ -128,10 +128,10 @@ select = [
   #"BLE",  # flake8-blind-except
   "B",     # flake8-bugbear
   "C4",    # flake8-comprehensions
-  #"COM",  # flake8-commas
-  #"CPY",  # flake8-copyright
+  "COM",   # flake8-commas
+  "CPY",   # flake8-copyright
   "DTZ",   # flake8-datetimez
-  #"EM",   # TODO flake8-errmsg
+  #"EM",   # flake8-errmsg
   #"ERA",  # eradicate commented-out code
   "EXE",   # flake8-executable
   "FA",    # flake8-future-annotations
@@ -175,37 +175,38 @@ select = [
 ]
 ignore = [
   "ANN401",  # Dynamically typed expressions (typing.Any) are disallowed
-  "ASYNC210", # TODO Async functions should not call blocking HTTP methods
-  "ASYNC230", # TODO Async functions should not open files with blocking methods like `open`
-  "D1", # Missing docstring in ...
-  "D200", # One-line docstring should fit on one line
-  "D202", # No blank lines allowed after function docstring (found 1)
-  "D203", # 1 blank line required before class docstring
-  "D204", # 1 blank line required after class docstring
-  "D205", # 1 blank line required between summary line and description
-  "D209", # Multi-line docstring closing quotes should be on a separate line"
-  "D212", # Multi-line docstring summary should start at the first line
-  "D213", # Multi-line docstring summary should start at the second line
-  "D400", # First line should end with a period
-  "D401", # First line of docstring should be in imperative mood
-  "D402", # First line should not be the function's signature
-  "D404", # First word of the docstring should not be "This"
-  "D413", # Missing blank line after last section ("Returns")"
-  "D415", # First line should end with a period, question mark, or exclamation point
-  "D417", # Missing argument description in the docstring for
-  #"E124", # Don't change indention of multi-line statements
-  #"E128", # Don't change indention of multi-line statements
-  #"E231", # Don't add whitespace after colon (:) on type declaration
-  #"E251", # Don't remove whitespace around parameter '=' sign.
+  "ASYNC210",  # TODO Async functions should not call blocking HTTP methods
+  "ASYNC230",  # TODO Async functions should not open files with blocking methods like `open`
+  "COM812",  # Trailing comma missing
+  "D1",  # Missing docstring in ...
+  "D200",  # One-line docstring should fit on one line
+  "D202",  # No blank lines allowed after function docstring (found 1)
+  "D203",  # 1 blank line required before class docstring
+  "D204",  # 1 blank line required after class docstring
+  "D205",  # 1 blank line required between summary line and description
+  "D209",  # Multi-line docstring closing quotes should be on a separate line"
+  "D212",  # Multi-line docstring summary should start at the first line
+  "D213",  # Multi-line docstring summary should start at the second line
+  "D400",  # First line should end with a period
+  "D401",  # First line of docstring should be in imperative mood
+  "D402",  # First line should not be the function's signature
+  "D404",  # First word of the docstring should not be "This"
+  "D413",  # Missing blank line after last section ("Returns")"
+  "D415",  # First line should end with a period, question mark, or exclamation point
+  "D417",  # Missing argument description in the docstring for
+  #"E124",  # Don't change indention of multi-line statements
+  #"E128",  # Don't change indention of multi-line statements
+  "E231",  # Don't add whitespace after colon (:) on type declaration
+  "E251",  # Don't remove whitespace around parameter '=' sign.
   "E401",  # Don't put imports on separate lines
-  "Q000", # TODO Single quotes found but double quotes preferred
-  "PERF203", # `try`-`except` within a loop incurs performance overhead
-  "RET504", # Unnecessary assignment to `...` before `return` statement
-  "PYI041", # Use `float` instead of `int | float`
-  "SIM102", # Use a single `if` statement instead of nested `if` statements
-  "SIM105", # Use `contextlib.suppress(TimeoutError)` instead of `try`-`except`-`pass`
-  "SIM114", # Combine `if` branches using logical `or` operator
-  "TC006", # Add quotes to type expression in `typing.cast()`
+  "PERF203",  # `try`-`except` within a loop incurs performance overhead
+  "RET504",  # Unnecessary assignment to `...` before `return` statement
+  "PLR6301",  # Method `...` could be a function, class method, or static method
+  "PYI041",  # Use `float` instead of `int | float`
+  "SIM102",  # Use a single `if` statement instead of nested `if` statements
+  "SIM105",  # Use `contextlib.suppress(TimeoutError)` instead of `try`-`except`-`pass`
+  "SIM114",  # Combine `if` branches using logical `or` operator
+  "TC006",  # Add quotes to type expression in `typing.cast()`
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -219,20 +220,25 @@ ignore = [
   "INP",
   "SLF",
   "S101", # Use of `assert` detected
-  "PLR2004" # Magic value used in comparison
+  "PLR0904", # Too many public methods (12 > 10)
+  "PLR2004", # Magic value used in comparison
 ]
+
+[tool.ruff.lint.flake8-copyright]
+notice-rgx = "SPDX-FileCopyrightText: .*"
+min-file-size = 256
 
 [tool.ruff.lint.pylint]
 # https://pylint.pycqa.org/en/latest/user_guide/configuration/all-options.html#design-checker
 # https://pylint.pycqa.org/en/latest/user_guide/checkers/features.html#design-checker-messages
-#max-args       = 6   # max. number of args for function / method (R0913)
-#max-attributes = 15  # max. number of instance attrs for a class (R0902)
-max-branches   = 40  # max. number of branch for function / method body (R0912)
-#max-locals     = 30  # max. number of local vars for function / method body (R0914)
-max-returns    = 15  # max. number of return / yield for function / method body (R0911)
-max-statements = 150 # max. number of statements in function / method body (R0915)
-#max-public-methods       = 30 # max. number of public methods for a class (R0904)
-#max-positional-arguments = 6  # max. number of positional args for function / method (R0917)
+max-args       = 5      # max. number of args for function / method (R0913)
+# max-attributes = 15   # max. number of instance attrs for a class (R0902)
+max-branches   = 40     # max. number of branch for function / method body (R0912)
+max-locals     = 30     # max. number of local vars for function / method body (R0914)
+max-returns    = 15     # max. number of return / yield for function / method body (R0911)
+max-statements = 150    # max. number of statements in function / method body (R0915)
+max-public-methods = 20 # max. number of public methods for a class (R0904)
+# max-positional-arguments = 5  # max. number of positional args for function / method (R0917)
 
 
 #####################

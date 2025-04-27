@@ -13,7 +13,12 @@ from . import i18n
 T = TypeVar("T")
 
 
-def ensure(condition:Any | bool | Callable[[], bool], error_message:str, timeout:float = 5, poll_requency:float = 0.5) -> None:
+def ensure(
+        condition:Any | bool | Callable[[], bool],  # noqa: FBT001 Boolean-typed positional argument in function definition
+        error_message:str,
+        timeout:float = 5,
+        poll_requency:float = 0.5
+    ) -> None:
     """
     :param timeout: timespan in seconds until when the condition must become `True`, default is 5 seconds
     :param poll_requency: sleep interval between calls in seconds, default is 0.5 seconds
@@ -50,7 +55,7 @@ def is_frozen() -> bool:
 
 
 async def ainput(prompt:str) -> str:
-    return await asyncio.to_thread(input, f'{prompt} ')
+    return await asyncio.to_thread(input, f"{prompt} ")
 
 
 def parse_decimal(number:float | int | str) -> decimal.Decimal:
