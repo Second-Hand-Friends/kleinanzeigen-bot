@@ -4,19 +4,19 @@ ad_files:
 # default values for ads, can be overwritten in each ad configuration file
 ad_defaults:
   active: true
-  type: OFFER # one of: OFFER, WANTED
-  description_prefix: "" # prefix for the ad description
-  description_suffix: "" # suffix for the ad description
+  type: OFFER  # one of: OFFER, WANTED
+  description_prefix: ""  # prefix for the ad description
+  description_suffix: ""  # suffix for the ad description
 
-  price_type: NEGOTIABLE # one of: FIXED, NEGOTIABLE, GIVE_AWAY, NOT_APPLICABLE
-  shipping_type: SHIPPING # one of: PICKUP, SHIPPING, NOT_APPLICABLE
-  sell_directly: false # requires shipping_options to take effect
+  price_type: NEGOTIABLE  # one of: FIXED, NEGOTIABLE, GIVE_AWAY, NOT_APPLICABLE
+  shipping_type: SHIPPING  # one of: PICKUP, SHIPPING, NOT_APPLICABLE
+  sell_directly: false  # requires shipping_options to take effect
   contact:
     name: ""
     street: ""
     zipcode:
-    phone: "" # IMPORTANT: surround phone number with quotes to prevent removal of leading zeros
-  republication_interval: 7 # every X days ads should be re-published
+    phone: ""  # IMPORTANT: surround phone number with quotes to prevent removal of leading zeros
+  republication_interval: 7  # every X days ads should be re-published
 
 # additional name to category ID mappings, see default list at
 # https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml
@@ -27,17 +27,17 @@ ad_defaults:
 categories: {}
 
 publishing:
-  delete_old_ads: "AFTER_PUBLISH" # one of: AFTER_PUBLISH, BEFORE_PUBLISH, NEVER
-  delete_old_ads_by_title: true # only works if delete_old_ads is set to BEFORE_PUBLISH
+  delete_old_ads: "AFTER_PUBLISH"  # one of: AFTER_PUBLISH, BEFORE_PUBLISH, NEVER
+  delete_old_ads_by_title: true  # only works if delete_old_ads is set to BEFORE_PUBLISH
 
 # browser configuration
 browser:
   # https://peter.sh/experiments/chromium-command-line-switches/
   arguments: []
-  binary_location: # path to custom browser executable, if not specified will be looked up on PATH
-  extensions: [] # a list of .crx extension files to be loaded
+  binary_location:  # path to custom browser executable, if not specified will be looked up on PATH
+  extensions: []  # a list of .crx extension files to be loaded
   use_private_window: true
-  user_data_dir: "" # see https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md
+  user_data_dir: ""  # see https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md
   profile_name: ""
 
 # login credentials

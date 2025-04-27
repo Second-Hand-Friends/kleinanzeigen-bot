@@ -117,8 +117,7 @@ Videospiele_XBox: 161/227/xbox
 Videospiele_Wii: 161/227/wii
 Videospiele_PC: 161/227/pc_spiele
 
-
-#Auto, Rad & Boot
+# Auto, Rad & Boot
 Autoreifen: 210/223/reifen_felgen
 
 # Freizeit, Hobby & Nachbarschaft
@@ -158,7 +157,7 @@ Herren_Stiefeletten: 153/158/stiefel
 Herren_Outdoorschuhe: 153/158/outdoor_wanderschuhe
 Herren_Wanderschuhe: 153/158/outdoor_wanderschuhe
 
-#Familie, Kind & Baby
+# Familie, Kind & Baby
 Familie_Kind_Baby: 17/18
 Altenpflege: 17/236
 Babysitter: 17/237
