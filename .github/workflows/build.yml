@@ -142,8 +142,8 @@ jobs:
       run: pdm run mypy
 
 
-    - name: Check with pyright
-      run: pdm run pyright
+    - name: Check with basedpyright
+      run: pdm run basedpyright
 
 
     - name: Run unit tests
