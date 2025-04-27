@@ -391,12 +391,12 @@ class KleinanzeigenBot(WebScrapingMixin):
                     continue
 
             # Get description with prefix/suffix from ad config if present, otherwise use defaults
-            ad_cfg["description"] = self.__get_description_with_affixes(ad_cfg)
+            description = self.__get_description_with_affixes(ad_cfg)
 
             # Validate total length
-            ensure(len(ad_cfg["description"]) <= 4000,
-                   f"""Length of ad description including prefix and suffix exceeds 4000 chars. Description length: {
-                   len(ad_cfg["description"])} chars. @ {ad_file}.""")
+            ensure(len(description) <= 4000,
+                   f"Length of ad description including prefix and suffix exceeds 4000 chars. "
+                   f"Description length: {len(description)} chars. @ {ad_file}.")
 
             # pylint: disable=cell-var-from-loop
             def assert_one_of(path:str, allowed:Iterable[str]) -> None:
@@ -711,7 +711,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         #############################
         # set description
         #############################
-        description = ad_cfg["description"]
+        description = self.__get_description_with_affixes(ad_cfg)
         await self.web_execute("document.querySelector('#pstad-descrptn').value = `" + description.replace("`", "'") + "`")
 
         #############################
