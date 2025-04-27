@@ -28,11 +28,11 @@ LOG_ROOT:Final[logging.Logger] = logging.getLogger()
 
 class _MaxLevelFilter(logging.Filter):
 
-    def __init__(self, level: int) -> None:
+    def __init__(self, level:int) -> None:
         super().__init__()
         self.level = level
 
-    def filter(self, record: logging.LogRecord) -> bool:
+    def filter(self, record:logging.LogRecord) -> bool:
         return record.levelno <= self.level
 
 
@@ -104,7 +104,7 @@ def configure_console_logging() -> None:
 class LogFileHandle:
     """Encapsulates a log file handler with close and status methods."""
 
-    def __init__(self, file_path: str, handler: RotatingFileHandler, logger: logging.Logger) -> None:
+    def __init__(self, file_path:str, handler:RotatingFileHandler, logger:logging.Logger) -> None:
         self.file_path = file_path
         self._handler:RotatingFileHandler | None = handler
         self._logger = logger
@@ -146,14 +146,14 @@ def flush_all_handlers() -> None:
         handler.flush()
 
 
-def get_logger(name: str | None = None) -> logging.Logger:
+def get_logger(name:str | None = None) -> logging.Logger:
     """
     Returns a localized logger
     """
 
     class TranslatingLogger(logging.Logger):
 
-        def _log(self, level: int, msg: object, *args: Any, **kwargs: Any) -> None:
+        def _log(self, level:int, msg:object, *args:Any, **kwargs:Any) -> None:
             if level != DEBUG:  # debug messages should not be translated
                 msg = i18n.translate(msg, reflect.get_caller(2))
             super()._log(level, msg, *args, **kwargs)

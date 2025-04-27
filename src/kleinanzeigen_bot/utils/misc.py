@@ -10,7 +10,7 @@ from typing import Any, TypeVar
 from . import i18n
 
 # https://mypy.readthedocs.io/en/stable/generics.html#generic-functions
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def ensure(condition:Any | bool | Callable[[], bool], error_message:str, timeout:float = 5, poll_requency:float = 0.5) -> None:
@@ -49,7 +49,7 @@ def is_frozen() -> bool:
     return getattr(sys, "frozen", False)
 
 
-async def ainput(prompt: str) -> str:
+async def ainput(prompt:str) -> str:
     return await asyncio.to_thread(input, f'{prompt} ')
 
 
@@ -84,10 +84,10 @@ def parse_decimal(number:float | int | str) -> decimal.Decimal:
 
 
 def parse_datetime(
-    date: datetime | str | None,
+    date:datetime | str | None,
     *,
-    add_timezone_if_missing: bool = True,
-    use_local_timezone: bool = True
+    add_timezone_if_missing:bool = True,
+    use_local_timezone:bool = True
 ) -> datetime | None:
     """
     Parses a datetime object or ISO-formatted string.
@@ -152,22 +152,22 @@ def parse_duration(text:str) -> timedelta:
     >>> parse_duration("invalid input")
     datetime.timedelta(0)
     """
-    pattern = re.compile(r'(\d+)\s*([dhms])')
+    pattern = re.compile(r"(\d+)\s*([dhms])")
     parts = pattern.findall(text.lower())
-    kwargs: dict[str, int] = {}
+    kwargs:dict[str, int] = {}
     for value, unit in parts:
-        if unit == 'd':
-            kwargs['days'] = kwargs.get('days', 0) + int(value)
-        elif unit == 'h':
-            kwargs['hours'] = kwargs.get('hours', 0) + int(value)
-        elif unit == 'm':
-            kwargs['minutes'] = kwargs.get('minutes', 0) + int(value)
-        elif unit == 's':
-            kwargs['seconds'] = kwargs.get('seconds', 0) + int(value)
+        if unit == "d":
+            kwargs["days"] = kwargs.get("days", 0) + int(value)
+        elif unit == "h":
+            kwargs["hours"] = kwargs.get("hours", 0) + int(value)
+        elif unit == "m":
+            kwargs["minutes"] = kwargs.get("minutes", 0) + int(value)
+        elif unit == "s":
+            kwargs["seconds"] = kwargs.get("seconds", 0) + int(value)
     return timedelta(**kwargs)
 
 
-def format_timedelta(td: timedelta) -> str:
+def format_timedelta(td:timedelta) -> str:
     """
     Formats a timedelta into a human-readable string using the pluralize utility.
 

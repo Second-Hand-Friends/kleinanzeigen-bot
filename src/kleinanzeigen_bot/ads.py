@@ -9,7 +9,7 @@ from .utils import dicts
 MAX_DESCRIPTION_LENGTH:Final[int] = 4000
 
 
-def calculate_content_hash(ad_cfg: dict[str, Any]) -> str:
+def calculate_content_hash(ad_cfg:dict[str, Any]) -> str:
     """Calculate a hash for user-modifiable fields of the ad."""
 
     # Relevant fields for the hash
@@ -40,7 +40,7 @@ def calculate_content_hash(ad_cfg: dict[str, Any]) -> str:
     return hashlib.sha256(content_str.encode()).hexdigest()
 
 
-def get_description_affixes(config: dict[str, Any], *, prefix: bool = True) -> str:
+def get_description_affixes(config:dict[str, Any], *, prefix:bool = True) -> str:
     """Get prefix or suffix for description with proper precedence.
 
     This function handles both the new flattened format and legacy nested format:

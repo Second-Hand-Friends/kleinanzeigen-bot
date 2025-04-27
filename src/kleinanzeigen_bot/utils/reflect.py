@@ -5,7 +5,7 @@ import inspect
 from typing import Any
 
 
-def get_caller(depth: int = 1) -> inspect.FrameInfo | None:
+def get_caller(depth:int = 1) -> inspect.FrameInfo | None:
     stack = inspect.stack()
     try:
         for frame in stack[depth + 1:]:
