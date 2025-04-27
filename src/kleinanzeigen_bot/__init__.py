@@ -551,7 +551,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     async def is_logged_in(self) -> bool:
         try:
-            user_info = await self.web_text(By.ID, "user-email")
+            user_info = await self.web_text(By.CLASS_NAME, "mr-medium")
             if self.config['login']['username'].lower() in user_info.lower():
                 return True
         except TimeoutError:
@@ -711,7 +711,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         #############################
         # set description
         #############################
-        description = self.__get_description_with_affixes(ad_cfg)
+        description = ad_cfg["description"]
         await self.web_execute("document.querySelector('#pstad-descrptn').value = `" + description.replace("`", "'") + "`")
 
         #############################
