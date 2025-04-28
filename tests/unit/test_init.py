@@ -1045,7 +1045,7 @@ class TestKleinanzeigenBotPrefixSuffix:
             test_bot.config = config
             ad_cfg = {"description": raw_description, "active": True}
             # Access private method using the correct name mangling
-            description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+            description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
             assert description == expected_description
 
     def test_description_length_validation(self, test_bot:KleinanzeigenBot) -> None:
@@ -1062,7 +1062,7 @@ class TestKleinanzeigenBotPrefixSuffix:
         }
 
         with pytest.raises(AssertionError) as exc_info:
-            getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+            getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
 
         assert "Length of ad description including prefix and suffix exceeds 4000 chars" in str(exc_info.value)
         assert "Description length: 4001" in str(exc_info.value)
@@ -1087,7 +1087,7 @@ class TestKleinanzeigenBotDescriptionHandling:
         }
 
         # The description should be returned as-is without any prefix/suffix
-        description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+        description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Test Description"
 
     def test_description_with_only_new_format_affixes(self, test_bot:KleinanzeigenBot) -> None:
@@ -1104,7 +1104,7 @@ class TestKleinanzeigenBotDescriptionHandling:
             "active": True
         }
 
-        description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+        description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Prefix: Test Description :Suffix"
 
     def test_description_with_mixed_config_formats(self, test_bot:KleinanzeigenBot) -> None:
@@ -1125,7 +1125,7 @@ class TestKleinanzeigenBotDescriptionHandling:
             "active": True
         }
 
-        description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+        description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "New Prefix: Test Description :New Suffix"
 
     def test_description_with_ad_level_affixes(self, test_bot:KleinanzeigenBot) -> None:
@@ -1144,7 +1144,7 @@ class TestKleinanzeigenBotDescriptionHandling:
             "active": True
         }
 
-        description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+        description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Ad Prefix: Test Description :Ad Suffix"
 
     def test_description_with_none_values(self, test_bot:KleinanzeigenBot) -> None:
@@ -1165,7 +1165,7 @@ class TestKleinanzeigenBotDescriptionHandling:
             "active": True
         }
 
-        description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+        description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Test Description"
 
     def test_description_with_email_replacement(self, test_bot:KleinanzeigenBot) -> None:
@@ -1179,7 +1179,7 @@ class TestKleinanzeigenBotDescriptionHandling:
             "active": True
         }
 
-        description = getattr(test_bot, "_KleinanzeigenBot__get_description_with_affixes")(ad_cfg)
+        description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Contact: test(at)example.com"
 
 

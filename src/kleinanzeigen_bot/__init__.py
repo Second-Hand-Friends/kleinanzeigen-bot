@@ -386,14 +386,6 @@ class KleinanzeigenBot(WebScrapingMixin):
                 if not should_include:
                     continue
 
-            # Get description with prefix/suffix from ad config if present, otherwise use defaults
-            description = self.__get_description_with_affixes(ad_cfg)
-
-            # Validate total length
-            ensure(len(description) <= MAX_DESCRIPTION_LENGTH,
-                   f"Length of ad description including prefix and suffix exceeds 4000 chars. "
-                   f"Description length: {len(description)} chars. @ {ad_file}.")
-
             def assert_one_of(path:str, allowed:Iterable[str]) -> None:
                 # ruff: noqa: B023 function-uses-loop-variable
                 ensure(dicts.safe_get(ad_cfg, *path.split(".")) in allowed, f"-> property [{path}] must be one of: {allowed} @ [{ad_file}]")
@@ -408,7 +400,8 @@ class KleinanzeigenBot(WebScrapingMixin):
 
             assert_one_of("type", {"OFFER", "WANTED"})
             assert_min_len("title", 10)
-            assert_has_value("description")
+            ensure(self.__get_description(ad_cfg, with_affixes = False), f"-> property [description] not specified @ [{ad_file}]")
+            self.__get_description(ad_cfg, with_affixes = True)  # validates complete description
             assert_one_of("price_type", {"FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"})
             if ad_cfg["price_type"] == "GIVE_AWAY":
                 ensure(not dicts.safe_get(ad_cfg, "price"), f"-> [price] must not be specified for GIVE_AWAY ad @ [{ad_file}]")
@@ -707,7 +700,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         #############################
         # set description
         #############################
-        description = self.__get_description_with_affixes(ad_cfg)
+        description = self.__get_description(ad_cfg, with_affixes = True)
         await self.web_execute("document.querySelector('#pstad-descrptn').value = `" + description.replace("`", "'") + "`")
 
         #############################
@@ -1104,8 +1097,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                 else:
                     LOG.error("The page with the id %d does not exist!", ad_id)
 
-    def __get_description_with_affixes(self, ad_cfg:dict[str, Any]) -> str:
-        """Get the complete description with prefix and suffix applied.
+    def __get_description(self, ad_cfg:dict[str, Any], *, with_affixes:bool) -> str:
+        """Get the ad description optionally with prefix and suffix applied.
 
         Precedence (highest to lowest):
         1. Direct ad-level affixes (description_prefix/suffix)
@@ -1117,7 +1110,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             ad_cfg: The ad configuration dictionary
 
         Returns:
-            The complete description with prefix and suffix applied
+            The raw or complete description with prefix and suffix applied
         """
         # Get the main description text
         description_text = ""
@@ -1126,33 +1119,36 @@ class KleinanzeigenBot(WebScrapingMixin):
         elif isinstance(ad_cfg.get("description"), str):
             description_text = ad_cfg["description"]
 
-        # Get prefix with precedence
-        prefix = (
-            # 1. Direct ad-level prefix
-            ad_cfg.get("description_prefix") if ad_cfg.get("description_prefix") is not None
-            # 2. Legacy nested ad-level prefix
-            else dicts.safe_get(ad_cfg, "description", "prefix")
-            if dicts.safe_get(ad_cfg, "description", "prefix") is not None
-            # 3. Global prefix from config
-            else get_description_affixes(self.config, prefix = True)
-            or ""  # Default to empty string if all sources are None
-        )
+        if with_affixes:
+            # Get prefix with precedence
+            prefix = (
+                # 1. Direct ad-level prefix
+                ad_cfg.get("description_prefix") if ad_cfg.get("description_prefix") is not None
+                # 2. Legacy nested ad-level prefix
+                else dicts.safe_get(ad_cfg, "description", "prefix")
+                if dicts.safe_get(ad_cfg, "description", "prefix") is not None
+                # 3. Global prefix from config
+                else get_description_affixes(self.config, prefix = True)
+                or ""  # Default to empty string if all sources are None
+            )
 
-        # Get suffix with precedence
-        suffix = (
-            # 1. Direct ad-level suffix
-            ad_cfg.get("description_suffix") if ad_cfg.get("description_suffix") is not None
-            # 2. Legacy nested ad-level suffix
-            else dicts.safe_get(ad_cfg, "description", "suffix")
-            if dicts.safe_get(ad_cfg, "description", "suffix") is not None
-            # 3. Global suffix from config
-            else get_description_affixes(self.config, prefix = False)
-            or ""  # Default to empty string if all sources are None
-        )
+            # Get suffix with precedence
+            suffix = (
+                # 1. Direct ad-level suffix
+                ad_cfg.get("description_suffix") if ad_cfg.get("description_suffix") is not None
+                # 2. Legacy nested ad-level suffix
+                else dicts.safe_get(ad_cfg, "description", "suffix")
+                if dicts.safe_get(ad_cfg, "description", "suffix") is not None
+                # 3. Global suffix from config
+                else get_description_affixes(self.config, prefix = False)
+                or ""  # Default to empty string if all sources are None
+            )
 
-        # Combine the parts and replace @ with (at)
-        final_description = str(prefix) + str(description_text) + str(suffix)
-        final_description = final_description.replace("@", "(at)")
+            # Combine the parts and replace @ with (at)
+            final_description = str(prefix) + str(description_text) + str(suffix)
+            final_description = final_description.replace("@", "(at)")
+        else:
+            final_description = description_text
 
         # Validate length
         ensure(len(final_description) <= MAX_DESCRIPTION_LENGTH,
