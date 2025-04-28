@@ -1,11 +1,9 @@
-"""
-SPDX-FileCopyrightText: © Jens Bergmann and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""
-import copy, os, tempfile
+# SPDX-FileCopyrightText: © Jens Bergmann and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import copy, os, tempfile  # isort: skip
 from collections.abc import Generator
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -13,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from ruamel.yaml import YAML
 
-from kleinanzeigen_bot import LOG, KleinanzeigenBot
+from kleinanzeigen_bot import LOG, KleinanzeigenBot, misc
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.ads import calculate_content_hash
 from kleinanzeigen_bot.utils import loggers
@@ -191,7 +189,7 @@ class TestKleinanzeigenBotLogging:
 class TestKleinanzeigenBotCommandLine:
     """Tests for command line argument parsing."""
 
-    @pytest.mark.parametrize("args,expected_command,expected_selector,expected_keep_old", [
+    @pytest.mark.parametrize(("args", "expected_command", "expected_selector", "expected_keep_old"), [
         (["publish", "--ads=all"], "publish", "all", False),
         (["verify"], "verify", "due", False),
         (["download", "--ads=12345"], "download", "12345", False),
@@ -833,7 +831,7 @@ class TestKleinanzeigenBotAdDeletion:
                 patch.object(test_bot, 'web_click', new_callable = AsyncMock), \
                 patch.object(test_bot, 'web_check', new_callable = AsyncMock, return_value = True):
             mock_find.return_value.attrs = {"content": "some-token"}
-            result = await test_bot.delete_ad(ad_cfg, True, published_ads)
+            result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = True)
             assert result is True
 
     @pytest.mark.asyncio
@@ -859,7 +857,7 @@ class TestKleinanzeigenBotAdDeletion:
                 patch.object(test_bot, 'web_click', new_callable = AsyncMock), \
                 patch.object(test_bot, 'web_check', new_callable = AsyncMock, return_value = True):
             mock_find.return_value.attrs = {"content": "some-token"}
-            result = await test_bot.delete_ad(ad_cfg, False, published_ads)
+            result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = False)
             assert result is True
 
 
@@ -910,7 +908,7 @@ class TestKleinanzeigenBotAdRepublication:
 
     def test_check_ad_republication_no_changes(self, test_bot: KleinanzeigenBot, base_ad_config: dict[str, Any]) -> None:
         """Test that unchanged ads within interval are not marked for republication."""
-        current_time = datetime.utcnow()
+        current_time = misc.now()
         three_days_ago = (current_time - timedelta(days = 3)).isoformat()
 
         # Create ad config with timestamps for republication check
@@ -1235,7 +1233,7 @@ class TestKleinanzeigenBotChangedAds:
             # Mock the loading of the ad configuration
             with patch('kleinanzeigen_bot.utils.dicts.load_dict', side_effect=[
                 changed_ad,  # First call returns the changed ad
-                {}          # Second call for ad_fields.yaml
+                {}  # Second call for ad_fields.yaml
             ]):
                 ads_to_publish = test_bot.load_ads()
 
@@ -1255,7 +1253,7 @@ class TestKleinanzeigenBotChangedAds:
         }
 
         # Create a changed ad that is also due for republication
-        current_time = datetime.utcnow()
+        current_time = misc.now()
         old_date = (current_time - timedelta(days=10)).isoformat()  # Past republication interval
 
         changed_ad = create_ad_config(
@@ -1287,7 +1285,7 @@ class TestKleinanzeigenBotChangedAds:
             # Mock the loading of the ad configuration
             with patch('kleinanzeigen_bot.utils.dicts.load_dict', side_effect=[
                 changed_ad,  # First call returns the changed ad
-                {}          # Second call for ad_fields.yaml
+                {}  # Second call for ad_fields.yaml
             ]):
                 ads_to_publish = test_bot.load_ads()
 

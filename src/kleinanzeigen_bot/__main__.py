@@ -1,9 +1,7 @@
-"""
-SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""
-import sys, time
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import sys, time  # isort: skip
 from gettext import gettext as _
 
 import kleinanzeigen_bot
@@ -17,7 +15,6 @@ while True:
     try:
         kleinanzeigen_bot.main(sys.argv)  # runs & returns when finished
         sys.exit(0)  # not using `break` to prevent process closing issues
-
     except CaptchaEncountered as ex:
         delay = ex.restart_delay
         print(_("[INFO] Captcha detected. Sleeping %s before restart...") % format_timedelta(delay))

@@ -1,9 +1,7 @@
-"""
-SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""
-import json, mimetypes, os, shutil
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import json, mimetypes, os, shutil  # isort: skip
 import urllib.request as urllib_request
 from datetime import datetime
 from typing import Any, Final
@@ -24,7 +22,7 @@ class AdExtractor(WebScrapingMixin):
     Wrapper class for ad extraction that uses an active bot´s browser session to extract specific elements from an ad page.
     """
 
-    def __init__(self, browser:Browser, config:dict[str, Any]):
+    def __init__(self, browser:Browser, config:dict[str, Any]) -> None:
         super().__init__()
         self.browser = browser
         self.config = config
@@ -84,7 +82,7 @@ class AdExtractor(WebScrapingMixin):
                 if current_img_url is None:
                     continue
 
-                with urllib_request.urlopen(current_img_url) as response:  # nosec B310
+                with urllib_request.urlopen(current_img_url) as response:  # noqa: S310 Audit URL open for permitted schemes.
                     content_type = response.info().get_content_type()
                     file_ending = mimetypes.guess_extension(content_type)
                     img_path = f"{directory}/{img_fn_prefix}{img_nr}{file_ending}"
@@ -170,7 +168,7 @@ class AdExtractor(WebScrapingMixin):
             # This will now correctly trigger only if the '.Pagination' div itself is not found
             LOG.info('No pagination controls found. Assuming single page.')
         except Exception as e:
-            LOG.error("Error during pagination detection: %s", e, exc_info=True)
+            LOG.exception("Error during pagination detection: %s", e)
             LOG.info('Assuming single page due to error during pagination check.')
         # --- End Pagination Handling ---
 
@@ -201,7 +199,7 @@ class AdExtractor(WebScrapingMixin):
                 LOG.info("Successfully extracted %s refs from page %s.", len(page_refs), current_page)
             except Exception as e:
                 # Log the error if extraction fails for some items, but try to continue
-                LOG.error("Error extracting refs on page %s: %s", current_page, e, exc_info=True)
+                LOG.exception("Error extracting refs on page %s: %s", current_page, e)
 
             if not multi_page:  # only one iteration for single-page overview
                 break
@@ -232,7 +230,7 @@ class AdExtractor(WebScrapingMixin):
                 LOG.info("No pagination controls found after scrolling/waiting. Assuming last page.")
                 break
             except Exception as e:
-                LOG.error("Error during pagination navigation: %s", e, exc_info=True)
+                LOG.exception("Error during pagination navigation: %s", e)
                 break
             # --- End Navigation ---
 
@@ -287,7 +285,7 @@ class AdExtractor(WebScrapingMixin):
         # extract basic info
         info['type'] = 'OFFER' if 's-anzeige' in self.page.url else 'WANTED'
         title:str = await self.web_text(By.ID, 'viewad-title')
-        LOG.info('Extracting information from ad with title \"%s\"', title)
+        LOG.info('Extracting information from ad with title "%s"', title)
 
         info['category'] = await self._extract_category_from_ad_page()
         info['title'] = title
@@ -389,7 +387,7 @@ class AdExtractor(WebScrapingMixin):
                     price = int(price_str.replace('.', '').split()[0])
                 case 'VB':
                     price_type = 'NEGOTIABLE'
-                    if not price_str == "VB":  # can be either 'X € VB', or just 'VB'
+                    if price_str != "VB":  # can be either 'X € VB', or just 'VB'
                         price = int(price_str.replace('.', '').split()[0])
                 case 'verschenken':
                     price_type = 'GIVE_AWAY'

@@ -1,9 +1,7 @@
-"""
-SPDX-FileCopyrightText: © Jens Bergmann and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""
-import json, os
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import json, os  # isort: skip
 from typing import Any, TypedDict
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
@@ -30,7 +28,7 @@ class _SpecialAttributesDict(TypedDict, total = False):
     condition_s: str
 
 
-class _TestCaseDict(TypedDict):
+class _TestCaseDict(TypedDict):  # noqa: PYI049 Private TypedDict `...` is never used
     belen_conf: _BelenConfDict
     expected: _SpecialAttributesDict
 
@@ -44,15 +42,12 @@ class TestAdExtractorBasics:
         assert extractor.browser == browser_mock
         assert extractor.config == sample_config
 
-    @pytest.mark.parametrize(
-        "url,expected_id",
-        [
-            ("https://www.kleinanzeigen.de/s-anzeige/test-title/12345678", 12345678),
-            ("https://www.kleinanzeigen.de/s-anzeige/another-test/98765432", 98765432),
-            ("https://www.kleinanzeigen.de/s-anzeige/invalid-id/abc", -1),
-            ("https://www.kleinanzeigen.de/invalid-url", -1),
-        ],
-    )
+    @pytest.mark.parametrize(("url", "expected_id"), [
+        ("https://www.kleinanzeigen.de/s-anzeige/test-title/12345678", 12345678),
+        ("https://www.kleinanzeigen.de/s-anzeige/another-test/98765432", 98765432),
+        ("https://www.kleinanzeigen.de/s-anzeige/invalid-id/abc", -1),
+        ("https://www.kleinanzeigen.de/invalid-url", -1),
+    ])
     def test_extract_ad_id_from_ad_url(self, test_extractor: AdExtractor, url: str, expected_id: int) -> None:
         """Test extraction of ad ID from different URL formats."""
         assert test_extractor.extract_ad_id_from_ad_url(url) == expected_id
@@ -61,16 +56,13 @@ class TestAdExtractorBasics:
 class TestAdExtractorPricing:
     """Tests for pricing related functionality."""
 
-    @pytest.mark.parametrize(
-        "price_text,expected_price,expected_type",
-        [
-            ("50 €", 50, "FIXED"),
-            ("1.234 €", 1234, "FIXED"),
-            ("50 € VB", 50, "NEGOTIABLE"),
-            ("VB", None, "NEGOTIABLE"),
-            ("Zu verschenken", None, "GIVE_AWAY"),
-        ],
-    )
+    @pytest.mark.parametrize(("price_text", "expected_price", "expected_type"), [
+        ("50 €", 50, "FIXED"),
+        ("1.234 €", 1234, "FIXED"),
+        ("50 € VB", 50, "NEGOTIABLE"),
+        ("VB", None, "NEGOTIABLE"),
+        ("Zu verschenken", None, "GIVE_AWAY"),
+    ])
     @pytest.mark.asyncio
     # pylint: disable=protected-access
     async def test_extract_pricing_info(
@@ -95,14 +87,11 @@ class TestAdExtractorPricing:
 class TestAdExtractorShipping:
     """Tests for shipping related functionality."""
 
-    @pytest.mark.parametrize(
-        "shipping_text,expected_type,expected_cost",
-        [
-            ("+ Versand ab 2,99 €", "SHIPPING", 2.99),
-            ("Nur Abholung", "PICKUP", None),
-            ("Versand möglich", "SHIPPING", None),
-        ],
-    )
+    @pytest.mark.parametrize(("shipping_text", "expected_type", "expected_cost"), [
+        ("+ Versand ab 2,99 €", "SHIPPING", 2.99),
+        ("Nur Abholung", "PICKUP", None),
+        ("Versand möglich", "SHIPPING", None),
+    ])
     @pytest.mark.asyncio
     # pylint: disable=protected-access
     async def test_extract_shipping_info(
@@ -272,9 +261,9 @@ class TestAdExtractorNavigation:
             # Mocks needed for the actual execution flow
             ad_list_container_mock = MagicMock()
             pagination_section_mock = MagicMock()
-            cardbox_mock = MagicMock()    # Represents the <li> element
-            link_mock = MagicMock()      # Represents the <a> element
-            link_mock.attrs = {'href': '/s-anzeige/test/12345'}    # Configure the desired output
+            cardbox_mock = MagicMock()  # Represents the <li> element
+            link_mock = MagicMock()  # Represents the <a> element
+            link_mock.attrs = {'href': '/s-anzeige/test/12345'}  # Configure the desired output
 
             # Mocks for elements potentially checked but maybe not strictly needed for output
             # (depending on how robust the mocking is)
@@ -287,18 +276,18 @@ class TestAdExtractorNavigation:
             # 3. Find for ad list container (inside loop)
             # 4. Find for the link (inside list comprehension)
             mock_web_find.side_effect = [
-                ad_list_container_mock,          # Call 1: find #my-manageitems-adlist (before loop)
-                pagination_section_mock,         # Call 2: find .Pagination
-                ad_list_container_mock,          # Call 3: find #my-manageitems-adlist (inside loop)
-                link_mock                        # Call 4: find 'div.manageitems-item-ad h3 a.text-onSurface'
+                ad_list_container_mock,   # Call 1: find #my-manageitems-adlist (before loop)
+                pagination_section_mock,  # Call 2: find .Pagination
+                ad_list_container_mock,   # Call 3: find #my-manageitems-adlist (inside loop)
+                link_mock                 # Call 4: find 'div.manageitems-item-ad h3 a.text-onSurface'
                 # Add more mocks here if the pagination navigation logic calls web_find again
             ]
 
             # 1. Find all 'Nächste' buttons (pagination check) - Return empty list for single page test case
             # 2. Find all '.cardbox' elements (inside loop)
             mock_web_find_all.side_effect = [
-                [],                              # Call 1: find 'button[aria-label="Nächste"]' -> No next button = single page
-                [cardbox_mock]                   # Call 2: find .cardbox -> One ad item
+                [],            # Call 1: find 'button[aria-label="Nächste"]' -> No next button = single page
+                [cardbox_mock] # Call 2: find .cardbox -> One ad item
                 # Add more mocks here if pagination navigation calls web_find_all
             ]
 
@@ -550,9 +539,9 @@ class TestAdExtractorContact:
         """Test contact info extraction when elements are not found."""
         with patch.object(extractor, 'page', MagicMock()), \
                 patch.object(extractor, 'web_text', new_callable = AsyncMock, side_effect = TimeoutError()), \
-                patch.object(extractor, 'web_find', new_callable = AsyncMock, side_effect = TimeoutError()):
+                patch.object(extractor, 'web_find', new_callable = AsyncMock, side_effect = TimeoutError()), \
+                pytest.raises(TimeoutError):
 
-            with pytest.raises(TimeoutError):
                 await extractor._extract_contact_from_ad_page()
 
     @pytest.mark.asyncio

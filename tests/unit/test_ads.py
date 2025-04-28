@@ -1,8 +1,6 @@
-"""
-SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 from typing import Any
 
 import pytest
@@ -33,7 +31,7 @@ def test_calculate_content_hash_with_none_values() -> None:
     assert len(hash_value) == 64  # SHA-256 hash is 64 characters long
 
 
-@pytest.mark.parametrize("config,prefix,expected", [
+@pytest.mark.parametrize(("config", "prefix", "expected"), [
     # Test new flattened format - prefix
     (
         {"ad_defaults": {"description_prefix": "Hello"}},
@@ -129,11 +127,11 @@ def test_get_description_affixes(
     expected: str
 ) -> None:
     """Test get_description_affixes function with various inputs."""
-    result = ads.get_description_affixes(config, prefix)
+    result = ads.get_description_affixes(config, prefix = prefix)
     assert result == expected
 
 
-@pytest.mark.parametrize("config,prefix,expected", [
+@pytest.mark.parametrize(("config", "prefix", "expected"), [
     # Add test for malformed config
     (
         {},  # Empty config
@@ -161,16 +159,16 @@ def test_get_description_affixes(
 ])
 def test_get_description_affixes_edge_cases(config: dict[str, Any], prefix: bool, expected: str) -> None:
     """Test edge cases for description affix handling."""
-    assert ads.get_description_affixes(config, prefix) == expected
+    assert ads.get_description_affixes(config, prefix = prefix) == expected
 
 
-@pytest.mark.parametrize("config,expected", [
-    (None, ""),  # Test with None
-    ([], ""),    # Test with an empty list
+@pytest.mark.parametrize(("config", "expected"), [
+    (None, ""),      # Test with None
+    ([], ""),        # Test with an empty list
     ("string", ""),  # Test with a string
-    (123, ""),   # Test with an integer
-    (3.14, ""),  # Test with a float
-    (set(), ""),  # Test with an empty set
+    (123, ""),       # Test with an integer
+    (3.14, ""),      # Test with a float
+    (set(), ""),     # Test with an empty set
 ])
 def test_get_description_affixes_edge_cases_non_dict(config: Any, expected: str) -> None:
     """Test get_description_affixes function with non-dict inputs."""

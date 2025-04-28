@@ -1,9 +1,9 @@
+# SPDX-FileCopyrightText: © Jens Bergmann and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """
-SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-
 This module contains tests for verifying the completeness and correctness of translations in the project.
+
 It ensures that:
 1. All log messages in the code have corresponding translations
 2. All translations in the YAML files are actually used in the code
@@ -15,7 +15,7 @@ The tests work by:
 3. Comparing the extracted messages with translations
 4. Verifying no unused translations exist
 """
-import ast, os
+import ast, os  # isort: skip
 from collections import defaultdict
 from dataclasses import dataclass
 from importlib.resources import files
@@ -105,7 +105,7 @@ def _extract_log_messages(file_path: str, exclude_debug:bool = False) -> Message
     messages: MessageDict = defaultdict(lambda: defaultdict(set))
 
     def add_message(function: str, msg: str) -> None:
-        """Helper to add a message to the messages dictionary."""
+        """Add a message to the messages dictionary."""
         if function not in messages:
             messages[function] = defaultdict(set)
         if msg not in messages[function]:
@@ -128,7 +128,7 @@ def _extract_log_messages(file_path: str, exclude_debug:bool = False) -> Message
         if (isinstance(node.func, ast.Attribute) and
                 isinstance(node.func.value, ast.Name) and
                 node.func.value.id in {'LOG', 'logger', 'logging'} and
-                node.func.attr in {None if exclude_debug else 'debug', 'info', 'warning', 'error', 'critical'}):
+                node.func.attr in {None if exclude_debug else 'debug', 'info', 'warning', 'error', 'exception', 'critical'}):
             if node.args:
                 msg = extract_string_value(node.args[0])
                 if msg:
@@ -390,7 +390,7 @@ def test_no_obsolete_translations(lang: str) -> None:
             if not isinstance(function_trans, dict):
                 continue
 
-            for original_message in function_trans.keys():
+            for original_message in function_trans:
                 # Check if this message exists in the code
                 message_exists = _message_exists_in_code(messages_by_file, module, function, original_message)
 

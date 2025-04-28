@@ -134,12 +134,16 @@ jobs:
       run: pdm show
 
 
-    - name: Security Audit
-      run: pdm run audit
+    - name: Check with ruff
+      run: pdm run ruff check
 
 
-    - name: Check code style
-      run: pdm run lint
+    - name: Check with mypy
+      run: pdm run mypy
+
+
+    - name: Check with pyright
+      run: pdm run pyright
 
 
     - name: Run unit tests
