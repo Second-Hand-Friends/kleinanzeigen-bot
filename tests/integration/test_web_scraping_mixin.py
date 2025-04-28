@@ -1,12 +1,12 @@
-"""
-SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""
-import os, platform
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import os
+import platform
 from typing import cast
 
-import nodriver, pytest
+import nodriver
+import pytest
 
 from kleinanzeigen_bot.utils import loggers
 from kleinanzeigen_bot.utils.misc import ensure

@@ -1,11 +1,9 @@
-"""
-SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""
-import asyncio, decimal, re, sys, time
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import asyncio, decimal, re, sys, time  # isort: skip
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from gettext import gettext as _
 from typing import Any, TypeVar
 
@@ -37,6 +35,10 @@ def ensure(condition:Any | bool | Callable[[], bool], error_message:str, timeout
         if elapsed >= timeout:
             raise AssertionError(_(error_message))
         time.sleep(poll_requency)
+
+
+def now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def is_frozen() -> bool:
@@ -81,12 +83,27 @@ def parse_decimal(number:float | int | str) -> decimal.Decimal:
             raise decimal.DecimalException(f"Invalid number format: {number}") from ex
 
 
-def parse_datetime(date:datetime | str | None) -> datetime | None:
+def parse_datetime(
+    date: datetime | str | None,
+    *,
+    add_timezone_if_missing: bool = True,
+    use_local_timezone: bool = True
+) -> datetime | None:
     """
-    >>> parse_datetime(datetime(2020, 1, 1, 0, 0))
+    Parses a datetime object or ISO-formatted string.
+
+    Args:
+        date: The input datetime object or ISO string.
+        add_timezone_if_missing: If True, add timezone info if missing.
+        use_local_timezone: If True, use local timezone; otherwise UTC if adding timezone.
+
+    Returns:
+        A timezone-aware or naive datetime object, depending on parameters.
+
+    >>> parse_datetime(datetime(2020, 1, 1, 0, 0), add_timezone_if_missing = False)
     datetime.datetime(2020, 1, 1, 0, 0)
 
-    >>> parse_datetime("2020-01-01T00:00:00")
+    >>> parse_datetime("2020-01-01T00:00:00", add_timezone_if_missing = False)
     datetime.datetime(2020, 1, 1, 0, 0)
 
     >>> parse_datetime(None)
@@ -94,9 +111,16 @@ def parse_datetime(date:datetime | str | None) -> datetime | None:
     """
     if date is None:
         return None
-    if isinstance(date, datetime):
-        return date
-    return datetime.fromisoformat(date)
+
+    dt = date if isinstance(date, datetime) else datetime.fromisoformat(date)
+
+    if dt.tzinfo is None and add_timezone_if_missing:
+        dt = (
+            dt.astimezone() if use_local_timezone
+            else dt.replace(tzinfo = timezone.utc)
+        )
+
+    return dt
 
 
 def parse_duration(text:str) -> timedelta:

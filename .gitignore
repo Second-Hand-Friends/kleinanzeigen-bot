@@ -21,6 +21,7 @@ __pycache__
 /.mypy_cache
 /.pdm-build/
 /.pdm-python
+/.ruff_cache
 
 # test coverage
 /.coverage

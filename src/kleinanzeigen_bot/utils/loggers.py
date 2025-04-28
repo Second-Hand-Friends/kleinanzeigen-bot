@@ -1,15 +1,14 @@
-"""
-SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
-SPDX-License-Identifier: AGPL-3.0-or-later
-SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""
-import copy, logging, re, sys
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import copy, logging, re, sys  # isort: skip
 from gettext import gettext as _
-from logging import Logger, DEBUG, INFO, WARNING, ERROR, CRITICAL
+from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING, Logger
 from logging.handlers import RotatingFileHandler
 from typing import Any, Final  # @UnusedImport
 
 import colorama
+
 from . import i18n, reflect
 
 __all__ = [
@@ -25,6 +24,16 @@ __all__ = [
 ]
 
 LOG_ROOT:Final[logging.Logger] = logging.getLogger()
+
+
+class _MaxLevelFilter(logging.Filter):
+
+    def __init__(self, level: int) -> None:
+        super().__init__()
+        self.level = level
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno <= self.level
 
 
 def configure_console_logging() -> None:
@@ -82,9 +91,7 @@ def configure_console_logging() -> None:
 
     stdout_log = logging.StreamHandler(sys.stderr)
     stdout_log.setLevel(DEBUG)
-    stdout_log.addFilter(type("", (logging.Filter,), {
-        "filter": lambda rec: rec.levelno <= INFO
-    }))
+    stdout_log.addFilter(_MaxLevelFilter(INFO))
     stdout_log.setFormatter(formatter)
     LOG_ROOT.addHandler(stdout_log)
 
@@ -97,7 +104,7 @@ def configure_console_logging() -> None:
 class LogFileHandle:
     """Encapsulates a log file handler with close and status methods."""
 
-    def __init__(self, file_path: str, handler: RotatingFileHandler, logger: logging.Logger):
+    def __init__(self, file_path: str, handler: RotatingFileHandler, logger: logging.Logger) -> None:
         self.file_path = file_path
         self._handler:RotatingFileHandler | None = handler
         self._logger = logger
