@@ -107,7 +107,7 @@ class TestAdExtractorShipping:
                     "data": {
                         "shippingOptionsResponse": {
                             "options": [
-                                {"id": "DHL_001", "priceInEuroCent": int(expected_cost * 100)}
+                                {"id": "DHL_001", "priceInEuroCent": int(expected_cost * 100), "packageSize": "SMALL"}
                             ]
                         }
                     }
@@ -132,7 +132,7 @@ class TestAdExtractorShipping:
                 "data": {
                     "shippingOptionsResponse": {
                         "options": [
-                            {"id": "DHL_001", "priceInEuroCent": 549}
+                            {"id": "DHL_001", "priceInEuroCent": 549, "packageSize": "SMALL"}
                         ]
                     }
                 }
@@ -148,6 +148,109 @@ class TestAdExtractorShipping:
             assert shipping_type == "SHIPPING"
             assert costs == 5.49
             assert options == ["DHL_2"]
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_shipping_info_with_all_matching_options(self, test_extractor: AdExtractor) -> None:
+        """Test shipping info extraction with all matching options enabled."""
+        shipping_response = {
+            "content": json.dumps({
+                "data": {
+                    "shippingOptionsResponse": {
+                        "options": [
+                            {"id": "HERMES_001", "priceInEuroCent": 489, "packageSize": "SMALL"},
+                            {"id": "HERMES_002", "priceInEuroCent": 549, "packageSize": "SMALL"},
+                            {"id": "DHL_001", "priceInEuroCent": 619, "packageSize": "SMALL"}
+                        ]
+                    }
+                }
+            })
+        }
+
+        # Enable all matching options in config
+        test_extractor.config["download"] = {"include_all_matching_shipping_options": True}
+
+        with patch.object(test_extractor, "page", MagicMock()), \
+                patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"), \
+                patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response):
+
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
+
+            assert shipping_type == "SHIPPING"
+            assert costs == 4.89
+            if options is not None:
+                assert sorted(options) == ["DHL_2", "Hermes_Päckchen", "Hermes_S"]
+            else:
+                assert options is None
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_shipping_info_with_excluded_options(self, test_extractor: AdExtractor) -> None:
+        """Test shipping info extraction with excluded options."""
+        shipping_response = {
+            "content": json.dumps({
+                "data": {
+                    "shippingOptionsResponse": {
+                        "options": [
+                            {"id": "HERMES_001", "priceInEuroCent": 489, "packageSize": "SMALL"},
+                            {"id": "HERMES_002", "priceInEuroCent": 549, "packageSize": "SMALL"},
+                            {"id": "DHL_001", "priceInEuroCent": 619, "packageSize": "SMALL"}
+                        ]
+                    }
+                }
+            })
+        }
+
+        # Enable all matching options and exclude DHL in config
+        test_extractor.config["download"] = {
+            "include_all_matching_shipping_options": True,
+            "excluded_shipping_options": ["DHL_2"]
+        }
+
+        with patch.object(test_extractor, "page", MagicMock()), \
+                patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"), \
+                patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response):
+
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
+
+            assert shipping_type == "SHIPPING"
+            assert costs == 4.89
+            if options is not None:
+                assert sorted(options) == ["Hermes_Päckchen", "Hermes_S"]
+            else:
+                assert options is None
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_shipping_info_with_excluded_matching_option(self, test_extractor: AdExtractor) -> None:
+        """Test shipping info extraction when the matching option is excluded."""
+        shipping_response = {
+            "content": json.dumps({
+                "data": {
+                    "shippingOptionsResponse": {
+                        "options": [
+                            {"id": "HERMES_001", "priceInEuroCent": 489, "packageSize": "SMALL"},
+                            {"id": "HERMES_002", "priceInEuroCent": 549, "packageSize": "SMALL"}
+                        ]
+                    }
+                }
+            })
+        }
+
+        # Exclude the matching option
+        test_extractor.config["download"] = {
+            "excluded_shipping_options": ["Hermes_Päckchen"]
+        }
+
+        with patch.object(test_extractor, "page", MagicMock()), \
+                patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"), \
+                patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response):
+
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
+
+            assert shipping_type == "NOT_APPLICABLE"
+            assert costs == 4.89
+            assert options is None
 
 
 class TestAdExtractorNavigation:
