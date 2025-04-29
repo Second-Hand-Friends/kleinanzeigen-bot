@@ -446,7 +446,7 @@ class AdExtractor(WebScrapingMixin):
                     # Find all options with the same price to determine the package size
                     matching_options = [opt for opt in shipping_costs if opt["priceInEuroCent"] == price_in_cent]
                     if not matching_options:
-                        return 'NOT_APPLICABLE', ship_costs, shipping_options
+                        return "NOT_APPLICABLE", ship_costs, shipping_options
 
                     # Use the package size of the first matching option
                     matching_size = matching_options[0]["packageSize"]
@@ -463,11 +463,11 @@ class AdExtractor(WebScrapingMixin):
                     # Only use the matching option if it's not excluded
                     matching_option = next((x for x in shipping_costs if x["priceInEuroCent"] == price_in_cent), None)
                     if not matching_option:
-                        return 'NOT_APPLICABLE', ship_costs, shipping_options
+                        return "NOT_APPLICABLE", ship_costs, shipping_options
 
                     shipping_option = shipping_option_mapping.get(matching_option["id"])
                     if not shipping_option or shipping_option in excluded_options:
-                        return 'NOT_APPLICABLE', ship_costs, shipping_options
+                        return "NOT_APPLICABLE", ship_costs, shipping_options
                     shipping_options = [shipping_option]
 
         except TimeoutError:  # no pricing box -> no shipping given

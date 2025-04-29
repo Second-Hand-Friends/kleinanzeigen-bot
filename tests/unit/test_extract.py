@@ -170,9 +170,9 @@ class TestAdExtractorShipping:
         # Enable all matching options in config
         test_extractor.config["download"] = {"store_all_matching_shipping_options": True}
 
-        with patch.object(test_extractor, 'page', MagicMock()), \
-                patch.object(test_extractor, 'web_text', new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"), \
-                patch.object(test_extractor, 'web_request', new_callable = AsyncMock, return_value = shipping_response):
+        with patch.object(test_extractor, "page", MagicMock()), \
+                patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"), \
+                patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response):
 
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
 
@@ -207,9 +207,9 @@ class TestAdExtractorShipping:
             "excluded_shipping_options": ["DHL_2"]
         }
 
-        with patch.object(test_extractor, 'page', MagicMock()), \
-                patch.object(test_extractor, 'web_text', new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"), \
-                patch.object(test_extractor, 'web_request', new_callable = AsyncMock, return_value = shipping_response):
+        with patch.object(test_extractor, "page", MagicMock()), \
+                patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"), \
+                patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response):
 
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
 
@@ -242,9 +242,9 @@ class TestAdExtractorShipping:
             "excluded_shipping_options": ["Hermes_Päckchen"]
         }
 
-        with patch.object(test_extractor, 'page', MagicMock()), \
-                patch.object(test_extractor, 'web_text', new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"), \
-                patch.object(test_extractor, 'web_request', new_callable = AsyncMock, return_value = shipping_response):
+        with patch.object(test_extractor, "page", MagicMock()), \
+                patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"), \
+                patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response):
 
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
 
