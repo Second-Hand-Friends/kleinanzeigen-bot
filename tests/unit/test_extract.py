@@ -168,7 +168,7 @@ class TestAdExtractorShipping:
         }
 
         # Enable all matching options in config
-        test_extractor.config["download"] = {"store_all_matching_shipping_options": True}
+        test_extractor.config["download"] = {"include_all_matching_shipping_options": True}
 
         with patch.object(test_extractor, "page", MagicMock()), \
                 patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"), \
@@ -203,7 +203,7 @@ class TestAdExtractorShipping:
 
         # Enable all matching options and exclude DHL in config
         test_extractor.config["download"] = {
-            "store_all_matching_shipping_options": True,
+            "include_all_matching_shipping_options": True,
             "excluded_shipping_options": ["DHL_2"]
         }
 

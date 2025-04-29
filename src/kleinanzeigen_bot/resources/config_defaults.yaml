@@ -27,8 +27,8 @@ ad_defaults:
 categories: {}
 
 download:
-  # if true, all shipping options matching the size will be stored
-  store_all_matching_shipping_options: false
+  # if true, all shipping options matching the package size will be included
+  include_all_matching_shipping_options: false
   # list of shipping options to exclude, e.g. ["DHL_2", "DHL_5"]
   excluded_shipping_options: []
 

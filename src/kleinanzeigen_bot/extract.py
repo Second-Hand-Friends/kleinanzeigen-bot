@@ -441,8 +441,8 @@ class AdExtractor(WebScrapingMixin):
                 # Get excluded shipping options from config
                 excluded_options = self.config.get("download", {}).get("excluded_shipping_options", [])
 
-                # If store_all_matching_shipping_options is enabled, get all options for the same size
-                if self.config.get("download", {}).get("store_all_matching_shipping_options", False):
+                # If include_all_matching_shipping_options is enabled, get all options for the same package size
+                if self.config.get("download", {}).get("include_all_matching_shipping_options", False):
                     # Find all options with the same price to determine the package size
                     matching_options = [opt for opt in shipping_costs if opt["priceInEuroCent"] == price_in_cent]
                     if not matching_options:
