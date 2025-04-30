@@ -325,6 +325,15 @@ class TestKleinanzeigenBotAuthentication:
             assert await configured_bot.is_logged_in() is True
 
     @pytest.mark.asyncio
+    async def test_is_logged_in_returns_true_with_alternative_element(self, configured_bot:KleinanzeigenBot) -> None:
+        """Verify that login check returns true when logged in with alternative element."""
+        with patch.object(configured_bot, "web_text", side_effect = [
+            TimeoutError(),  # First try with mr-medium fails
+            "angemeldet als: testuser"  # Second try with user-email succeeds
+        ]):
+            assert await configured_bot.is_logged_in() is True
+
+    @pytest.mark.asyncio
     async def test_is_logged_in_returns_false_when_not_logged_in(self, configured_bot:KleinanzeigenBot) -> None:
         """Verify that login check returns false when not logged in."""
         with patch.object(configured_bot, "web_text", side_effect = TimeoutError):
