@@ -540,11 +540,18 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     async def is_logged_in(self) -> bool:
         try:
+            # Try to find the standard element first
             user_info = await self.web_text(By.CLASS_NAME, "mr-medium")
             if self.config["login"]["username"].lower() in user_info.lower():
                 return True
         except TimeoutError:
-            return False
+            try:
+                # If standard element not found, try the alternative
+                user_info = await self.web_text(By.ID, "user-email")
+                if self.config["login"]["username"].lower() in user_info.lower():
+                    return True
+            except TimeoutError:
+                return False
         return False
 
     async def delete_ads(self, ad_cfgs:list[tuple[str, dict[str, Any], dict[str, Any]]]) -> None:
