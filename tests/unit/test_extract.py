@@ -151,7 +151,7 @@ class TestAdExtractorShipping:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_shipping_info_with_all_matching_options(self, test_extractor: AdExtractor) -> None:
+    async def test_extract_shipping_info_with_all_matching_options(self, test_extractor:AdExtractor) -> None:
         """Test shipping info extraction with all matching options enabled."""
         shipping_response = {
             "content": json.dumps({
@@ -185,7 +185,7 @@ class TestAdExtractorShipping:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_shipping_info_with_excluded_options(self, test_extractor: AdExtractor) -> None:
+    async def test_extract_shipping_info_with_excluded_options(self, test_extractor:AdExtractor) -> None:
         """Test shipping info extraction with excluded options."""
         shipping_response = {
             "content": json.dumps({
@@ -222,7 +222,7 @@ class TestAdExtractorShipping:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_shipping_info_with_excluded_matching_option(self, test_extractor: AdExtractor) -> None:
+    async def test_extract_shipping_info_with_excluded_matching_option(self, test_extractor:AdExtractor) -> None:
         """Test shipping info extraction when the matching option is excluded."""
         shipping_response = {
             "content": json.dumps({
