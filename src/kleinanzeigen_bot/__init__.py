@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import atexit, copy, json, os, re, signal, sys, textwrap  # isort: skip
+import atexit, copy, json, os, re, signal, sys, textwrap, shutil  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 from collections.abc import Iterable
@@ -463,8 +463,21 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         if config is None:
             LOG.warning("Config file %s does not exist. Creating it with default values...", self.config_file_path)
-            dicts.save_dict(self.config_file_path, config_defaults)
+            self._save_config_safely(config_defaults, self.config_file_path)
             config = {}
+        else:
+            # Check for new configuration fields
+            new_fields = self._find_new_config_fields(config, config_defaults)
+            if new_fields:
+                LOG.info("New configuration fields found:")
+                for field_path in sorted(new_fields):
+                    LOG.info("  - %s", field_path)
+                LOG.info("These fields were automatically filled with default values.")
+
+                # Add new fields to the existing configuration
+                self._add_new_config_fields(config, config_defaults)
+                # Save the updated configuration
+                self._save_config_safely(config, self.config_file_path)
 
         self.config = dicts.apply_defaults(config, config_defaults)
 
@@ -485,6 +498,112 @@ class KleinanzeigenBot(WebScrapingMixin):
         if self.config["browser"]["user_data_dir"]:
             self.browser_config.user_data_dir = abspath(self.config["browser"]["user_data_dir"], relative_to = self.config_file_path)
         self.browser_config.profile_name = self.config["browser"]["profile_name"]
+
+    def _find_new_config_fields(self, current_config:dict[str, Any], default_config:dict[str, Any], path:str = "") -> list[str]:
+        """Recursively searches for new configuration fields in the default configuration.
+
+        Args:
+            current_config: The current configuration dictionary
+            default_config: The default configuration dictionary containing all possible fields
+            path: The current path in the configuration tree (used for recursion)
+
+        Returns:
+            A list of paths to new fields that exist in default_config but not in current_config
+        """
+        new_fields = []
+
+        for key, default_value in default_config.items():
+            current_path = f"{path}.{key}" if path else key
+
+            if key not in current_config:
+                new_fields.append(current_path)
+                # If the new field is a dictionary, also add its subfields
+                if isinstance(default_value, dict):
+                    for sub_key in default_value:
+                        sub_path = f"{current_path}.{sub_key}"
+                        new_fields.append(sub_path)
+            elif isinstance(default_value, dict) and isinstance(current_config[key], dict):
+                # Recursive call for subfields
+                sub_fields = self._find_new_config_fields(current_config[key], default_value, current_path)
+                new_fields.extend(sub_fields)
+            elif isinstance(default_value, dict) and not isinstance(current_config[key], dict):
+                # If the current field is not a dictionary but the default field is,
+                # then the entire default field is new
+                new_fields.append(current_path)
+
+        return new_fields
+
+    def _add_new_config_fields(self, current_config:dict[str, Any], default_config:dict[str, Any]) -> None:
+        """Adds new fields from the default configuration to the current configuration.
+
+        This method recursively traverses the configuration dictionaries and adds any fields
+        that exist in default_config but not in current_config. Existing values in current_config
+        are preserved.
+
+        Args:
+            current_config: The current configuration dictionary to be updated
+            default_config: The default configuration dictionary containing all possible fields
+        """
+        for key, default_value in default_config.items():
+            if key not in current_config:
+                current_config[key] = default_value
+            elif isinstance(default_value, dict) and isinstance(current_config[key], dict):
+                self._add_new_config_fields(current_config[key], default_value)
+
+    def _save_config_safely(self, config:dict[str, Any], config_path:str) -> None:
+        """Safely saves the configuration with backup and error handling.
+
+        This method implements a safe save operation that:
+        1. Creates a backup of the existing configuration
+        2. Attempts to save the new configuration
+        3. Removes the backup if successful
+        4. Restores from backup if the save fails
+
+        Args:
+            config: The configuration dictionary to save
+            config_path: The path where the configuration should be saved
+
+        Raises:
+            Exception: If the configuration cannot be saved and the backup restore fails
+        """
+        backup_path = f"{config_path}.bak"
+        try:
+            # Create backup of current configuration
+            if os.path.exists(config_path):
+                LOG.debug("Creating configuration backup: %s -> %s", config_path, backup_path)
+                try:
+                    shutil.copy2(config_path, backup_path)
+                    LOG.debug("Configuration backup created successfully")
+                except Exception as ex:
+                    LOG.warning("Failed to create configuration backup: %s", ex)
+
+            # Save new configuration
+            LOG.debug("Saving new configuration to: %s", config_path)
+            dicts.save_dict(config_path, config)
+            LOG.debug("Configuration saved successfully")
+
+            # Remove backup after successful save
+            if os.path.exists(backup_path):
+                LOG.debug("Removing backup file: %s", backup_path)
+                try:
+                    os.remove(backup_path)
+                    LOG.debug("Backup file removed successfully")
+                except Exception as ex:
+                    LOG.warning("Failed to remove backup file: %s", ex)
+
+        except Exception as ex:
+            LOG.error("Failed to save configuration: %s", ex)
+            # Attempt to restore from backup
+            if os.path.exists(backup_path):
+                LOG.debug("Attempting to restore configuration from backup: %s -> %s",
+                         backup_path, config_path)
+                try:
+                    shutil.copy2(backup_path, config_path)
+                    LOG.info("Configuration restored from backup successfully")
+                except Exception as restore_ex:
+                    LOG.error("Failed to restore configuration from backup: %s", restore_ex)
+                    raise Exception("Failed to save configuration and restore from backup") from restore_ex
+            raise
 
     async def login(self) -> None:
         LOG.info("Checking if already logged in...")

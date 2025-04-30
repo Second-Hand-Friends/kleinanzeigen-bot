@@ -29,6 +29,13 @@ kleinanzeigen_bot/__init__.py:
     "App version: %s": "App Version: %s"
     "Python version: %s": "Python Version: %s"
 
+  _save_config_safely:
+    "Configuration restored from backup successfully": "Konfiguration wurde aus Backup wiederhergestellt"
+    "Failed to restore configuration from backup: %s": "Konnte Konfiguration nicht aus Backup wiederherstellen: %s"
+    "Failed to create configuration backup: %s": "Konnte kein Backup der Konfigurationsdatei erstellen: %s"
+    "Failed to remove backup file: %s": "Konnte Backup-Datei nicht löschen: %s"
+    "Failed to save configuration: %s": "Fehler beim Speichern der Konfiguration: %s"
+
   __check_ad_changed:
     "Hash comparison for [%s]:": "Hash-Vergleich für [%s]:"
     "    Stored hash: %s": "    Gespeicherter Hash: %s"
@@ -49,6 +56,9 @@ kleinanzeigen_bot/__init__.py:
     " -> found %s": "-> %s gefunden"
     "config": "Konfiguration"
     "Config file %s does not exist. Creating it with default values...": "Konfigurationsdatei %s existiert nicht. Erstelle sie mit Standardwerten..."
+    "New configuration fields found:": "Neue Konfigurationsfelder gefunden:"
+    "  - %s": "  - %s"
+    "These fields were automatically filled with default values.": "Diese Felder wurden automatisch mit Standardwerten ergänzt."
 
   login:
     "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
