@@ -955,7 +955,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                         if ad_cfg["shipping_costs"]:
                             await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]',
                                              str.replace(ad_cfg["shipping_costs"], ".", ","))
-                        await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
+                        await self.web_click(By.XPATH, '//dialog//button[.//*[text()[contains(.,"Fertig")]]]')
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
                     raise TimeoutError(_("Unable to close shipping dialog!")) from ex
