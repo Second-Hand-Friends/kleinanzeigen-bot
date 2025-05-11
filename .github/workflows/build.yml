@@ -134,6 +134,12 @@ jobs:
       run: pdm show
 
 
+    - name: Check with pip-audit
+      # until https://github.com/astral-sh/ruff/issues/8277
+      run: 
+        pdm run pip-audit --progress-spinner off --skip-editable --verbose 
+
+
     - name: Check with ruff
       run: pdm run ruff check
 

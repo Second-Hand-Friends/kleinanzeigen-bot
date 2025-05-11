@@ -46,6 +46,8 @@ dependencies = [
 
 [dependency-groups] # https://peps.python.org/pep-0735/
 dev = [
+  # security
+  "pip-audit",
   # testing:
   "pytest>=8.3.4",
   "pytest-asyncio>=0.25.3",
