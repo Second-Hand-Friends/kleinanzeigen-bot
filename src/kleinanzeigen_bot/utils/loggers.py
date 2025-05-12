@@ -65,7 +65,10 @@ def configure_console_logging() -> None:
         }
 
         def format(self, record:logging.LogRecord) -> str:
-            record = copy.deepcopy(record)
+            # Deep copy fails if record.args contains objects with
+            # __init__(...) parameters (e.g., CaptchaEncountered).
+            # A shallow copy is sufficient to preserve the original.
+            record = copy.copy(record)
 
             level_color = self.LEVEL_COLORS.get(record.levelno, "")
             msg_color = self.MESSAGE_COLORS.get(record.levelno, "")
