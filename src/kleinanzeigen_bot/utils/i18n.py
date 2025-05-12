@@ -121,7 +121,7 @@ def translate(text:object, caller:inspect.FrameInfo | None) -> str:
 # replace gettext.gettext with custom _translate function
 _original_gettext = gettext.gettext
 gettext.gettext = lambda message: translate(_original_gettext(message), reflect.get_caller())
-for module_name, module in sys.modules.items():
+for module_name, module in sys.modules.copy().items():
     if module is None or module_name in sys.builtin_module_names:
         continue
     if hasattr(module, "_") and module._ is _original_gettext:
