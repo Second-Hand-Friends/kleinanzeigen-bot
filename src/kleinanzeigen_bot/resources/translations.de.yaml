@@ -21,6 +21,9 @@ kleinanzeigen_bot/__main__.py:
 #################################################
 kleinanzeigen_bot/__init__.py:
 #################################################
+  main:
+    "Captcha recognized - restart in %.0f s ...": "[INFO] Captcha erkannt - Neustart in %.0f s ..."
+
   module:
     "Direct execution not supported. Use 'pdm run app'": "Direkte Ausführung nicht unterstützt. Bitte 'pdm run app' verwenden"
 

@@ -1,14 +1,27 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import atexit, copy, json, os, re, signal, sys, textwrap  # isort: skip
+import atexit
+import copy
+import json
+import os
+import re
+import signal
+import sys
+import textwrap
+
+import time  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 from collections.abc import Iterable
+from datetime import timedelta
 from gettext import gettext as _
 from typing import Any, Final
 
-import certifi, colorama, nodriver  # isort: skip
+import certifi
+import colorama
+
+import nodriver  # isort: skip
 from ruamel.yaml import YAML
 from wcmatch import glob
 
@@ -1195,7 +1208,16 @@ def main(args:list[str]) -> None:
     try:
         bot = KleinanzeigenBot()
         atexit.register(bot.close_browser_session)
-        nodriver.loop().run_until_complete(bot.run(args))
+        while True:
+            try:
+                nodriver.loop().run_until_complete(bot.run(args))
+                break  # regular exit
+            except CaptchaEncountered as ex:
+                delay = getattr(ex, "restart_delay", timedelta(hours=6))
+                delay_s = delay.total_seconds()
+                LOG.warning("Captcha recognized - restart in %.0f s ...", delay_s)
+                time.sleep(delay_s)
+                # Loop continues → Bot restarts
     except Exception:
         error_handlers.on_exception(*sys.exc_info())
 
