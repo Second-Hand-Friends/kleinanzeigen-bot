@@ -23,6 +23,7 @@ def on_exception(ex_type:type[BaseException] | None, ex_value:BaseException | No
         LOG.error(ex_value)
     else:
         LOG.error("%s: %s", ex_type.__name__, ex_value)
+    sys.exit(1)
 
 
 def on_sigint(_sig:int, _frame:FrameType | None) -> None:
