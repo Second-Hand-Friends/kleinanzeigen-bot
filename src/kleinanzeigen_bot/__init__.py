@@ -1196,6 +1196,8 @@ def main(args:list[str]) -> None:
         bot = KleinanzeigenBot()
         atexit.register(bot.close_browser_session)
         nodriver.loop().run_until_complete(bot.run(args))
+    except CaptchaEncountered as ex:
+        raise ex
     except Exception:
         error_handlers.on_exception(*sys.exc_info())
 
