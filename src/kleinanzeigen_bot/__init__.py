@@ -795,12 +795,12 @@ class KleinanzeigenBot(WebScrapingMixin):
             await self.web_click(By.ID, "pstad-submit")
         except TimeoutError:
             # https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/40
-            await self.web_click(By.XPATH, "//fieldset[@id='postad-publish']//*[contains(text(),'Anzeige aufgeben')]")
+            await self.web_click(By.XPATH, "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')]")
             await self.web_click(By.ID, "imprint-guidance-submit")
 
         # check for no image question
         try:
-            image_hint_xpath = '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Ohne Bild veröffentlichen")]]]'
+            image_hint_xpath = '//*[contains(@class, "ModalDialog--Actions")]//button[contains(., "Ohne Bild veröffentlichen")]'
             if not ad_cfg["images"] and await self.web_check(By.XPATH, image_hint_xpath, Is.DISPLAYED):
                 await self.web_click(By.XPATH, image_hint_xpath)
         except TimeoutError:
@@ -815,7 +815,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         # check for approval message
         try:
-            approval_link_xpath = '//*[contains(@id, "not-completed")]//*//a[contains(@class, "to-my-ads-link")]'
+            approval_link_xpath = '//*[contains(@id, "not-completed")]//a[contains(@class, "to-my-ads-link")]'
             if await self.web_check(By.XPATH, approval_link_xpath, Is.DISPLAYED):
                 await self.web_click(By.XPATH, approval_link_xpath)
         except TimeoutError:
@@ -858,7 +858,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         try:
             # Click continue button
-            await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Bestätigen")]]]')
+            await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[contains(., "Bestätigen")]')
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close condition dialog!")) from ex
 
@@ -929,13 +929,12 @@ class KleinanzeigenBot(WebScrapingMixin):
         if ad_cfg["shipping_type"] == "PICKUP":
             try:
                 await self.web_click(By.XPATH,
-                    '//*[contains(@class, "ShippingPickupSelector")]//label[text()[contains(.,"Nur Abholung")]]/../input[@type="radio"]')
+                    '//*[contains(@class, "ShippingPickupSelector")]//label[contains(., "Nur Abholung")]/../input[@type="radio"]')
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg["shipping_options"]:
-            await self.web_click(By.XPATH, '//*[contains(@class, "SubSection")]//*//button[contains(@class, "SelectionButton")]')
-            await self.web_click(By.XPATH,
-                                 '//*[contains(@class, "CarrierSelectionModal")]//button[contains(text(),"Andere Versandmethoden")]')
+            await self.web_click(By.XPATH, '//*[contains(@class, "SubSection")]//button[contains(@class, "SelectionButton")]')
+            await self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(., "Andere Versandmethoden")]')
             await self.__set_shipping_options(ad_cfg)
         else:
             special_shipping_selector = '//select[contains(@id, ".versand_s")]'
@@ -947,15 +946,14 @@ class KleinanzeigenBot(WebScrapingMixin):
                 try:
                     # no options. only costs. Set custom shipping cost
                     if ad_cfg["shipping_costs"] is not None:
-                        await self.web_click(By.XPATH,
-                                             '//*[contains(@class, "SubSection")]//*//button[contains(@class, "SelectionButton")]')
-                        await self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(text(),"Andere Versandmethoden")]')
+                        await self.web_click(By.XPATH, '//*[contains(@class, "SubSection")]//button[contains(@class, "SelectionButton")]')
+                        await self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(., "Andere Versandmethoden")]')
                         await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
 
                         if ad_cfg["shipping_costs"]:
                             await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]',
                                              str.replace(ad_cfg["shipping_costs"], ".", ","))
-                        await self.web_click(By.XPATH, '//dialog//button[.//*[text()[contains(.,"Fertig")]]]')
+                        await self.web_click(By.XPATH, '//dialog//button[contains(., "Fertig")]')
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
                     raise TimeoutError(_("Unable to close shipping dialog!")) from ex
@@ -1001,10 +999,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 await self.web_click(By.CSS_SELECTOR, f'.SingleSelectionItem--Main input[type=radio][data-testid="{shipping_size}"]')
                 to_be_clicked_shipping_packages = list(shipping_packages)
 
-            await self.web_click(
-                By.XPATH,
-                '//*[contains(@class, "ModalDialog--Actions")]'
-                '//button[.//*[text()[contains(.,"Weiter")]]]')
+            await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[contains(., "Weiter")]')
 
             for shipping_package in to_be_clicked_shipping_packages:
                 try:
@@ -1021,7 +1016,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.debug(ex, exc_info = True)
         try:
             # Click apply button
-            await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[.//*[text()[contains(.,"Fertig")]]]')
+            await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[contains(., "Fertig")]')
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 
