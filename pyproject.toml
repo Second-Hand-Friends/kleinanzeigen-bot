@@ -70,6 +70,7 @@ Homepage      = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot"
 Repository    = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot.git"
 Documentation = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/README.md"
 Issues        = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues"
+CI            = "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/actions"
 
 
 #####################
@@ -85,9 +86,12 @@ write_template = "__version__ = '{}'\n"
 app   = "python -m kleinanzeigen_bot"
 debug = "python -m pdb -m kleinanzeigen_bot"
 
+# build & packaging
+generate-schemas = "python scripts/generate_schemas.py"
 compile.cmd = "python -O -m PyInstaller pyinstaller.spec --clean"
 compile.env = {PYTHONHASHSEED = "1", SOURCE_DATE_EPOCH = "0"}  # https://pyinstaller.org/en/stable/advanced-topics.html#creating-a-reproducible-build
 
+# format & lint
 format = { composite = ["format:py", "format:yaml"] }
 "format:py"   = { shell = "autopep8 --recursive --in-place scripts src tests --verbose && python scripts/post_autopep8.py scripts src tests" }
 "format:yaml" = "yamlfix scripts/ src/ tests/"
@@ -98,9 +102,13 @@ lint = { composite = ["lint:ruff", "lint:mypy", "lint:pyright"] }
 "lint:pyright" = "basedpyright"
 "lint:fix"     = {shell = "ruff check --preview --fix" }
 
+# tests
 test    = "python -m pytest --capture=tee-sys -v"
 utest   = "python -m pytest --capture=tee-sys -v -m 'not itest'"
 itest   = "python -m pytest --capture=tee-sys -v -m 'itest'"
+"test:cov" = { composite = ["test --cov=src/kleinanzeigen_bot"] }
+"utest:cov" = { composite = ["utest --cov=src/kleinanzeigen_bot"] }
+"itest:cov" = { composite = ["itest --cov=src/kleinanzeigen_bot"] }
 
 
 #####################
@@ -303,7 +311,6 @@ addopts = """
   --strict-markers
   -p no:cacheprovider
   --doctest-modules
-  --cov=src/kleinanzeigen_bot
   --cov-report=term-missing
 """
 markers = [
