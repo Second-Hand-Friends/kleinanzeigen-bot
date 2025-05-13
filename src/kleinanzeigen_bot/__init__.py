@@ -348,7 +348,11 @@ class KleinanzeigenBot(WebScrapingMixin):
         for ad_file, ad_file_relative in sorted(ad_files.items()):
             ad_cfg_orig = dicts.load_dict(ad_file, "ad")
             ad_cfg = copy.deepcopy(ad_cfg_orig)
-            dicts.apply_defaults(ad_cfg, self.config["ad_defaults"], ignore = lambda k, _: k == "description", override = lambda _, v: not v)
+            dicts.apply_defaults(ad_cfg,
+                self.config["ad_defaults"],
+                ignore = lambda k, _: k == "description",
+                override = lambda _, v: v == ""  # noqa: PLC1901 can be simplified to `not v` as an empty string is falsey
+            )
             dicts.apply_defaults(ad_cfg, ad_fields)
 
             if ignore_inactive and not ad_cfg["active"]:
