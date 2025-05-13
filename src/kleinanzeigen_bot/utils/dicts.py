@@ -5,6 +5,7 @@ import copy, json, os  # isort: skip
 from collections.abc import Callable
 from gettext import gettext as _
 from importlib.resources import read_text as get_resource_as_string
+from pathlib import Path
 from types import ModuleType
 from typing import Any, Final
 
@@ -85,11 +86,14 @@ def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "
     return json.loads(content) if filename.endswith(".json") else YAML().load(content)  # type: ignore[no-any-return] # mypy
 
 
-def save_dict(filepath:str, content:dict[str, Any]) -> None:
-    filepath = files.abspath(filepath)
+def save_dict(filepath:str | Path, content:dict[str, Any], *, header:str | None = None) -> None:
+    filepath = Path(filepath).resolve(strict = False)
     LOG.info("Saving [%s]...", filepath)
     with open(filepath, "w", encoding = "utf-8") as file:
-        if filepath.endswith(".json"):
+        if header:
+            file.write(header)
+            file.write("\n")
+        if filepath.suffix == ".json":
             file.write(json.dumps(content, indent = 2, ensure_ascii = False))
         else:
             yaml = YAML()
