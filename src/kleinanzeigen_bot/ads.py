@@ -4,7 +4,7 @@
 import hashlib, json, os  # isort: skip
 from typing import Any, Final
 
-from .utils import dicts
+from .model.config_model import Config
 
 MAX_DESCRIPTION_LENGTH:Final[int] = 4000
 
@@ -40,7 +40,7 @@ def calculate_content_hash(ad_cfg:dict[str, Any]) -> str:
     return hashlib.sha256(content_str.encode()).hexdigest()
 
 
-def get_description_affixes(config:dict[str, Any], *, prefix:bool = True) -> str:
+def get_description_affixes(config:Config, *, prefix:bool = True) -> str:
     """Get prefix or suffix for description with proper precedence.
 
     This function handles both the new flattened format and legacy nested format:
@@ -65,24 +65,21 @@ def get_description_affixes(config:dict[str, Any], *, prefix:bool = True) -> str
 
     Example:
         >>> config = {"ad_defaults": {"description_prefix": "Hello", "description": {"prefix": "Hi"}}}
-        >>> get_description_affixes(config, prefix=True)
+        >>> get_description_affixes(Config.model_validate(config), prefix=True)
         'Hello'
     """
-    # Handle edge cases
-    if not isinstance(config, dict):
-        return ""
-
     affix_type = "prefix" if prefix else "suffix"
 
     # First try new flattened format (description_prefix/description_suffix)
     flattened_key = f"description_{affix_type}"
-    flattened_value = dicts.safe_get(config, "ad_defaults", flattened_key)
+    flattened_value = getattr(config.ad_defaults, flattened_key)
     if isinstance(flattened_value, str):
         return flattened_value
 
     # Then try legacy nested format (description.prefix/description.suffix)
-    nested_value = dicts.safe_get(config, "ad_defaults", "description", affix_type)
-    if isinstance(nested_value, str):
-        return nested_value
+    if config.ad_defaults.description:
+        nested_value = getattr(config.ad_defaults.description, affix_type)
+        if isinstance(nested_value, str):
+            return nested_value
 
     return ""

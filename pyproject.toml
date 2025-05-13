@@ -39,6 +39,7 @@ dependencies = [
   "colorama",
   "jaraco.text", # required by pkg_resources during runtime
   "nodriver==0.39.0", # 0.40-0.44 have issues starting browsers and evaluating self.web_execute("window.BelenConf") fails
+  "pydantic>=2.0.0",
   "ruamel.yaml",
   "psutil",
   "wcmatch",
@@ -256,7 +257,7 @@ min-file-size = 256
 [tool.ruff.lint.pylint]
 # https://pylint.pycqa.org/en/latest/user_guide/configuration/all-options.html#design-checker
 # https://pylint.pycqa.org/en/latest/user_guide/checkers/features.html#design-checker-messages
-max-args       = 5      # max. number of args for function / method (R0913)
+max-args       = 6      # max. number of args for function / method (R0913)
 # max-attributes = 15   # max. number of instance attrs for a class (R0902)
 max-branches   = 40     # max. number of branch for function / method body (R0912)
 max-locals     = 30     # max. number of local vars for function / method body (R0914)

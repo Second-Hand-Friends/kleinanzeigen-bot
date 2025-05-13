@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 
 from kleinanzeigen_bot.extract import AdExtractor
+from kleinanzeigen_bot.model.config_model import Config, DownloadConfig
 from kleinanzeigen_bot.utils.web_scraping_mixin import Browser, By, Element
 
 
@@ -36,11 +37,11 @@ class _TestCaseDict(TypedDict):  # noqa: PYI049 Private TypedDict `...` is never
 class TestAdExtractorBasics:
     """Basic synchronous tests for AdExtractor."""
 
-    def test_constructor(self, browser_mock:MagicMock, sample_config:dict[str, Any]) -> None:
+    def test_constructor(self, browser_mock:MagicMock, test_bot_config:Config) -> None:
         """Test the constructor of AdExtractor"""
-        extractor = AdExtractor(browser_mock, sample_config)
+        extractor = AdExtractor(browser_mock, test_bot_config)
         assert extractor.browser == browser_mock
-        assert extractor.config == sample_config
+        assert extractor.config == test_bot_config
 
     @pytest.mark.parametrize(("url", "expected_id"), [
         ("https://www.kleinanzeigen.de/s-anzeige/test-title/12345678", 12345678),
@@ -168,7 +169,7 @@ class TestAdExtractorShipping:
         }
 
         # Enable all matching options in config
-        test_extractor.config["download"] = {"include_all_matching_shipping_options": True}
+        test_extractor.config.download = DownloadConfig.model_validate({"include_all_matching_shipping_options": True})
 
         with patch.object(test_extractor, "page", MagicMock()), \
                 patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"), \
@@ -202,10 +203,10 @@ class TestAdExtractorShipping:
         }
 
         # Enable all matching options and exclude DHL in config
-        test_extractor.config["download"] = {
+        test_extractor.config.download = DownloadConfig.model_validate({
             "include_all_matching_shipping_options": True,
             "excluded_shipping_options": ["DHL_2"]
-        }
+        })
 
         with patch.object(test_extractor, "page", MagicMock()), \
                 patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"), \
@@ -238,9 +239,9 @@ class TestAdExtractorShipping:
         }
 
         # Exclude the matching option
-        test_extractor.config["download"] = {
+        test_extractor.config.download = DownloadConfig.model_validate({
             "excluded_shipping_options": ["Hermes_Päckchen"]
-        }
+        })
 
         with patch.object(test_extractor, "page", MagicMock()), \
                 patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"), \
@@ -407,13 +408,14 @@ class TestAdExtractorContent:
     def extractor_with_config(self) -> AdExtractor:
         """Create extractor with specific config for testing prefix/suffix handling."""
         browser_mock = MagicMock(spec = Browser)
-        return AdExtractor(browser_mock, {})  # Empty config, will be overridden in tests
+        return AdExtractor(browser_mock, Config())  # Empty config, will be overridden in tests
 
     @pytest.mark.asyncio
     async def test_extract_description_with_affixes(
         self,
         test_extractor:AdExtractor,
-        description_test_cases:list[tuple[dict[str, Any], str, str]]
+        description_test_cases:list[tuple[dict[str, Any], str, str]],
+        test_bot_config:Config
     ) -> None:
         """Test extraction of description with various prefix/suffix configurations."""
         # Mock the page
@@ -422,7 +424,7 @@ class TestAdExtractorContent:
         test_extractor.page = page_mock
 
         for config, raw_description, _ in description_test_cases:  # Changed to _ since we don't use expected_description
-            test_extractor.config = config
+            test_extractor.config = test_bot_config.with_values(config)
 
             with patch.multiple(test_extractor,
                 web_text = AsyncMock(side_effect = [
@@ -483,7 +485,6 @@ class TestAdExtractorContent:
         page_mock = MagicMock()
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
         test_extractor.page = page_mock
-        test_extractor.config = {"ad_defaults": {}}  # Empty config
         raw_description = "Original Description"
 
         with patch.multiple(test_extractor,
@@ -525,17 +526,17 @@ class TestAdExtractorCategory:
     """Tests for category extraction functionality."""
 
     @pytest.fixture
-    def extractor(self) -> AdExtractor:
+    def extractor(self, test_bot_config:Config) -> AdExtractor:
         browser_mock = MagicMock(spec = Browser)
-        config_mock = {
+        config = test_bot_config.with_values({
             "ad_defaults": {
                 "description": {
                     "prefix": "Test Prefix",
                     "suffix": "Test Suffix"
                 }
             }
-        }
-        return AdExtractor(browser_mock, config_mock)
+        })
+        return AdExtractor(browser_mock, config)
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
@@ -581,17 +582,17 @@ class TestAdExtractorContact:
     """Tests for contact information extraction."""
 
     @pytest.fixture
-    def extractor(self) -> AdExtractor:
+    def extractor(self, test_bot_config:Config) -> AdExtractor:
         browser_mock = MagicMock(spec = Browser)
-        config_mock = {
+        config = test_bot_config.with_values({
             "ad_defaults": {
                 "description": {
                     "prefix": "Test Prefix",
                     "suffix": "Test Suffix"
                 }
             }
-        }
-        return AdExtractor(browser_mock, config_mock)
+        })
+        return AdExtractor(browser_mock, config)
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
@@ -663,17 +664,17 @@ class TestAdExtractorDownload:
     """Tests for download functionality."""
 
     @pytest.fixture
-    def extractor(self) -> AdExtractor:
+    def extractor(self, test_bot_config:Config) -> AdExtractor:
         browser_mock = MagicMock(spec = Browser)
-        config_mock = {
+        config = test_bot_config.with_values({
             "ad_defaults": {
                 "description": {
                     "prefix": "Test Prefix",
                     "suffix": "Test Suffix"
                 }
             }
-        }
-        return AdExtractor(browser_mock, config_mock)
+        })
+        return AdExtractor(browser_mock, config)
 
     @pytest.mark.asyncio
     async def test_download_ad_existing_directory(self, extractor:AdExtractor) -> None:

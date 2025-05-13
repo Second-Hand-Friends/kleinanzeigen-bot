@@ -229,6 +229,8 @@ Valid file extensions are `.json`, `.yaml` and `.yml`
 The following parameters can be configured:
 
 ```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/config.schema.json
+
 # glob (wildcard) patterns to select ad configuration files
 # if relative paths are specified, then they are relative to this configuration file
 ad_files:
@@ -425,6 +427,7 @@ By default a new browser process will be launched. To reuse a manually launched 
   - all tests: `pdm run test` - with coverage: `pdm run test:cov`
 - Run syntax checks: `pdm run lint`
 - Linting issues found by ruff can be auto-fixed using `pdm run lint:fix`
+- Derive JSON schema files from Pydantic data model: `pdm run generate-schemas`
 - Create platform-specific executable: `pdm run compile`
 - Application bootstrap works like this:
   ```python

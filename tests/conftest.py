@@ -9,6 +9,7 @@ import pytest
 
 from kleinanzeigen_bot import KleinanzeigenBot
 from kleinanzeigen_bot.extract import AdExtractor
+from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import loggers
 from kleinanzeigen_bot.utils.web_scraping_mixin import Browser
 
@@ -29,50 +30,39 @@ def test_data_dir(tmp_path:str) -> str:
 
 
 @pytest.fixture
-def sample_config() -> dict[str, Any]:
+def test_bot_config() -> Config:
     """Provides a basic sample configuration for testing.
 
     This configuration includes all required fields for the bot to function:
     - Login credentials (username/password)
-    - Browser settings
-    - Ad defaults (description prefix/suffix)
     - Publishing settings
     """
-    return {
-        "login": {
-            "username": "testuser",
-            "password": "testpass"
-        },
-        "browser": {
-            "arguments": [],
-            "binary_location": None,
-            "extensions": [],
-            "use_private_window": True,
-            "user_data_dir": None,
-            "profile_name": None
-        },
+    return Config.model_validate({
         "ad_defaults": {
-            "description": {
-                "prefix": "Test Prefix",
-                "suffix": "Test Suffix"
-            }
+            "contact": {
+                "name": "dummy_name"
+            },
+        },
+        "login": {
+            "username": "dummy_user",
+            "password": "dummy_password"
         },
         "publishing": {
             "delete_old_ads": "BEFORE_PUBLISH",
             "delete_old_ads_by_title": False
         }
-    }
+    })
 
 
 @pytest.fixture
-def test_bot(sample_config:dict[str, Any]) -> KleinanzeigenBot:
-    """Provides a fresh KleinanzeigenBot instance for all test classes.
+def test_bot(test_bot_config:Config) -> KleinanzeigenBot:
+    """Provides a fresh KleinanzeigenBot instance for all test methods.
 
     Dependencies:
-        - sample_config: Used to initialize the bot with a valid configuration
+        - test_bot_config: Used to initialize the bot with a valid configuration
     """
     bot_instance = KleinanzeigenBot()
-    bot_instance.config = sample_config
+    bot_instance.config = test_bot_config
     return bot_instance
 
 
@@ -97,14 +87,14 @@ def log_file_path(test_data_dir:str) -> str:
 
 
 @pytest.fixture
-def test_extractor(browser_mock:MagicMock, sample_config:dict[str, Any]) -> AdExtractor:
+def test_extractor(browser_mock:MagicMock, test_bot_config:Config) -> AdExtractor:
     """Provides a fresh AdExtractor instance for testing.
 
     Dependencies:
         - browser_mock: Used to mock browser interactions
-        - sample_config: Used to initialize the extractor with a valid configuration
+        - test_bot_config: Used to initialize the extractor with a valid configuration
     """
-    return AdExtractor(browser_mock, sample_config)
+    return AdExtractor(browser_mock, test_bot_config)
 
 
 @pytest.fixture
@@ -174,21 +164,6 @@ def description_test_cases() -> list[tuple[dict[str, Any], str, str]]:
             "Original Description",
             "Original Description"
         ),
-        # Test case 6: Non-string values in config
-        (
-            {
-                "ad_defaults": {
-                    "description_prefix": 123,
-                    "description_suffix": True,
-                    "description": {
-                        "prefix": [],
-                        "suffix": {}
-                    }
-                }
-            },
-            "Original Description",
-            "Original Description"
-        )
     ]
 
 
@@ -200,3 +175,8 @@ def mock_web_text_responses() -> list[str]:
         "Test Description",  # Description
         "03.02.2025"  # Creation date
     ]
+
+
+@pytest.fixture(autouse = True)
+def silence_nodriver_logs() -> None:
+    loggers.get_logger("nodriver").setLevel(loggers.WARNING)

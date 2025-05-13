@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Final
 
 from .ads import calculate_content_hash, get_description_affixes
+from .model.config_model import Config
 from .utils import dicts, i18n, loggers, misc, reflect
 from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
 
@@ -22,7 +23,7 @@ class AdExtractor(WebScrapingMixin):
     Wrapper class for ad extraction that uses an active bot´s browser session to extract specific elements from an ad page.
     """
 
-    def __init__(self, browser:Browser, config:dict[str, Any]) -> None:
+    def __init__(self, browser:Browser, config:Config) -> None:
         super().__init__()
         self.browser = browser
         self.config = config
@@ -432,11 +433,8 @@ class AdExtractor(WebScrapingMixin):
                 # Convert Euro to cents and round to nearest integer
                 price_in_cent = round(ship_costs * 100)
 
-                # Get excluded shipping options from config
-                excluded_options = self.config.get("download", {}).get("excluded_shipping_options", [])
-
                 # If include_all_matching_shipping_options is enabled, get all options for the same package size
-                if self.config.get("download", {}).get("include_all_matching_shipping_options", False):
+                if self.config.download.include_all_matching_shipping_options:
                     # Find all options with the same price to determine the package size
                     matching_options = [opt for opt in shipping_costs if opt["priceInEuroCent"] == price_in_cent]
                     if not matching_options:
@@ -451,7 +449,7 @@ class AdExtractor(WebScrapingMixin):
                         for opt in shipping_costs
                         if opt["packageSize"] == matching_size
                         and opt["id"] in shipping_option_mapping
-                        and shipping_option_mapping[opt["id"]] not in excluded_options
+                        and shipping_option_mapping[opt["id"]] not in self.config.download.excluded_shipping_options
                     ]
                 else:
                     # Only use the matching option if it's not excluded
@@ -460,7 +458,7 @@ class AdExtractor(WebScrapingMixin):
                         return "NOT_APPLICABLE", ship_costs, shipping_options
 
                     shipping_option = shipping_option_mapping.get(matching_option["id"])
-                    if not shipping_option or shipping_option in excluded_options:
+                    if not shipping_option or shipping_option in self.config.download.excluded_shipping_options:
                         return "NOT_APPLICABLE", ship_costs, shipping_options
                     shipping_options = [shipping_option]
 

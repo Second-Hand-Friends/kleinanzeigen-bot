@@ -58,9 +58,9 @@ def apply_defaults(
     return target
 
 
-def defaultdict_to_dict(d: defaultdict[K, V]) -> dict[K, V]:
+def defaultdict_to_dict(d:defaultdict[K, V]) -> dict[K, V]:
     """Recursively convert defaultdict to dict."""
-    result: dict[K, V] = {}
+    result:dict[K, V] = {}
     for key, value in d.items():
         if isinstance(value, defaultdict):
             result[key] = defaultdict_to_dict(value)  # type: ignore[assignment]
