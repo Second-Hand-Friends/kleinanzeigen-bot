@@ -60,8 +60,8 @@ class BrowserConfig:
         self.binary_location:str | None = None
         self.extensions:Iterable[str] = []
         self.use_private_window:bool = True
-        self.user_data_dir:str = ""
-        self.profile_name:str = ""
+        self.user_data_dir:str | None = None
+        self.profile_name:str | None = None
 
 
 class WebScrapingMixin:
