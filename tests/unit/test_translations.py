@@ -111,7 +111,7 @@ def _extract_log_messages(file_path:str, exclude_debug:bool = False) -> MessageD
         if msg not in messages[function]:
             messages[function][msg] = {msg}
 
-    def extract_string_value(node:ast.AST) -> str | None:
+    def extract_string_constant(node:ast.AST) -> str | None:
         """Safely extract string value from an AST node."""
         if isinstance(node, ast.Constant):
             value = getattr(node, "value", None)
@@ -125,32 +125,38 @@ def _extract_log_messages(file_path:str, exclude_debug:bool = False) -> MessageD
         function_name = _get_function_name(node)
 
         # Extract messages from various call types
-        if (isinstance(node.func, ast.Attribute) and
-                isinstance(node.func.value, ast.Name) and
-                node.func.value.id in {"LOG", "logger", "logging"} and
-                node.func.attr in {None if exclude_debug else "debug", "info", "warning", "error", "exception", "critical"}):
+
+        # 1) Logging calls: LOG.info(…), logger.warning(…), etc.
+        if (
+            isinstance(node.func, ast.Attribute) and
+            isinstance(node.func.value, ast.Name) and
+            node.func.value.id in {"LOG", "logger", "logging"} and
+            node.func.attr in {None if exclude_debug else "debug", "info", "warning", "error", "exception", "critical"}
+        ):
             if node.args:
-                msg = extract_string_value(node.args[0])
+                msg = extract_string_constant(node.args[0])
                 if msg:
                     add_message(function_name, msg)
 
-        # Handle gettext calls
-        elif ((isinstance(node.func, ast.Name) and node.func.id == "_") or
-              (isinstance(node.func, ast.Attribute) and node.func.attr == "gettext")):
+        # 2) gettext: _("…") or obj.gettext("…")
+        elif (
+            (isinstance(node.func, ast.Name) and node.func.id == "_") or
+            (isinstance(node.func, ast.Attribute) and node.func.attr == "gettext")
+        ):
             if node.args:
-                msg = extract_string_value(node.args[0])
+                msg = extract_string_constant(node.args[0])
                 if msg:
                     add_message(function_name, msg)
 
         # Handle other translatable function calls
         elif isinstance(node.func, ast.Name) and node.func.id in {"ainput", "pluralize", "ensure"}:
-            arg_index = 0 if node.func.id == "ainput" else 1
+            arg_index = 1 if node.func.id == "ensure" else 0
             if len(node.args) > arg_index:
-                msg = extract_string_value(node.args[arg_index])
+                msg = extract_string_constant(node.args[arg_index])
                 if msg:
                     add_message(function_name, msg)
 
-    print(f"Messages: {messages}")
+    print(f"Messages: {len(messages)} in {file_path}")
 
     return messages
 
@@ -376,6 +382,12 @@ def test_no_obsolete_translations(lang:str) -> None:
     """
     messages_by_file = _get_all_log_messages(exclude_debug = False)
     translations = _get_translations_for_language(lang)
+
+    # ignore values that are not in code
+    del translations["kleinanzeigen_bot/utils/loggers.py"]["format"]["CRITICAL"]
+    del translations["kleinanzeigen_bot/utils/loggers.py"]["format"]["ERROR"]
+    del translations["kleinanzeigen_bot/utils/loggers.py"]["format"]["WARNING"]
+
     obsolete_items:list[tuple[str, str, str]] = []
 
     for module, module_trans in translations.items():
