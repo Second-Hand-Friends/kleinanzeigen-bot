@@ -1,19 +1,22 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import copy, os, tempfile  # isort: skip
+import copy, io, logging, os, tempfile  # isort: skip
 from collections.abc import Generator
+from contextlib import redirect_stdout
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 from ruamel.yaml import YAML
 
 from kleinanzeigen_bot import LOG, KleinanzeigenBot, misc
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.ads import calculate_content_hash
+from kleinanzeigen_bot.model.config_model import AdDefaults, Config, PublishingConfig
 from kleinanzeigen_bot.utils import loggers
 
 
@@ -150,7 +153,7 @@ class TestKleinanzeigenBotInitialization:
     def test_constructor_initializes_default_values(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that constructor sets all default values correctly."""
         assert test_bot.root_url == "https://www.kleinanzeigen.de"
-        assert isinstance(test_bot.config, dict)
+        assert isinstance(test_bot.config, Config)
         assert test_bot.command == "help"
         assert test_bot.ads_selector == "due"
         assert test_bot.keep_old_ads is False
@@ -218,15 +221,37 @@ class TestKleinanzeigenBotCommandLine:
 
     def test_parse_args_handles_help_command(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that help command is handled correctly."""
-        with pytest.raises(SystemExit) as exc_info:
+        buf = io.StringIO()
+        with pytest.raises(SystemExit) as exc_info, redirect_stdout(buf):
             test_bot.parse_args(["dummy", "--help"])
         assert exc_info.value.code == 0
+        stdout = buf.getvalue()
+        assert "publish" in stdout
+        assert "verify" in stdout
+        assert "help" in stdout
+        assert "version" in stdout
+        assert "--verbose" in stdout
 
-    def test_parse_args_handles_invalid_arguments(self, test_bot:KleinanzeigenBot) -> None:
+    def test_parse_args_handles_invalid_arguments(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
         """Verify that invalid arguments are handled correctly."""
+        caplog.set_level(logging.ERROR)
         with pytest.raises(SystemExit) as exc_info:
             test_bot.parse_args(["dummy", "--invalid-option"])
         assert exc_info.value.code == 2
+        assert any(
+            record.levelno == logging.ERROR
+            and (
+                "--invalid-option not recognized" in record.getMessage()
+                or "Option --invalid-option unbekannt" in record.getMessage()
+            )
+            for record in caplog.records
+        )
+
+        assert any(
+            ("--invalid-option not recognized" in m)
+            or ("Option --invalid-option unbekannt" in m)
+            for m in caplog.messages
+        )
 
     def test_parse_args_handles_verbose_flag(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that verbose flag sets correct log level."""
@@ -246,109 +271,88 @@ class TestKleinanzeigenBotConfiguration:
     def test_load_config_handles_missing_file(
         self,
         test_bot:KleinanzeigenBot,
-        test_data_dir:str,
-        sample_config:dict[str, Any]
+        test_data_dir:str
     ) -> None:
         """Verify that loading a missing config file creates default config."""
         config_path = Path(test_data_dir) / "missing_config.yaml"
+        config_path.unlink(missing_ok = True)
         test_bot.config_file_path = str(config_path)
 
-        # Add categories to sample config
-        sample_config_with_categories = sample_config.copy()
-        sample_config_with_categories["categories"] = {}
+        with patch.object(LOG, "warning") as mock_warning:
+            with pytest.raises(ValidationError) as exc_info:
+                test_bot.load_config()
 
-        with patch("kleinanzeigen_bot.utils.dicts.load_dict_if_exists", return_value = None), \
-                patch.object(LOG, "warning") as mock_warning, \
-                patch("kleinanzeigen_bot.utils.dicts.save_dict") as mock_save, \
-                patch("kleinanzeigen_bot.utils.dicts.load_dict_from_module") as mock_load_module:
-
-            mock_load_module.side_effect = [
-                sample_config_with_categories,  # config_defaults.yaml
-                {"cat1": "id1"},  # categories.yaml
-                {"cat2": "id2"}  # categories_old.yaml
-            ]
-
-            test_bot.load_config()
             mock_warning.assert_called_once()
-            mock_save.assert_called_once_with(str(config_path), sample_config_with_categories)
-
-            # Verify categories were loaded
-            assert test_bot.categories == {"cat1": "id1", "cat2": "id2"}
-            assert test_bot.config == sample_config_with_categories
+            assert config_path.exists()
+            assert "login.username" in str(exc_info.value)
+            assert "login.password" in str(exc_info.value)
 
     def test_load_config_validates_required_fields(self, test_bot:KleinanzeigenBot, test_data_dir:str) -> None:
         """Verify that config validation checks required fields."""
         config_path = Path(test_data_dir) / "config.yaml"
         config_content = """
 login:
-  username: testuser
+  username: dummy_user
   # Missing password
-browser:
-  arguments: []
 """
         with open(config_path, "w", encoding = "utf-8") as f:
             f.write(config_content)
         test_bot.config_file_path = str(config_path)
 
-        with pytest.raises(AssertionError) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             test_bot.load_config()
-        assert "[login.password] not specified" in str(exc_info.value)
+        assert "login.username" not in str(exc_info.value)
+        assert "login.password" in str(exc_info.value)
 
 
 class TestKleinanzeigenBotAuthentication:
     """Tests for login and authentication functionality."""
 
-    @pytest.fixture
-    def configured_bot(self, test_bot:KleinanzeigenBot, sample_config:dict[str, Any]) -> KleinanzeigenBot:
-        """Provides a bot instance with basic configuration."""
-        test_bot.config = sample_config
-        return test_bot
-
     @pytest.mark.asyncio
-    async def test_assert_free_ad_limit_not_reached_success(self, configured_bot:KleinanzeigenBot) -> None:
+    async def test_assert_free_ad_limit_not_reached_success(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that free ad limit check succeeds when limit not reached."""
-        with patch.object(configured_bot, "web_find", side_effect = TimeoutError):
-            await configured_bot.assert_free_ad_limit_not_reached()
+        with patch.object(test_bot, "web_find", side_effect = TimeoutError):
+            await test_bot.assert_free_ad_limit_not_reached()
 
     @pytest.mark.asyncio
-    async def test_assert_free_ad_limit_not_reached_limit_reached(self, configured_bot:KleinanzeigenBot) -> None:
+    async def test_assert_free_ad_limit_not_reached_limit_reached(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that free ad limit check fails when limit is reached."""
-        with patch.object(configured_bot, "web_find", return_value = AsyncMock()):
+        with patch.object(test_bot, "web_find", return_value = AsyncMock()):
             with pytest.raises(AssertionError) as exc_info:
-                await configured_bot.assert_free_ad_limit_not_reached()
+                await test_bot.assert_free_ad_limit_not_reached()
             assert "Cannot publish more ads" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_returns_true_when_logged_in(self, configured_bot:KleinanzeigenBot) -> None:
+    async def test_is_logged_in_returns_true_when_logged_in(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login check returns true when logged in."""
-        with patch.object(configured_bot, "web_text", return_value = "Welcome testuser"):
-            assert await configured_bot.is_logged_in() is True
+        with patch.object(test_bot, "web_text", return_value = "Welcome dummy_user"):
+            assert await test_bot.is_logged_in() is True
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_returns_true_with_alternative_element(self, configured_bot:KleinanzeigenBot) -> None:
+    async def test_is_logged_in_returns_true_with_alternative_element(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login check returns true when logged in with alternative element."""
-        with patch.object(configured_bot, "web_text", side_effect = [
+        with patch.object(test_bot, "web_text", side_effect = [
             TimeoutError(),  # First try with mr-medium fails
-            "angemeldet als: testuser"  # Second try with user-email succeeds
+            "angemeldet als: dummy_user"  # Second try with user-email succeeds
         ]):
-            assert await configured_bot.is_logged_in() is True
+            assert await test_bot.is_logged_in() is True
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_returns_false_when_not_logged_in(self, configured_bot:KleinanzeigenBot) -> None:
+    async def test_is_logged_in_returns_false_when_not_logged_in(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login check returns false when not logged in."""
-        with patch.object(configured_bot, "web_text", side_effect = TimeoutError):
-            assert await configured_bot.is_logged_in() is False
+        with patch.object(test_bot, "web_text", side_effect = TimeoutError):
+            assert await test_bot.is_logged_in() is False
 
     @pytest.mark.asyncio
-    async def test_login_flow_completes_successfully(self, configured_bot:KleinanzeigenBot) -> None:
+    async def test_login_flow_completes_successfully(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that normal login flow completes successfully."""
-        with patch.object(configured_bot, "web_open") as mock_open, \
-                patch.object(configured_bot, "is_logged_in", side_effect = [False, True]) as mock_logged_in, \
-                patch.object(configured_bot, "web_find", side_effect = TimeoutError), \
-                patch.object(configured_bot, "web_input") as mock_input, \
-                patch.object(configured_bot, "web_click") as mock_click:
+        with patch.object(test_bot, "web_open") as mock_open, \
+                patch.object(test_bot, "is_logged_in", side_effect = [False, True]) as mock_logged_in, \
+                patch.object(test_bot, "web_find", side_effect = TimeoutError), \
+                patch.object(test_bot, "web_input") as mock_input, \
+                patch.object(test_bot, "web_click") as mock_click:
 
-            await configured_bot.login()
+            await test_bot.login()
 
             mock_open.assert_called()
             mock_logged_in.assert_called()
@@ -356,14 +360,14 @@ class TestKleinanzeigenBotAuthentication:
             mock_click.assert_called()
 
     @pytest.mark.asyncio
-    async def test_login_flow_handles_captcha(self, configured_bot:KleinanzeigenBot) -> None:
+    async def test_login_flow_handles_captcha(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login flow handles captcha correctly."""
-        with patch.object(configured_bot, "web_open"), \
-                patch.object(configured_bot, "is_logged_in", return_value = False), \
-                patch.object(configured_bot, "web_find") as mock_find, \
-                patch.object(configured_bot, "web_await") as mock_await, \
-                patch.object(configured_bot, "web_input"), \
-                patch.object(configured_bot, "web_click"), \
+        with patch.object(test_bot, "web_open"), \
+                patch.object(test_bot, "is_logged_in", return_value = False), \
+                patch.object(test_bot, "web_find") as mock_find, \
+                patch.object(test_bot, "web_await") as mock_await, \
+                patch.object(test_bot, "web_input"), \
+                patch.object(test_bot, "web_click"), \
                 patch("kleinanzeigen_bot.ainput") as mock_ainput:
 
             mock_find.side_effect = [
@@ -376,7 +380,7 @@ class TestKleinanzeigenBotAuthentication:
             mock_await.return_value = True
             mock_ainput.return_value = ""
 
-            await configured_bot.login()
+            await test_bot.login()
 
             assert mock_find.call_count >= 2
             mock_await.assert_called_once()
@@ -440,7 +444,7 @@ class TestKleinanzeigenBotBasics:
 
     def test_get_config_defaults(self, test_bot:KleinanzeigenBot) -> None:
         """Test default configuration values."""
-        assert isinstance(test_bot.config, dict)
+        assert isinstance(test_bot.config, Config)
         assert test_bot.command == "help"
         assert test_bot.ads_selector == "due"
         assert test_bot.keep_old_ads is False
@@ -578,7 +582,7 @@ login:
 """)
         test_bot.config_file_path = str(config_path)
         await test_bot.run(["script.py", "verify"])
-        assert test_bot.config["login"]["username"] == "test"
+        assert test_bot.config.login.username == "test"
 
 
 class TestKleinanzeigenBotAdOperations:
@@ -607,7 +611,7 @@ class TestKleinanzeigenBotAdOperations:
 
     def test_load_ads_no_files(self, test_bot:KleinanzeigenBot) -> None:
         """Test loading ads with no files."""
-        test_bot.config["ad_files"] = ["nonexistent/*.yaml"]
+        test_bot.config.ad_files = ["nonexistent/*.yaml"]
         ads = test_bot.load_ads()
         assert len(ads) == 0
 
@@ -676,7 +680,7 @@ categories:
 
         # Set config file path to tmp_path and use relative path for ad_files
         test_bot.config_file_path = str(temp_path / "config.yaml")
-        test_bot.config["ad_files"] = ["ads/*.yaml"]
+        test_bot.config.ad_files = ["ads/*.yaml"]
         with pytest.raises(AssertionError) as exc_info:
             test_bot.load_ads()
         assert "must be at least 10 characters long" in str(exc_info.value)
@@ -700,7 +704,7 @@ categories:
 
         # Set config file path to tmp_path and use relative path for ad_files
         test_bot.config_file_path = str(temp_path / "config.yaml")
-        test_bot.config["ad_files"] = ["ads/*.yaml"]
+        test_bot.config.ad_files = ["ads/*.yaml"]
         with pytest.raises(AssertionError) as exc_info:
             test_bot.load_ads()
         assert "property [price_type] must be one of:" in str(exc_info.value)
@@ -724,7 +728,7 @@ categories:
 
         # Set config file path to tmp_path and use relative path for ad_files
         test_bot.config_file_path = str(temp_path / "config.yaml")
-        test_bot.config["ad_files"] = ["ads/*.yaml"]
+        test_bot.config.ad_files = ["ads/*.yaml"]
         with pytest.raises(AssertionError) as exc_info:
             test_bot.load_ads()
         assert "property [shipping_type] must be one of:" in str(exc_info.value)
@@ -749,7 +753,7 @@ categories:
 
         # Set config file path to tmp_path and use relative path for ad_files
         test_bot.config_file_path = str(temp_path / "config.yaml")
-        test_bot.config["ad_files"] = ["ads/*.yaml"]
+        test_bot.config.ad_files = ["ads/*.yaml"]
         with pytest.raises(AssertionError) as exc_info:
             test_bot.load_ads()
         assert "must not be specified for GIVE_AWAY ad" in str(exc_info.value)
@@ -774,7 +778,7 @@ categories:
 
         # Set config file path to tmp_path and use relative path for ad_files
         test_bot.config_file_path = str(temp_path / "config.yaml")
-        test_bot.config["ad_files"] = ["ads/*.yaml"]
+        test_bot.config.ad_files = ["ads/*.yaml"]
         with pytest.raises(AssertionError) as exc_info:
             test_bot.load_ads()
         assert "not specified" in str(exc_info.value)
@@ -794,12 +798,7 @@ categories:
         )
 
         # Mock the config to prevent auto-detection
-        test_bot.config["ad_defaults"] = {
-            "description": {
-                "prefix": "",
-                "suffix": ""
-            }
-        }
+        test_bot.config.ad_defaults = AdDefaults()
 
         yaml = YAML()
         with open(ad_file, "w", encoding = "utf-8") as f:
@@ -807,7 +806,7 @@ categories:
 
         # Set config file path to tmp_path and use relative path for ad_files
         test_bot.config_file_path = str(temp_path / "config.yaml")
-        test_bot.config["ad_files"] = ["ads/*.yaml"]
+        test_bot.config.ad_files = ["ads/*.yaml"]
         with pytest.raises(AssertionError) as exc_info:
             test_bot.load_ads()
         assert "property [description] not specified" in str(exc_info.value)
@@ -876,12 +875,12 @@ class TestKleinanzeigenBotAdRepublication:
     def test_check_ad_republication_with_changes(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
         """Test that ads with changes are marked for republication."""
         # Mock the description config to prevent modification of the description
-        test_bot.config["ad_defaults"] = {
+        test_bot.config.ad_defaults = AdDefaults.model_validate({
             "description": {
                 "prefix": "",
                 "suffix": ""
             }
-        }
+        })
 
         # Create ad config with all necessary fields for republication
         ad_cfg = create_ad_config(
@@ -905,7 +904,7 @@ class TestKleinanzeigenBotAdRepublication:
 
             # Set config file path and use relative path for ad_files
             test_bot.config_file_path = str(temp_path / "config.yaml")
-            test_bot.config["ad_files"] = ["ads/*.yaml"]
+            test_bot.config.ad_files = ["ads/*.yaml"]
 
             # Mock the loading of the original ad configuration
             with patch("kleinanzeigen_bot.utils.dicts.load_dict", side_effect = [
@@ -934,7 +933,7 @@ class TestKleinanzeigenBotAdRepublication:
         ad_cfg_orig["content_hash"] = current_hash
 
         # Mock the config to prevent actual file operations
-        test_bot.config["ad_files"] = ["test.yaml"]
+        test_bot.config.ad_files = ["test.yaml"]
         with patch("kleinanzeigen_bot.utils.dicts.load_dict_if_exists", return_value = ad_cfg_orig), \
                 patch("kleinanzeigen_bot.utils.dicts.load_dict", return_value = {}):  # Mock ad_fields.yaml
             ads_to_publish = test_bot.load_ads()
@@ -966,10 +965,10 @@ class TestKleinanzeigenBotShippingOptions:
         published_ads:list[dict[str, Any]] = []
 
         # Set up default config values needed for the test
-        test_bot.config["publishing"] = {
+        test_bot.config.publishing = PublishingConfig.model_validate({
             "delete_old_ads": "BEFORE_PUBLISH",
             "delete_old_ads_by_title": False
-        }
+        })
 
         # Create temporary file path
         ad_file = Path(tmp_path) / "test_ad.yaml"
@@ -1046,25 +1045,27 @@ class TestKleinanzeigenBotPrefixSuffix:
 
     def test_description_prefix_suffix_handling(
         self,
-        test_bot:KleinanzeigenBot,
+        test_bot_config:Config,
         description_test_cases:list[tuple[dict[str, Any], str, str]]
     ) -> None:
         """Test handling of description prefix/suffix in various configurations."""
         for config, raw_description, expected_description in description_test_cases:
-            test_bot.config = config
+            test_bot = KleinanzeigenBot()
+            test_bot.config = test_bot_config.with_values(config)
             ad_cfg = {"description": raw_description, "active": True}
             # Access private method using the correct name mangling
             description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
             assert description == expected_description
 
-    def test_description_length_validation(self, test_bot:KleinanzeigenBot) -> None:
+    def test_description_length_validation(self, test_bot_config:Config) -> None:
         """Test that long descriptions with affixes raise appropriate error."""
-        test_bot.config = {
+        test_bot = KleinanzeigenBot()
+        test_bot.config = test_bot_config.with_values({
             "ad_defaults": {
                 "description_prefix": "P" * 1000,
                 "description_suffix": "S" * 1000
             }
-        }
+        })
         ad_cfg = {
             "description": "D" * 2001,  # This plus affixes will exceed 4000 chars
             "active": True
@@ -1080,14 +1081,10 @@ class TestKleinanzeigenBotPrefixSuffix:
 class TestKleinanzeigenBotDescriptionHandling:
     """Tests for description handling functionality."""
 
-    def test_description_without_main_config_description(self, test_bot:KleinanzeigenBot) -> None:
+    def test_description_without_main_config_description(self, test_bot_config:Config) -> None:
         """Test that description works correctly when description is missing from main config."""
-        # Set up config without any description fields
-        test_bot.config = {
-            "ad_defaults": {
-                # No description field at all
-            }
-        }
+        test_bot = KleinanzeigenBot()
+        test_bot.config = test_bot_config
 
         # Test with a simple ad config
         ad_cfg = {
@@ -1099,14 +1096,15 @@ class TestKleinanzeigenBotDescriptionHandling:
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Test Description"
 
-    def test_description_with_only_new_format_affixes(self, test_bot:KleinanzeigenBot) -> None:
+    def test_description_with_only_new_format_affixes(self, test_bot_config:Config) -> None:
         """Test that description works with only new format affixes in config."""
-        test_bot.config = {
+        test_bot = KleinanzeigenBot()
+        test_bot.config = test_bot_config.with_values({
             "ad_defaults": {
                 "description_prefix": "Prefix: ",
                 "description_suffix": " :Suffix"
             }
-        }
+        })
 
         ad_cfg = {
             "description": "Test Description",
@@ -1116,9 +1114,10 @@ class TestKleinanzeigenBotDescriptionHandling:
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Prefix: Test Description :Suffix"
 
-    def test_description_with_mixed_config_formats(self, test_bot:KleinanzeigenBot) -> None:
+    def test_description_with_mixed_config_formats(self, test_bot_config:Config) -> None:
         """Test that description works with both old and new format affixes in config."""
-        test_bot.config = {
+        test_bot = KleinanzeigenBot()
+        test_bot.config = test_bot_config.with_values({
             "ad_defaults": {
                 "description_prefix": "New Prefix: ",
                 "description_suffix": " :New Suffix",
@@ -1127,7 +1126,7 @@ class TestKleinanzeigenBotDescriptionHandling:
                     "suffix": " :Old Suffix"
                 }
             }
-        }
+        })
 
         ad_cfg = {
             "description": "Test Description",
@@ -1137,14 +1136,15 @@ class TestKleinanzeigenBotDescriptionHandling:
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "New Prefix: Test Description :New Suffix"
 
-    def test_description_with_ad_level_affixes(self, test_bot:KleinanzeigenBot) -> None:
+    def test_description_with_ad_level_affixes(self, test_bot_config:Config) -> None:
         """Test that ad-level affixes take precedence over config affixes."""
-        test_bot.config = {
+        test_bot = KleinanzeigenBot()
+        test_bot.config = test_bot_config.with_values({
             "ad_defaults": {
                 "description_prefix": "Config Prefix: ",
                 "description_suffix": " :Config Suffix"
             }
-        }
+        })
 
         ad_cfg = {
             "description": "Test Description",
@@ -1156,9 +1156,10 @@ class TestKleinanzeigenBotDescriptionHandling:
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Ad Prefix: Test Description :Ad Suffix"
 
-    def test_description_with_none_values(self, test_bot:KleinanzeigenBot) -> None:
+    def test_description_with_none_values(self, test_bot_config:Config) -> None:
         """Test that None values in affixes are handled correctly."""
-        test_bot.config = {
+        test_bot = KleinanzeigenBot()
+        test_bot.config = test_bot_config.with_values({
             "ad_defaults": {
                 "description_prefix": None,
                 "description_suffix": None,
@@ -1167,7 +1168,7 @@ class TestKleinanzeigenBotDescriptionHandling:
                     "suffix": None
                 }
             }
-        }
+        })
 
         ad_cfg = {
             "description": "Test Description",
@@ -1177,11 +1178,10 @@ class TestKleinanzeigenBotDescriptionHandling:
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Test Description"
 
-    def test_description_with_email_replacement(self, test_bot:KleinanzeigenBot) -> None:
+    def test_description_with_email_replacement(self, test_bot_config:Config) -> None:
         """Test that @ symbols in description are replaced with (at)."""
-        test_bot.config = {
-            "ad_defaults": {}
-        }
+        test_bot = KleinanzeigenBot()
+        test_bot.config = test_bot_config
 
         ad_cfg = {
             "description": "Contact: test@example.com",
@@ -1195,16 +1195,19 @@ class TestKleinanzeigenBotDescriptionHandling:
 class TestKleinanzeigenBotChangedAds:
     """Tests for the 'changed' ads selector functionality."""
 
-    def test_load_ads_with_changed_selector(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+    def test_load_ads_with_changed_selector(self, test_bot_config:Config, base_ad_config:dict[str, Any]) -> None:
         """Test that only changed ads are loaded when using the 'changed' selector."""
         # Set up the bot with the 'changed' selector
+        test_bot = KleinanzeigenBot()
         test_bot.ads_selector = "changed"
-        test_bot.config["ad_defaults"] = {
-            "description": {
-                "prefix": "",
-                "suffix": ""
+        test_bot.config = test_bot_config.with_values({
+            "ad_defaults": {
+                "description": {
+                    "prefix": "",
+                    "suffix": ""
+                }
             }
-        }
+        })
 
         # Create a changed ad
         changed_ad = create_ad_config(
@@ -1237,7 +1240,7 @@ class TestKleinanzeigenBotChangedAds:
 
             # Set config file path and use relative path for ad_files
             test_bot.config_file_path = str(temp_path / "config.yaml")
-            test_bot.config["ad_files"] = ["ads/*.yaml"]
+            test_bot.config.ad_files = ["ads/*.yaml"]
 
             # Mock the loading of the ad configuration
             with patch("kleinanzeigen_bot.utils.dicts.load_dict", side_effect = [
@@ -1254,12 +1257,6 @@ class TestKleinanzeigenBotChangedAds:
         """Test that 'due' selector includes all ads that are due for republication, regardless of changes."""
         # Set up the bot with the 'due' selector
         test_bot.ads_selector = "due"
-        test_bot.config["ad_defaults"] = {
-            "description": {
-                "prefix": "",
-                "suffix": ""
-            }
-        }
 
         # Create a changed ad that is also due for republication
         current_time = misc.now()
@@ -1289,7 +1286,7 @@ class TestKleinanzeigenBotChangedAds:
 
             # Set config file path and use relative path for ad_files
             test_bot.config_file_path = str(temp_path / "config.yaml")
-            test_bot.config["ad_files"] = ["ads/*.yaml"]
+            test_bot.config.ad_files = ["ads/*.yaml"]
 
             # Mock the loading of the ad configuration
             with patch("kleinanzeigen_bot.utils.dicts.load_dict", side_effect = [

@@ -1,0 +1,377 @@
+{
+  "$defs": {
+    "AdDefaults": {
+      "properties": {
+        "active": {
+          "default": true,
+          "title": "Active",
+          "type": "boolean"
+        },
+        "type": {
+          "default": "OFFER",
+          "enum": [
+            "OFFER",
+            "WANTED"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DescriptionAffixes"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "description_prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "prefix for the ad description",
+          "title": "Description Prefix"
+        },
+        "description_suffix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": " suffix for the ad description",
+          "title": "Description Suffix"
+        },
+        "price_type": {
+          "default": "NEGOTIABLE",
+          "enum": [
+            "FIXED",
+            "NEGOTIABLE",
+            "GIVE_AWAY",
+            "NOT_APPLICABLE"
+          ],
+          "title": "Price Type",
+          "type": "string"
+        },
+        "shipping_type": {
+          "default": "SHIPPING",
+          "enum": [
+            "PICKUP",
+            "SHIPPING",
+            "NOT_APPLICABLE"
+          ],
+          "title": "Shipping Type",
+          "type": "string"
+        },
+        "sell_directly": {
+          "default": false,
+          "description": "requires shipping_type SHIPPING to take effect",
+          "title": "Sell Directly",
+          "type": "boolean"
+        },
+        "contact": {
+          "$ref": "#/$defs/ContactDefaults"
+        },
+        "republication_interval": {
+          "default": 7,
+          "title": "Republication Interval",
+          "type": "integer"
+        }
+      },
+      "title": "AdDefaults",
+      "type": "object"
+    },
+    "BrowserConfig": {
+      "properties": {
+        "arguments": {
+          "description": "See https://peter.sh/experiments/chromium-command-line-switches/",
+          "items": {
+            "type": "string"
+          },
+          "title": "Arguments",
+          "type": "array"
+        },
+        "binary_location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "path to custom browser executable, if not specified will be looked up on PATH",
+          "title": "Binary Location"
+        },
+        "extensions": {
+          "description": "a list of .crx extension files to be loaded",
+          "items": {
+            "type": "string"
+          },
+          "title": "Extensions",
+          "type": "array"
+        },
+        "use_private_window": {
+          "default": true,
+          "title": "Use Private Window",
+          "type": "boolean"
+        },
+        "user_data_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "See https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md",
+          "title": "User Data Dir"
+        },
+        "profile_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Profile Name"
+        }
+      },
+      "title": "BrowserConfig",
+      "type": "object"
+    },
+    "CaptchaConfig": {
+      "properties": {
+        "auto_restart": {
+          "default": false,
+          "title": "Auto Restart",
+          "type": "boolean"
+        },
+        "restart_delay": {
+          "default": "6h",
+          "title": "Restart Delay",
+          "type": "string"
+        }
+      },
+      "title": "CaptchaConfig",
+      "type": "object"
+    },
+    "ContactDefaults": {
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "street": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Street"
+        },
+        "zipcode": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zipcode"
+        },
+        "phone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Phone"
+        }
+      },
+      "title": "ContactDefaults",
+      "type": "object"
+    },
+    "DescriptionAffixes": {
+      "deprecated": true,
+      "properties": {
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prefix"
+        },
+        "suffix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suffix"
+        }
+      },
+      "title": "DescriptionAffixes",
+      "type": "object"
+    },
+    "DownloadConfig": {
+      "properties": {
+        "include_all_matching_shipping_options": {
+          "default": false,
+          "description": "if true, all shipping options matching the package size will be included",
+          "title": "Include All Matching Shipping Options",
+          "type": "boolean"
+        },
+        "excluded_shipping_options": {
+          "description": "list of shipping options to exclude, e.g. ['DHL_2', 'DHL_5']",
+          "items": {
+            "type": "string"
+          },
+          "title": "Excluded Shipping Options",
+          "type": "array"
+        }
+      },
+      "title": "DownloadConfig",
+      "type": "object"
+    },
+    "LoginConfig": {
+      "properties": {
+        "username": {
+          "minLength": 1,
+          "title": "Username",
+          "type": "string"
+        },
+        "password": {
+          "minLength": 1,
+          "title": "Password",
+          "type": "string"
+        }
+      },
+      "required": [
+        "username",
+        "password"
+      ],
+      "title": "LoginConfig",
+      "type": "object"
+    },
+    "PublishingConfig": {
+      "properties": {
+        "delete_old_ads": {
+          "anyOf": [
+            {
+              "enum": [
+                "BEFORE_PUBLISH",
+                "AFTER_PUBLISH",
+                "NEVER"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "AFTER_PUBLISH",
+          "title": "Delete Old Ads"
+        },
+        "delete_old_ads_by_title": {
+          "default": true,
+          "description": "only works if delete_old_ads is set to BEFORE_PUBLISH",
+          "title": "Delete Old Ads By Title",
+          "type": "boolean"
+        }
+      },
+      "title": "PublishingConfig",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "ad_files": {
+      "description": "\nglob (wildcard) patterns to select ad configuration files\nif relative paths are specified, then they are relative to this configuration file\n",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Ad Files",
+      "type": "array"
+    },
+    "ad_defaults": {
+      "$ref": "#/$defs/AdDefaults",
+      "description": "Default values for ads, can be overwritten in each ad configuration file"
+    },
+    "categories": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "\nadditional name to category ID mappings, see default list at\nhttps://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml\n\nExample:\n    categories:\n       Elektronik > Notebooks: 161/278\n       Jobs > Praktika: 102/125\n    ",
+      "title": "Categories",
+      "type": "object"
+    },
+    "download": {
+      "$ref": "#/$defs/DownloadConfig"
+    },
+    "publishing": {
+      "$ref": "#/$defs/PublishingConfig"
+    },
+    "browser": {
+      "$ref": "#/$defs/BrowserConfig",
+      "description": "Browser configuration"
+    },
+    "login": {
+      "$ref": "#/$defs/LoginConfig",
+      "description": "Login credentials"
+    },
+    "captcha": {
+      "$ref": "#/$defs/CaptchaConfig"
+    }
+  },
+  "title": "Config",
+  "type": "object",
+  "description": "Auto-generated JSON Schema for Config"
+}
