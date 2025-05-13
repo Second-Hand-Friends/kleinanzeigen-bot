@@ -38,17 +38,20 @@ kleinanzeigen_bot/__init__.py:
   load_ads:
     "Searching for ad config files...": "Suche nach Anzeigendateien..."
     " -> found %s": "-> %s gefunden"
+    "ad config file": "Anzeigendatei"
     "Start fetch task for the ad(s) with id(s):": "Starte Abrufaufgabe für die Anzeige(n) mit ID(s):"
     " -> SKIPPED: inactive ad [%s]": " -> ÜBERSPRUNGEN: inaktive Anzeige [%s]"
     " -> SKIPPED: ad [%s] is not in list of given ids.": " -> ÜBERSPRUNGEN: Anzeige [%s] ist nicht in der Liste der angegebenen IDs."
     " -> SKIPPED: ad [%s] is not new. already has an id assigned.": " -> ÜBERSPRUNGEN: Anzeige [%s] ist nicht neu. Eine ID wurde bereits zugewiesen."
     "Category [%s] unknown. Using category [%s] with ID [%s] instead.": "Kategorie [%s] unbekannt. Verwende stattdessen Kategorie [%s] mit ID [%s]."
     "Loaded %s": "%s geladen"
+    "ad": "Anzeige"
 
   load_config:
-    " -> found %s": "-> %s gefunden"
-    "config": "Konfiguration"
     "Config file %s does not exist. Creating it with default values...": "Konfigurationsdatei %s existiert nicht. Erstelle sie mit Standardwerten..."
+    "config": "Konfiguration"
+    " -> found %s": "-> %s gefunden"
+    "category": "Kategorie"
 
   login:
     "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
@@ -64,6 +67,7 @@ kleinanzeigen_bot/__init__.py:
   delete_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "DONE: Deleted %s": "FERTIG: %s gelöscht"
+    "ad": "Anzeige"
 
   delete_ad:
     "Deleting ad '%s' if already present...": "Lösche Anzeige '%s', falls bereits vorhanden..."
@@ -74,6 +78,7 @@ kleinanzeigen_bot/__init__.py:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
     "DONE: (Re-)published %s": "FERTIG: %s (erneut) veröffentlicht"
+    "ad": "Anzeige"
 
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
@@ -92,6 +97,7 @@ kleinanzeigen_bot/__init__.py:
 
   __upload_images:
     " -> found %s": "-> %s gefunden"
+    "image": "Bild"
     " -> uploading image [%s]": " -> Lade Bild [%s] hoch"
 
   __check_ad_republication:
@@ -109,15 +115,17 @@ kleinanzeigen_bot/__init__.py:
 
   download_ads:
     "Scanning your ad overview...": "Scanne Anzeigenübersicht..."
+    "%s found.": "%s gefunden."
+    "ad": "Anzeige"
     "Starting download of all ads...": "Starte den Download aller Anzeigen..."
     "%d of %d ads were downloaded from your profile.": "%d von %d Anzeigen wurden aus Ihrem Profil heruntergeladen."
     "Starting download of not yet downloaded ads...": "Starte den Download noch nicht heruntergeladener Anzeigen..."
     "The ad with id %d has already been saved.": "Die Anzeige mit der ID %d wurde bereits gespeichert."
     "%s were downloaded from your profile.": "%s wurden aus Ihrem Profil heruntergeladen."
+    "new ad": "neue Anzeige"
     "Starting download of ad(s) with the id(s):": "Starte Download der Anzeige(n) mit den ID(s):"
     "Downloaded ad with id %d": "Anzeige mit der ID %d heruntergeladen"
     "The page with the id %d does not exist!": "Die Seite mit der ID %d existiert nicht!"
-    "%s found.": "%s gefunden."
 
   parse_args:
     "Use --help to display available options.": "Mit --help können die verfügbaren Optionen angezeigt werden."
@@ -200,6 +208,14 @@ kleinanzeigen_bot/utils/error_handlers.py:
   on_exception:
     "%s: %s": "%s: %s"
     "Unknown exception occurred (missing exception info): ex_type=%s, ex_value=%s": "Unbekannter Fehler aufgetreten (fehlende Fehlerinformation):  ex_type=%s, ex_value=%s"
+
+#################################################
+kleinanzeigen_bot/utils/loggers.py:
+#################################################
+  format:
+    "CRITICAL": "KRITISCH"
+    "ERROR": "FEHLER"
+    "WARNING": "WARNUNG"
 
 #################################################
 kleinanzeigen_bot/utils/dicts.py:

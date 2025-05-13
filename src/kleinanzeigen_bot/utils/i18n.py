@@ -109,6 +109,8 @@ def translate(text:object, caller:inspect.FrameInfo | None) -> str:
     file_basename = os.path.splitext(os.path.basename(caller.filename))[0]
     if module_name and module_name.endswith(f".{file_basename}"):
         module_name = module_name[:-(len(file_basename) + 1)]
+    if module_name:
+        module_name = module_name.replace(".", "/")
     file_key = f"{file_basename}.py" if module_name == file_basename else f"{module_name}/{file_basename}.py"
     translation = dicts.safe_get(_TRANSLATIONS,
         file_key,
