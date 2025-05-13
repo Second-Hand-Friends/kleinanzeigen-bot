@@ -11,6 +11,8 @@ from . import i18n
 
 # https://mypy.readthedocs.io/en/stable/generics.html#generic-functions
 T = TypeVar("T")
+K = TypeVar("K")
+V = TypeVar("V")
 
 
 def ensure(
