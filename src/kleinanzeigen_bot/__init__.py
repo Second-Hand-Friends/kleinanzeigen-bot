@@ -1003,7 +1003,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 await self.web_click(By.CSS_SELECTOR, f'.SingleSelectionItem--Main input[type=radio][data-testid="{shipping_size}"]')
                 to_be_clicked_shipping_packages = list(shipping_packages)
 
-            await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[contains(., "Weiter")]')
+            await self.web_click(By.XPATH, '//dialog//button[contains(., "Weiter")]')
 
             for shipping_package in to_be_clicked_shipping_packages:
                 try:
@@ -1020,7 +1020,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.debug(ex, exc_info = True)
         try:
             # Click apply button
-            await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[contains(., "Fertig")]')
+            await self.web_click(By.XPATH, '//dialog//button[contains(., "Fertig")]')
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 
