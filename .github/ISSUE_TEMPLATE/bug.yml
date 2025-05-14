@@ -13,6 +13,17 @@ body:
 
         Please try to investigate the issue yourself, and if possible submit a pull request with a fix.
 
+  - type: checkboxes
+    id: reproduce-latest
+    attributes:
+      label: 🔄 Tested on Latest Release
+      description: |
+        Only open issues for problems reproducible with the latest release:
+        https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/tag/latest
+      options:
+        - label: I confirm that I can reproduce this issue on the latest version
+          required: true
+
   - type: textarea
     id: expected-behaviour
     attributes:
@@ -37,16 +48,6 @@ body:
       label: 📋 Steps to Reproduce
       description: How can we reproduce the issue?
       placeholder: Please enter steps to reproduce here...
-    validations:
-      required: true
-
-  - type: input
-    id: bot-version
-    attributes:
-      label: 🤖 What version of the bot are you using?
-      description: |
-        You can find out by running: `kleinanzeigen-bot version`
-      placeholder: e.g. 2025+8e2385c
     validations:
       required: true
 
