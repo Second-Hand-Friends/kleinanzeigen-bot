@@ -266,48 +266,33 @@ class TestAdExtractorNavigation:
                 patch.object(test_extractor, "web_open", new_callable = AsyncMock) as mock_web_open, \
                 patch.object(test_extractor, "web_find", new_callable = AsyncMock, side_effect = TimeoutError):
 
-            result = await test_extractor.naviagte_to_ad_page("https://www.kleinanzeigen.de/s-anzeige/test/12345")
+            result = await test_extractor.navigate_to_ad_page("https://www.kleinanzeigen.de/s-anzeige/test/12345")
             assert result is True
             mock_web_open.assert_called_with("https://www.kleinanzeigen.de/s-anzeige/test/12345")
 
     @pytest.mark.asyncio
     async def test_navigate_to_ad_page_with_id(self, test_extractor:AdExtractor) -> None:
         """Test navigation to ad page using an ID."""
+        ad_id = 12345
         page_mock = AsyncMock()
-        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
-
-        submit_button_mock = AsyncMock()
-        submit_button_mock.click = AsyncMock()
-        submit_button_mock.apply = AsyncMock(return_value = True)
-
-        input_mock = AsyncMock()
-        input_mock.clear_input = AsyncMock()
-        input_mock.send_keys = AsyncMock()
-        input_mock.apply = AsyncMock(return_value = True)
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/{0}".format(ad_id)
 
         popup_close_mock = AsyncMock()
         popup_close_mock.click = AsyncMock()
         popup_close_mock.apply = AsyncMock(return_value = True)
 
         def find_mock(selector_type:By, selector_value:str, **_:Any) -> Element | None:
-            if selector_type == By.ID and selector_value == "site-search-query":
-                return input_mock
-            if selector_type == By.ID and selector_value == "site-search-submit":
-                return submit_button_mock
             if selector_type == By.CLASS_NAME and selector_value == "mfp-close":
                 return popup_close_mock
             return None
 
         with patch.object(test_extractor, "page", page_mock), \
                 patch.object(test_extractor, "web_open", new_callable = AsyncMock) as mock_web_open, \
-                patch.object(test_extractor, "web_input", new_callable = AsyncMock), \
-                patch.object(test_extractor, "web_check", new_callable = AsyncMock, return_value = True), \
                 patch.object(test_extractor, "web_find", new_callable = AsyncMock, side_effect = find_mock):
 
-            result = await test_extractor.naviagte_to_ad_page(12345)
+            result = await test_extractor.navigate_to_ad_page(ad_id)
             assert result is True
-            mock_web_open.assert_called_with("https://www.kleinanzeigen.de/")
-            submit_button_mock.click.assert_awaited_once()
+            mock_web_open.assert_called_with("https://www.kleinanzeigen.de/s-suchanfrage.html?keywords={0}".format(ad_id))
             popup_close_mock.click.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -327,7 +312,7 @@ class TestAdExtractorNavigation:
                 patch.object(test_extractor, "web_click", new_callable = AsyncMock) as mock_web_click, \
                 patch.object(test_extractor, "web_check", new_callable = AsyncMock, return_value = True):
 
-            result = await test_extractor.naviagte_to_ad_page(12345)
+            result = await test_extractor.navigate_to_ad_page(12345)
             assert result is True
             mock_web_click.assert_called_with(By.CLASS_NAME, "mfp-close")
 
@@ -347,7 +332,7 @@ class TestAdExtractorNavigation:
                 patch.object(test_extractor, "web_open", new_callable = AsyncMock), \
                 patch.object(test_extractor, "web_find", new_callable = AsyncMock, return_value = input_mock):
 
-            result = await test_extractor.naviagte_to_ad_page(99999)
+            result = await test_extractor.navigate_to_ad_page(99999)
             assert result is False
 
     @pytest.mark.asyncio

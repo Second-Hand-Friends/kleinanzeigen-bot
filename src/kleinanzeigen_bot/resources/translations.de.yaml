@@ -184,7 +184,7 @@ kleinanzeigen_bot/extract.py:
     "Found %s ad items on page %s.": "%s Anzeigen-Elemente auf Seite %s gefunden."
     "Successfully extracted %s refs from page %s.": "%s Referenzen von Seite %s erfolgreich extrahiert."
 
-  naviagte_to_ad_page:
+  navigate_to_ad_page:
     "There is no ad under the given ID.": "Es gibt keine Anzeige unter der angegebenen ID."
     "A popup appeared!": "Ein Popup ist erschienen!"
 
