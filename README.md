@@ -305,6 +305,7 @@ Parameter values specified in the `ad_defaults` section of the `config.yaml` fil
 The following parameters can be configured:
 
 ```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
 active: # true or false (default: true)
 type: # one of: OFFER, WANTED (default: OFFER)
 title:

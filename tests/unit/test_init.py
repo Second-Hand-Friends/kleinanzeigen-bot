@@ -11,13 +11,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
-from ruamel.yaml import YAML
 
 from kleinanzeigen_bot import LOG, KleinanzeigenBot, misc
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.ads import calculate_content_hash
+from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, PublishingConfig
-from kleinanzeigen_bot.utils import loggers
+from kleinanzeigen_bot.utils import dicts, loggers
 
 
 @pytest.fixture
@@ -66,32 +66,6 @@ def base_ad_config() -> dict[str, Any]:
             "phone": ""
         }
     }
-
-
-def create_ad_config(base_config:dict[str, Any], **overrides:Any) -> dict[str, Any]:
-    """Create a new ad configuration by extending or overriding the base configuration.
-
-    Args:
-        base_config: The base configuration to start from
-        **overrides: Key-value pairs to override or extend the base configuration
-
-    Returns:
-        A new ad configuration dictionary
-    """
-    config = copy.deepcopy(base_config)
-    for key, value in overrides.items():
-        if isinstance(value, dict) and key in config and isinstance(config[key], dict):
-            config[key].update(value)
-        elif key in config:
-            config[key] = value
-        else:
-            config[key] = value
-
-    # Only check length if description is a string
-    if isinstance(config.get("description"), str):
-        assert len(config["description"]) <= 4000, "Length of ad description including prefix and suffix exceeds 4000 chars"
-
-    return config
 
 
 def remove_fields(config:dict[str, Any], *fields:str) -> dict[str, Any]:
@@ -669,21 +643,17 @@ categories:
         ad_file = ad_dir / "test_ad.yaml"
 
         # Create a minimal config with empty title to trigger validation
-        ad_cfg = create_ad_config(
-            minimal_ad_config,
-            title = ""  # Empty title to trigger length validation
-        )
-
-        yaml = YAML()
-        with open(ad_file, "w", encoding = "utf-8") as f:
-            yaml.dump(ad_cfg, f)
+        ad_cfg = minimal_ad_config | {
+            "title": ""
+        }
+        dicts.save_dict(ad_file, ad_cfg)
 
         # Set config file path to tmp_path and use relative path for ad_files
         test_bot.config_file_path = str(temp_path / "config.yaml")
         test_bot.config.ad_files = ["ads/*.yaml"]
-        with pytest.raises(AssertionError) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             test_bot.load_ads()
-        assert "must be at least 10 characters long" in str(exc_info.value)
+        assert "title" in str(exc_info.value)
 
     def test_load_ads_with_invalid_price_type(self, test_bot:KleinanzeigenBot, tmp_path:Any, minimal_ad_config:dict[str, Any]) -> None:
         """Test loading ads with invalid price type."""
@@ -693,21 +663,17 @@ categories:
         ad_file = ad_dir / "test_ad.yaml"
 
         # Create config with invalid price type
-        ad_cfg = create_ad_config(
-            minimal_ad_config,
-            price_type = "INVALID_TYPE"  # Invalid price type
-        )
-
-        yaml = YAML()
-        with open(ad_file, "w", encoding = "utf-8") as f:
-            yaml.dump(ad_cfg, f)
+        ad_cfg = minimal_ad_config | {
+            "price_type": "INVALID_TYPE"
+        }
+        dicts.save_dict(ad_file, ad_cfg)
 
         # Set config file path to tmp_path and use relative path for ad_files
         test_bot.config_file_path = str(temp_path / "config.yaml")
         test_bot.config.ad_files = ["ads/*.yaml"]
-        with pytest.raises(AssertionError) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             test_bot.load_ads()
-        assert "property [price_type] must be one of:" in str(exc_info.value)
+        assert "price_type" in str(exc_info.value)
 
     def test_load_ads_with_invalid_shipping_type(self, test_bot:KleinanzeigenBot, tmp_path:Any, minimal_ad_config:dict[str, Any]) -> None:
         """Test loading ads with invalid shipping type."""
@@ -717,21 +683,17 @@ categories:
         ad_file = ad_dir / "test_ad.yaml"
 
         # Create config with invalid shipping type
-        ad_cfg = create_ad_config(
-            minimal_ad_config,
-            shipping_type = "INVALID_TYPE"  # Invalid shipping type
-        )
-
-        yaml = YAML()
-        with open(ad_file, "w", encoding = "utf-8") as f:
-            yaml.dump(ad_cfg, f)
+        ad_cfg = minimal_ad_config | {
+            "shipping_type": "INVALID_TYPE"
+        }
+        dicts.save_dict(ad_file, ad_cfg)
 
         # Set config file path to tmp_path and use relative path for ad_files
         test_bot.config_file_path = str(temp_path / "config.yaml")
         test_bot.config.ad_files = ["ads/*.yaml"]
-        with pytest.raises(AssertionError) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             test_bot.load_ads()
-        assert "property [shipping_type] must be one of:" in str(exc_info.value)
+        assert "shipping_type" in str(exc_info.value)
 
     def test_load_ads_with_invalid_price_config(self, test_bot:KleinanzeigenBot, tmp_path:Any, minimal_ad_config:dict[str, Any]) -> None:
         """Test loading ads with invalid price configuration."""
@@ -741,22 +703,18 @@ categories:
         ad_file = ad_dir / "test_ad.yaml"
 
         # Create config with price for GIVE_AWAY type
-        ad_cfg = create_ad_config(
-            minimal_ad_config,
-            price_type = "GIVE_AWAY",
-            price = 100  # Price should not be set for GIVE_AWAY
-        )
-
-        yaml = YAML()
-        with open(ad_file, "w", encoding = "utf-8") as f:
-            yaml.dump(ad_cfg, f)
+        ad_cfg = minimal_ad_config | {
+            "price_type": "GIVE_AWAY",
+            "price": 100  # Price should not be set for GIVE_AWAY
+        }
+        dicts.save_dict(ad_file, ad_cfg)
 
         # Set config file path to tmp_path and use relative path for ad_files
         test_bot.config_file_path = str(temp_path / "config.yaml")
         test_bot.config.ad_files = ["ads/*.yaml"]
-        with pytest.raises(AssertionError) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             test_bot.load_ads()
-        assert "must not be specified for GIVE_AWAY ad" in str(exc_info.value)
+        assert "price" in str(exc_info.value)
 
     def test_load_ads_with_missing_price(self, test_bot:KleinanzeigenBot, tmp_path:Any, minimal_ad_config:dict[str, Any]) -> None:
         """Test loading ads with missing price for FIXED price type."""
@@ -766,50 +724,18 @@ categories:
         ad_file = ad_dir / "test_ad.yaml"
 
         # Create config with FIXED price type but no price
-        ad_cfg = create_ad_config(
-            minimal_ad_config,
-            price_type = "FIXED",
-            price = None  # Missing required price for FIXED type
-        )
-
-        yaml = YAML()
-        with open(ad_file, "w", encoding = "utf-8") as f:
-            yaml.dump(ad_cfg, f)
+        ad_cfg = minimal_ad_config | {
+            "price_type": "FIXED",
+            "price": None  # Missing required price for FIXED type
+        }
+        dicts.save_dict(ad_file, ad_cfg)
 
         # Set config file path to tmp_path and use relative path for ad_files
         test_bot.config_file_path = str(temp_path / "config.yaml")
         test_bot.config.ad_files = ["ads/*.yaml"]
-        with pytest.raises(AssertionError) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             test_bot.load_ads()
-        assert "not specified" in str(exc_info.value)
-
-    def test_load_ads_with_invalid_category(self, test_bot:KleinanzeigenBot, tmp_path:Any, minimal_ad_config:dict[str, Any]) -> None:
-        """Test loading ads with invalid category."""
-        temp_path = Path(tmp_path)
-        ad_dir = temp_path / "ads"
-        ad_dir.mkdir()
-        ad_file = ad_dir / "test_ad.yaml"
-
-        # Create config with invalid category and empty description to prevent auto-detection
-        ad_cfg = create_ad_config(
-            minimal_ad_config,
-            category = "999999",  # Non-existent category
-            description = None  # Set description to None to trigger validation
-        )
-
-        # Mock the config to prevent auto-detection
-        test_bot.config.ad_defaults = AdDefaults()
-
-        yaml = YAML()
-        with open(ad_file, "w", encoding = "utf-8") as f:
-            yaml.dump(ad_cfg, f)
-
-        # Set config file path to tmp_path and use relative path for ad_files
-        test_bot.config_file_path = str(temp_path / "config.yaml")
-        test_bot.config.ad_files = ["ads/*.yaml"]
-        with pytest.raises(AssertionError) as exc_info:
-            test_bot.load_ads()
-        assert "property [description] not specified" in str(exc_info.value)
+        assert "price is required when price_type is FIXED" in str(exc_info.value)
 
 
 class TestKleinanzeigenBotAdDeletion:
@@ -823,11 +749,10 @@ class TestKleinanzeigenBotAdDeletion:
         test_bot.page.sleep = AsyncMock()
 
         # Use minimal config since we only need title for deletion by title
-        ad_cfg = create_ad_config(
-            minimal_ad_config,
-            title = "Test Title",
-            id = None  # Explicitly set id to None for title-based deletion
-        )
+        ad_cfg = Ad.model_validate(minimal_ad_config | {
+            "title": "Test Title",
+            "id": None  # Explicitly set id to None for title-based deletion
+        })
 
         published_ads = [
             {"title": "Test Title", "id": "67890"},
@@ -850,10 +775,9 @@ class TestKleinanzeigenBotAdDeletion:
         test_bot.page.sleep = AsyncMock()
 
         # Create config with ID for deletion by ID
-        ad_cfg = create_ad_config(
-            minimal_ad_config,
-            id = "12345"
-        )
+        ad_cfg = Ad.model_validate(minimal_ad_config | {
+            id: "12345"
+        })
 
         published_ads = [
             {"title": "Different Title", "id": "12345"},
@@ -883,13 +807,12 @@ class TestKleinanzeigenBotAdRepublication:
         })
 
         # Create ad config with all necessary fields for republication
-        ad_cfg = create_ad_config(
-            base_ad_config,
-            id = "12345",
-            updated_on = "2024-01-01T00:00:00",
-            created_on = "2024-01-01T00:00:00",
-            description = "Changed description"
-        )
+        ad_cfg = Ad.model_validate(base_ad_config | {
+            "id": "12345",
+            "updated_on": "2024-01-01T00:00:01",
+            "created_on": "2024-01-01T00:00:01",
+            "description": "Changed description"
+        })
 
         # Create a temporary directory and file
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -898,21 +821,14 @@ class TestKleinanzeigenBotAdRepublication:
             ad_dir.mkdir()
             ad_file = ad_dir / "test_ad.yaml"
 
-            yaml = YAML()
-            with open(ad_file, "w", encoding = "utf-8") as f:
-                yaml.dump(ad_cfg, f)
+            dicts.save_dict(ad_file, ad_cfg.model_dump())
 
             # Set config file path and use relative path for ad_files
             test_bot.config_file_path = str(temp_path / "config.yaml")
             test_bot.config.ad_files = ["ads/*.yaml"]
 
-            # Mock the loading of the original ad configuration
-            with patch("kleinanzeigen_bot.utils.dicts.load_dict", side_effect = [
-                ad_cfg,  # First call returns the original ad config
-                {}  # Second call for ad_fields.yaml
-            ]):
-                ads_to_publish = test_bot.load_ads()
-                assert len(ads_to_publish) == 1
+            ads_to_publish = test_bot.load_ads()
+            assert len(ads_to_publish) == 1
 
     def test_check_ad_republication_no_changes(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
         """Test that unchanged ads within interval are not marked for republication."""
@@ -920,16 +836,15 @@ class TestKleinanzeigenBotAdRepublication:
         three_days_ago = (current_time - timedelta(days = 3)).isoformat()
 
         # Create ad config with timestamps for republication check
-        ad_cfg = create_ad_config(
-            base_ad_config,
-            id = "12345",
-            updated_on = three_days_ago,
-            created_on = three_days_ago
-        )
+        ad_cfg = Ad.model_validate(base_ad_config | {
+            "id": "12345",
+            "updated_on": three_days_ago,
+            "created_on": three_days_ago
+        })
 
         # Calculate hash before making the copy to ensure they match
-        current_hash = calculate_content_hash(ad_cfg)
-        ad_cfg_orig = copy.deepcopy(ad_cfg)
+        ad_cfg_orig = ad_cfg.model_dump()
+        current_hash = calculate_content_hash(ad_cfg_orig)
         ad_cfg_orig["content_hash"] = current_hash
 
         # Mock the config to prevent actual file operations
@@ -952,16 +867,15 @@ class TestKleinanzeigenBotShippingOptions:
         test_bot.page.evaluate = AsyncMock()
 
         # Create ad config with specific shipping options
-        ad_cfg = create_ad_config(
-            base_ad_config,
-            shipping_options = ["DHL_2", "Hermes_Päckchen"],
-            created_on = "2024-01-01T00:00:00",  # Add created_on to prevent KeyError
-            updated_on = "2024-01-01T00:00:00"  # Add updated_on for consistency
-        )
+        ad_cfg = Ad.model_validate(base_ad_config | {
+            "shipping_options": ["DHL_2", "Hermes_Päckchen"],
+            "updated_on": "2024-01-01T00:00:00",  # Add created_on to prevent KeyError
+            "created_on": "2024-01-01T00:00:00"  # Add updated_on for consistency
+        })
 
         # Create the original ad config and published ads list
-        ad_cfg_orig = copy.deepcopy(ad_cfg)
-        ad_cfg_orig["content_hash"] = calculate_content_hash(ad_cfg)  # Add content hash to prevent republication
+        ad_cfg_orig = ad_cfg.model_dump()
+        ad_cfg_orig["content_hash"] = calculate_content_hash(ad_cfg_orig)  # Add content hash to prevent republication
         published_ads:list[dict[str, Any]] = []
 
         # Set up default config values needed for the test
@@ -1052,7 +966,13 @@ class TestKleinanzeigenBotPrefixSuffix:
         for config, raw_description, expected_description in description_test_cases:
             test_bot = KleinanzeigenBot()
             test_bot.config = test_bot_config.with_values(config)
-            ad_cfg = {"description": raw_description, "active": True}
+            ad_cfg = test_bot.load_ad({
+                "description": raw_description,
+                "active": True,
+                "title": "0123456789",
+                "category": "whatever",
+            })
+
             # Access private method using the correct name mangling
             description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
             assert description == expected_description
@@ -1066,10 +986,12 @@ class TestKleinanzeigenBotPrefixSuffix:
                 "description_suffix": "S" * 1000
             }
         })
-        ad_cfg = {
+        ad_cfg = test_bot.load_ad({
             "description": "D" * 2001,  # This plus affixes will exceed 4000 chars
-            "active": True
-        }
+            "active": True,
+            "title": "0123456789",
+            "category": "whatever",
+        })
 
         with pytest.raises(AssertionError) as exc_info:
             getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
@@ -1087,10 +1009,12 @@ class TestKleinanzeigenBotDescriptionHandling:
         test_bot.config = test_bot_config
 
         # Test with a simple ad config
-        ad_cfg = {
+        ad_cfg = test_bot.load_ad({
             "description": "Test Description",
-            "active": True
-        }
+            "active": True,
+            "title": "0123456789",
+            "category": "whatever",
+        })
 
         # The description should be returned as-is without any prefix/suffix
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
@@ -1106,10 +1030,12 @@ class TestKleinanzeigenBotDescriptionHandling:
             }
         })
 
-        ad_cfg = {
+        ad_cfg = test_bot.load_ad({
             "description": "Test Description",
-            "active": True
-        }
+            "active": True,
+            "title": "0123456789",
+            "category": "whatever",
+        })
 
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Prefix: Test Description :Suffix"
@@ -1128,10 +1054,12 @@ class TestKleinanzeigenBotDescriptionHandling:
             }
         })
 
-        ad_cfg = {
+        ad_cfg = test_bot.load_ad({
             "description": "Test Description",
-            "active": True
-        }
+            "active": True,
+            "title": "0123456789",
+            "category": "whatever",
+        })
 
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "New Prefix: Test Description :New Suffix"
@@ -1146,12 +1074,14 @@ class TestKleinanzeigenBotDescriptionHandling:
             }
         })
 
-        ad_cfg = {
+        ad_cfg = test_bot.load_ad({
             "description": "Test Description",
             "description_prefix": "Ad Prefix: ",
             "description_suffix": " :Ad Suffix",
-            "active": True
-        }
+            "active": True,
+            "title": "0123456789",
+            "category": "whatever",
+        })
 
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Ad Prefix: Test Description :Ad Suffix"
@@ -1170,10 +1100,12 @@ class TestKleinanzeigenBotDescriptionHandling:
             }
         })
 
-        ad_cfg = {
+        ad_cfg = test_bot.load_ad({
             "description": "Test Description",
-            "active": True
-        }
+            "active": True,
+            "title": "0123456789",
+            "category": "whatever",
+        })
 
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Test Description"
@@ -1183,10 +1115,12 @@ class TestKleinanzeigenBotDescriptionHandling:
         test_bot = KleinanzeigenBot()
         test_bot.config = test_bot_config
 
-        ad_cfg = {
+        ad_cfg = test_bot.load_ad({
             "description": "Contact: test@example.com",
-            "active": True
-        }
+            "active": True,
+            "title": "0123456789",
+            "category": "whatever",
+        })
 
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Contact: test(at)example.com"
@@ -1210,17 +1144,17 @@ class TestKleinanzeigenBotChangedAds:
         })
 
         # Create a changed ad
-        changed_ad = create_ad_config(
-            base_ad_config,
-            id = "12345",
-            title = "Changed Ad",
-            updated_on = "2024-01-01T00:00:00",
-            created_on = "2024-01-01T00:00:00",
-            active = True
-        )
+        ad_cfg = Ad.model_validate(base_ad_config | {
+            "id": "12345",
+            "title": "Changed Ad",
+            "updated_on": "2024-01-01T00:00:00",
+            "created_on": "2024-01-01T00:00:00",
+            "active": True
+        })
 
         # Calculate hash for changed_ad and add it to the config
         # Then modify the ad to simulate a change
+        changed_ad = ad_cfg.model_dump()
         changed_hash = calculate_content_hash(changed_ad)
         changed_ad["content_hash"] = changed_hash
         # Now modify the ad to make it "changed"
@@ -1233,10 +1167,7 @@ class TestKleinanzeigenBotChangedAds:
             ad_dir.mkdir()
 
             # Write the ad file
-            yaml = YAML()
-            changed_file = ad_dir / "changed_ad.yaml"
-            with open(changed_file, "w", encoding = "utf-8") as f:
-                yaml.dump(changed_ad, f)
+            dicts.save_dict(ad_dir / "changed_ad.yaml", changed_ad)
 
             # Set config file path and use relative path for ad_files
             test_bot.config_file_path = str(temp_path / "config.yaml")
@@ -1251,7 +1182,7 @@ class TestKleinanzeigenBotChangedAds:
 
                 # The changed ad should be loaded
                 assert len(ads_to_publish) == 1
-                assert ads_to_publish[0][1]["title"] == "Changed Ad - Modified"
+                assert ads_to_publish[0][1].title == "Changed Ad - Modified"
 
     def test_load_ads_with_due_selector_includes_all_due_ads(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
         """Test that 'due' selector includes all ads that are due for republication, regardless of changes."""
@@ -1262,15 +1193,15 @@ class TestKleinanzeigenBotChangedAds:
         current_time = misc.now()
         old_date = (current_time - timedelta(days = 10)).isoformat()  # Past republication interval
 
-        changed_ad = create_ad_config(
-            base_ad_config,
-            id = "12345",
-            title = "Changed Ad",
-            updated_on = old_date,
-            created_on = old_date,
-            republication_interval = 7,  # Due for republication after 7 days
-            active = True
-        )
+        ad_cfg = Ad.model_validate(base_ad_config | {
+            "id": "12345",
+            "title": "Changed Ad",
+            "updated_on": old_date,
+            "created_on": old_date,
+            "republication_interval": 7,  # Due for republication after 7 days
+            "active": True
+        })
+        changed_ad = ad_cfg.model_dump()
 
         # Create temporary directory and file
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1279,10 +1210,7 @@ class TestKleinanzeigenBotChangedAds:
             ad_dir.mkdir()
 
             # Write the ad file
-            yaml = YAML()
-            ad_file = ad_dir / "changed_ad.yaml"
-            with open(ad_file, "w", encoding = "utf-8") as f:
-                yaml.dump(changed_ad, f)
+            dicts.save_dict(ad_dir / "changed_ad.yaml", changed_ad)
 
             # Set config file path and use relative path for ad_files
             test_bot.config_file_path = str(temp_path / "config.yaml")

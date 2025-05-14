@@ -153,7 +153,7 @@ jobs:
 
 
     - name: Run unit tests
-      run: pdm run utest:cov --cov=src/kleinanzeigen_bot
+      run: pdm run utest:cov -vv --cov=src/kleinanzeigen_bot
 
 
     - name: Run integration tests
@@ -163,9 +163,9 @@ jobs:
         case "${{ matrix.os }}" in
            ubuntu-*) 
               sudo apt-get install --no-install-recommends -y xvfb
-              xvfb-run pdm run itest:cov
+              xvfb-run pdm run itest:cov -vv
               ;;
-           *) pdm run itest:cov
+           *) pdm run itest:cov -vv
               ;;
         esac
 

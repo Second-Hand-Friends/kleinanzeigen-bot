@@ -104,9 +104,9 @@ lint = { composite = ["lint:ruff", "lint:mypy", "lint:pyright"] }
 "lint:fix"     = {shell = "ruff check --preview --fix" }
 
 # tests
-test    = "python -m pytest --capture=tee-sys -v"
-utest   = "python -m pytest --capture=tee-sys -v -m 'not itest'"
-itest   = "python -m pytest --capture=tee-sys -v -m 'itest'"
+test    = "python -m pytest --capture=tee-sys"
+utest   = "python -m pytest --capture=tee-sys -m 'not itest'"
+itest   = "python -m pytest --capture=tee-sys -m 'itest'"
 "test:cov" = { composite = ["test --cov=src/kleinanzeigen_bot"] }
 "utest:cov" = { composite = ["utest --cov=src/kleinanzeigen_bot"] }
 "itest:cov" = { composite = ["itest --cov=src/kleinanzeigen_bot"] }

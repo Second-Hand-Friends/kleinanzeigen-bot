@@ -6,7 +6,10 @@ import urllib.request as urllib_request
 from datetime import datetime
 from typing import Any, Final
 
+from kleinanzeigen_bot.model.ad_model import ContactPartial
+
 from .ads import calculate_content_hash, get_description_affixes
+from .model.ad_model import AdPartial
 from .model.config_model import Config
 from .utils import dicts, i18n, loggers, misc, reflect
 from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
@@ -51,9 +54,12 @@ class AdExtractor(WebScrapingMixin):
         LOG.info("New directory for ad created at %s.", new_base_dir)
 
         # call extraction function
-        info = await self._extract_ad_page_info(new_base_dir, ad_id)
+        ad_cfg:AdPartial = await self._extract_ad_page_info(new_base_dir, ad_id)
         ad_file_path = new_base_dir + "/" + f"ad_{ad_id}.yaml"
-        dicts.save_dict(ad_file_path, info)
+        dicts.save_dict(
+            ad_file_path,
+            ad_cfg.model_dump(),
+            header = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json")
 
     async def _download_images_from_ad_page(self, directory:str, ad_id:int) -> list[str]:
         """
@@ -240,7 +246,7 @@ class AdExtractor(WebScrapingMixin):
 
         return refs
 
-    async def navigate_to_ad_page(self, id_or_url: int | str) -> bool:
+    async def navigate_to_ad_page(self, id_or_url:int | str) -> bool:
         """
         Navigates to an ad page specified with an ad ID; or alternatively by a given URL.
         :return: whether the navigation to the ad page was successful
@@ -267,13 +273,12 @@ class AdExtractor(WebScrapingMixin):
             pass
         return True
 
-    async def _extract_ad_page_info(self, directory:str, ad_id:int) -> dict[str, Any]:
+    async def _extract_ad_page_info(self, directory:str, ad_id:int) -> AdPartial:
         """
         Extracts all necessary information from an ad´s page.
 
         :param directory: the path of the ad´s previously created directory
         :param ad_id: the ad ID, already extracted by a calling function
-        :return: a dictionary with the keys as given in an ad YAML, and their respective values
         """
         info:dict[str, Any] = {"active": True}
 
@@ -332,7 +337,7 @@ class AdExtractor(WebScrapingMixin):
         # Calculate the initial hash for the downloaded ad
         info["content_hash"] = calculate_content_hash(info)
 
-        return info
+        return AdPartial.model_validate(info)
 
     async def _extract_category_from_ad_page(self) -> str:
         """
@@ -479,7 +484,7 @@ class AdExtractor(WebScrapingMixin):
         except TimeoutError:
             return None
 
-    async def _extract_contact_from_ad_page(self) -> dict[str, (str | None)]:
+    async def _extract_contact_from_ad_page(self) -> ContactPartial:
         """
         Processes the address part involving street (optional), zip code + city, and phone number (optional).
 
@@ -516,4 +521,4 @@ class AdExtractor(WebScrapingMixin):
             contact["phone"] = None  # phone seems to be a deprecated feature (for non-professional users)
         # also see 'https://themen.kleinanzeigen.de/hilfe/deine-anzeigen/Telefon/
 
-        return contact
+        return ContactPartial.model_validate(contact)

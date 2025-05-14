@@ -8,14 +8,17 @@ from gettext import gettext as _
 from importlib.resources import read_text as get_resource_as_string
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Final
+from typing import Any, Final, TypeVar
 
 from ruamel.yaml import YAML
 
 from . import files, loggers  # pylint: disable=cyclic-import
-from .misc import K, V
 
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
+
+# https://mypy.readthedocs.io/en/stable/generics.html#generic-functions
+K = TypeVar("K")
+V = TypeVar("V")
 
 
 def apply_defaults(
