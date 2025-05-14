@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import copy, logging, re, sys  # isort: skip
+import copy, logging, os, re, sys  # isort: skip
 from gettext import gettext as _
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING, Logger
 from logging.handlers import RotatingFileHandler
@@ -64,11 +64,42 @@ def configure_console_logging() -> None:
             CRITICAL: colorama.Fore.MAGENTA,
         }
 
+        def _relativize_paths_under_cwd(self, record: logging.LogRecord) -> None:
+            """
+            Mutate record.args in-place, converting any absolute-path strings
+            under the current working directory into relative paths.
+            """
+
+            if not record.args:
+                return
+
+            cwd = os.getcwd()
+
+            def _rel_if_subpath(val: Any) -> Any:
+                if isinstance(val, str) and os.path.isabs(val):
+                    # don't relativize log-file paths
+                    if val.endswith(".log"):
+                        return val
+
+                    try:
+                        if os.path.commonpath([cwd, val]) == cwd:
+                            return os.path.relpath(val, cwd)
+                    except ValueError:
+                        return val
+                return val
+
+            if isinstance(record.args, tuple):
+                record.args = tuple(_rel_if_subpath(a) for a in record.args)
+            elif isinstance(record.args, dict):
+                record.args = {k: _rel_if_subpath(v) for k, v in record.args.items()}
+
         def format(self, record:logging.LogRecord) -> str:
             # Deep copy fails if record.args contains objects with
             # __init__(...) parameters (e.g., CaptchaEncountered).
             # A shallow copy is sufficient to preserve the original.
             record = copy.copy(record)
+
+            self._relativize_paths_under_cwd(record)
 
             level_color = self.LEVEL_COLORS.get(record.levelno, "")
             msg_color = self.MESSAGE_COLORS.get(record.levelno, "")
