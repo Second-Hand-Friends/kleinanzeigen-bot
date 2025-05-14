@@ -8,7 +8,7 @@ from typing import Any, Final
 
 from .ads import calculate_content_hash, get_description_affixes
 from .utils import dicts, i18n, loggers, misc, reflect
-from .utils.web_scraping_mixin import Browser, By, Element, Is, WebScrapingMixin
+from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
 
 __all__ = [
     "AdExtractor",
