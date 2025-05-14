@@ -40,6 +40,16 @@ body:
     validations:
       required: true
 
+  - type: input
+    id: bot-version
+    attributes:
+      label: 🤖 What version of the bot are you using?
+      description: |
+        You can find out by running: `kleinanzeigen-bot version`
+      placeholder: e.g. 2025+8e2385c
+    validations:
+      required: true
+
   - type: dropdown
     id: browsers
     attributes:
