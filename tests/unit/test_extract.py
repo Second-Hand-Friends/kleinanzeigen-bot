@@ -266,7 +266,7 @@ class TestAdExtractorNavigation:
                 patch.object(test_extractor, "web_open", new_callable = AsyncMock) as mock_web_open, \
                 patch.object(test_extractor, "web_find", new_callable = AsyncMock, side_effect = TimeoutError):
 
-            result = await test_extractor.naviagte_to_ad_page("https://www.kleinanzeigen.de/s-anzeige/test/12345")
+            result = await test_extractor.navigate_to_ad_page("https://www.kleinanzeigen.de/s-anzeige/test/12345")
             assert result is True
             mock_web_open.assert_called_with("https://www.kleinanzeigen.de/s-anzeige/test/12345")
 
@@ -304,7 +304,7 @@ class TestAdExtractorNavigation:
                 patch.object(test_extractor, "web_check", new_callable = AsyncMock, return_value = True), \
                 patch.object(test_extractor, "web_find", new_callable = AsyncMock, side_effect = find_mock):
 
-            result = await test_extractor.naviagte_to_ad_page(12345)
+            result = await test_extractor.navigate_to_ad_page(12345)
             assert result is True
             mock_web_open.assert_called_with("https://www.kleinanzeigen.de/")
             submit_button_mock.click.assert_awaited_once()
@@ -327,7 +327,7 @@ class TestAdExtractorNavigation:
                 patch.object(test_extractor, "web_click", new_callable = AsyncMock) as mock_web_click, \
                 patch.object(test_extractor, "web_check", new_callable = AsyncMock, return_value = True):
 
-            result = await test_extractor.naviagte_to_ad_page(12345)
+            result = await test_extractor.navigate_to_ad_page(12345)
             assert result is True
             mock_web_click.assert_called_with(By.CLASS_NAME, "mfp-close")
 
@@ -347,7 +347,7 @@ class TestAdExtractorNavigation:
                 patch.object(test_extractor, "web_open", new_callable = AsyncMock), \
                 patch.object(test_extractor, "web_find", new_callable = AsyncMock, return_value = input_mock):
 
-            result = await test_extractor.naviagte_to_ad_page(99999)
+            result = await test_extractor.navigate_to_ad_page(99999)
             assert result is False
 
     @pytest.mark.asyncio

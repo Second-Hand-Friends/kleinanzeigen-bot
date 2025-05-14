@@ -239,7 +239,7 @@ class AdExtractor(WebScrapingMixin):
 
         return refs
 
-    async def naviagte_to_ad_page(self, id_or_url:int | str) -> bool:
+    async def navigate_to_ad_page(self, id_or_url: int | str) -> bool:
         """
         Navigates to an ad page specified with an ad ID; or alternatively by a given URL.
         :return: whether the navigation to the ad page was successful

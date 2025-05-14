@@ -1061,7 +1061,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 # call download function for each ad page
                 for add_url in own_ad_urls:
                     ad_id = ad_extractor.extract_ad_id_from_ad_url(add_url)
-                    if await ad_extractor.naviagte_to_ad_page(add_url):
+                    if await ad_extractor.navigate_to_ad_page(add_url):
                         await ad_extractor.download_ad(ad_id)
                         success_count += 1
                 LOG.info("%d of %d ads were downloaded from your profile.", success_count, len(own_ad_urls))
@@ -1085,7 +1085,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                         LOG.info("The ad with id %d has already been saved.", ad_id)
                         continue
 
-                    if await ad_extractor.naviagte_to_ad_page(ad_url):
+                    if await ad_extractor.navigate_to_ad_page(ad_url):
                         await ad_extractor.download_ad(ad_id)
                         new_count += 1
                 LOG.info("%s were downloaded from your profile.", pluralize("new ad", new_count))
@@ -1096,7 +1096,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.info(" | ".join([str(ad_id) for ad_id in ids]))
 
             for ad_id in ids:  # call download routine for every id
-                exists = await ad_extractor.naviagte_to_ad_page(ad_id)
+                exists = await ad_extractor.navigate_to_ad_page(ad_id)
                 if exists:
                     await ad_extractor.download_ad(ad_id)
                     LOG.info("Downloaded ad with id %d", ad_id)
