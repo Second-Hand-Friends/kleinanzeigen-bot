@@ -5,14 +5,12 @@ import asyncio, decimal, re, sys, time  # isort: skip
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from gettext import gettext as _
-from typing import Any, TypeVar
+from typing import Any, Mapping, TypeVar
 
 from . import i18n
 
 # https://mypy.readthedocs.io/en/stable/generics.html#generic-functions
 T = TypeVar("T")
-K = TypeVar("K")
-V = TypeVar("V")
 
 
 def ensure(
@@ -42,6 +40,63 @@ def ensure(
         if elapsed >= timeout:
             raise AssertionError(_(error_message))
         time.sleep(poll_requency)
+
+
+def get_attr(obj:Mapping[str, Any] | Any, key:str, default:Any | None = None) -> Any:
+    """
+    Unified getter for attribute or key access on objects or dicts.
+    Supports dot-separated paths for nested access.
+
+    Args:
+        obj: The object or dictionary to get the value from.
+        key: The attribute or key name, possibly nested via dot notation (e.g. 'contact.email').
+        default: A default value to return if the key/attribute path is not found.
+
+    Returns:
+        The found value or the default.
+
+    Examples:
+        >>> class User:
+        ...     def __init__(self, contact): self.contact = contact
+
+        # [object] normal nested access:
+        >>> get_attr(User({'email': 'user@example.com'}), 'contact.email')
+        'user@example.com'
+
+        # [object] missing key at depth:
+        >>> get_attr(User({'email': 'user@example.com'}), 'contact.foo') is None
+        True
+
+        # [object] explicit None treated as missing:
+        >>> get_attr(User({'email': None}), 'contact.email', default='n/a')
+        'n/a'
+
+        # [object] parent in path is None:
+        >>> get_attr(User(None), 'contact.email', default='n/a')
+        'n/a'
+
+        # [dict] normal nested access:
+        >>> get_attr({'contact': {'email': 'data@example.com'}}, 'contact.email')
+        'data@example.com'
+
+        # [dict] missing key at depth:
+        >>> get_attr({'contact': {'email': 'user@example.com'}}, 'contact.foo') is None
+        True
+
+        # [dict] explicit None treated as missing:
+        >>> get_attr({'contact': {'email': None}}, 'contact.email', default='n/a')
+        'n/a'
+
+        # [dict] parent in path is None:
+        >>> get_attr({}, 'contact.email', default='none')
+        'none'
+    """
+    for part in key.split("."):
+        obj = obj.get(part) if isinstance(obj, Mapping) else getattr(obj, part, None)
+        if obj is None:
+            return default
+
+    return obj
 
 
 def now() -> datetime:

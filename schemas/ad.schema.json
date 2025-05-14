@@ -1,0 +1,304 @@
+{
+  "$defs": {
+    "ContactPartial": {
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "street": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Street"
+        },
+        "zipcode": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zipcode"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location"
+        },
+        "phone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Phone"
+        }
+      },
+      "title": "ContactPartial",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "active": {
+      "default": true,
+      "title": "Active",
+      "type": "boolean"
+    },
+    "type": {
+      "default": "OFFER",
+      "enum": [
+        "OFFER",
+        "WANTED"
+      ],
+      "title": "Type",
+      "type": "string"
+    },
+    "title": {
+      "minLength": 10,
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "description_prefix": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description Prefix"
+    },
+    "description_suffix": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description Suffix"
+    },
+    "category": {
+      "title": "Category",
+      "type": "string"
+    },
+    "special_attributes": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Special Attributes"
+    },
+    "price": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Price"
+    },
+    "price_type": {
+      "default": "NEGOTIABLE",
+      "enum": [
+        "FIXED",
+        "NEGOTIABLE",
+        "GIVE_AWAY",
+        "NOT_APPLICABLE"
+      ],
+      "title": "Price Type",
+      "type": "string"
+    },
+    "shipping_type": {
+      "default": "SHIPPING",
+      "enum": [
+        "PICKUP",
+        "SHIPPING",
+        "NOT_APPLICABLE"
+      ],
+      "title": "Shipping Type",
+      "type": "string"
+    },
+    "shipping_costs": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Shipping Costs"
+    },
+    "shipping_options": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Shipping Options"
+    },
+    "sell_directly": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": false,
+      "title": "Sell Directly"
+    },
+    "images": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Images"
+    },
+    "contact": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ContactPartial"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "republication_interval": {
+      "default": 7,
+      "title": "Republication Interval",
+      "type": "integer"
+    },
+    "id": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Id"
+    },
+    "created_on": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})?$",
+          "type": "string"
+        }
+      ],
+      "default": null,
+      "description": "ISO-8601 timestamp with optional timezone (e.g. 2024-12-25T00:00:00 or 2024-12-25T00:00:00Z)",
+      "title": "Created On"
+    },
+    "updated_on": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})?$",
+          "type": "string"
+        }
+      ],
+      "default": null,
+      "description": "ISO-8601 timestamp with optional timezone (e.g. 2024-12-25T00:00:00 or 2024-12-25T00:00:00Z)",
+      "title": "Updated On"
+    },
+    "content_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Content Hash"
+    }
+  },
+  "required": [
+    "title",
+    "description",
+    "category"
+  ],
+  "title": "AdPartial",
+  "type": "object",
+  "description": "Auto-generated JSON Schema for Ad"
+}
