@@ -8,7 +8,7 @@ from typing import Any, Final
 
 from .ads import calculate_content_hash, get_description_affixes
 from .utils import dicts, i18n, loggers, misc, reflect
-from .utils.web_scraping_mixin import Browser, By, Element, Is, WebScrapingMixin
+from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
 
 __all__ = [
     "AdExtractor",
@@ -239,20 +239,14 @@ class AdExtractor(WebScrapingMixin):
 
         return refs
 
-    async def naviagte_to_ad_page(self, id_or_url:int | str) -> bool:
+    async def navigate_to_ad_page(self, id_or_url: int | str) -> bool:
         """
         Navigates to an ad page specified with an ad ID; or alternatively by a given URL.
         :return: whether the navigation to the ad page was successful
         """
         if reflect.is_integer(id_or_url):
-            # navigate to start page, otherwise page can be None!
-            await self.web_open("https://www.kleinanzeigen.de/")
-            # enter the ad ID into the search bar
-            await self.web_input(By.ID, "site-search-query", id_or_url)
-            # navigate to ad page and wait
-            await self.web_check(By.ID, "site-search-submit", Is.CLICKABLE)
-            submit_button = await self.web_find(By.ID, "site-search-submit")
-            await submit_button.click()
+            # navigate to search page
+            await self.web_open("https://www.kleinanzeigen.de/s-suchanfrage.html?keywords={0}".format(id_or_url))
         else:
             await self.web_open(str(id_or_url))  # navigate to URL directly given
         await self.web_sleep()
