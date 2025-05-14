@@ -40,7 +40,8 @@ def test_bot_config() -> Config:
     return Config.model_validate({
         "ad_defaults": {
             "contact": {
-                "name": "dummy_name"
+                "name": "dummy_name",
+                "zipcode": "12345"
             },
         },
         "login": {

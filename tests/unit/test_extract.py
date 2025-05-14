@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 
 from kleinanzeigen_bot.extract import AdExtractor
+from kleinanzeigen_bot.model.ad_model import AdPartial, ContactPartial
 from kleinanzeigen_bot.model.config_model import Config, DownloadConfig
 from kleinanzeigen_bot.utils.web_scraping_mixin import Browser, By, Element
 
@@ -441,7 +442,7 @@ class TestAdExtractorContent:
                 _extract_contact_from_ad_page = AsyncMock(return_value = {})
             ):
                 info = await test_extractor._extract_ad_page_info("/some/dir", 12345)
-                assert info["description"] == raw_description
+                assert info.description == raw_description
 
     @pytest.mark.asyncio
     async def test_extract_description_with_affixes_timeout(
@@ -466,11 +467,11 @@ class TestAdExtractorContent:
             _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
             _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
             _download_images_from_ad_page = AsyncMock(return_value = []),
-            _extract_contact_from_ad_page = AsyncMock(return_value = {})
+            _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial())
         ):
             try:
                 info = await test_extractor._extract_ad_page_info("/some/dir", 12345)
-                assert not info["description"]
+                assert not info.description
             except TimeoutError:
                 # This is also acceptable - depends on how we want to handle timeouts
                 pass
@@ -499,10 +500,10 @@ class TestAdExtractorContent:
             _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
             _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
             _download_images_from_ad_page = AsyncMock(return_value = []),
-            _extract_contact_from_ad_page = AsyncMock(return_value = {})
+            _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial())
         ):
             info = await test_extractor._extract_ad_page_info("/some/dir", 12345)
-            assert info["description"] == raw_description
+            assert info.description == raw_description
 
     @pytest.mark.asyncio
     async def test_extract_sell_directly(self, test_extractor:AdExtractor) -> None:
@@ -615,12 +616,11 @@ class TestAdExtractorContact:
             ]
 
             contact_info = await extractor._extract_contact_from_ad_page()
-            assert isinstance(contact_info, dict)
-            assert contact_info["street"] == "Example Street 123"
-            assert contact_info["zipcode"] == "12345"
-            assert contact_info["location"] == "Berlin - Mitte"
-            assert contact_info["name"] == "Test User"
-            assert contact_info["phone"] is None
+            assert contact_info.street == "Example Street 123"
+            assert contact_info.zipcode == "12345"
+            assert contact_info.location == "Berlin - Mitte"
+            assert contact_info.name == "Test User"
+            assert contact_info.phone is None
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
@@ -656,8 +656,7 @@ class TestAdExtractorContact:
             ]
 
             contact_info = await extractor._extract_contact_from_ad_page()
-            assert isinstance(contact_info, dict)
-            assert contact_info["phone"] == "01234567890"  # Normalized phone number
+            assert contact_info.phone == "01234567890"  # Normalized phone number
 
 
 class TestAdExtractorDownload:
@@ -696,9 +695,10 @@ class TestAdExtractorDownload:
             mock_exists.side_effect = lambda path: path in existing_paths
             mock_isdir.side_effect = lambda path: path == base_dir
 
-            mock_extract.return_value = {
+            mock_extract.return_value = AdPartial.model_validate({
                 "title": "Test Advertisement Title",
                 "description": "Test Description",
+                "category": "Dienstleistungen",
                 "price": 100,
                 "images": [],
                 "contact": {
@@ -707,7 +707,7 @@ class TestAdExtractorDownload:
                     "zipcode": "12345",
                     "location": "Test City"
                 }
-            }
+            })
 
             await extractor.download_ad(12345)
 
@@ -723,7 +723,7 @@ class TestAdExtractorDownload:
             assert actual_call is not None
             actual_path = actual_call[0][0].replace("/", os.path.sep)
             assert actual_path == yaml_path
-            assert actual_call[0][1] == mock_extract.return_value
+            assert actual_call[0][1] == mock_extract.return_value.model_dump()
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
@@ -752,9 +752,10 @@ class TestAdExtractorDownload:
             mock_exists.return_value = False
             mock_isdir.return_value = False
 
-            mock_extract.return_value = {
+            mock_extract.return_value = AdPartial.model_validate({
                 "title": "Test Advertisement Title",
                 "description": "Test Description",
+                "category": "Dienstleistungen",
                 "price": 100,
                 "images": [],
                 "contact": {
@@ -763,7 +764,7 @@ class TestAdExtractorDownload:
                     "zipcode": "12345",
                     "location": "Test City"
                 }
-            }
+            })
 
             await extractor.download_ad(12345)
 
@@ -781,4 +782,4 @@ class TestAdExtractorDownload:
             assert actual_call is not None
             actual_path = actual_call[0][0].replace("/", os.path.sep)
             assert actual_path == yaml_path
-            assert actual_call[0][1] == mock_extract.return_value
+            assert actual_call[0][1] == mock_extract.return_value.model_dump()

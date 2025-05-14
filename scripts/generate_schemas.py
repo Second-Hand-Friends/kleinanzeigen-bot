@@ -7,14 +7,14 @@ from typing import Type
 
 from pydantic import BaseModel
 
+from kleinanzeigen_bot.model.ad_model import AdPartial
 from kleinanzeigen_bot.model.config_model import Config
 
 
-def generate_schema(model:Type[BaseModel], out_dir:Path) -> None:
+def generate_schema(model:Type[BaseModel], name:str, out_dir:Path) -> None:
     """
     Generate and write JSON schema for the given model.
     """
-    name = model.__name__
     print(f"[+] Generating schema for model [{name}]...")
 
     # Create JSON Schema dict
@@ -35,5 +35,6 @@ out_dir = project_root / "schemas"
 out_dir.mkdir(parents = True, exist_ok = True)
 
 print(f"Generating schemas in: {out_dir.resolve()}")
-generate_schema(Config, out_dir)
+generate_schema(Config, "Config", out_dir)
+generate_schema(AdPartial, "Ad", out_dir)
 print("All schemas generated successfully.")

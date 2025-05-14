@@ -2,11 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import hashlib, json, os  # isort: skip
-from typing import Any, Final
+from typing import Any
 
 from .model.config_model import Config
-
-MAX_DESCRIPTION_LENGTH:Final[int] = 4000
+from .utils.misc import get_attr
 
 
 def calculate_content_hash(ad_cfg:dict[str, Any]) -> str:
@@ -14,24 +13,24 @@ def calculate_content_hash(ad_cfg:dict[str, Any]) -> str:
 
     # Relevant fields for the hash
     content = {
-        "active": bool(ad_cfg.get("active", True)),  # Explicitly convert to bool
-        "type": str(ad_cfg.get("type", "")),  # Explicitly convert to string
-        "title": str(ad_cfg.get("title", "")),
-        "description": str(ad_cfg.get("description", "")),
-        "category": str(ad_cfg.get("category", "")),
-        "price": str(ad_cfg.get("price", "")),  # Price always as string
-        "price_type": str(ad_cfg.get("price_type", "")),
-        "special_attributes": dict(ad_cfg.get("special_attributes") or {}),  # Handle None case
-        "shipping_type": str(ad_cfg.get("shipping_type", "")),
-        "shipping_costs": str(ad_cfg.get("shipping_costs", "")),
-        "shipping_options": sorted([str(x) for x in (ad_cfg.get("shipping_options") or [])]),  # Handle None case
-        "sell_directly": bool(ad_cfg.get("sell_directly", False)),  # Explicitly convert to bool
-        "images": sorted([os.path.basename(str(img)) if img is not None else "" for img in (ad_cfg.get("images") or [])]),  # Handle None values in images
+        "active": bool(get_attr(ad_cfg, "active", default = True)),  # Explicitly convert to bool
+        "type": str(get_attr(ad_cfg, "type", "")),  # Explicitly convert to string
+        "title": str(get_attr(ad_cfg, "title", "")),
+        "description": str(get_attr(ad_cfg, "description", "")),
+        "category": str(get_attr(ad_cfg, "category", "")),
+        "price": str(get_attr(ad_cfg, "price", "")),  # Price always as string
+        "price_type": str(get_attr(ad_cfg, "price_type", "")),
+        "special_attributes": dict(get_attr(ad_cfg, "special_attributes", {})),  # Handle None case
+        "shipping_type": str(get_attr(ad_cfg, "shipping_type", "")),
+        "shipping_costs": str(get_attr(ad_cfg, "shipping_costs", "")),
+        "shipping_options": sorted([str(x) for x in get_attr(ad_cfg, "shipping_options", [])]),  # Handle None case
+        "sell_directly": bool(get_attr(ad_cfg, "sell_directly", default = False)),  # Explicitly convert to bool
+        "images": sorted([os.path.basename(str(img)) if img is not None else "" for img in get_attr(ad_cfg, "images", [])]),  # Handle None values in images
         "contact": {
-            "name": str(ad_cfg.get("contact", {}).get("name", "")),
-            "street": str(ad_cfg.get("contact", {}).get("street", "")),  # Changed from "None" to empty string for consistency
-            "zipcode": str(ad_cfg.get("contact", {}).get("zipcode", "")),
-            "phone": str(ad_cfg.get("contact", {}).get("phone", ""))
+            "name": str(get_attr(ad_cfg, "contact.name", "")),
+            "street": str(get_attr(ad_cfg, "contact.street", "")),  # Changed from "None" to empty string for consistency
+            "zipcode": str(get_attr(ad_cfg, "contact.zipcode", "")),
+            "phone": str(get_attr(ad_cfg, "contact.phone", ""))
         }
     }
 
