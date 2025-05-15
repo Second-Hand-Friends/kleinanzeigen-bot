@@ -22,9 +22,13 @@ excluded_modules = [
     "bz2",
     "ftplib",
     "lzma",
+    "mypy",  # wrongly included dev-dep
+    "rich",  # wrongly included dev-dep (transitive dep of pip-audit)
     "setuptools",
     "smtplib",
     "statistics",
+    "toml",  # wrongly included dev-dep (transitive dep of pip-audit)
+    "tomllib",
     "tracemalloc",
     "xml.sax",
     "xmlrpc"
