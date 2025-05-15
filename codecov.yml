@@ -1,0 +1,12 @@
+# https://docs.codecov.com/docs/codecovyml-reference
+# https://json.schemastore.org/codecov.json
+codecov:
+  branch: main
+  require_ci_to_pass: true
+  notify:
+    wait_for_ci: true
+
+coverage:
+  precision: 2
+  round: down
+  range: "65...100"

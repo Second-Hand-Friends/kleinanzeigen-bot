@@ -336,7 +336,10 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
+# https://coverage.readthedocs.io/en/latest/config.html#run
 data_file = ".temp/coverage.sqlite"
+branch = true  # track branch coverage
+relative_files = true
 
 
 #####################
