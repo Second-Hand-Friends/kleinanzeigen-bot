@@ -100,6 +100,7 @@ jobs:
     - name: Git Checkout
       uses: actions/checkout@v4  # https://github.com/actions/checkout
 
+
     - name: "Install: Chromium Browser"
       if: env.ACT == 'true' && startsWith(matrix.os, 'ubuntu')
       run: |
@@ -153,7 +154,7 @@ jobs:
 
 
     - name: Run unit tests
-      run: pdm run utest:cov -vv --cov=src/kleinanzeigen_bot
+      run: pdm run utest:cov -vv
 
 
     - name: Run integration tests

@@ -89,7 +89,7 @@ debug = "python -m pdb -m kleinanzeigen_bot"
 
 # build & packaging
 generate-schemas = "python scripts/generate_schemas.py"
-compile.cmd = "python -O -m PyInstaller pyinstaller.spec --clean"
+compile.cmd = "python -O -m PyInstaller pyinstaller.spec --clean --workpath .temp"
 compile.env = {PYTHONHASHSEED = "1", SOURCE_DATE_EPOCH = "0"}  # https://pyinstaller.org/en/stable/advanced-topics.html#creating-a-reproducible-build
 
 deps                = "pdm list --fields name,version,groups"
@@ -112,9 +112,9 @@ lint = { composite = ["lint:ruff", "lint:mypy", "lint:pyright"] }
 test  = "python -m pytest --capture=tee-sys"
 utest = "python -m pytest --capture=tee-sys -m 'not itest'"
 itest = "python -m pytest --capture=tee-sys -m 'itest'"
-"test:cov"  = { composite = ["test --cov=src/kleinanzeigen_bot"] }
-"utest:cov" = { composite = ["utest --cov=src/kleinanzeigen_bot"] }
-"itest:cov" = { composite = ["itest --cov=src/kleinanzeigen_bot"] }
+"test:cov"  = { composite = ["utest:cov", "itest:cov"] }
+"utest:cov" = { composite = ["utest --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-unit.xml"] }
+"itest:cov" = { composite = ["itest --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-integration.xml"] }
 
 
 #####################
@@ -140,6 +140,7 @@ aggressive = 3
 # https://docs.astral.sh/ruff/configuration/
 #####################
 [tool.ruff]
+cache-dir = ".temp/cache_ruff"
 include = ["pyproject.toml", "scripts/**/*.py", "src/**/*.py", "tests/**/*.py"]
 line-length = 160
 indent-width = 4
@@ -282,6 +283,7 @@ max-public-methods = 25 # max. number of public methods for a class (R0904)
 [tool.mypy]
 # https://mypy.readthedocs.io/en/stable/config_file.html
 #mypy_path = "$MYPY_CONFIG_FILE_DIR/tests/stubs"
+cache_dir = ".temp/cache_mypy"
 python_version = "3.10"
 files = "scripts,src,tests"
 strict = true
@@ -311,6 +313,7 @@ typeCheckingMode = "standard"
 # https://pypi.org/project/pytest/
 #####################
 [tool.pytest.ini_options]
+cache_dir = ".temp/cache_pytest"
 testpaths = [
   "src",
   "tests"
@@ -318,7 +321,6 @@ testpaths = [
 # https://docs.pytest.org/en/stable/reference.html#confval-addopts
 addopts = """
   --strict-markers
-  -p no:cacheprovider
   --doctest-modules
   --cov-report=term-missing
 """
@@ -332,6 +334,9 @@ filterwarnings = [
   "ignore:Exception ignored in:pytest.PytestUnraisableExceptionWarning",
   "ignore::DeprecationWarning"
 ]
+
+[tool.coverage.run]
+data_file = ".temp/coverage.sqlite"
 
 
 #####################
