@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 import copy
-from typing import Any, List, Literal
+from typing import Annotated, Any, List, Literal
 
-from pydantic import Field, model_validator, validator
+from pydantic import AfterValidator, Field, model_validator
 from typing_extensions import deprecated
 
 from kleinanzeigen_bot.utils import dicts
@@ -102,8 +102,17 @@ class CaptchaConfig(ContextualModel):
     restart_delay:str = "6h"
 
 
+def _validate_glob_pattern(v:str) -> str:
+    if not v.strip():
+        raise ValueError("must be a non-empty, non-blank glob pattern")
+    return v
+
+
+GlobPattern = Annotated[str, AfterValidator(_validate_glob_pattern)]
+
+
 class Config(ContextualModel):
-    ad_files:List[str] = Field(
+    ad_files:List[GlobPattern] = Field(
         default_factory = lambda: ["./**/ad_*.{json,yml,yaml}"],
         min_items = 1,
         description = """
@@ -137,10 +146,3 @@ Example:
         return Config.model_validate(
             dicts.apply_defaults(copy.deepcopy(values), defaults = self.model_dump())
         )
-
-    @validator("ad_files", each_item = True)
-    @classmethod
-    def _non_empty_glob_pattern(cls, v:str) -> str:
-        if not v.strip():
-            raise ValueError("ad_files entries must be non-empty glob patterns")
-        return v

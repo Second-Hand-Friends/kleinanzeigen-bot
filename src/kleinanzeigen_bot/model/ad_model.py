@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import hashlib, json  # isort: skip
 from datetime import datetime  # noqa: TC003 Move import into a type-checking block
-from typing import Any, Dict, Final, List, Literal, Mapping, Sequence
+from typing import Annotated, Any, Dict, Final, List, Literal, Mapping, Sequence
 
-from pydantic import Field, model_validator, validator
+from pydantic import AfterValidator, Field, field_validator, model_validator
 from typing_extensions import Self
 
 from kleinanzeigen_bot.model.config_model import AdDefaults  # noqa: TC001 Move application import into a type-checking block
@@ -52,6 +52,15 @@ class ContactPartial(ContextualModel):
     phone:str | None = _OPTIONAL()
 
 
+def _validate_shipping_option_item(v:str) -> str:
+    if not v.strip():
+        raise ValueError("must be non-empty and non-blank")
+    return v
+
+
+ShippingOption = Annotated[str, AfterValidator(_validate_shipping_option_item)]
+
+
 class AdPartial(ContextualModel):
     active:bool | None = _OPTIONAL()
     type:Literal["OFFER", "WANTED"] | None = _OPTIONAL()
@@ -65,7 +74,7 @@ class AdPartial(ContextualModel):
     price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] | None = _OPTIONAL()
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] | None = _OPTIONAL()
     shipping_costs:float | None = _OPTIONAL()
-    shipping_options:List[str] | None = _OPTIONAL()
+    shipping_options:List[ShippingOption] | None = _OPTIONAL()
     sell_directly:bool | None = _OPTIONAL()
     images:List[str] | None = _OPTIONAL()
     contact:ContactPartial | None = _OPTIONAL()
@@ -76,19 +85,19 @@ class AdPartial(ContextualModel):
     updated_on:datetime | None = _ISO_DATETIME()
     content_hash:str | None = _OPTIONAL()
 
-    @validator("created_on", "updated_on", pre = True)
+    @field_validator("created_on", "updated_on", mode = "before")
     @classmethod
     def _parse_dates(cls, v:Any) -> Any:
         return parse_datetime(v)
 
-    @validator("shipping_costs", pre = True)
+    @field_validator("shipping_costs", mode = "before")
     @classmethod
     def _parse_shipping_costs(cls, v:float | int | str) -> Any:
         if v:
             return round(parse_decimal(v), 2)
         return None
 
-    @validator("description")
+    @field_validator("description")
     @classmethod
     def _validate_description_length(cls, v:str) -> str:
         if len(v) > MAX_DESCRIPTION_LENGTH:
@@ -105,13 +114,6 @@ class AdPartial(ContextualModel):
         if price_type == "FIXED" and price is None:
             raise ValueError("price is required when price_type is FIXED")
         return values
-
-    @validator("shipping_options", each_item = True)
-    @classmethod
-    def _validate_shipping_option(cls, v:str) -> str:
-        if not v.strip():
-            raise ValueError("shipping_options entries must be non-empty")
-        return v
 
     def update_content_hash(self) -> Self:
         """Calculate and updates the content_hash value for user-modifiable fields of the ad."""
