@@ -14,19 +14,13 @@ downloaded-ads
 # python
 /.venv
 __pycache__
-/build
 /dist
+/.temp
 /.eggs
 /*.egg-info
-/.mypy_cache
 /.pdm-build/
 /.pdm-python
-/.ruff_cache
 
-# test coverage
-/.coverage
-/htmlcov/
-/coverage.xml
 
 # Eclipse
 /.project
