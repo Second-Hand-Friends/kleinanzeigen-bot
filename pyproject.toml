@@ -226,6 +226,7 @@ ignore = [
   "E231",  # Don't add whitespace after colon (:) on type declaration
   "E251",  # Don't remove whitespace around parameter '=' sign.
   "E401",  # Don't put imports on separate lines
+  "FIX002",  # Line contains TODO, consider resolving the issue
   "PERF203",  # `try`-`except` within a loop incurs performance overhead
   "RET504",  # Unnecessary assignment to `...` before `return` statement
   "PLR6301",  # Method `...` could be a function, class method, or static method
@@ -234,6 +235,8 @@ ignore = [
   "SIM105",  # Use `contextlib.suppress(TimeoutError)` instead of `try`-`except`-`pass`
   "SIM114",  # Combine `if` branches using logical `or` operator
   "TC006",  # Add quotes to type expression in `typing.cast()`
+  "TD002",  # Missing author in TODO
+  "TD003",  # Missing issue link for this TODO
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -263,12 +266,12 @@ min-file-size = 256
 # https://pylint.pycqa.org/en/latest/user_guide/configuration/all-options.html#design-checker
 # https://pylint.pycqa.org/en/latest/user_guide/checkers/features.html#design-checker-messages
 max-args       = 6      # max. number of args for function / method (R0913)
-# max-attributes = 15   # max. number of instance attrs for a class (R0902)
+# max-attributes = 15   # TODO max. number of instance attrs for a class (R0902)
 max-branches   = 40     # max. number of branch for function / method body (R0912)
 max-locals     = 30     # max. number of local vars for function / method body (R0914)
 max-returns    = 15     # max. number of return / yield for function / method body (R0911)
 max-statements = 150    # max. number of statements in function / method body (R0915)
-max-public-methods = 20 # max. number of public methods for a class (R0904)
+max-public-methods = 25 # max. number of public methods for a class (R0904)
 # max-positional-arguments = 5  # max. number of positional args for function / method (R0917)
 
 

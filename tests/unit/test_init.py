@@ -14,7 +14,6 @@ from pydantic import ValidationError
 
 from kleinanzeigen_bot import LOG, KleinanzeigenBot, misc
 from kleinanzeigen_bot._version import __version__
-from kleinanzeigen_bot.ads import calculate_content_hash
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, PublishingConfig
 from kleinanzeigen_bot.utils import dicts, loggers
@@ -844,7 +843,7 @@ class TestKleinanzeigenBotAdRepublication:
 
         # Calculate hash before making the copy to ensure they match
         ad_cfg_orig = ad_cfg.model_dump()
-        current_hash = calculate_content_hash(ad_cfg_orig)
+        current_hash = ad_cfg.update_content_hash().content_hash
         ad_cfg_orig["content_hash"] = current_hash
 
         # Mock the config to prevent actual file operations
@@ -874,8 +873,8 @@ class TestKleinanzeigenBotShippingOptions:
         })
 
         # Create the original ad config and published ads list
+        ad_cfg.update_content_hash()  # Add content hash to prevent republication
         ad_cfg_orig = ad_cfg.model_dump()
-        ad_cfg_orig["content_hash"] = calculate_content_hash(ad_cfg_orig)  # Add content hash to prevent republication
         published_ads:list[dict[str, Any]] = []
 
         # Set up default config values needed for the test
@@ -1155,7 +1154,7 @@ class TestKleinanzeigenBotChangedAds:
         # Calculate hash for changed_ad and add it to the config
         # Then modify the ad to simulate a change
         changed_ad = ad_cfg.model_dump()
-        changed_hash = calculate_content_hash(changed_ad)
+        changed_hash = ad_cfg.update_content_hash().content_hash
         changed_ad["content_hash"] = changed_hash
         # Now modify the ad to make it "changed"
         changed_ad["title"] = "Changed Ad - Modified"

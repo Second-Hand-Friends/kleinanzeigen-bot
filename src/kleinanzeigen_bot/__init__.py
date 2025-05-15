@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import atexit, copy, json, os, re, signal, sys, textwrap  # isort: skip
+import atexit, json, os, re, signal, sys, textwrap  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 from gettext import gettext as _
@@ -13,8 +13,7 @@ from wcmatch import glob
 
 from . import extract, resources
 from ._version import __version__
-from .ads import calculate_content_hash, get_description_affixes
-from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad
+from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial
 from .model.config_model import Config
 from .utils import dicts, error_handlers, loggers, misc
 from .utils.exceptions import CaptchaEncountered
@@ -80,6 +79,16 @@ class KleinanzeigenBot(WebScrapingMixin):
                     LOG.info("############################################")
                     LOG.info("DONE: No configuration errors found.")
                     LOG.info("############################################")
+                case "update-content-hash":
+                    self.configure_file_logging()
+                    self.load_config()
+                    self.ads_selector = "all"
+                    if ads := self.load_ads(exclude_ads_with_id = False):
+                        self.update_content_hashes(ads)
+                    else:
+                        LOG.info("############################################")
+                        LOG.info("DONE: No active ads found.")
+                        LOG.info("############################################")
                 case "publish":
                     self.configure_file_logging()
                     self.load_config()
@@ -143,6 +152,9 @@ class KleinanzeigenBot(WebScrapingMixin):
               verify   - Überprüft die Konfigurationsdateien
               delete   - Löscht Anzeigen
               download - Lädt eine oder mehrere Anzeigen herunter
+              update-content-hash - Berechnet den content_hash aller Anzeigen anhand der aktuellen ad_defaults neu;
+                                    nach Änderungen an den config.yaml/ad_defaults verhindert es, dass alle Anzeigen als
+                                    "geändert" gelten und neu veröffentlicht werden.
               --
               help     - Zeigt diese Hilfe an (Standardbefehl)
               version  - Zeigt die Version der Anwendung an
@@ -178,6 +190,8 @@ class KleinanzeigenBot(WebScrapingMixin):
               verify   - verifies the configuration files
               delete   - deletes ads
               download - downloads one or multiple ads
+              update-content-hash – recalculates each ad’s content_hash based on the current ad_defaults;
+                                    use this after changing config.yaml/ad_defaults to avoid every ad being marked "changed" and republished
               --
               help     - displays this help (default command)
               version  - displays the application version
@@ -269,9 +283,10 @@ class KleinanzeigenBot(WebScrapingMixin):
     def __check_ad_republication(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
         """
         Check if an ad needs to be republished based on republication interval.
-        Returns True if the ad should be republished based on the interval.
+        Note:  This method does not check for content changes. Use __check_ad_changed for that.
 
-        Note: This method no longer checks for content changes. Use __check_ad_changed for that.
+        Returns:
+            True if the ad should be republished based on the interval.
         """
         if ad_cfg.updated_on:
             last_updated_on = ad_cfg.updated_on
@@ -299,14 +314,16 @@ class KleinanzeigenBot(WebScrapingMixin):
     def __check_ad_changed(self, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> bool:
         """
         Check if an ad has been changed since last publication.
-        Returns True if the ad has been changed.
+
+        Returns:
+            True if the ad has been changed.
         """
         if not ad_cfg.id:
             # New ads are not considered "changed"
             return False
 
         # Calculate hash on original config to match what was stored
-        current_hash = calculate_content_hash(ad_cfg_orig)
+        current_hash = AdPartial.model_validate(ad_cfg_orig).update_content_hash().content_hash
         stored_hash = ad_cfg_orig.get("content_hash")
 
         LOG.debug("Hash comparison for [%s]:", ad_file_relative)
@@ -321,7 +338,20 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         return False
 
-    def load_ads(self, *, ignore_inactive:bool = True, check_id:bool = True) -> list[tuple[str, Ad, dict[str, Any]]]:
+    def load_ads(self, *, ignore_inactive:bool = True, exclude_ads_with_id:bool = True) -> list[tuple[str, Ad, dict[str, Any]]]:
+        """
+        Load and validate all ad config files, optionally filtering out inactive or already‐published ads.
+
+        Args:
+            ignore_inactive (bool):
+                Skip ads with `active=False`.
+            exclude_ads_with_id (bool):
+                Skip ads whose raw data already contains an `id`, i.e. was published before.
+
+        Returns:
+            list[tuple[str, Ad, dict[str, Any]]]:
+            Tuples of (file_path, validated Ad model, original raw data).
+        """
         LOG.info("Searching for ad config files...")
 
         ad_files:dict[str, str] = {}
@@ -366,9 +396,9 @@ class KleinanzeigenBot(WebScrapingMixin):
                     should_include = True
 
                 # Check for 'new' selector
-                if "new" in selectors and (not ad_cfg.id or not check_id):
+                if "new" in selectors and (not ad_cfg.id or not exclude_ads_with_id):
                     should_include = True
-                elif "new" in selectors and ad_cfg.id and check_id:
+                elif "new" in selectors and ad_cfg.id and exclude_ads_with_id:
                     LOG.info(" -> SKIPPED: ad [%s] is not new. already has an id assigned.", ad_file_relative)
 
                 # Check for 'due' selector
@@ -427,13 +457,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         return ads
 
     def load_ad(self, ad_cfg_orig:dict[str, Any]) -> Ad:
-        ad_cfg_merged = dicts.apply_defaults(
-            target = copy.deepcopy(ad_cfg_orig),
-            defaults = self.config.ad_defaults.model_dump(),
-            ignore = lambda k, _: k == "description",
-            override = lambda _, v: v == ""  # noqa: PLC1901 can be simplified to `not v` as an empty string is falsey
-        )
-        return Ad.model_validate(ad_cfg_merged)
+        return AdPartial.model_validate(ad_cfg_orig).to_ad(self.config.ad_defaults)
 
     def load_config(self) -> None:
         # write default config.yaml if config file does not exist
@@ -805,7 +829,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         # Update content hash after successful publication
         # Calculate hash on original config to ensure consistent comparison on restart
-        ad_cfg_orig["content_hash"] = calculate_content_hash(ad_cfg_orig)
+        ad_cfg_orig["content_hash"] = AdPartial.model_validate(ad_cfg_orig).update_content_hash().content_hash
         ad_cfg_orig["updated_on"] = misc.now().isoformat(timespec = "seconds")
         if not ad_cfg.created_on and not ad_cfg.id:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
@@ -1052,7 +1076,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             elif self.ads_selector == "new":  # download only unsaved ads
                 # check which ads already saved
                 saved_ad_ids = []
-                ads = self.load_ads(ignore_inactive = False, check_id = False)  # do not skip because of existing IDs
+                ads = self.load_ads(ignore_inactive = False, exclude_ads_with_id = False)  # do not skip because of existing IDs
                 for ad in ads:
                     ad_id = int(ad[2]["id"])
                     saved_ad_ids.append(ad_id)
@@ -1111,7 +1135,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 # 1. Direct ad-level prefix
                 ad_cfg.description_prefix if ad_cfg.description_prefix is not None
                 # 2. Global prefix from config
-                else get_description_affixes(self.config, prefix = True)
+                else self.config.ad_defaults.description_prefix
                 or ""  # Default to empty string if all sources are None
             )
 
@@ -1120,7 +1144,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 # 1. Direct ad-level suffix
                 ad_cfg.description_suffix if ad_cfg.description_suffix is not None
                 # 2. Global suffix from config
-                else get_description_affixes(self.config, prefix = False)
+                else self.config.ad_defaults.description_suffix
                 or ""  # Default to empty string if all sources are None
             )
 
@@ -1136,6 +1160,21 @@ class KleinanzeigenBot(WebScrapingMixin):
                f"Description length: {len(final_description)} chars.")
 
         return final_description
+
+    def update_content_hashes(self, ads:list[tuple[str, Ad, dict[str, Any]]]) -> None:
+        count = 0
+
+        for (ad_file, ad_cfg, ad_cfg_orig) in ads:
+            LOG.info("Processing %s/%s: '%s' from [%s]...", count + 1, len(ads), ad_cfg.title, ad_file)
+            ad_cfg.update_content_hash()
+            if ad_cfg.content_hash != ad_cfg_orig["content_hash"]:
+                count += 1
+                ad_cfg_orig["content_hash"] = ad_cfg.content_hash
+                dicts.save_dict(ad_file, ad_cfg_orig)
+
+        LOG.info("############################################")
+        LOG.info("DONE: Updated [content_hash] in %s", pluralize("ad", count))
+        LOG.info("############################################")
 
 #############################
 # main entry point

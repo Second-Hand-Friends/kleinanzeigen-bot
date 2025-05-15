@@ -133,6 +133,7 @@ kleinanzeigen_bot/__init__.py:
 
   run:
     "DONE: No configuration errors found.": "FERTIG: Keine Konfigurationsfehler gefunden."
+    "DONE: No active ads found.": "FERTIG: Keine aktiven Anzeigen gefunden."
     "You provided no ads selector. Defaulting to \"due\".": "Es wurden keine Anzeigen-Selektor angegeben. Es wird \"due\" verwendet."
     "DONE: No new/outdated ads found.": "FERTIG: Keine neuen/veralteten Anzeigen gefunden."
     "DONE: No ads to delete found.": "FERTIG: Keine zu löschnenden Anzeigen gefunden."
@@ -147,6 +148,11 @@ kleinanzeigen_bot/__init__.py:
 
   __set_shipping_options:
     "Unable to close shipping dialog!": "Versanddialog konnte nicht geschlossen werden!"
+
+  update_content_hashes:
+    "DONE: Updated [content_hash] in %s": "FERTIG: [content_hash] in %s aktualisiert."
+    "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
+    "ad": "Anzeige"
 
 #################################################
 kleinanzeigen_bot/extract.py:

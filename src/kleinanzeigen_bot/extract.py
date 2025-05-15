@@ -8,7 +8,6 @@ from typing import Any, Final
 
 from kleinanzeigen_bot.model.ad_model import ContactPartial
 
-from .ads import calculate_content_hash, get_description_affixes
 from .model.ad_model import AdPartial
 from .model.config_model import Config
 from .utils import dicts, i18n, loggers, misc, reflect
@@ -294,8 +293,8 @@ class AdExtractor(WebScrapingMixin):
         raw_description = (await self.web_text(By.ID, "viewad-description-text")).strip()
 
         # Get prefix and suffix from config
-        prefix = get_description_affixes(self.config, prefix = True)
-        suffix = get_description_affixes(self.config, prefix = False)
+        prefix = self.config.ad_defaults.description_prefix
+        suffix = self.config.ad_defaults.description_suffix
 
         # Remove prefix and suffix if present
         description_text = raw_description
@@ -334,10 +333,12 @@ class AdExtractor(WebScrapingMixin):
         info["created_on"] = creation_date
         info["updated_on"] = None  # will be set later on
 
-        # Calculate the initial hash for the downloaded ad
-        info["content_hash"] = calculate_content_hash(info)
+        ad_cfg = AdPartial.model_validate(info)
 
-        return AdPartial.model_validate(info)
+        # calculate the initial hash for the downloaded ad
+        ad_cfg.content_hash = ad_cfg.to_ad(self.config.ad_defaults).update_content_hash().content_hash
+
+        return ad_cfg
 
     async def _extract_category_from_ad_page(self) -> str:
         """
