@@ -3,20 +3,28 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 from __future__ import annotations
 
+import hashlib, json  # isort: skip
 from datetime import datetime  # noqa: TC003 Move import into a type-checking block
-from typing import Any, Dict, Final, List, Literal
+from typing import Any, Dict, Final, List, Literal, Mapping, Sequence
 
 from pydantic import Field, model_validator, validator
+from typing_extensions import Self
 
+from kleinanzeigen_bot.model.config_model import AdDefaults  # noqa: TC001 Move application import into a type-checking block
+from kleinanzeigen_bot.utils import dicts
 from kleinanzeigen_bot.utils.misc import parse_datetime, parse_decimal
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
 
 MAX_DESCRIPTION_LENGTH:Final[int] = 4000
 
 
-def _iso_datetime_field() -> Any:
+def _OPTIONAL() -> Any:
+    return Field(default = None)
+
+
+def _ISO_DATETIME(default:datetime | None = None) -> Any:
     return Field(
-        default = None,
+        default = default,
         description = "ISO-8601 timestamp with optional timezone (e.g. 2024-12-25T00:00:00 or 2024-12-25T00:00:00Z)",
         json_schema_extra = {
             "anyOf": [
@@ -36,37 +44,37 @@ def _iso_datetime_field() -> Any:
 
 
 class ContactPartial(ContextualModel):
-    name:str | None = None
-    street:str | None = None
-    zipcode:int | str | None = None
-    location:str | None = None
+    name:str | None = _OPTIONAL()
+    street:str | None = _OPTIONAL()
+    zipcode:int | str | None = _OPTIONAL()
+    location:str | None = _OPTIONAL()
 
-    phone:str | None = None
+    phone:str | None = _OPTIONAL()
 
 
 class AdPartial(ContextualModel):
-    active:bool = True
-    type:Literal["OFFER", "WANTED"] = "OFFER"
+    active:bool | None = _OPTIONAL()
+    type:Literal["OFFER", "WANTED"] | None = _OPTIONAL()
     title:str = Field(..., min_length = 10)
     description:str
-    description_prefix:str | None = None
-    description_suffix:str | None = None
+    description_prefix:str | None = _OPTIONAL()
+    description_suffix:str | None = _OPTIONAL()
     category:str
-    special_attributes:Dict[str, str] | None = Field(default = None)
-    price:int | None = None
-    price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] = "NEGOTIABLE"
-    shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] = "SHIPPING"
-    shipping_costs:float | None = None
-    shipping_options:List[str] | None = Field(default = None)
-    sell_directly:bool | None = False
-    images:List[str] | None = Field(default = None)
-    contact:ContactPartial | None = None
-    republication_interval:int = 7
+    special_attributes:Dict[str, str] | None = _OPTIONAL()
+    price:int | None = _OPTIONAL()
+    price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] | None = _OPTIONAL()
+    shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] | None = _OPTIONAL()
+    shipping_costs:float | None = _OPTIONAL()
+    shipping_options:List[str] | None = _OPTIONAL()
+    sell_directly:bool | None = _OPTIONAL()
+    images:List[str] | None = _OPTIONAL()
+    contact:ContactPartial | None = _OPTIONAL()
+    republication_interval:int | None = _OPTIONAL()
 
-    id:int | None = None
-    created_on:datetime | None = _iso_datetime_field()
-    updated_on:datetime | None = _iso_datetime_field()
-    content_hash:str | None = None
+    id:int | None = _OPTIONAL()
+    created_on:datetime | None = _ISO_DATETIME()
+    updated_on:datetime | None = _ISO_DATETIME()
+    content_hash:str | None = _OPTIONAL()
 
     @validator("created_on", "updated_on", pre = True)
     @classmethod
@@ -105,11 +113,71 @@ class AdPartial(ContextualModel):
             raise ValueError("shipping_options entries must be non-empty")
         return v
 
+    def update_content_hash(self) -> Self:
+        """Calculate and updates the content_hash value for user-modifiable fields of the ad."""
 
+        # 1) Dump to a plain dict, excluding the metadata fields:
+        raw = self.model_dump(
+            exclude = {"id", "created_on", "updated_on", "content_hash"},
+            exclude_none = True,
+            exclude_unset = True,
+        )
+
+        # 2) Recursively prune any empty containers:
+        def prune(obj:Any) -> Any:
+            if isinstance(obj, Mapping):
+                return {
+                    k: prune(v)
+                    for k, v in obj.items()
+                    # drop keys whose values are empty list/dict/set
+                    if not (isinstance(v, (Mapping, Sequence, set)) and not isinstance(v, (str, bytes)) and len(v) == 0)
+                }
+            if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
+                return [
+                    prune(v)
+                    for v in obj
+                    if not (isinstance(v, (Mapping, Sequence, set)) and not isinstance(v, (str, bytes)) and len(v) == 0)
+                ]
+            return obj
+
+        pruned = prune(raw)
+
+        # 3) Produce a canonical JSON string and hash it:
+        json_string = json.dumps(pruned, sort_keys = True)
+        self.content_hash = hashlib.sha256(json_string.encode()).hexdigest()
+        return self
+
+    def to_ad(self, ad_defaults:AdDefaults) -> Ad:
+        """
+        Returns a complete, validated Ad by merging this partial with values from ad_defaults.
+
+        Any field that is `None` or `""` is filled from `ad_defaults`.
+
+        Raises `ValidationError` when, after merging with `ad_defaults`, not all fields required by `Ad` are populated.
+        """
+        ad_cfg = self.model_dump()
+        dicts.apply_defaults(
+            target = ad_cfg,
+            defaults = ad_defaults.model_dump(),
+            ignore = lambda k, _: k == "description",  # ignore legacy global description config
+            override = lambda _, v: v in {None, ""}  # noqa: PLC1901 can be simplified
+        )
+        return Ad.model_validate(ad_cfg)
+
+
+# pyright: reportGeneralTypeIssues=false, reportIncompatibleVariableOverride=false
 class Contact(ContactPartial):
-    name:str  # pyright: ignore[reportGeneralTypeIssues, reportIncompatibleVariableOverride]
-    zipcode:int | str  # pyright: ignore[reportGeneralTypeIssues, reportIncompatibleVariableOverride]
+    name:str
+    zipcode:int | str
 
 
+# pyright: reportGeneralTypeIssues=false, reportIncompatibleVariableOverride=false
 class Ad(AdPartial):
-    contact:Contact  # pyright: ignore[reportGeneralTypeIssues, reportIncompatibleVariableOverride]
+    active:bool
+    type:Literal["OFFER", "WANTED"]
+    description:str
+    price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"]
+    shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"]
+    sell_directly:bool
+    contact:Contact
+    republication_interval:int

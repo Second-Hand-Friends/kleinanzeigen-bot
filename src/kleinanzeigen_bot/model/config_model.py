@@ -4,12 +4,13 @@
 from __future__ import annotations
 
 import copy
-from typing import Any, Dict, List, Literal
+from typing import Any, List, Literal
 
 from pydantic import Field, model_validator, validator
 from typing_extensions import deprecated
 
 from kleinanzeigen_bot.utils import dicts
+from kleinanzeigen_bot.utils.misc import get_attr
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
 
 
@@ -40,16 +41,17 @@ class AdDefaults(ContextualModel):
 
     @model_validator(mode = "before")
     @classmethod
-    def unify_description(cls, values:Dict[str, Any]) -> Dict[str, Any]:
+    def migrate_legacy_description(cls, values:dict[str, Any]) -> dict[str, Any]:
         # Ensure flat prefix/suffix take precedence over deprecated nested "description"
-        desc = values.get("description")
-        flat_prefix = values.get("description_prefix")
-        flat_suffix = values.get("description_suffix")
+        description_prefix = values.get("description_prefix")
+        description_suffix = values.get("description_suffix")
+        legacy_prefix = get_attr(values, "description.prefix")
+        legacy_suffix = get_attr(values, "description.suffix")
 
-        if not flat_prefix and isinstance(desc, dict) and desc.get("prefix") is not None:
-            values["description_prefix"] = desc.get("prefix", "")
-        if not flat_suffix and isinstance(desc, dict) and desc.get("suffix") is not None:
-            values["description_suffix"] = desc.get("suffix", "")
+        if not description_prefix and legacy_prefix is not None:
+            values["description_prefix"] = legacy_prefix
+        if not description_suffix and legacy_suffix is not None:
+            values["description_suffix"] = legacy_suffix
         return values
 
 
@@ -115,7 +117,7 @@ if relative paths are specified, then they are relative to this configuration fi
         description = "Default values for ads, can be overwritten in each ad configuration file"
     )
 
-    categories:Dict[str, str] = Field(default_factory = dict, description = """
+    categories:dict[str, str] = Field(default_factory = dict, description = """
 additional name to category ID mappings, see default list at
 https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml
 
