@@ -67,7 +67,7 @@ def configure_console_logging() -> None:
             CRITICAL: colorama.Fore.MAGENTA,
         }
 
-        def _relativize_paths_under_cwd(self, record: logging.LogRecord) -> None:
+        def _relativize_paths_under_cwd(self, record:logging.LogRecord) -> None:
             """
             Mutate record.args in-place, converting any absolute-path strings
             under the current working directory into relative paths.
@@ -78,7 +78,7 @@ def configure_console_logging() -> None:
 
             cwd = os.getcwd()
 
-            def _rel_if_subpath(val: Any) -> Any:
+            def _rel_if_subpath(val:Any) -> Any:
                 if isinstance(val, str) and os.path.isabs(val):
                     # don't relativize log-file paths
                     if val.endswith(".log"):

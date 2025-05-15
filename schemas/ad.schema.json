@@ -72,18 +72,32 @@
   },
   "properties": {
     "active": {
-      "default": true,
-      "title": "Active",
-      "type": "boolean"
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Active"
     },
     "type": {
-      "default": "OFFER",
-      "enum": [
-        "OFFER",
-        "WANTED"
+      "anyOf": [
+        {
+          "enum": [
+            "OFFER",
+            "WANTED"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
       ],
-      "title": "Type",
-      "type": "string"
+      "default": null,
+      "title": "Type"
     },
     "title": {
       "minLength": 10,
@@ -150,25 +164,39 @@
       "title": "Price"
     },
     "price_type": {
-      "default": "NEGOTIABLE",
-      "enum": [
-        "FIXED",
-        "NEGOTIABLE",
-        "GIVE_AWAY",
-        "NOT_APPLICABLE"
+      "anyOf": [
+        {
+          "enum": [
+            "FIXED",
+            "NEGOTIABLE",
+            "GIVE_AWAY",
+            "NOT_APPLICABLE"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
       ],
-      "title": "Price Type",
-      "type": "string"
+      "default": null,
+      "title": "Price Type"
     },
     "shipping_type": {
-      "default": "SHIPPING",
-      "enum": [
-        "PICKUP",
-        "SHIPPING",
-        "NOT_APPLICABLE"
+      "anyOf": [
+        {
+          "enum": [
+            "PICKUP",
+            "SHIPPING",
+            "NOT_APPLICABLE"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
       ],
-      "title": "Shipping Type",
-      "type": "string"
+      "default": null,
+      "title": "Shipping Type"
     },
     "shipping_costs": {
       "anyOf": [
@@ -206,7 +234,7 @@
           "type": "null"
         }
       ],
-      "default": false,
+      "default": null,
       "title": "Sell Directly"
     },
     "images": {
@@ -236,9 +264,16 @@
       "default": null
     },
     "republication_interval": {
-      "default": 7,
-      "title": "Republication Interval",
-      "type": "integer"
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Republication Interval"
     },
     "id": {
       "anyOf": [
