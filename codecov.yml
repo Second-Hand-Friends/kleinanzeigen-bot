@@ -9,4 +9,12 @@ codecov:
 coverage:
   precision: 2
   round: down
-  range: "65...100"
+  range: "65...100"  # https://docs.codecov.com/docs/codecovyml-reference#coveragerange
+  status:
+    project:
+      default:
+        threshold: "0%"
+        flags: ["unit-tests"]
+      integration:
+        flags: ["integration-tests"]
+        threshold: "0.2%"  # https://docs.codecov.com/docs/commit-status#threshold
