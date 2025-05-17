@@ -16,7 +16,8 @@ class TestFiles:
         # Test with a simple path
         result = abspath("test/path")
         assert os.path.isabs(result)
-        assert result.endswith("test/path")
+        # Use os.path.normpath to handle path separators correctly on all platforms
+        assert os.path.normpath(result).endswith(os.path.normpath("test/path"))
 
         # Test with an absolute path
         abs_path = os.path.abspath("test/path")
