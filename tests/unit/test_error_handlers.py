@@ -43,27 +43,27 @@ def mock_sys_exit() -> Generator[MagicMock, None, None]:
 class TestExceptionHandler:
     """Test cases for the exception handler."""
 
-    def test_keyboard_interrupt(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+    def test_keyboard_interrupt(self, mock_logger:MagicMock, mock_sys_exit:MagicMock) -> None:
         """Test that KeyboardInterrupt is handled by the system excepthook."""
         with patch("sys.__excepthook__") as mock_excepthook:
             on_exception(KeyboardInterrupt, KeyboardInterrupt(), None)
             mock_excepthook.assert_called_once()
             mock_sys_exit.assert_called_once_with(1)
 
-    def test_validation_error(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+    def test_validation_error(self, mock_logger:MagicMock, mock_sys_exit:MagicMock) -> None:
         """Test that ValidationError is formatted and logged."""
 
         class TestModel(BaseModel):
-            field: int
+            field:int
 
         try:
-            TestModel(field="not an int")  # type: ignore[arg-type]
+            TestModel(field = "not an int")  # type: ignore[arg-type]
         except ValidationError as error:
             on_exception(ValidationError, error, None)
             mock_logger.error.assert_called_once()
             mock_sys_exit.assert_called_once_with(1)
 
-    def test_assertion_error(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+    def test_assertion_error(self, mock_logger:MagicMock, mock_sys_exit:MagicMock) -> None:
         """Test that AssertionError is logged directly."""
         error = AssertionError("Test error")
         on_exception(AssertionError, error, None)
@@ -72,7 +72,7 @@ class TestExceptionHandler:
         assert logged.strip() == str(error) or logged.strip() == f"{error.__class__.__name__}: {error}"
         mock_sys_exit.assert_called_once_with(1)
 
-    def test_unknown_exception(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+    def test_unknown_exception(self, mock_logger:MagicMock, mock_sys_exit:MagicMock) -> None:
         """Test that unknown exceptions are logged with type and message."""
         error = RuntimeError("Test error")
         on_exception(RuntimeError, error, None)
@@ -80,16 +80,16 @@ class TestExceptionHandler:
         assert logged.strip() == f"{error.__class__.__name__}: {error}"
         mock_sys_exit.assert_called_once_with(1)
 
-    def test_missing_exception_info(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+    def test_missing_exception_info(self, mock_logger:MagicMock, mock_sys_exit:MagicMock) -> None:
         """Test handling of missing exception information."""
         on_exception(None, None, None)
         mock_logger.error.assert_called_once()
         # sys.exit is not called for missing exception info
         mock_sys_exit.assert_not_called()
 
-    def test_debug_mode_error(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+    def test_debug_mode_error(self, mock_logger:MagicMock, mock_sys_exit:MagicMock) -> None:
         """Test error handling in debug mode."""
-        with patch("kleinanzeigen_bot.utils.error_handlers.loggers.is_debug", return_value=True):
+        with patch("kleinanzeigen_bot.utils.error_handlers.loggers.is_debug", return_value = True):
             try:
                 raise ValueError("Test error")
             except ValueError as error:
@@ -102,7 +102,7 @@ class TestExceptionHandler:
                 assert "ValueError: Test error" in logged
                 mock_sys_exit.assert_called_once_with(1)
 
-    def test_attribute_error(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+    def test_attribute_error(self, mock_logger:MagicMock, mock_sys_exit:MagicMock) -> None:
         """Test handling of AttributeError."""
         try:
             raise AttributeError("Test error")
@@ -116,7 +116,7 @@ class TestExceptionHandler:
             assert "AttributeError: Test error" in logged
             mock_sys_exit.assert_called_once_with(1)
 
-    def test_import_error(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+    def test_import_error(self, mock_logger:MagicMock, mock_sys_exit:MagicMock) -> None:
         """Test handling of ImportError."""
         try:
             raise ImportError("Test error")
@@ -130,7 +130,7 @@ class TestExceptionHandler:
             assert "ImportError: Test error" in logged
             mock_sys_exit.assert_called_once_with(1)
 
-    def test_name_error(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+    def test_name_error(self, mock_logger:MagicMock, mock_sys_exit:MagicMock) -> None:
         """Test handling of NameError."""
         try:
             raise NameError("Test error")
@@ -144,7 +144,7 @@ class TestExceptionHandler:
             assert "NameError: Test error" in logged
             mock_sys_exit.assert_called_once_with(1)
 
-    def test_type_error(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+    def test_type_error(self, mock_logger:MagicMock, mock_sys_exit:MagicMock) -> None:
         """Test handling of TypeError."""
         try:
             raise TypeError("Test error")
@@ -162,7 +162,7 @@ class TestExceptionHandler:
 class TestSignalHandler:
     """Test cases for the signal handler."""
 
-    def test_sigint_handler(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+    def test_sigint_handler(self, mock_logger:MagicMock, mock_sys_exit:MagicMock) -> None:
         """Test that SIGINT is handled with a warning message."""
         on_sigint(2, None)  # 2 is SIGINT
         mock_logger.warning.assert_called_once_with("Aborted on user request.")

@@ -21,11 +21,11 @@ from kleinanzeigen_bot.utils.pydantics import (
 
 
 class ErrorDetails(TypedDict):
-    loc: tuple[str, ...]
-    msg: str
-    type: str
-    input: NotRequired[Any]
-    ctx: NotRequired[dict[str, Any]]
+    loc:tuple[str, ...]
+    msg:str
+    type:str
+    input:NotRequired[Any]
+    ctx:NotRequired[dict[str, Any]]
 
 # --------------------------------------------------------------------------- #
 # Test fixtures
@@ -46,7 +46,7 @@ def context() -> dict[str, Any]:
 class TestContextualValidationError:
     """Test ContextualValidationError behavior."""
 
-    def test_context_attached(self, context: dict[str, Any]) -> None:
+    def test_context_attached(self, context:dict[str, Any]) -> None:
         """Context is attached to the exception."""
         ex = ContextualValidationError("test", [])
         ex.context = context
@@ -62,7 +62,7 @@ class TestContextualModel:
     """Test ContextualModel validation logic."""
 
     class SimpleModel(ContextualModel):  # type: ignore[unused-ignore,misc]
-        x: int
+        x:int
 
     def test_model_validate_success(self) -> None:
         """Valid input returns a model instance."""
@@ -70,10 +70,10 @@ class TestContextualModel:
         assert isinstance(result, self.SimpleModel)
         assert result.x == 42
 
-    def test_model_validate_failure_with_context(self, context: dict[str, Any]) -> None:
+    def test_model_validate_failure_with_context(self, context:dict[str, Any]) -> None:
         """Invalid input raises ContextualValidationError with context."""
         with pytest.raises(ContextualValidationError) as exc_info:
-            self.SimpleModel.model_validate({"x": "not-an-int"}, context=context)
+            self.SimpleModel.model_validate({"x": "not-an-int"}, context = context)
         assert exc_info.value.context == context
 
 
@@ -81,7 +81,7 @@ class TestFormatValidationError:
     """Test format_validation_error output."""
 
     class SimpleModel(BaseModel):
-        y: int
+        y:int
 
     @pytest.mark.parametrize(
         ("error_details", "expected"),
@@ -202,10 +202,10 @@ class TestFormatValidationError:
             ),
         ],
     )
-    def test_various_error_codes(self, error_details: list[dict[str, Any]], expected: str) -> None:
+    def test_various_error_codes(self, error_details:list[dict[str, Any]], expected:str) -> None:
         """Test various error codes and message formatting."""
         class DummyValidationError(ValidationError):
-            def errors(self, *, include_url: bool = True, include_context: bool = True, include_input: bool = True) -> list[PydanticErrorDetails]:
+            def errors(self, *, include_url:bool = True, include_context:bool = True, include_input:bool = True) -> list[PydanticErrorDetails]:
                 return cast(list[PydanticErrorDetails], error_details)
 
             def error_count(self) -> int:
@@ -221,25 +221,25 @@ class TestFormatValidationError:
     def test_format_standard_validation_error(self) -> None:
         """Standard ValidationError produces expected string."""
         try:
-            self.SimpleModel(y="not an int")  # type: ignore[arg-type]
+            self.SimpleModel(y = "not an int")  # type: ignore[arg-type]
         except ValidationError as ex:
             out = format_validation_error(ex)
             assert "validation error" in out
             assert "y" in out
             assert "integer" in out
 
-    def test_format_contextual_validation_error(self, context: dict[str, Any]) -> None:
+    def test_format_contextual_validation_error(self, context:dict[str, Any]) -> None:
         """ContextualValidationError includes context in output."""
         class Model(ContextualModel):  # type: ignore[unused-ignore,misc]
-            z: int
+            z:int
         with pytest.raises(ContextualValidationError) as exc_info:
-            Model.model_validate({"z": "not an int"}, context=context)
+            Model.model_validate({"z": "not an int"}, context = context)
         assert exc_info.value.context == context
 
     def test_format_unknown_error_code(self) -> None:
         """Unknown error code falls back to default formatting."""
         class DummyValidationError(ValidationError):
-            def errors(self, *, include_url: bool = True, include_context: bool = True, include_input: bool = True) -> list[PydanticErrorDetails]:
+            def errors(self, *, include_url:bool = True, include_context:bool = True, include_input:bool = True) -> list[PydanticErrorDetails]:
                 return cast(list[PydanticErrorDetails], [{"loc": ("foo",), "msg": "dummy", "type": "unknown_code", "input": None}])
 
             def error_count(self) -> int:
@@ -257,7 +257,7 @@ class TestFormatValidationError:
     def test_pluralization_and_empty_errors(self) -> None:
         """Test pluralization in header and empty error list edge case."""
         class DummyValidationError(ValidationError):
-            def errors(self, *, include_url: bool = True, include_context: bool = True, include_input: bool = True) -> list[PydanticErrorDetails]:
+            def errors(self, *, include_url:bool = True, include_context:bool = True, include_input:bool = True) -> list[PydanticErrorDetails]:
                 return cast(list[PydanticErrorDetails], [
                     {"loc": ("a",), "msg": "dummy", "type": "int_type"},
                     {"loc": ("b",), "msg": "dummy", "type": "int_type"},
@@ -277,7 +277,7 @@ class TestFormatValidationError:
 
         # Empty error list
         class EmptyValidationError(ValidationError):
-            def errors(self, *, include_url: bool = True, include_context: bool = True, include_input: bool = True) -> list[PydanticErrorDetails]:
+            def errors(self, *, include_url:bool = True, include_context:bool = True, include_input:bool = True) -> list[PydanticErrorDetails]:
                 return cast(list[PydanticErrorDetails], [])
 
             def error_count(self) -> int:
