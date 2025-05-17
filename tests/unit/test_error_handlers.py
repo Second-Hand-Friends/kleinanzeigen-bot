@@ -7,6 +7,7 @@ This module contains tests for the error handling functionality of the kleinanze
 It tests both the exception handler and signal handler functionality.
 """
 
+import sys
 from collections.abc import Generator
 from unittest.mock import MagicMock, patch
 
@@ -56,7 +57,7 @@ class TestExceptionHandler:
             field: int
 
         try:
-            TestModel(field=42)
+            TestModel(field="not an int")  # type: ignore[arg-type]
         except ValidationError as error:
             on_exception(ValidationError, error, None)
             mock_logger.error.assert_called_once()
@@ -85,6 +86,77 @@ class TestExceptionHandler:
         mock_logger.error.assert_called_once()
         # sys.exit is not called for missing exception info
         mock_sys_exit.assert_not_called()
+
+    def test_debug_mode_error(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+        """Test error handling in debug mode."""
+        with patch("kleinanzeigen_bot.utils.error_handlers.loggers.is_debug", return_value=True):
+            try:
+                raise ValueError("Test error")
+            except ValueError as error:
+                _, _, tb = sys.exc_info()
+                on_exception(ValueError, error, tb)
+                mock_logger.error.assert_called_once()
+                # Verify that traceback was included
+                logged = mock_logger.error.call_args[0][0]
+                assert "Traceback" in logged
+                assert "ValueError: Test error" in logged
+                mock_sys_exit.assert_called_once_with(1)
+
+    def test_attribute_error(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+        """Test handling of AttributeError."""
+        try:
+            raise AttributeError("Test error")
+        except AttributeError as error:
+            _, _, tb = sys.exc_info()
+            on_exception(AttributeError, error, tb)
+            mock_logger.error.assert_called_once()
+            # Verify that traceback was included
+            logged = mock_logger.error.call_args[0][0]
+            assert "Traceback" in logged
+            assert "AttributeError: Test error" in logged
+            mock_sys_exit.assert_called_once_with(1)
+
+    def test_import_error(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+        """Test handling of ImportError."""
+        try:
+            raise ImportError("Test error")
+        except ImportError as error:
+            _, _, tb = sys.exc_info()
+            on_exception(ImportError, error, tb)
+            mock_logger.error.assert_called_once()
+            # Verify that traceback was included
+            logged = mock_logger.error.call_args[0][0]
+            assert "Traceback" in logged
+            assert "ImportError: Test error" in logged
+            mock_sys_exit.assert_called_once_with(1)
+
+    def test_name_error(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+        """Test handling of NameError."""
+        try:
+            raise NameError("Test error")
+        except NameError as error:
+            _, _, tb = sys.exc_info()
+            on_exception(NameError, error, tb)
+            mock_logger.error.assert_called_once()
+            # Verify that traceback was included
+            logged = mock_logger.error.call_args[0][0]
+            assert "Traceback" in logged
+            assert "NameError: Test error" in logged
+            mock_sys_exit.assert_called_once_with(1)
+
+    def test_type_error(self, mock_logger: MagicMock, mock_sys_exit: MagicMock) -> None:
+        """Test handling of TypeError."""
+        try:
+            raise TypeError("Test error")
+        except TypeError as error:
+            _, _, tb = sys.exc_info()
+            on_exception(TypeError, error, tb)
+            mock_logger.error.assert_called_once()
+            # Verify that traceback was included
+            logged = mock_logger.error.call_args[0][0]
+            assert "Traceback" in logged
+            assert "TypeError: Test error" in logged
+            mock_sys_exit.assert_called_once_with(1)
 
 
 class TestSignalHandler:
