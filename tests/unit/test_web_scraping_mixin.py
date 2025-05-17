@@ -481,15 +481,26 @@ class TestWebScrapingBrowserConfiguration:
         real_exists = os.path.exists
 
         def mock_exists(path:str) -> bool:
-            # Handle Linux browser paths
+            # Handle all browser paths
             if path in {
+                # Linux paths
                 "/usr/bin/chromium",
                 "/usr/bin/chromium-browser",
                 "/usr/bin/google-chrome",
                 "/usr/bin/microsoft-edge",
                 "/usr/bin/chrome",
+                # macOS paths
                 edge_path,
-                chrome_path
+                chrome_path,
+                # Windows paths
+                "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+                "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+                "C:\\Program Files\\Chromium\\Application\\chrome.exe",
+                "C:\\Program Files (x86)\\Chromium\\Application\\chrome.exe",
+                "C:\\Users\\runneradmin\\AppData\\Local\\Chromium\\Application\\chrome.exe",
+                "C:\\Program Files\\Chrome\\Application\\chrome.exe",
+                "C:\\Program Files (x86)\\Chrome\\Application\\chrome.exe",
+                "C:\\Users\\runneradmin\\AppData\\Local\\Chrome\\Application\\chrome.exe"
             }:
                 return True
             if "Preferences" in str(path) and str(tmp_path) in str(path):
