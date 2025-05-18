@@ -264,43 +264,70 @@ jobs:
         docker push ghcr.io/$image_name
 
 
-    - name: Upload unit-test coverage to Codecov
-      uses: codecov/codecov-action@v5  # https://github.com/codecov/codecov-action
-      if: ${{ github.ref_name == 'main' || github.event_name == 'pull_request' }}
+    - name: Collect coverage reports
+      uses: actions/upload-artifact@v4
+      if: (github.ref_name == 'main' || github.event_name == 'pull_request') && !env.ACT
       with:
-        files: .temp/coverage-unit.xml
+        name: coverage-${{ matrix.os }}-py${{ matrix.PYTHON_VERSION }}
+        include-hidden-files: true
+        path: .temp/coverage-*.xml
+        if-no-files-found: error
+
+
+  ###########################################################
+  publish-coverage:
+  ###########################################################
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: (github.ref_name == 'main' || github.event_name == 'pull_request') && !github.event.act
+
+    steps:
+    - name: Git Checkout # required to avoid https://docs.codecov.com/docs/error-reference#unusable-reports
+      uses: actions/checkout@v4  # https://github.com/actions/checkout
+
+
+    - name: Download coverage reports
+      uses: actions/download-artifact@v4
+      with:
+        pattern: coverage-*
+        path: coverage
+
+
+    - name: List coverage reports
+      run: find . -name coverage-*.xml 
+
+
+    - name: Publish unit-test coverage
+      uses: codecov/codecov-action@v5  # https://github.com/codecov/codecov-action
+      with:
+        slug: ${{ github.repository }}
+        name: unit-coverage
         flags: unit-tests
-        env_vars: OS,PYTHON
-        name: gha-u-${{ matrix.PYTHON_VERSION }}-${{ matrix.os }}
+        disable_search: true
+        files: coverage/**/coverage-unit.xml
       env:
-        OS: ${{ matrix.os }}
-        PYTHON: ${{ matrix.PYTHON_VERSION }}
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        slug: ${{ github.repository }}
 
 
-    - name: Upload integration-test coverage to Codecov
+    - name: Publish integration-test coverage
       uses: codecov/codecov-action@v5  # https://github.com/codecov/codecov-action
-      if: ${{ github.ref_name == 'main' || github.event_name == 'pull_request' }}
       with:
-        files: .temp/coverage-integration.xml
-        flags: integration-tests
-        env_vars: OS,PYTHON
-        name: gha-i-${{ matrix.PYTHON_VERSION }}-${{ matrix.os }}
-      env:
-        OS: ${{ matrix.os }}
-        PYTHON: ${{ matrix.PYTHON_VERSION }}
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         slug: ${{ github.repository }}
+        name: integration-coverage
+        flags: integration-tests
+        disable_search: true
+        files: coverage/**/coverage-integration.xml
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
 
   ###########################################################
   publish-release:
   ###########################################################
+    needs: [build, publish-coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: 
-      - build
     if: (github.ref_name == 'main' || github.ref_name == 'release') && !github.event.act
     concurrency: publish-${{ github.ref_name }}-release # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idconcurrency
 
