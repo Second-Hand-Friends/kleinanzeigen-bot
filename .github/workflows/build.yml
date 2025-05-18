@@ -25,6 +25,7 @@ on:
     - '.github/workflows/stale.yml'
     - '.github/workflows/update-python-deps.yml'
     - '.github/workflows/validate-pr.yml'
+    - 'codecov.yml'
   pull_request:
     paths-ignore:
     - '**/*.md'
@@ -36,6 +37,8 @@ on:
     - '.github/workflows/codeql-analysis.yml'
     - '.github/workflows/stale.yml'
     - '.github/workflows/update-python-deps.yml'
+    - '.github/workflows/validate-pr.yml'
+    - 'codecov.yml'
   workflow_dispatch:
     # https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/
 
