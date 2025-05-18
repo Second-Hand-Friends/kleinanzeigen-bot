@@ -9,7 +9,7 @@ codecov:
 coverage:
   precision: 2
   round: down
-  range: "65...100"  # https://docs.codecov.com/docs/codecovyml-reference#coveragerange
+  range: "70...100"  # https://docs.codecov.com/docs/codecovyml-reference#coveragerange
   status:
     project:
       default:

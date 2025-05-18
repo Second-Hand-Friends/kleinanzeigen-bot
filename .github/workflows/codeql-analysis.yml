@@ -18,9 +18,19 @@ on:
     - '.github/workflows/stale.yml'
     - '.github/workflows/update-python-deps.yml'
     - '.github/workflows/validate-pr.yml'
+    - 'codevoc.yml'
   pull_request:
     paths-ignore:
     - '**/*.md'
+    - '.act*'
+    - '.editorconfig'
+    - '.git*'
+    - '.github/ISSUE_TEMPLATE/*'
+    - '.github/workflows/build.yml'
+    - '.github/workflows/stale.yml'
+    - '.github/workflows/update-python-deps.yml'
+    - '.github/workflows/validate-pr.yml'
+    - 'codecov.yml'
   schedule:
     - cron: '10 10 * * 1'
   workflow_dispatch:
