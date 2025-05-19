@@ -9,6 +9,7 @@ from typing import Annotated, Any, List, Literal
 from pydantic import AfterValidator, Field, model_validator
 from typing_extensions import deprecated
 
+from kleinanzeigen_bot.model.update_check_model import UpdateCheckConfig
 from kleinanzeigen_bot.utils import dicts
 from kleinanzeigen_bot.utils.misc import get_attr
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
@@ -141,6 +142,7 @@ Example:
     browser:BrowserConfig = Field(default_factory = BrowserConfig, description = "Browser configuration")
     login:LoginConfig = Field(default_factory = LoginConfig.model_construct, description = "Login credentials")
     captcha:CaptchaConfig = Field(default_factory = CaptchaConfig)
+    update_check:UpdateCheckConfig = Field(default_factory = UpdateCheckConfig, description = "Update check configuration")
 
     def with_values(self, values:dict[str, Any]) -> Config:
         return Config.model_validate(

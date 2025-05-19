@@ -381,3 +381,24 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
 
   web_request:
     " -> HTTP %s [%s]...": " -> HTTP %s [%s]..."
+
+#################################################
+kleinanzeigen_bot/update_checker.py:
+#################################################
+  _get_commit_date:
+    "Could not get commit date: %s": "Konnte Commit-Datum nicht ermitteln: %s"
+  _get_release_commit:
+    "Could not get release commit: %s": "Konnte Release-Commit nicht ermitteln: %s"
+  check_for_updates:
+    "A new version is available: %s from %s (current: %s from %s, channel: %s)": "Eine neue Version ist verfügbar: %s vom %s (aktuell: %s vom %s, Kanal: %s)"
+    "Could not determine commit dates for comparison.": "Konnte Commit-Daten für den Vergleich nicht ermitteln."
+    "Could not determine local commit hash.": "Konnte lokalen Commit-Hash nicht ermitteln."
+    "Could not determine local version.": "Konnte lokale Version nicht ermitteln."
+    "Could not determine release commit hash.": "Konnte Release-Commit-Hash nicht ermitteln."
+    "Could not get releases: %s": "Konnte Releases nicht abrufen: %s"
+    "No release found for channel %s.": "Kein Release für Kanal %s gefunden."
+    "No releases found.": "Keine Releases gefunden."
+    ? "Release notes:\n%s"
+    : "Release-Notizen:\n%s"
+    "You are ahead of the latest version: %s (compared to %s in channel %s)": "Sie sind der neuesten Version voraus: %s (verglichen mit %s im Kanal %s)"
+    "You are on the latest version: %s (compared to %s in channel %s)": "Sie verwenden die neueste Version: %s (verglichen mit %s im Kanal %s)"

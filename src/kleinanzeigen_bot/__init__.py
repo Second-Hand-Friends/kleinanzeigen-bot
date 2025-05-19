@@ -15,6 +15,7 @@ from . import extract, resources
 from ._version import __version__
 from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial
 from .model.config_model import Config
+from .update_checker import UpdateChecker
 from .utils import dicts, error_handlers, loggers, misc
 from .utils.exceptions import CaptchaEncountered
 from .utils.files import abspath
@@ -79,6 +80,11 @@ class KleinanzeigenBot(WebScrapingMixin):
                     LOG.info("############################################")
                     LOG.info("DONE: No configuration errors found.")
                     LOG.info("############################################")
+                case "update-check":
+                    self.configure_file_logging()
+                    self.load_config()
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
                 case "update-content-hash":
                     self.configure_file_logging()
                     self.load_config()
@@ -152,6 +158,7 @@ class KleinanzeigenBot(WebScrapingMixin):
               verify   - Überprüft die Konfigurationsdateien
               delete   - Löscht Anzeigen
               download - Lädt eine oder mehrere Anzeigen herunter
+              update-check - Prüft auf verfügbare Updates
               update-content-hash - Berechnet den content_hash aller Anzeigen anhand der aktuellen ad_defaults neu;
                                     nach Änderungen an den config.yaml/ad_defaults verhindert es, dass alle Anzeigen als
                                     "geändert" gelten und neu veröffentlicht werden.
@@ -190,7 +197,8 @@ class KleinanzeigenBot(WebScrapingMixin):
               verify   - verifies the configuration files
               delete   - deletes ads
               download - downloads one or multiple ads
-              update-content-hash – recalculates each ad’s content_hash based on the current ad_defaults;
+              update-check - checks for available updates
+              update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;
                                     use this after changing config.yaml/ad_defaults to avoid every ad being marked "changed" and republished
               --
               help     - displays this help (default command)
