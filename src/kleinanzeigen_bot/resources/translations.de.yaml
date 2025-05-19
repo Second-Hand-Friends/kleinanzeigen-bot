@@ -396,6 +396,8 @@ kleinanzeigen_bot/update_checker.py:
     "Could not determine local version.": "Konnte lokale Version nicht ermitteln."
     "Could not determine release commit hash.": "Konnte Release-Commit-Hash nicht ermitteln."
     "Could not get releases: %s": "Konnte Releases nicht abrufen: %s"
+    "Failed to get commit dates: %s": "Fehler beim Abrufen der Commit-Daten: %s"
+    "Failed to get release commit: %s": "Fehler beim Abrufen des Release-Commits: %s"
     "No release found for channel %s.": "Kein Release für Kanal %s gefunden."
     "No releases found.": "Keine Releases gefunden."
     ? "Release notes:\n%s"

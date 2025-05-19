@@ -12,4 +12,5 @@ from kleinanzeigen_bot.utils.pydantics import ContextualModel
 class UpdateCheckConfig(ContextualModel):
     """Configuration for update checking functionality."""
     enabled:bool = True
-    channel:Literal["latest", "prerelease"] = "latest"
+    channel:Literal["latest", "preview"] = "latest"
+    interval:str = "7d"  # Default interval of 7 days

@@ -71,11 +71,19 @@ class KleinanzeigenBot(WebScrapingMixin):
             match self.command:
                 case "help":
                     self.show_help()
+                    self.configure_file_logging()
+                    self.load_config()
+                    # Check for updates on startup
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
                 case "version":
                     print(self.get_version())
                 case "verify":
                     self.configure_file_logging()
                     self.load_config()
+                    # Check for updates on startup
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
                     self.load_ads()
                     LOG.info("############################################")
                     LOG.info("DONE: No configuration errors found.")
@@ -84,10 +92,13 @@ class KleinanzeigenBot(WebScrapingMixin):
                     self.configure_file_logging()
                     self.load_config()
                     checker = UpdateChecker(self.config)
-                    checker.check_for_updates()
+                    checker.check_for_updates(skip_interval_check = True)
                 case "update-content-hash":
                     self.configure_file_logging()
                     self.load_config()
+                    # Check for updates on startup
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
                     self.ads_selector = "all"
                     if ads := self.load_ads(exclude_ads_with_id = False):
                         self.update_content_hashes(ads)
@@ -98,6 +109,9 @@ class KleinanzeigenBot(WebScrapingMixin):
                 case "publish":
                     self.configure_file_logging()
                     self.load_config()
+                    # Check for updates on startup
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
 
                     if not (self.ads_selector in {"all", "new", "due", "changed"} or
                             any(selector in self.ads_selector.split(",") for selector in ("all", "new", "due", "changed")) or
@@ -116,6 +130,9 @@ class KleinanzeigenBot(WebScrapingMixin):
                 case "delete":
                     self.configure_file_logging()
                     self.load_config()
+                    # Check for updates on startup
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
                     if ads := self.load_ads():
                         await self.create_browser_session()
                         await self.login()
@@ -131,6 +148,9 @@ class KleinanzeigenBot(WebScrapingMixin):
                         LOG.warning('You provided no ads selector. Defaulting to "new".')
                         self.ads_selector = "new"
                     self.load_config()
+                    # Check for updates on startup
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
                     await self.create_browser_session()
                     await self.login()
                     await self.download_ads()

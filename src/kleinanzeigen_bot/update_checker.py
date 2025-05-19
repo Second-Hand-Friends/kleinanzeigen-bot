@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import colorama
@@ -18,6 +19,8 @@ try:
     from kleinanzeigen_bot._version import __version__
 except ImportError:
     __version__ = "unknown"
+
+from kleinanzeigen_bot.model.update_check_state import UpdateCheckState
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +37,9 @@ class UpdateChecker:
             config: The bot configuration.
         """
         self.config = config
+        self.state_file = Path(".temp") / "update_check_state.json"
+        self.state_file.parent.mkdir(exist_ok = True)  # Ensure .temp directory exists
+        self.state = UpdateCheckState.load(self.state_file)
 
     def get_local_version(self) -> str | None:
         """Get the local version of the bot.
@@ -67,13 +73,13 @@ class UpdateChecker:
         """
         try:
             response = requests.get(
-                f"https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/git/refs/tags/{tag_name}",
+                f"https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases/tags/{tag_name}",
                 timeout = 10
             )
             response.raise_for_status()
             data = response.json()
-            if isinstance(data, dict) and "sha" in data:
-                return str(data["sha"])
+            if isinstance(data, dict) and "target_commitish" in data:
+                return str(data["target_commitish"])
             return None
         except Exception as e:
             logger.warning("Could not get release commit: %s", e)
@@ -113,9 +119,17 @@ class UpdateChecker:
         """
         return commit[:7]
 
-    def check_for_updates(self) -> None:
-        """Check for updates to the bot."""
+    def check_for_updates(self, *, skip_interval_check:bool = False) -> None:
+        """Check for updates to the bot.
+
+        Args:
+            skip_interval_check: If True, bypass the interval check and force an update check.
+        """
         if not self.config.update_check.enabled:
+            return
+
+        # Check if we should perform an update check based on the interval
+        if not skip_interval_check and not self.state.should_check(self.config.update_check.interval):
             return
 
         local_version = self.get_local_version()
@@ -143,23 +157,34 @@ class UpdateChecker:
             logger.warning("No releases found.")
             return
 
-        release = next(
-            (r for r in releases if r["tag_name"] == self.config.update_check.channel and not r["prerelease"]),
-            None,
-        )
+        release = next((r for r in releases if r["tag_name"] == self.config.update_check.channel and (
+            self.config.update_check.channel == "preview" and r["prerelease"] or self.config.update_check.channel == "latest" and not r["prerelease"])), None)
         if not release:
             logger.warning("No release found for channel %s.", self.config.update_check.channel)
             return
 
-        release_commit = self._get_release_commit(release["tag_name"])
+        # Get release commit
+        try:
+            release_commit = self._get_release_commit(release["tag_name"])
+        except Exception as e:
+            logger.warning("Failed to get release commit: %s", e)
+            return
         if not release_commit:
             logger.warning("Could not determine release commit hash.")
             return
 
-        if local_commit != release_commit:
+        # Get commit dates
+        try:
             local_commit_date = self._get_commit_date(local_commit)
             release_commit_date = self._get_commit_date(release_commit)
+        except Exception as e:
+            logger.warning("Failed to get commit dates: %s", e)
+            return
+        if not local_commit_date or not release_commit_date:
+            logger.warning("Could not determine commit dates for comparison.")
+            return
 
+        if local_commit != release_commit:
             if local_commit_date and release_commit_date:
                 if local_commit_date > release_commit_date:
                     logger.info(
@@ -188,3 +213,7 @@ class UpdateChecker:
                 self._get_short_commit_hash(release_commit),
                 self.config.update_check.channel
             )
+
+        # Update the last check time
+        self.state.update_last_check()
+        self.state.save(self.state_file)
