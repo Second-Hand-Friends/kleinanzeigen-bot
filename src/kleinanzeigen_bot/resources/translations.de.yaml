@@ -404,3 +404,26 @@ kleinanzeigen_bot/update_checker.py:
     : "Release-Notizen:\n%s"
     "You are ahead of the latest version: %s (compared to %s in channel %s)": "Sie sind der neuesten Version voraus: %s (verglichen mit %s im Kanal %s)"
     "You are on the latest version: %s (compared to %s in channel %s)": "Sie verwenden die neueste Version: %s (verglichen mit %s im Kanal %s)"
+
+#################################################
+kleinanzeigen_bot/model/update_check_state.py:
+#################################################
+  _parse_timestamp:
+    "Invalid timestamp format in state file: %s": "Ungültiges Zeitstempel-Format in der Statusdatei: %s"
+
+  load:
+    "Failed to load update check state: %s": "Fehler beim Laden des Update-Prüfstatus: %s"
+    "Migrating update check state from version %d to %d": "Migriere Update-Prüfstatus von Version %d zu %d"
+
+  save:
+    "Failed to save update check state: %s": "Fehler beim Speichern des Update-Prüfstatus: %s"
+    "Permission denied when saving update check state to %s": "Keine Berechtigung zum Speichern des Update-Prüfstatus in %s"
+
+  _parse_interval:
+    "Invalid interval format: %s. Expected format: <number><unit> (e.g. 7d)": "Ungültiges Intervall-Format: %s. Erwartetes Format: <Zahl><Einheit> (z.B. 7d)"
+    "Invalid interval unit: %s. Supported units: s, m, h, d, w": "Ungültige Intervall-Einheit: %s. Unterstützte Einheiten: s, m, h, d, w"
+    "Invalid interval value: %d. Value must be positive.": "Ungültiger Intervall-Wert: %d. Wert muss positiv sein."
+
+  should_check:
+    "Interval too long: %s. Maximum interval is 4w.": "Intervall zu lang: %s. Maximales Intervall ist 4w."
+    "Interval too short: %s. Minimum interval is 1d.": "Intervall zu kurz: %s. Minimales Intervall ist 1d."

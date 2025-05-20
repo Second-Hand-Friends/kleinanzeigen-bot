@@ -453,3 +453,136 @@ class TestUpdateChecker:
         checker = UpdateChecker(config)
         checker.check_for_updates()
         assert any("Could not determine commit dates for comparison." in r.getMessage() for r in caplog.records)
+
+    def test_update_check_state_interval_validation(self) -> None:
+        """Test that interval validation works correctly."""
+        state = UpdateCheckState()
+        now = datetime.now(timezone.utc)
+        state.last_check = now - timedelta(days = 1)
+
+        # Test minimum value (1d)
+        assert state.should_check("12h") is True  # Too short
+        assert state.should_check("1d") is False  # Minimum allowed
+        assert state.should_check("2d") is False  # Valid
+
+        # Test maximum value (4w)
+        assert state.should_check("5w") is True   # Too long
+        assert state.should_check("60d") is True   # Too long
+        assert state.should_check("4w") is False  # Maximum allowed
+        assert state.should_check("3w") is False  # Valid
+
+        # Test negative values
+        assert state.should_check("-1d") is True  # Negative value
+        assert state.should_check("0d") is True   # Zero value
+
+        # Test invalid formats
+        assert state.should_check("invalid") is True  # Invalid format
+        assert state.should_check("1") is True       # Missing unit
+        assert state.should_check("d") is True       # Missing value
+        assert state.should_check("1x") is True      # Invalid unit
+
+        # Test unit conversions
+        assert state.should_check("24h") is False    # 1 day in hours
+        assert state.should_check("1440m") is False  # 1 day in minutes
+        assert state.should_check("86400s") is False  # 1 day in seconds
+        assert state.should_check("1w") is False     # 7 days in weeks
+
+    def test_update_check_state_version_tracking(self, state_file:Path) -> None:
+        """Test that version tracking works correctly."""
+        # Create a state with version 0 (old format)
+        state_file.write_text(json.dumps({
+            "last_check": datetime.now(timezone.utc).isoformat()
+        }))
+
+        # Load the state - should migrate to version 1
+        state = UpdateCheckState.load(state_file)
+        assert state.version == 1
+
+        # Save the state
+        state.save(state_file)
+
+        # Load again - should keep version 1
+        state = UpdateCheckState.load(state_file)
+        assert state.version == 1
+
+    def test_update_check_state_migration(self, state_file:Path) -> None:
+        """Test that state migration works correctly."""
+        # Create a state with version 0 (old format)
+        old_time = datetime.now(timezone.utc)
+        state_file.write_text(json.dumps({
+            "last_check": old_time.isoformat()
+        }))
+
+        # Load the state - should migrate to version 1
+        state = UpdateCheckState.load(state_file)
+        assert state.version == 1
+        assert state.last_check == old_time
+
+        # Save the state
+        state.save(state_file)
+
+        # Verify the saved file has the new version
+        with open(state_file, "r", encoding = "utf-8") as f:
+            data = json.load(f)
+            assert data["version"] == 1
+            assert data["last_check"] == old_time.isoformat()
+
+    def test_update_check_state_save_errors(self, state_file:Path, mocker:"MockerFixture") -> None:
+        """Test that save errors are handled gracefully."""
+        state = UpdateCheckState()
+        state.last_check = datetime.now(timezone.utc)
+
+        # Test permission error
+        mocker.patch("kleinanzeigen_bot.utils.dicts.save_dict", side_effect = PermissionError)
+        state.save(state_file)  # Should not raise
+
+        # Test other errors
+        mocker.patch("kleinanzeigen_bot.utils.dicts.save_dict", side_effect = Exception("Test error"))
+        state.save(state_file)  # Should not raise
+
+    def test_update_check_state_load_errors(self, state_file:Path) -> None:
+        """Test that load errors are handled gracefully."""
+        # Test invalid JSON
+        state_file.write_text("invalid json")
+        state = UpdateCheckState.load(state_file)
+        assert state.version == 1
+        assert state.last_check is None
+
+        # Test invalid date format
+        state_file.write_text(json.dumps({
+            "version": 1,
+            "last_check": "invalid-date"
+        }))
+        state = UpdateCheckState.load(state_file)
+        assert state.version == 1
+        assert state.last_check is None
+
+    def test_update_check_state_timezone_handling(self, state_file:Path) -> None:
+        """Test that timezone handling works correctly."""
+        # Test loading timestamp without timezone (should assume UTC)
+        state_file.write_text(json.dumps({
+            "version": 1,
+            "last_check": "2024-03-20T12:00:00"
+        }))
+        state = UpdateCheckState.load(state_file)
+        assert state.last_check is not None
+        assert state.last_check.tzinfo == timezone.utc
+        assert state.last_check.hour == 12
+
+        # Test loading timestamp with different timezone (should convert to UTC)
+        state_file.write_text(json.dumps({
+            "version": 1,
+            "last_check": "2024-03-20T12:00:00+02:00"  # 2 hours ahead of UTC
+        }))
+        state = UpdateCheckState.load(state_file)
+        assert state.last_check is not None
+        assert state.last_check.tzinfo == timezone.utc
+        assert state.last_check.hour == 10  # Converted to UTC
+
+        # Test saving timestamp (should always be in UTC)
+        state = UpdateCheckState()
+        state.last_check = datetime(2024, 3, 20, 12, 0, tzinfo = timezone(timedelta(hours = 2)))
+        state.save(state_file)
+        with open(state_file, "r", encoding = "utf-8") as f:
+            data = json.load(f)
+            assert data["last_check"] == "2024-03-20T10:00:00+00:00"  # Converted to UTC
