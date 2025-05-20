@@ -213,5 +213,8 @@ class UpdateCheckState(ContextualModel):
             return True
         interval_seconds = self._interval_to_seconds(value, unit)
         time_since = self._time_since_last_check()
+        # Handle infinite time difference (no last check)
+        if time_since == float("inf"):
+            return True
         # Compare using integer seconds to avoid microsecond-level flakiness
         return int(time_since) > int(interval_seconds)

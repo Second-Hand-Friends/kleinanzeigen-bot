@@ -291,6 +291,12 @@ browser:
   user_data_dir: "" # see https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md
   profile_name: ""
 
+# update check configuration
+update_check:
+  enabled: true  # Enable/disable update checks
+  channel: latest  # One of: latest, prerelease
+  interval: 7d    # Check interval (e.g. 7d for 7 days)
+
 # login credentials
 login:
   username: ""

@@ -586,3 +586,22 @@ class TestUpdateChecker:
         with open(state_file, "r", encoding = "utf-8") as f:
             data = json.load(f)
             assert data["last_check"] == "2024-03-20T10:00:00+00:00"  # Converted to UTC
+
+    def test_update_check_state_missing_file(self, state_file:Path) -> None:
+        """Test that loading a missing state file returns a new state and should_check returns True."""
+        # Ensure the file doesn't exist
+        if state_file.exists():
+            state_file.unlink()
+
+        # Load state from non-existent file
+        state = UpdateCheckState.load(state_file)
+        assert state.last_check is None
+        assert state.version == 1
+
+        # Verify should_check returns True for any interval
+        assert state.should_check("7d") is True
+        assert state.should_check("1d") is True
+        assert state.should_check("4w") is True
+
+        # Verify time_since_last_check returns infinity
+        assert state._time_since_last_check() == float("inf")
