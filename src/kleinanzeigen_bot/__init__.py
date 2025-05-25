@@ -1013,10 +1013,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 try:
                     await self.web_click(
                         By.XPATH,
-                        '//*[contains(@class, "CarrierSelectionModal")]'
-                        '//*[contains(@class, "CarrierOption")]'
-                        f'//*[contains(@class, "CarrierOption--Main") and @data-testid="{shipping_package}"]'
-                    )
+                        f'//dialog//input[contains(@data-testid, "{shipping_package}")]')
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
 
