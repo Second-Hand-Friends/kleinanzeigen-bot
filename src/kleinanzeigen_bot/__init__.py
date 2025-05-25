@@ -639,7 +639,6 @@ class KleinanzeigenBot(WebScrapingMixin):
         @param ad_cfg_orig: the ad config as present in the YAML file
         @param published_ads: json list of published ads
         """
-        await self.assert_free_ad_limit_not_reached()
 
         if self.config.publishing.delete_old_ads == "BEFORE_PUBLISH" and not self.keep_old_ads:
             await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title)
@@ -811,6 +810,20 @@ class KleinanzeigenBot(WebScrapingMixin):
                 await self.web_click(By.XPATH, image_hint_xpath)
         except TimeoutError:
             pass  # nosec
+
+        #############################
+        # wait for payment form if commercial account is used
+        #############################
+        try:
+            await self.web_find(By.ID, "myftr-shppngcrt-frm", timeout = 2)
+
+            LOG.warning("############################################")
+            LOG.warning("# Payment form detected! Please proceed with payment.")
+            LOG.warning("############################################")
+            await self.web_scroll_page_down()
+            input(_("Press a key to continue..."))
+        except TimeoutError:
+            pass
 
         await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = 20)
 
@@ -1036,13 +1049,6 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.info(" -> uploading image [%s]", image)
             await image_upload.send_file(image)
             await self.web_sleep()
-
-    async def assert_free_ad_limit_not_reached(self) -> None:
-        try:
-            await self.web_find(By.XPATH, "/html/body/div[1]/form/fieldset[6]/div[1]/header", timeout = 2)
-            raise AssertionError(f"Cannot publish more ads. The monthly limit of free ads of account {self.config.login.username} is reached.")
-        except TimeoutError:
-            pass
 
     async def download_ads(self) -> None:
         """
