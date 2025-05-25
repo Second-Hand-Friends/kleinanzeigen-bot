@@ -165,7 +165,6 @@ kleinanzeigen_bot/extract.py:
   _download_images_from_ad_page:
     "Found %s.": "%s gefunden."
     "Downloaded %s.": "%s heruntergeladen."
-    "NEXT button in image gallery somehow missing, aborting image fetching.": "WEITER-Button in der Bildergalerie fehlt, breche Bildabruf ab."
     "No image area found. Continuing without downloading images.": "Keine Bildbereiche gefunden. Fahre ohne Bilder-Download fort."
 
   extract_ad_id_from_ad_url:
