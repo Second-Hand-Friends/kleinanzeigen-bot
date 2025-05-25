@@ -75,15 +75,15 @@ class AdExtractor(WebScrapingMixin):
             # download all images from box
             image_box = await self.web_find(By.CLASS_NAME, "galleryimage-large")
 
-            n_images = len(await self.web_find_all(By.CSS_SELECTOR, ".galleryimage-element[data-ix]", parent = image_box))
+            images = await self.web_find_all(By.CSS_SELECTOR, ".galleryimage-element[data-ix] > img", parent = image_box)
+            n_images = len(images)
             LOG.info("Found %s.", i18n.pluralize("image", n_images))
 
-            img_element:Element = await self.web_find(By.CSS_SELECTOR, "div:nth-child(1) > img", parent = image_box)
             img_fn_prefix = "ad_" + str(ad_id) + "__img"
-
             img_nr = 1
             dl_counter = 0
-            while img_nr <= n_images:  # scrolling + downloading
+
+            for img_element in images:
                 current_img_url = img_element.attrs["src"]  # URL of the image
                 if current_img_url is None:
                     continue
@@ -97,16 +97,6 @@ class AdExtractor(WebScrapingMixin):
                     dl_counter += 1
                     img_paths.append(img_path.rsplit("/", maxsplit = 1)[-1])
 
-                # navigate to next image (if exists)
-                if img_nr < n_images:
-                    try:
-                        # click next button, wait, and re-establish reference
-                        await (await self.web_find(By.CLASS_NAME, "galleryimage--navigation--next")).click()
-                        new_div = await self.web_find(By.CSS_SELECTOR, f"div.galleryimage-element:nth-child({img_nr + 1})")
-                        img_element = await self.web_find(By.TAG_NAME, "img", parent = new_div)
-                    except TimeoutError:
-                        LOG.error("NEXT button in image gallery somehow missing, aborting image fetching.")
-                        break
                 img_nr += 1
             LOG.info("Downloaded %s.", i18n.pluralize("image", dl_counter))
 
