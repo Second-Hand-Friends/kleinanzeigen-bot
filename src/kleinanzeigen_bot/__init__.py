@@ -523,6 +523,10 @@ class KleinanzeigenBot(WebScrapingMixin):
     async def fill_login_data_and_send(self) -> None:
         LOG.info("Logging in as [%s]...", self.config.login.username)
         await self.web_input(By.ID, "email", self.config.login.username)
+
+        # clearing password input in case browser has stored login data set
+        await self.web_input(By.ID, "password", "")
+
         await self.web_input(By.ID, "password", self.config.login.password)
         await self.web_click(By.CSS_SELECTOR, "form#login-form button[type='submit']")
 
