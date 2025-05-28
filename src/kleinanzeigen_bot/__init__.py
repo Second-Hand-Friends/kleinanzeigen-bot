@@ -544,7 +544,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.info("Handling GDPR disclaimer...")
             await self.web_find(By.ID, "gdpr-banner-accept", timeout = 10)
             await self.web_click(By.ID, "gdpr-banner-cmp-button")
-            await self.web_click(By.CSS_SELECTOR, "#ConsentManagementPage button.Button-secondary", timeout = 10)
+            await self.web_click(By.XPATH, "//div[@id='ConsentManagementPage']//*//button//*[contains(., 'Alle ablehnen und fortfahren')]", timeout = 10)
         except TimeoutError:
             pass
 
