@@ -333,6 +333,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
+    permissions:
+      contents: write
+
     # run on 'main' and 'release' branch when:
     #   – build succeeded, AND
     #   – publish-coverage succeeded OR was skipped
