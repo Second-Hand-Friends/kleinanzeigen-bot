@@ -84,6 +84,7 @@ kleinanzeigen_bot/__init__.py:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
     "Failed to set shipping attribute for type '%s'!": "Fehler beim setzen des Versandattributs für den Typ '%s'!"
     "# Captcha present! Please solve the captcha.": "# Captcha vorhanden! Bitte lösen Sie das Captcha."
+    "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
     " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
     " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
