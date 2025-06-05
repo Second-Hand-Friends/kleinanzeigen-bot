@@ -153,7 +153,7 @@ class AdPartial(ContextualModel):
         """
         Returns a complete, validated Ad by merging this partial with values from ad_defaults.
 
-        Any field that is `None` or `""` is filled from `ad_defaults`.
+        Any field that is `None` or `""` is filled from `ad_defaults` when it's not a list.
 
         Raises `ValidationError` when, after merging with `ad_defaults`, not all fields required by `Ad` are populated.
         """
@@ -162,7 +162,7 @@ class AdPartial(ContextualModel):
             target = ad_cfg,
             defaults = ad_defaults.model_dump(),
             ignore = lambda k, _: k == "description",  # ignore legacy global description config
-            override = lambda _, v: v in {None, ""}  # noqa: PLC1901 can be simplified
+            override = lambda _, v: not isinstance(v, list) and v in {None, ""}  # noqa: PLC1901 can be simplified
         )
         return Ad.model_validate(ad_cfg)
 
