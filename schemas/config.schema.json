@@ -80,6 +80,21 @@
           "title": "Sell Directly",
           "type": "boolean"
         },
+        "images": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Images"
+        },
         "contact": {
           "$ref": "#/$defs/ContactDefaults"
         },
