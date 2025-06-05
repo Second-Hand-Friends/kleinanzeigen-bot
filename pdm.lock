@@ -756,13 +756,13 @@ files = [
 
 [[package]]
 name = "packageurl-python"
-version = "0.16.0"
+version = "0.17.0"
 requires_python = ">=3.8"
 summary = "A purl aka. Package URL parser and builder"
 groups = ["dev"]
 files = [
-    {file = "packageurl_python-0.16.0-py3-none-any.whl", hash = "sha256:5c3872638b177b0f1cf01c3673017b7b27ebee485693ae12a8bed70fa7fa7c35"},
-    {file = "packageurl_python-0.16.0.tar.gz", hash = "sha256:69e3bf8a3932fe9c2400f56aaeb9f86911ecee2f9398dbe1b58ec34340be365d"},
+    {file = "packageurl_python-0.17.0-py3-none-any.whl", hash = "sha256:c2a8e48d7b393b18806fd096abe326260b3aed82a07eda6c6628689b36ba52c4"},
+    {file = "packageurl_python-0.17.0.tar.gz", hash = "sha256:3cc44a01c9549c237f14c34981bae1008eb57c858c0af9039f4f13091807e1f3"},
 ]
 
 [[package]]
@@ -1044,7 +1044,7 @@ files = [
 
 [[package]]
 name = "pyinstaller"
-version = "6.13.0"
+version = "6.14.0"
 requires_python = "<3.14,>=3.8"
 summary = "PyInstaller bundles a Python application and all its dependencies into a single package."
 groups = ["dev"]
@@ -1054,23 +1054,23 @@ dependencies = [
     "macholib>=1.8; sys_platform == \"darwin\"",
     "packaging>=22.0",
     "pefile!=2024.8.26,>=2022.5.30; sys_platform == \"win32\"",
-    "pyinstaller-hooks-contrib>=2025.2",
+    "pyinstaller-hooks-contrib>=2025.4",
     "pywin32-ctypes>=0.2.1; sys_platform == \"win32\"",
     "setuptools>=42.0.0",
 ]
 files = [
-    {file = "pyinstaller-6.13.0-py3-none-macosx_10_13_universal2.whl", hash = "sha256:aa404f0b02cd57948098055e76ee190b8e65ccf7a2a3f048e5000f668317069f"},
-    {file = "pyinstaller-6.13.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:92efcf2f09e78f07b568c5cb7ed48c9940f5dad627af4b49bede6320fab2a06e"},
-    {file = "pyinstaller-6.13.0-py3-none-manylinux2014_i686.whl", hash = "sha256:9f82f113c463f012faa0e323d952ca30a6f922685d9636e754bd3a256c7ed200"},
-    {file = "pyinstaller-6.13.0-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:db0e7945ebe276f604eb7c36e536479556ab32853412095e19172a5ec8fca1c5"},
-    {file = "pyinstaller-6.13.0-py3-none-manylinux2014_s390x.whl", hash = "sha256:92fe7337c5aa08d42b38d7a79614492cb571489f2cb0a8f91dc9ef9ccbe01ed3"},
-    {file = "pyinstaller-6.13.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:bc09795f5954135dd4486c1535650958c8218acb954f43860e4b05fb515a21c0"},
-    {file = "pyinstaller-6.13.0-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:589937548d34978c568cfdc39f31cf386f45202bc27fdb8facb989c79dfb4c02"},
-    {file = "pyinstaller-6.13.0-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:b7260832f7501ba1d2ce1834d4cddc0f2b94315282bc89c59333433715015447"},
-    {file = "pyinstaller-6.13.0-py3-none-win32.whl", hash = "sha256:80c568848529635aa7ca46d8d525f68486d53e03f68b7bb5eba2c88d742e302c"},
-    {file = "pyinstaller-6.13.0-py3-none-win_amd64.whl", hash = "sha256:8d4296236b85aae570379488c2da833b28828b17c57c2cc21fccd7e3811fe372"},
-    {file = "pyinstaller-6.13.0-py3-none-win_arm64.whl", hash = "sha256:d9f21d56ca2443aa6a1e255e7ad285c76453893a454105abe1b4d45e92bb9a20"},
-    {file = "pyinstaller-6.13.0.tar.gz", hash = "sha256:38911feec2c5e215e5159a7e66fdb12400168bd116143b54a8a7a37f08733456"},
+    {file = "pyinstaller-6.14.0-py3-none-macosx_10_13_universal2.whl", hash = "sha256:20b4dcaf17a27cf5d5417f9dc53e81adf417d22e4d8c4afe50ae20dacdc1cde6"},
+    {file = "pyinstaller-6.14.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:57982d0ebeb39e9a5dd8722bed871873ec59161613d8b09ca638adbd4fb4e592"},
+    {file = "pyinstaller-6.14.0-py3-none-manylinux2014_i686.whl", hash = "sha256:d75492d4a7ece299b580837cb027cf7742cea5e92dfec0bb4c6064816c009b59"},
+    {file = "pyinstaller-6.14.0-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:ca5ad60e210a7eb1c968d09deb85b645963bf24dcb8ed4af93c293ea526a08e6"},
+    {file = "pyinstaller-6.14.0-py3-none-manylinux2014_s390x.whl", hash = "sha256:af8c973543e976bd660f83a43089cabd3c41e98398f53fa179ef7eee4d5fe3b0"},
+    {file = "pyinstaller-6.14.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:640f68e50d22684aa5970c2f3a6490d2e7c16bd5c20c63f5541c0e50e5bd2391"},
+    {file = "pyinstaller-6.14.0-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:3c2c88a355223d13704b5153dc341e02699523363cc18c49d872c8e82b5c6063"},
+    {file = "pyinstaller-6.14.0-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:9af257dc72d6b2027ab8a4c217eda07a6e6efa8ae9223953fd721aa9baec9106"},
+    {file = "pyinstaller-6.14.0-py3-none-win32.whl", hash = "sha256:083d97ee52077bc21a8e8beaede394dfd8d19da8bafc03ebc6734949d63d74a1"},
+    {file = "pyinstaller-6.14.0-py3-none-win_amd64.whl", hash = "sha256:c62c3e0f768d4f90c0329c5e2616d8fff5c041dc4864a28e74d653d0e77aff1a"},
+    {file = "pyinstaller-6.14.0-py3-none-win_arm64.whl", hash = "sha256:adf130c72e98ced09df5c43d7ca271d701a730036980da75cae056325cbc2dcd"},
+    {file = "pyinstaller-6.14.0.tar.gz", hash = "sha256:cc55cdc21491722d74133e35ab363a88679b37ee2d76f9d80adcbc0ae862d630"},
 ]
 
 [[package]]
@@ -1102,21 +1102,22 @@ files = [
 
 [[package]]
 name = "pytest"
-version = "8.3.5"
-requires_python = ">=3.8"
+version = "8.4.0"
+requires_python = ">=3.9"
 summary = "pytest: simple powerful testing with Python"
 groups = ["dev"]
 dependencies = [
-    "colorama; sys_platform == \"win32\"",
-    "exceptiongroup>=1.0.0rc8; python_version < \"3.11\"",
-    "iniconfig",
-    "packaging",
+    "colorama>=0.4; sys_platform == \"win32\"",
+    "exceptiongroup>=1; python_version < \"3.11\"",
+    "iniconfig>=1",
+    "packaging>=20",
     "pluggy<2,>=1.5",
+    "pygments>=2.7.2",
     "tomli>=1; python_version < \"3.11\"",
 ]
 files = [
-    {file = "pytest-8.3.5-py3-none-any.whl", hash = "sha256:c69214aa47deac29fad6c2a4f590b9c4a9fdb16a403176fe154b79c0b4d4d820"},
-    {file = "pytest-8.3.5.tar.gz", hash = "sha256:f4efe70cc14e511565ac476b57c279e12a855b11f48f212af1080ef2263d3845"},
+    {file = "pytest-8.4.0-py3-none-any.whl", hash = "sha256:f40f825768ad76c0977cbacdf1fd37c6f7a468e460ea6a0636078f8972d4517e"},
+    {file = "pytest-8.4.0.tar.gz", hash = "sha256:14d920b48472ea0dbf68e45b96cd1ffda4705f33307dcc86c676c1b5104838a6"},
 ]
 
 [[package]]
@@ -1388,13 +1389,13 @@ files = [
 
 [[package]]
 name = "typing-extensions"
-version = "4.13.2"
-requires_python = ">=3.8"
-summary = "Backported and Experimental Type Hints for Python 3.8+"
+version = "4.14.0"
+requires_python = ">=3.9"
+summary = "Backported and Experimental Type Hints for Python 3.9+"
 groups = ["default", "dev"]
 files = [
-    {file = "typing_extensions-4.13.2-py3-none-any.whl", hash = "sha256:a439e7c04b49fec3e5d3e2beaa21755cadbbdc391694e28ccdd36ca4a1408f8c"},
-    {file = "typing_extensions-4.13.2.tar.gz", hash = "sha256:e6c81219bd689f51865d9e372991c540bda33a0379d5573cddb9a3a23f7caaef"},
+    {file = "typing_extensions-4.14.0-py3-none-any.whl", hash = "sha256:a1514509136dd0b477638fc68d6a91497af5076466ad0fa6c338e44e359944af"},
+    {file = "typing_extensions-4.14.0.tar.gz", hash = "sha256:8676b788e32f02ab42d9e7c61324048ae4c6d844a399eebace3d4979d75ceef4"},
 ]
 
 [[package]]
