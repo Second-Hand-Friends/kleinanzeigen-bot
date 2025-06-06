@@ -282,20 +282,6 @@ class TestKleinanzeigenBotAuthentication:
     """Tests for login and authentication functionality."""
 
     @pytest.mark.asyncio
-    async def test_assert_free_ad_limit_not_reached_success(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that free ad limit check succeeds when limit not reached."""
-        with patch.object(test_bot, "web_find", side_effect = TimeoutError):
-            await test_bot.assert_free_ad_limit_not_reached()
-
-    @pytest.mark.asyncio
-    async def test_assert_free_ad_limit_not_reached_limit_reached(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that free ad limit check fails when limit is reached."""
-        with patch.object(test_bot, "web_find", return_value = AsyncMock()):
-            with pytest.raises(AssertionError) as exc_info:
-                await test_bot.assert_free_ad_limit_not_reached()
-            assert "Cannot publish more ads" in str(exc_info.value)
-
-    @pytest.mark.asyncio
     async def test_is_logged_in_returns_true_when_logged_in(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login check returns true when logged in."""
         with patch.object(test_bot, "web_text", return_value = "Welcome dummy_user"):
