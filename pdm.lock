@@ -756,13 +756,13 @@ files = [
 
 [[package]]
 name = "packageurl-python"
-version = "0.17.0"
+version = "0.17.1"
 requires_python = ">=3.8"
 summary = "A purl aka. Package URL parser and builder"
 groups = ["dev"]
 files = [
-    {file = "packageurl_python-0.17.0-py3-none-any.whl", hash = "sha256:c2a8e48d7b393b18806fd096abe326260b3aed82a07eda6c6628689b36ba52c4"},
-    {file = "packageurl_python-0.17.0.tar.gz", hash = "sha256:3cc44a01c9549c237f14c34981bae1008eb57c858c0af9039f4f13091807e1f3"},
+    {file = "packageurl_python-0.17.1-py3-none-any.whl", hash = "sha256:59b0862ae0b216994f847e05b4c6e870e0d16e1ddd706feefb19d79810f22cbd"},
+    {file = "packageurl_python-0.17.1.tar.gz", hash = "sha256:5db592a990b60bc02446033c50fb1803a26c5124cd72c5a2cd1b8ea1ae741969"},
 ]
 
 [[package]]
@@ -1212,7 +1212,7 @@ files = [
 
 [[package]]
 name = "ruamel-yaml"
-version = "0.18.12"
+version = "0.18.13"
 requires_python = ">=3.7"
 summary = "ruamel.yaml is a YAML parser/emitter that supports roundtrip preservation of comments, seq/map flow style, and map key order"
 groups = ["default"]
@@ -1220,8 +1220,8 @@ dependencies = [
     "ruamel-yaml-clib>=0.2.7; platform_python_implementation == \"CPython\" and python_version < \"3.14\"",
 ]
 files = [
-    {file = "ruamel.yaml-0.18.12-py3-none-any.whl", hash = "sha256:790ba4c48b6a6e6b12b532a7308779eb12d2aaab3a80fdb8389216f28ea2b287"},
-    {file = "ruamel.yaml-0.18.12.tar.gz", hash = "sha256:5a38fd5ce39d223bebb9e3a6779e86b9427a03fb0bf9f270060f8b149cffe5e2"},
+    {file = "ruamel.yaml-0.18.13-py3-none-any.whl", hash = "sha256:cf9628cfdfe9d88b78429cd093aa766e9a4c69242f9f3c86ac1d9e56437e5572"},
+    {file = "ruamel.yaml-0.18.13.tar.gz", hash = "sha256:b0d5ac0a2b0b4e39d87aed00ddff26e795de6750b064da364a8d009b97ce5f26"},
 ]
 
 [[package]]
