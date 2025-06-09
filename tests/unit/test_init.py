@@ -39,6 +39,26 @@ def mock_page() -> MagicMock:
     return mock
 
 
+@pytest.mark.asyncio
+async def test_mock_page_fixture(mock_page:MagicMock) -> None:
+    """Test that the mock_page fixture is properly configured."""
+    # Test that all required async methods are present
+    assert hasattr(mock_page, "sleep")
+    assert hasattr(mock_page, "evaluate")
+    assert hasattr(mock_page, "click")
+    assert hasattr(mock_page, "type")
+    assert hasattr(mock_page, "select")
+    assert hasattr(mock_page, "wait_for_selector")
+    assert hasattr(mock_page, "wait_for_navigation")
+    assert hasattr(mock_page, "wait_for_load_state")
+    assert hasattr(mock_page, "content")
+    assert hasattr(mock_page, "goto")
+    assert hasattr(mock_page, "close")
+
+    # Test that content returns expected value
+    assert await mock_page.content() == "<html></html>"
+
+
 @pytest.fixture
 def base_ad_config() -> dict[str, Any]:
     """Provide a base ad configuration that can be used across tests."""
@@ -82,7 +102,7 @@ def remove_fields(config:dict[str, Any], *fields:str) -> dict[str, Any]:
     for field in fields:
         if "." in field:
             # Handle nested fields (e.g., "contact.phone")
-            parts = field.split(".", maxsplit=1)
+            parts = field.split(".", maxsplit = 1)
             current = result
             for part in parts[:-1]:
                 if part in current:
@@ -92,6 +112,30 @@ def remove_fields(config:dict[str, Any], *fields:str) -> dict[str, Any]:
         elif field in result:
             del result[field]
     return result
+
+
+def test_remove_fields() -> None:
+    """Test the remove_fields helper function."""
+    test_config = {
+        "field1": "value1",
+        "field2": "value2",
+        "nested": {
+            "field3": "value3"
+        }
+    }
+
+    # Test removing top-level field
+    result = remove_fields(test_config, "field1")
+    assert "field1" not in result
+    assert "field2" in result
+
+    # Test removing nested field
+    result = remove_fields(test_config, "nested.field3")
+    assert "field3" not in result["nested"]
+
+    # Test removing non-existent field
+    result = remove_fields(test_config, "nonexistent")
+    assert result == test_config
 
 
 @pytest.fixture
