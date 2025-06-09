@@ -508,7 +508,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             if not is_login_page:
                 await self.web_scroll_page_down()
 
-            input(_("Press a key to continue..."))
+            await ainput(_("Press a key to continue..."))
         except TimeoutError:
             pass
 
