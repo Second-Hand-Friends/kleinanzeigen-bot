@@ -336,27 +336,123 @@ class TestKleinanzeigenBotAuthentication:
     async def test_login_flow_handles_captcha(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login flow handles captcha correctly."""
         with patch.object(test_bot, "web_open"), \
-                patch.object(test_bot, "is_logged_in", return_value = False), \
+                patch.object(test_bot, "is_logged_in", side_effect = [False, False, True]), \
                 patch.object(test_bot, "web_find") as mock_find, \
-                patch.object(test_bot, "web_await") as mock_await, \
-                patch.object(test_bot, "web_input"), \
-                patch.object(test_bot, "web_click"), \
-                patch("kleinanzeigen_bot.ainput") as mock_ainput:
+                patch.object(test_bot, "web_input") as mock_input, \
+                patch.object(test_bot, "web_click") as mock_click, \
+                patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput:
 
+            # Mock the sequence of web_find calls:
+            # First login attempt:
+            # 1. Captcha iframe found (in check_and_wait_for_captcha)
+            # 2. Phone verification not found (in handle_after_login_logic)
+            # 3. GDPR banner not found (in handle_after_login_logic)
+            # Second login attempt:
+            # 4. Captcha iframe found (in check_and_wait_for_captcha)
+            # 5. Phone verification not found (in handle_after_login_logic)
+            # 6. GDPR banner not found (in handle_after_login_logic)
             mock_find.side_effect = [
-                AsyncMock(),  # Captcha iframe
-                TimeoutError(),  # Login form
-                TimeoutError(),  # Phone verification
-                TimeoutError(),  # GDPR banner
-                TimeoutError(),  # GDPR banner click
+                AsyncMock(),  # Captcha iframe (first login)
+                TimeoutError(),  # Phone verification (first login)
+                TimeoutError(),  # GDPR banner (first login)
+                AsyncMock(),  # Captcha iframe (second login)
+                TimeoutError(),  # Phone verification (second login)
+                TimeoutError(),  # GDPR banner (second login)
             ]
-            mock_await.return_value = True
             mock_ainput.return_value = ""
+            mock_input.return_value = AsyncMock()
+            mock_click.return_value = AsyncMock()
 
             await test_bot.login()
 
-            assert mock_find.call_count >= 2
-            mock_await.assert_called_once()
+            # Verify the complete flow
+            assert mock_find.call_count == 6  # Exactly 6 web_find calls
+            assert mock_ainput.call_count == 2  # Two captcha prompts
+            assert mock_input.call_count == 6  # Two login attempts with username, clear password, and set password
+            assert mock_click.call_count == 2  # Two submit button clicks
+
+    @pytest.mark.asyncio
+    async def test_check_and_wait_for_captcha(self, test_bot:KleinanzeigenBot) -> None:
+        """Verify that captcha detection works correctly."""
+        with patch.object(test_bot, "web_find") as mock_find, \
+                patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput:
+
+            # Test case 1: Captcha found
+            mock_find.return_value = AsyncMock()
+            mock_ainput.return_value = ""
+
+            await test_bot.check_and_wait_for_captcha(is_login_page = True)
+
+            assert mock_find.call_count == 1
+            assert mock_ainput.call_count == 1
+
+            # Test case 2: No captcha
+            mock_find.side_effect = TimeoutError()
+            mock_ainput.reset_mock()
+
+            await test_bot.check_and_wait_for_captcha(is_login_page = True)
+
+            assert mock_find.call_count == 2
+            assert mock_ainput.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_fill_login_data_and_send(self, test_bot:KleinanzeigenBot) -> None:
+        """Verify that login form filling works correctly."""
+        with patch.object(test_bot, "web_input") as mock_input, \
+                patch.object(test_bot, "web_click") as mock_click, \
+                patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock) as mock_captcha:
+
+            # Mock successful login form interaction
+            mock_input.return_value = AsyncMock()
+            mock_click.return_value = AsyncMock()
+
+            await test_bot.fill_login_data_and_send()
+
+            assert mock_captcha.call_count == 1
+            assert mock_input.call_count == 3  # Username, clear password, set password
+            assert mock_click.call_count == 1  # Submit button
+
+    @pytest.mark.asyncio
+    async def test_handle_after_login_logic(self, test_bot:KleinanzeigenBot) -> None:
+        """Verify that post-login handling works correctly."""
+        with patch.object(test_bot, "web_find") as mock_find, \
+                patch.object(test_bot, "web_click") as mock_click, \
+                patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput:
+
+            # Test case 1: No special handling needed
+            mock_find.side_effect = [TimeoutError(), TimeoutError()]  # No phone verification, no GDPR
+            mock_click.return_value = AsyncMock()
+            mock_ainput.return_value = ""
+
+            await test_bot.handle_after_login_logic()
+
+            assert mock_find.call_count == 2
+            assert mock_click.call_count == 0
+            assert mock_ainput.call_count == 0
+
+            # Test case 2: Phone verification needed
+            mock_find.reset_mock()
+            mock_click.reset_mock()
+            mock_ainput.reset_mock()
+            mock_find.side_effect = [AsyncMock(), TimeoutError()]  # Phone verification found, no GDPR
+
+            await test_bot.handle_after_login_logic()
+
+            assert mock_find.call_count == 2
+            assert mock_click.call_count == 0  # No click needed, just wait for user
+            assert mock_ainput.call_count == 1  # Wait for user to complete verification
+
+            # Test case 3: GDPR banner present
+            mock_find.reset_mock()
+            mock_click.reset_mock()
+            mock_ainput.reset_mock()
+            mock_find.side_effect = [TimeoutError(), AsyncMock()]  # No phone verification, GDPR found
+
+            await test_bot.handle_after_login_logic()
+
+            assert mock_find.call_count == 2
+            assert mock_click.call_count == 2  # Click to accept GDPR and continue
+            assert mock_ainput.call_count == 0
 
 
 class TestKleinanzeigenBotLocalization:
