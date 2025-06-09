@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import math
+
 from kleinanzeigen_bot.model.ad_model import AdPartial
 
 
@@ -37,3 +39,24 @@ def test_update_content_hash() -> None:
         "special_attributes": {},
         "contact": {},
     }).update_content_hash().content_hash != minimal_ad_cfg_hash
+
+
+def test_shipping_costs() -> None:
+    minimal_ad_cfg = {
+        "id": "123456789",
+        "title": "Test Ad Title",
+        "category": "160",
+        "description": "Test Description",
+    }
+
+    def is_close(a:float | None, b:float) -> bool:
+        return a is not None and math.isclose(a, b, rel_tol = 1e-09, abs_tol = 1e-09)
+
+    assert AdPartial.model_validate(minimal_ad_cfg | {"shipping_costs": 0}).shipping_costs == 0
+    assert is_close(AdPartial.model_validate(minimal_ad_cfg | {"shipping_costs": 0.00}).shipping_costs, 0)
+    assert is_close(AdPartial.model_validate(minimal_ad_cfg | {"shipping_costs": 0.10}).shipping_costs, 0.10)
+    assert is_close(AdPartial.model_validate(minimal_ad_cfg | {"shipping_costs": 1.00}).shipping_costs, 1)
+    assert AdPartial.model_validate(minimal_ad_cfg | {"shipping_costs": ""}).shipping_costs is None
+    assert AdPartial.model_validate(minimal_ad_cfg | {"shipping_costs": " "}).shipping_costs is None
+    assert AdPartial.model_validate(minimal_ad_cfg | {"shipping_costs": None}).shipping_costs is None
+    assert AdPartial.model_validate(minimal_ad_cfg).shipping_costs is None
