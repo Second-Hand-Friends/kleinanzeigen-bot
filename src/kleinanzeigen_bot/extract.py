@@ -112,7 +112,7 @@ class AdExtractor(WebScrapingMixin):
         :param url: the URL to the ad page
         :return: the ad ID, a (ten-digit) integer number
         """
-        num_part = url.split("/")[-1]  # suffix
+        num_part = url.rsplit("/", 1)[-1]  # suffix
         id_part = num_part.split("-")[0]
 
         try:
@@ -371,7 +371,7 @@ class AdExtractor(WebScrapingMixin):
         try:
             price_str:str = await self.web_text(By.ID, "viewad-price")
             price:int | None = None
-            match price_str.split()[-1]:
+            match price_str.rsplit(" ", 1)[-1]:
                 case "€":
                     price_type = "FIXED"
                     # replace('.', '') is to remove the thousands separator before parsing as int
