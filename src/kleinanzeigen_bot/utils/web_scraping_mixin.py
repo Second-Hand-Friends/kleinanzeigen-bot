@@ -87,9 +87,9 @@ class WebScrapingMixin:
         remote_port = 0
         for arg in self.browser_config.arguments:
             if arg.startswith("--remote-debugging-host="):
-                remote_host = arg.split("=", 2)[1]
+                remote_host = arg.split("=", maxsplit = 1)[1]
             if arg.startswith("--remote-debugging-port="):
-                remote_port = int(arg.split("=", 2)[1])
+                remote_port = int(arg.split("=", maxsplit = 1)[1])
 
         if remote_port > 0:
             LOG.info("Using existing browser process at %s:%s", remote_host, remote_port)
