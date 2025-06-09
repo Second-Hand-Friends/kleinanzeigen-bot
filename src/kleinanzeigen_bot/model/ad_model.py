@@ -93,9 +93,9 @@ class AdPartial(ContextualModel):
     @field_validator("shipping_costs", mode = "before")
     @classmethod
     def _parse_shipping_costs(cls, v:float | int | str) -> Any:
-        if v:
-            return round(parse_decimal(v), 2)
-        return None
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return None
+        return round(parse_decimal(v), 2)
 
     @field_validator("description")
     @classmethod
