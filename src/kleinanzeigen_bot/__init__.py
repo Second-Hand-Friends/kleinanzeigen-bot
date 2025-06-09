@@ -961,10 +961,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                         await self.web_click(By.XPATH, '//*[contains(@class, "SubSection")]//button[contains(@class, "SelectionButton")]')
                         await self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(., "Andere Versandmethoden")]')
                         await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
-
-                        if ad_cfg.shipping_costs:
-                            await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]',
-                                             str.replace(str(ad_cfg.shipping_costs), ".", ","))
+                        await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]', str.replace(str(ad_cfg.shipping_costs), ".", ","))
                         await self.web_click(By.XPATH, '//dialog//button[contains(., "Fertig")]')
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
