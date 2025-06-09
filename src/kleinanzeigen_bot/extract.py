@@ -112,13 +112,13 @@ class AdExtractor(WebScrapingMixin):
         :param url: the URL to the ad page
         :return: the ad ID, a (ten-digit) integer number
         """
-        num_part = url.split("/")[-1]  # suffix
-        id_part = num_part.split("-")[0]
+        num_part = url.rsplit("/", maxsplit = 1)[-1]  # suffix
+        id_part = num_part.split("-", maxsplit = 1)[0]
 
         try:
-            path = url.split("?", 1)[0]  # Remove query string if present
-            last_segment = path.rstrip("/").split("/")[-1]  # Get last path component
-            id_part = last_segment.split("-")[0]  # Extract part before first hyphen
+            path = url.split("?", maxsplit = 1)[0]  # Remove query string if present
+            last_segment = path.rstrip("/").rsplit("/", maxsplit = 1)[-1]  # Get last path component
+            id_part = last_segment.split("-", maxsplit = 1)[0]  # Extract part before first hyphen
             return int(id_part)
         except (IndexError, ValueError) as ex:
             LOG.warning("Failed to extract ad ID from URL '%s': %s", url, ex)
@@ -340,8 +340,8 @@ class AdExtractor(WebScrapingMixin):
         category_line = await self.web_find(By.ID, "vap-brdcrmb")
         category_first_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
         category_second_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(3)", parent = category_line)
-        cat_num_first = category_first_part.attrs["href"].split("/")[-1][1:]
-        cat_num_second = category_second_part.attrs["href"].split("/")[-1][1:]
+        cat_num_first = category_first_part.attrs["href"].rsplit("/", maxsplit = 1)[-1][1:]
+        cat_num_second = category_second_part.attrs["href"].rsplit("/", maxsplit = 1)[-1][1:]
         category:str = cat_num_first + "/" + cat_num_second
 
         return category
@@ -371,15 +371,15 @@ class AdExtractor(WebScrapingMixin):
         try:
             price_str:str = await self.web_text(By.ID, "viewad-price")
             price:int | None = None
-            match price_str.split()[-1]:
+            match price_str.rsplit(maxsplit = 1)[-1]:
                 case "€":
                     price_type = "FIXED"
                     # replace('.', '') is to remove the thousands separator before parsing as int
-                    price = int(price_str.replace(".", "").split()[0])
+                    price = int(price_str.replace(".", "").split(maxsplit = 1)[0])
                 case "VB":
                     price_type = "NEGOTIABLE"
                     if price_str != "VB":  # can be either 'X € VB', or just 'VB'
-                        price = int(price_str.replace(".", "").split()[0])
+                        price = int(price_str.replace(".", "").split(maxsplit = 1)[0])
                 case "verschenken":
                     price_type = "GIVE_AWAY"
                 case _:
@@ -490,7 +490,7 @@ class AdExtractor(WebScrapingMixin):
         except TimeoutError:
             LOG.info("No street given in the contact.")
 
-        (zipcode, location) = address_text.split(" ", 1)
+        (zipcode, location) = address_text.split(" ", maxsplit = 1)
         contact["zipcode"] = zipcode  # e.g. 19372
         contact["location"] = location  # e.g. Mecklenburg-Vorpommern - Steinbeck
 
