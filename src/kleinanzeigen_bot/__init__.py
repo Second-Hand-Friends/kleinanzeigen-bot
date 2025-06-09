@@ -523,6 +523,10 @@ class KleinanzeigenBot(WebScrapingMixin):
     async def fill_login_data_and_send(self) -> None:
         LOG.info("Logging in as [%s]...", self.config.login.username)
         await self.web_input(By.ID, "email", self.config.login.username)
+
+        # clearing password input in case browser has stored login data set
+        await self.web_input(By.ID, "password", "")
+
         await self.web_input(By.ID, "password", self.config.login.password)
         await self.web_click(By.CSS_SELECTOR, "form#login-form button[type='submit']")
 
@@ -540,7 +544,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.info("Handling GDPR disclaimer...")
             await self.web_find(By.ID, "gdpr-banner-accept", timeout = 10)
             await self.web_click(By.ID, "gdpr-banner-cmp-button")
-            await self.web_click(By.CSS_SELECTOR, "#ConsentManagementPage button.Button-secondary", timeout = 10)
+            await self.web_click(By.XPATH, "//div[@id='ConsentManagementPage']//*//button//*[contains(., 'Alle ablehnen und fortfahren')]", timeout = 10)
         except TimeoutError:
             pass
 
@@ -970,10 +974,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                         await self.web_click(By.XPATH, '//*[contains(@class, "SubSection")]//button[contains(@class, "SelectionButton")]')
                         await self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(., "Andere Versandmethoden")]')
                         await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
-
-                        if ad_cfg.shipping_costs:
-                            await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]',
-                                             str.replace(str(ad_cfg.shipping_costs), ".", ","))
+                        await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]', str.replace(str(ad_cfg.shipping_costs), ".", ","))
                         await self.web_click(By.XPATH, '//dialog//button[contains(., "Fertig")]')
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)

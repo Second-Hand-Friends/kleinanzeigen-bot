@@ -36,6 +36,7 @@ class AdDefaults(ContextualModel):
     price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] = "NEGOTIABLE"
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] = "SHIPPING"
     sell_directly:bool = Field(default = False, description = "requires shipping_type SHIPPING to take effect")
+    images:List[str] | None = Field(default = None)
     contact:ContactDefaults = Field(default_factory = ContactDefaults)
     republication_interval:int = 7
 
