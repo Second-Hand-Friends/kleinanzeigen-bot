@@ -17,6 +17,7 @@ from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, PublishingConfig
 from kleinanzeigen_bot.utils import dicts, loggers
+from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
 @pytest.fixture
@@ -36,6 +37,26 @@ def mock_page() -> MagicMock:
     mock.goto = AsyncMock()
     mock.close = AsyncMock()
     return mock
+
+
+@pytest.mark.asyncio
+async def test_mock_page_fixture(mock_page:MagicMock) -> None:
+    """Test that the mock_page fixture is properly configured."""
+    # Test that all required async methods are present
+    assert hasattr(mock_page, "sleep")
+    assert hasattr(mock_page, "evaluate")
+    assert hasattr(mock_page, "click")
+    assert hasattr(mock_page, "type")
+    assert hasattr(mock_page, "select")
+    assert hasattr(mock_page, "wait_for_selector")
+    assert hasattr(mock_page, "wait_for_navigation")
+    assert hasattr(mock_page, "wait_for_load_state")
+    assert hasattr(mock_page, "content")
+    assert hasattr(mock_page, "goto")
+    assert hasattr(mock_page, "close")
+
+    # Test that content returns expected value
+    assert await mock_page.content() == "<html></html>"
 
 
 @pytest.fixture
@@ -81,7 +102,7 @@ def remove_fields(config:dict[str, Any], *fields:str) -> dict[str, Any]:
     for field in fields:
         if "." in field:
             # Handle nested fields (e.g., "contact.phone")
-            parts = field.split(".")
+            parts = field.split(".", maxsplit = 1)
             current = result
             for part in parts[:-1]:
                 if part in current:
@@ -91,6 +112,30 @@ def remove_fields(config:dict[str, Any], *fields:str) -> dict[str, Any]:
         elif field in result:
             del result[field]
     return result
+
+
+def test_remove_fields() -> None:
+    """Test the remove_fields helper function."""
+    test_config = {
+        "field1": "value1",
+        "field2": "value2",
+        "nested": {
+            "field3": "value3"
+        }
+    }
+
+    # Test removing top-level field
+    result = remove_fields(test_config, "field1")
+    assert "field1" not in result
+    assert "field2" in result
+
+    # Test removing nested field
+    result = remove_fields(test_config, "nested.field3")
+    assert "field3" not in result["nested"]
+
+    # Test removing non-existent field
+    result = remove_fields(test_config, "nonexistent")
+    assert result == test_config
 
 
 @pytest.fixture
@@ -280,20 +325,6 @@ login:
 
 class TestKleinanzeigenBotAuthentication:
     """Tests for login and authentication functionality."""
-
-    @pytest.mark.asyncio
-    async def test_assert_free_ad_limit_not_reached_success(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that free ad limit check succeeds when limit not reached."""
-        with patch.object(test_bot, "web_find", side_effect = TimeoutError):
-            await test_bot.assert_free_ad_limit_not_reached()
-
-    @pytest.mark.asyncio
-    async def test_assert_free_ad_limit_not_reached_limit_reached(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that free ad limit check fails when limit is reached."""
-        with patch.object(test_bot, "web_find", return_value = AsyncMock()):
-            with pytest.raises(AssertionError) as exc_info:
-                await test_bot.assert_free_ad_limit_not_reached()
-            assert "Cannot publish more ads" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_is_logged_in_returns_true_when_logged_in(self, test_bot:KleinanzeigenBot) -> None:
@@ -988,6 +1019,19 @@ class TestKleinanzeigenBotShippingOptions:
                 return 0  # Return integer to prevent scrolling loop
             return None
 
+        # Create mock elements
+        csrf_token_elem = MagicMock()
+        csrf_token_elem.attrs = {"content": "csrf-token-123"}
+
+        shipping_form_elem = MagicMock()
+        shipping_form_elem.attrs = {}
+
+        shipping_size_radio = MagicMock()
+        shipping_size_radio.attrs = {"checked": False}
+
+        category_path_elem = MagicMock()
+        category_path_elem.apply = AsyncMock(return_value = "Test Category")
+
         # Mock the necessary web interaction methods
         with patch.object(test_bot, "web_execute", side_effect = mock_web_execute), \
                 patch.object(test_bot, "web_click", new_callable = AsyncMock), \
@@ -998,23 +1042,24 @@ class TestKleinanzeigenBotShippingOptions:
                 patch.object(test_bot, "web_sleep", new_callable = AsyncMock), \
                 patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True), \
                 patch.object(test_bot, "web_request", new_callable = AsyncMock), \
-                patch.object(test_bot, "web_find_all", new_callable = AsyncMock) as mock_find_all, \
+                patch.object(test_bot, "web_find_all", new_callable = AsyncMock), \
                 patch.object(test_bot, "web_await", new_callable = AsyncMock), \
-                patch("builtins.input", return_value = ""):  # Mock the input function
+                patch("builtins.input", return_value = ""), \
+                patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock):
 
-            # Mock the shipping options form elements
-            mock_find.side_effect = [
-                TimeoutError(),  # First call in assert_free_ad_limit_not_reached
-                AsyncMock(attrs = {"content": "csrf-token-123"}),  # CSRF token
-                AsyncMock(attrs = {"checked": True}),  # Size radio button check
-                AsyncMock(attrs = {"value": "Klein"}),  # Size dropdown
-                AsyncMock(attrs = {"value": "Paket 2 kg"}),  # Package type dropdown
-                AsyncMock(attrs = {"value": "Päckchen"}),  # Second package type dropdown
-                TimeoutError(),  # Captcha check
-            ]
+            # Mock web_find to simulate element detection
+            async def mock_find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+                if selector_value == "meta[name=_csrf]":
+                    return csrf_token_elem
+                if selector_value == "myftr-shppngcrt-frm":
+                    return shipping_form_elem
+                if selector_value == '.SingleSelectionItem--Main input[type=radio][data-testid="Klein"]':
+                    return shipping_size_radio
+                if selector_value == "postad-category-path":
+                    return category_path_elem
+                return None
 
-            # Mock web_find_all to return empty list for city options
-            mock_find_all.return_value = []
+            mock_find.side_effect = mock_find_side_effect
 
             # Mock web_check to return True for radio button checked state
             with patch.object(test_bot, "web_check", new_callable = AsyncMock) as mock_check:
