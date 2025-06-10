@@ -87,9 +87,11 @@ kleinanzeigen_bot/__init__.py:
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
     "Failed to set shipping attribute for type '%s'!": "Fehler beim setzen des Versandattributs für den Typ '%s'!"
+    "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
     " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
     " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
     "Could not set city from location": "Stadt konnte nicht aus dem Standort gesetzt werden"
+    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
 
   __set_condition:
     "Unable to close condition dialog!": "Kann den Dialog für Artikelzustand nicht schließen!"

@@ -112,6 +112,7 @@ class AdExtractor(WebScrapingMixin):
         :param url: the URL to the ad page
         :return: the ad ID, a (ten-digit) integer number
         """
+
         num_part = url.rsplit("/", maxsplit = 1)[-1]  # suffix
         id_part = num_part.split("-", maxsplit = 1)[0]
 
