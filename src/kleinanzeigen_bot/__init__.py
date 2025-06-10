@@ -743,9 +743,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                     await self.web_sleep(1)  # Wait for city dropdown to populate
                     options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
                     for option in options:
-                        option_text = await self.web_text(By.CSS_SELECTOR, "option", parent = option)
-                        if option_text == ad_cfg.contact.location:
-                            await self.web_select(By.ID, "pstad-citychsr", option_text)
+                        if option.text == ad_cfg.contact.location:
+                            await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
                             break
                 except TimeoutError:
                     LOG.debug("Could not set city from location")
