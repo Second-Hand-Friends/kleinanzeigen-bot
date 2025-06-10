@@ -492,6 +492,26 @@ class KleinanzeigenBot(WebScrapingMixin):
             self.browser_config.user_data_dir = abspath(self.config.browser.user_data_dir, relative_to = self.config_file_path)
         self.browser_config.profile_name = self.config.browser.profile_name
 
+    async def check_and_wait_for_captcha(self, *, is_login_page:bool = True) -> None:
+        try:
+            await self.web_find(By.CSS_SELECTOR,
+                                "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']", timeout = 2)
+
+            if not is_login_page and self.config.captcha.auto_restart:
+                LOG.warning("Captcha recognized - auto-restart enabled, abort run...")
+                raise CaptchaEncountered(misc.parse_duration(self.config.captcha.restart_delay))
+
+            LOG.warning("############################################")
+            LOG.warning("# Captcha present! Please solve the captcha.")
+            LOG.warning("############################################")
+
+            if not is_login_page:
+                await self.web_scroll_page_down()
+
+            await ainput(_("Press a key to continue..."))
+        except TimeoutError:
+            pass
+
     async def login(self) -> None:
         LOG.info("Checking if already logged in...")
         await self.web_open(f"{self.root_url}")
@@ -503,15 +523,6 @@ class KleinanzeigenBot(WebScrapingMixin):
         LOG.info("Opening login page...")
         await self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
 
-        try:
-            await self.web_find(By.CSS_SELECTOR, "iframe[src*='captcha-delivery.com']", timeout = 2)
-            LOG.warning("############################################")
-            LOG.warning("# Captcha present! Please solve the captcha.")
-            LOG.warning("############################################")
-            await self.web_await(lambda: self.web_find(By.ID, "login-form") is not None, timeout = 5 * 60)
-        except TimeoutError:
-            pass
-
         await self.fill_login_data_and_send()
         await self.handle_after_login_logic()
 
@@ -522,12 +533,14 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     async def fill_login_data_and_send(self) -> None:
         LOG.info("Logging in as [%s]...", self.config.login.username)
-        await self.web_input(By.ID, "email", self.config.login.username)
+        await self.web_input(By.ID, "login-email", self.config.login.username)
 
         # clearing password input in case browser has stored login data set
-        await self.web_input(By.ID, "password", "")
+        await self.web_input(By.ID, "login-password", "")
+        await self.web_input(By.ID, "login-password", self.config.login.password)
 
-        await self.web_input(By.ID, "password", self.config.login.password)
+        await self.check_and_wait_for_captcha(is_login_page = True)
+
         await self.web_click(By.CSS_SELECTOR, "form#login-form button[type='submit']")
 
     async def handle_after_login_logic(self) -> None:
@@ -778,24 +791,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         #############################
         # wait for captcha
         #############################
-        try:
-            await self.web_find(
-                By.CSS_SELECTOR,
-                "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']",
-                timeout = 2)
-
-            if self.config.captcha.auto_restart:
-                LOG.warning("Captcha recognized - auto-restart enabled, abort run...")
-                raise CaptchaEncountered(misc.parse_duration(self.config.captcha.restart_delay))
-
-            # Fallback: manuell
-            LOG.warning("############################################")
-            LOG.warning("# Captcha present! Please solve the captcha.")
-            LOG.warning("############################################")
-            await self.web_scroll_page_down()
-            input(_("Press a key to continue..."))
-        except TimeoutError:
-            pass
+        await self.check_and_wait_for_captcha(is_login_page = False)
 
         #############################
         # submit

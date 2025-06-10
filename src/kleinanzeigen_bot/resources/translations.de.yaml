@@ -53,11 +53,15 @@ kleinanzeigen_bot/__init__.py:
     " -> found %s": "-> %s gefunden"
     "category": "Kategorie"
 
+  check_and_wait_for_captcha:
+    "# Captcha present! Please solve the captcha.": "# Captcha vorhanden! Bitte lösen Sie das Captcha."
+    "Captcha recognized - auto-restart enabled, abort run...": "Captcha erkannt - Auto-Neustart aktiviert, Durchlauf wird beendet..."
+    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
+
   login:
     "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
     "Already logged in as [%s]. Skipping login.": "Bereits eingeloggt als [%s]. Überspringe Anmeldung."
     "Opening login page...": "Öffne Anmeldeseite..."
-    "# Captcha present! Please solve the captcha.": "# Captcha vorhanden! Bitte lösen Sie das Captcha."
 
   handle_after_login_logic:
     "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
@@ -83,13 +87,10 @@ kleinanzeigen_bot/__init__.py:
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
     "Failed to set shipping attribute for type '%s'!": "Fehler beim setzen des Versandattributs für den Typ '%s'!"
-    "# Captcha present! Please solve the captcha.": "# Captcha vorhanden! Bitte lösen Sie das Captcha."
     "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
-    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
     " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
     " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
     "Could not set city from location": "Stadt konnte nicht aus dem Standort gesetzt werden"
-    "Captcha recognized - auto-restart enabled, abort run...": "Captcha erkannt - Auto-Neustart aktiviert, Durchlauf wird beendet..."
 
   __set_condition:
     "Unable to close condition dialog!": "Kann den Dialog für Artikelzustand nicht schließen!"
