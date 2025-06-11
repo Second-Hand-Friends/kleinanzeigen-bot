@@ -910,7 +910,6 @@ class KleinanzeigenBot(WebScrapingMixin):
 
             count += 1
 
-            # await self.update_ad(ad_file, ad_cfg, ad_cfg_orig)
             await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdMode.UPDATE)
             await self.web_await(lambda: self.web_check(By.ID, "checking-done", Is.DISPLAYED), timeout = 5 * 60)
 
