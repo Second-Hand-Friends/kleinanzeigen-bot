@@ -86,10 +86,18 @@ kleinanzeigen_bot/__init__.py:
 
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
+    "Updating ad '%s'...": "Aktualisiere Anzeige '%s'..."
     "Failed to set shipping attribute for type '%s'!": "Fehler beim setzen des Versandattributs für den Typ '%s'!"
     " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
+    " -> SUCCESS: ad updated with ID %s": " -> ERFOLG: Anzeige mit ID %s aktualisiert"
     " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
     "Could not set city from location": "Stadt konnte nicht aus dem Standort gesetzt werden"
+
+  update_ads:
+    "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
+    "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
+    "DONE: updated %s": "FERTIG: %s aktualisiert"
+    "ad": "Anzeige"
 
   __set_condition:
     "Unable to close condition dialog!": "Kann den Dialog für Artikelzustand nicht schließen!"
@@ -137,8 +145,10 @@ kleinanzeigen_bot/__init__.py:
     "DONE: No active ads found.": "FERTIG: Keine aktiven Anzeigen gefunden."
     "You provided no ads selector. Defaulting to \"due\".": "Es wurden keine Anzeigen-Selektor angegeben. Es wird \"due\" verwendet."
     "DONE: No new/outdated ads found.": "FERTIG: Keine neuen/veralteten Anzeigen gefunden."
-    "DONE: No ads to delete found.": "FERTIG: Keine zu löschnenden Anzeigen gefunden."
+    "DONE: No ads to delete found.": "FERTIG: Keine zu löschenden Anzeigen gefunden."
+    "DONE: No changed ads found.": "FERTIG: Keine geänderten Anzeigen gefunden."
     "You provided no ads selector. Defaulting to \"new\".": "Es wurden keine Anzeigen-Selektor angegeben. Es wird \"new\" verwendet."
+    "You provided no ads selector. Defaulting to \"changed\".": "Es wurden keine Anzeigen-Selektor angegeben. Es wird \"changed\" verwendet."
     "Unknown command: %s": "Unbekannter Befehl: %s"
 
   fill_login_data_and_send:
