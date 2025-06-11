@@ -863,7 +863,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         try:
             # Open condition dialog
-            await self.web_click(By.CSS_SELECTOR, '[class*="ConditionSelector"] button')
+            await self.web_click(By.XPATH, '//*[contains(@id, "j-post-listing-frontend-conditions")]//button[contains(., "Bitte wählen")]')
         except TimeoutError:
             LOG.debug("Unable to open condition dialog and select condition [%s]", condition_value, exc_info = True)
             return
@@ -875,8 +875,8 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.debug("Unable to select condition [%s]", condition_value, exc_info = True)
 
         try:
-            # Click continue button
-            await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[contains(., "Bestätigen")]')
+            # Click accept button
+            await self.web_click(By.XPATH, '//*[contains(@id, "j-post-listing-frontend-conditions")]//dialog//button[contains(., "Bestätigen")]')
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close condition dialog!")) from ex
 
