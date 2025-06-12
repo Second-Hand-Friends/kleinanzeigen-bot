@@ -1163,6 +1163,13 @@ class KleinanzeigenBot(WebScrapingMixin):
             await image_upload.send_file(image)
             await self.web_sleep()
 
+    async def assert_free_ad_limit_not_reached(self) -> None:
+        try:
+            await self.web_find(By.XPATH, "/html/body/div[1]/form/fieldset[6]/div[1]/header", timeout = 2)
+            raise AssertionError(f"Cannot publish more ads. The monthly limit of free ads of account {self.config.login.username} is reached.")
+        except TimeoutError:
+            pass
+
     async def download_ads(self) -> None:
         """
         Determines which download mode was chosen with the arguments, and calls the specified download routine.
