@@ -855,8 +855,8 @@ class KleinanzeigenBot(WebScrapingMixin):
             "new_with_tag": "Neu mit Etikett",
             "new": "Neu",
             "like_new": "Sehr Gut",
-            "alright": "Gut",
-            "ok": "In Ordnung",
+            "ok": "Gut",
+            "alright": "In Ordnung",
             "defect": "Defekt",
         }
         mapped_condition = condition_mapping.get(condition_value)

@@ -277,7 +277,19 @@ class AdExtractor(WebScrapingMixin):
         title:str = await self.web_text(By.ID, "viewad-title")
         LOG.info('Extracting information from ad with title "%s"', title)
 
+        # contains info about ad in different dimensions in form of a key:value dict
+        # dimension108 contains special attributes
+        # dimension92 contains fake category, which becomes an special attribute on ad page
+        belen_conf = await self.web_execute("window.BelenConf")
+
         info["category"] = await self._extract_category_from_ad_page()
+
+        # append subcategory and change e.g. category "161/172" to "161/172/lautsprecher_kopfhoerer"
+        # take subcategory from dimension92 as key 'art_s' sometimes is a special attribute (e.g. gender for clothes)
+        # the subcategory isn't really necessary, but when set, the appropriate special attribute gets preselected
+        if belen_conf["universalAnalyticsOpts"]["dimensions"]["dimension92"]:
+            info["category"] += f"/{belen_conf['universalAnalyticsOpts']['dimensions']['dimension92']}"
+
         info["title"] = title
 
         # Get raw description text
@@ -296,11 +308,8 @@ class AdExtractor(WebScrapingMixin):
 
         info["description"] = description_text.strip()
 
-        info["special_attributes"] = await self._extract_special_attributes_from_ad_page()
-        if "art_s" in info["special_attributes"]:
-            # change e.g. category "161/172" to "161/172/lautsprecher_kopfhoerer"
-            info["category"] = f"{info['category']}/{info['special_attributes']['art_s']}"
-            del info["special_attributes"]["art_s"]
+        info["special_attributes"] = await self._extract_special_attributes_from_ad_page(belen_conf)
+
         if "schaden_s" in info["special_attributes"]:
             # change f to  'nein' and 't' to 'ja'
             info["special_attributes"]["schaden_s"] = info["special_attributes"]["schaden_s"].translate(str.maketrans({"t": "ja", "f": "nein"}))
@@ -347,18 +356,16 @@ class AdExtractor(WebScrapingMixin):
 
         return category
 
-    async def _extract_special_attributes_from_ad_page(self) -> dict[str, Any]:
+    async def _extract_special_attributes_from_ad_page(self, belen_conf:dict[str, Any]) -> dict[str, Any]:
         """
         Extracts the special attributes from an ad page.
         If no items are available then special_attributes is empty
 
         :return: a dictionary (possibly empty) where the keys are the attribute names, mapped to their values
         """
-        belen_conf = await self.web_execute("window.BelenConf")
 
         # e.g. "art_s:lautsprecher_kopfhoerer|condition_s:like_new|versand_s:t"
         special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"]["dimension108"]
-
         special_attributes = dict(item.split(":") for item in special_attributes_str.split("|") if ":" in item)
         special_attributes = {k: v for k, v in special_attributes.items() if not k.endswith(".versand_s") and k != "versand_s"}
         return special_attributes
