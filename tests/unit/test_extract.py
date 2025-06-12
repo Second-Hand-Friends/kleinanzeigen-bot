@@ -433,6 +433,14 @@ class TestAdExtractorContent:
                     raw_description,  # Raw description (without affixes)
                     "03.02.2025"  # Creation date
                 ]),
+                web_execute=AsyncMock(return_value={
+                    "universalAnalyticsOpts": {
+                        "dimensions": {
+                            "dimension92": "",
+                            "dimension108": ""
+                        }
+                    }
+                }),
                 _extract_category_from_ad_page = AsyncMock(return_value = "160"),
                 _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
                 _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
@@ -461,6 +469,14 @@ class TestAdExtractorContent:
                 TimeoutError("Timeout"),  # Description times out
                 "03.02.2025"  # Date succeeds
             ]),
+            web_execute=AsyncMock(return_value={
+                "universalAnalyticsOpts": {
+                    "dimensions": {
+                        "dimension92": "",
+                        "dimension108": ""
+                    }
+                }
+            }),
             _extract_category_from_ad_page = AsyncMock(return_value = "160"),
             _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
             _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
@@ -494,6 +510,14 @@ class TestAdExtractorContent:
                 raw_description,  # Description without affixes
                 "03.02.2025"  # Creation date
             ]),
+            web_execute = AsyncMock(return_value = {
+                "universalAnalyticsOpts": {
+                    "dimensions": {
+                        "dimension92": "",
+                        "dimension108": ""
+                    }
+                }
+            }),
             _extract_category_from_ad_page = AsyncMock(return_value = "160"),
             _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
             _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
@@ -575,8 +599,34 @@ class TestAdExtractorCategory:
                     }
                 }
             }
-            result = await extractor._extract_special_attributes_from_ad_page()
+            result = await extractor._extract_special_attributes_from_ad_page(mock_web_execute.return_value)
             assert result == {}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_not_empty(self, extractor: AdExtractor) -> None:
+        """Test extraction of special attributes when not empty."""
+
+        special_atts = {
+            "universalAnalyticsOpts": {
+                "dimensions": {
+                    "dimension108": "versand_s:t|color_s:creme|groesse_s:68|condition_s:alright|type_s:accessoires|art_s:maedchen"
+                }
+            }
+        }
+        result = await extractor._extract_special_attributes_from_ad_page(special_atts)
+        assert len(result) == 5
+        assert "versand_s" not in result
+        assert "color_s" in result
+        assert result["color_s"] == "creme"
+        assert "groesse_s" in result
+        assert result["groesse_s"] == "68"
+        assert "condition_s" in result
+        assert result["condition_s"] == "alright"
+        assert "type_s" in result
+        assert result["type_s"] == "accessoires"
+        assert "art_s" in result
+        assert result["art_s"] == "maedchen"
 
 
 class TestAdExtractorContact:
