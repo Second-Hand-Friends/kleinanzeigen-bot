@@ -909,6 +909,17 @@ class KleinanzeigenBot(WebScrapingMixin):
         dicts.save_dict(ad_file, ad_cfg_orig)
 
     async def update_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
+        """
+        Updates a list of ads.
+        The list gets filtered, so that only already published ads will be updated.
+        Calls publish_ad in PUBLISH mode.
+
+        Args:
+            ad_cfgs: List of ad configurations
+
+        Returns:
+            None
+        """
         count = 0
 
         published_ads = json.loads(
