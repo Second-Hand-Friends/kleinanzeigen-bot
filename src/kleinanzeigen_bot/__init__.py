@@ -901,7 +901,10 @@ class KleinanzeigenBot(WebScrapingMixin):
         if not ad_cfg.created_on and not ad_cfg.id:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
 
-        LOG.info(" -> SUCCESS: ad published with ID %s" if mode == AdMode.PUBLISH else " -> SUCCESS: ad updated with ID %s", ad_id)
+        if mode == AdMode.PUBLISH:
+            LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
+        else:
+            LOG.info(" -> SUCCESS: ad updated with ID %s", ad_id)
 
         dicts.save_dict(ad_file, ad_cfg_orig)
 
