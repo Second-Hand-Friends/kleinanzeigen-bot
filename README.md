@@ -186,6 +186,7 @@ Usage: kleinanzeigen-bot COMMAND [OPTIONS]
 Commands:
   publish  - (re-)publishes ads
   verify   - verifies the configuration files
+  update   - updates published ads
   delete   - deletes ads
   download - downloads one or multiple ads
   --
@@ -206,6 +207,10 @@ Options:
         * all: downloads all ads from your profile
         * new: downloads ads from your profile that are not locally saved yet
         * <id(s)>: provide one or several ads by ID to download, like e.g. "--ads=1,2,3"
+  --ads=changed|<id(s)> (update) - specifies which ads to update (DEFAULT: changed)
+        Possible values:
+        * changed: only update ads that have been modified since last publication
+        * <id(s)>: provide one or several ads by ID to update, like e.g. "--ads=1,2,3"
   --force           - alias for '--ads=all'
   --keep-old        - don't delete old ads on republication
   --config=<PATH>   - path to the config YAML or JSON file (DEFAULT: ./config.yaml)
