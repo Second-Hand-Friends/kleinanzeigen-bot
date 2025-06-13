@@ -693,8 +693,6 @@ class KleinanzeigenBot(WebScrapingMixin):
         """
 
         if mode == AdMode.PUBLISH:
-            await self.assert_free_ad_limit_not_reached()
-
             if self.config.publishing.delete_old_ads == "BEFORE_PUBLISH" and not self.keep_old_ads:
                 await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title)
 
@@ -1162,13 +1160,6 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.info(" -> uploading image [%s]", image)
             await image_upload.send_file(image)
             await self.web_sleep()
-
-    async def assert_free_ad_limit_not_reached(self) -> None:
-        try:
-            await self.web_find(By.XPATH, "/html/body/div[1]/form/fieldset[6]/div[1]/header", timeout = 2)
-            raise AssertionError(f"Cannot publish more ads. The monthly limit of free ads of account {self.config.login.username} is reached.")
-        except TimeoutError:
-            pass
 
     async def download_ads(self) -> None:
         """

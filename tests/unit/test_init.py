@@ -1045,8 +1045,7 @@ class TestKleinanzeigenBotShippingOptions:
                 patch.object(test_bot, "web_find_all", new_callable = AsyncMock), \
                 patch.object(test_bot, "web_await", new_callable = AsyncMock), \
                 patch("builtins.input", return_value = ""), \
-                patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock), \
-                patch.object(test_bot, "assert_free_ad_limit_not_reached", new_callable = AsyncMock):
+                patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock):
 
             # Mock web_find to simulate element detection
             async def mock_find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
