@@ -684,7 +684,8 @@ class KleinanzeigenBot(WebScrapingMixin):
         LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    async def publish_ad(self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[dict[str, Any]], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
+    async def publish_ad(self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[dict[str, Any]],
+                         mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         """
         @param ad_cfg: the effective ad config (i.e. with default values applied etc.)
         @param ad_cfg_orig: the ad config as present in the YAML file
