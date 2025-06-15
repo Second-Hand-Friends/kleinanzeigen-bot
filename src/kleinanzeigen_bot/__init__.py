@@ -30,9 +30,9 @@ LOG.setLevel(loggers.INFO)
 colorama.just_fix_windows_console()
 
 
-class AdMode(enum.Enum):
-    PUBLISH = enum.auto()
-    UPDATE = enum.auto()
+class AdUpdateStrategy(enum.Enum):
+    REPLACE = enum.auto()
+    MODIFY = enum.auto()
 
 
 class KleinanzeigenBot(WebScrapingMixin):
@@ -674,7 +674,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
             count += 1
 
-            await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdMode.PUBLISH)
+            await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.REPLACE)
             await self.web_await(lambda: self.web_check(By.ID, "checking-done", Is.DISPLAYED), timeout = 5 * 60)
 
             if self.config.publishing.delete_old_ads == "AFTER_PUBLISH" and not self.keep_old_ads:
@@ -684,7 +684,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    async def publish_ad(self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[dict[str, Any]], mode:AdMode = AdMode.PUBLISH) -> None:
+    async def publish_ad(self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[dict[str, Any]], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         """
         @param ad_cfg: the effective ad config (i.e. with default values applied etc.)
         @param ad_cfg_orig: the ad config as present in the YAML file
@@ -692,7 +692,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         @param mode: the mode of ad editing, either publishing a new or updating an existing ad
         """
 
-        if mode == AdMode.PUBLISH:
+        if mode == AdUpdateStrategy.REPLACE:
             if self.config.publishing.delete_old_ads == "BEFORE_PUBLISH" and not self.keep_old_ads:
                 await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title)
 
@@ -748,7 +748,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             except TimeoutError:
                 pass
             if ad_cfg.price:
-                if mode == AdMode.UPDATE:
+                if mode == AdUpdateStrategy.MODIFY:
                     # we have to clear the input, otherwise input gets appended
                     await self.web_input(By.CSS_SELECTOR,
                                      "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price", "")
@@ -825,7 +825,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     pass
                 await self.web_input(By.ID, "postad-phonenumber", ad_cfg.contact.phone)
 
-        if mode == AdMode.UPDATE:
+        if mode == AdUpdateStrategy.MODIFY:
             #############################
             # delete previous images because we don't know which have changed
             #############################
@@ -899,7 +899,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         if not ad_cfg.created_on and not ad_cfg.id:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
 
-        if mode == AdMode.PUBLISH:
+        if mode == AdUpdateStrategy.REPLACE:
             LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
         else:
             LOG.info(" -> SUCCESS: ad updated with ID %s", ad_id)
@@ -910,7 +910,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         """
         Updates a list of ads.
         The list gets filtered, so that only already published ads will be updated.
-        Calls publish_ad in PUBLISH mode.
+        Calls publish_ad in MODIFY mode.
 
         Args:
             ad_cfgs: List of ad configurations
@@ -936,7 +936,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
             count += 1
 
-            await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdMode.UPDATE)
+            await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.MODIFY)
             await self.web_await(lambda: self.web_check(By.ID, "checking-done", Is.DISPLAYED), timeout = 5 * 60)
 
         LOG.info("############################################")
@@ -1038,7 +1038,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 raise TimeoutError(f"Failed to set special attribute [{special_attribute_key}]") from ex
             LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value)
 
-    async def __set_shipping(self, ad_cfg:Ad, mode:AdMode = AdMode.PUBLISH) -> None:
+    async def __set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         if ad_cfg.shipping_type == "PICKUP":
             try:
                 await self.web_click(By.XPATH,
@@ -1048,7 +1048,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         elif ad_cfg.shipping_options:
             await self.web_click(By.XPATH, '//*[contains(@class, "SubSection")]//button[contains(@class, "SelectionButton")]')
 
-            if mode == AdMode.UPDATE:
+            if mode == AdUpdateStrategy.MODIFY:
                 try:
                     # when "Andere Versandmethoden" is not available, go back and start over new
                     await self.web_find(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(., "Andere Versandmethoden")]', timeout=2)
