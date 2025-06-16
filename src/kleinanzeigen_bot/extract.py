@@ -287,8 +287,8 @@ class AdExtractor(WebScrapingMixin):
         # append subcategory and change e.g. category "161/172" to "161/172/lautsprecher_kopfhoerer"
         # take subcategory from dimension92 as key 'art_s' sometimes is a special attribute (e.g. gender for clothes)
         # the subcategory isn't really necessary, but when set, the appropriate special attribute gets preselected
-        if belen_conf["universalAnalyticsOpts"]["dimensions"]["dimension92"]:
-            info["category"] += f"/{belen_conf['universalAnalyticsOpts']['dimensions']['dimension92']}"
+        if dimension92 := belen_conf["universalAnalyticsOpts"]["dimensions"].get("dimension92"):
+            info["category"] += f"/{dimension92}"
 
         info["title"] = title
 
