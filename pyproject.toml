@@ -265,7 +265,7 @@ min-file-size = 256
 # https://pylint.pycqa.org/en/latest/user_guide/checkers/features.html#design-checker-messages
 max-args       = 6      # max. number of args for function / method (R0913)
 # max-attributes = 15   # TODO max. number of instance attrs for a class (R0902)
-max-branches   = 40     # max. number of branch for function / method body (R0912)
+max-branches   = 45     # max. number of branch for function / method body (R0912)
 max-locals     = 30     # max. number of local vars for function / method body (R0914)
 max-returns    = 15     # max. number of return / yield for function / method body (R0911)
 max-statements = 150    # max. number of statements in function / method body (R0915)

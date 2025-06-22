@@ -75,15 +75,15 @@ class AdExtractor(WebScrapingMixin):
             # download all images from box
             image_box = await self.web_find(By.CLASS_NAME, "galleryimage-large")
 
-            n_images = len(await self.web_find_all(By.CSS_SELECTOR, ".galleryimage-element[data-ix]", parent = image_box))
+            images = await self.web_find_all(By.CSS_SELECTOR, ".galleryimage-element[data-ix] > img", parent = image_box)
+            n_images = len(images)
             LOG.info("Found %s.", i18n.pluralize("image", n_images))
 
-            img_element:Element = await self.web_find(By.CSS_SELECTOR, "div:nth-child(1) > img", parent = image_box)
             img_fn_prefix = "ad_" + str(ad_id) + "__img"
-
             img_nr = 1
             dl_counter = 0
-            while img_nr <= n_images:  # scrolling + downloading
+
+            for img_element in images:
                 current_img_url = img_element.attrs["src"]  # URL of the image
                 if current_img_url is None:
                     continue
@@ -97,16 +97,6 @@ class AdExtractor(WebScrapingMixin):
                     dl_counter += 1
                     img_paths.append(img_path.rsplit("/", maxsplit = 1)[-1])
 
-                # navigate to next image (if exists)
-                if img_nr < n_images:
-                    try:
-                        # click next button, wait, and re-establish reference
-                        await (await self.web_find(By.CLASS_NAME, "galleryimage--navigation--next")).click()
-                        new_div = await self.web_find(By.CSS_SELECTOR, f"div.galleryimage-element:nth-child({img_nr + 1})")
-                        img_element = await self.web_find(By.TAG_NAME, "img", parent = new_div)
-                    except TimeoutError:
-                        LOG.error("NEXT button in image gallery somehow missing, aborting image fetching.")
-                        break
                 img_nr += 1
             LOG.info("Downloaded %s.", i18n.pluralize("image", dl_counter))
 
@@ -122,13 +112,14 @@ class AdExtractor(WebScrapingMixin):
         :param url: the URL to the ad page
         :return: the ad ID, a (ten-digit) integer number
         """
-        num_part = url.split("/")[-1]  # suffix
-        id_part = num_part.split("-")[0]
+
+        num_part = url.rsplit("/", maxsplit = 1)[-1]  # suffix
+        id_part = num_part.split("-", maxsplit = 1)[0]
 
         try:
-            path = url.split("?", 1)[0]  # Remove query string if present
-            last_segment = path.rstrip("/").split("/")[-1]  # Get last path component
-            id_part = last_segment.split("-")[0]  # Extract part before first hyphen
+            path = url.split("?", maxsplit = 1)[0]  # Remove query string if present
+            last_segment = path.rstrip("/").rsplit("/", maxsplit = 1)[-1]  # Get last path component
+            id_part = last_segment.split("-", maxsplit = 1)[0]  # Extract part before first hyphen
             return int(id_part)
         except (IndexError, ValueError) as ex:
             LOG.warning("Failed to extract ad ID from URL '%s': %s", url, ex)
@@ -286,7 +277,19 @@ class AdExtractor(WebScrapingMixin):
         title:str = await self.web_text(By.ID, "viewad-title")
         LOG.info('Extracting information from ad with title "%s"', title)
 
+        # contains info about ad in different dimensions in form of a key:value dict
+        # dimension108 contains special attributes
+        # dimension92 contains fake category, which becomes an special attribute on ad page
+        belen_conf = await self.web_execute("window.BelenConf")
+
         info["category"] = await self._extract_category_from_ad_page()
+
+        # append subcategory and change e.g. category "161/172" to "161/172/lautsprecher_kopfhoerer"
+        # take subcategory from dimension92 as key 'art_s' sometimes is a special attribute (e.g. gender for clothes)
+        # the subcategory isn't really necessary, but when set, the appropriate special attribute gets preselected
+        if dimension92 := belen_conf["universalAnalyticsOpts"]["dimensions"].get("dimension92"):
+            info["category"] += f"/{dimension92}"
+
         info["title"] = title
 
         # Get raw description text
@@ -305,11 +308,8 @@ class AdExtractor(WebScrapingMixin):
 
         info["description"] = description_text.strip()
 
-        info["special_attributes"] = await self._extract_special_attributes_from_ad_page()
-        if "art_s" in info["special_attributes"]:
-            # change e.g. category "161/172" to "161/172/lautsprecher_kopfhoerer"
-            info["category"] = f"{info['category']}/{info['special_attributes']['art_s']}"
-            del info["special_attributes"]["art_s"]
+        info["special_attributes"] = await self._extract_special_attributes_from_ad_page(belen_conf)
+
         if "schaden_s" in info["special_attributes"]:
             # change f to  'nein' and 't' to 'ja'
             info["special_attributes"]["schaden_s"] = info["special_attributes"]["schaden_s"].translate(str.maketrans({"t": "ja", "f": "nein"}))
@@ -350,24 +350,22 @@ class AdExtractor(WebScrapingMixin):
         category_line = await self.web_find(By.ID, "vap-brdcrmb")
         category_first_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
         category_second_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(3)", parent = category_line)
-        cat_num_first = category_first_part.attrs["href"].split("/")[-1][1:]
-        cat_num_second = category_second_part.attrs["href"].split("/")[-1][1:]
+        cat_num_first = category_first_part.attrs["href"].rsplit("/", maxsplit = 1)[-1][1:]
+        cat_num_second = category_second_part.attrs["href"].rsplit("/", maxsplit = 1)[-1][1:]
         category:str = cat_num_first + "/" + cat_num_second
 
         return category
 
-    async def _extract_special_attributes_from_ad_page(self) -> dict[str, Any]:
+    async def _extract_special_attributes_from_ad_page(self, belen_conf:dict[str, Any]) -> dict[str, Any]:
         """
         Extracts the special attributes from an ad page.
         If no items are available then special_attributes is empty
 
         :return: a dictionary (possibly empty) where the keys are the attribute names, mapped to their values
         """
-        belen_conf = await self.web_execute("window.BelenConf")
 
         # e.g. "art_s:lautsprecher_kopfhoerer|condition_s:like_new|versand_s:t"
         special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"]["dimension108"]
-
         special_attributes = dict(item.split(":") for item in special_attributes_str.split("|") if ":" in item)
         special_attributes = {k: v for k, v in special_attributes.items() if not k.endswith(".versand_s") and k != "versand_s"}
         return special_attributes
@@ -381,15 +379,15 @@ class AdExtractor(WebScrapingMixin):
         try:
             price_str:str = await self.web_text(By.ID, "viewad-price")
             price:int | None = None
-            match price_str.split()[-1]:
+            match price_str.rsplit(maxsplit = 1)[-1]:
                 case "€":
                     price_type = "FIXED"
                     # replace('.', '') is to remove the thousands separator before parsing as int
-                    price = int(price_str.replace(".", "").split()[0])
+                    price = int(price_str.replace(".", "").split(maxsplit = 1)[0])
                 case "VB":
                     price_type = "NEGOTIABLE"
                     if price_str != "VB":  # can be either 'X € VB', or just 'VB'
-                        price = int(price_str.replace(".", "").split()[0])
+                        price = int(price_str.replace(".", "").split(maxsplit = 1)[0])
                 case "verschenken":
                     price_type = "GIVE_AWAY"
                 case _:
@@ -500,7 +498,7 @@ class AdExtractor(WebScrapingMixin):
         except TimeoutError:
             LOG.info("No street given in the contact.")
 
-        (zipcode, location) = address_text.split(" ", 1)
+        (zipcode, location) = address_text.split(" ", maxsplit = 1)
         contact["zipcode"] = zipcode  # e.g. 19372
         contact["location"] = location  # e.g. Mecklenburg-Vorpommern - Steinbeck
 

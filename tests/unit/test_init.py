@@ -17,6 +17,7 @@ from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, PublishingConfig
 from kleinanzeigen_bot.utils import dicts, loggers
+from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
 @pytest.fixture
@@ -36,6 +37,26 @@ def mock_page() -> MagicMock:
     mock.goto = AsyncMock()
     mock.close = AsyncMock()
     return mock
+
+
+@pytest.mark.asyncio
+async def test_mock_page_fixture(mock_page:MagicMock) -> None:
+    """Test that the mock_page fixture is properly configured."""
+    # Test that all required async methods are present
+    assert hasattr(mock_page, "sleep")
+    assert hasattr(mock_page, "evaluate")
+    assert hasattr(mock_page, "click")
+    assert hasattr(mock_page, "type")
+    assert hasattr(mock_page, "select")
+    assert hasattr(mock_page, "wait_for_selector")
+    assert hasattr(mock_page, "wait_for_navigation")
+    assert hasattr(mock_page, "wait_for_load_state")
+    assert hasattr(mock_page, "content")
+    assert hasattr(mock_page, "goto")
+    assert hasattr(mock_page, "close")
+
+    # Test that content returns expected value
+    assert await mock_page.content() == "<html></html>"
 
 
 @pytest.fixture
@@ -81,7 +102,7 @@ def remove_fields(config:dict[str, Any], *fields:str) -> dict[str, Any]:
     for field in fields:
         if "." in field:
             # Handle nested fields (e.g., "contact.phone")
-            parts = field.split(".")
+            parts = field.split(".", maxsplit = 1)
             current = result
             for part in parts[:-1]:
                 if part in current:
@@ -91,6 +112,30 @@ def remove_fields(config:dict[str, Any], *fields:str) -> dict[str, Any]:
         elif field in result:
             del result[field]
     return result
+
+
+def test_remove_fields() -> None:
+    """Test the remove_fields helper function."""
+    test_config = {
+        "field1": "value1",
+        "field2": "value2",
+        "nested": {
+            "field3": "value3"
+        }
+    }
+
+    # Test removing top-level field
+    result = remove_fields(test_config, "field1")
+    assert "field1" not in result
+    assert "field2" in result
+
+    # Test removing nested field
+    result = remove_fields(test_config, "nested.field3")
+    assert "field3" not in result["nested"]
+
+    # Test removing non-existent field
+    result = remove_fields(test_config, "nonexistent")
+    assert result == test_config
 
 
 @pytest.fixture
@@ -282,20 +327,6 @@ class TestKleinanzeigenBotAuthentication:
     """Tests for login and authentication functionality."""
 
     @pytest.mark.asyncio
-    async def test_assert_free_ad_limit_not_reached_success(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that free ad limit check succeeds when limit not reached."""
-        with patch.object(test_bot, "web_find", side_effect = TimeoutError):
-            await test_bot.assert_free_ad_limit_not_reached()
-
-    @pytest.mark.asyncio
-    async def test_assert_free_ad_limit_not_reached_limit_reached(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that free ad limit check fails when limit is reached."""
-        with patch.object(test_bot, "web_find", return_value = AsyncMock()):
-            with pytest.raises(AssertionError) as exc_info:
-                await test_bot.assert_free_ad_limit_not_reached()
-            assert "Cannot publish more ads" in str(exc_info.value)
-
-    @pytest.mark.asyncio
     async def test_is_logged_in_returns_true_when_logged_in(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login check returns true when logged in."""
         with patch.object(test_bot, "web_text", return_value = "Welcome dummy_user"):
@@ -336,27 +367,123 @@ class TestKleinanzeigenBotAuthentication:
     async def test_login_flow_handles_captcha(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login flow handles captcha correctly."""
         with patch.object(test_bot, "web_open"), \
-                patch.object(test_bot, "is_logged_in", return_value = False), \
+                patch.object(test_bot, "is_logged_in", side_effect = [False, False, True]), \
                 patch.object(test_bot, "web_find") as mock_find, \
-                patch.object(test_bot, "web_await") as mock_await, \
-                patch.object(test_bot, "web_input"), \
-                patch.object(test_bot, "web_click"), \
-                patch("kleinanzeigen_bot.ainput") as mock_ainput:
+                patch.object(test_bot, "web_input") as mock_input, \
+                patch.object(test_bot, "web_click") as mock_click, \
+                patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput:
 
+            # Mock the sequence of web_find calls:
+            # First login attempt:
+            # 1. Captcha iframe found (in check_and_wait_for_captcha)
+            # 2. Phone verification not found (in handle_after_login_logic)
+            # 3. GDPR banner not found (in handle_after_login_logic)
+            # Second login attempt:
+            # 4. Captcha iframe found (in check_and_wait_for_captcha)
+            # 5. Phone verification not found (in handle_after_login_logic)
+            # 6. GDPR banner not found (in handle_after_login_logic)
             mock_find.side_effect = [
-                AsyncMock(),  # Captcha iframe
-                TimeoutError(),  # Login form
-                TimeoutError(),  # Phone verification
-                TimeoutError(),  # GDPR banner
-                TimeoutError(),  # GDPR banner click
+                AsyncMock(),  # Captcha iframe (first login)
+                TimeoutError(),  # Phone verification (first login)
+                TimeoutError(),  # GDPR banner (first login)
+                AsyncMock(),  # Captcha iframe (second login)
+                TimeoutError(),  # Phone verification (second login)
+                TimeoutError(),  # GDPR banner (second login)
             ]
-            mock_await.return_value = True
             mock_ainput.return_value = ""
+            mock_input.return_value = AsyncMock()
+            mock_click.return_value = AsyncMock()
 
             await test_bot.login()
 
-            assert mock_find.call_count >= 2
-            mock_await.assert_called_once()
+            # Verify the complete flow
+            assert mock_find.call_count == 6  # Exactly 6 web_find calls
+            assert mock_ainput.call_count == 2  # Two captcha prompts
+            assert mock_input.call_count == 6  # Two login attempts with username, clear password, and set password
+            assert mock_click.call_count == 2  # Two submit button clicks
+
+    @pytest.mark.asyncio
+    async def test_check_and_wait_for_captcha(self, test_bot:KleinanzeigenBot) -> None:
+        """Verify that captcha detection works correctly."""
+        with patch.object(test_bot, "web_find") as mock_find, \
+                patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput:
+
+            # Test case 1: Captcha found
+            mock_find.return_value = AsyncMock()
+            mock_ainput.return_value = ""
+
+            await test_bot.check_and_wait_for_captcha(is_login_page = True)
+
+            assert mock_find.call_count == 1
+            assert mock_ainput.call_count == 1
+
+            # Test case 2: No captcha
+            mock_find.side_effect = TimeoutError()
+            mock_ainput.reset_mock()
+
+            await test_bot.check_and_wait_for_captcha(is_login_page = True)
+
+            assert mock_find.call_count == 2
+            assert mock_ainput.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_fill_login_data_and_send(self, test_bot:KleinanzeigenBot) -> None:
+        """Verify that login form filling works correctly."""
+        with patch.object(test_bot, "web_input") as mock_input, \
+                patch.object(test_bot, "web_click") as mock_click, \
+                patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock) as mock_captcha:
+
+            # Mock successful login form interaction
+            mock_input.return_value = AsyncMock()
+            mock_click.return_value = AsyncMock()
+
+            await test_bot.fill_login_data_and_send()
+
+            assert mock_captcha.call_count == 1
+            assert mock_input.call_count == 3  # Username, clear password, set password
+            assert mock_click.call_count == 1  # Submit button
+
+    @pytest.mark.asyncio
+    async def test_handle_after_login_logic(self, test_bot:KleinanzeigenBot) -> None:
+        """Verify that post-login handling works correctly."""
+        with patch.object(test_bot, "web_find") as mock_find, \
+                patch.object(test_bot, "web_click") as mock_click, \
+                patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput:
+
+            # Test case 1: No special handling needed
+            mock_find.side_effect = [TimeoutError(), TimeoutError()]  # No phone verification, no GDPR
+            mock_click.return_value = AsyncMock()
+            mock_ainput.return_value = ""
+
+            await test_bot.handle_after_login_logic()
+
+            assert mock_find.call_count == 2
+            assert mock_click.call_count == 0
+            assert mock_ainput.call_count == 0
+
+            # Test case 2: Phone verification needed
+            mock_find.reset_mock()
+            mock_click.reset_mock()
+            mock_ainput.reset_mock()
+            mock_find.side_effect = [AsyncMock(), TimeoutError()]  # Phone verification found, no GDPR
+
+            await test_bot.handle_after_login_logic()
+
+            assert mock_find.call_count == 2
+            assert mock_click.call_count == 0  # No click needed, just wait for user
+            assert mock_ainput.call_count == 1  # Wait for user to complete verification
+
+            # Test case 3: GDPR banner present
+            mock_find.reset_mock()
+            mock_click.reset_mock()
+            mock_ainput.reset_mock()
+            mock_find.side_effect = [TimeoutError(), AsyncMock()]  # No phone verification, GDPR found
+
+            await test_bot.handle_after_login_logic()
+
+            assert mock_find.call_count == 2
+            assert mock_click.call_count == 2  # Click to accept GDPR and continue
+            assert mock_ainput.call_count == 0
 
 
 class TestKleinanzeigenBotLocalization:
@@ -892,6 +1019,19 @@ class TestKleinanzeigenBotShippingOptions:
                 return 0  # Return integer to prevent scrolling loop
             return None
 
+        # Create mock elements
+        csrf_token_elem = MagicMock()
+        csrf_token_elem.attrs = {"content": "csrf-token-123"}
+
+        shipping_form_elem = MagicMock()
+        shipping_form_elem.attrs = {}
+
+        shipping_size_radio = MagicMock()
+        shipping_size_radio.attrs = {"checked": False}
+
+        category_path_elem = MagicMock()
+        category_path_elem.apply = AsyncMock(return_value = "Test Category")
+
         # Mock the necessary web interaction methods
         with patch.object(test_bot, "web_execute", side_effect = mock_web_execute), \
                 patch.object(test_bot, "web_click", new_callable = AsyncMock), \
@@ -902,23 +1042,24 @@ class TestKleinanzeigenBotShippingOptions:
                 patch.object(test_bot, "web_sleep", new_callable = AsyncMock), \
                 patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True), \
                 patch.object(test_bot, "web_request", new_callable = AsyncMock), \
-                patch.object(test_bot, "web_find_all", new_callable = AsyncMock) as mock_find_all, \
+                patch.object(test_bot, "web_find_all", new_callable = AsyncMock), \
                 patch.object(test_bot, "web_await", new_callable = AsyncMock), \
-                patch("builtins.input", return_value = ""):  # Mock the input function
+                patch("builtins.input", return_value = ""), \
+                patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock):
 
-            # Mock the shipping options form elements
-            mock_find.side_effect = [
-                TimeoutError(),  # First call in assert_free_ad_limit_not_reached
-                AsyncMock(attrs = {"content": "csrf-token-123"}),  # CSRF token
-                AsyncMock(attrs = {"checked": True}),  # Size radio button check
-                AsyncMock(attrs = {"value": "Klein"}),  # Size dropdown
-                AsyncMock(attrs = {"value": "Paket 2 kg"}),  # Package type dropdown
-                AsyncMock(attrs = {"value": "Päckchen"}),  # Second package type dropdown
-                TimeoutError(),  # Captcha check
-            ]
+            # Mock web_find to simulate element detection
+            async def mock_find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+                if selector_value == "meta[name=_csrf]":
+                    return csrf_token_elem
+                if selector_value == "myftr-shppngcrt-frm":
+                    return shipping_form_elem
+                if selector_value == '.SingleSelectionItem--Main input[type=radio][data-testid="Klein"]':
+                    return shipping_size_radio
+                if selector_value == "postad-category-path":
+                    return category_path_elem
+                return None
 
-            # Mock web_find_all to return empty list for city options
-            mock_find_all.return_value = []
+            mock_find.side_effect = mock_find_side_effect
 
             # Mock web_check to return True for radio button checked state
             with patch.object(test_bot, "web_check", new_callable = AsyncMock) as mock_check:

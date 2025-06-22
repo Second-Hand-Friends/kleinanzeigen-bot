@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import atexit, json, os, re, signal, sys, textwrap  # isort: skip
+import atexit, enum, json, os, re, signal, sys, textwrap  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 from gettext import gettext as _
@@ -29,6 +29,11 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 LOG.setLevel(loggers.INFO)
 
 colorama.just_fix_windows_console()
+
+
+class AdUpdateStrategy(enum.Enum):
+    REPLACE = enum.auto()
+    MODIFY = enum.auto()
 
 
 class KleinanzeigenBot(WebScrapingMixin):
@@ -127,6 +132,25 @@ class KleinanzeigenBot(WebScrapingMixin):
                         LOG.info("############################################")
                         LOG.info("DONE: No new/outdated ads found.")
                         LOG.info("############################################")
+                case "update":
+                    self.configure_file_logging()
+                    self.load_config()
+
+                    if not (self.ads_selector in {"all", "changed"} or
+                            any(selector in self.ads_selector.split(",") for selector in
+                                ("all", "changed")) or
+                            re.compile(r"\d+[,\d+]*").search(self.ads_selector)):
+                        LOG.warning('You provided no ads selector. Defaulting to "changed".')
+                        self.ads_selector = "changed"
+
+                    if ads := self.load_ads():
+                        await self.create_browser_session()
+                        await self.login()
+                        await self.update_ads(ads)
+                    else:
+                        LOG.info("############################################")
+                        LOG.info("DONE: No changed ads found.")
+                        LOG.info("############################################")
                 case "delete":
                     self.configure_file_logging()
                     self.load_config()
@@ -177,6 +201,7 @@ class KleinanzeigenBot(WebScrapingMixin):
               publish  - (Wieder-)Veröffentlicht Anzeigen
               verify   - Überprüft die Konfigurationsdateien
               delete   - Löscht Anzeigen
+              update   - Aktualisiert bestehende Anzeigen
               download - Lädt eine oder mehrere Anzeigen herunter
               update-check - Prüft auf verfügbare Updates
               update-content-hash - Berechnet den content_hash aller Anzeigen anhand der aktuellen ad_defaults neu;
@@ -201,6 +226,10 @@ class KleinanzeigenBot(WebScrapingMixin):
                     * all: Lädt alle Anzeigen aus Ihrem Profil herunter
                     * new: Lädt Anzeigen aus Ihrem Profil herunter, die lokal noch nicht gespeichert sind
                     * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs zum Herunterladen an, z. B. "--ads=1,2,3"
+              --ads=changed|<id(s)> (update) - Gibt an, welche Anzeigen aktualisiert werden sollen (STANDARD: changed)
+                    Mögliche Werte:
+                    * changed: Aktualisiert nur Anzeigen, die seit der letzten Veröffentlichung geändert wurden
+                    * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs zum Aktualisieren an, z. B. "--ads=1,2,3"
               --force           - Alias für '--ads=all'
               --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
               --config=<PATH>   - Pfad zur YAML- oder JSON-Konfigurationsdatei (STANDARD: ./config.yaml)
@@ -216,6 +245,7 @@ class KleinanzeigenBot(WebScrapingMixin):
               publish  - (re-)publishes ads
               verify   - verifies the configuration files
               delete   - deletes ads
+              update   - updates published ads
               download - downloads one or multiple ads
               update-check - checks for available updates
               update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;
@@ -238,6 +268,10 @@ class KleinanzeigenBot(WebScrapingMixin):
                     * all: downloads all ads from your profile
                     * new: downloads ads from your profile that are not locally saved yet
                     * <id(s)>: provide one or several ads by ID to download, like e.g. "--ads=1,2,3"
+              --ads=changed|<id(s)> (update) - specifies which ads to update (DEFAULT: changed)
+                    Possible values:
+                    * changed: only update ads that have been modified since last publication
+                    * <id(s)>: provide one or several ads by ID to update, like e.g. "--ads=1,2,3"
               --force           - alias for '--ads=all'
               --keep-old        - don't delete old ads on republication
               --config=<PATH>   - path to the config YAML or JSON file (DEFAULT: ./config.yaml)
@@ -368,7 +402,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     def load_ads(self, *, ignore_inactive:bool = True, exclude_ads_with_id:bool = True) -> list[tuple[str, Ad, dict[str, Any]]]:
         """
-        Load and validate all ad config files, optionally filtering out inactive or already‐published ads.
+        Load and validate all ad config files, optionally filtering out inactive or already-published ads.
 
         Args:
             ignore_inactive (bool):
@@ -520,6 +554,26 @@ class KleinanzeigenBot(WebScrapingMixin):
             self.browser_config.user_data_dir = abspath(self.config.browser.user_data_dir, relative_to = self.config_file_path)
         self.browser_config.profile_name = self.config.browser.profile_name
 
+    async def check_and_wait_for_captcha(self, *, is_login_page:bool = True) -> None:
+        try:
+            await self.web_find(By.CSS_SELECTOR,
+                                "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']", timeout = 2)
+
+            if not is_login_page and self.config.captcha.auto_restart:
+                LOG.warning("Captcha recognized - auto-restart enabled, abort run...")
+                raise CaptchaEncountered(misc.parse_duration(self.config.captcha.restart_delay))
+
+            LOG.warning("############################################")
+            LOG.warning("# Captcha present! Please solve the captcha.")
+            LOG.warning("############################################")
+
+            if not is_login_page:
+                await self.web_scroll_page_down()
+
+            await ainput(_("Press a key to continue..."))
+        except TimeoutError:
+            pass
+
     async def login(self) -> None:
         LOG.info("Checking if already logged in...")
         await self.web_open(f"{self.root_url}")
@@ -531,15 +585,6 @@ class KleinanzeigenBot(WebScrapingMixin):
         LOG.info("Opening login page...")
         await self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
 
-        try:
-            await self.web_find(By.CSS_SELECTOR, "iframe[src*='captcha-delivery.com']", timeout = 2)
-            LOG.warning("############################################")
-            LOG.warning("# Captcha present! Please solve the captcha.")
-            LOG.warning("############################################")
-            await self.web_await(lambda: self.web_find(By.ID, "login-form") is not None, timeout = 5 * 60)
-        except TimeoutError:
-            pass
-
         await self.fill_login_data_and_send()
         await self.handle_after_login_logic()
 
@@ -550,8 +595,14 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     async def fill_login_data_and_send(self) -> None:
         LOG.info("Logging in as [%s]...", self.config.login.username)
-        await self.web_input(By.ID, "email", self.config.login.username)
-        await self.web_input(By.ID, "password", self.config.login.password)
+        await self.web_input(By.ID, "login-email", self.config.login.username)
+
+        # clearing password input in case browser has stored login data set
+        await self.web_input(By.ID, "login-password", "")
+        await self.web_input(By.ID, "login-password", self.config.login.password)
+
+        await self.check_and_wait_for_captcha(is_login_page = True)
+
         await self.web_click(By.CSS_SELECTOR, "form#login-form button[type='submit']")
 
     async def handle_after_login_logic(self) -> None:
@@ -568,7 +619,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.info("Handling GDPR disclaimer...")
             await self.web_find(By.ID, "gdpr-banner-accept", timeout = 10)
             await self.web_click(By.ID, "gdpr-banner-cmp-button")
-            await self.web_click(By.CSS_SELECTOR, "#ConsentManagementPage button.Button-secondary", timeout = 10)
+            await self.web_click(By.XPATH, "//div[@id='ConsentManagementPage']//*//button//*[contains(., 'Alle ablehnen und fortfahren')]", timeout = 10)
         except TimeoutError:
             pass
 
@@ -651,7 +702,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
             count += 1
 
-            await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads)
+            await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.REPLACE)
             await self.web_await(lambda: self.web_check(By.ID, "checking-done", Is.DISPLAYED), timeout = 5 * 60)
 
             if self.config.publishing.delete_old_ads == "AFTER_PUBLISH" and not self.keep_old_ads:
@@ -661,24 +712,28 @@ class KleinanzeigenBot(WebScrapingMixin):
         LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    async def publish_ad(self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[dict[str, Any]]) -> None:
+    async def publish_ad(self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[dict[str, Any]],
+                         mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         """
         @param ad_cfg: the effective ad config (i.e. with default values applied etc.)
         @param ad_cfg_orig: the ad config as present in the YAML file
         @param published_ads: json list of published ads
+        @param mode: the mode of ad editing, either publishing a new or updating an existing ad
         """
-        await self.assert_free_ad_limit_not_reached()
 
-        if self.config.publishing.delete_old_ads == "BEFORE_PUBLISH" and not self.keep_old_ads:
-            await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title)
+        if mode == AdUpdateStrategy.REPLACE:
+            if self.config.publishing.delete_old_ads == "BEFORE_PUBLISH" and not self.keep_old_ads:
+                await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title)
 
-        LOG.info("Publishing ad '%s'...", ad_cfg.title)
+            LOG.info("Publishing ad '%s'...", ad_cfg.title)
+            await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html")
+        else:
+            LOG.info("Updating ad '%s'...", ad_cfg.title)
+            await self.web_open(f"{self.root_url}/p-anzeige-bearbeiten.html?adId={ad_cfg.id}")
 
         if loggers.is_debug(LOG):
             LOG.debug(" -> effective ad meta:")
             YAML().dump(ad_cfg.model_dump(), sys.stdout)
-
-        await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html")
 
         if ad_cfg.type == "WANTED":
             await self.web_click(By.ID, "adType2")
@@ -710,7 +765,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 except TimeoutError:
                     LOG.warning("Failed to set shipping attribute for type '%s'!", ad_cfg.shipping_type)
         else:
-            await self.__set_shipping(ad_cfg)
+            await self.__set_shipping(ad_cfg, mode)
 
         #############################
         # set price
@@ -722,6 +777,10 @@ class KleinanzeigenBot(WebScrapingMixin):
             except TimeoutError:
                 pass
             if ad_cfg.price:
+                if mode == AdUpdateStrategy.MODIFY:
+                    # we have to clear the input, otherwise input gets appended
+                    await self.web_input(By.CSS_SELECTOR,
+                                     "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price", "")
                 await self.web_input(By.CSS_SELECTOR, "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price", str(ad_cfg.price))
 
         #############################
@@ -754,10 +813,10 @@ class KleinanzeigenBot(WebScrapingMixin):
                 try:
                     await self.web_sleep(1)  # Wait for city dropdown to populate
                     options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
+
                     for option in options:
-                        option_text = await self.web_text(By.CSS_SELECTOR, "option", parent = option)
-                        if option_text == ad_cfg.contact.location:
-                            await self.web_select(By.ID, "pstad-citychsr", option_text)
+                        if option.text == ad_cfg.contact.location:
+                            await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
                             break
                 except TimeoutError:
                     LOG.debug("Could not set city from location")
@@ -795,6 +854,16 @@ class KleinanzeigenBot(WebScrapingMixin):
                     pass
                 await self.web_input(By.ID, "postad-phonenumber", ad_cfg.contact.phone)
 
+        if mode == AdUpdateStrategy.MODIFY:
+            #############################
+            # delete previous images because we don't know which have changed
+            #############################
+            img_items = await self.web_find_all(By.CSS_SELECTOR,
+                                                "ul#j-pictureupload-thumbnails > li.ui-sortable-handle")
+            for element in img_items:
+                btn = await self.web_find(By.CSS_SELECTOR, "button.pictureupload-thumbnails-remove", parent=element)
+                await btn.click()
+
         #############################
         # upload images
         #############################
@@ -803,24 +872,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         #############################
         # wait for captcha
         #############################
-        try:
-            await self.web_find(
-                By.CSS_SELECTOR,
-                "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']",
-                timeout = 2)
-
-            if self.config.captcha.auto_restart:
-                LOG.warning("Captcha recognized - auto-restart enabled, abort run...")
-                raise CaptchaEncountered(misc.parse_duration(self.config.captcha.restart_delay))
-
-            # Fallback: manuell
-            LOG.warning("############################################")
-            LOG.warning("# Captcha present! Please solve the captcha.")
-            LOG.warning("############################################")
-            await self.web_scroll_page_down()
-            input(_("Press a key to continue..."))
-        except TimeoutError:
-            pass
+        await self.check_and_wait_for_captcha(is_login_page = False)
 
         #############################
         # submit
@@ -839,6 +891,20 @@ class KleinanzeigenBot(WebScrapingMixin):
                 await self.web_click(By.XPATH, image_hint_xpath)
         except TimeoutError:
             pass  # nosec
+
+        #############################
+        # wait for payment form if commercial account is used
+        #############################
+        try:
+            await self.web_find(By.ID, "myftr-shppngcrt-frm", timeout = 2)
+
+            LOG.warning("############################################")
+            LOG.warning("# Payment form detected! Please proceed with payment.")
+            LOG.warning("############################################")
+            await self.web_scroll_page_down()
+            input(_("Press a key to continue..."))
+        except TimeoutError:
+            pass
 
         await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = 20)
 
@@ -862,24 +928,64 @@ class KleinanzeigenBot(WebScrapingMixin):
         if not ad_cfg.created_on and not ad_cfg.id:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
 
-        LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
+        if mode == AdUpdateStrategy.REPLACE:
+            LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
+        else:
+            LOG.info(" -> SUCCESS: ad updated with ID %s", ad_id)
 
         dicts.save_dict(ad_file, ad_cfg_orig)
+
+    async def update_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
+        """
+        Updates a list of ads.
+        The list gets filtered, so that only already published ads will be updated.
+        Calls publish_ad in MODIFY mode.
+
+        Args:
+            ad_cfgs: List of ad configurations
+
+        Returns:
+            None
+        """
+        count = 0
+
+        published_ads = json.loads(
+            (await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
+
+        for (ad_file, ad_cfg, ad_cfg_orig) in ad_cfgs:
+            ad = next((ad for ad in published_ads if ad["id"] == ad_cfg.id), None)
+
+            if not ad:
+                continue
+
+            LOG.info("Processing %s/%s: '%s' from [%s]...", count + 1, len(ad_cfgs), ad_cfg.title, ad_file)
+            if ad["state"] == "paused":
+                LOG.info("Skipping because ad is reserved")
+                continue
+
+            count += 1
+
+            await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.MODIFY)
+            await self.web_await(lambda: self.web_check(By.ID, "checking-done", Is.DISPLAYED), timeout = 5 * 60)
+
+        LOG.info("############################################")
+        LOG.info("DONE: updated %s", pluralize("ad", count))
+        LOG.info("############################################")
 
     async def __set_condition(self, condition_value:str) -> None:
         condition_mapping = {
             "new_with_tag": "Neu mit Etikett",
             "new": "Neu",
             "like_new": "Sehr Gut",
-            "alright": "Gut",
-            "ok": "In Ordnung",
+            "ok": "Gut",
+            "alright": "In Ordnung",
             "defect": "Defekt",
         }
         mapped_condition = condition_mapping.get(condition_value)
 
         try:
             # Open condition dialog
-            await self.web_click(By.CSS_SELECTOR, '[class*="ConditionSelector"] button')
+            await self.web_click(By.XPATH, '//*[@id="j-post-listing-frontend-conditions"]//button[contains(@class, "SelectionButton")]')
         except TimeoutError:
             LOG.debug("Unable to open condition dialog and select condition [%s]", condition_value, exc_info = True)
             return
@@ -891,8 +997,8 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.debug("Unable to select condition [%s]", condition_value, exc_info = True)
 
         try:
-            # Click continue button
-            await self.web_click(By.XPATH, '//*[contains(@class, "ModalDialog--Actions")]//button[contains(., "Bestätigen")]')
+            # Click accept button
+            await self.web_click(By.XPATH, '//*[contains(@id, "j-post-listing-frontend-conditions")]//dialog//button[contains(., "Bestätigen")]')
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close condition dialog!")) from ex
 
@@ -961,7 +1067,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 raise TimeoutError(f"Failed to set special attribute [{special_attribute_key}]") from ex
             LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value)
 
-    async def __set_shipping(self, ad_cfg:Ad) -> None:
+    async def __set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         if ad_cfg.shipping_type == "PICKUP":
             try:
                 await self.web_click(By.XPATH,
@@ -970,6 +1076,14 @@ class KleinanzeigenBot(WebScrapingMixin):
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg.shipping_options:
             await self.web_click(By.XPATH, '//*[contains(@class, "SubSection")]//button[contains(@class, "SelectionButton")]')
+
+            if mode == AdUpdateStrategy.MODIFY:
+                try:
+                    # when "Andere Versandmethoden" is not available, go back and start over new
+                    await self.web_find(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(., "Andere Versandmethoden")]', timeout=2)
+                except TimeoutError:
+                    await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
+
             await self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(., "Andere Versandmethoden")]')
             await self.__set_shipping_options(ad_cfg)
         else:
@@ -983,12 +1097,23 @@ class KleinanzeigenBot(WebScrapingMixin):
                     # no options. only costs. Set custom shipping cost
                     if ad_cfg.shipping_costs is not None:
                         await self.web_click(By.XPATH, '//*[contains(@class, "SubSection")]//button[contains(@class, "SelectionButton")]')
-                        await self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(., "Andere Versandmethoden")]')
-                        await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
 
-                        if ad_cfg.shipping_costs:
-                            await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]',
-                                             str.replace(str(ad_cfg.shipping_costs), ".", ","))
+                        try:
+                            # when "Andere Versandmethoden" is not available, then we are already on the individual page
+                            await self.web_click(By.XPATH,
+                                                 '//*[contains(@class, "CarrierSelectionModal")]//button[contains(., "Andere Versandmethoden")]')
+                        except TimeoutError:
+                            pass
+
+                        try:
+                            # only click on "Individueller Versand" when "IndividualShippingInput" is not available, otherwise its already checked
+                            # (important for mode = UPDATE)
+                            await self.web_find(By.XPATH,
+                                                '//*[contains(@class, "IndividualPriceSection")]//div[contains(@class, "IndividualShippingInput")]', timeout=2)
+                        except TimeoutError:
+                            await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
+
+                        await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]', str.replace(str(ad_cfg.shipping_costs), ".", ","))
                         await self.web_click(By.XPATH, '//dialog//button[contains(., "Fertig")]')
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
@@ -1041,10 +1166,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 try:
                     await self.web_click(
                         By.XPATH,
-                        '//*[contains(@class, "CarrierSelectionModal")]'
-                        '//*[contains(@class, "CarrierOption")]'
-                        f'//*[contains(@class, "CarrierOption--Main") and @data-testid="{shipping_package}"]'
-                    )
+                        f'//dialog//input[contains(@data-testid, "{shipping_package}")]')
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
 
@@ -1067,13 +1189,6 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.info(" -> uploading image [%s]", image)
             await image_upload.send_file(image)
             await self.web_sleep()
-
-    async def assert_free_ad_limit_not_reached(self) -> None:
-        try:
-            await self.web_find(By.XPATH, "/html/body/div[1]/form/fieldset[6]/div[1]/header", timeout = 2)
-            raise AssertionError(f"Cannot publish more ads. The monthly limit of free ads of account {self.config.login.username} is reached.")
-        except TimeoutError:
-            pass
 
     async def download_ads(self) -> None:
         """

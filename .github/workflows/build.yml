@@ -53,6 +53,10 @@ jobs:
   ###########################################################
   build:
   ###########################################################
+  
+    permissions:
+      packages: write
+
     strategy:
       fail-fast: false
       matrix:
@@ -328,7 +332,19 @@ jobs:
     needs: [build, publish-coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: (github.ref_name == 'main' || github.ref_name == 'release') && !github.event.act
+
+    permissions:
+      contents: write
+
+    # run on 'main' and 'release' branch when:
+    #   – build succeeded, AND
+    #   – publish-coverage succeeded OR was skipped
+    if: >
+        always()
+          && needs.build.result == 'success' 
+          && (needs.publish-coverage.result == 'success' || needs.publish-coverage.result == 'skipped')
+        && (github.ref_name == 'main' || github.ref_name == 'release') && !github.event.act     
+
     concurrency: publish-${{ github.ref_name }}-release # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idconcurrency
 
     steps:
