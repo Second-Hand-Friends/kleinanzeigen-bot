@@ -1327,7 +1327,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
 def main(args:list[str]) -> None:
     if "version" not in args:
-        print(textwrap.dedent(r"""
+        print(textwrap.dedent(rf"""
          _    _      _                           _                       _           _
         | | _| | ___(_)_ __   __ _ _ __  _______(_) __ _  ___ _ __      | |__   ___ | |_
         | |/ / |/ _ \ | '_ \ / _` | '_ \|_  / _ \ |/ _` |/ _ \ '_ \ ____| '_ \ / _ \| __|
@@ -1335,6 +1335,7 @@ def main(args:list[str]) -> None:
         |_|\_\_|\___|_|_| |_|\__,_|_| |_/___\___|_|\__, |\___|_| |_|    |_.__/ \___/ \__|
                                                    |___/
                                  https://github.com/Second-Hand-Friends/kleinanzeigen-bot
+                                 Version: {__version__}
         """)[1:], flush = True)  # [1:] removes the first empty blank line
 
     loggers.configure_console_logging()
