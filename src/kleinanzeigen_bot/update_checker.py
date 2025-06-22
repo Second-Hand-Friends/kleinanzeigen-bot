@@ -142,25 +142,38 @@ class UpdateChecker:
             logger.warning("Could not determine local commit hash.")
             return
 
+        # --- Fetch release info from GitHub using correct endpoint per channel ---
         try:
-            response = requests.get(
-                "https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases",
-                timeout = 10
-            )
-            response.raise_for_status()
-            releases = response.json()
+            if self.config.update_check.channel == "latest":
+                # Use /releases/latest endpoint for stable releases
+                response = requests.get(
+                    "https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases/latest",
+                    timeout=10
+                )
+                response.raise_for_status()
+                release = response.json()
+                # Defensive: ensure it's not a prerelease
+                if release.get("prerelease", False):
+                    logger.warning("Latest release from GitHub is a prerelease, but 'latest' channel expects a stable release.")
+                    return
+            elif self.config.update_check.channel == "preview":
+                # Use /releases endpoint and select the most recent prerelease
+                response = requests.get(
+                    "https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases",
+                    timeout=10
+                )
+                response.raise_for_status()
+                releases = response.json()
+                # Find the most recent prerelease
+                release = next((r for r in releases if r.get("prerelease", False)), None)
+                if not release:
+                    logger.warning("No prerelease found for 'preview' channel.")
+                    return
+            else:
+                logger.warning("Unknown update channel: %s", self.config.update_check.channel)
+                return
         except Exception as e:
             logger.warning("Could not get releases: %s", e)
-            return
-
-        if not releases:
-            logger.warning("No releases found.")
-            return
-
-        release = next((r for r in releases if r["tag_name"] == self.config.update_check.channel and (
-            self.config.update_check.channel == "preview" and r["prerelease"] or self.config.update_check.channel == "latest" and not r["prerelease"])), None)
-        if not release:
-            logger.warning("No release found for channel %s.", self.config.update_check.channel)
             return
 
         # Get release commit
@@ -184,35 +197,35 @@ class UpdateChecker:
             logger.warning("Could not determine commit dates for comparison.")
             return
 
-        if local_commit != release_commit:
-            if local_commit_date and release_commit_date:
-                if local_commit_date > release_commit_date:
-                    logger.info(
-                        "You are ahead of the latest version: %s (compared to %s in channel %s)",
-                        local_version,
-                        self._get_short_commit_hash(release_commit),
-                        self.config.update_check.channel
-                    )
-                else:
-                    logger.warning(
-                        "A new version is available: %s from %s (current: %s from %s, channel: %s)",
-                        self._get_short_commit_hash(release_commit),
-                        release_commit_date.strftime("%Y-%m-%d %H:%M:%S"),
-                        local_version,
-                        local_commit_date.strftime("%Y-%m-%d %H:%M:%S"),
-                        self.config.update_check.channel
-                    )
-                    if release.get("body"):
-                        logger.info("Release notes:\n%s", release["body"])
-            else:
-                logger.warning("Could not determine commit dates for comparison.")
-        else:
+        if local_commit == release_commit:
             logger.info(
                 "You are on the latest version: %s (compared to %s in channel %s)",
                 local_version,
                 self._get_short_commit_hash(release_commit),
                 self.config.update_check.channel
             )
+        else:
+            # We cannot reliably determine ahead/behind without git. Use commit dates as a weak heuristic, but clarify in the log.
+            if local_commit_date < release_commit_date:
+                logger.warning(
+                    "A new version is available: %s from %s (current: %s from %s, channel: %s)",
+                    self._get_short_commit_hash(release_commit),
+                    release_commit_date.strftime("%Y-%m-%d %H:%M:%S"),
+                    local_version,
+                    local_commit_date.strftime("%Y-%m-%d %H:%M:%S"),
+                    self.config.update_check.channel
+                )
+                if release.get("body"):
+                    logger.info("Release notes:\n%s", release["body"])
+            else:
+                logger.info(
+                    "You are on a different commit than the latest release. This may mean you are ahead, behind, or on a different branch. "
+                    "Local commit: %s (%s), Release commit: %s (%s)",
+                    self._get_short_commit_hash(local_commit),
+                    local_commit_date.strftime("%Y-%m-%d %H:%M:%S"),
+                    self._get_short_commit_hash(release_commit),
+                    release_commit_date.strftime("%Y-%m-%d %H:%M:%S")
+                )
 
         # Update the last check time
         self.state.update_last_check()
