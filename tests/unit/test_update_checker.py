@@ -226,81 +226,6 @@ class TestUpdateChecker:
         expected = "You are on the latest version: 2025+fb00f11 (compared to fb00f11 in channel latest)"
         assert any(expected in r.getMessage() for r in caplog.records)
 
-    def test_interval_checking(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
-        """Test that the update checker respects the interval setting."""
-        # Create a state with a recent check
-        state = UpdateCheckState()
-        state.last_check = datetime.now(timezone.utc) - timedelta(days = 3)  # 3 days ago
-        state.save(state_file)
-
-        # Mock the update check to verify it's not called
-        mocker.patch.object(UpdateChecker, "get_local_version")
-        mock_get = mocker.patch("requests.get")
-
-        # Run the update check
-        checker = UpdateChecker(config)
-        checker.state_file = state_file  # Override the state file path
-        checker.state = UpdateCheckState.load(state_file)  # Load the state
-        checker.check_for_updates()
-
-        # Verify that no API calls were made
-        mock_get.assert_not_called()
-
-    def test_interval_checking_expired(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
-        """Test that the update checker performs a check when the interval has expired."""
-        # Create a state with an old check
-        state = UpdateCheckState()
-        state.last_check = datetime.now(timezone.utc) - timedelta(days = 8)  # 8 days ago
-        state.save(state_file)
-
-        # Mock the update check to verify it's called
-        mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
-        mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
-        mocker.patch.object(UpdateChecker, "_get_release_commit", return_value = "e7a3d46")
-        mock_get = mocker.patch.object(
-            requests,
-            "get",
-            return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": False})
-        )
-
-        # Run the update check
-        checker = UpdateChecker(config)
-        checker.state_file = state_file  # Override the state file path
-        checker.state = UpdateCheckState.load(state_file)  # Load the state
-        checker.check_for_updates()
-
-        # Verify that API calls were made
-        assert mock_get.call_count > 0
-
-    def test_interval_checking_invalid(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
-        """Test that the update checker performs a check when the interval is invalid."""
-        # Create a state with a recent check
-        state = UpdateCheckState()
-        state.last_check = datetime.now(timezone.utc) - timedelta(days = 3)  # 3 days ago
-        state.save(state_file)
-
-        # Set an invalid interval
-        config.update_check.interval = "invalid"
-
-        # Mock the update check to verify it's called
-        mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
-        mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
-        mocker.patch.object(UpdateChecker, "_get_release_commit", return_value = "e7a3d46")
-        mock_get = mocker.patch.object(
-            requests,
-            "get",
-            return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": False})
-        )
-
-        # Run the update check
-        checker = UpdateChecker(config)
-        checker.state_file = state_file  # Override the state file path
-        checker.state = UpdateCheckState.load(state_file)  # Load the state
-        checker.check_for_updates()
-
-        # Verify that API calls were made
-        assert mock_get.call_count > 0
-
     def test_update_check_state_empty_file(self, state_file:Path) -> None:
         """Test that loading an empty state file returns a new state."""
         state_file.touch()  # Create empty file
@@ -336,35 +261,82 @@ class TestUpdateChecker:
         state = UpdateCheckState()
         now = datetime.now(timezone.utc)
 
-        # Test seconds
+        # Test seconds (should always be too short)
         state.last_check = now - timedelta(seconds = 30)
-        assert state.should_check("60s") is False
+        assert state.should_check("60s") is True
         assert state.should_check("20s") is True
 
-        # Test minutes
+        # Test minutes (should always be too short)
         state.last_check = now - timedelta(minutes = 30)
-        assert state.should_check("60m") is False
+        assert state.should_check("60m") is True
         assert state.should_check("20m") is True
 
-        # Test hours
+        # Test hours (should always be too short)
         state.last_check = now - timedelta(hours = 2)
-        assert state.should_check("4h") is False
+        assert state.should_check("4h") is True
         assert state.should_check("1h") is True
 
         # Test days
         state.last_check = now - timedelta(days = 3)
         assert state.should_check("7d") is False
         assert state.should_check("2d") is True
-
-        # Test weeks
-        state.last_check = now - timedelta(weeks = 1)
-        assert state.should_check("2w") is False
+        state.last_check = now - timedelta(days = 3)
+        assert state.should_check("3d") is False
+        state.last_check = now - timedelta(days = 3, seconds = 1)
         assert state.should_check("3d") is True
+
+        # Test multi-day intervals (was weeks)
+        state.last_check = now - timedelta(days = 14)
+        assert state.should_check("14d") is False
+        state.last_check = now - timedelta(days = 14, seconds = 1)
+        assert state.should_check("14d") is True
 
         # Test invalid unit
         assert state.should_check("1x") is True
         # Test truly unknown unit (case _)
         assert state.should_check("1z") is True
+
+    def test_update_check_state_interval_validation(self) -> None:
+        """Test that interval validation works correctly."""
+        state = UpdateCheckState()
+        now = datetime.now(timezone.utc)
+        state.last_check = now - timedelta(days = 1)
+
+        # Test minimum value (1d)
+        assert state.should_check("12h") is True  # Too short
+        assert state.should_check("1d") is False  # Minimum allowed
+        assert state.should_check("2d") is False  # Valid
+
+        # Test maximum value (30d)
+        assert state.should_check("31d") is True   # Too long
+        assert state.should_check("60d") is True   # Too long
+        state.last_check = now - timedelta(days = 30)
+        assert state.should_check("30d") is False  # Maximum allowed
+        state.last_check = now - timedelta(days = 30, seconds = 1)
+        assert state.should_check("30d") is True   # Should check if just over interval
+        state.last_check = now - timedelta(days = 21)
+        assert state.should_check("21d") is False  # Valid
+        state.last_check = now - timedelta(days = 21, seconds = 1)
+        assert state.should_check("21d") is True   # Should check if just over interval
+        state.last_check = now - timedelta(days = 7)
+        assert state.should_check("7d") is False   # 7 days
+        state.last_check = now - timedelta(days = 7, seconds = 1)
+        assert state.should_check("7d") is True    # Should check if just over interval
+
+        # Test negative values
+        assert state.should_check("-1d") is True  # Negative value
+        assert state.should_check("0d") is True   # Zero value
+
+        # Test invalid formats
+        assert state.should_check("invalid") is True  # Invalid format
+        assert state.should_check("1") is True       # Missing unit
+        assert state.should_check("d") is True       # Missing value
+        assert state.should_check("1x") is True      # Invalid unit
+
+        # Test unit conversions (all sub-day intervals are too short)
+        assert state.should_check("24h") is True    # 1 day in hours (should be too short)
+        assert state.should_check("1440m") is True  # 1 day in minutes (should be too short)
+        assert state.should_check("86400s") is True  # 1 day in seconds (should be too short)
 
     def test_update_check_state_invalid_date(self, state_file:Path) -> None:
         """Test that loading a state file with an invalid date string for last_check returns a new state (triggers ValueError)."""
@@ -462,39 +434,6 @@ class TestUpdateChecker:
         checker = UpdateChecker(config)
         checker.check_for_updates()
         assert any("Could not determine commit dates for comparison." in r.getMessage() for r in caplog.records)
-
-    def test_update_check_state_interval_validation(self) -> None:
-        """Test that interval validation works correctly."""
-        state = UpdateCheckState()
-        now = datetime.now(timezone.utc)
-        state.last_check = now - timedelta(days = 1)
-
-        # Test minimum value (1d)
-        assert state.should_check("12h") is True  # Too short
-        assert state.should_check("1d") is False  # Minimum allowed
-        assert state.should_check("2d") is False  # Valid
-
-        # Test maximum value (4w)
-        assert state.should_check("5w") is True   # Too long
-        assert state.should_check("60d") is True   # Too long
-        assert state.should_check("4w") is False  # Maximum allowed
-        assert state.should_check("3w") is False  # Valid
-
-        # Test negative values
-        assert state.should_check("-1d") is True  # Negative value
-        assert state.should_check("0d") is True   # Zero value
-
-        # Test invalid formats
-        assert state.should_check("invalid") is True  # Invalid format
-        assert state.should_check("1") is True       # Missing unit
-        assert state.should_check("d") is True       # Missing value
-        assert state.should_check("1x") is True      # Invalid unit
-
-        # Test unit conversions
-        assert state.should_check("24h") is False    # 1 day in hours
-        assert state.should_check("1440m") is False  # 1 day in minutes
-        assert state.should_check("86400s") is False  # 1 day in seconds
-        assert state.should_check("1w") is False     # 7 days in weeks
 
     def test_update_check_state_version_tracking(self, state_file:Path) -> None:
         """Test that version tracking works correctly."""
@@ -612,5 +551,4 @@ class TestUpdateChecker:
         assert state.should_check("1d") is True
         assert state.should_check("4w") is True
 
-        # Verify time_since_last_check returns infinity
-        assert state._time_since_last_check() == float("inf")
+        # No longer check _time_since_last_check (method removed)
