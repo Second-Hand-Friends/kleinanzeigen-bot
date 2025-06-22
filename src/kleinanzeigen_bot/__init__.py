@@ -861,7 +861,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             img_items = await self.web_find_all(By.CSS_SELECTOR,
                                                 "ul#j-pictureupload-thumbnails > li.ui-sortable-handle")
             for element in img_items:
-                btn = await self.web_find(By.CSS_SELECTOR, "button.pictureupload-thumbnails-remove", parent=element)
+                btn = await self.web_find(By.CSS_SELECTOR, "button.pictureupload-thumbnails-remove", parent = element)
                 await btn.click()
 
         #############################
@@ -1080,7 +1080,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             if mode == AdUpdateStrategy.MODIFY:
                 try:
                     # when "Andere Versandmethoden" is not available, go back and start over new
-                    await self.web_find(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(., "Andere Versandmethoden")]', timeout=2)
+                    await self.web_find(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(., "Andere Versandmethoden")]', timeout = 2)
                 except TimeoutError:
                     await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
 
@@ -1109,7 +1109,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                             # only click on "Individueller Versand" when "IndividualShippingInput" is not available, otherwise its already checked
                             # (important for mode = UPDATE)
                             await self.web_find(By.XPATH,
-                                                '//*[contains(@class, "IndividualPriceSection")]//div[contains(@class, "IndividualShippingInput")]', timeout=2)
+                                                '//*[contains(@class, "IndividualPriceSection")]//div[contains(@class, "IndividualShippingInput")]',
+                                                timeout = 2)
                         except TimeoutError:
                             await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
 

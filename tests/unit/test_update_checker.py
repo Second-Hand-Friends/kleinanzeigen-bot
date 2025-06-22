@@ -114,7 +114,7 @@ class TestUpdateChecker:
         mocker.patch.object(
             requests,
             "get",
-            return_value = mocker.Mock(json = lambda: [{"tag_name": "latest", "prerelease": False}])
+            return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": False})
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
 
@@ -125,7 +125,10 @@ class TestUpdateChecker:
         for r in caplog.records:
             print(f"{r.levelname}: {r.getMessage()}")
 
-        expected = "You are ahead of the latest version: 2025+fb00f11 (compared to e7a3d46 in channel latest)"
+        expected = (
+            "You are on a different commit than the release for channel 'latest' (tag: latest). This may mean you are ahead, behind, or on a different branch. "
+            "Local commit: fb00f11 (2025-05-18 00:00:00), Release commit: e7a3d46 (2025-05-16 00:00:00)"
+        )
         assert any(expected in r.getMessage() for r in caplog.records)
 
     def test_check_for_updates_preview(self, config:Config, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
@@ -139,8 +142,8 @@ class TestUpdateChecker:
             UpdateChecker,
             "_get_commit_date",
             side_effect = [
-                datetime(2025, 5, 16, tzinfo = timezone.utc),
-                datetime(2025, 5, 18, tzinfo = timezone.utc)
+                datetime(2025, 5, 18, tzinfo = timezone.utc),
+                datetime(2025, 5, 16, tzinfo = timezone.utc)
             ]
         )
         mocker.patch.object(
@@ -157,7 +160,11 @@ class TestUpdateChecker:
         for r in caplog.records:
             print(f"{r.levelname}: {r.getMessage()}")
 
-        expected = "A new version is available: e7a3d46 from 2025-05-18 00:00:00 (current: 2025+fb00f11 from 2025-05-16 00:00:00, channel: preview)"
+        expected = (
+            "You are on a different commit than the release for channel 'preview' (tag: preview). "
+            "This may mean you are ahead, behind, or on a different branch. "
+            "Local commit: fb00f11 (2025-05-18 00:00:00), Release commit: e7a3d46 (2025-05-16 00:00:00)"
+        )
         assert any(expected in r.getMessage() for r in caplog.records)
 
     def test_check_for_updates_behind(self, config:Config, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
@@ -177,7 +184,7 @@ class TestUpdateChecker:
         mocker.patch.object(
             requests,
             "get",
-            return_value = mocker.Mock(json = lambda: [{"tag_name": "latest", "prerelease": False}])
+            return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": False})
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
 
@@ -205,7 +212,7 @@ class TestUpdateChecker:
         mocker.patch.object(
             requests,
             "get",
-            return_value = mocker.Mock(json = lambda: [{"tag_name": "latest", "prerelease": False}])
+            return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": False})
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
 
@@ -253,7 +260,7 @@ class TestUpdateChecker:
         mock_get = mocker.patch.object(
             requests,
             "get",
-            return_value = mocker.Mock(json = lambda: [{"tag_name": "latest", "prerelease": False}])
+            return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": False})
         )
 
         # Run the update check
@@ -282,7 +289,7 @@ class TestUpdateChecker:
         mock_get = mocker.patch.object(
             requests,
             "get",
-            return_value = mocker.Mock(json = lambda: [{"tag_name": "latest", "prerelease": False}])
+            return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": False})
         )
 
         # Run the update check
@@ -450,6 +457,8 @@ class TestUpdateChecker:
         mocker.patch.object(UpdateChecker, "_get_release_commit", return_value = "e7a3d46")
         mocker.patch.object(UpdateChecker, "_get_commit_date", return_value = None)
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
+        # Patch requests.get to avoid any real HTTP requests
+        mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": False}))
         checker = UpdateChecker(config)
         checker.check_for_updates()
         assert any("Could not determine commit dates for comparison." in r.getMessage() for r in caplog.records)

@@ -148,7 +148,7 @@ class UpdateChecker:
                 # Use /releases/latest endpoint for stable releases
                 response = requests.get(
                     "https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases/latest",
-                    timeout=10
+                    timeout = 10
                 )
                 response.raise_for_status()
                 release = response.json()
@@ -160,7 +160,7 @@ class UpdateChecker:
                 # Use /releases endpoint and select the most recent prerelease
                 response = requests.get(
                     "https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases",
-                    timeout=10
+                    timeout = 10
                 )
                 response.raise_for_status()
                 releases = response.json()
@@ -204,28 +204,29 @@ class UpdateChecker:
                 self._get_short_commit_hash(release_commit),
                 self.config.update_check.channel
             )
+        # We cannot reliably determine ahead/behind without git. Use commit dates as a weak heuristic, but clarify in the log.
+        elif local_commit_date < release_commit_date:
+            logger.warning(
+                "A new version is available: %s from %s (current: %s from %s, channel: %s)",
+                self._get_short_commit_hash(release_commit),
+                release_commit_date.strftime("%Y-%m-%d %H:%M:%S"),
+                local_version,
+                local_commit_date.strftime("%Y-%m-%d %H:%M:%S"),
+                self.config.update_check.channel
+            )
+            if release.get("body"):
+                logger.info("Release notes:\n%s", release["body"])
         else:
-            # We cannot reliably determine ahead/behind without git. Use commit dates as a weak heuristic, but clarify in the log.
-            if local_commit_date < release_commit_date:
-                logger.warning(
-                    "A new version is available: %s from %s (current: %s from %s, channel: %s)",
-                    self._get_short_commit_hash(release_commit),
-                    release_commit_date.strftime("%Y-%m-%d %H:%M:%S"),
-                    local_version,
-                    local_commit_date.strftime("%Y-%m-%d %H:%M:%S"),
-                    self.config.update_check.channel
-                )
-                if release.get("body"):
-                    logger.info("Release notes:\n%s", release["body"])
-            else:
-                logger.info(
-                    "You are on a different commit than the latest release. This may mean you are ahead, behind, or on a different branch. "
-                    "Local commit: %s (%s), Release commit: %s (%s)",
-                    self._get_short_commit_hash(local_commit),
-                    local_commit_date.strftime("%Y-%m-%d %H:%M:%S"),
-                    self._get_short_commit_hash(release_commit),
-                    release_commit_date.strftime("%Y-%m-%d %H:%M:%S")
-                )
+            logger.info(
+                "You are on a different commit than the release for channel '%s' (tag: %s). This may mean you are ahead, behind, or on a different branch. "
+                "Local commit: %s (%s), Release commit: %s (%s)",
+                self.config.update_check.channel,
+                release.get("tag_name", "unknown"),
+                self._get_short_commit_hash(local_commit),
+                local_commit_date.strftime("%Y-%m-%d %H:%M:%S"),
+                self._get_short_commit_hash(release_commit),
+                release_commit_date.strftime("%Y-%m-%d %H:%M:%S")
+            )
 
         # Update the last check time
         self.state.update_last_check()
