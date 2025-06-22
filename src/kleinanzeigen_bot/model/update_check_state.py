@@ -11,15 +11,15 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from pathlib import Path
 
-from kleinanzeigen_bot.utils import dicts, loggers
+from kleinanzeigen_bot.utils import dicts, loggers, misc
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
 
 LOG = loggers.get_logger(__name__)
 
 # Current version of the state file format
 CURRENT_STATE_VERSION = 1
-# Maximum allowed interval in days (4 weeks)
-MAX_INTERVAL_DAYS = 28
+# Maximum allowed interval in days
+MAX_INTERVAL_DAYS = 30
 
 
 class UpdateCheckState(ContextualModel):
@@ -127,70 +127,12 @@ class UpdateCheckState(ContextualModel):
         """Update the last check time to now in UTC."""
         self.last_check = datetime.datetime.now(datetime.timezone.utc)
 
-    def _parse_interval(self, interval:str) -> tuple[float, str] | None:
-        """
-        Parse and validate the interval string.
-        Returns (value, unit) if valid, else None.
-        """
-        try:
-            value = float(interval[:-1])
-            unit = interval[-1].lower()
-        except (ValueError, IndexError):
-            LOG.warning("Invalid interval format: %s. Expected format: <number><unit> (e.g. 7d)", interval)
-            return None
-        if value <= 0:
-            LOG.warning("Invalid interval value: %d. Value must be positive.", value)
-            return None
-        if unit not in {"s", "m", "h", "d", "w"}:
-            LOG.warning("Invalid interval unit: %s. Supported units: s, m, h, d, w", unit)
-            return None
-        return value, unit
-
-    def _interval_to_days(self, value:float, unit:str) -> float:
-        """Convert interval to days for max/min validation."""
-        match unit:
-            case "s":
-                return value / (24 * 3600)
-            case "m":
-                return value / (24 * 60)
-            case "h":
-                return value / 24
-            case "d":
-                return value
-            case "w":
-                return value * 7
-        return 0.0
-
-    def _interval_to_seconds(self, value:float, unit:str) -> float:
-        """Convert interval to seconds for time comparison."""
-        match unit:
-            case "s":
-                return value
-            case "m":
-                return value * 60
-            case "h":
-                return value * 3600
-            case "d":
-                return value * 86400
-            case "w":
-                return value * 604800
-        return 0.0
-
-    def _time_since_last_check(self) -> float:
-        """Return seconds since last_check, or a large number if last_check is None."""
-        if not self.last_check:
-            return float("inf")
-        now = datetime.datetime.now(datetime.timezone.utc)
-        last_check_utc = self.last_check.astimezone(datetime.timezone.utc)
-        now_utc = now.astimezone(datetime.timezone.utc)
-        return (now_utc - last_check_utc).total_seconds()
-
     def should_check(self, interval:str) -> bool:
         """
         Determine if an update check should be performed based on the provided interval.
 
         Args:
-            interval: The interval string in the format <number><unit> (e.g. 7d)
+            interval: The interval string (e.g. '7d', '1d 12h', etc.)
 
         Returns:
             bool: True if an update check should be performed, False otherwise.
@@ -200,21 +142,22 @@ class UpdateCheckState(ContextualModel):
             - Only returns True if more than the interval has passed since last_check.
             - Always compares in UTC.
         """
-        parsed = self._parse_interval(interval)
-        if not parsed:
+        try:
+            td = misc.parse_duration(interval)
+        except Exception as e:
+            LOG.warning("Invalid interval format: %s. Error: %s", interval, e)
             return True
-        value, unit = parsed
-        days = self._interval_to_days(value, unit)
-        if days > MAX_INTERVAL_DAYS:
-            LOG.warning("Interval too long: %s. Maximum interval is 4w.", interval)
+        total_days = td.total_seconds() / 86400
+        epsilon = 1e-6
+        if total_days > MAX_INTERVAL_DAYS + epsilon:
+            LOG.warning("Interval too long: %s. Maximum interval is 30d.", interval)
             return True
-        if days < 1 and unit in {"d", "w"}:
+        if total_days < 1 - epsilon:
             LOG.warning("Interval too short: %s. Minimum interval is 1d.", interval)
             return True
-        interval_seconds = self._interval_to_seconds(value, unit)
-        time_since = self._time_since_last_check()
-        # Handle infinite time difference (no last check)
-        if time_since == float("inf"):
+        if not self.last_check:
             return True
+        now = datetime.datetime.now(datetime.timezone.utc)
+        elapsed = now - self.last_check
         # Compare using integer seconds to avoid microsecond-level flakiness
-        return int(time_since) > int(interval_seconds)
+        return int(elapsed.total_seconds()) > int(td.total_seconds())
