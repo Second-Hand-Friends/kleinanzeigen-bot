@@ -297,13 +297,11 @@ class TestKleinanzeigenBotConfiguration:
         test_bot.config_file_path = str(config_path)
 
         with patch.object(LOG, "warning") as mock_warning:
-            with pytest.raises(ValidationError) as exc_info:
-                test_bot.load_config()
-
+            test_bot.load_config()
             mock_warning.assert_called_once()
             assert config_path.exists()
-            assert "login.username" in str(exc_info.value)
-            assert "login.password" in str(exc_info.value)
+            assert test_bot.config.login.username == "changeme"  # noqa: S105 placeholder for default config, not a real username
+            assert test_bot.config.login.password == "changeme"  # noqa: S105 placeholder for default config, not a real password
 
     def test_load_config_validates_required_fields(self, test_bot:KleinanzeigenBot, test_data_dir:str) -> None:
         """Verify that config validation checks required fields."""

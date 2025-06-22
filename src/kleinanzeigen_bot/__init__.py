@@ -526,8 +526,8 @@ class KleinanzeigenBot(WebScrapingMixin):
         if not os.path.exists(self.config_file_path):
             LOG.warning("Config file %s does not exist. Creating it with default values...", self.config_file_path)
             default_config = Config.model_construct()
-            default_config.login.username = ""
-            default_config.login.password = ""
+            default_config.login.username = "changeme"  # noqa: S105 placeholder for default config, not a real username
+            default_config.login.password = "changeme"  # noqa: S105 placeholder for default config, not a real password
             dicts.save_dict(self.config_file_path, default_config.model_dump(exclude_none = True, exclude = {
                 "ad_defaults": {
                     "description"  # deprecated
