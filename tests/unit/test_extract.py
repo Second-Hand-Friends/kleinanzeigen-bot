@@ -433,7 +433,7 @@ class TestAdExtractorContent:
                     raw_description,  # Raw description (without affixes)
                     "03.02.2025"  # Creation date
                 ]),
-                web_execute=AsyncMock(return_value={
+                web_execute = AsyncMock(return_value = {
                     "universalAnalyticsOpts": {
                         "dimensions": {
                             "dimension92": "",
@@ -469,7 +469,7 @@ class TestAdExtractorContent:
                 TimeoutError("Timeout"),  # Description times out
                 "03.02.2025"  # Date succeeds
             ]),
-            web_execute=AsyncMock(return_value={
+            web_execute = AsyncMock(return_value = {
                 "universalAnalyticsOpts": {
                     "dimensions": {
                         "dimension92": "",
@@ -604,7 +604,7 @@ class TestAdExtractorCategory:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_special_attributes_not_empty(self, extractor: AdExtractor) -> None:
+    async def test_extract_special_attributes_not_empty(self, extractor:AdExtractor) -> None:
         """Test extraction of special attributes when not empty."""
 
         special_atts = {
