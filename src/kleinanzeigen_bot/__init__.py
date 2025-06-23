@@ -76,11 +76,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             match self.command:
                 case "help":
                     self.show_help()
-                    self.configure_file_logging()
-                    self.load_config()
-                    # Check for updates on startup
-                    checker = UpdateChecker(self.config)
-                    checker.check_for_updates()
+                    return
                 case "version":
                     print(self.get_version())
                 case "verify":
