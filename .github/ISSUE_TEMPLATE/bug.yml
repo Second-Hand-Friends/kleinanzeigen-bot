@@ -52,6 +52,18 @@ body:
       required: true
 
   - type: dropdown
+    id: operating-system
+    attributes:
+      label: 💻 What operating systems are you seeing the problem on?
+      multiple: true
+      options:
+        - Linux
+        - MacOS
+        - Windows
+    validations:
+      required: true
+
+  - type: dropdown
     id: browsers
     attributes:
       label: 📺 What browsers are you seeing the problem on? (if applicable)
@@ -59,16 +71,6 @@ body:
       options:
         - Chrome
         - Microsoft Edge
-
-  - type: dropdown
-    id: operating-system
-    attributes:
-      label: 💻 What operating systems are you seeing the problem on? (if applicable)
-      multiple: true
-      options:
-        - Linux
-        - MacOS
-        - Windows
 
   - type: textarea
     id: logs
