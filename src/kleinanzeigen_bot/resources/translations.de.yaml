@@ -434,6 +434,10 @@ kleinanzeigen_bot/model/update_check_state.py:
     "Permission denied when saving update check state to %s": "Keine Berechtigung zum Speichern des Update-Prüfstatus in %s"
 
   should_check:
-    "Interval too long: %s. Maximum interval is 30d.": "Intervall zu lang: %s. Maximales Intervall ist 30d."
-    "Interval too short: %s. Minimum interval is 1d.": "Intervall zu kurz: %s. Minimales Intervall ist 1d."
-    "Invalid interval format: %s. Error: %s": "Ungültiges Intervall-Format: %s. Fehler: %s"
+    "Falling back to default interval: 1d (preview channel). Please fix your config to avoid this warning.": "Falle auf das Standardintervall zurück: 1 Tag (Vorschaukanal). Bitte korrigieren Sie Ihre Konfiguration, um diese Warnung zu vermeiden."
+    "Falling back to default interval: 7d (latest channel). Please fix your config to avoid this warning.": "Falle auf das Standardintervall zurück: 7 Tage (Stabiler Kanal). Bitte korrigieren Sie Ihre Konfiguration, um diese Warnung zu vermeiden."
+    "Interval is zero: %s. Minimum interval is 1d. Using default interval for this run.": "Intervall ist null: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
+    "Interval too long: %s. Maximum interval is 30d. Using default interval for this run.": "Intervall zu lang: %s. Das maximale Intervall beträgt 30 Tage. Es wird das Standardintervall für diesen Durchlauf verwendet."
+    "Interval too short: %s. Minimum interval is 1d. Using default interval for this run.": "Intervall zu kurz: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
+    "Invalid interval format or unsupported unit: %s. Using default interval for this run.": "Ungültiges Intervallformat oder nicht unterstützte Einheit: %s. Es wird das Standardintervall für diesen Durchlauf verwendet."
+    "Negative interval: %s. Minimum interval is 1d. Using default interval for this run.": "Negatives Intervall: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."

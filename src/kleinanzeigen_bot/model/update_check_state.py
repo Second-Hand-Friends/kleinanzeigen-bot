@@ -127,34 +127,65 @@ class UpdateCheckState(ContextualModel):
         """Update the last check time to now in UTC."""
         self.last_check = datetime.datetime.now(datetime.timezone.utc)
 
-    def should_check(self, interval:str) -> bool:
+    def _validate_update_interval(self, interval:str) -> tuple[datetime.timedelta, bool, str]:
+        """
+        Validate the update check interval string.
+        Returns (timedelta, is_valid, reason).
+        """
+        td = misc.parse_duration(interval)
+        # Accept explicit zero (e.g. "0d", "0h", "0m", "0s", "0") as invalid, but distinguish from typos
+        if td.total_seconds() == 0:
+            if interval.strip() in {"0d", "0h", "0m", "0s", "0"}:
+                return td, False, "Interval is zero, which is not allowed."
+            return td, False, "Invalid interval format or unsupported unit."
+        if td.total_seconds() < 0:
+            return td, False, "Negative interval is not allowed."
+        return td, True, ""
+
+    def should_check(self, interval:str, channel:str = "latest") -> bool:
         """
         Determine if an update check should be performed based on the provided interval.
 
         Args:
             interval: The interval string (e.g. '7d', '1d 12h', etc.)
+            channel: The update channel ('latest' or 'preview') for fallback default interval.
 
         Returns:
             bool: True if an update check should be performed, False otherwise.
 
         Notes:
-            - Returns True if interval is invalid, negative, zero, or above max.
+            - If interval is invalid, negative, zero, or above max, falls back to default interval for the channel.
             - Only returns True if more than the interval has passed since last_check.
             - Always compares in UTC.
         """
-        try:
-            td = misc.parse_duration(interval)
-        except Exception as e:
-            LOG.warning("Invalid interval format: %s. Error: %s", interval, e)
-            return True
-        total_days = td.total_seconds() / 86400
+        fallback = False
+        td = None
+        reason = ""
+        td, is_valid, reason = self._validate_update_interval(interval)
+        total_days = td.total_seconds() / 86400 if td else 0
         epsilon = 1e-6
-        if total_days > MAX_INTERVAL_DAYS + epsilon:
-            LOG.warning("Interval too long: %s. Maximum interval is 30d.", interval)
-            return True
-        if total_days < 1 - epsilon:
-            LOG.warning("Interval too short: %s. Minimum interval is 1d.", interval)
-            return True
+        if not is_valid:
+            if reason == "Interval is zero, which is not allowed.":
+                LOG.warning("Interval is zero: %s. Minimum interval is 1d. Using default interval for this run.", interval)
+            elif reason == "Invalid interval format or unsupported unit.":
+                LOG.warning("Invalid interval format or unsupported unit: %s. Using default interval for this run.", interval)
+            elif reason == "Negative interval is not allowed.":
+                LOG.warning("Negative interval: %s. Minimum interval is 1d. Using default interval for this run.", interval)
+            fallback = True
+        elif total_days > MAX_INTERVAL_DAYS + epsilon:
+            LOG.warning("Interval too long: %s. Maximum interval is 30d. Using default interval for this run.", interval)
+            fallback = True
+        elif total_days < 1 - epsilon:
+            LOG.warning("Interval too short: %s. Minimum interval is 1d. Using default interval for this run.", interval)
+            fallback = True
+        if fallback:
+            # Fallback to default interval based on channel
+            if channel == "preview":
+                td = misc.parse_duration("1d")
+                LOG.warning("Falling back to default interval: 1d (preview channel). Please fix your config to avoid this warning.")
+            else:
+                td = misc.parse_duration("7d")
+                LOG.warning("Falling back to default interval: 7d (latest channel). Please fix your config to avoid this warning.")
         if not self.last_check:
             return True
         now = datetime.datetime.now(datetime.timezone.utc)

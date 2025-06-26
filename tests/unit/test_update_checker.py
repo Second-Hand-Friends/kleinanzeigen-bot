@@ -261,20 +261,20 @@ class TestUpdateChecker:
         state = UpdateCheckState()
         now = datetime.now(timezone.utc)
 
-        # Test seconds (should always be too short)
+        # Test seconds (should always be too short, fallback to 7d, only 2 days elapsed, so should_check is False)
         state.last_check = now - timedelta(seconds = 30)
-        assert state.should_check("60s") is True
-        assert state.should_check("20s") is True
+        assert state.should_check("60s") is False
+        assert state.should_check("20s") is False
 
         # Test minutes (should always be too short)
         state.last_check = now - timedelta(minutes = 30)
-        assert state.should_check("60m") is True
-        assert state.should_check("20m") is True
+        assert state.should_check("60m") is False
+        assert state.should_check("20m") is False
 
         # Test hours (should always be too short)
         state.last_check = now - timedelta(hours = 2)
-        assert state.should_check("4h") is True
-        assert state.should_check("1h") is True
+        assert state.should_check("4h") is False
+        assert state.should_check("1h") is False
 
         # Test days
         state.last_check = now - timedelta(days = 3)
@@ -291,10 +291,17 @@ class TestUpdateChecker:
         state.last_check = now - timedelta(days = 14, seconds = 1)
         assert state.should_check("14d") is True
 
-        # Test invalid unit
+        # Test invalid unit (should fallback to 7d, 14 days elapsed, so should_check is True)
+        state.last_check = now - timedelta(days = 14)
         assert state.should_check("1x") is True
+        # If fallback interval has not elapsed, should_check is False
+        state.last_check = now - timedelta(days = 6)
+        assert state.should_check("1x") is False
         # Test truly unknown unit (case _)
+        state.last_check = now - timedelta(days = 14)
         assert state.should_check("1z") is True
+        state.last_check = now - timedelta(days = 6)
+        assert state.should_check("1z") is False
 
     def test_update_check_state_interval_validation(self) -> None:
         """Test that interval validation works correctly."""
@@ -303,40 +310,64 @@ class TestUpdateChecker:
         state.last_check = now - timedelta(days = 1)
 
         # Test minimum value (1d)
-        assert state.should_check("12h") is True  # Too short
+        assert state.should_check("12h") is False  # Too short, fallback to 7d, only 1 day elapsed
         assert state.should_check("1d") is False  # Minimum allowed
-        assert state.should_check("2d") is False  # Valid
+        assert state.should_check("2d") is False  # Valid, but only 1 day elapsed
 
         # Test maximum value (30d)
-        assert state.should_check("31d") is True   # Too long
-        assert state.should_check("60d") is True   # Too long
+        assert state.should_check("31d") is False   # Too long, fallback to 7d, only 1 day elapsed
+        assert state.should_check("60d") is False   # Too long, fallback to 7d, only 1 day elapsed
         state.last_check = now - timedelta(days = 30)
-        assert state.should_check("30d") is False  # Maximum allowed
+        assert state.should_check("30d") is False  # Exactly 30 days, should_check is False
         state.last_check = now - timedelta(days = 30, seconds = 1)
         assert state.should_check("30d") is True   # Should check if just over interval
         state.last_check = now - timedelta(days = 21)
-        assert state.should_check("21d") is False  # Valid
+        assert state.should_check("21d") is False  # Exactly 21 days, should_check is False
         state.last_check = now - timedelta(days = 21, seconds = 1)
         assert state.should_check("21d") is True   # Should check if just over interval
         state.last_check = now - timedelta(days = 7)
-        assert state.should_check("7d") is False   # 7 days
+        assert state.should_check("7d") is False   # 7 days, should_check is False
         state.last_check = now - timedelta(days = 7, seconds = 1)
         assert state.should_check("7d") is True    # Should check if just over interval
 
         # Test negative values
-        assert state.should_check("-1d") is True  # Negative value
-        assert state.should_check("0d") is True   # Zero value
+        state.last_check = now - timedelta(days = 1)
+        assert state.should_check("-1d") is False  # Negative value, fallback to 7d, only 1 day elapsed
+        state.last_check = now - timedelta(days = 8)
+        assert state.should_check("-1d") is True   # Negative value, fallback to 7d, 8 days elapsed
+        # Test zero value
+        state.last_check = now - timedelta(days = 1)
+        assert state.should_check("0d") is False   # Zero value, fallback to 7d, only 1 day elapsed
+        state.last_check = now - timedelta(days = 8)
+        assert state.should_check("0d") is True    # Zero value, fallback to 7d, 8 days elapsed
 
         # Test invalid formats
-        assert state.should_check("invalid") is True  # Invalid format
-        assert state.should_check("1") is True       # Missing unit
-        assert state.should_check("d") is True       # Missing value
-        assert state.should_check("1x") is True      # Invalid unit
+        state.last_check = now - timedelta(days = 1)
+        assert state.should_check("invalid") is False  # Invalid format, fallback to 7d, only 1 day elapsed
+        state.last_check = now - timedelta(days = 8)
+        assert state.should_check("invalid") is True   # Invalid format, fallback to 7d, 8 days elapsed
+        state.last_check = now - timedelta(days = 1)
+        assert state.should_check("1") is False       # Missing unit, fallback to 7d, only 1 day elapsed
+        state.last_check = now - timedelta(days = 8)
+        assert state.should_check("1") is True        # Missing unit, fallback to 7d, 8 days elapsed
+        state.last_check = now - timedelta(days = 1)
+        assert state.should_check("d") is False       # Missing value, fallback to 7d, only 1 day elapsed
+        state.last_check = now - timedelta(days = 8)
+        assert state.should_check("d") is True        # Missing value, fallback to 7d, 8 days elapsed
 
         # Test unit conversions (all sub-day intervals are too short)
-        assert state.should_check("24h") is True    # 1 day in hours (should be too short)
-        assert state.should_check("1440m") is True  # 1 day in minutes (should be too short)
-        assert state.should_check("86400s") is True  # 1 day in seconds (should be too short)
+        state.last_check = now - timedelta(days = 1)
+        assert state.should_check("24h") is False    # 1 day in hours, fallback to 7d, only 1 day elapsed
+        state.last_check = now - timedelta(days = 8)
+        assert state.should_check("24h") is True     # 1 day in hours, fallback to 7d, 8 days elapsed
+        state.last_check = now - timedelta(days = 1)
+        assert state.should_check("1440m") is False  # 1 day in minutes, fallback to 7d, only 1 day elapsed
+        state.last_check = now - timedelta(days = 8)
+        assert state.should_check("1440m") is True   # 1 day in minutes, fallback to 7d, 8 days elapsed
+        state.last_check = now - timedelta(days = 1)
+        assert state.should_check("86400s") is False  # 1 day in seconds, fallback to 7d, only 1 day elapsed
+        state.last_check = now - timedelta(days = 8)
+        assert state.should_check("86400s") is True   # 1 day in seconds, fallback to 7d, 8 days elapsed
 
     def test_update_check_state_invalid_date(self, state_file:Path) -> None:
         """Test that loading a state file with an invalid date string for last_check returns a new state (triggers ValueError)."""
@@ -552,3 +583,62 @@ class TestUpdateChecker:
         assert state.should_check("4w") is True
 
         # No longer check _time_since_last_check (method removed)
+
+    def test_should_check_fallback_to_default_interval(self, caplog:pytest.LogCaptureFixture) -> None:
+        """Test that should_check falls back to default interval and logs a warning for invalid/too short/too long/zero intervals and unsupported units."""
+        state = UpdateCheckState()
+        now = datetime.now(timezone.utc)
+        state.last_check = now - timedelta(days = 2)
+
+        # Invalid format (unsupported unit)
+        caplog.clear()
+        assert state.should_check("notaninterval", channel = "latest") is False  # 2 days since last check, default 7d
+        assert any("Invalid interval format or unsupported unit" in r.getMessage() for r in caplog.records)
+        assert any("Falling back to default interval: 7d" in r.getMessage() for r in caplog.records)
+
+        caplog.clear()
+        assert state.should_check("notaninterval", channel = "preview") is True  # 2 days since last check, default 1d
+        assert any("Invalid interval format or unsupported unit" in r.getMessage() for r in caplog.records)
+        assert any("Falling back to default interval: 1d" in r.getMessage() for r in caplog.records)
+
+        # Explicit zero interval
+        for zero in ["0d", "0h", "0m", "0s", "0"]:
+            caplog.clear()
+            assert state.should_check(zero, channel = "latest") is False
+            assert any("Interval is zero" in r.getMessage() for r in caplog.records)
+            assert any("Falling back to default interval: 7d" in r.getMessage() for r in caplog.records)
+
+            caplog.clear()
+            assert state.should_check(zero, channel = "preview") is True
+            assert any("Interval is zero" in r.getMessage() for r in caplog.records)
+            assert any("Falling back to default interval: 1d" in r.getMessage() for r in caplog.records)
+
+        # Too short
+        caplog.clear()
+        assert state.should_check("12h", channel = "latest") is False  # 2 days since last check, default 7d
+        assert any("Interval too short" in r.getMessage() for r in caplog.records)
+        assert any("Falling back to default interval: 7d" in r.getMessage() for r in caplog.records)
+
+        caplog.clear()
+        assert state.should_check("12h", channel = "preview") is True  # 2 days since last check, default 1d
+        assert any("Interval too short" in r.getMessage() for r in caplog.records)
+        assert any("Falling back to default interval: 1d" in r.getMessage() for r in caplog.records)
+
+        # Too long
+        caplog.clear()
+        assert state.should_check("60d", channel = "latest") is False  # 2 days since last check, default 7d
+        assert any("Interval too long" in r.getMessage() for r in caplog.records)
+        assert any("Falling back to default interval: 7d" in r.getMessage() for r in caplog.records)
+
+        caplog.clear()
+        assert state.should_check("60d", channel = "preview") is True  # 2 days since last check, default 1d
+        assert any("Interval too long" in r.getMessage() for r in caplog.records)
+        assert any("Falling back to default interval: 1d" in r.getMessage() for r in caplog.records)
+
+        # Valid interval, no fallback
+        caplog.clear()
+        assert state.should_check("7d", channel = "latest") is False
+        assert not any("Falling back to default interval" in r.getMessage() for r in caplog.records)
+        caplog.clear()
+        assert state.should_check("1d", channel = "preview") is True
+        assert not any("Falling back to default interval" in r.getMessage() for r in caplog.records)
