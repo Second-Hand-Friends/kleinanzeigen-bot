@@ -129,7 +129,7 @@ class UpdateChecker:
             return
 
         # Check if we should perform an update check based on the interval
-        if not skip_interval_check and not self.state.should_check(self.config.update_check.interval):
+        if not skip_interval_check and not self.state.should_check(self.config.update_check.interval, self.config.update_check.channel):
             return
 
         local_version = self.get_local_version()

@@ -301,6 +301,11 @@ update_check:
   enabled: true  # Enable/disable update checks
   channel: latest  # One of: latest, prerelease
   interval: 7d    # Check interval (e.g. 7d for 7 days)
+                  # If the interval is invalid, too short (<1d), or too long (>30d),
+                  # the bot logs a warning and uses a default interval for this run:
+                  #   - 1d for 'prerelease' channel
+                  #   - 7d for 'latest' channel
+                  # The config file is not changed automatically; please fix your config to avoid repeated warnings.
 
 # login credentials
 login:
