@@ -149,7 +149,7 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 
 1. Execute `bash build-image.sh`
 
-1. Ensure the image is build:
+1. Ensure the image is built:
 
    ```
    $ docker image ls
