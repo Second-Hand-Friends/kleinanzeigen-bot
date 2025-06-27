@@ -17,12 +17,16 @@ def ensure(
         condition:Any | bool | Callable[[], bool],  # noqa: FBT001 Boolean-typed positional argument in function definition
         error_message:str,
         timeout:float = 5,
-        poll_requency:float = 0.5
+        poll_frequency:float = 0.5
     ) -> None:
     """
-    :param timeout: timespan in seconds until when the condition must become `True`, default is 5 seconds
-    :param poll_requency: sleep interval between calls in seconds, default is 0.5 seconds
-    :raises AssertionError: if condition did not come `True` within given timespan
+    Ensure a condition is true, retrying until timeout.
+
+    :param condition: The condition to check (bool, value, or callable returning bool)
+    :param error_message: The error message to raise if the condition is not met
+    :param timeout: maximum time to wait in seconds, default is 5 seconds
+    :param poll_frequency: sleep interval between calls in seconds, default is 0.5 seconds
+    :raises AssertionError: if the condition is not met within the timeout
     """
     if not isinstance(condition, Callable):  # type: ignore[arg-type] # https://github.com/python/mypy/issues/6864
         if condition:
@@ -31,15 +35,15 @@ def ensure(
 
     if timeout < 0:
         raise AssertionError("[timeout] must be >= 0")
-    if poll_requency < 0:
-        raise AssertionError("[poll_requency] must be >= 0")
+    if poll_frequency < 0:
+        raise AssertionError("[poll_frequency] must be >= 0")
 
     start_at = time.time()
     while not condition():  # type: ignore[operator]
         elapsed = time.time() - start_at
         if elapsed >= timeout:
             raise AssertionError(_(error_message))
-        time.sleep(poll_requency)
+        time.sleep(poll_frequency)
 
 
 def get_attr(obj:Mapping[str, Any] | Any, key:str, default:Any | None = None) -> Any:
