@@ -15,6 +15,7 @@ from . import extract, resources
 from ._version import __version__
 from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial
 from .model.config_model import Config
+from .update_checker import UpdateChecker
 from .utils import dicts, error_handlers, loggers, misc
 from .utils.exceptions import CaptchaEncountered
 from .utils.files import abspath
@@ -75,18 +76,30 @@ class KleinanzeigenBot(WebScrapingMixin):
             match self.command:
                 case "help":
                     self.show_help()
+                    return
                 case "version":
                     print(self.get_version())
                 case "verify":
                     self.configure_file_logging()
                     self.load_config()
+                    # Check for updates on startup
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
                     self.load_ads()
                     LOG.info("############################################")
                     LOG.info("DONE: No configuration errors found.")
                     LOG.info("############################################")
+                case "update-check":
+                    self.configure_file_logging()
+                    self.load_config()
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates(skip_interval_check = True)
                 case "update-content-hash":
                     self.configure_file_logging()
                     self.load_config()
+                    # Check for updates on startup
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
                     self.ads_selector = "all"
                     if ads := self.load_ads(exclude_ads_with_id = False):
                         self.update_content_hashes(ads)
@@ -97,6 +110,9 @@ class KleinanzeigenBot(WebScrapingMixin):
                 case "publish":
                     self.configure_file_logging()
                     self.load_config()
+                    # Check for updates on startup
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
 
                     if not (self.ads_selector in {"all", "new", "due", "changed"} or
                             any(selector in self.ads_selector.split(",") for selector in ("all", "new", "due", "changed")) or
@@ -134,6 +150,9 @@ class KleinanzeigenBot(WebScrapingMixin):
                 case "delete":
                     self.configure_file_logging()
                     self.load_config()
+                    # Check for updates on startup
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
                     if ads := self.load_ads():
                         await self.create_browser_session()
                         await self.login()
@@ -149,6 +168,9 @@ class KleinanzeigenBot(WebScrapingMixin):
                         LOG.warning('You provided no ads selector. Defaulting to "new".')
                         self.ads_selector = "new"
                     self.load_config()
+                    # Check for updates on startup
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
                     await self.create_browser_session()
                     await self.login()
                     await self.download_ads()
@@ -177,6 +199,7 @@ class KleinanzeigenBot(WebScrapingMixin):
               delete   - Löscht Anzeigen
               update   - Aktualisiert bestehende Anzeigen
               download - Lädt eine oder mehrere Anzeigen herunter
+              update-check - Prüft auf verfügbare Updates
               update-content-hash - Berechnet den content_hash aller Anzeigen anhand der aktuellen ad_defaults neu;
                                     nach Änderungen an den config.yaml/ad_defaults verhindert es, dass alle Anzeigen als
                                     "geändert" gelten und neu veröffentlicht werden.
@@ -220,7 +243,8 @@ class KleinanzeigenBot(WebScrapingMixin):
               delete   - deletes ads
               update   - updates published ads
               download - downloads one or multiple ads
-              update-content-hash – recalculates each ad’s content_hash based on the current ad_defaults;
+              update-check - checks for available updates
+              update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;
                                     use this after changing config.yaml/ad_defaults to avoid every ad being marked "changed" and republished
               --
               help     - displays this help (default command)
@@ -498,8 +522,8 @@ class KleinanzeigenBot(WebScrapingMixin):
         if not os.path.exists(self.config_file_path):
             LOG.warning("Config file %s does not exist. Creating it with default values...", self.config_file_path)
             default_config = Config.model_construct()
-            default_config.login.username = ""
-            default_config.login.password = ""
+            default_config.login.username = "changeme"  # noqa: S105 placeholder for default config, not a real username
+            default_config.login.password = "changeme"  # noqa: S105 placeholder for default config, not a real password
             dicts.save_dict(self.config_file_path, default_config.model_dump(exclude_none = True, exclude = {
                 "ad_defaults": {
                     "description"  # deprecated

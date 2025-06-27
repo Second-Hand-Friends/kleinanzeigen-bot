@@ -344,6 +344,32 @@
       },
       "title": "PublishingConfig",
       "type": "object"
+    },
+    "UpdateCheckConfig": {
+      "description": "Configuration for update checking functionality.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "channel": {
+          "default": "latest",
+          "enum": [
+            "latest",
+            "preview"
+          ],
+          "title": "Channel",
+          "type": "string"
+        },
+        "interval": {
+          "default": "7d",
+          "title": "Interval",
+          "type": "string"
+        }
+      },
+      "title": "UpdateCheckConfig",
+      "type": "object"
     }
   },
   "properties": {
@@ -384,6 +410,10 @@
     },
     "captcha": {
       "$ref": "#/$defs/CaptchaConfig"
+    },
+    "update_check": {
+      "$ref": "#/$defs/UpdateCheckConfig",
+      "description": "Update check configuration"
     }
   },
   "title": "Config",
