@@ -6,12 +6,9 @@ import os
 
 def abspath(relative_path:str, relative_to:str | None = None) -> str:
     """Return an absolute path based on *relative_to*.
-
-    Prior to this fix, passing a relative ``relative_to`` produced another
-    relative path.  This contradicted the function's intention and name.
-    ``relative_to`` is now normalized to an absolute path first, ensuring the
-    returned path is always absolute regardless of whether ``relative_to`` is
-    absolute or not.
+    # This function ensures that the returned path is always absolute, regardless of whether
+    # the input 'relative_to' is absolute or relative. This is achieved by normalizing
+    # 'relative_to' to an absolute path before joining it with 'relative_path'.
     """
 
     if not relative_to:
