@@ -5,16 +5,23 @@ import os
 
 
 def abspath(relative_path:str, relative_to:str | None = None) -> str:
+    """Return an absolute path based on *relative_to*.
+
+    Prior to this fix, passing a relative ``relative_to`` produced another
+    relative path.  This contradicted the function's intention and name.
+    ``relative_to`` is now normalized to an absolute path first, ensuring the
+    returned path is always absolute regardless of whether ``relative_to`` is
+    absolute or not.
     """
-    Makes a given relative path absolute based on another file/folder
-    """
+
     if not relative_to:
         return os.path.abspath(relative_path)
 
     if os.path.isabs(relative_path):
-        return relative_path
+        return os.path.abspath(relative_path)
 
-    if os.path.isfile(relative_to):
-        relative_to = os.path.dirname(relative_to)
+    base = os.path.abspath(relative_to)
+    if os.path.isfile(base):
+        base = os.path.dirname(base)
 
-    return os.path.normpath(os.path.join(relative_to, relative_path))
+    return os.path.normpath(os.path.join(base, relative_path))
