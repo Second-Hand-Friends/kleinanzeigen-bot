@@ -5,17 +5,19 @@ import os
 
 
 def abspath(relative_path:str, relative_to:str | None = None) -> str:
-    """Return an absolute path based on *relative_to*.
-    This function ensures that the returned path is always absolute, regardless of whether
-    the input 'relative_to' is absolute or relative. This is achieved by normalizing
-    'relative_to' to an absolute path before joining it with 'relative_path'.
+    """
+    Return a normalized absolute path based on *relative_to*.
+
+    If 'relative_path' is already absolute, it is normalized and returned.
+    Otherwise, the function joins 'relative_path' with 'relative_to' (or the current working directory if not provided),
+    normalizes the result, and returns the absolute path.
     """
 
     if not relative_to:
         return os.path.abspath(relative_path)
 
     if os.path.isabs(relative_path):
-        return os.path.abspath(relative_path)
+        return os.path.normpath(relative_path)
 
     base = os.path.abspath(relative_to)
     if os.path.isfile(base):
