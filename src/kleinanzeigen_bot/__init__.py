@@ -973,6 +973,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             "new_with_tag": "Neu mit Etikett",
             "new": "Neu",
             "like_new": "Sehr Gut",
+            "good": "Gut",
             "ok": "Gut",
             "alright": "In Ordnung",
             "defect": "Defekt",
@@ -1066,8 +1067,7 @@ class KleinanzeigenBot(WebScrapingMixin):
     async def __set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         if ad_cfg.shipping_type == "PICKUP":
             try:
-                await self.web_click(By.XPATH,
-                    '//*[contains(@class, "ShippingPickupSelector")]//label[contains(., "Nur Abholung")]/../input[@type="radio"]')
+                await self.web_click(By.ID, "radio-pickup")
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg.shipping_options:
@@ -1076,11 +1076,11 @@ class KleinanzeigenBot(WebScrapingMixin):
             if mode == AdUpdateStrategy.MODIFY:
                 try:
                     # when "Andere Versandmethoden" is not available, go back and start over new
-                    await self.web_find(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(., "Andere Versandmethoden")]', timeout = 2)
+                    await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]', timeout = 2)
                 except TimeoutError:
                     await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
 
-            await self.web_click(By.XPATH, '//*[contains(@class, "CarrierSelectionModal")]//button[contains(., "Andere Versandmethoden")]')
+            await self.web_click(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]')
             await self.__set_shipping_options(ad_cfg)
         else:
             special_shipping_selector = '//select[contains(@id, ".versand_s")]'
@@ -1097,7 +1097,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                         try:
                             # when "Andere Versandmethoden" is not available, then we are already on the individual page
                             await self.web_click(By.XPATH,
-                                                 '//*[contains(@class, "CarrierSelectionModal")]//button[contains(., "Andere Versandmethoden")]')
+                                                 '//dialog//button[contains(., "Andere Versandmethoden")]')
                         except TimeoutError:
                             pass
 
@@ -1105,12 +1105,13 @@ class KleinanzeigenBot(WebScrapingMixin):
                             # only click on "Individueller Versand" when "IndividualShippingInput" is not available, otherwise its already checked
                             # (important for mode = UPDATE)
                             await self.web_find(By.XPATH,
-                                                '//*[contains(@class, "IndividualPriceSection")]//div[contains(@class, "IndividualShippingInput")]',
+                                                '//input[contains(@placeholder, "Versandkosten (optional)")]',
                                                 timeout = 2)
                         except TimeoutError:
                             await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
 
-                        await self.web_input(By.CSS_SELECTOR, '.IndividualShippingInput input[type="text"]', str.replace(str(ad_cfg.shipping_costs), ".", ","))
+                        await self.web_input(By.XPATH, '//input[contains(@placeholder, "Versandkosten (optional)")]',
+                                             str.replace(str(ad_cfg.shipping_costs), ".", ","))
                         await self.web_click(By.XPATH, '//dialog//button[contains(., "Fertig")]')
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
