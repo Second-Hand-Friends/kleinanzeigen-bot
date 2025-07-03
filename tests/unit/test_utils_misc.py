@@ -115,3 +115,21 @@ def test_ensure_callable_condition_timeout() -> None:
     # Should raise AssertionError after timeout if condition never True
     with pytest.raises(AssertionError):
         misc.ensure(lambda: False, "Timeout fail", timeout = 0.05, poll_frequency = 0.01)
+
+
+def test_ensure_non_callable_truthy_and_falsy() -> None:
+    # Truthy values should not raise
+    misc.ensure(True, "Should not fail for True")
+    misc.ensure("Some Value", "Should not fail for non-empty string")
+    misc.ensure(123, "Should not fail for positive int")
+    misc.ensure(-123, "Should not fail for negative int")
+
+    # Falsy values should raise AssertionError
+    with pytest.raises(AssertionError):
+        misc.ensure(False, "Should fail for False")
+    with pytest.raises(AssertionError):
+        misc.ensure(0, "Should fail for 0")
+    with pytest.raises(AssertionError):
+        misc.ensure("", "Should fail for empty string")
+    with pytest.raises(AssertionError):
+        misc.ensure(None, "Should fail for None")
