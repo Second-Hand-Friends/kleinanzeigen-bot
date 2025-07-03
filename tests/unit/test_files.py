@@ -54,9 +54,9 @@ class TestFiles:
         """Test abspath function with a nonexistent file/directory as relative_to."""
         nonexistent_path = "nonexistent/path"
 
-        # Test with a relative path
+        # Test with a relative path; should still yield an absolute path
         result = abspath("test/path", nonexistent_path)
-        expected = os.path.normpath(os.path.join(nonexistent_path, "test/path"))
+        expected = os.path.normpath(os.path.join(os.path.abspath(nonexistent_path), "test/path"))
         assert result == expected
 
         # Test with an absolute path
