@@ -2,79 +2,86 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 
-import builtins, importlib, sys  # isort: skip
-from typing import NoReturn
+import builtins, ctypes, importlib, sys, types  # isort: skip
 from unittest import mock
 
 import pytest
 
-# Test: On Windows, the guard should trigger and exit on double-click
+from kleinanzeigen_bot.utils.i18n import Locale
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason = "Windows-specific test")
-def test_guard_triggers_on_double_click(monkeypatch:pytest.MonkeyPatch) -> None:
-    # Simulate Windows
-    monkeypatch.setattr(sys, "platform", "win32")
-    # Patch GetConsoleProcessList to return 2 (simulate double-click)
-    mock_kernel32 = mock.Mock()
-    mock_kernel32.GetConsoleProcessList.return_value = 2
-    monkeypatch.setattr("ctypes.windll.kernel32", mock_kernel32)
-    # Patch input to avoid blocking
+@pytest.mark.parametrize(
+    ("platform", "compiled_exe", "windows_double_click_launch", "expected_error_msg_lang"),
+    [
+        ("win32", True, True, "en"),  # Windows Explorer double-click - English locale
+        ("win32", True, True, "de"),  # Windows Explorer double-click - German locale
+        ("win32", True, False, None),  # Windows Terminal launch - compiled exe
+        ("win32", False, False, None),  # Windows Terminal launch - from source code
+        ("linux", True, None, None),  # Any non-Windows OS
+        ("linux", False, None, None),  # Any non-Windows OS
+    ],
+)
+def test_guard_triggers_on_double_click(
+    monkeypatch:pytest.MonkeyPatch,
+    capsys:pytest.CaptureFixture[str],
+    platform:str,
+    compiled_exe:bool,
+    windows_double_click_launch:bool | None,
+    expected_error_msg_lang:str | None
+) -> None:
+    # Prevent blocking in tests
     monkeypatch.setattr(builtins, "input", lambda: None)
-    # Patch sys.exit to capture exit
-    exit_called = {}
 
-    def fake_exit(code:int) -> NoReturn:
-        exit_called["code"] = code
-        raise SystemExit
+    # Simulate target platform
+    monkeypatch.setattr(sys, "platform", platform)
 
-    monkeypatch.setattr(sys, "exit", fake_exit)
-    # Patch i18n to always return English
+    # Simulate compiled executable
     monkeypatch.setattr(
-        "kleinanzeigen_bot.utils.launch_mode_guard.get_current_locale",
-        lambda: mock.Mock(language = "en")
+        "kleinanzeigen_bot.utils.misc.is_frozen",
+        lambda: compiled_exe,
     )
-    launch_mode_guard = importlib.import_module("kleinanzeigen_bot.utils.launch_mode_guard")
-    with pytest.raises(SystemExit):
-        launch_mode_guard.ensure_not_launched_from_windows_explorer()
-    assert exit_called["code"] == 1
 
-# Test: On non-Windows, the guard should do nothing and not error
+    # Force specific locale
+    if expected_error_msg_lang:
+        monkeypatch.setattr(
+            "kleinanzeigen_bot.utils.i18n.get_current_locale",
+            lambda: Locale(expected_error_msg_lang),
+        )
 
-
-@pytest.mark.skipif(sys.platform == "win32", reason = "Non-Windows-specific test")
-def test_guard_noop_on_non_windows(monkeypatch:pytest.MonkeyPatch) -> None:
-    # Simulate non-Windows platform
-    monkeypatch.setattr(sys, "platform", "linux")
-    # Patch input and sys.exit to ensure they are not called
-    monkeypatch.setattr(builtins, "input", lambda: None)
-    exit_mock = mock.Mock()
+    # Spy on sys.exit
+    exit_mock = mock.Mock(wraps = sys.exit)
     monkeypatch.setattr(sys, "exit", exit_mock)
-    launch_mode_guard = importlib.import_module("kleinanzeigen_bot.utils.launch_mode_guard")
-    # Should not raise or exit
-    launch_mode_guard.ensure_not_launched_from_windows_explorer()
-    exit_mock.assert_not_called()
 
+    # Simulate double-click launch on Windows
+    if platform == "win32" and windows_double_click_launch:
+        pid_count = 2 if windows_double_click_launch else 3  # 2 -> Explorer, 3 -> Terminal
+        k32 = mock.Mock()
+        k32.GetConsoleProcessList.return_value = pid_count
+        if sys.platform == "win32":
+            monkeypatch.setattr("ctypes.windll.kernel32", k32)
+        else:
+            dummy_windll = types.SimpleNamespace(kernel32 = k32)
+            monkeypatch.setattr(ctypes, "windll", dummy_windll, raising = False)
 
-@pytest.mark.skipif(sys.platform != "win32", reason = "Windows-specific behavior")
-def test_guard_noop_on_terminal(monkeypatch:pytest.MonkeyPatch) -> None:
-    # Arrange: Patch sys.platform
-    monkeypatch.setattr(sys, "platform", "win32")
-    # Patch GetConsoleProcessList to return 3 (simulate terminal launch)
-    mock_kernel32 = mock.Mock()
-    mock_kernel32.GetConsoleProcessList.return_value = 3
-    monkeypatch.setattr("ctypes.windll.kernel32", mock_kernel32)
-    # Patch input and sys.exit to ensure they are not called
-    monkeypatch.setattr(builtins, "input", lambda: None)
-    exit_mock = mock.Mock()
-    monkeypatch.setattr(sys, "exit", exit_mock)
-    # Patch i18n to always return English
-    monkeypatch.setattr(
-        "kleinanzeigen_bot.utils.launch_mode_guard.get_current_locale",
-        lambda: mock.Mock(language = "en")
+    # Reload module to pick up system monkeypatches
+    guard = importlib.reload(
+        importlib.import_module("kleinanzeigen_bot.utils.launch_mode_guard")
     )
-    # Reload module to pick up monkeypatches
-    launch_mode_guard = importlib.import_module("kleinanzeigen_bot.utils.launch_mode_guard")
-    # Act & Assert: Should not exit or call input
-    launch_mode_guard.ensure_not_launched_from_windows_explorer()
-    exit_mock.assert_not_called()
+
+    if expected_error_msg_lang:
+        with pytest.raises(SystemExit) as exc:
+            guard.ensure_not_launched_from_windows_explorer()
+        assert exc.value.code == 1
+        exit_mock.assert_called_once_with(1)
+
+        captured = capsys.readouterr()
+        if expected_error_msg_lang == "de":
+            assert "Du hast das Programm scheinbar per Doppelklick gestartet." in captured.err
+        else:
+            assert "It looks like you launched it by double-clicking the EXE." in captured.err
+        assert not captured.out  # nothing to stdout
+    else:
+        guard.ensure_not_launched_from_windows_explorer()
+        exit_mock.assert_not_called()
+        captured = capsys.readouterr()
+        assert not captured.err  # nothing to stderr
