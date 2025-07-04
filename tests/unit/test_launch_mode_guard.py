@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 
-import builtins, ctypes, importlib, sys, types  # isort: skip
+import builtins, importlib, sys  # isort: skip
 from unittest import mock
 
 import pytest
 
 from kleinanzeigen_bot.utils.i18n import Locale
+
 
 # --- Platform-specific test for Windows double-click guard ---
 @pytest.mark.parametrize(
@@ -19,7 +20,7 @@ from kleinanzeigen_bot.utils.i18n import Locale
         (False, False, None),  # Windows Terminal launch - from source code
     ],
 )
-@pytest.mark.skipif(sys.platform != "win32", reason="ctypes.windll only exists on Windows")
+@pytest.mark.skipif(sys.platform != "win32", reason = "ctypes.windll only exists on Windows")
 def test_guard_triggers_on_double_click_windows(
     monkeypatch:pytest.MonkeyPatch,
     capsys:pytest.CaptureFixture[str],
@@ -80,6 +81,7 @@ def test_guard_triggers_on_double_click_windows(
         captured = capsys.readouterr()
         assert not captured.err  # nothing to stderr
 
+
 # --- Platform-agnostic tests for non-Windows and non-frozen code paths ---
 @pytest.mark.parametrize(
     ("platform", "compiled_exe"),
@@ -90,8 +92,11 @@ def test_guard_triggers_on_double_click_windows(
         ("darwin", False),
     ],
 )
-def test_guard_non_windows_and_non_frozen(monkeypatch, platform, compiled_exe):
-    import importlib
+def test_guard_non_windows_and_non_frozen(
+    monkeypatch:pytest.MonkeyPatch,
+    platform:str,
+    compiled_exe:bool
+) -> None:
     monkeypatch.setattr(sys, "platform", platform)
     monkeypatch.setattr("kleinanzeigen_bot.utils.misc.is_frozen", lambda: compiled_exe)
     # Reload module to pick up system monkeypatches
