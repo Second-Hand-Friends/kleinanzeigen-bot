@@ -6,7 +6,13 @@ from gettext import gettext as _
 
 import kleinanzeigen_bot
 from kleinanzeigen_bot.utils.exceptions import CaptchaEncountered
+from kleinanzeigen_bot.utils.launch_mode_guard import ensure_not_launched_from_windows_explorer
 from kleinanzeigen_bot.utils.misc import format_timedelta
+
+# --------------------------------------------------------------------------- #
+# Refuse GUI/double-click launch on Windows
+# --------------------------------------------------------------------------- #
+ensure_not_launched_from_windows_explorer()
 
 # --------------------------------------------------------------------------- #
 # Main loop: run bot → if captcha → sleep → restart
