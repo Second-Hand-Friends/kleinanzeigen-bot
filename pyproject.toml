@@ -109,9 +109,9 @@ lint = { composite = ["lint:ruff", "lint:mypy", "lint:pyright"] }
 # Run smoke tests only
 smoke = "python -m pytest --capture=tee-sys -m smoke"
 # Run unit tests only (exclude smoke and itest)
-utest = "python -m pytest --capture=tee-sys -m 'not itest and not smoke'"
+utest = "python -m pytest --capture=tee-sys -m \"not itest and not smoke\""
 # Run integration tests only (exclude smoke)
-itest = "python -m pytest --capture=tee-sys -m 'itest and not smoke'"
+itest = "python -m pytest --capture=tee-sys -m \"itest and not smoke\""
 # Run all tests in order: smoke, unit, integration
 # (for CI: run these three scripts in sequence)
 test = { composite = ["smoke", "utest", "itest"] }
@@ -122,8 +122,8 @@ test = { composite = ["smoke", "utest", "itest"] }
 #
 "test:cov"  = { composite = ["smoke:cov", "utest:cov", "itest:cov", "coverage:combine"] }
 "smoke:cov" = { shell = "python -m pytest --capture=tee-sys -m smoke --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-smoke.xml --cov-append" }
-"utest:cov" = { shell = "python -m pytest --capture=tee-sys -m 'not itest and not smoke' --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-unit.xml --cov-append" }
-"itest:cov" = { shell = "python -m pytest --capture=tee-sys -m 'itest and not smoke' --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-integration.xml --cov-append" }
+"utest:cov" = { shell = "python -m pytest --capture=tee-sys -m \"not itest and not smoke\" --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-unit.xml --cov-append" }
+"itest:cov" = { shell = "python -m pytest --capture=tee-sys -m \"itest and not smoke\" --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-integration.xml --cov-append" }
 "coverage:combine" = { shell = "coverage report -m" }
 
 # Test script structure:
