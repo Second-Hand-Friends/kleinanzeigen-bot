@@ -53,7 +53,7 @@ jobs:
   ###########################################################
   build:
   ###########################################################
-  
+
     permissions:
       packages: write
 
@@ -144,8 +144,8 @@ jobs:
 
     - name: Check with pip-audit
       # until https://github.com/astral-sh/ruff/issues/8277
-      run: 
-        pdm run pip-audit --progress-spinner off --skip-editable --verbose 
+      run:
+        pdm run pip-audit --progress-spinner off --skip-editable --verbose
 
 
     - name: Check with ruff
@@ -160,6 +160,10 @@ jobs:
       run: pdm run basedpyright
 
 
+    - name: Run smoke tests
+      run: pdm run smoke:cov -vv
+
+
     - name: Run unit tests
       run: pdm run utest:cov -vv
 
@@ -169,7 +173,7 @@ jobs:
         set -eux
 
         case "${{ matrix.os }}" in
-           ubuntu-*) 
+           ubuntu-*)
               sudo apt-get install --no-install-recommends -y xvfb
               xvfb-run pdm run itest:cov -vv
               ;;
@@ -278,6 +282,18 @@ jobs:
         if-no-files-found: error
 
 
+    - name: Publish smoke-test coverage
+      uses: codecov/codecov-action@v5  # https://github.com/codecov/codecov-action
+      with:
+        slug: ${{ github.repository }}
+        name: smoke-coverage
+        flags: smoke-tests
+        disable_search: true
+        files: coverage/**/coverage-smoke.xml
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+
   ###########################################################
   publish-coverage:
   ###########################################################
@@ -299,7 +315,19 @@ jobs:
 
 
     - name: List coverage reports
-      run: find . -name coverage-*.xml 
+      run: find . -name coverage-*.xml
+
+
+    - name: Publish smoke-test coverage
+      uses: codecov/codecov-action@v5  # https://github.com/codecov/codecov-action
+      with:
+        slug: ${{ github.repository }}
+        name: smoke-coverage
+        flags: smoke-tests
+        disable_search: true
+        files: coverage/**/coverage-smoke.xml
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
 
     - name: Publish unit-test coverage
@@ -341,9 +369,9 @@ jobs:
     #   – publish-coverage succeeded OR was skipped
     if: >
         always()
-          && needs.build.result == 'success' 
+          && needs.build.result == 'success'
           && (needs.publish-coverage.result == 'success' || needs.publish-coverage.result == 'skipped')
-        && (github.ref_name == 'main' || github.ref_name == 'release') && !github.event.act     
+        && (github.ref_name == 'main' || github.ref_name == 'release') && !github.event.act
 
     concurrency: publish-${{ github.ref_name }}-release # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idconcurrency
 
@@ -362,7 +390,7 @@ jobs:
       uses: vegardit/fast-apt-mirror.sh@v1
 
 
-    - name: Git Checkout 
+    - name: Git Checkout
       # only required by "gh release create" to prevent "fatal: Not a git repository"
       uses: actions/checkout@v4  # https://github.com/actions/checkout
 

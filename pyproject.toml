@@ -106,12 +106,28 @@ lint = { composite = ["lint:ruff", "lint:mypy", "lint:pyright"] }
 "lint:fix"     = {shell = "ruff check --preview --fix" }
 
 # tests
-test  = "python -m pytest --capture=tee-sys"
-utest = "python -m pytest --capture=tee-sys -m 'not itest'"
-itest = "python -m pytest --capture=tee-sys -m 'itest'"
-"test:cov"  = { composite = ["utest:cov", "itest:cov"] }
+# Run smoke tests only
+smoke = "python -m pytest --capture=tee-sys -m 'smoke'"
+# Run unit tests only (exclude smoke and itest)
+utest = "python -m pytest --capture=tee-sys -m 'not itest and not smoke'"
+# Run integration tests only (exclude smoke)
+itest = "python -m pytest --capture=tee-sys -m 'itest and not smoke'"
+# Run all tests in order: smoke, unit, integration
+# (for CI: run these three scripts in sequence)
+test = { composite = ["smoke", "utest", "itest"] }
+"test:cov"  = { composite = ["smoke:cov", "utest:cov", "itest:cov"] }
+"smoke:cov" = { composite = ["smoke --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-smoke.xml"] }
 "utest:cov" = { composite = ["utest --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-unit.xml"] }
 "itest:cov" = { composite = ["itest --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-integration.xml"] }
+
+# Test script structure:
+# - Composite test groups (smoke, unit, integration) are run in order to fail fast and surface critical errors early in CI.
+# - This prevents running all tests if a critical path is broken, saving CI time and resources.
+# - Each group is covered and reported separately.
+# - Tradeoff: You lose a unified summary of all failures, but gain early detection of the most important issues.
+# - For local development, you may also provide a unified test script to see all failures at once.
+#
+# See TESTING.md for more details.
 
 
 #####################
@@ -322,6 +338,7 @@ addopts = """
   --cov-report=term-missing
 """
 markers = [
+  "smoke: marks a test as a high-level smoke test (critical path, no mocks)",
   "itest: marks a test as an integration test (i.e. a test with external dependencies)",
   "asyncio: mark test as async"
 ]
