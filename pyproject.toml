@@ -133,7 +133,7 @@ test = { composite = ["smoke", "utest", "itest"] }
 # - Tradeoff: You lose a unified summary of all failures, but gain early detection of the most important issues.
 # - For local development, you may also provide a unified test script to see all failures at once.
 #
-# See TESTING.md for more details.
+# See docs/TESTING.md for more details.
 
 
 #####################

@@ -19,7 +19,7 @@
 1. [Related Open-Source Projects](#related)
 1. [License](#license)
 
-For details on the new smoke test strategy and contributor guidance, see [TESTING.md](./TESTING.md).
+For details on the new smoke test strategy and contributor guidance, see [TESTING.md](./docs/TESTING.md).
 
 ## <a name="about"></a>About
 
