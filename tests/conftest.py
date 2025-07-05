@@ -2,13 +2,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import os
-from typing import Any, Final
+from typing import Any, Final, cast
 from unittest.mock import MagicMock
 
 import pytest
 
 from kleinanzeigen_bot import KleinanzeigenBot
 from kleinanzeigen_bot.extract import AdExtractor
+from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import loggers
 from kleinanzeigen_bot.utils.web_scraping_mixin import Browser
@@ -181,3 +182,64 @@ def mock_web_text_responses() -> list[str]:
 @pytest.fixture(autouse = True)
 def silence_nodriver_logs() -> None:
     loggers.get_logger("nodriver").setLevel(loggers.WARNING)
+
+
+# --- Smoke test fakes and fixtures ---
+
+class DummyBrowser:
+    def __init__(self) -> None:
+        self.page = DummyPage()
+        self._process_pid = None  # Use None to indicate no real process
+
+    def stop(self) -> None:
+        pass  # Dummy method to satisfy close_browser_session
+
+
+class DummyPage:
+    def find_element(self, selector:str) -> "DummyElement":
+        return DummyElement()
+
+
+class DummyElement:
+    def click(self) -> None:
+        pass
+
+    def type(self, text:str) -> None:
+        pass
+
+
+class SmokeKleinanzeigenBot(KleinanzeigenBot):
+    """A test subclass that overrides async methods for smoke testing."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        # Use cast to satisfy type checker for browser attribute
+        self.browser = cast(Browser, DummyBrowser())
+
+    def close_browser_session(self) -> None:
+        # Override to avoid psutil.Process logic in tests
+        self.page = None  # pyright: ignore[reportAttributeAccessIssue]
+        if self.browser:
+            self.browser.stop()
+            self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
+
+    async def login(self) -> None:
+        return None
+
+    async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
+        return None
+
+    def load_ads(self, *, ignore_inactive:bool = True, exclude_ads_with_id:bool = True) -> list[tuple[str, Ad, dict[str, Any]]]:
+        # Use cast to satisfy type checker for dummy Ad value
+        return [("dummy_file", cast(Ad, None), {})]
+
+    def load_config(self) -> None:
+        return None
+
+
+@pytest.fixture
+def smoke_bot() -> SmokeKleinanzeigenBot:
+    """Fixture providing a ready-to-use smoke test bot instance."""
+    bot = SmokeKleinanzeigenBot()
+    bot.command = "publish"
+    return bot
