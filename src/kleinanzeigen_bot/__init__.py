@@ -1071,7 +1071,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg.shipping_options:
-            await self.web_click(By.XPATH, '//*[contains(@class, "SubSection")]//button[contains(@class, "SelectionButton")]')
+            await self.web_click(By.XPATH, '//button//span[contains(., "Versandmethoden auswählen")]')
 
             if mode == AdUpdateStrategy.MODIFY:
                 try:
@@ -1092,7 +1092,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                 try:
                     # no options. only costs. Set custom shipping cost
                     if ad_cfg.shipping_costs is not None:
-                        await self.web_click(By.XPATH, '//*[contains(@class, "SubSection")]//button[contains(@class, "SelectionButton")]')
+                        await self.web_click(By.XPATH,
+                                             '//button//span[contains(., "Versandmethoden auswählen")]')
 
                         try:
                             # when "Andere Versandmethoden" is not available, then we are already on the individual page
