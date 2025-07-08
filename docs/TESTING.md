@@ -1,17 +1,17 @@
 # TESTING.md
 
-## Smoke Test Strategy
+## Test Strategy and Types
 
-This project uses a layered testing approach, with a strong focus on high-level smoke tests to ensure core workflows function as expected. The goal is to:
+This project uses a layered testing approach, with a focus on reliability and fast feedback. The test types are:
 
-- Validate that the bot can run end-to-end without crashing
-- Check that critical paths (e.g., config loading, login, ad publishing) work with minimal setup
-- Provide fast, understandable feedback for contributors and CI
+- **Unit tests**: Isolated, fast tests targeting the smallest testable units (functions, classes) in isolation. Run first.
+- **Integration tests**: Tests that verify the interaction between components or with real external dependencies. Run after unit tests.
+- **Smoke tests**: Minimal set of critical checks, run after a successful build and (optionally) after deployment. Their goal is to verify that the most essential workflows (e.g., app starts, config loads, login page reachable) work and that the system is stable enough for deeper testing. Smoke tests are not end-to-end (E2E) tests and should not cover full user workflows.
 
 ### Principles
 
 - **Test observable behavior, not internal implementation**
-- **Avoid mocks** where possible; use custom fake components (e.g., dummy browser/page objects)
+- **Avoid mocks** in smoke tests; use custom fake components (e.g., dummy browser/page objects)
 - **Write tests that verify outcomes**, not method call sequences
 - **Keep tests simple and maintainable**
 
@@ -22,10 +22,9 @@ This project uses a layered testing approach, with a strong focus on high-level 
 
 ### Example Smoke Tests
 
-- `test_bot_runs_without_crashing`: Verifies that the core workflow doesn't raise
-- `test_ad_config_can_be_processed`: Checks that a simple ad config doesn't break the flow
-
-See `tests/smoke/` for examples.
+- Minimal checks that the application starts and does not crash
+- Verifying that a config file can be loaded without error
+- Checking that a login page is reachable (but not performing a full login workflow)
 
 ### Why This Approach?
 
@@ -45,41 +44,41 @@ See `tests/smoke/` for examples.
 
   @pytest.mark.smoke
   @pytest.mark.asyncio
-  async def test_bot_runs_without_crashing(smoke_bot):
+  async def test_bot_starts(smoke_bot):
       ...
   ```
 
 ### Running Smoke, Unit, and Integration Tests
 
-- **Smoke tests:**
-  - Run with: `pdm run smoke`
-  - Coverage: `pdm run smoke:cov`
 - **Unit tests:**
   - Run with: `pdm run utest` (excludes smoke and integration tests)
   - Coverage: `pdm run utest:cov`
 - **Integration tests:**
   - Run with: `pdm run itest` (excludes smoke tests)
   - Coverage: `pdm run itest:cov`
+- **Smoke tests:**
+  - Run with: `pdm run smoke`
+  - Coverage: `pdm run smoke:cov`
 - **All tests in order:**
-  - Run with: `pdm run test` (runs smoke, then unit, then integration)
+  - Run with: `pdm run test` (runs unit, then integration, then smoke)
 
 ### CI Test Order
 
-- CI runs smoke tests first, then unit tests, then integration tests.
-- Coverage for each group is uploaded separately to Codecov (with flags: `smoke-tests`, `unit-tests`, `integration-tests`).
-- This ensures that critical path failures are caught early and that test types are clearly separated.
+- CI runs unit tests first, then integration tests, then smoke tests.
+- Coverage for each group is uploaded separately to Codecov (with flags: `unit-tests`, `integration-tests`, `smoke-tests`).
+- This ensures that foundational failures are caught early and that test types are clearly separated.
 
 ### Adding New Smoke Tests
 
 - Add new tests to `tests/smoke/` and mark them with `@pytest.mark.smoke`.
 - Use fakes/dummies for browser and page dependencies (see `tests/conftest.py`).
-- Focus on end-to-end flows and observable outcomes.
+- Focus on minimal, critical health checks, not full user workflows.
 
 ### Why This Structure?
 
-- **Fast feedback:** Smoke tests catch catastrophic failures before running slower or more detailed tests.
-- **Separation:** Unit and integration tests are not polluted by smoke tests, and vice versa.
-- **Coverage clarity:** You can see which code paths are covered by smoke, unit, or integration tests in Codecov.
+- **Fast feedback:** Unit and integration tests catch most issues before running smoke tests.
+- **Separation:** Unit, integration, and smoke tests are not polluted by each other.
+- **Coverage clarity:** You can see which code paths are covered by each test type in Codecov.
 
 See also: `pyproject.toml` for test script definitions and `.github/workflows/build.yml` for CI setup.
 
@@ -87,10 +86,10 @@ See also: `pyproject.toml` for test script definitions and `.github/workflows/bu
 
 ### Failing Fast and Early Feedback
 
-- **Failing fast:** By running smoke tests first, then unit, then integration tests (as separate groups), CI and contributors get immediate feedback if a critical path is broken.
-- **Critical errors surface early:** If a smoke test fails, the job stops before running slower or less critical tests, saving time and resources.
-- **CI efficiency:** This approach prevents running hundreds of unit/integration tests if the application is fundamentally broken (e.g., cannot start, cannot load config, etc.).
-- **Clear separation:** Each test group (smoke, unit, integration) is reported and covered separately, making it easy to see which layer is failing.
+- **Failing fast:** By running unit tests first, then integration, then smoke tests, CI and contributors get immediate feedback if a foundational component is broken.
+- **Critical errors surface early:** If a unit test fails, the job stops before running slower or less critical tests, saving time and resources.
+- **CI efficiency:** This approach prevents running hundreds of integration/smoke tests if the application is fundamentally broken (e.g., cannot start, cannot load config, etc.).
+- **Clear separation:** Each test group (unit, integration, smoke) is reported and covered separately, making it easy to see which layer is failing.
 
 ### Tradeoff: Unified Reporting vs. Fast Failure
 

@@ -23,29 +23,29 @@ Please read through this document before submitting any contributions to ensure 
 This project uses a comprehensive testing strategy with three test types:
 
 ### Test Types
-- **Smoke tests** (`tests/smoke/`): High-level, end-to-end tests that verify critical paths work
-- **Unit tests** (`tests/unit/`): Isolated component tests with mocks
-- **Integration tests** (`tests/integration/`): Tests with real external dependencies
+- **Unit tests** (`tests/unit/`): Isolated component tests with mocks. Run first.
+- **Integration tests** (`tests/integration/`): Tests with real external dependencies. Run after unit tests.
+- **Smoke tests** (`tests/smoke/`): Minimal, post-deployment health checks that verify the most essential workflows (e.g., app starts, config loads, login page reachable). Run after integration tests. Smoke tests are not end-to-end (E2E) tests and should not cover full user workflows.
 
 ### Running Tests
 ```bash
-# Run all tests in order (smoke → unit → integration)
+# Run all tests in order (unit → integration → smoke)
 pdm run test:cov
 
 # Run specific test types
-pdm run smoke      # Smoke tests only
 pdm run utest      # Unit tests only
 pdm run itest      # Integration tests only
+pdm run smoke      # Smoke tests only
 
 # Run with coverage
-pdm run smoke:cov  # Smoke tests with coverage
 pdm run utest:cov  # Unit tests with coverage
 pdm run itest:cov  # Integration tests with coverage
+pdm run smoke:cov  # Smoke tests with coverage
 ```
 
 ### Adding New Tests
 1. **Determine test type** based on what you're testing:
-   - **Smoke tests**: Critical user workflows, end-to-end scenarios
+   - **Smoke tests**: Minimal, critical health checks (not full user workflows)
    - **Unit tests**: Individual components, isolated functionality
    - **Integration tests**: External dependencies, real network calls
 
