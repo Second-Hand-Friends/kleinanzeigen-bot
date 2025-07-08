@@ -160,10 +160,6 @@ jobs:
       run: pdm run basedpyright
 
 
-    - name: Run smoke tests
-      run: pdm run smoke:cov -vv
-
-
     - name: Run unit tests
       run: pdm run utest:cov -vv
 
@@ -180,6 +176,10 @@ jobs:
            *) pdm run itest:cov -vv
               ;;
         esac
+
+
+    - name: Run smoke tests
+      run: pdm run smoke:cov -vv
 
 
     - name: Run app from source
@@ -282,18 +282,6 @@ jobs:
         if-no-files-found: error
 
 
-    - name: Publish smoke-test coverage
-      uses: codecov/codecov-action@v5  # https://github.com/codecov/codecov-action
-      with:
-        slug: ${{ github.repository }}
-        name: smoke-coverage
-        flags: smoke-tests
-        disable_search: true
-        files: coverage/**/coverage-smoke.xml
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-
   ###########################################################
   publish-coverage:
   ###########################################################
@@ -318,18 +306,6 @@ jobs:
       run: find . -name coverage-*.xml
 
 
-    - name: Publish smoke-test coverage
-      uses: codecov/codecov-action@v5  # https://github.com/codecov/codecov-action
-      with:
-        slug: ${{ github.repository }}
-        name: smoke-coverage
-        flags: smoke-tests
-        disable_search: true
-        files: coverage/**/coverage-smoke.xml
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-
     - name: Publish unit-test coverage
       uses: codecov/codecov-action@v5  # https://github.com/codecov/codecov-action
       with:
@@ -350,6 +326,18 @@ jobs:
         flags: integration-tests
         disable_search: true
         files: coverage/**/coverage-integration.xml
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+
+    - name: Publish smoke-test coverage
+      uses: codecov/codecov-action@v5  # https://github.com/codecov/codecov-action
+      with:
+        slug: ${{ github.repository }}
+        name: smoke-coverage
+        flags: smoke-tests
+        disable_search: true
+        files: coverage/**/coverage-smoke.xml
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
