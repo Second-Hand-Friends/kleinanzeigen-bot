@@ -1,3 +1,18 @@
+# Table of Contents
+
+- [Development Setup](#development-setup)
+- [Development Notes](#development-notes)
+- [Development Workflow](#development-workflow)
+- [Testing Requirements](#testing-requirements)
+- [Code Quality Standards](#code-quality-standards)
+- [Bug Reports](#bug-reports)
+- [Feature Requests](#feature-requests)
+- [Pull Request Requirements](#pull-request-requirements)
+- [Performance Considerations](#performance-considerations)
+- [Security and Best Practices](#security-and-best-practices)
+- [Licensing](#licensing)
+- [Internationalization (i18n) and Translations](#internationalization-i18n-and-translations)
+
 # Contributing
 
 Thanks for your interest in contributing to this project! Whether it's a bug report, new feature, correction, or additional documentation, we greatly value feedback and contributions from our community.
@@ -17,6 +32,65 @@ Please read through this document before submitting any contributions to ensure 
 1. Fork and clone the repository
 2. Install dependencies: `pdm install`
 3. Run tests to verify setup: `pdm run test:cov`
+
+## Development Notes
+
+This section provides quick reference commands for common development tasks. See ‘Testing Requirements’ below for more details on running and organizing tests.
+
+- Format source code: `pdm run format`
+- Run tests: `pdm run test` (see 'Testing Requirements' below for more details)
+- Run syntax checks: `pdm run lint`
+- Linting issues found by ruff can be auto-fixed using `pdm run lint:fix`
+- Derive JSON schema files from Pydantic data model: `pdm run generate-schemas`
+- Create platform-specific executable: `pdm run compile`
+- Application bootstrap works like this:
+  ```python
+  pdm run app
+  |-> executes 'python -m kleinanzeigen_bot'
+      |-> executes 'kleinanzeigen_bot/__main__.py'
+          |-> executes main() function of 'kleinanzeigen_bot/__init__.py'
+              |-> executes KleinanzeigenBot().run()
+  ```
+
+## Development Workflow
+
+### Before Submitting
+1. **Format your code**: Ensure your code is auto-formatted
+   ```bash
+   pdm run format
+   ```
+2. **Lint your code**: Check for linting errors and warnings
+   ```bash
+   pdm run lint
+   ```
+3. **Run tests**: Ensure all tests pass locally
+   ```bash
+   pdm run test
+   ```
+4. **Check code quality**: Verify your code follows project standards
+   - Type hints are complete
+   - Docstrings are present
+   - SPDX headers are included
+   - Imports are properly organized
+5. **Test your changes**: Add appropriate tests for new functionality
+   - Add smoke tests for critical paths
+   - Add unit tests for new components
+   - Add integration tests for external dependencies
+
+### Commit Messages
+Use clear, descriptive commit messages that explain:
+- What was changed
+- Why it was changed
+- Any breaking changes or important notes
+
+Example:
+```
+feat: add smoke test for bot startup
+
+- Add test_bot_starts_without_crashing to verify core workflow
+- Use DummyBrowser to avoid real browser dependencies
+- Follows existing smoke test patterns in tests/smoke/
+```
 
 ## Testing Requirements
 
@@ -143,73 +217,17 @@ def parse_duration(text: str) -> timedelta:
         # ... handle other units
     return timedelta(**kwargs)
 ```
-
 ### Error Handling
 - Use specific exception types when possible
 - Include meaningful error messages
 - Use `pytest.fail()` with descriptive messages in tests
 - Use `pyright: ignore[reportAttributeAccessIssue]` for known type checker issues
 
-## Development Workflow
-
-### Before Submitting
-1. **Format your code**: Ensure your code is auto-formatted
-   ```bash
-   pdm run format
-   ```
-2. **Lint your code**: Check for linting errors and warnings
-   ```bash
-   pdm run lint
-   ```
-3. **Run tests**: Ensure all tests pass locally
-   ```bash
-   pdm run test
-   ```
-4. **Check code quality**: Verify your code follows project standards
-   - Type hints are complete
-   - Docstrings are present
-   - SPDX headers are included
-   - Imports are properly organized
-5. **Test your changes**: Add appropriate tests for new functionality
-   - Add smoke tests for critical paths
-   - Add unit tests for new components
-   - Add integration tests for external dependencies
-
-### Commit Messages
-Use clear, descriptive commit messages that explain:
-- What was changed
-- Why it was changed
-- Any breaking changes or important notes
-
-Example:
-```
-feat: add smoke test for bot startup
-
-- Add test_bot_starts_without_crashing to verify core workflow
-- Use DummyBrowser to avoid real browser dependencies
-- Follows existing smoke test patterns in tests/smoke/
-```
-
 ## Reporting Bugs/Feature Requests
 
 We use GitHub issues to track bugs and feature requests. Please ensure your description is clear and has sufficient instructions to be able to reproduce the issue.
 
 ### Bug Reports
-Include:
-- Clear description of the problem
-- Steps to reproduce
-- Expected vs actual behavior
-- Environment details (OS, Python version, etc.)
-- Any relevant error messages or logs
-
-### Feature Requests
-Include:
-- Clear description of the desired feature
-- Use case or problem it solves
-- Any implementation ideas or considerations
-
-## Bug Reports
-
 When reporting a bug, please ensure you:
 - Confirm the issue is reproducible on the latest release
 - Clearly describe the expected and actual behavior
@@ -219,6 +237,12 @@ When reporting a bug, please ensure you:
 - Agree to the project's Code of Conduct
 
 This helps maintainers quickly triage and address issues.
+
+### Feature Requests
+Include:
+- Clear description of the desired feature
+- Use case or problem it solves
+- Any implementation ideas or considerations
 
 ## Pull Request Requirements
 
@@ -264,7 +288,7 @@ GitHub provides additional documentation on [forking a repository](https://help.
 
 ## Licensing
 
-See the [LICENSE.txt](LICENSE.txt) file for our project's licensing. We will ask you to confirm the licensing of your contribution.
+See the [LICENSE.txt](LICENSE.txt) file for our project's licensing. All source files must include SPDX license headers as described above. We will ask you to confirm the licensing of your contribution.
 
 ## Internationalization (i18n) and Translations
 
@@ -273,3 +297,4 @@ See the [LICENSE.txt](LICENSE.txt) file for our project's licensing. We will ask
 - Use the translation system for all output—**never hardcode German or other languages** in the code.
 - If you add or change a user-facing message, update the translation file and ensure that translation completeness tests pass (`tests/unit/test_translations.py`).
 - Review the translation guidelines and patterns in the codebase for correct usage.
+
