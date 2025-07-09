@@ -17,7 +17,7 @@
 
 Thanks for your interest in contributing to this project! Whether it's a bug report, new feature, correction, or additional documentation, we greatly value feedback and contributions from our community.
 
-We want to make contributing as easy and transparent as possible.
+We want to make contributing as easy and transparent as possible. Contributions via [pull requests](#pull-request-requirements) are much appreciated.
 
 Please read through this document before submitting any contributions to ensure your contribution goes to the correct code repository and we have all the necessary information to effectively respond to your request.
 
