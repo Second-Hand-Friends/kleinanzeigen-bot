@@ -19,6 +19,7 @@
 1. [Related Open-Source Projects](#related)
 1. [License](#license)
 
+For details on the new smoke test strategy and contributor guidance, see [TESTING.md](./docs/TESTING.md).
 
 ## <a name="about"></a>About
 
@@ -437,25 +438,6 @@ By default a new browser process will be launched. To reuse a manually launched 
 ## <a name="development"></a>Development Notes
 
 > Please read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing code. Thank you!
-
-- Format source code: `pdm run format`
-- Run tests:
-  - unit tests: `pdm run utest` - with coverage: `pdm run utest:cov`
-  - integration tests: `pdm run itest` - with coverage: `pdm run itest:cov`
-  - all tests: `pdm run test` - with coverage: `pdm run test:cov`
-- Run syntax checks: `pdm run lint`
-- Linting issues found by ruff can be auto-fixed using `pdm run lint:fix`
-- Derive JSON schema files from Pydantic data model: `pdm run generate-schemas`
-- Create platform-specific executable: `pdm run compile`
-- Application bootstrap works like this:
-  ```python
-  pdm run app
-  |-> executes 'python -m kleinanzeigen_bot'
-      |-> executes 'kleinanzeigen_bot/__main__.py'
-          |-> executes main() function of 'kleinanzeigen_bot/__init__.py'
-              |-> executes KleinanzeigenBot().run()
-  ````
-
 
 ## <a name="related"></a>Related Open-Source projects
 
