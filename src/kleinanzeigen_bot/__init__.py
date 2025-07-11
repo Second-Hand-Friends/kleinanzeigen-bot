@@ -79,6 +79,9 @@ class KleinanzeigenBot(WebScrapingMixin):
                     return
                 case "version":
                     print(self.get_version())
+                case "create-config":
+                    self.create_default_config()
+                    return
                 case "verify":
                     self.configure_file_logging()
                     self.load_config()
@@ -203,6 +206,7 @@ class KleinanzeigenBot(WebScrapingMixin):
               update-content-hash - Berechnet den content_hash aller Anzeigen anhand der aktuellen ad_defaults neu;
                                     nach Änderungen an den config.yaml/ad_defaults verhindert es, dass alle Anzeigen als
                                     "geändert" gelten und neu veröffentlicht werden.
+              create-config - Erstellt eine neue Standard-Konfigurationsdatei, falls noch nicht vorhanden
               --
               help     - Zeigt diese Hilfe an (Standardbefehl)
               version  - Zeigt die Version der Anwendung an
@@ -246,6 +250,7 @@ class KleinanzeigenBot(WebScrapingMixin):
               update-check - checks for available updates
               update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;
                                     use this after changing config.yaml/ad_defaults to avoid every ad being marked "changed" and republished
+              create-config - creates a new default configuration file if one does not exist
               --
               help     - displays this help (default command)
               version  - displays the application version
@@ -337,6 +342,48 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         LOG.info("App version: %s", self.get_version())
         LOG.info("Python version: %s", sys.version)
+
+    def create_default_config(self) -> None:
+        """
+        Create a default config.yaml in the project root if it does not exist.
+        If it exists, log an error and inform the user.
+        """
+        if os.path.exists(self.config_file_path):
+            LOG.error("Config file %s already exists. Aborting creation.", self.config_file_path)
+            return
+        default_config = Config.model_construct()
+        default_config.login.username = "changeme"  # noqa: S105 placeholder for default config, not a real username
+        default_config.login.password = "changeme"  # noqa: S105 placeholder for default config, not a real password
+        dicts.save_dict(
+            self.config_file_path,
+            default_config.model_dump(exclude_none = True, exclude = {"ad_defaults": {"description"}}),
+            header = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/config.schema.json"
+        )
+
+    def load_config(self) -> None:
+        # write default config.yaml if config file does not exist
+        if not os.path.exists(self.config_file_path):
+            self.create_default_config()
+
+        config_yaml = dicts.load_dict_if_exists(self.config_file_path, _("config"))
+        self.config = Config.model_validate(config_yaml, strict = True, context = self.config_file_path)
+
+        # load built-in category mappings
+        self.categories = dicts.load_dict_from_module(resources, "categories.yaml", "categories")
+        deprecated_categories = dicts.load_dict_from_module(resources, "categories_old.yaml", "categories")
+        self.categories.update(deprecated_categories)
+        if self.config.categories:
+            self.categories.update(self.config.categories)
+        LOG.info(" -> found %s", pluralize("category", self.categories))
+
+        # populate browser_config object used by WebScrapingMixin
+        self.browser_config.arguments = self.config.browser.arguments
+        self.browser_config.binary_location = self.config.browser.binary_location
+        self.browser_config.extensions = [abspath(item, relative_to = self.config_file_path) for item in self.config.browser.extensions]
+        self.browser_config.use_private_window = self.config.browser.use_private_window
+        if self.config.browser.user_data_dir:
+            self.browser_config.user_data_dir = abspath(self.config.browser.user_data_dir, relative_to = self.config_file_path)
+        self.browser_config.profile_name = self.config.browser.profile_name
 
     def __check_ad_republication(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
         """
@@ -516,39 +563,6 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     def load_ad(self, ad_cfg_orig:dict[str, Any]) -> Ad:
         return AdPartial.model_validate(ad_cfg_orig).to_ad(self.config.ad_defaults)
-
-    def load_config(self) -> None:
-        # write default config.yaml if config file does not exist
-        if not os.path.exists(self.config_file_path):
-            LOG.warning("Config file %s does not exist. Creating it with default values...", self.config_file_path)
-            default_config = Config.model_construct()
-            default_config.login.username = "changeme"  # noqa: S105 placeholder for default config, not a real username
-            default_config.login.password = "changeme"  # noqa: S105 placeholder for default config, not a real password
-            dicts.save_dict(self.config_file_path, default_config.model_dump(exclude_none = True, exclude = {
-                "ad_defaults": {
-                    "description"  # deprecated
-                }
-            }), header = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/config.schema.json")
-
-        config_yaml = dicts.load_dict_if_exists(self.config_file_path, _("config"))
-        self.config = Config.model_validate(config_yaml, strict = True, context = self.config_file_path)
-
-        # load built-in category mappings
-        self.categories = dicts.load_dict_from_module(resources, "categories.yaml", "categories")
-        deprecated_categories = dicts.load_dict_from_module(resources, "categories_old.yaml", "categories")
-        self.categories.update(deprecated_categories)
-        if self.config.categories:
-            self.categories.update(self.config.categories)
-        LOG.info(" -> found %s", pluralize("category", self.categories))
-
-        # populate browser_config object used by WebScrapingMixin
-        self.browser_config.arguments = self.config.browser.arguments
-        self.browser_config.binary_location = self.config.browser.binary_location
-        self.browser_config.extensions = [abspath(item, relative_to = self.config_file_path) for item in self.config.browser.extensions]
-        self.browser_config.use_private_window = self.config.browser.use_private_window
-        if self.config.browser.user_data_dir:
-            self.browser_config.user_data_dir = abspath(self.config.browser.user_data_dir, relative_to = self.config_file_path)
-        self.browser_config.profile_name = self.config.browser.profile_name
 
     async def check_and_wait_for_captcha(self, *, is_login_page:bool = True) -> None:
         try:

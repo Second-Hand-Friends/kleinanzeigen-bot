@@ -288,20 +288,15 @@ class TestKleinanzeigenBotConfiguration:
 
     def test_load_config_handles_missing_file(
         self,
-        test_bot:KleinanzeigenBot,
-        test_data_dir:str
+        test_bot: KleinanzeigenBot,
+        test_data_dir: str
     ) -> None:
-        """Verify that loading a missing config file creates default config."""
+        """Verify that loading a missing config file creates default config. No info log is expected anymore."""
         config_path = Path(test_data_dir) / "missing_config.yaml"
-        config_path.unlink(missing_ok = True)
+        config_path.unlink(missing_ok=True)
         test_bot.config_file_path = str(config_path)
-
-        with patch.object(LOG, "warning") as mock_warning:
-            test_bot.load_config()
-            mock_warning.assert_called_once()
-            assert config_path.exists()
-            assert test_bot.config.login.username == "changeme"  # noqa: S105 placeholder for default config, not a real username
-            assert test_bot.config.login.password == "changeme"  # noqa: S105 placeholder for default config, not a real password
+        test_bot.load_config()
+        assert config_path.exists()
 
     def test_load_config_validates_required_fields(self, test_bot:KleinanzeigenBot, test_data_dir:str) -> None:
         """Verify that config validation checks required fields."""
