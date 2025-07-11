@@ -288,12 +288,12 @@ class TestKleinanzeigenBotConfiguration:
 
     def test_load_config_handles_missing_file(
         self,
-        test_bot: KleinanzeigenBot,
-        test_data_dir: str
+        test_bot:KleinanzeigenBot,
+        test_data_dir:str
     ) -> None:
         """Verify that loading a missing config file creates default config. No info log is expected anymore."""
         config_path = Path(test_data_dir) / "missing_config.yaml"
-        config_path.unlink(missing_ok=True)
+        config_path.unlink(missing_ok = True)
         test_bot.config_file_path = str(config_path)
         test_bot.load_config()
         assert config_path.exists()

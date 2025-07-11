@@ -18,14 +18,14 @@ from kleinanzeigen_bot.utils import i18n
 from tests.conftest import DummyBrowser, DummyPage, SmokeKleinanzeigenBot
 
 
-def run_cli_subcommand(args: list[str], cwd: str | None = None) -> subprocess.CompletedProcess[str]:
+def run_cli_subcommand(args:list[str], cwd:str | None = None) -> subprocess.CompletedProcess[str]:
     """
     Run the kleinanzeigen-bot CLI as a subprocess with the given arguments.
     Returns the CompletedProcess object.
     """
     cli_module = "kleinanzeigen_bot.__main__"
     cmd = [sys.executable, "-m", cli_module] + args
-    return subprocess.run(cmd, check=False, capture_output=True, text=True, cwd=cwd)  # noqa: S603
+    return subprocess.run(cmd, check = False, capture_output = True, text = True, cwd = cwd)  # noqa: S603
 
 
 @pytest.mark.smoke
@@ -113,9 +113,9 @@ def test_cli_entrypoint_help_runs() -> None:
 
 
 @pytest.mark.smoke
-def test_cli_create_config_creates_file(tmp_path: Path) -> None:
+def test_cli_create_config_creates_file(tmp_path:Path) -> None:
     """Smoke: CLI 'create-config' creates a config.yaml file in the current directory."""
-    result = run_cli_subcommand(["create-config"], cwd=str(tmp_path))
+    result = run_cli_subcommand(["create-config"], cwd = str(tmp_path))
     config_path = tmp_path / "config.yaml"
     assert result.returncode == 0, f"CLI exited with code {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
     assert config_path.exists(), "config.yaml was not created by create-config command"
