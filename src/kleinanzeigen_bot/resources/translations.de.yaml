@@ -23,6 +23,8 @@ kleinanzeigen_bot/__init__.py:
 #################################################
   module:
     "Direct execution not supported. Use 'pdm run app'": "Direkte Ausführung nicht unterstützt. Bitte 'pdm run app' verwenden"
+  create_default_config:
+    "Config file %s already exists. Aborting creation.": "Konfigurationsdatei %s existiert bereits. Erstellung abgebrochen."
 
   configure_file_logging:
     "Logging to [%s]...": "Protokollierung in [%s]..."
@@ -48,7 +50,6 @@ kleinanzeigen_bot/__init__.py:
     "ad": "Anzeige"
 
   load_config:
-    "Config file %s does not exist. Creating it with default values...": "Konfigurationsdatei %s existiert nicht. Erstelle sie mit Standardwerten..."
     "config": "Konfiguration"
     " -> found %s": "-> %s gefunden"
     "category": "Kategorie"

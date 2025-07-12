@@ -187,9 +187,13 @@ Usage: kleinanzeigen-bot COMMAND [OPTIONS]
 Commands:
   publish  - (re-)publishes ads
   verify   - verifies the configuration files
-  update   - updates published ads
   delete   - deletes ads
+  update   - updates published ads
   download - downloads one or multiple ads
+  update-check - checks for available updates
+  update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;
+                      use this after changing config.yaml/ad_defaults to avoid every ad being marked "changed" and republished
+  create-config - creates a new default configuration file if one does not exist
   --
   help     - displays this help (default command)
   version  - displays the application version
@@ -219,6 +223,8 @@ Options:
   --lang=en|de      - display language (STANDARD: system language if supported, otherwise English)
   -v, --verbose     - enables verbose output - only useful when troubleshooting issues
 ```
+
+> **Note:** The output of `kleinanzeigen-bot help` is always the most up-to-date reference for available commands and options.
 
 Limitation of `download`: It's only possible to extract the cheapest given shipping option.
 

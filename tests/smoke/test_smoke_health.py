@@ -18,6 +18,16 @@ from kleinanzeigen_bot.utils import i18n
 from tests.conftest import DummyBrowser, DummyPage, SmokeKleinanzeigenBot
 
 
+def run_cli_subcommand(args:list[str], cwd:str | None = None) -> subprocess.CompletedProcess[str]:
+    """
+    Run the kleinanzeigen-bot CLI as a subprocess with the given arguments.
+    Returns the CompletedProcess object.
+    """
+    cli_module = "kleinanzeigen_bot.__main__"
+    cmd = [sys.executable, "-m", cli_module] + args
+    return subprocess.run(cmd, check = False, capture_output = True, text = True, cwd = cwd)  # noqa: S603
+
+
 @pytest.mark.smoke
 def test_app_starts(smoke_bot:SmokeKleinanzeigenBot) -> None:
     """Smoke: Bot can be instantiated and started without error."""
@@ -97,7 +107,15 @@ def test_dummy_browser_session() -> None:
 @pytest.mark.smoke
 def test_cli_entrypoint_help_runs() -> None:
     """Smoke: CLI entry point runs with --help and exits cleanly (subprocess)."""
-    cli_module = "kleinanzeigen_bot.__main__"
-    result = subprocess.run([sys.executable, "-m", cli_module, "--help"], check = False, capture_output = True, text = True)  # noqa: S603
+    result = run_cli_subcommand(["--help"])
     assert result.returncode in {0, 1}, f"CLI exited with unexpected code: {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
     assert "Usage" in result.stdout or "usage" in result.stdout or "help" in result.stdout.lower(), f"No help text in CLI output: {result.stdout}"
+
+
+@pytest.mark.smoke
+def test_cli_create_config_creates_file(tmp_path:Path) -> None:
+    """Smoke: CLI 'create-config' creates a config.yaml file in the current directory."""
+    result = run_cli_subcommand(["create-config"], cwd = str(tmp_path))
+    config_path = tmp_path / "config.yaml"
+    assert result.returncode == 0, f"CLI exited with code {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
+    assert config_path.exists(), "config.yaml was not created by create-config command"
