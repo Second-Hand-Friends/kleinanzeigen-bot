@@ -6,12 +6,16 @@ Minimal smoke tests: post-deployment health checks for kleinanzeigen-bot.
 These tests verify that the most essential components are operational.
 """
 
+import json
 import logging
+import re
 import subprocess  # noqa: S404
 import sys
 from pathlib import Path
+from typing import Callable
 
 import pytest
+from ruyaml import YAML
 
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import i18n
@@ -105,17 +109,95 @@ def test_dummy_browser_session() -> None:
 
 
 @pytest.mark.smoke
-def test_cli_entrypoint_help_runs() -> None:
-    """Smoke: CLI entry point runs with --help and exits cleanly (subprocess)."""
-    result = run_cli_subcommand(["--help"])
-    assert result.returncode in {0, 1}, f"CLI exited with unexpected code: {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
-    assert "Usage" in result.stdout or "usage" in result.stdout or "help" in result.stdout.lower(), f"No help text in CLI output: {result.stdout}"
+@pytest.mark.parametrize("subcommand", [
+    "--help",
+    "help",
+    "version",
+])
+def test_cli_subcommands_no_config(subcommand:str, tmp_path:Path) -> None:
+    """
+    Smoke: CLI subcommands that do not require a config file (--help, help, version).
+    """
+    args = [subcommand]
+    result = run_cli_subcommand(args, cwd = str(tmp_path))
+    assert result.returncode == 0
+    out = (result.stdout + "\n" + result.stderr).lower()
+    if subcommand in {"--help", "help"}:
+        assert "usage" in out or "help" in out, f"Expected help text in CLI output.\n{out}"
+    elif subcommand == "version":
+        assert re.match(r"^\s*\d{4}\+\w+", result.stdout.strip()), f"Output does not look like a version string: {result.stdout}"
 
 
 @pytest.mark.smoke
-def test_cli_create_config_creates_file(tmp_path:Path) -> None:
-    """Smoke: CLI 'create-config' creates a config.yaml file in the current directory."""
+def test_cli_subcommands_create_config_creates_file(tmp_path:Path) -> None:
+    """
+    Smoke: CLI 'create-config' creates a config.yaml file in the current directory.
+    """
     result = run_cli_subcommand(["create-config"], cwd = str(tmp_path))
-    config_path = tmp_path / "config.yaml"
-    assert result.returncode == 0, f"CLI exited with code {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
-    assert config_path.exists(), "config.yaml was not created by create-config command"
+    config_file = tmp_path / "config.yaml"
+    assert result.returncode == 0
+    assert config_file.exists(), "config.yaml was not created by create-config command"
+    out = (result.stdout + "\n" + result.stderr).lower()
+    assert "saving" in out, f"Expected saving message in CLI output.\n{out}"
+    assert "config.yaml" in out, f"Expected config.yaml in CLI output.\n{out}"
+
+
+@pytest.mark.smoke
+def test_cli_subcommands_create_config_fails_if_exists(tmp_path:Path) -> None:
+    """
+    Smoke: CLI 'create-config' does not overwrite config.yaml if it already exists.
+    """
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("# dummy config\n", encoding = "utf-8")
+    result = run_cli_subcommand(["create-config"], cwd = str(tmp_path))
+    assert result.returncode == 0
+    assert config_file.exists(), "config.yaml was deleted or not present after second create-config run"
+    out = (result.stdout + "\n" + result.stderr).lower()
+    assert (
+        "already exists" in out or "not overwritten" in out or "saving" in out
+    ), f"Expected message about existing config in CLI output.\n{out}"
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(("subcommand", "output_check"), [
+    ("verify", "verify"),
+    ("update-check", "update"),
+    ("update-content-hash", "update-content-hash"),
+])
+@pytest.mark.parametrize(("config_ext", "serializer"), [
+    ("yaml", None),
+    ("yml", None),
+    ("json", json.dumps),
+])
+def test_cli_subcommands_with_config_formats(
+    subcommand:str,
+    output_check:str,
+    config_ext:str,
+    serializer:Callable[[dict[str, object]], str] | None,
+    tmp_path:Path,
+    test_bot_config:Config,
+) -> None:
+    """
+    Smoke: CLI subcommands that require a config file, tested with all supported formats.
+    """
+    config_path = tmp_path / f"config.{config_ext}"
+    try:
+        config_dict = test_bot_config.model_dump()
+    except AttributeError:
+        config_dict = test_bot_config.dict()
+    if config_ext in {"yaml", "yml"}:
+        yaml = YAML(typ = "unsafe", pure = True)
+        with open(config_path, "w", encoding = "utf-8") as f:
+            yaml.dump(config_dict, f)
+    elif serializer is not None:
+        config_path.write_text(serializer(config_dict), encoding = "utf-8")
+    args = [subcommand, "--config", str(config_path)]
+    result = run_cli_subcommand(args, cwd = str(tmp_path))
+    assert result.returncode == 0
+    out = (result.stdout + "\n" + result.stderr).lower()
+    if subcommand == "verify":
+        assert "no configuration errors found" in out, f"Expected 'no configuration errors found' in output for 'verify'.\n{out}"
+    elif subcommand == "update-content-hash":
+        assert "no active ads found" in out, f"Expected 'no active ads found' in output for 'update-content-hash'.\n{out}"
+    elif subcommand == "update-check":
+        assert result.returncode == 0
