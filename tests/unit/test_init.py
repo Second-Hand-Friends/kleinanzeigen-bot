@@ -1360,7 +1360,7 @@ class TestKleinanzeigenBotChangedAds:
                 assert len(ads_to_publish) == 1
 
 
-def test_file_logger_writes_message(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+def test_file_logger_writes_message(tmp_path:Path, caplog:pytest.LogCaptureFixture) -> None:
     """
     Unit: Logger can be initialized and used, robust to pytest log capture.
     """
@@ -1371,7 +1371,7 @@ def test_file_logger_writes_message(tmp_path: Path, caplog: pytest.LogCaptureFix
     logger.propagate = False
     for h in list(logger.handlers):
         logger.removeHandler(h)
-    handle = logging.FileHandler(str(log_path), encoding="utf-8")
+    handle = logging.FileHandler(str(log_path), encoding = "utf-8")
     handle.setLevel(logging.DEBUG)
     formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
     handle.setFormatter(formatter)
@@ -1381,6 +1381,6 @@ def test_file_logger_writes_message(tmp_path: Path, caplog: pytest.LogCaptureFix
     handle.close()
     logger.removeHandler(handle)
     assert log_path.exists()
-    with open(log_path, "r", encoding="utf-8") as f:
+    with open(log_path, "r", encoding = "utf-8") as f:
         contents = f.read()
     assert "Logger test log message" in contents

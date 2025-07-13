@@ -7,7 +7,6 @@ These tests verify that the most essential components are operational.
 """
 
 import json
-import logging
 import re
 import subprocess  # noqa: S404
 import sys
@@ -18,8 +17,7 @@ import pytest
 from ruyaml import YAML
 
 from kleinanzeigen_bot.model.config_model import Config
-from kleinanzeigen_bot.utils import i18n
-from tests.conftest import DummyBrowser, DummyPage, SmokeKleinanzeigenBot
+from tests.conftest import SmokeKleinanzeigenBot
 
 
 def run_cli_subcommand(args:list[str], cwd:str | None = None) -> subprocess.CompletedProcess[str]:
