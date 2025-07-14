@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-from kleinanzeigen_bot.model.config_model import AdDefaults
+from kleinanzeigen_bot.model.config_model import AdDefaults, Config
 
 
 def test_migrate_legacy_description_prefix() -> None:
@@ -60,3 +60,17 @@ def test_migrate_legacy_description_suffix() -> None:
             "suffix": "Legacy Suffix"
         }
     }).description_suffix == "Legacy Suffix"
+
+
+def test_minimal_config_validation() -> None:
+    """
+    Unit: Minimal config validation.
+    """
+    minimal_cfg = {
+        "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
+        "login": {"username": "dummy", "password": "dummy"},
+        "publishing": {"delete_old_ads": "BEFORE_PUBLISH", "delete_old_ads_by_title": False},
+    }
+    config = Config.model_validate(minimal_cfg)
+    assert config.login.username == "dummy"
+    assert config.login.password == "dummy"  # noqa: S105
