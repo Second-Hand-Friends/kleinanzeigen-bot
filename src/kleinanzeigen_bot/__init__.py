@@ -764,6 +764,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                         LOG.warning("Failed to set shipping attribute for type '%s'!", shipping_type)
             else:
                 await self.__set_shipping(ad_cfg, mode)
+        else:
+            LOG.debug("Shipping step skipped - reason: NOT_APPLICABLE")
 
         #############################
         # set price

@@ -88,6 +88,7 @@ kleinanzeigen_bot/__init__.py:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
     "Updating ad '%s'...": "Aktualisiere Anzeige '%s'..."
     "Failed to set shipping attribute for type '%s'!": "Fehler beim setzen des Versandattributs für den Typ '%s'!"
+    "Shipping step skipped - reason: NOT_APPLICABLE": "Versandschritt übersprungen: Versand nicht anwendbar (Status = NOT_APPLICABLE)"
     "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
     " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
     " -> SUCCESS: ad updated with ID %s": " -> ERFOLG: Anzeige mit ID %s aktualisiert"
