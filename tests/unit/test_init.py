@@ -1046,7 +1046,7 @@ class TestKleinanzeigenBotShippingOptions:
                     return csrf_token_elem
                 if selector_value == "myftr-shppngcrt-frm":
                     return shipping_form_elem
-                if selector_value == '.SingleSelectionItem--Main input[type=radio][data-testid="Klein"]':
+                if selector_type == By.ID and selector_value.startswith("radio-button-"):
                     return shipping_size_radio
                 if selector_value == "postad-category-path":
                     return category_path_elem
