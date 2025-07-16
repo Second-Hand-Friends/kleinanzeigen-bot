@@ -1165,7 +1165,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         try:
             shipping_radio_selector = shipping_selector[0]
-            shipping_size_radio = await self.web_find(By.ID, f'radio-button-{shipping_radio_selector}')
+            shipping_size_radio = await self.web_find(By.ID, f"radio-button-{shipping_radio_selector}")
             shipping_size_radio_is_checked = hasattr(shipping_size_radio.attrs, "checked")
 
             if shipping_size_radio_is_checked:
@@ -1175,7 +1175,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 ]
                 to_be_clicked_shipping_packages = unwanted_shipping_packages
             else:
-                await self.web_click(By.ID, f'radio-button-{shipping_radio_selector}')
+                await self.web_click(By.ID, f"radio-button-{shipping_radio_selector}")
                 to_be_clicked_shipping_packages = list(shipping_packages)
 
             await self.web_click(By.XPATH, '//dialog//button[contains(., "Weiter")]')
