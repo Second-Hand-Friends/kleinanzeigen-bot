@@ -1170,7 +1170,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
             if shipping_size_radio_is_checked:
                 unwanted_shipping_packages = [
-                    package for size, package in shipping_options_mapping.values()
+                    package for size, selector, package in shipping_options_mapping.values()
                     if size == shipping_size and package not in shipping_packages
                 ]
                 to_be_clicked_shipping_packages = unwanted_shipping_packages
