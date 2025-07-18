@@ -403,7 +403,7 @@ kleinanzeigen_bot/update_checker.py:
   _get_release_commit:
     "Could not get release commit: %s": "Konnte Release-Commit nicht ermitteln: %s"
   check_for_updates:
-    "A new version is available: %s from %s (current: %s from %s, channel: %s)": "Eine neue Version ist verfügbar: %s vom %s (aktuell: %s vom %s, Kanal: %s)"
+    "A new version is available: %s from %s UTC (current: %s from %s UTC, channel: %s)": "Eine neue Version ist verfügbar: %s vom %s UTC (aktuell: %s vom %s UTC, Kanal: %s)"
     "Could not determine commit dates for comparison.": "Konnte Commit-Daten für den Vergleich nicht ermitteln."
     "Could not determine local commit hash.": "Konnte lokalen Commit-Hash nicht ermitteln."
     "Could not determine local version.": "Konnte lokale Version nicht ermitteln."
@@ -417,8 +417,8 @@ kleinanzeigen_bot/update_checker.py:
     "Latest release from GitHub is a prerelease, but 'latest' channel expects a stable release.": "Die neueste GitHub-Version ist eine Vorabversion, aber der 'latest'-Kanal erwartet eine stabile Version."
     "No prerelease found for 'preview' channel.": "Keine Vorabversion für den 'preview'-Kanal gefunden."
     "Unknown update channel: %s": "Unbekannter Update-Kanal: %s"
-    ? "You are on a different commit than the release for channel '%s' (tag: %s). This may mean you are ahead, behind, or on a different branch. Local commit: %s (%s), Release commit: %s (%s)"
-    : "Sie befinden sich auf einem anderen Commit als das Release für Kanal '%s' (Tag: %s). Dies kann bedeuten, dass Sie voraus, hinterher oder auf einem anderen Branch sind. Lokaler Commit: %s (%s), Release-Commit: %s (%s)"
+    ? "You are on a different commit than the release for channel '%s' (tag: %s). This may mean you are ahead, behind, or on a different branch. Local commit: %s (%s UTC), Release commit: %s (%s UTC)"
+    : "Sie befinden sich auf einem anderen Commit als das Release für Kanal '%s' (Tag: %s). Dies kann bedeuten, dass Sie voraus, hinterher oder auf einem anderen Branch sind. Lokaler Commit: %s (%s UTC), Release-Commit: %s (%s UTC)"
 
 #################################################
 kleinanzeigen_bot/model/update_check_state.py:
