@@ -766,16 +766,20 @@ class KleinanzeigenBot(WebScrapingMixin):
         #############################
         # set shipping type/options/costs
         #############################
-        if ad_cfg.type == "WANTED":
-            # special handling for ads of type WANTED since shipping is a special attribute for these
-            if ad_cfg.shipping_type in {"PICKUP", "SHIPPING"}:
-                shipping_value = "ja" if ad_cfg.shipping_type == "SHIPPING" else "nein"
-                try:
-                    await self.web_select(By.XPATH, "//select[contains(@id, '.versand_s')]", shipping_value)
-                except TimeoutError:
-                    LOG.warning("Failed to set shipping attribute for type '%s'!", ad_cfg.shipping_type)
+        shipping_type = ad_cfg.shipping_type
+        if shipping_type != "NOT_APPLICABLE":
+            if ad_cfg.type == "WANTED":
+                # special handling for ads of type WANTED since shipping is a special attribute for these
+                if shipping_type in {"PICKUP", "SHIPPING"}:
+                    shipping_value = "ja" if shipping_type == "SHIPPING" else "nein"
+                    try:
+                        await self.web_select(By.XPATH, "//select[contains(@id, '.versand_s')]", shipping_value)
+                    except TimeoutError:
+                        LOG.warning("Failed to set shipping attribute for type '%s'!", shipping_type)
+            else:
+                await self.__set_shipping(ad_cfg, mode)
         else:
-            await self.__set_shipping(ad_cfg, mode)
+            LOG.debug("Shipping step skipped - reason: NOT_APPLICABLE")
 
         #############################
         # set price
@@ -1137,22 +1141,22 @@ class KleinanzeigenBot(WebScrapingMixin):
             return
 
         shipping_options_mapping = {
-            "DHL_2": ("Klein", "Paket 2 kg"),
-            "Hermes_Päckchen": ("Klein", "Päckchen"),
-            "Hermes_S": ("Klein", "S-Paket"),
-            "DHL_5": ("Mittel", "Paket 5 kg"),
-            "Hermes_M": ("Mittel", "M-Paket"),
-            "DHL_10": ("Groß", "Paket 10 kg"),
-            "DHL_20": ("Groß", "Paket 20 kg"),
-            "DHL_31,5": ("Groß", "Paket 31,5 kg"),
-            "Hermes_L": ("Groß", "L-Paket"),
+            "DHL_2": ("Klein", "SMALL", "Paket 2 kg"),
+            "Hermes_Päckchen": ("Klein", "SMALL", "Päckchen"),
+            "Hermes_S": ("Klein", "SMALL", "S-Paket"),
+            "DHL_5": ("Mittel", "MEDIUM", "Paket 5 kg"),
+            "Hermes_M": ("Mittel", "MEDIUM", "M-Paket"),
+            "DHL_10": ("Groß", "LARGE", "Paket 10 kg"),
+            "DHL_20": ("Groß", "LARGE", "Paket 20 kg"),
+            "DHL_31,5": ("Groß", "LARGE", "Paket 31,5 kg"),
+            "Hermes_L": ("Groß", "LARGE", "L-Paket"),
         }
         try:
             mapped_shipping_options = [shipping_options_mapping[option] for option in set(ad_cfg.shipping_options)]
         except KeyError as ex:
             raise KeyError(f"Unknown shipping option(s), please refer to the documentation/README: {ad_cfg.shipping_options}") from ex
 
-        shipping_sizes, shipping_packages = zip(*mapped_shipping_options, strict = False)
+        shipping_sizes, shipping_selector, shipping_packages = zip(*mapped_shipping_options, strict = False)
 
         try:
             shipping_size, = set(shipping_sizes)
@@ -1160,17 +1164,18 @@ class KleinanzeigenBot(WebScrapingMixin):
             raise ValueError("You can only specify shipping options for one package size!") from ex
 
         try:
-            shipping_size_radio = await self.web_find(By.CSS_SELECTOR, f'.SingleSelectionItem--Main input[type=radio][data-testid="{shipping_size}"]')
+            shipping_radio_selector = shipping_selector[0]
+            shipping_size_radio = await self.web_find(By.ID, f"radio-button-{shipping_radio_selector}")
             shipping_size_radio_is_checked = hasattr(shipping_size_radio.attrs, "checked")
 
             if shipping_size_radio_is_checked:
                 unwanted_shipping_packages = [
-                    package for size, package in shipping_options_mapping.values()
+                    package for size, selector, package in shipping_options_mapping.values()
                     if size == shipping_size and package not in shipping_packages
                 ]
                 to_be_clicked_shipping_packages = unwanted_shipping_packages
             else:
-                await self.web_click(By.CSS_SELECTOR, f'.SingleSelectionItem--Main input[type=radio][data-testid="{shipping_size}"]')
+                await self.web_click(By.ID, f"radio-button-{shipping_radio_selector}")
                 to_be_clicked_shipping_packages = list(shipping_packages)
 
             await self.web_click(By.XPATH, '//dialog//button[contains(., "Weiter")]')
