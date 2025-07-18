@@ -198,16 +198,18 @@ class UpdateChecker:
             return
 
         if local_commit == release_commit:
+            # If the commit hashes are identical, we are on the latest version. Do not proceed to other checks.
             logger.info(
                 "You are on the latest version: %s (compared to %s in channel %s)",
                 local_version,
                 self._get_short_commit_hash(release_commit),
                 self.config.update_check.channel
             )
-        # We cannot reliably determine ahead/behind without git. Use commit dates as a weak heuristic, but clarify in the log.
-        elif local_commit_date < release_commit_date:
+            return
+        # All commit dates are in UTC; append ' UTC' to timestamps in logs for clarity.
+        if local_commit_date < release_commit_date:
             logger.warning(
-                "A new version is available: %s from %s (current: %s from %s, channel: %s)",
+                "A new version is available: %s from %s UTC (current: %s from %s UTC, channel: %s)",
                 self._get_short_commit_hash(release_commit),
                 release_commit_date.strftime("%Y-%m-%d %H:%M:%S"),
                 local_version,
@@ -219,7 +221,7 @@ class UpdateChecker:
         else:
             logger.info(
                 "You are on a different commit than the release for channel '%s' (tag: %s). This may mean you are ahead, behind, or on a different branch. "
-                "Local commit: %s (%s), Release commit: %s (%s)",
+                "Local commit: %s (%s UTC), Release commit: %s (%s UTC)",
                 self.config.update_check.channel,
                 release.get("tag_name", "unknown"),
                 self._get_short_commit_hash(local_commit),

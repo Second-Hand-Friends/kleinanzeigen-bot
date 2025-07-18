@@ -127,7 +127,7 @@ class TestUpdateChecker:
 
         expected = (
             "You are on a different commit than the release for channel 'latest' (tag: latest). This may mean you are ahead, behind, or on a different branch. "
-            "Local commit: fb00f11 (2025-05-18 00:00:00), Release commit: e7a3d46 (2025-05-16 00:00:00)"
+            "Local commit: fb00f11 (2025-05-18 00:00:00 UTC), Release commit: e7a3d46 (2025-05-16 00:00:00 UTC)"
         )
         assert any(expected in r.getMessage() for r in caplog.records)
 
@@ -163,7 +163,7 @@ class TestUpdateChecker:
         expected = (
             "You are on a different commit than the release for channel 'preview' (tag: preview). "
             "This may mean you are ahead, behind, or on a different branch. "
-            "Local commit: fb00f11 (2025-05-18 00:00:00), Release commit: e7a3d46 (2025-05-16 00:00:00)"
+            "Local commit: fb00f11 (2025-05-18 00:00:00 UTC), Release commit: e7a3d46 (2025-05-16 00:00:00 UTC)"
         )
         assert any(expected in r.getMessage() for r in caplog.records)
 
@@ -195,7 +195,7 @@ class TestUpdateChecker:
         for r in caplog.records:
             print(f"{r.levelname}: {r.getMessage()}")
 
-        expected = "A new version is available: e7a3d46 from 2025-05-18 00:00:00 (current: 2025+fb00f11 from 2025-05-16 00:00:00, channel: latest)"
+        expected = "A new version is available: e7a3d46 from 2025-05-18 00:00:00 UTC (current: 2025+fb00f11 from 2025-05-16 00:00:00 UTC, channel: latest)"
         assert any(expected in r.getMessage() for r in caplog.records)
 
     def test_check_for_updates_same(self, config:Config, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
