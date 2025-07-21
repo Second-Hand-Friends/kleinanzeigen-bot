@@ -910,7 +910,7 @@ files = [
 
 [[package]]
 name = "py-serializable"
-version = "2.0.0"
+version = "2.1.0"
 requires_python = "<4.0,>=3.8"
 summary = "Library for serializing and deserializing Python Objects to and from JSON and XML."
 groups = ["dev"]
@@ -918,8 +918,8 @@ dependencies = [
     "defusedxml<0.8.0,>=0.7.1",
 ]
 files = [
-    {file = "py_serializable-2.0.0-py3-none-any.whl", hash = "sha256:1721e4c0368adeec965c183168da4b912024702f19e15e13f8577098b9a4f8fe"},
-    {file = "py_serializable-2.0.0.tar.gz", hash = "sha256:e9e6491dd7d29c31daf1050232b57f9657f9e8a43b867cca1ff204752cf420a5"},
+    {file = "py_serializable-2.1.0-py3-none-any.whl", hash = "sha256:b56d5d686b5a03ba4f4db5e769dc32336e142fc3bd4d68a8c25579ebb0a67304"},
+    {file = "py_serializable-2.1.0.tar.gz", hash = "sha256:9d5db56154a867a9b897c0163b33a793c804c80cee984116d02d49e4578fc103"},
 ]
 
 [[package]]
