@@ -189,7 +189,7 @@ class AdExtractor(WebScrapingMixin):
             # Extract references using the CORRECTED selector
             try:
                 page_refs = [
-                    (await self.web_find(By.CSS_SELECTOR, "div.manageitems-item-ad h3 a.text-onSurface", parent = li)).attrs["href"]
+                    (await self.web_find(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = li)).attrs["href"]
                     for li in list_items
                 ]
                 refs.extend(page_refs)
