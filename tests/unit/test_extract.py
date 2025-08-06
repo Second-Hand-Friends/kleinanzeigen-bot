@@ -392,7 +392,7 @@ class TestAdExtractorNavigation:
                 call(By.ID, "my-manageitems-adlist"),
                 call(By.CSS_SELECTOR, ".Pagination", timeout = 10),
                 call(By.ID, "my-manageitems-adlist"),
-                call(By.CSS_SELECTOR, "div.manageitems-item-ad h3 a.text-onSurface", parent = cardbox_mock),
+                call(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = cardbox_mock),
             ], any_order = False)  # Check order if important
 
             mock_web_find_all.assert_has_calls([
