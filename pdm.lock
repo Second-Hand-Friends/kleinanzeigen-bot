@@ -760,13 +760,13 @@ files = [
 
 [[package]]
 name = "packageurl-python"
-version = "0.17.4"
+version = "0.17.5"
 requires_python = ">=3.8"
 summary = "A purl aka. Package URL parser and builder"
 groups = ["dev"]
 files = [
-    {file = "packageurl_python-0.17.4-py3-none-any.whl", hash = "sha256:020df8f3ced4fc4a7973e6b5338e00b1b32c948a6fc6bf2c9bf89bda401cadf2"},
-    {file = "packageurl_python-0.17.4.tar.gz", hash = "sha256:d31e23495dd33efe8e1f9ad98d97af69a21e49e751684864d77a35814254a861"},
+    {file = "packageurl_python-0.17.5-py3-none-any.whl", hash = "sha256:f0e55452ab37b5c192c443de1458e3f3b4d8ac27f747df6e8c48adeab081d321"},
+    {file = "packageurl_python-0.17.5.tar.gz", hash = "sha256:a7be3f3ba70d705f738ace9bf6124f31920245a49fa69d4b416da7037dd2de61"},
 ]
 
 [[package]]
