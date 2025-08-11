@@ -72,6 +72,10 @@ class DownloadConfig(ContextualModel):
         le = 255,
         description = "maximum length for folder names when downloading ads (default: 100)"
     )
+    rename_existing_folders:bool = Field(
+        default = False,
+        description = "if true, rename existing folders without titles to include titles (default: false)"
+    )
 
 
 class BrowserConfig(ContextualModel):

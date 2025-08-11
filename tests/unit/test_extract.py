@@ -838,8 +838,63 @@ class TestAdExtractorDownload:
             assert actual_call[0][1] == mock_extract.return_value.model_dump()
 
     @pytest.mark.asyncio
-    async def test_download_ad_rename_existing_folder(self, extractor:AdExtractor) -> None:
-        """Test downloading an ad when an old folder without title exists."""
+    async def test_download_ad_use_existing_folder(self, extractor:AdExtractor) -> None:
+        """Test downloading an ad when an old folder without title exists (default behavior)."""
+        with patch("os.path.exists") as mock_exists, \
+                patch("os.path.isdir") as mock_isdir, \
+                patch("os.makedirs") as mock_makedirs, \
+                patch("os.mkdir") as mock_mkdir, \
+                patch("os.rename") as mock_rename, \
+                patch("shutil.rmtree") as mock_rmtree, \
+                patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict, \
+                patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock) as mock_extract:
+
+            base_dir = "downloaded-ads"
+            temp_dir = os.path.join(base_dir, "ad_12345")
+            yaml_path = os.path.join(temp_dir, "ad_12345.yaml")
+
+            # Configure mocks for directory checks
+            # Base directory exists, temp directory exists
+            existing_paths = {base_dir, temp_dir}
+            mock_exists.side_effect = lambda path: path in existing_paths
+            mock_isdir.side_effect = lambda path: path == base_dir
+
+            mock_extract.return_value = AdPartial.model_validate({
+                "title": "Test Advertisement Title",
+                "description": "Test Description",
+                "category": "Dienstleistungen",
+                "price": 100,
+                "images": [],
+                "contact": {
+                    "name": "Test User",
+                    "street": "Test Street 123",
+                    "zipcode": "12345",
+                    "location": "Test City"
+                }
+            })
+
+            await extractor.download_ad(12345)
+
+            # Verify the correct functions were called
+            mock_extract.assert_called_once()
+            mock_rmtree.assert_not_called()  # No directory to remove
+            mock_mkdir.assert_not_called()  # Base directory already exists
+            mock_makedirs.assert_not_called()  # Using mkdir instead
+            mock_rename.assert_not_called()  # No renaming (default behavior)
+
+            # Get the actual call arguments
+            actual_call = mock_save_dict.call_args
+            assert actual_call is not None
+            actual_path = actual_call[0][0].replace("/", os.path.sep)
+            assert actual_path == yaml_path
+            assert actual_call[0][1] == mock_extract.return_value.model_dump()
+
+    @pytest.mark.asyncio
+    async def test_download_ad_rename_existing_folder_when_enabled(self, extractor:AdExtractor) -> None:
+        """Test downloading an ad when an old folder without title exists and renaming is enabled."""
+        # Enable renaming in config
+        extractor.config.download.rename_existing_folders = True
+
         with patch("os.path.exists") as mock_exists, \
                 patch("os.path.isdir") as mock_isdir, \
                 patch("os.makedirs") as mock_makedirs, \

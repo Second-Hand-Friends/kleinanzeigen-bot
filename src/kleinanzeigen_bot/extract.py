@@ -58,11 +58,16 @@ class AdExtractor(WebScrapingMixin):
             LOG.info("Deleting current folder of ad %s...", ad_id)
             shutil.rmtree(new_base_dir)
 
-        # If the old folder without title exists, rename it
+        # If the old folder without title exists, handle based on configuration
         if os.path.exists(temp_dir):
-            LOG.info("Renaming folder from %s to %s for ad %s...",
-                    os.path.basename(temp_dir), os.path.basename(new_base_dir), ad_id)
-            os.rename(temp_dir, new_base_dir)
+            if self.config.download.rename_existing_folders:
+                LOG.info("Renaming folder from %s to %s for ad %s...",
+                        os.path.basename(temp_dir), os.path.basename(new_base_dir), ad_id)
+                os.rename(temp_dir, new_base_dir)
+            else:
+                # Use the existing folder without renaming
+                new_base_dir = temp_dir
+                LOG.info("Using existing folder for ad %s at %s.", ad_id, new_base_dir)
         else:
             # Create new directory with title
             os.mkdir(new_base_dir)

@@ -280,6 +280,7 @@ download:
   include_all_matching_shipping_options: false  # if true, all shipping options matching the package size will be included
   excluded_shipping_options: []  # list of shipping options to exclude, e.g. ['DHL_2', 'DHL_5']
   folder_name_max_length: 100  # maximum length for folder names when downloading ads (default: 100)
+  rename_existing_folders: false  # if true, rename existing folders without titles to include titles (default: false)
 
 # publishing configuration
 publishing:

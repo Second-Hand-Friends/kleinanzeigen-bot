@@ -299,6 +299,12 @@
           "minimum": 10,
           "title": "Folder Name Max Length",
           "type": "integer"
+        },
+        "rename_existing_folders": {
+          "default": false,
+          "description": "if true, rename existing folders without titles to include titles (default: false)",
+          "title": "Rename Existing Folders",
+          "type": "boolean"
         }
       },
       "title": "DownloadConfig",
