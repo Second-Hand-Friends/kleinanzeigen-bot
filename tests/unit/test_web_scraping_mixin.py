@@ -968,7 +968,8 @@ class TestWebScrapingDiagnostics:
         """Test diagnostic when user data directory exists and is readable/writable."""
         test_dir = str(tmp_path / "chrome-profile")
         with patch("os.path.exists", return_value = True), \
-                patch("os.access", return_value = True):
+                patch("os.access", return_value = True), \
+                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
             scraper_with_config.browser_config.user_data_dir = test_dir
             scraper_with_config.diagnose_browser_issues()
 
@@ -981,7 +982,8 @@ class TestWebScrapingDiagnostics:
         """Test diagnostic when user data directory exists but is not readable/writable."""
         test_dir = str(tmp_path / "chrome-profile")
         with patch("os.path.exists", return_value = True), \
-                patch("os.access", return_value = False):
+                patch("os.access", return_value = False), \
+                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
             scraper_with_config.browser_config.user_data_dir = test_dir
             scraper_with_config.diagnose_browser_issues()
 
@@ -993,7 +995,8 @@ class TestWebScrapingDiagnostics:
     ) -> None:
         """Test diagnostic when user data directory does not exist."""
         test_dir = str(tmp_path / "chrome-profile")
-        with patch("os.path.exists", side_effect = lambda path: path != test_dir):
+        with patch("os.path.exists", side_effect = lambda path: path != test_dir), \
+                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
             scraper_with_config.browser_config.user_data_dir = test_dir
             scraper_with_config.diagnose_browser_issues()
 
@@ -1099,6 +1102,8 @@ class TestWebScrapingDiagnostics:
         """Test diagnostic on macOS platform with user data directory."""
         test_dir = str(tmp_path / "chrome-profile")
         with patch("platform.system", return_value = "Darwin"), \
+                patch("os.path.exists", return_value = True), \
+                patch("os.access", return_value = True), \
                 patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
             scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
             scraper_with_config.browser_config.user_data_dir = test_dir
@@ -1195,22 +1200,30 @@ class TestWebScrapingMixinAdminCheck:
 
     def test_is_admin_on_unix_system(self) -> None:
         """Test _is_admin function on Unix-like system."""
-        with patch("os.geteuid", return_value = 0):
+        # Create a mock os module with geteuid
+        mock_os = Mock()
+        mock_os.geteuid = Mock(return_value = 0)
+
+        with patch("kleinanzeigen_bot.utils.web_scraping_mixin.os", mock_os):
             assert _is_admin() is True
 
     def test_is_admin_on_unix_system_not_root(self) -> None:
         """Test _is_admin function on Unix-like system when not root."""
-        with patch("os.geteuid", return_value = 1000):
+        # Create a mock os module with geteuid
+        mock_os = Mock()
+        mock_os.geteuid = Mock(return_value = 1000)
+
+        with patch("kleinanzeigen_bot.utils.web_scraping_mixin.os", mock_os):
             assert _is_admin() is False
 
     def test_is_admin_on_windows_system(self) -> None:
         """Test _is_admin function on Windows system."""
-        with patch("os.geteuid", side_effect = AttributeError):
-            assert _is_admin() is False
+        # Create a mock os module without geteuid
+        mock_os = Mock()
+        # Remove geteuid attribute to simulate Windows
+        del mock_os.geteuid
 
-    def test_is_admin_on_windows_system_no_geteuid(self) -> None:
-        """Test _is_admin function on Windows system without geteuid."""
-        with patch("os.geteuid", side_effect = AttributeError):
+        with patch("kleinanzeigen_bot.utils.web_scraping_mixin.os", mock_os):
             assert _is_admin() is False
 
 
