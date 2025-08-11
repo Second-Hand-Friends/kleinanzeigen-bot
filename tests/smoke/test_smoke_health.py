@@ -43,10 +43,11 @@ def test_app_starts(smoke_bot:SmokeKleinanzeigenBot) -> None:
     "--help",
     "help",
     "version",
+    "diagnose",
 ])
 def test_cli_subcommands_no_config(subcommand:str, tmp_path:Path) -> None:
     """
-    Smoke: CLI subcommands that do not require a config file (--help, help, version).
+    Smoke: CLI subcommands that do not require a config file (--help, help, version, diagnose).
     """
     args = [subcommand]
     result = run_cli_subcommand(args, cwd = str(tmp_path))
@@ -56,6 +57,8 @@ def test_cli_subcommands_no_config(subcommand:str, tmp_path:Path) -> None:
         assert "usage" in out or "help" in out, f"Expected help text in CLI output.\n{out}"
     elif subcommand == "version":
         assert re.match(r"^\s*\d{4}\+\w+", result.stdout.strip()), f"Output does not look like a version string: {result.stdout}"
+    elif subcommand == "diagnose":
+        assert "browser connection diagnostics" in out or "browser-verbindungsdiagnose" in out, f"Expected diagnostic output.\n{out}"
 
 
 @pytest.mark.smoke
@@ -93,6 +96,7 @@ def test_cli_subcommands_create_config_fails_if_exists(tmp_path:Path) -> None:
     ("verify", "verify"),
     ("update-check", "update"),
     ("update-content-hash", "update-content-hash"),
+    ("diagnose", "diagnose"),
 ])
 @pytest.mark.parametrize(("config_ext", "serializer"), [
     ("yaml", None),
@@ -131,3 +135,5 @@ def test_cli_subcommands_with_config_formats(
         assert "no active ads found" in out, f"Expected 'no active ads found' in output for 'update-content-hash'.\n{out}"
     elif subcommand == "update-check":
         assert result.returncode == 0
+    elif subcommand == "diagnose":
+        assert "browser connection diagnostics" in out or "browser-verbindungsdiagnose" in out, f"Expected diagnostic output for 'diagnose'.\n{out}"

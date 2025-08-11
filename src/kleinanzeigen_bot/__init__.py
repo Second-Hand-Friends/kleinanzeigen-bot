@@ -82,6 +82,11 @@ class KleinanzeigenBot(WebScrapingMixin):
                 case "create-config":
                     self.create_default_config()
                     return
+                case "diagnose":
+                    self.configure_file_logging()
+                    self.load_config()
+                    self.diagnose_browser_issues()
+                    return
                 case "verify":
                     self.configure_file_logging()
                     self.load_config()
@@ -207,6 +212,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                                     nach Änderungen an den config.yaml/ad_defaults verhindert es, dass alle Anzeigen als
                                     "geändert" gelten und neu veröffentlicht werden.
               create-config - Erstellt eine neue Standard-Konfigurationsdatei, falls noch nicht vorhanden
+              diagnose - Diagnostiziert Browser-Verbindungsprobleme und zeigt Troubleshooting-Informationen
               --
               help     - Zeigt diese Hilfe an (Standardbefehl)
               version  - Zeigt die Version der Anwendung an
@@ -251,6 +257,7 @@ class KleinanzeigenBot(WebScrapingMixin):
               update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;
                                     use this after changing config.yaml/ad_defaults to avoid every ad being marked "changed" and republished
               create-config - creates a new default configuration file if one does not exist
+              diagnose - diagnoses browser connection issues and shows troubleshooting information
               --
               help     - displays this help (default command)
               version  - displays the application version

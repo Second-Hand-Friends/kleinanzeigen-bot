@@ -15,6 +15,7 @@
    1. [Main configuration](#main-config)
    1. [Ad configuration](#ad-config)
    1. [Using an existing browser window](#existing-browser)
+   1. [Browser Connection Issues](#browser-connection-issues)
 1. [Development Notes](#development)
 1. [Related Open-Source Projects](#related)
 1. [License](#license)
@@ -194,6 +195,7 @@ Commands:
   update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;
                       use this after changing config.yaml/ad_defaults to avoid every ad being marked "changed" and republished
   create-config - creates a new default configuration file if one does not exist
+  diagnose - diagnoses browser connection issues and shows troubleshooting information
   --
   help     - displays this help (default command)
   version  - displays the application version
@@ -440,6 +442,22 @@ By default a new browser process will be launched. To reuse a manually launched 
 
 > NOTE: If an existing browser is used all other settings configured under `browser` in your config.yaml file will ignored
   because they are only used to programmatically configure/launch a dedicated browser instance.
+
+### <a name="browser-connection-issues"></a>Browser Connection Issues
+
+If you encounter browser connection problems, the bot includes a diagnostic command to help identify issues:
+
+**For binary users:**
+```bash
+kleinanzeigen-bot diagnose
+```
+
+**For source users:**
+```bash
+pdm run app diagnose
+```
+
+This command will check your browser setup and provide troubleshooting information. For detailed solutions to common browser connection issues, see the [Browser Connection Troubleshooting Guide](docs/BROWSER_TROUBLESHOOTING.md).
 
 ## <a name="development"></a>Development Notes
 

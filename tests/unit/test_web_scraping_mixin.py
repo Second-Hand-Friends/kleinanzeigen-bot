@@ -22,6 +22,7 @@ import pytest
 from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
 
+from kleinanzeigen_bot.utils import loggers
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is, WebScrapingMixin
 
 
@@ -882,3 +883,27 @@ class TestWebScrapingBrowserConfiguration:
         print("[DEBUG] scraper.page after session creation:", scraper.page)
         assert scraper.browser is not None
         assert scraper.page is not None
+
+    def test_diagnose_browser_issues(self, caplog:pytest.LogCaptureFixture) -> None:
+        """Test that diagnose_browser_issues provides expected diagnostic output."""
+        # Configure logging to capture output
+        caplog.set_level(loggers.INFO)
+
+        # Create a WebScrapingMixin instance
+        mixin = WebScrapingMixin()
+
+        # Call the diagnose method
+        mixin.diagnose_browser_issues()
+
+        # Check that diagnostic output was produced
+        log_output = caplog.text.lower()
+        assert "browser connection diagnostics" in log_output or "browser-verbindungsdiagnose" in log_output
+        assert "end diagnostics" in log_output or "ende der diagnose" in log_output
+
+        # Check for platform-specific information
+        if platform.system() == "Windows":
+            assert "windows detected" in log_output or "windows erkannt" in log_output
+        elif platform.system() == "Darwin":
+            assert "macos detected" in log_output or "macos erkannt" in log_output
+        elif platform.system() == "Linux":
+            assert "linux detected" in log_output or "linux erkannt" in log_output
