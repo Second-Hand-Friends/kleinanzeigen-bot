@@ -275,6 +275,12 @@ categories:
   Verschenken & Tauschen > Verleihen: 272/274
   Verschenken & Tauschen > Verschenken: 272/192
 
+# download configuration
+download:
+  include_all_matching_shipping_options: false  # if true, all shipping options matching the package size will be included
+  excluded_shipping_options: []  # list of shipping options to exclude, e.g. ['DHL_2', 'DHL_5']
+  folder_name_max_length: 100  # maximum length for folder names when downloading ads (default: 100)
+
 # publishing configuration
 publishing:
   delete_old_ads: "AFTER_PUBLISH" # one of: AFTER_PUBLISH, BEFORE_PUBLISH, NEVER

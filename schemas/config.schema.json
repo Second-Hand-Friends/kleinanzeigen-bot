@@ -291,6 +291,14 @@
           },
           "title": "Excluded Shipping Options",
           "type": "array"
+        },
+        "folder_name_max_length": {
+          "default": 100,
+          "description": "maximum length for folder names when downloading ads (default: 100)",
+          "maximum": 255,
+          "minimum": 10,
+          "title": "Folder Name Max Length",
+          "type": "integer"
         }
       },
       "title": "DownloadConfig",
@@ -346,7 +354,7 @@
       "type": "object"
     },
     "UpdateCheckConfig": {
-      "description": "Configuration for update checking functionality.",
+      "description": "Configuration for update checking functionality.\n\nAttributes:\n    enabled: Whether update checking is enabled.\n    channel: Which release channel to check ('latest' for stable, 'preview' for prereleases).\n    interval: How often to check for updates (e.g. '7d', '1d').\n        If the interval is invalid, too short (<1d), or too long (>30d),\n        the bot will log a warning and use a default interval for this run:\n            - 1d for 'preview' channel\n            - 7d for 'latest' channel\n        The config file is not changed automatically; please fix your config to avoid repeated warnings.",
       "properties": {
         "enabled": {
           "default": true,

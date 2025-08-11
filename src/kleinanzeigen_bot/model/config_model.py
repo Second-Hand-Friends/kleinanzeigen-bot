@@ -66,6 +66,12 @@ class DownloadConfig(ContextualModel):
         default_factory = list,
         description = "list of shipping options to exclude, e.g. ['DHL_2', 'DHL_5']"
     )
+    folder_name_max_length:int = Field(
+        default = 100,
+        ge = 10,
+        le = 255,
+        description = "maximum length for folder names when downloading ads (default: 100)"
+    )
 
 
 class BrowserConfig(ContextualModel):

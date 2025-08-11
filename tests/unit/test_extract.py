@@ -732,16 +732,17 @@ class TestAdExtractorDownload:
                 patch("os.path.isdir") as mock_isdir, \
                 patch("os.makedirs") as mock_makedirs, \
                 patch("os.mkdir") as mock_mkdir, \
+                patch("os.rename") as mock_rename, \
                 patch("shutil.rmtree") as mock_rmtree, \
                 patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict, \
                 patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock) as mock_extract:
 
             base_dir = "downloaded-ads"
-            ad_dir = os.path.join(base_dir, "ad_12345")
-            yaml_path = os.path.join(ad_dir, "ad_12345.yaml")
+            final_dir = os.path.join(base_dir, "ad_12345_Test Advertisement Title")
+            yaml_path = os.path.join(final_dir, "ad_12345.yaml")
 
             # Configure mocks for directory checks
-            existing_paths = {base_dir, ad_dir}
+            existing_paths = {base_dir, final_dir}  # Final directory with title exists
             mock_exists.side_effect = lambda path: path in existing_paths
             mock_isdir.side_effect = lambda path: path == base_dir
 
@@ -763,12 +764,12 @@ class TestAdExtractorDownload:
 
             # Verify the correct functions were called
             mock_extract.assert_called_once()
-            mock_rmtree.assert_called_once_with(ad_dir)
-            mock_mkdir.assert_called_once_with(ad_dir)
+            mock_rmtree.assert_called_once_with(final_dir)  # Delete the final directory with title
+            mock_mkdir.assert_called_once_with(final_dir)  # Create the final directory with title
             mock_makedirs.assert_not_called()  # Directory already exists
+            mock_rename.assert_not_called()  # No renaming needed
 
             # Get the actual call arguments
-            # Workaround for hard-coded path in download_ad
             actual_call = mock_save_dict.call_args
             assert actual_call is not None
             actual_path = actual_call[0][0].replace("/", os.path.sep)
@@ -790,13 +791,14 @@ class TestAdExtractorDownload:
                 patch("os.path.isdir") as mock_isdir, \
                 patch("os.makedirs") as mock_makedirs, \
                 patch("os.mkdir") as mock_mkdir, \
+                patch("os.rename") as mock_rename, \
                 patch("shutil.rmtree") as mock_rmtree, \
                 patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict, \
                 patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock) as mock_extract:
 
             base_dir = "downloaded-ads"
-            ad_dir = os.path.join(base_dir, "ad_12345")
-            yaml_path = os.path.join(ad_dir, "ad_12345.yaml")
+            final_dir = os.path.join(base_dir, "ad_12345_Test Advertisement Title")
+            yaml_path = os.path.join(final_dir, "ad_12345.yaml")
 
             # Configure mocks for directory checks
             mock_exists.return_value = False
@@ -823,9 +825,63 @@ class TestAdExtractorDownload:
             mock_rmtree.assert_not_called()  # No directory to remove
             mock_mkdir.assert_has_calls([
                 call(base_dir),
-                call(ad_dir)
+                call(final_dir)  # Create the final directory with title
             ])
             mock_makedirs.assert_not_called()  # Using mkdir instead
+            mock_rename.assert_not_called()  # No renaming needed
+
+            # Get the actual call arguments
+            actual_call = mock_save_dict.call_args
+            assert actual_call is not None
+            actual_path = actual_call[0][0].replace("/", os.path.sep)
+            assert actual_path == yaml_path
+            assert actual_call[0][1] == mock_extract.return_value.model_dump()
+
+    @pytest.mark.asyncio
+    async def test_download_ad_rename_existing_folder(self, extractor:AdExtractor) -> None:
+        """Test downloading an ad when an old folder without title exists."""
+        with patch("os.path.exists") as mock_exists, \
+                patch("os.path.isdir") as mock_isdir, \
+                patch("os.makedirs") as mock_makedirs, \
+                patch("os.mkdir") as mock_mkdir, \
+                patch("os.rename") as mock_rename, \
+                patch("shutil.rmtree") as mock_rmtree, \
+                patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict, \
+                patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock) as mock_extract:
+
+            base_dir = "downloaded-ads"
+            temp_dir = os.path.join(base_dir, "ad_12345")
+            final_dir = os.path.join(base_dir, "ad_12345_Test Advertisement Title")
+            yaml_path = os.path.join(final_dir, "ad_12345.yaml")
+
+            # Configure mocks for directory checks
+            # Base directory exists, temp directory exists, final directory doesn't exist
+            existing_paths = {base_dir, temp_dir}
+            mock_exists.side_effect = lambda path: path in existing_paths
+            mock_isdir.side_effect = lambda path: path == base_dir
+
+            mock_extract.return_value = AdPartial.model_validate({
+                "title": "Test Advertisement Title",
+                "description": "Test Description",
+                "category": "Dienstleistungen",
+                "price": 100,
+                "images": [],
+                "contact": {
+                    "name": "Test User",
+                    "street": "Test Street 123",
+                    "zipcode": "12345",
+                    "location": "Test City"
+                }
+            })
+
+            await extractor.download_ad(12345)
+
+            # Verify the correct functions were called
+            mock_extract.assert_called_once()
+            mock_rmtree.assert_not_called()  # No directory to remove
+            mock_mkdir.assert_not_called()  # Base directory already exists
+            mock_makedirs.assert_not_called()  # Using mkdir instead
+            mock_rename.assert_called_once_with(temp_dir, final_dir)  # Rename temp to final
 
             # Get the actual call arguments
             actual_call = mock_save_dict.call_args
