@@ -18,7 +18,7 @@ jobs:
 
     steps:
     - name: Git checkout
-      uses: actions/checkout@v4  # https://github.com/actions/checkout
+      uses: actions/checkout@v5  # https://github.com/actions/checkout
 
     - name: Run stale action
       uses: actions/stale@v9  # https://github.com/actions/stale
