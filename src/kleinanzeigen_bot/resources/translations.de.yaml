@@ -418,7 +418,7 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "=== End Diagnostics ===": "=== Ende der Diagnose ==="
     "(ok) Browser binary exists: %s": "(Ok) Browser-Binärdatei existiert: %s"
     "(ok) Browser binary is executable": "(Ok) Browser-Binärdatei ist ausführbar"
-    "(ok) Auto-detected browser: %s": "(Ok) Auto-erkanntes Browser: %s"
+    "(ok) Auto-detected browser: %s": "(Ok) Automatisch erkannter Browser: %s"
     "(ok) User data directory exists: %s": "(Ok) Benutzerdatenverzeichnis existiert: %s"
     "(ok) User data directory is readable and writable": "(Ok) Benutzerdatenverzeichnis ist lesbar und beschreibbar"
     "(ok) Remote debugging port is open": "(Ok) Remote-Debugging-Port ist offen"

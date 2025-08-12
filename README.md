@@ -438,17 +438,39 @@ By default a new browser process will be launched. To reuse a manually launched 
 
    This runs the browser in debug mode which allows it to be remote controlled by the bot.
 
-1. In your config.yaml specify the same flag as browser argument, e.g.:
+   **⚠️ IMPORTANT: Chrome 136+ Security Requirement**
+
+   Starting with Chrome 136 (March 2025), Google has implemented security changes that require `--user-data-dir` to be specified when using `--remote-debugging-port`. This prevents attackers from accessing the default Chrome profile and stealing cookies/credentials.
+
+   **You must now use:**
+   ```bash
+   chrome --remote-debugging-port=9222 --user-data-dir=/path/to/custom/directory
+   ```
+
+   **And in your config.yaml:**
+   ```yaml
+   browser:
+     arguments:
+       - --remote-debugging-port=9222
+       - --user-data-dir=/path/to/custom/directory
+     user_data_dir: "/path/to/custom/directory"
+   ```
+
+1. In your config.yaml specify the same flags as browser arguments, e.g.:
    ```yaml
    browser:
      arguments:
      - --remote-debugging-port=9222
+     - --user-data-dir=/tmp/chrome-debug-profile  # Required for Chrome 136+
+     user_data_dir: "/tmp/chrome-debug-profile"   # Must match the argument above
    ```
 
 1. When now publishing ads the manually launched browser will be re-used.
 
 > NOTE: If an existing browser is used all other settings configured under `browser` in your config.yaml file will ignored
   because they are only used to programmatically configure/launch a dedicated browser instance.
+
+> **Security Note:** This change was implemented by Google to protect users from cookie theft attacks. The custom user data directory uses a different encryption key than the default profile, making it more secure for debugging purposes.
 
 ### <a name="browser-connection-issues"></a>Browser Connection Issues
 

@@ -2,6 +2,29 @@
 
 This guide helps you resolve common browser connection issues with the kleinanzeigen-bot.
 
+## ⚠️ Important: Chrome 136+ Security Changes (March 2025)
+
+**If you're using Chrome 136 or later and remote debugging stopped working, this is likely the cause.**
+
+Google implemented security changes in Chrome 136 that require `--user-data-dir` to be specified when using `--remote-debugging-port`. This prevents attackers from accessing the default Chrome profile and stealing cookies/credentials.
+
+**Quick Fix:**
+```bash
+# Start Chrome with custom user data directory
+chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug-profile
+```
+
+**In your config.yaml:**
+```yaml
+browser:
+  arguments:
+    - --remote-debugging-port=9222
+    - --user-data-dir=/tmp/chrome-debug-profile  # Required for Chrome 136+
+  user_data_dir: "/tmp/chrome-debug-profile"     # Must match the argument above
+```
+
+For more details, see [Chrome 136+ Security Changes](#5-chrome-136-security-changes-march-2025) below.
+
 ## Quick Diagnosis
 
 Run the diagnostic command to automatically check your setup:
@@ -71,22 +94,22 @@ browser:
 #### 4. Start browser manually with remote debugging
 ```bash
 # For Chrome (macOS)
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug-profile
 
 # For Chrome (Linux)
-google-chrome --remote-debugging-port=9222
+google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug-profile
 
 # For Chrome (Windows)
-"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir=C:\temp\chrome-debug-profile
 
 # For Edge (macOS)
-/Applications/Microsoft\ Edge.app/Contents/MacOS/Microsoft\ Edge --remote-debugging-port=9222
+/Applications/Microsoft\ Edge.app/Contents/MacOS/Microsoft\ Edge --remote-debugging-port=9222 --user-data-dir=/tmp/edge-debug-profile
 
 # For Edge (Linux/Windows)
-msedge --remote-debugging-port=9222
+msedge --remote-debugging-port=9222 --user-data-dir=/tmp/edge-debug-profile
 
 # For Chromium (Linux)
-chromium --remote-debugging-port=9222
+chromium --remote-debugging-port=9222 --user-data-dir=/tmp/chromium-debug-profile
 ```
 
 Then in your `config.yaml`:
@@ -94,7 +117,13 @@ Then in your `config.yaml`:
 browser:
   arguments:
     - --remote-debugging-port=9222
+    - --user-data-dir=/tmp/chrome-debug-profile  # Must match the command line
+  user_data_dir: "/tmp/chrome-debug-profile"     # Must match the argument above
 ```
+
+**⚠️ IMPORTANT: Chrome 136+ Security Requirement**
+
+Starting with Chrome 136 (March 2025), Google has implemented security changes that require `--user-data-dir` to be specified when using `--remote-debugging-port`. This prevents attackers from accessing the default Chrome profile and stealing cookies/credentials. See [Chrome's security announcement](https://developer.chrome.com/blog/remote-debugging-port?hl=de) for more details.
 
 ### Issue 2: "Browser process not reachable at 127.0.0.1:9222"
 
@@ -109,6 +138,7 @@ browser:
 4. Timing issue - browser not fully started
 5. Browser update changed remote debugging behavior
 6. Existing Chrome instance conflicts with new debugging session
+7. **Chrome 136+ security requirement not met** (most common cause since March 2025)
 
 **Solutions:**
 
@@ -199,6 +229,42 @@ taskkill /f /im chrome.exe  # Windows
 - Try using a fresh user data directory to avoid conflicts
 - Ensure you're using the latest version of the bot
 
+#### 5. Chrome 136+ Security Changes (March 2025)
+If you're using Chrome 136 or later and remote debugging stopped working:
+
+**The Problem:**
+Google implemented security changes in Chrome 136 that prevent `--remote-debugging-port` from working with the default user data directory. This was done to protect users from cookie theft attacks.
+
+**The Solution:**
+You must now specify a custom `--user-data-dir` when using remote debugging:
+
+```bash
+# ❌ This will NOT work with Chrome 136+
+chrome --remote-debugging-port=9222
+
+# ✅ This WILL work with Chrome 136+
+chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug-profile
+```
+
+**In your config.yaml:**
+```yaml
+browser:
+  arguments:
+    - --remote-debugging-port=9222
+    - --user-data-dir=/tmp/chrome-debug-profile  # Required for Chrome 136+
+  user_data_dir: "/tmp/chrome-debug-profile"     # Must match the argument above
+```
+
+**Why this change was made:**
+- Prevents attackers from accessing the default Chrome profile
+- Protects cookies and login credentials
+- Uses a different encryption key for the custom profile
+- Makes debugging more secure
+
+**For more information:**
+- [Chrome's security announcement](https://developer.chrome.com/blog/remote-debugging-port?hl=de)
+- [GitHub issue discussion](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/604)
+
 #### 5. Check firewall settings
 - Windows: Check Windows Defender Firewall
 - macOS: Check System Preferences > Security & Privacy > Firewall
@@ -280,6 +346,8 @@ browser:
 browser:
   arguments:
     - --remote-debugging-port=9222
+    - --user-data-dir=/tmp/chrome-debug-profile  # Required for Chrome 136+
+  user_data_dir: "/tmp/chrome-debug-profile"     # Must match the argument above
   binary_location: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
 ```
 
