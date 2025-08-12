@@ -23,6 +23,8 @@ browser:
   user_data_dir: "/tmp/chrome-debug-profile"     # Must match the argument above
 ```
 
+**The bot will automatically detect Chrome 136+ and provide clear error messages if your configuration is missing the required `--user-data-dir` setting.**
+
 For more details, see [Chrome 136+ Security Changes](#5-chrome-136-security-changes-march-2025) below.
 
 ## Quick Diagnosis
@@ -45,6 +47,17 @@ This will check:
 - Remote debugging port status
 - Running browser processes
 - Platform-specific issues
+- **Chrome/Edge version detection and configuration validation**
+
+**Automatic Chrome 136+ Validation:**
+The bot automatically detects Chrome/Edge 136+ and validates your configuration. If you're using Chrome 136+ with remote debugging but missing the required `--user-data-dir` setting, you'll see clear error messages like:
+
+```
+Chrome 136+ configuration validation failed: Chrome 136+ requires --user-data-dir
+Please update your configuration to include --user-data-dir for remote debugging
+```
+
+The bot will also provide specific instructions on how to fix your configuration.
 
 ## Common Issues and Solutions
 
