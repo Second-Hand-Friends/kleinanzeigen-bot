@@ -456,6 +456,8 @@ By default a new browser process will be launched. To reuse a manually launched 
      user_data_dir: "/path/to/custom/directory"
    ```
 
+   **The bot will automatically detect Chrome 136+ and validate your configuration. If validation fails, you'll see clear error messages with specific instructions on how to fix your configuration.**
+
 1. In your config.yaml specify the same flags as browser arguments, e.g.:
    ```yaml
    browser:

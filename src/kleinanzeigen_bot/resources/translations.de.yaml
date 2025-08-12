@@ -440,14 +440,34 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "(ok) Remote debugging API accessible - Browser: %s": "(ok) Remote-Debugging-API zugänglich - Browser: %s"
     "(fail) Remote debugging port is open but API not accessible: %s": "(Fehler) Remote-Debugging-Port ist offen, aber API nicht zugänglich: %s"
     "  This might indicate a browser update issue or configuration problem": "  Dies könnte auf ein Browser-Update-Problem oder Konfigurationsproblem hinweisen"
-    ? "  On macOS, try: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=%d --user-data-dir=/tmp/chrome-debug-profile --disable-dev-shm-usage"
-    : "  Unter macOS versuchen Sie: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=%d --user-data-dir=/tmp/chrome-debug-profile --disable-dev-shm-usage"
-    ? "  Or: open -a \"Google Chrome\" --args --remote-debugging-port=%d --user-data-dir=/tmp/chrome-debug-profile --disable-dev-shm-usage"
-    : "  Oder: open -a \"Google Chrome\" --args --remote-debugging-port=%d --user-data-dir=/tmp/chrome-debug-profile --disable-dev-shm-usage"
-    "  IMPORTANT: --user-data-dir is MANDATORY for macOS Chrome remote debugging": "  WARNUNG: --user-data-dir ist PFLICHT für macOS Chrome Remote-Debugging"
-    "  IMPORTANT: macOS Chrome remote debugging requires --user-data-dir flag": "  WARNUNG: macOS Chrome Remote-Debugging erfordert --user-data-dir Flag"
-    "  Add to your config.yaml: user_data_dir: \"/tmp/chrome-debug-profile\"": "  Fügen Sie zu Ihrer config.yaml hinzu: user_data_dir: \"/tmp/chrome-debug-profile\""
-    "  And to browser arguments: --user-data-dir=/tmp/chrome-debug-profile": "  Und zu Browser-Argumenten: --user-data-dir=/tmp/chrome-debug-profile"
+
+
+
+
+  _validate_chrome_version_configuration:
+    " -> %s 136+ detected: %s": " -> %s 136+ erkannt: %s"
+    " -> %s 136+ configuration validation passed": " -> %s 136+ Konfigurationsvalidierung bestanden"
+    " -> %s 136+ configuration validation failed: %s": " -> %s 136+ Konfigurationsvalidierung fehlgeschlagen: %s"
+    " -> %s version detected: %s (pre-136, no special validation required)": " -> %s-Version erkannt: %s (vor 136, keine besondere Validierung erforderlich)"
+    " -> Please update your configuration to include --user-data-dir for remote debugging": " -> Bitte aktualisieren Sie Ihre Konfiguration, um --user-data-dir für Remote-Debugging einzuschließen"
+    " -> Skipping browser version validation in test environment": " -> Browser-Versionsvalidierung in Testumgebung wird übersprungen"
+    " -> Browser version detection failed, skipping validation: %s": " -> Browser-Versionserkennung fehlgeschlagen, Validierung wird übersprungen: %s"
+    " -> Unexpected error during browser version validation, skipping: %s": " -> Unerwarteter Fehler bei Browser-Versionsvalidierung, wird übersprungen: %s"
+
+  _diagnose_chrome_version_issues:
+    "(info) %s version from binary: %s %s (major: %d)": "(Info) %s-Version von Binärdatei: %s %s (Hauptversion: %d)"
+    "(info) %s version from remote debugging: %s %s (major: %d)": "(Info) %s-Version von Remote-Debugging: %s %s (Hauptversion: %d)"
+    "(info) %s 136+ detected - security validation required": "(Info) %s 136+ erkannt - Sicherheitsvalidierung erforderlich"
+    "(info) %s pre-136 detected - no special security requirements": "(Info) %s vor 136 erkannt - keine besonderen Sicherheitsanforderungen"
+    "(info) Remote %s 136+ detected - validating configuration": "(Info) Remote %s 136+ erkannt - validiere Konfiguration"
+    "(fail) %s 136+ configuration validation failed: %s": "(Fehler) %s 136+ Konfigurationsvalidierung fehlgeschlagen: %s"
+    "(ok) %s 136+ configuration validation passed": "(Ok) %s 136+ Konfigurationsvalidierung bestanden"
+    "(info) Chrome/Edge 136+ security changes require --user-data-dir for remote debugging": "(Info) Chrome/Edge 136+ Sicherheitsänderungen erfordern --user-data-dir für Remote-Debugging"
+    "  See: https://developer.chrome.com/blog/remote-debugging-port": "  Siehe: https://developer.chrome.com/blog/remote-debugging-port"
+    " -> Browser version diagnostics failed: %s": " -> Browser-Versionsdiagnose fehlgeschlagen: %s"
+    " -> Unexpected error during browser version diagnostics: %s": " -> Unerwarteter Fehler bei Browser-Versionsdiagnose: %s"
+    "  Solution: Add --user-data-dir=/path/to/directory to browser arguments": "  Lösung: Fügen Sie --user-data-dir=/pfad/zum/verzeichnis zu Browser-Argumenten hinzu"
+    "  And user_data_dir: \"/path/to/directory\" to your configuration": "  Und user_data_dir: \"/pfad/zum/verzeichnis\" zu Ihrer Konfiguration"
 
 #################################################
 kleinanzeigen_bot/update_checker.py:
