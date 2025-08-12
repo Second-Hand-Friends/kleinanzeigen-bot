@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:25eeef987c3fa08a52036fd696587f2fb89c6474225d7c9108e5d0281aa54d26"
+content_hash = "sha256:3bda32de316794f1c608898e17874857e2263ee1f3a5932440c630366cc40af2"
 
 [[metadata.targets]]
 requires_python = ">=3.10,<3.14"
@@ -1322,6 +1322,17 @@ dependencies = [
 files = [
     {file = "ruyaml-0.91.0-py3-none-any.whl", hash = "sha256:50e0ee3389c77ad340e209472e0effd41ae0275246df00cdad0a067532171755"},
     {file = "ruyaml-0.91.0.tar.gz", hash = "sha256:6ce9de9f4d082d696d3bde264664d1bcdca8f5a9dff9d1a1f1a127969ab871ab"},
+]
+
+[[package]]
+name = "sanitize-filename"
+version = "1.2.0"
+requires_python = "~=3.7"
+summary = "A permissive filename sanitizer."
+groups = ["default"]
+files = [
+    {file = "sanitize_filename-1.2.0-py3-none-any.whl", hash = "sha256:a5be41a4371c84cb4a666a9c3baa70e1b2086a3e50b86c7ba5dd579f5ad2f330"},
+    {file = "sanitize_filename-1.2.0.tar.gz", hash = "sha256:e75933e96d426e306eef8c270cc24c3e1971d8715288c9776d801d3d8e7b941a"},
 ]
 
 [[package]]
