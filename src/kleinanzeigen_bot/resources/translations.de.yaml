@@ -176,6 +176,8 @@ kleinanzeigen_bot/extract.py:
     "Created ads directory at ./%s.": "Verzeichnis für Anzeigen erstellt unter ./%s."
     "Deleting current folder of ad %s...": "Lösche aktuellen Ordner der Anzeige %s..."
     "New directory for ad created at %s.": "Neues Verzeichnis für Anzeige erstellt unter %s."
+    "Renaming folder from %s to %s for ad %s...": "Benenne Ordner von %s zu %s für Anzeige %s um..."
+    "Using existing folder for ad %s at %s.": "Verwende bestehenden Ordner für Anzeige %s unter %s."
 
   _download_images_from_ad_page:
     "Found %s.": "%s gefunden."

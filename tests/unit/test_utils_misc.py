@@ -7,8 +7,10 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from sanitize_filename import sanitize
 
 from kleinanzeigen_bot.utils import misc
+from kleinanzeigen_bot.utils.misc import sanitize_folder_name
 
 
 def test_now_returns_utc_datetime() -> None:
@@ -133,3 +135,133 @@ def test_ensure_non_callable_truthy_and_falsy() -> None:
         misc.ensure("", "Should fail for empty string")
     with pytest.raises(AssertionError):
         misc.ensure(None, "Should fail for None")
+
+
+# --- Test sanitize_folder_name function ---
+@pytest.mark.parametrize(
+    ("test_input", "expected_output", "description"),
+    [
+        # Basic sanitization
+        ("My Ad Title!", "My Ad Title!", "Basic sanitization"),
+
+        # Unicode normalization (sanitize-filename changes normalization)
+        ("café", "cafe\u0301", "Unicode normalization"),
+        ("caf\u00e9", "cafe\u0301", "Unicode normalization from escaped"),
+
+        # Edge cases
+        ("", "untitled", "Empty string"),
+        ("   ", "untitled", "Whitespace only"),
+        ("___", "___", "Multiple underscores (not collapsed)"),
+
+        # Control characters (removed by sanitize-filename)
+        ("Ad\x00with\x1fcontrol", "Adwithcontrol", "Control characters removed"),
+
+        # Multiple consecutive underscores (sanitize-filename doesn't collapse them)
+        ("Ad___with___multiple___underscores", "Ad___with___multiple___underscores", "Multiple underscores preserved"),
+
+        # Special characters (removed by sanitize-filename)
+        ('file<with>invalid:chars"|?*', "filewithinvalidchars", "Special characters removed"),
+        ("file\\with\\backslashes", "filewithbackslashes", "Backslashes removed"),
+        ("file/with/slashes", "filewithslashes", "Forward slashes removed"),
+
+        # Path traversal attempts (handled by sanitize-filename)
+        ("Title with ../../etc/passwd", "Title with ....etcpasswd", "Path traversal attempt"),
+        ("Title with C:\\Windows\\System32\\cmd.exe", "Title with CWindowsSystem32cmd.exe", "Windows path traversal"),
+
+        # XSS attempts (handled by sanitize-filename)
+        ('Title with <script>alert("xss")</script>', "Title with scriptalert(xss)script", "XSS attempt"),
+    ],
+)
+def test_sanitize_folder_name_basic(test_input:str, expected_output:str, description:str) -> None:
+    """Test sanitize_folder_name function with various inputs."""
+    result = sanitize_folder_name(test_input)
+    assert result == expected_output, f"Failed for '{test_input}': {description}"
+
+
+@pytest.mark.parametrize(
+    ("test_input", "max_length", "expected_output", "description"),
+    [
+        # Length truncation
+        ("Very long advertisement title that exceeds the maximum length and should be truncated", 50,
+         "Very long advertisement title that exceeds the", "Length truncation"),
+
+        # Word boundary truncation
+        ("Short words but very long title", 20, "Short words but", "Word boundary truncation"),
+
+        # Edge case: no word boundary found
+        ("VeryLongWordWithoutSpaces", 10, "VeryLongWo", "No word boundary truncation"),
+
+        # Test default max_length (100)
+        ("This is a reasonable advertisement title that fits within the default limit", 100,
+         "This is a reasonable advertisement title that fits within the default limit", "Default max_length"),
+    ],
+)
+def test_sanitize_folder_name_truncation(test_input:str, max_length:int, expected_output:str, description:str) -> None:
+    """Test sanitize_folder_name function with length truncation."""
+    result = sanitize_folder_name(test_input, max_length = max_length)
+    assert len(result) <= max_length, f"Result exceeds max_length for '{test_input}': {description}"
+    assert result == expected_output, f"Failed for '{test_input}' with max_length={max_length}: {description}"
+
+
+# --- Test sanitize-filename behavior directly (since it's consistent across platforms) ---
+@pytest.mark.parametrize(
+    ("test_input", "expected_output"),
+    [
+        # Test sanitize-filename behavior (consistent across platforms)
+        ("test/file", "testfile"),
+        ("test\\file", "testfile"),
+        ("test<file", "testfile"),
+        ("test>file", "testfile"),
+        ('test"file', "testfile"),
+        ("test|file", "testfile"),
+        ("test?file", "testfile"),
+        ("test*file", "testfile"),
+        ("test:file", "testfile"),
+        ("CON", "__CON"),
+        ("PRN", "__PRN"),
+        ("AUX", "__AUX"),
+        ("NUL", "__NUL"),
+        ("COM1", "__COM1"),
+        ("LPT1", "__LPT1"),
+        ("file/with/slashes", "filewithslashes"),
+        ("file\\with\\backslashes", "filewithbackslashes"),
+        ('file<with>invalid:chars"|?*', "filewithinvalidchars"),
+        ("file\x00with\x1fcontrol", "filewithcontrol"),
+        ("file___with___underscores", "file___with___underscores"),
+    ],
+)
+def test_sanitize_filename_behavior(test_input:str, expected_output:str) -> None:
+    """Test sanitize-filename behavior directly (consistent across platforms)."""
+    result = sanitize(test_input)
+    assert result == expected_output, f"sanitize-filename behavior mismatch for '{test_input}'"
+
+
+# --- Test sanitize_folder_name cross-platform consistency ---
+@pytest.mark.parametrize(
+    "test_input",
+    [
+        "normal_filename",
+        "filename with spaces",
+        "filename_with_underscores",
+        "filename-with-dashes",
+        "filename.with.dots",
+        "filename123",
+        "café_filename",
+        "filename\x00with\x1fcontrol",  # Control characters
+    ],
+)
+def test_sanitize_folder_name_cross_platform_consistency(
+    monkeypatch:pytest.MonkeyPatch,
+    test_input:str
+) -> None:
+    """Test that sanitize_folder_name produces consistent results across platforms for safe inputs."""
+    platforms = ["Windows", "Darwin", "Linux"]
+    results = []
+
+    for platform in platforms:
+        monkeypatch.setattr("sys.platform", platform.lower())
+        result = sanitize_folder_name(test_input)
+        results.append(result)
+
+    # All platforms should produce the same result for safe inputs
+    assert len(set(results)) == 1, f"Cross-platform inconsistency for '{test_input}': {results}"

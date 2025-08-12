@@ -2,10 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import asyncio, decimal, re, sys, time  # isort: skip
+import unicodedata
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from gettext import gettext as _
 from typing import Any, Mapping, TypeVar
+
+from sanitize_filename import sanitize
 
 from . import i18n
 
@@ -263,3 +266,36 @@ def format_timedelta(td:timedelta) -> str:
         parts.append(i18n.pluralize("second", seconds))
 
     return ", ".join(parts) if parts else i18n.pluralize("second", 0)
+
+
+def sanitize_folder_name(name:str, max_length:int = 100) -> str:
+    """
+    Sanitize a string for use as a folder name using `sanitize-filename`.
+
+    - Cross-platform safe (Windows/macOS/Linux)
+    - Removes invalid characters and Windows reserved names
+    - Handles path traversal attempts
+    - Truncates to `max_length`
+
+    Args:
+        name: The input string.
+        max_length: Maximum length of the resulting folder name (default: 100).
+
+    Returns:
+        A sanitized folder name (falls back to "untitled" when empty).
+    """
+    # Normalize whitespace and handle empty input
+    raw = (name or "").strip()
+    if not raw:
+        return "untitled"
+
+    raw = unicodedata.normalize("NFC", raw)
+    safe:str = sanitize(raw)
+
+    # Truncate with word-boundary preference
+    if len(safe) > max_length:
+        truncated = safe[:max_length]
+        last_break = max(truncated.rfind(" "), truncated.rfind("_"))
+        safe = truncated[:last_break] if last_break > int(max_length * 0.7) else truncated
+
+    return safe

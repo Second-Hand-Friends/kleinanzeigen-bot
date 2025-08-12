@@ -45,15 +45,35 @@ class AdExtractor(WebScrapingMixin):
             os.mkdir(relative_directory)
             LOG.info("Created ads directory at ./%s.", relative_directory)
 
-        new_base_dir = os.path.join(relative_directory, f"ad_{ad_id}")
+        # First, extract ad info to get the title
+        temp_dir = os.path.join(relative_directory, f"ad_{ad_id}")
+        ad_cfg:AdPartial = await self._extract_ad_page_info(temp_dir, ad_id)
+
+        # Create folder name with ad title
+        sanitized_title = misc.sanitize_folder_name(ad_cfg.title, self.config.download.folder_name_max_length)
+        new_base_dir = os.path.join(relative_directory, f"ad_{ad_id}_{sanitized_title}")
+
+        # If the folder with title already exists, delete it
         if os.path.exists(new_base_dir):
             LOG.info("Deleting current folder of ad %s...", ad_id)
             shutil.rmtree(new_base_dir)
-        os.mkdir(new_base_dir)
-        LOG.info("New directory for ad created at %s.", new_base_dir)
 
-        # call extraction function
-        ad_cfg:AdPartial = await self._extract_ad_page_info(new_base_dir, ad_id)
+        # If the old folder without title exists, handle based on configuration
+        if os.path.exists(temp_dir):
+            if self.config.download.rename_existing_folders:
+                LOG.info("Renaming folder from %s to %s for ad %s...",
+                        os.path.basename(temp_dir), os.path.basename(new_base_dir), ad_id)
+                os.rename(temp_dir, new_base_dir)
+            else:
+                # Use the existing folder without renaming
+                new_base_dir = temp_dir
+                LOG.info("Using existing folder for ad %s at %s.", ad_id, new_base_dir)
+        else:
+            # Create new directory with title
+            os.mkdir(new_base_dir)
+            LOG.info("New directory for ad created at %s.", new_base_dir)
+
+        # Save the ad configuration file
         ad_file_path = new_base_dir + "/" + f"ad_{ad_id}.yaml"
         dicts.save_dict(
             ad_file_path,
