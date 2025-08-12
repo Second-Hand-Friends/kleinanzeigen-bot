@@ -980,7 +980,8 @@ class KleinanzeigenBot(WebScrapingMixin):
             count += 1
 
             await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.MODIFY)
-            await self.web_await(lambda: self.web_check(By.ID, "checking-done", Is.DISPLAYED), timeout = 5 * 60)
+            await self.web_await(lambda: self.web_check(By.ID, "checking-done", Is.DISPLAYED) or
+                                 self.web_check(By.ID, "not-completed", Is.DISPLAYED), timeout = 5 * 60)
 
         LOG.info("############################################")
         LOG.info("DONE: updated %s", pluralize("ad", count))
