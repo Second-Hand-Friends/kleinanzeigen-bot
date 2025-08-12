@@ -234,13 +234,13 @@ class TestUpdateChecker:
 
     def test_update_check_state_invalid_data(self, state_file:Path) -> None:
         """Test that loading invalid state data returns a new state."""
-        state_file.write_text("invalid json")
+        state_file.write_text("invalid json", encoding = "utf-8")
         state = UpdateCheckState.load(state_file)
         assert state.last_check is None
 
     def test_update_check_state_missing_last_check(self, state_file:Path) -> None:
         """Test that loading state data without last_check returns a new state."""
-        state_file.write_text("{}")
+        state_file.write_text("{}", encoding = "utf-8")
         state = UpdateCheckState.load(state_file)
         assert state.last_check is None
 
@@ -371,7 +371,7 @@ class TestUpdateChecker:
 
     def test_update_check_state_invalid_date(self, state_file:Path) -> None:
         """Test that loading a state file with an invalid date string for last_check returns a new state (triggers ValueError)."""
-        state_file.write_text(json.dumps({"last_check": "not-a-date"}))
+        state_file.write_text(json.dumps({"last_check": "not-a-date"}), encoding = "utf-8")
         state = UpdateCheckState.load(state_file)
         assert state.last_check is None
 
@@ -471,7 +471,7 @@ class TestUpdateChecker:
         # Create a state with version 0 (old format)
         state_file.write_text(json.dumps({
             "last_check": datetime.now(timezone.utc).isoformat()
-        }))
+        }), encoding = "utf-8")
 
         # Load the state - should migrate to version 1
         state = UpdateCheckState.load(state_file)
@@ -490,7 +490,7 @@ class TestUpdateChecker:
         old_time = datetime.now(timezone.utc)
         state_file.write_text(json.dumps({
             "last_check": old_time.isoformat()
-        }))
+        }), encoding = "utf-8")
 
         # Load the state - should migrate to version 1
         state = UpdateCheckState.load(state_file)
@@ -522,7 +522,7 @@ class TestUpdateChecker:
     def test_update_check_state_load_errors(self, state_file:Path) -> None:
         """Test that load errors are handled gracefully."""
         # Test invalid JSON
-        state_file.write_text("invalid json")
+        state_file.write_text("invalid json", encoding = "utf-8")
         state = UpdateCheckState.load(state_file)
         assert state.version == 1
         assert state.last_check is None
@@ -531,7 +531,7 @@ class TestUpdateChecker:
         state_file.write_text(json.dumps({
             "version": 1,
             "last_check": "invalid-date"
-        }))
+        }), encoding = "utf-8")
         state = UpdateCheckState.load(state_file)
         assert state.version == 1
         assert state.last_check is None
@@ -542,7 +542,7 @@ class TestUpdateChecker:
         state_file.write_text(json.dumps({
             "version": 1,
             "last_check": "2024-03-20T12:00:00"
-        }))
+        }), encoding = "utf-8")
         state = UpdateCheckState.load(state_file)
         assert state.last_check is not None
         assert state.last_check.tzinfo == timezone.utc
@@ -552,7 +552,7 @@ class TestUpdateChecker:
         state_file.write_text(json.dumps({
             "version": 1,
             "last_check": "2024-03-20T12:00:00+02:00"  # 2 hours ahead of UTC
-        }))
+        }), encoding = "utf-8")
         state = UpdateCheckState.load(state_file)
         assert state.last_check is not None
         assert state.last_check.tzinfo == timezone.utc

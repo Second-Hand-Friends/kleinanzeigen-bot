@@ -43,6 +43,7 @@ dependencies = [
   "ruamel.yaml",
   "psutil",
   "wcmatch",
+  "sanitize-filename>=1.2.0",
 ]
 
 [dependency-groups] # https://peps.python.org/pep-0735/
