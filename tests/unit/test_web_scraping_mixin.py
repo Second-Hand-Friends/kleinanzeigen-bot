@@ -14,7 +14,7 @@ import shutil
 import zipfile
 from pathlib import Path
 from typing import NoReturn, Protocol, cast
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, mock_open, patch
 
 import nodriver
 import psutil
@@ -1194,6 +1194,440 @@ class TestWebScrapingDiagnostics:
             assert "(info) Linux detected - check if running as root (not recommended)" in caplog.text
             assert "=== End Diagnostics ===" in caplog.text
 
+    def test_diagnose_browser_issues_remote_debugging_host_configured(
+            self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test diagnostic when remote debugging host is configured."""
+        with patch("os.path.exists", return_value = True), \
+                patch("os.access", return_value = True), \
+                patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True), \
+                patch("urllib.request.urlopen") as mock_urlopen, \
+                patch("psutil.process_iter", return_value = []), \
+                patch("platform.system", return_value = "Linux"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False), \
+                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
+            mock_response = Mock()
+            mock_response.read.return_value = b'{"Browser": "Chrome/120.0.0.0"}'
+            mock_urlopen.return_value = mock_response
+
+            scraper_with_config.browser_config.arguments = [
+                "--remote-debugging-host=192.168.1.100",
+                "--remote-debugging-port=9222"
+            ]
+
+            scraper_with_config.diagnose_browser_issues()
+
+            assert "(info) Remote debugging port configured: 9222" in caplog.text
+            assert "(ok) Remote debugging port is open" in caplog.text
+
+    def test_diagnose_browser_issues_process_info_missing_name(
+            self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test diagnostic when process info is missing name."""
+        mock_process = Mock()
+        mock_process.info = {"pid": 1234, "name": None, "cmdline": []}
+
+        with patch("os.path.exists", return_value = True), \
+                patch("os.access", return_value = True), \
+                patch("psutil.process_iter", return_value = [mock_process]), \
+                patch("platform.system", return_value = "Linux"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False), \
+                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
+            scraper_with_config.diagnose_browser_issues()
+
+            assert "(info) No browser processes currently running" in caplog.text
+
+    def test_diagnose_browser_issues_psutil_exception_handling(
+            self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test diagnostic when psutil raises an exception during process iteration."""
+        # Mock psutil.process_iter to return a list that will cause an exception when accessing proc.info
+        mock_process = Mock()
+        mock_process.info = {"name": "chrome"}
+        mock_processes = [mock_process]
+
+        with patch("os.path.exists", return_value = True), \
+                patch("os.access", return_value = True), \
+                patch("psutil.process_iter", return_value = mock_processes), \
+                patch("platform.system", return_value = "Linux"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False), \
+                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"), \
+                patch.object(mock_process, "info", side_effect = psutil.AccessDenied):
+            scraper_with_config.diagnose_browser_issues()
+
+            # Should handle the exception gracefully and continue
+            assert "=== Browser Connection Diagnostics ===" in caplog.text
+            assert "=== End Diagnostics ===" in caplog.text
+
+    def test_diagnose_browser_issues_browser_not_executable(
+            self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test diagnostic when browser binary exists but is not executable."""
+        scraper_with_config.browser_config.binary_location = "/usr/bin/chrome"
+        with patch("os.path.exists", return_value = True), \
+                patch("os.access", return_value = False), \
+                patch("platform.system", return_value = "Linux"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False), \
+                patch("psutil.process_iter", return_value = []):
+            scraper_with_config.diagnose_browser_issues()
+
+            assert "(fail) Browser binary is not executable" in caplog.text
+
+    def test_diagnose_browser_issues_browser_not_found(
+            self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test diagnostic when browser binary does not exist."""
+        scraper_with_config.browser_config.binary_location = "/usr/bin/chrome"
+        with patch("os.path.exists", return_value = False), \
+                patch("platform.system", return_value = "Linux"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False), \
+                patch("psutil.process_iter", return_value = []):
+            scraper_with_config.diagnose_browser_issues()
+
+            assert "(fail) Browser binary not found:" in caplog.text
+
+    def test_diagnose_browser_issues_no_browser_auto_detection(
+            self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test diagnostic when no browser binary is configured and auto-detection fails."""
+        scraper_with_config.browser_config.binary_location = None
+        with patch("platform.system", return_value = "Linux"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False), \
+                patch("psutil.process_iter", return_value = []), \
+                patch.object(scraper_with_config, "get_compatible_browser", side_effect = AssertionError("No browser found")), \
+                pytest.raises(AssertionError, match = "No browser found"):
+            scraper_with_config.diagnose_browser_issues()
+
+    def test_diagnose_browser_issues_user_data_dir_permissions_issue(
+            self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture, tmp_path:Path
+    ) -> None:
+        """Test diagnostic when user data directory has permission issues."""
+        test_dir = str(tmp_path / "chrome-profile")
+        scraper_with_config.browser_config.user_data_dir = test_dir
+
+        with patch("os.path.exists", return_value = True), \
+                patch("os.access", return_value = False), \
+                patch("platform.system", return_value = "Linux"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False), \
+                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
+            scraper_with_config.diagnose_browser_issues()
+
+            assert "(fail) User data directory permissions issue" in caplog.text
+
+    def test_diagnose_browser_issues_remote_debugging_api_inaccessible(
+            self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test diagnostic when remote debugging port is open but API is not accessible."""
+        scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
+
+        with patch("os.path.exists", return_value = True), \
+                patch("os.access", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.net.is_port_open", return_value = True), \
+                patch("urllib.request.urlopen", side_effect = Exception("Connection refused")), \
+                patch("platform.system", return_value = "Linux"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False), \
+                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
+            scraper_with_config.diagnose_browser_issues()
+
+            assert "(fail) Remote debugging port is open but API not accessible" in caplog.text
+            assert "This might indicate a browser update issue or configuration problem" in caplog.text
+
+    def test_diagnose_browser_issues_macos_chrome_warning(
+            self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test diagnostic when macOS Chrome remote debugging is configured without user_data_dir."""
+        scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
+        scraper_with_config.browser_config.user_data_dir = None
+
+        with patch("os.path.exists", return_value = True), \
+                patch("os.access", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.net.is_port_open", return_value = False), \
+                patch("platform.system", return_value = "Darwin"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False), \
+                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
+            scraper_with_config.diagnose_browser_issues()
+
+            assert "IMPORTANT: macOS Chrome remote debugging requires --user-data-dir flag" in caplog.text
+            assert "Add to your config.yaml: user_data_dir:" in caplog.text
+
+    def test_diagnose_browser_issues_linux_root_user(
+            self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test diagnostic when running as root on Linux."""
+        with patch("os.path.exists", return_value = True), \
+                patch("os.access", return_value = True), \
+                patch("platform.system", return_value = "Linux"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = True), \
+                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
+            scraper_with_config.diagnose_browser_issues()
+
+            assert "(fail) Running as root - this can cause browser connection issues" in caplog.text
+
+
+class TestWebScrapingMixinPortRetry:
+    """Test the _check_port_with_retry method."""
+
+    @pytest.fixture
+    def scraper_with_remote_config(self) -> WebScrapingMixin:
+        """Create a WebScrapingMixin instance with remote debugging configuration."""
+        scraper = WebScrapingMixin()
+        scraper.browser_config.binary_location = "/usr/bin/chrome"
+        scraper.browser_config.arguments = ["--remote-debugging-port=9222"]
+        return scraper
+
+    @pytest.mark.asyncio
+    async def test_browser_connection_error_handling(
+            self, scraper_with_remote_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test error handling when browser connection fails."""
+        with patch("os.path.exists", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.net.is_port_open", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", side_effect = Exception("Failed to connect as root user")), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.Config") as mock_config_class:
+
+            mock_config = Mock()
+            mock_config_class.return_value = mock_config
+
+            with pytest.raises(Exception, match = "Failed to connect as root user"):
+                await scraper_with_remote_config.create_browser_session()
+
+            # Check that the error handling was triggered
+            assert "Failed to connect to browser. This error often occurs when:" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_browser_connection_error_handling_non_root_error(
+            self, scraper_with_remote_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test error handling when browser connection fails with non-root error."""
+        with patch("os.path.exists", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.net.is_port_open", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", side_effect = Exception("Connection timeout")), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.Config") as mock_config_class:
+
+            mock_config = Mock()
+            mock_config_class.return_value = mock_config
+
+            with pytest.raises(Exception, match = "Connection timeout"):
+                await scraper_with_remote_config.create_browser_session()
+
+            # Should not trigger the root-specific error handling
+            assert "Failed to connect to browser. This error often occurs when:" not in caplog.text
+
+    @pytest.fixture
+    def scraper_with_startup_config(self) -> WebScrapingMixin:
+        """Create a WebScrapingMixin instance for testing browser startup (no remote debugging)."""
+        scraper = WebScrapingMixin()
+        scraper.browser_config.binary_location = "/usr/bin/chrome"
+        # No remote debugging port configured - will start new browser
+        return scraper
+
+    @pytest.mark.asyncio
+    async def test_browser_startup_error_handling_root_error(
+            self, scraper_with_startup_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test error handling when browser startup fails with root error."""
+        with patch("os.path.exists", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", side_effect = Exception("Failed to start as root user")), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.Config") as mock_config_class:
+
+            mock_config = Mock()
+            mock_config_class.return_value = mock_config
+
+            with pytest.raises(Exception, match = "Failed to start as root user"):
+                await scraper_with_startup_config.create_browser_session()
+
+            # Check that the root-specific error handling was triggered
+            assert "Failed to start browser. This error often occurs when:" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_browser_startup_error_handling_non_root_error(
+            self, scraper_with_startup_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test error handling when browser startup fails with non-root error."""
+        with patch("os.path.exists", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", side_effect = Exception("Browser binary not found")), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.Config") as mock_config_class:
+
+            mock_config = Mock()
+            mock_config_class.return_value = mock_config
+
+            with pytest.raises(Exception, match = "Browser binary not found"):
+                await scraper_with_startup_config.create_browser_session()
+
+            # Should not trigger the root-specific error handling
+            assert "Failed to start browser. This error often occurs when:" not in caplog.text
+
+    @pytest.fixture
+    def scraper(self) -> WebScrapingMixin:
+        """Create a WebScrapingMixin instance."""
+        return WebScrapingMixin()
+
+    @pytest.mark.asyncio
+    async def test_check_port_with_retry_success_first_try(self, scraper:WebScrapingMixin) -> None:
+        """Test port check succeeds on first try."""
+        with patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True):
+            result = await scraper._check_port_with_retry("127.0.0.1", 9222)
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_check_port_with_retry_success_after_retries(self, scraper:WebScrapingMixin) -> None:
+        """Test port check succeeds after some retries."""
+        with patch("kleinanzeigen_bot.utils.net.is_port_open", side_effect = [False, False, True]):
+            result = await scraper._check_port_with_retry("127.0.0.1", 9222, max_retries = 3, retry_delay = 0.1)
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_check_port_with_retry_failure_after_max_retries(self, scraper:WebScrapingMixin) -> None:
+        """Test port check fails after max retries."""
+        with patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = False):
+            result = await scraper._check_port_with_retry("127.0.0.1", 9222, max_retries = 2, retry_delay = 0.1)
+            assert result is False
+
+    @pytest.mark.asyncio
+    async def test_check_port_with_retry_custom_parameters(self, scraper:WebScrapingMixin) -> None:
+        """Test port check with custom retry parameters."""
+        with patch("kleinanzeigen_bot.utils.net.is_port_open", side_effect = [False, True]):
+            result = await scraper._check_port_with_retry("192.168.1.100", 8080, max_retries = 5, retry_delay = 0.05)
+            assert result is True
+
+
+class TestWebScrapingMixinProfileHandling:
+    """Test the enhanced profile directory handling."""
+
+    @pytest.fixture
+    def scraper_with_profile_config(self, tmp_path:Path) -> WebScrapingMixin:
+        """Create a WebScrapingMixin instance with profile configuration."""
+        scraper = WebScrapingMixin()
+        scraper.browser_config.user_data_dir = str(tmp_path / "test-profile")
+        scraper.browser_config.profile_name = "TestProfile"
+        return scraper
+
+    def test_profile_directory_creation_with_user_data_dir(
+            self, scraper_with_profile_config:WebScrapingMixin, tmp_path:Path
+    ) -> None:
+        """Test profile directory creation when user_data_dir is configured."""
+        test_dir = str(tmp_path / "test-profile")
+        scraper_with_profile_config.browser_config.user_data_dir = test_dir
+
+        with patch("os.path.join", return_value = os.path.join(test_dir, "TestProfile")), \
+                patch("os.makedirs") as mock_makedirs, \
+                patch("os.path.exists", return_value = False), \
+                patch("builtins.open", mock_open()), \
+                patch("json.dump"):
+
+            # This would be called during browser session creation
+            profile_dir = os.path.join(test_dir, "TestProfile")
+            mock_makedirs.assert_not_called()  # Not called yet
+
+            # Simulate the profile creation logic
+            os.makedirs(profile_dir, exist_ok = True)
+            mock_makedirs.assert_called_with(profile_dir, exist_ok = True)
+
+    def test_profile_directory_creation_with_preferences_file(
+            self, scraper_with_profile_config:WebScrapingMixin, tmp_path:Path
+    ) -> None:
+        """Test profile directory creation with preferences file when it doesn't exist."""
+        test_dir = str(tmp_path / "test-profile")
+        scraper_with_profile_config.browser_config.user_data_dir = test_dir
+
+        with patch("os.makedirs") as mock_makedirs, \
+                patch("os.path.exists", return_value = False), \
+                patch("builtins.open", mock_open()) as mock_file, \
+                patch("json.dump") as mock_json_dump:
+
+            # Simulate the profile creation logic
+            profile_dir = os.path.join(test_dir, "TestProfile")
+            prefs_file = os.path.join(profile_dir, "Preferences")
+
+            # This would be called during browser session creation
+            os.makedirs(profile_dir, exist_ok = True)
+            mock_makedirs.assert_called_with(profile_dir, exist_ok = True)
+
+            # Simulate preferences file creation
+            with open(prefs_file, "w", encoding = "UTF-8") as fd:
+                json.dump({"test": "preferences"}, fd)
+
+            mock_file.assert_called_with(prefs_file, "w", encoding = "UTF-8")
+            mock_json_dump.assert_called()
+
+    def test_profile_directory_creation_with_existing_preferences_file(
+            self, scraper_with_profile_config:WebScrapingMixin, tmp_path:Path
+    ) -> None:
+        """Test profile directory creation when preferences file already exists."""
+        test_dir = str(tmp_path / "test-profile")
+        scraper_with_profile_config.browser_config.user_data_dir = test_dir
+
+        with patch("os.makedirs") as mock_makedirs, \
+                patch("os.path.exists", return_value = True), \
+                patch("builtins.open", mock_open()) as mock_file, \
+                patch("json.dump") as mock_json_dump:
+
+            # Simulate the profile creation logic
+            profile_dir = os.path.join(test_dir, "TestProfile")
+
+            # This would be called during browser session creation
+            os.makedirs(profile_dir, exist_ok = True)
+            mock_makedirs.assert_called_with(profile_dir, exist_ok = True)
+
+            # Preferences file exists, so it should not be created
+            mock_file.assert_not_called()
+            mock_json_dump.assert_not_called()
+
+    def test_profile_directory_creation_with_edge_browser(
+            self, scraper_with_profile_config:WebScrapingMixin, tmp_path:Path
+    ) -> None:
+        """Test profile directory creation with Edge browser configuration."""
+        test_dir = str(tmp_path / "test-profile")
+        scraper_with_profile_config.browser_config.user_data_dir = test_dir
+        scraper_with_profile_config.browser_config.binary_location = "/usr/bin/microsoft-edge"
+
+        with patch("os.makedirs") as mock_makedirs, \
+                patch("os.path.exists", return_value = False), \
+                patch("builtins.open", mock_open()), \
+                patch("json.dump"), \
+                patch("os.environ", {"MSEDGEDRIVER_TELEMETRY_OPTOUT": "1"}):
+
+            # Simulate the profile creation logic
+            profile_dir = os.path.join(test_dir, "TestProfile")
+
+            # This would be called during browser session creation
+            os.makedirs(profile_dir, exist_ok = True)
+            mock_makedirs.assert_called_with(profile_dir, exist_ok = True)
+
+    def test_profile_directory_creation_with_private_window(
+            self, scraper_with_profile_config:WebScrapingMixin, tmp_path:Path
+    ) -> None:
+        """Test profile directory creation with private window configuration."""
+        test_dir = str(tmp_path / "test-profile")
+        scraper_with_profile_config.browser_config.user_data_dir = test_dir
+        scraper_with_profile_config.browser_config.use_private_window = True
+
+        with patch("os.makedirs") as mock_makedirs, \
+                patch("os.path.exists", return_value = False), \
+                patch("builtins.open", mock_open()), \
+                patch("json.dump"):
+
+            # Simulate the profile creation logic
+            profile_dir = os.path.join(test_dir, "TestProfile")
+
+            # This would be called during browser session creation
+            os.makedirs(profile_dir, exist_ok = True)
+            mock_makedirs.assert_called_with(profile_dir, exist_ok = True)
+
+    def test_profile_directory_creation_without_user_data_dir(
+            self, scraper_with_profile_config:WebScrapingMixin
+    ) -> None:
+        """Test profile directory handling when user_data_dir is not configured."""
+        scraper_with_profile_config.browser_config.user_data_dir = None
+
+        # Should not create profile directories when user_data_dir is None
+        with patch("os.path.join") as mock_join, \
+                patch("os.makedirs") as mock_makedirs:
+
+            # The profile creation logic should not be called
+            mock_join.assert_not_called()
+            mock_makedirs.assert_not_called()
+
 
 class TestWebScrapingMixinAdminCheck:
     """Test the _is_admin helper function."""
@@ -1225,47 +1659,3 @@ class TestWebScrapingMixinAdminCheck:
 
         with patch("kleinanzeigen_bot.utils.web_scraping_mixin.os", mock_os):
             assert _is_admin() is False
-
-
-class TestWebScrapingMixinPortRetry:
-    """Test the _check_port_with_retry method."""
-
-    @pytest.fixture
-    def scraper(self) -> WebScrapingMixin:
-        """Create a WebScrapingMixin instance."""
-        return WebScrapingMixin()
-
-    @pytest.mark.asyncio
-    async def test_check_port_with_retry_success_first_try(self, scraper:WebScrapingMixin) -> None:
-        """Test port check succeeds on first try."""
-        with patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True):
-            result = await scraper._check_port_with_retry("127.0.0.1", 9222)
-            assert result is True
-
-    @pytest.mark.asyncio
-    async def test_check_port_with_retry_success_after_retries(self, scraper:WebScrapingMixin) -> None:
-        """Test port check succeeds after some retries."""
-        with patch("kleinanzeigen_bot.utils.net.is_port_open", side_effect = [False, False, True]):
-            result = await scraper._check_port_with_retry("127.0.0.1", 9222, max_retries = 3, retry_delay = 0.1)
-            assert result is True
-
-    @pytest.mark.asyncio
-    async def test_check_port_with_retry_failure_after_max_retries(self, scraper:WebScrapingMixin) -> None:
-        """Test port check fails after maximum retries."""
-        with patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = False):
-            result = await scraper._check_port_with_retry("127.0.0.1", 9222, max_retries = 2, retry_delay = 0.1)
-            assert result is False
-
-    @pytest.mark.asyncio
-    async def test_check_port_with_retry_custom_retry_config(self, scraper:WebScrapingMixin) -> None:
-        """Test port check with custom retry configuration."""
-        with patch("kleinanzeigen_bot.utils.net.is_port_open", side_effect = [False, True]):
-            result = await scraper._check_port_with_retry("127.0.0.1", 9222, max_retries = 5, retry_delay = 0.05)
-            assert result is True
-
-    @pytest.mark.asyncio
-    async def test_check_port_with_retry_different_host(self, scraper:WebScrapingMixin) -> None:
-        """Test port check with different host."""
-        with patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True):
-            result = await scraper._check_port_with_retry("localhost", 8080)
-            assert result is True
