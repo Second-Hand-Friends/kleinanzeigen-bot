@@ -908,7 +908,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         # check for no image question
         try:
-            image_hint_xpath = '//*[contains(@class, "ModalDialog--Actions")]//button[contains(., "Ohne Bild veröffentlichen")]'
+            image_hint_xpath = '//button[contains(., "Ohne Bild veröffentlichen")]'
             if not ad_cfg.images and await self.web_check(By.XPATH, image_hint_xpath, Is.DISPLAYED):
                 await self.web_click(By.XPATH, image_hint_xpath)
         except TimeoutError:
