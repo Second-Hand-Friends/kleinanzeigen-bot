@@ -704,6 +704,10 @@ class KleinanzeigenBot(WebScrapingMixin):
         ad_cfg.id = None
         return True
 
+    async def __check_publishing_result(self) -> bool:
+        # Check for success messages
+        return await self.web_check(By.ID, "checking-done", Is.DISPLAYED) or await self.web_check(By.ID, "not-completed", Is.DISPLAYED)
+
     async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
 
@@ -720,8 +724,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             count += 1
 
             await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.REPLACE)
-            await self.web_await(lambda: self.web_check(By.ID, "checking-done", Is.DISPLAYED) or
-                                         self.web_check(By.ID, "not-completed", Is.DISPLAYED), timeout=5 * 60)
+            await self.web_await(self.__check_publishing_result, timeout = 5 * 60)
 
             if self.config.publishing.delete_old_ads == "AFTER_PUBLISH" and not self.keep_old_ads:
                 await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = False)
@@ -935,14 +938,6 @@ class KleinanzeigenBot(WebScrapingMixin):
         ad_id = int(current_url_query_params.get("adId", [])[0])
         ad_cfg_orig["id"] = ad_id
 
-        # check for approval message
-        try:
-            approval_link_xpath = '//*[contains(@id, "not-completed")]//a[contains(@class, "to-my-ads-link")]'
-            if await self.web_check(By.XPATH, approval_link_xpath, Is.DISPLAYED):
-                await self.web_click(By.XPATH, approval_link_xpath)
-        except TimeoutError:
-            pass  # nosec
-
         # Update content hash after successful publication
         # Calculate hash on original config to ensure consistent comparison on restart
         ad_cfg_orig["content_hash"] = AdPartial.model_validate(ad_cfg_orig).update_content_hash().content_hash
@@ -988,8 +983,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             count += 1
 
             await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.MODIFY)
-            await self.web_await(lambda: self.web_check(By.ID, "checking-done", Is.DISPLAYED) or
-                                 self.web_check(By.ID, "not-completed", Is.DISPLAYED), timeout = 5 * 60)
+            await self.web_await(self.__check_publishing_result, timeout = 5 * 60)
 
         LOG.info("############################################")
         LOG.info("DONE: updated %s", pluralize("ad", count))
