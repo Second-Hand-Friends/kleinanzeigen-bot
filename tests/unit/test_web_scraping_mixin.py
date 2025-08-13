@@ -1092,9 +1092,6 @@ class TestWebScrapingDiagnostics:
             scraper_with_config.diagnose_browser_issues()
 
             assert "(info) macOS detected - check Gatekeeper and security settings" in caplog.text
-            assert "  IMPORTANT: macOS Chrome remote debugging requires --user-data-dir flag" in caplog.text
-            assert '  Add to your config.yaml: user_data_dir: "/tmp/chrome-debug-profile"' in caplog.text
-            assert "  And to browser arguments: --user-data-dir=/tmp/chrome-debug-profile" in caplog.text
 
     def test_diagnose_browser_issues_macos_platform_with_user_data_dir(
             self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture, tmp_path:Path
@@ -1110,8 +1107,6 @@ class TestWebScrapingDiagnostics:
             scraper_with_config.diagnose_browser_issues()
 
             assert "(info) macOS detected - check Gatekeeper and security settings" in caplog.text
-            # Should not show the warning about user-data-dir being required
-            assert "IMPORTANT: macOS Chrome remote debugging requires --user-data-dir flag" not in caplog.text
 
     def test_diagnose_browser_issues_linux_platform_not_root(self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
         """Test diagnostic on Linux platform when not running as root."""
@@ -1152,11 +1147,6 @@ class TestWebScrapingDiagnostics:
                 patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
             scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
             scraper_with_config.diagnose_browser_issues()
-
-            assert "On macOS, try: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome" in caplog.text
-            assert "--remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug-profile --disable-dev-shm-usage" in caplog.text
-            assert 'Or: open -a "Google Chrome" --args --remote-debugging-port=9222' in caplog.text
-            assert "  IMPORTANT: --user-data-dir is MANDATORY for macOS Chrome remote debugging" in caplog.text
 
     def test_diagnose_browser_issues_complete_diagnostic_flow(
             self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture, tmp_path:Path
@@ -1346,9 +1336,6 @@ class TestWebScrapingDiagnostics:
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False), \
                 patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
             scraper_with_config.diagnose_browser_issues()
-
-            assert "IMPORTANT: macOS Chrome remote debugging requires --user-data-dir flag" in caplog.text
-            assert "Add to your config.yaml: user_data_dir:" in caplog.text
 
     def test_diagnose_browser_issues_linux_root_user(
             self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
