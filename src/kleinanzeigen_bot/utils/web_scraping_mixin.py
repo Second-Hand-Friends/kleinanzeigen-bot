@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio, enum, inspect, json, os, platform, secrets, shutil  # isort: skip
+import asyncio, enum, inspect, json, os, platform, secrets, shutil, urllib.request  # isort: skip
 from collections.abc import Callable, Coroutine, Iterable
 from gettext import gettext as _
 from typing import Any, Final, cast
@@ -34,6 +34,17 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 # see https://api.jquery.com/category/selectors/
 METACHAR_ESCAPER:Final[dict[int, str]] = str.maketrans({ch: f"\\{ch}" for ch in '!"#$%&\'()*+,./:;<=>?@[\\]^`{|}~'})
+
+
+def _is_admin() -> bool:
+    """Check if the current process is running with admin/root privileges."""
+    try:
+        if hasattr(os, "geteuid"):
+            result = os.geteuid() == 0
+            return bool(result)
+        return False
+    except AttributeError:
+        return False
 
 
 class By(enum.Enum):
@@ -93,17 +104,39 @@ class WebScrapingMixin:
 
         if remote_port > 0:
             LOG.info("Using existing browser process at %s:%s", remote_host, remote_port)
-            ensure(net.is_port_open(remote_host, remote_port),
+
+            # Enhanced port checking with retry logic
+            port_available = await self._check_port_with_retry(remote_host, remote_port)
+            ensure(port_available,
                 f"Browser process not reachable at {remote_host}:{remote_port}. "
-                f"Start the browser with --remote-debugging-port={remote_port} or remove this port from your config.yaml")
-            cfg = Config(
-                browser_executable_path = self.browser_config.binary_location  # actually not necessary but nodriver fails without
-            )
-            cfg.host = remote_host
-            cfg.port = remote_port
-            self.browser = await nodriver.start(cfg)
-            LOG.info("New Browser session is %s", self.browser.websocket_url)
-            return
+                f"Start the browser with --remote-debugging-port={remote_port} or remove this port from your config.yaml. "
+                f"Make sure the browser is running and the port is not blocked by firewall.")
+
+            try:
+                cfg = Config(
+                    browser_executable_path = self.browser_config.binary_location  # actually not necessary but nodriver fails without
+                )
+                cfg.host = remote_host
+                cfg.port = remote_port
+                self.browser = await nodriver.start(cfg)
+                LOG.info("New Browser session is %s", self.browser.websocket_url)
+                return
+            except Exception as e:
+                error_msg = str(e)
+                if "root" in error_msg.lower():
+                    LOG.error("Failed to connect to browser. This error often occurs when:")
+                    LOG.error("1. Running as root user (try running as regular user)")
+                    LOG.error("2. Browser profile is locked or in use by another process")
+                    LOG.error("3. Insufficient permissions to access the browser profile")
+                    LOG.error("4. Browser is not properly started with remote debugging enabled")
+                    LOG.error("")
+                    LOG.error("Troubleshooting steps:")
+                    LOG.error("1. Close all browser instances and try again")
+                    LOG.error("2. Remove the user_data_dir configuration temporarily")
+                    LOG.error("3. Start browser manually with: %s --remote-debugging-port=%d",
+                             self.browser_config.binary_location, remote_port)
+                    LOG.error("4. Check if any antivirus or security software is blocking the connection")
+                raise
 
         ########################################################
         # configure and initialize new browser instance...
@@ -160,39 +193,41 @@ class WebScrapingMixin:
         # already logged by nodriver:
         # LOG.debug("-> Effective browser arguments: \n\t\t%s", "\n\t\t".join(cfg.browser_args))
 
-        profile_dir = os.path.join(cfg.user_data_dir, self.browser_config.profile_name or "Default")
-        os.makedirs(profile_dir, exist_ok = True)
-        prefs_file = os.path.join(profile_dir, "Preferences")
-        if not os.path.exists(prefs_file):
-            LOG.info(" -> Setting chrome prefs [%s]...", prefs_file)
-            with open(prefs_file, "w", encoding = "UTF-8") as fd:
-                json.dump({
-                    "credentials_enable_service": False,
-                    "enable_do_not_track": True,
-                    "google": {
-                        "services": {
-                            "consented_to_sync": False
-                        }
-                    },
-                    "profile": {
-                        "default_content_setting_values": {
-                            "popups": 0,
-                            "notifications": 2  # 1 = allow, 2 = block browser notifications
+        # Enhanced profile directory handling
+        if cfg.user_data_dir:
+            profile_dir = os.path.join(cfg.user_data_dir, self.browser_config.profile_name or "Default")
+            os.makedirs(profile_dir, exist_ok = True)
+            prefs_file = os.path.join(profile_dir, "Preferences")
+            if not os.path.exists(prefs_file):
+                LOG.info(" -> Setting chrome prefs [%s]...", prefs_file)
+                with open(prefs_file, "w", encoding = "UTF-8") as fd:
+                    json.dump({
+                        "credentials_enable_service": False,
+                        "enable_do_not_track": True,
+                        "google": {
+                            "services": {
+                                "consented_to_sync": False
+                            }
                         },
-                        "password_manager_enabled": False
-                    },
-                    "signin": {
-                        "allowed": False
-                    },
-                    "translate_site_blacklist": [
-                        "www.kleinanzeigen.de"
-                    ],
-                    "devtools": {
-                        "preferences": {
-                            "currentDockState": '"bottom"'
+                        "profile": {
+                            "default_content_setting_values": {
+                                "popups": 0,
+                                "notifications": 2  # 1 = allow, 2 = block browser notifications
+                            },
+                            "password_manager_enabled": False
+                        },
+                        "signin": {
+                            "allowed": False
+                        },
+                        "translate_site_blacklist": [
+                            "www.kleinanzeigen.de"
+                        ],
+                        "devtools": {
+                            "preferences": {
+                                "currentDockState": '"bottom"'
+                            }
                         }
-                    }
-                }, fd)
+                    }, fd)
 
         # load extensions
         for crx_extension in self.browser_config.extensions:
@@ -200,8 +235,145 @@ class WebScrapingMixin:
             ensure(os.path.exists(crx_extension), f"Configured extension-file [{crx_extension}] does not exist.")
             cfg.add_extension(crx_extension)
 
-        self.browser = await nodriver.start(cfg)
-        LOG.info("New Browser session is %s", self.browser.websocket_url)
+        try:
+            self.browser = await nodriver.start(cfg)
+            LOG.info("New Browser session is %s", self.browser.websocket_url)
+        except Exception as e:
+            error_msg = str(e)
+            if "root" in error_msg.lower():
+                LOG.error("Failed to start browser. This error often occurs when:")
+                LOG.error("1. Running as root user (try running as regular user)")
+                LOG.error("2. Browser profile is locked or in use by another process")
+                LOG.error("3. Insufficient permissions to access the browser profile")
+                LOG.error("4. Browser binary is not executable or missing")
+                LOG.error("")
+                LOG.error("Troubleshooting steps:")
+                LOG.error("1. Close all browser instances and try again")
+                LOG.error("2. Remove the user_data_dir configuration temporarily")
+                LOG.error("3. Try running without profile configuration")
+                LOG.error("4. Check browser binary permissions: %s", self.browser_config.binary_location)
+                LOG.error("5. Check if any antivirus or security software is blocking the browser")
+            raise
+
+    async def _check_port_with_retry(self, host:str, port:int, max_retries:int = 3, retry_delay:float = 1.0) -> bool:
+        """
+        Check if a port is open with retry logic.
+
+        Args:
+            host: Host to check
+            port: Port to check
+            max_retries: Maximum number of retry attempts
+            retry_delay: Delay between retries in seconds
+
+        Returns:
+            True if port is open, False otherwise
+        """
+        for attempt in range(max_retries):
+            if net.is_port_open(host, port):
+                return True
+
+            if attempt < max_retries - 1:
+                LOG.debug("Port %s:%s not available, retrying in %.1f seconds (attempt %d/%d)",
+                         host, port, retry_delay, attempt + 1, max_retries)
+                await asyncio.sleep(retry_delay)
+
+        return False
+
+    def diagnose_browser_issues(self) -> None:
+        """
+        Diagnose common browser connection issues and provide troubleshooting information.
+        """
+        LOG.info("=== Browser Connection Diagnostics ===")
+
+        # Check browser binary
+        if self.browser_config.binary_location:
+            if os.path.exists(self.browser_config.binary_location):
+                LOG.info("(ok) Browser binary exists: %s", self.browser_config.binary_location)
+                if os.access(self.browser_config.binary_location, os.X_OK):
+                    LOG.info("(ok) Browser binary is executable")
+                else:
+                    LOG.error("(fail) Browser binary is not executable")
+            else:
+                LOG.error("(fail) Browser binary not found: %s", self.browser_config.binary_location)
+        else:
+            browser_path = self.get_compatible_browser()
+            if browser_path:
+                LOG.info("(ok) Auto-detected browser: %s", browser_path)
+            else:
+                LOG.error("(fail) No compatible browser found")
+
+        # Check user data directory
+        if self.browser_config.user_data_dir:
+            if os.path.exists(self.browser_config.user_data_dir):
+                LOG.info("(ok) User data directory exists: %s", self.browser_config.user_data_dir)
+                if os.access(self.browser_config.user_data_dir, os.R_OK | os.W_OK):
+                    LOG.info("(ok) User data directory is readable and writable")
+                else:
+                    LOG.error("(fail) User data directory permissions issue")
+            else:
+                LOG.info("(info) User data directory does not exist (will be created): %s", self.browser_config.user_data_dir)
+
+        # Check for remote debugging port
+        remote_port = 0
+        for arg in self.browser_config.arguments:
+            if arg.startswith("--remote-debugging-port="):
+                remote_port = int(arg.split("=", maxsplit = 1)[1])
+                break
+
+        if remote_port > 0:
+            LOG.info("(info) Remote debugging port configured: %d", remote_port)
+            if net.is_port_open("127.0.0.1", remote_port):
+                LOG.info("(ok) Remote debugging port is open")
+                # Try to get more information about the debugging endpoint
+                try:
+                    response = urllib.request.urlopen(f"http://127.0.0.1:{remote_port}/json/version", timeout = 2)
+                    version_info = json.loads(response.read().decode())
+                    LOG.info("(ok) Remote debugging API accessible - Browser: %s", version_info.get("Browser", "Unknown"))
+                except Exception as e:
+                    LOG.warning("(fail) Remote debugging port is open but API not accessible: %s", str(e))
+                    LOG.info("  This might indicate a browser update issue or configuration problem")
+            else:
+                LOG.error("(fail) Remote debugging port is not open")
+                LOG.info("  Make sure browser is started with: --remote-debugging-port=%d", remote_port)
+                if platform.system() == "Darwin":
+                    LOG.info("  On macOS, try: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome "
+                            "--remote-debugging-port=%d --user-data-dir=/tmp/chrome-debug-profile --disable-dev-shm-usage", remote_port)
+                    LOG.info('  Or: open -a "Google Chrome" --args --remote-debugging-port=%d '
+                            '--user-data-dir=/tmp/chrome-debug-profile --disable-dev-shm-usage', remote_port)
+                    LOG.info("  IMPORTANT: --user-data-dir is MANDATORY for macOS Chrome remote debugging")
+
+        # Check for running browser processes
+        browser_processes = []
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                if proc.info["name"] and any(browser in proc.info["name"].lower() for browser in ["chrome", "chromium", "edge"]):
+                    browser_processes.append(proc.info)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+
+        if browser_processes:
+            LOG.info("(info) Found %d browser processes running", len(browser_processes))
+            for proc in browser_processes[:3]:  # Show first 3
+                LOG.info("  - PID %d: %s", proc["pid"], proc["name"])
+        else:
+            LOG.info("(info) No browser processes currently running")
+
+        # Platform-specific checks
+        if platform.system() == "Windows":
+            LOG.info("(info) Windows detected - check Windows Defender and antivirus software")
+        elif platform.system() == "Darwin":
+            LOG.info("(info) macOS detected - check Gatekeeper and security settings")
+            # Check for macOS-specific Chrome remote debugging requirements
+            if remote_port > 0 and not self.browser_config.user_data_dir:
+                LOG.warning("  IMPORTANT: macOS Chrome remote debugging requires --user-data-dir flag")
+                LOG.info('  Add to your config.yaml: user_data_dir: "/tmp/chrome-debug-profile"')
+                LOG.info("  And to browser arguments: --user-data-dir=/tmp/chrome-debug-profile")
+        elif platform.system() == "Linux":
+            LOG.info("(info) Linux detected - check if running as root (not recommended)")
+            if _is_admin():
+                LOG.error("(fail) Running as root - this can cause browser connection issues")
+
+        LOG.info("=== End Diagnostics ===")
 
     def close_browser_session(self) -> None:
         if self.browser:
