@@ -45,36 +45,13 @@ class AdExtractor(WebScrapingMixin):
             os.mkdir(relative_directory)
             LOG.info("Created ads directory at ./%s.", relative_directory)
 
-        # First, extract ad info to get the title
-        temp_dir = os.path.join(relative_directory, f"ad_{ad_id}")
-        ad_cfg:AdPartial = await self._extract_ad_page_info(temp_dir, ad_id)
-
-        # Create folder name with ad title
-        sanitized_title = misc.sanitize_folder_name(ad_cfg.title, self.config.download.folder_name_max_length)
-        new_base_dir = os.path.join(relative_directory, f"ad_{ad_id}_{sanitized_title}")
-
-        # If the folder with title already exists, delete it
-        if os.path.exists(new_base_dir):
-            LOG.info("Deleting current folder of ad %s...", ad_id)
-            shutil.rmtree(new_base_dir)
-
-        # If the old folder without title exists, handle based on configuration
-        if os.path.exists(temp_dir):
-            if self.config.download.rename_existing_folders:
-                LOG.info("Renaming folder from %s to %s for ad %s...",
-                        os.path.basename(temp_dir), os.path.basename(new_base_dir), ad_id)
-                os.rename(temp_dir, new_base_dir)
-            else:
-                # Use the existing folder without renaming
-                new_base_dir = temp_dir
-                LOG.info("Using existing folder for ad %s at %s.", ad_id, new_base_dir)
-        else:
-            # Create new directory with title
-            os.mkdir(new_base_dir)
-            LOG.info("New directory for ad created at %s.", new_base_dir)
+        # Extract ad info and determine final directory path
+        ad_cfg, final_dir = await self._extract_ad_page_info_with_directory_handling(
+            relative_directory, ad_id
+        )
 
         # Save the ad configuration file
-        ad_file_path = new_base_dir + "/" + f"ad_{ad_id}.yaml"
+        ad_file_path = final_dir + "/" + f"ad_{ad_id}.yaml"
         dicts.save_dict(
             ad_file_path,
             ad_cfg.model_dump(),
@@ -283,23 +260,32 @@ class AdExtractor(WebScrapingMixin):
             pass
         return True
 
+    async def _extract_title_from_ad_page(self) -> str:
+        """
+        Extracts the title from an ad page.
+        Assumes that the web driver currently shows an ad page.
+
+        :return: the ad title
+        """
+        return await self.web_text(By.ID, "viewad-title")
+
     async def _extract_ad_page_info(self, directory:str, ad_id:int) -> AdPartial:
         """
-        Extracts all necessary information from an ad´s page.
+        Extracts ad information and downloads images to the specified directory.
+        NOTE: Requires that the driver session currently is on the ad page.
 
-        :param directory: the path of the ad´s previously created directory
-        :param ad_id: the ad ID, already extracted by a calling function
+        :param directory: the directory to download images to
+        :param ad_id: the ad ID
+        :return: an AdPartial object containing the ad information
         """
         info:dict[str, Any] = {"active": True}
 
         # extract basic info
         info["type"] = "OFFER" if "s-anzeige" in self.page.url else "WANTED"
-        title:str = await self.web_text(By.ID, "viewad-title")
-        LOG.info('Extracting information from ad with title "%s"', title)
 
-        # contains info about ad in different dimensions in form of a key:value dict
-        # dimension108 contains special attributes
-        # dimension92 contains fake category, which becomes an special attribute on ad page
+        # Extract title
+        title = await self._extract_title_from_ad_page()
+
         belen_conf = await self.web_execute("window.BelenConf")
 
         info["category"] = await self._extract_category_from_ad_page()
@@ -348,9 +334,9 @@ class AdExtractor(WebScrapingMixin):
 
         # convert creation date to ISO format
         created_parts = creation_date.split(".")
-        creation_date = created_parts[2] + "-" + created_parts[1] + "-" + created_parts[0] + " 00:00:00"
-        creation_date = datetime.fromisoformat(creation_date).isoformat()
-        info["created_on"] = creation_date
+        creation_date_str = created_parts[2] + "-" + created_parts[1] + "-" + created_parts[0] + " 00:00:00"
+        creation_date_dt = datetime.fromisoformat(creation_date_str)
+        info["created_on"] = creation_date_dt
         info["updated_on"] = None  # will be set later on
 
         ad_cfg = AdPartial.model_validate(info)
@@ -359,6 +345,55 @@ class AdExtractor(WebScrapingMixin):
         ad_cfg.content_hash = ad_cfg.to_ad(self.config.ad_defaults).update_content_hash().content_hash
 
         return ad_cfg
+
+    async def _extract_ad_page_info_with_directory_handling(
+        self, relative_directory:str, ad_id:int
+    ) -> tuple[AdPartial, str]:
+        """
+        Extracts ad information and handles directory creation/renaming.
+
+        :param relative_directory: Base directory for downloads
+        :param ad_id: The ad ID
+        :return: AdPartial with directory information
+        """
+        # First, extract basic info to get the title
+        info:dict[str, Any] = {"active": True}
+
+        # extract basic info
+        info["type"] = "OFFER" if "s-anzeige" in self.page.url else "WANTED"
+        title = await self._extract_title_from_ad_page()
+        LOG.info('Extracting title from ad %s: "%s"', ad_id, title)
+
+        # Determine the final directory path
+        sanitized_title = misc.sanitize_folder_name(title, self.config.download.folder_name_max_length)
+        final_dir = os.path.join(relative_directory, f"ad_{ad_id}_{sanitized_title}")
+        temp_dir = os.path.join(relative_directory, f"ad_{ad_id}")
+
+        # Handle existing directories
+        if os.path.exists(final_dir):
+            # If the folder with title already exists, delete it
+            LOG.info("Deleting current folder of ad %s...", ad_id)
+            shutil.rmtree(final_dir)
+
+        if os.path.exists(temp_dir):
+            if self.config.download.rename_existing_folders:
+                # Rename the old folder to the new name with title
+                LOG.info("Renaming folder from %s to %s for ad %s...",
+                        os.path.basename(temp_dir), os.path.basename(final_dir), ad_id)
+                os.rename(temp_dir, final_dir)
+            else:
+                # Use the existing folder without renaming
+                final_dir = temp_dir
+                LOG.info("Using existing folder for ad %s at %s.", ad_id, final_dir)
+        else:
+            # Create new directory with title
+            os.mkdir(final_dir)
+            LOG.info("New directory for ad created at %s.", final_dir)
+
+        # Now extract complete ad info (including images) to the final directory
+        ad_cfg = await self._extract_ad_page_info(final_dir, ad_id)
+
+        return ad_cfg, final_dir
 
     async def _extract_category_from_ad_page(self) -> str:
         """

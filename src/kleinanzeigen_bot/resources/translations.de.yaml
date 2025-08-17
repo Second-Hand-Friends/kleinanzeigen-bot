@@ -174,10 +174,6 @@ kleinanzeigen_bot/extract.py:
 #################################################
   download_ad:
     "Created ads directory at ./%s.": "Verzeichnis für Anzeigen erstellt unter ./%s."
-    "Deleting current folder of ad %s...": "Lösche aktuellen Ordner der Anzeige %s..."
-    "New directory for ad created at %s.": "Neues Verzeichnis für Anzeige erstellt unter %s."
-    "Renaming folder from %s to %s for ad %s...": "Benenne Ordner von %s zu %s für Anzeige %s um..."
-    "Using existing folder for ad %s at %s.": "Verwende bestehenden Ordner für Anzeige %s unter %s."
 
   _download_images_from_ad_page:
     "Found %s.": "%s gefunden."
@@ -210,8 +206,12 @@ kleinanzeigen_bot/extract.py:
     "There is no ad under the given ID.": "Es gibt keine Anzeige unter der angegebenen ID."
     "A popup appeared!": "Ein Popup ist erschienen!"
 
-  _extract_ad_page_info:
-    "Extracting information from ad with title \"%s\"": "Extrahiere Informationen aus Anzeige mit Titel \"%s\""
+  _extract_ad_page_info_with_directory_handling:
+    "Extracting title from ad %s: \"%s\"": "Extrahiere Titel aus Anzeige %s: \"%s\""
+    "Deleting current folder of ad %s...": "Lösche aktuellen Ordner der Anzeige %s..."
+    "New directory for ad created at %s.": "Neues Verzeichnis für Anzeige erstellt unter %s."
+    "Renaming folder from %s to %s for ad %s...": "Benenne Ordner von %s zu %s für Anzeige %s um..."
+    "Using existing folder for ad %s at %s.": "Verwende bestehenden Ordner für Anzeige %s unter %s."
 
   _extract_contact_from_ad_page:
     "No street given in the contact.": "Keine Straße in den Kontaktdaten angegeben."
