@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio, enum, inspect, json, os, platform, secrets, shutil, urllib.request  # isort: skip
+import asyncio, enum, inspect, json, os, platform, secrets, shutil, subprocess, urllib.request  # isort: skip # noqa: S404
 from collections.abc import Callable, Coroutine, Iterable
 from gettext import gettext as _
 from typing import Any, Final, cast
@@ -18,6 +18,11 @@ from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
 
 from . import loggers, net
+from .chrome_version_detector import (
+    detect_chrome_version_from_binary,
+    get_chrome_version_diagnostic_info,
+    validate_chrome_136_configuration,
+)
 from .misc import T, ensure
 
 __all__ = [
@@ -90,6 +95,9 @@ class WebScrapingMixin:
         else:
             self.browser_config.binary_location = self.get_compatible_browser()
         LOG.info(" -> Browser binary location: %s", self.browser_config.binary_location)
+
+        # Chrome version detection and validation
+        await self._validate_chrome_version_configuration()
 
         ########################################################
         # check if an existing browser instance shall be used...
@@ -299,6 +307,8 @@ class WebScrapingMixin:
             browser_path = self.get_compatible_browser()
             if browser_path:
                 LOG.info("(ok) Auto-detected browser: %s", browser_path)
+                # Set the binary location for Chrome version detection
+                self.browser_config.binary_location = browser_path
             else:
                 LOG.error("(fail) No compatible browser found")
 
@@ -335,12 +345,6 @@ class WebScrapingMixin:
             else:
                 LOG.error("(fail) Remote debugging port is not open")
                 LOG.info("  Make sure browser is started with: --remote-debugging-port=%d", remote_port)
-                if platform.system() == "Darwin":
-                    LOG.info("  On macOS, try: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome "
-                            "--remote-debugging-port=%d --user-data-dir=/tmp/chrome-debug-profile --disable-dev-shm-usage", remote_port)
-                    LOG.info('  Or: open -a "Google Chrome" --args --remote-debugging-port=%d '
-                            '--user-data-dir=/tmp/chrome-debug-profile --disable-dev-shm-usage', remote_port)
-                    LOG.info("  IMPORTANT: --user-data-dir is MANDATORY for macOS Chrome remote debugging")
 
         # Check for running browser processes
         browser_processes = []
@@ -363,15 +367,13 @@ class WebScrapingMixin:
             LOG.info("(info) Windows detected - check Windows Defender and antivirus software")
         elif platform.system() == "Darwin":
             LOG.info("(info) macOS detected - check Gatekeeper and security settings")
-            # Check for macOS-specific Chrome remote debugging requirements
-            if remote_port > 0 and not self.browser_config.user_data_dir:
-                LOG.warning("  IMPORTANT: macOS Chrome remote debugging requires --user-data-dir flag")
-                LOG.info('  Add to your config.yaml: user_data_dir: "/tmp/chrome-debug-profile"')
-                LOG.info("  And to browser arguments: --user-data-dir=/tmp/chrome-debug-profile")
         elif platform.system() == "Linux":
             LOG.info("(info) Linux detected - check if running as root (not recommended)")
             if _is_admin():
                 LOG.error("(fail) Running as root - this can cause browser connection issues")
+
+        # Chrome version detection and validation
+        self._diagnose_chrome_version_issues(remote_port)
 
         LOG.info("=== End Diagnostics ===")
 
@@ -744,3 +746,109 @@ class WebScrapingMixin:
         """)
         await self.web_sleep()
         return elem
+
+    async def _validate_chrome_version_configuration(self) -> None:
+        """
+        Validate Chrome version configuration for Chrome 136+ security requirements.
+
+        This method checks if the browser is Chrome 136+ and validates that the configuration
+        meets the security requirements for remote debugging.
+        """
+        # Skip validation in test environments to avoid subprocess calls
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            LOG.debug(" -> Skipping browser version validation in test environment")
+            return
+
+        try:
+            # Detect Chrome version from binary
+            binary_path = self.browser_config.binary_location
+            version_info = detect_chrome_version_from_binary(binary_path) if binary_path else None
+
+            if version_info and version_info.is_chrome_136_plus:
+                LOG.info(" -> %s 136+ detected: %s", version_info.browser_name, version_info)
+
+                # Validate configuration for Chrome/Edge 136+
+                is_valid, error_message = validate_chrome_136_configuration(
+                    list(self.browser_config.arguments),
+                    self.browser_config.user_data_dir
+                )
+
+                if not is_valid:
+                    LOG.error(" -> %s 136+ configuration validation failed: %s", version_info.browser_name, error_message)
+                    LOG.error(" -> Please update your configuration to include --user-data-dir for remote debugging")
+                    raise AssertionError(error_message)
+                LOG.info(" -> %s 136+ configuration validation passed", version_info.browser_name)
+            elif version_info:
+                LOG.info(" -> %s version detected: %s (pre-136, no special validation required)", version_info.browser_name, version_info)
+            else:
+                LOG.debug(" -> Could not detect browser version, skipping validation")
+        except (subprocess.SubprocessError, OSError, FileNotFoundError) as e:
+            LOG.warning(" -> Browser version detection failed, skipping validation: %s", e)
+            # Continue without validation rather than failing
+        except Exception as e:
+            LOG.warning(" -> Unexpected error during browser version validation, skipping: %s", e)
+            # Continue without validation rather than failing
+
+    def _diagnose_chrome_version_issues(self, remote_port:int) -> None:
+        """
+        Diagnose Chrome version issues and provide specific recommendations.
+
+        Args:
+            remote_port: Remote debugging port (0 if not configured)
+        """
+        # Skip diagnostics in test environments to avoid subprocess calls
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            LOG.debug(" -> Skipping browser version diagnostics in test environment")
+            return
+
+        try:
+            # Get diagnostic information
+            binary_path = self.browser_config.binary_location
+            diagnostic_info = get_chrome_version_diagnostic_info(
+                binary_path = binary_path,
+                remote_port = remote_port if remote_port > 0 else None
+            )
+
+            # Report binary detection results
+            if diagnostic_info["binary_detection"]:
+                binary_info = diagnostic_info["binary_detection"]
+                LOG.info("(info) %s version from binary: %s %s (major: %d)",
+                        binary_info["browser_name"], binary_info["browser_name"], binary_info["version_string"], binary_info["major_version"])
+
+                if binary_info["is_chrome_136_plus"]:
+                    LOG.info("(info) %s 136+ detected - security validation required", binary_info["browser_name"])
+                else:
+                    LOG.info("(info) %s pre-136 detected - no special security requirements", binary_info["browser_name"])
+
+            # Report remote detection results
+            if diagnostic_info["remote_detection"]:
+                remote_info = diagnostic_info["remote_detection"]
+                LOG.info("(info) %s version from remote debugging: %s %s (major: %d)",
+                        remote_info["browser_name"], remote_info["browser_name"], remote_info["version_string"], remote_info["major_version"])
+
+                if remote_info["is_chrome_136_plus"]:
+                    LOG.info("(info) Remote %s 136+ detected - validating configuration", remote_info["browser_name"])
+
+                    # Validate configuration for Chrome/Edge 136+
+                    is_valid, error_message = validate_chrome_136_configuration(
+                        list(self.browser_config.arguments),
+                        self.browser_config.user_data_dir
+                    )
+
+                    if not is_valid:
+                        LOG.error("(fail) %s 136+ configuration validation failed: %s", remote_info["browser_name"], error_message)
+                        LOG.info("  Solution: Add --user-data-dir=/path/to/directory to browser arguments")
+                        LOG.info('  And user_data_dir: "/path/to/directory" to your configuration')
+                    else:
+                        LOG.info("(ok) %s 136+ configuration validation passed", remote_info["browser_name"])
+
+            # Add general recommendations
+            if diagnostic_info["chrome_136_plus_detected"]:
+                LOG.info("(info) Chrome/Edge 136+ security changes require --user-data-dir for remote debugging")
+                LOG.info("  See: https://developer.chrome.com/blog/remote-debugging-port")
+        except (subprocess.SubprocessError, OSError, FileNotFoundError) as e:
+            LOG.warning(" -> Browser version diagnostics failed: %s", e)
+            # Continue without diagnostics rather than failing
+        except Exception as e:
+            LOG.warning(" -> Unexpected error during browser version diagnostics: %s", e)
+            # Continue without diagnostics rather than failing
