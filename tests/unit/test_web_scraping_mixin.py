@@ -1412,6 +1412,102 @@ class TestWebScrapingDiagnostics:
 
             assert "(fail) Running as root - this can cause browser issues" in caplog.text
 
+    def test_is_admin_on_windows_system(self) -> None:
+        """Test _is_admin function on Windows system."""
+        # Create a mock os module without geteuid
+        mock_os = Mock()
+        # Remove geteuid attribute to simulate Windows
+        del mock_os.geteuid
+
+        with patch("kleinanzeigen_bot.utils.web_scraping_mixin.os", mock_os):
+            assert _is_admin() is False
+
+    def test_diagnose_browser_issues_psutil_exceptions(self, web_scraper:WebScrapingMixin) -> None:
+        """Test diagnose_browser_issues handles psutil exceptions gracefully."""
+        # Mock psutil.process_iter to return a list that will cause exceptions when accessing proc.info
+        mock_process1 = Mock()
+        mock_process1.info = {"name": "chrome"}
+        mock_process2 = Mock()
+        mock_process2.info = {"name": "edge"}
+        mock_processes = [mock_process1, mock_process2]
+
+        with patch("os.path.exists", return_value = True), \
+                patch("os.access", return_value = True), \
+                patch("psutil.process_iter", return_value = mock_processes), \
+                patch("platform.system", return_value = "Linux"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.WebScrapingMixin._diagnose_chrome_version_issues"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.net.is_port_open", return_value = False), \
+                patch.object(web_scraper, "get_compatible_browser", return_value = "/usr/bin/chrome"), \
+                patch.object(mock_process1, "info", side_effect = psutil.NoSuchProcess(pid = 123)), \
+                patch.object(mock_process2, "info", side_effect = psutil.AccessDenied(pid = 456)):
+            # Should not raise any exceptions
+            web_scraper.diagnose_browser_issues()
+
+    @pytest.mark.asyncio
+    async def test_validate_chrome_version_configuration_port_open_but_api_inaccessible(
+            self, web_scraper:WebScrapingMixin
+    ) -> None:
+        """Test _validate_chrome_version_configuration when port is open but API is inaccessible."""
+        # Configure remote debugging
+        web_scraper.browser_config.arguments = ["--remote-debugging-port=9222"]
+        web_scraper.browser_config.binary_location = "/usr/bin/chrome"
+
+        with patch.dict("os.environ", {}, clear = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.WebScrapingMixin._check_port_with_retry", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_remote_debugging", return_value = None), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary", return_value = None), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.LOG") as mock_log:
+
+            # Should not raise any exceptions and should log the appropriate debug message
+            await web_scraper._validate_chrome_version_configuration()
+
+            # Verify the debug message was logged
+            mock_log.debug.assert_any_call(" -> Port is open but remote debugging API not accessible")
+
+    @pytest.mark.asyncio
+    async def test_validate_chrome_version_configuration_remote_detection_exception(
+            self, web_scraper:WebScrapingMixin
+    ) -> None:
+        """Test _validate_chrome_version_configuration when remote detection raises exception."""
+        # Configure remote debugging
+        web_scraper.browser_config.arguments = ["--remote-debugging-port=9222"]
+        web_scraper.browser_config.binary_location = "/usr/bin/chrome"
+
+        with patch.dict("os.environ", {}, clear = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.WebScrapingMixin._check_port_with_retry", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_remote_debugging", side_effect = Exception("Test exception")), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary", return_value = None), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.LOG") as mock_log:
+
+            # Should not raise any exceptions and should log the appropriate debug message
+            await web_scraper._validate_chrome_version_configuration()
+
+            # Verify the debug message was logged
+            # Check that the debug method was called with the expected message
+            debug_calls = [call for call in mock_log.debug.call_args_list if "Failed to detect version from existing browser" in str(call)]
+            assert len(debug_calls) > 0, "Expected debug message not found"
+
+    @pytest.mark.asyncio
+    async def test_validate_chrome_version_configuration_no_existing_browser(
+            self, web_scraper:WebScrapingMixin
+    ) -> None:
+        """Test _validate_chrome_version_configuration when no existing browser is found."""
+        # Configure remote debugging
+        web_scraper.browser_config.arguments = ["--remote-debugging-port=9222"]
+        web_scraper.browser_config.binary_location = "/usr/bin/chrome"
+
+        with patch.dict("os.environ", {}, clear = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.WebScrapingMixin._check_port_with_retry", return_value = False), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary", return_value = None), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.LOG") as mock_log:
+
+            # Should not raise any exceptions and should log the appropriate debug message
+            await web_scraper._validate_chrome_version_configuration()
+
+            # Verify the debug message was logged
+            mock_log.debug.assert_any_call(" -> No existing browser found at %s:%s", "127.0.0.1", 9222)
+
 
 class TestWebScrapingMixinPortRetry:
     """Test the _check_port_with_retry method."""

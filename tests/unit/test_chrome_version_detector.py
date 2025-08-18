@@ -388,3 +388,17 @@ class TestGetChromeVersionDiagnosticInfo:
         assert diagnostic_info["chrome_136_plus_detected"] is False
         assert diagnostic_info["configuration_valid"] is True
         assert diagnostic_info["recommendations"] == []
+
+    @patch("urllib.request.urlopen")
+    def test_detect_chrome_version_from_remote_debugging_json_decode_error(
+        self, mock_urlopen:Mock
+    ) -> None:
+        """Test detect_chrome_version_from_remote_debugging handles JSONDecodeError gracefully."""
+        # Mock urlopen to return invalid JSON
+        mock_response = Mock()
+        mock_response.read.return_value = b"invalid json content"
+        mock_urlopen.return_value = mock_response
+
+        # Should return None when JSON decode fails
+        result = detect_chrome_version_from_remote_debugging("127.0.0.1", 9222)
+        assert result is None
