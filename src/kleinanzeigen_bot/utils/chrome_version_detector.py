@@ -4,6 +4,7 @@
 import json
 import re
 import subprocess  # noqa: S404
+import urllib.error
 import urllib.request
 from typing import Any, Final
 
@@ -59,7 +60,7 @@ def parse_version_string(version_string:str) -> int:
     return int(match.group(1))
 
 
-def _normalize_browser_name(browser_name: str) -> str:
+def _normalize_browser_name(browser_name:str) -> str:
     """
     Normalize browser name for consistent detection.
 

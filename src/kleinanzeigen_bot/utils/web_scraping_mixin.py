@@ -831,7 +831,7 @@ class WebScrapingMixin:
             LOG.warning(" -> Unexpected error during browser version validation, skipping: %s", e)
             # Continue without validation rather than failing
 
-    async def _validate_chrome_136_configuration(self, version_info: ChromeVersionInfo) -> None:
+    async def _validate_chrome_136_configuration(self, version_info:ChromeVersionInfo) -> None:
         """
         Validate Chrome 136+ configuration.
 
