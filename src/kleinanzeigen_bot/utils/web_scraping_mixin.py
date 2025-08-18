@@ -371,11 +371,15 @@ class WebScrapingMixin:
 
                 # Is this the target browser?
                 is_target_browser = target_browser_name and target_browser_name in proc_name.lower()
+
                 # Does it have remote debugging?
                 has_remote_debugging = cmdline and any(arg.startswith("--remote-debugging-port=") for arg in cmdline)
 
-                if is_target_browser or has_remote_debugging:
+                # Detect target browser processes for diagnostics
+                if is_target_browser:
                     is_relevant_browser = True
+                    # Add debugging status to the process info for better diagnostics
+                    proc.info["has_remote_debugging"] = has_remote_debugging
 
                 if is_relevant_browser:
                     browser_processes.append(proc.info)
@@ -385,7 +389,11 @@ class WebScrapingMixin:
         if browser_processes:
             LOG.info("(info) Found %d browser processes running", len(browser_processes))
             for proc in browser_processes[:3]:  # Show first 3
-                LOG.info("  - PID %d: %s", proc["pid"], proc["name"])
+                has_debugging = proc.get("has_remote_debugging", False)
+                if has_debugging:
+                    LOG.info("  - PID %d: %s (remote debugging enabled)", proc["pid"], proc["name"])
+                else:
+                    LOG.warning("  - PID %d: %s (remote debugging NOT enabled)", proc["pid"], proc["name"])
         else:
             LOG.info("(info) No browser processes currently running")
 

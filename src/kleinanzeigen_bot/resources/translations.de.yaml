@@ -434,7 +434,8 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "(fail) Running as root - this can cause browser issues": "(Fehler) Läuft als Root - dies kann Browser-Probleme verursachen"
 
     "(info) Found %d browser processes running": "(Info) %d Browser-Prozesse aktiv gefunden"
-    "  - PID %d: %s": "  - PID %d: %s"
+    "  - PID %d: %s (remote debugging enabled)": "  - PID %d: %s (Remote-Debugging aktiviert)"
+    "  - PID %d: %s (remote debugging NOT enabled)": "  - PID %d: %s (Remote-Debugging NICHT aktiviert)"
     "(ok) Remote debugging API accessible - Browser: %s": "(ok) Remote-Debugging-API zugänglich - Browser: %s"
     "(fail) Remote debugging port is open but API not accessible: %s": "(Fehler) Remote-Debugging-Port ist offen, aber API nicht zugänglich: %s"
     "  This might indicate a browser update issue or configuration problem": "  Dies könnte auf ein Browser-Update-Problem oder Konfigurationsproblem hinweisen"

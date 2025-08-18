@@ -1044,7 +1044,7 @@ class TestWebScrapingDiagnostics:
 
     def test_diagnose_browser_issues_browser_processes_found(self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
         """Test diagnostic when browser processes are found.
-        Updated to include cmdline field that the improved browser detection requires.
+        Updated to test target browser detection with debugging status.
         """
         mock_processes = [
             Mock(info = {"pid": 1234, "name": "chrome", "cmdline": ["/usr/bin/chrome"]}),
@@ -1053,13 +1053,14 @@ class TestWebScrapingDiagnostics:
             Mock(info = {"pid": 3456, "name": "chrome", "cmdline": ["/usr/bin/chrome", "--remote-debugging-port=9222"]})
         ]
 
-        with patch("psutil.process_iter", return_value = mock_processes):
+        with patch("psutil.process_iter", return_value = mock_processes), \
+                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
             scraper_with_config.diagnose_browser_issues()
 
-            # The simplified detection should find 1 browser process (only the one with remote debugging)
-            # The other processes are filtered out because they're not the target browser and don't have debugging
-            assert "(info) Found 1 browser processes running" in caplog.text
-            assert "  - PID 3456: chrome" in caplog.text
+            # Should find 2 chrome processes (target browser), one with debugging, one without
+            assert "(info) Found 2 browser processes running" in caplog.text
+            assert "  - PID 1234: chrome (remote debugging NOT enabled)" in caplog.text
+            assert "  - PID 3456: chrome (remote debugging enabled)" in caplog.text
 
     def test_diagnose_browser_issues_no_browser_processes(self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
         """Test diagnostic when no browser processes are found."""
