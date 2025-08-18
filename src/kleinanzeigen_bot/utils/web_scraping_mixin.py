@@ -19,7 +19,9 @@ from nodriver.core.tab import Tab as Page
 
 from . import loggers, net
 from .chrome_version_detector import (
+    ChromeVersionInfo,
     detect_chrome_version_from_binary,
+    detect_chrome_version_from_remote_debugging,
     get_chrome_version_diagnostic_info,
     validate_chrome_136_configuration,
 )
@@ -343,14 +345,39 @@ class WebScrapingMixin:
                     LOG.warning("(fail) Remote debugging port is open but API not accessible: %s", str(e))
                     LOG.info("  This might indicate a browser update issue or configuration problem")
             else:
-                LOG.error("(fail) Remote debugging port is not open")
-                LOG.info("  Make sure browser is started with: --remote-debugging-port=%d", remote_port)
+                LOG.info("(info) Remote debugging port is not open")
 
         # Check for running browser processes
         browser_processes = []
+        target_browser_name = ""
+
+        # Get the target browser name for comparison
+        if self.browser_config.binary_location:
+            target_browser_name = os.path.basename(self.browser_config.binary_location).lower()
+        else:
+            try:
+                target_browser_path = self.get_compatible_browser()
+                target_browser_name = os.path.basename(target_browser_path).lower()
+            except (AssertionError, TypeError):
+                target_browser_name = ""
+
         for proc in psutil.process_iter(["pid", "name", "cmdline"]):
             try:
-                if proc.info["name"] and any(browser in proc.info["name"].lower() for browser in ["chrome", "chromium", "edge"]):
+                proc_name = proc.info["name"] or ""
+                cmdline = proc.info["cmdline"] or []
+
+                # Check if this is a browser process relevant to our diagnostics
+                is_relevant_browser = False
+
+                # Is this the target browser?
+                is_target_browser = target_browser_name and target_browser_name in proc_name.lower()
+                # Does it have remote debugging?
+                has_remote_debugging = cmdline and any(arg.startswith("--remote-debugging-port=") for arg in cmdline)
+
+                if is_target_browser or has_remote_debugging:
+                    is_relevant_browser = True
+
+                if is_relevant_browser:
                     browser_processes.append(proc.info)
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
@@ -362,15 +389,9 @@ class WebScrapingMixin:
         else:
             LOG.info("(info) No browser processes currently running")
 
-        # Platform-specific checks
-        if platform.system() == "Windows":
-            LOG.info("(info) Windows detected - check Windows Defender and antivirus software")
-        elif platform.system() == "Darwin":
-            LOG.info("(info) macOS detected - check Gatekeeper and security settings")
-        elif platform.system() == "Linux":
-            LOG.info("(info) Linux detected - check if running as root (not recommended)")
+        if platform.system() == "Linux":
             if _is_admin():
-                LOG.error("(fail) Running as root - this can cause browser connection issues")
+                LOG.error("(fail) Running as root - this can cause browser issues")
 
         # Chrome version detection and validation
         self._diagnose_chrome_version_issues(remote_port)
@@ -760,24 +781,45 @@ class WebScrapingMixin:
             return
 
         try:
-            # Detect Chrome version from binary
-            binary_path = self.browser_config.binary_location
-            version_info = detect_chrome_version_from_binary(binary_path) if binary_path else None
+            # Get remote debugging configuration
+            remote_host = "127.0.0.1"
+            remote_port = 0
+            for arg in self.browser_config.arguments:
+                if arg.startswith("--remote-debugging-host="):
+                    remote_host = arg.split("=", maxsplit = 1)[1]
+                if arg.startswith("--remote-debugging-port="):
+                    remote_port = int(arg.split("=", maxsplit = 1)[1])
 
+            version_info = None
+
+            # First, try to detect version from existing browser with remote debugging
+            if remote_port > 0:
+                LOG.debug(" -> Checking for existing browser with remote debugging at %s:%s", remote_host, remote_port)
+                # Reuse the same port checking logic as in create_browser_session
+                port_available = await self._check_port_with_retry(remote_host, remote_port)
+                if port_available:
+                    try:
+                        version_info = detect_chrome_version_from_remote_debugging(remote_host, remote_port)
+                        if version_info:
+                            LOG.debug(" -> Detected version from existing browser: %s", version_info)
+                        else:
+                            LOG.debug(" -> Port is open but remote debugging API not accessible")
+                    except Exception as e:
+                        LOG.debug(" -> Failed to detect version from existing browser: %s", e)
+                else:
+                    LOG.debug(" -> No existing browser found at %s:%s", remote_host, remote_port)
+
+            # Only fall back to binary detection if no remote browser is running
+            if not version_info:
+                binary_path = self.browser_config.binary_location
+                if binary_path:
+                    LOG.debug(" -> No remote browser detected, trying binary detection")
+                    version_info = detect_chrome_version_from_binary(binary_path)
+
+            # Validate if Chrome 136+ detected
             if version_info and version_info.is_chrome_136_plus:
                 LOG.info(" -> %s 136+ detected: %s", version_info.browser_name, version_info)
-
-                # Validate configuration for Chrome/Edge 136+
-                is_valid, error_message = validate_chrome_136_configuration(
-                    list(self.browser_config.arguments),
-                    self.browser_config.user_data_dir
-                )
-
-                if not is_valid:
-                    LOG.error(" -> %s 136+ configuration validation failed: %s", version_info.browser_name, error_message)
-                    LOG.error(" -> Please update your configuration to include --user-data-dir for remote debugging")
-                    raise AssertionError(error_message)
-                LOG.info(" -> %s 136+ configuration validation passed", version_info.browser_name)
+                await self._validate_chrome_136_configuration(version_info)
             elif version_info:
                 LOG.info(" -> %s version detected: %s (pre-136, no special validation required)", version_info.browser_name, version_info)
             else:
@@ -788,6 +830,39 @@ class WebScrapingMixin:
         except Exception as e:
             LOG.warning(" -> Unexpected error during browser version validation, skipping: %s", e)
             # Continue without validation rather than failing
+
+    async def _validate_chrome_136_configuration(self, version_info: ChromeVersionInfo) -> None:
+        """
+        Validate Chrome 136+ configuration.
+
+        Chrome/Edge 136+ requires --user-data-dir to be specified for security reasons.
+
+        Args:
+            version_info: Chrome version information
+
+        Raises:
+            AssertionError: If configuration is invalid
+        """
+        # Check if user-data-dir is specified in arguments or configuration
+        has_user_data_dir_arg = any(
+            arg.startswith("--user-data-dir=")
+            for arg in self.browser_config.arguments
+        )
+        has_user_data_dir_config = (
+            self.browser_config.user_data_dir is not None and
+            self.browser_config.user_data_dir.strip()
+        )
+
+        if not has_user_data_dir_arg and not has_user_data_dir_config:
+            error_message = (
+                f"{version_info.browser_name} 136+ requires --user-data-dir to be specified. "
+                "Add --user-data-dir=/path/to/directory to browser arguments and "
+                'user_data_dir: "/path/to/directory" to your configuration.'
+            )
+            LOG.error(" -> %s 136+ configuration validation failed: %s", version_info.browser_name, error_message)
+            raise AssertionError(error_message)
+
+        LOG.info(" -> %s 136+ configuration validation passed", version_info.browser_name)
 
     def _diagnose_chrome_version_issues(self, remote_port:int) -> None:
         """

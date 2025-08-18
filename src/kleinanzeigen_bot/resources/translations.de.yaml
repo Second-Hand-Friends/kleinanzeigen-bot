@@ -426,31 +426,26 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "(fail) Browser binary is not executable": "(Fehler) Browser-Binärdatei ist nicht ausführbar"
     "(fail) No compatible browser found": "(Fehler) Kein kompatibler Browser gefunden"
     "(fail) User data directory permissions issue": "(Fehler) Benutzerdatenverzeichnis-Berechtigungsproblem"
-    "(fail) Remote debugging port is not open": "(Fehler) Remote-Debugging-Port ist nicht offen"
-    "(fail) Running as root - this can cause browser connection issues": "(Fehler) Läuft als Root - dies kann Browser-Verbindungsprobleme verursachen"
     "(info) User data directory does not exist (will be created): %s": "(Info) Benutzerdatenverzeichnis existiert nicht (wird erstellt): %s"
     "(info) Remote debugging port configured: %d": "(Info) Remote-Debugging-Port konfiguriert: %d"
+    "(info) Remote debugging port is not open": "(Info) Remote-Debugging-Port ist nicht offen"
+
     "(info) No browser processes currently running": "(Info) Derzeit keine Browser-Prozesse aktiv"
+    "(fail) Running as root - this can cause browser issues": "(Fehler) Läuft als Root - dies kann Browser-Probleme verursachen"
+
     "(info) Found %d browser processes running": "(Info) %d Browser-Prozesse aktiv gefunden"
-    "(info) Windows detected - check Windows Defender and antivirus software": "(Info) Windows erkannt - überprüfen Sie Windows Defender und Antivirensoftware"
-    "(info) macOS detected - check Gatekeeper and security settings": "(Info) macOS erkannt - überprüfen Sie Gatekeeper und Sicherheitseinstellungen"
-    "(info) Linux detected - check if running as root (not recommended)": "(Info) Linux erkannt - überprüfen Sie, ob als Root ausgeführt wird (nicht empfohlen)"
     "  - PID %d: %s": "  - PID %d: %s"
-    "  Make sure browser is started with: --remote-debugging-port=%d": "  Stellen Sie sicher, dass der Browser gestartet wird mit: --remote-debugging-port=%d"
     "(ok) Remote debugging API accessible - Browser: %s": "(ok) Remote-Debugging-API zugänglich - Browser: %s"
     "(fail) Remote debugging port is open but API not accessible: %s": "(Fehler) Remote-Debugging-Port ist offen, aber API nicht zugänglich: %s"
     "  This might indicate a browser update issue or configuration problem": "  Dies könnte auf ein Browser-Update-Problem oder Konfigurationsproblem hinweisen"
 
-
-
+  _validate_chrome_136_configuration:
+    " -> %s 136+ configuration validation failed: %s": " -> %s 136+ Konfigurationsvalidierung fehlgeschlagen: %s"
+    " -> %s 136+ configuration validation passed": " -> %s 136+ Konfigurationsvalidierung bestanden"
 
   _validate_chrome_version_configuration:
     " -> %s 136+ detected: %s": " -> %s 136+ erkannt: %s"
-    " -> %s 136+ configuration validation passed": " -> %s 136+ Konfigurationsvalidierung bestanden"
-    " -> %s 136+ configuration validation failed: %s": " -> %s 136+ Konfigurationsvalidierung fehlgeschlagen: %s"
     " -> %s version detected: %s (pre-136, no special validation required)": " -> %s-Version erkannt: %s (vor 136, keine besondere Validierung erforderlich)"
-    " -> Please update your configuration to include --user-data-dir for remote debugging": " -> Bitte aktualisieren Sie Ihre Konfiguration, um --user-data-dir für Remote-Debugging einzuschließen"
-    " -> Skipping browser version validation in test environment": " -> Browser-Versionsvalidierung in Testumgebung wird übersprungen"
     " -> Browser version detection failed, skipping validation: %s": " -> Browser-Versionserkennung fehlgeschlagen, Validierung wird übersprungen: %s"
     " -> Unexpected error during browser version validation, skipping: %s": " -> Unerwarteter Fehler bei Browser-Versionsvalidierung, wird übersprungen: %s"
 

@@ -59,6 +59,24 @@ def parse_version_string(version_string:str) -> int:
     return int(match.group(1))
 
 
+def _normalize_browser_name(browser_name: str) -> str:
+    """
+    Normalize browser name for consistent detection.
+
+    Args:
+        browser_name: Raw browser name from detection
+
+    Returns:
+        Normalized browser name
+    """
+    browser_name_lower = browser_name.lower()
+    if "edge" in browser_name_lower or "edg" in browser_name_lower:
+        return "Edge"
+    if "chromium" in browser_name_lower:
+        return "Chromium"
+    return "Chrome"
+
+
 def detect_chrome_version_from_binary(binary_path:str) -> ChromeVersionInfo | None:
     """
     Detect Chrome version by running the browser binary.
@@ -90,11 +108,7 @@ def detect_chrome_version_from_binary(binary_path:str) -> ChromeVersionInfo | No
         version_string = version_match.group(1) if version_match else output
 
         # Determine browser name from binary path
-        browser_name = "Chrome"
-        if "edge" in binary_path.lower():
-            browser_name = "Edge"
-        elif "chromium" in binary_path.lower():
-            browser_name = "Chromium"
+        browser_name = _normalize_browser_name(binary_path)
 
         return ChromeVersionInfo(version_string, major_version, browser_name)
 
@@ -125,7 +139,7 @@ def detect_chrome_version_from_remote_debugging(host:str = "127.0.0.1", port:int
 
         # Extract version information
         user_agent = version_data.get("User-Agent", "")
-        browser_name = version_data.get("Browser", "Unknown")
+        browser_name = _normalize_browser_name(version_data.get("Browser", "Unknown"))
 
         # Parse version from User-Agent string
         # Example: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.6778.0 Safari/537.36"
@@ -139,6 +153,12 @@ def detect_chrome_version_from_remote_debugging(host:str = "127.0.0.1", port:int
 
         return ChromeVersionInfo(version_string, major_version, browser_name)
 
+    except urllib.error.URLError as e:
+        LOG.debug("Remote debugging API not accessible: %s", e)
+        return None
+    except json.JSONDecodeError as e:
+        LOG.debug("Invalid JSON response from remote debugging API: %s", e)
+        return None
     except Exception as e:
         LOG.debug("Failed to detect browser version from remote debugging: %s", str(e))
         return None
@@ -148,7 +168,7 @@ def validate_chrome_136_configuration(browser_arguments:list[str], user_data_dir
     """
     Validate configuration for Chrome/Edge 136+ security requirements.
 
-    Chrome/Edge 136+ requires --user-data-dir to be specified when using --remote-debugging-port.
+    Chrome/Edge 136+ requires --user-data-dir to be specified for security reasons.
 
     Args:
         browser_arguments: List of browser arguments
@@ -157,15 +177,6 @@ def validate_chrome_136_configuration(browser_arguments:list[str], user_data_dir
     Returns:
         Tuple of (is_valid, error_message)
     """
-    # Check if remote debugging is enabled
-    has_remote_debugging = any(
-        arg.startswith("--remote-debugging-port=")
-        for arg in browser_arguments
-    )
-
-    if not has_remote_debugging:
-        return True, ""  # No remote debugging, no validation needed
-
     # Check if user-data-dir is specified in arguments
     has_user_data_dir_arg = any(
         arg.startswith("--user-data-dir=")
@@ -177,7 +188,7 @@ def validate_chrome_136_configuration(browser_arguments:list[str], user_data_dir
 
     if not has_user_data_dir_arg and not has_user_data_dir_config:
         return False, (
-            "Chrome/Edge 136+ requires --user-data-dir to be specified when using --remote-debugging-port. "
+            "Chrome/Edge 136+ requires --user-data-dir to be specified. "
             "Add --user-data-dir=/path/to/directory to your browser arguments and "
             'user_data_dir: "/path/to/directory" to your configuration.'
         )

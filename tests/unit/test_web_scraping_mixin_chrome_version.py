@@ -20,14 +20,12 @@ class TestWebScrapingMixinChromeVersionValidation:
         return WebScrapingMixin()
 
     @patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary")
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.validate_chrome_136_configuration")
     async def test_validate_chrome_version_configuration_chrome_136_plus_valid(
-        self, mock_validate:Mock, mock_detect:Mock, scraper:WebScrapingMixin
+        self, mock_detect:Mock, scraper:WebScrapingMixin
     ) -> None:
         """Test Chrome 136+ validation with valid configuration."""
         # Setup mocks
         mock_detect.return_value = ChromeVersionInfo("136.0.6778.0", 136, "Chrome")
-        mock_validate.return_value = (True, "")
 
         # Configure scraper
         scraper.browser_config.binary_location = "/path/to/chrome"
@@ -43,26 +41,23 @@ class TestWebScrapingMixinChromeVersionValidation:
             # Test validation
             await scraper._validate_chrome_version_configuration()
 
-            # Verify mocks were called correctly
+            # Verify detection was called correctly
             mock_detect.assert_called_once_with("/path/to/chrome")
-            mock_validate.assert_called_once_with(
-                ["--remote-debugging-port=9222", "--user-data-dir=/tmp/chrome-debug"],  # noqa: S108
-                "/tmp/chrome-debug"  # noqa: S108
-            )
+
+            # Verify validation passed (no exception raised)
+            # The validation is now done internally in _validate_chrome_136_configuration
         finally:
             # Restore environment
             if original_env:
                 os.environ["PYTEST_CURRENT_TEST"] = original_env
 
     @patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary")
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.validate_chrome_136_configuration")
     async def test_validate_chrome_version_configuration_chrome_136_plus_invalid(
-        self, mock_validate:Mock, mock_detect:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+        self, mock_detect:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture
     ) -> None:
         """Test Chrome 136+ validation with invalid configuration."""
         # Setup mocks
         mock_detect.return_value = ChromeVersionInfo("136.0.6778.0", 136, "Chrome")
-        mock_validate.return_value = (False, "Chrome 136+ requires --user-data-dir")
 
         # Configure scraper
         scraper.browser_config.binary_location = "/path/to/chrome"
