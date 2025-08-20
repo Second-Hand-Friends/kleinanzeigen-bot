@@ -191,7 +191,7 @@ class TestDetectChromeVersionFromRemoteDebugging:
         assert version_info is not None
         assert version_info.version_string == "136.0.6778.0"
         assert version_info.major_version == 136
-        assert version_info.browser_name == "Chrome/136.0.6778.0"
+        assert version_info.browser_name == "Chrome"
         mock_urlopen.assert_called_once_with("http://127.0.0.1:9222/json/version", timeout = 5)
 
     @patch("urllib.request.urlopen")
@@ -208,7 +208,7 @@ class TestDetectChromeVersionFromRemoteDebugging:
 
         assert version_info is not None
         assert version_info.major_version == 136
-        assert version_info.browser_name == "Edg/136.0.6778.0"
+        assert version_info.browser_name == "Edge"
 
     @patch("urllib.request.urlopen")
     def test_detect_chrome_version_from_remote_debugging_no_chrome_in_user_agent(self, mock_urlopen:Mock) -> None:
@@ -247,9 +247,10 @@ class TestValidateChrome136Configuration:
 
     def test_validate_chrome_136_configuration_no_remote_debugging(self) -> None:
         """Test validation when no remote debugging is configured."""
+        # Chrome 136+ requires --user-data-dir regardless of remote debugging
         is_valid, error_message = validate_chrome_136_configuration([], None)
-        assert is_valid is True
-        assert not error_message
+        assert is_valid is False
+        assert "Chrome/Edge 136+ requires --user-data-dir" in error_message
 
     def test_validate_chrome_136_configuration_with_user_data_dir_arg(self) -> None:
         """Test validation with --user-data-dir in arguments."""
@@ -387,3 +388,17 @@ class TestGetChromeVersionDiagnosticInfo:
         assert diagnostic_info["chrome_136_plus_detected"] is False
         assert diagnostic_info["configuration_valid"] is True
         assert diagnostic_info["recommendations"] == []
+
+    @patch("urllib.request.urlopen")
+    def test_detect_chrome_version_from_remote_debugging_json_decode_error(
+        self, mock_urlopen:Mock
+    ) -> None:
+        """Test detect_chrome_version_from_remote_debugging handles JSONDecodeError gracefully."""
+        # Mock urlopen to return invalid JSON
+        mock_response = Mock()
+        mock_response.read.return_value = b"invalid json content"
+        mock_urlopen.return_value = mock_response
+
+        # Should return None when JSON decode fails
+        result = detect_chrome_version_from_remote_debugging("127.0.0.1", 9222)
+        assert result is None
