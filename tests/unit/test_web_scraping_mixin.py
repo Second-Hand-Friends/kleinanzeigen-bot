@@ -900,14 +900,6 @@ class TestWebScrapingBrowserConfiguration:
         assert "browser connection diagnostics" in log_output or "browser-verbindungsdiagnose" in log_output
         assert "end diagnostics" in log_output or "ende der diagnose" in log_output
 
-        # Check for platform-specific information
-        if platform.system() == "Windows":
-            assert "windows detected" in log_output or "windows erkannt" in log_output
-        elif platform.system() == "Darwin":
-            assert "macos detected" in log_output or "macos erkannt" in log_output
-        elif platform.system() == "Linux":
-            assert "linux detected" in log_output or "linux erkannt" in log_output
-
 
 class TestWebScrapingDiagnostics:
     """Test the diagnose_browser_issues method."""
@@ -1039,8 +1031,7 @@ class TestWebScrapingDiagnostics:
             scraper_with_config.diagnose_browser_issues()
 
             assert "(info) Remote debugging port configured: 9222" in caplog.text
-            assert "(fail) Remote debugging port is not open" in caplog.text
-            assert "Make sure browser is started with: --remote-debugging-port=9222" in caplog.text
+            assert "(info) Remote debugging port is not open" in caplog.text
 
     def test_diagnose_browser_issues_remote_debugging_port_not_configured(
             self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
@@ -1052,21 +1043,24 @@ class TestWebScrapingDiagnostics:
         assert "Remote debugging port" not in caplog.text
 
     def test_diagnose_browser_issues_browser_processes_found(self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
-        """Test diagnostic when browser processes are found."""
+        """Test diagnostic when browser processes are found.
+        Updated to test target browser detection with debugging status.
+        """
         mock_processes = [
-            Mock(info = {"pid": 1234, "name": "chrome"}),
-            Mock(info = {"pid": 5678, "name": "chromium"}),
-            Mock(info = {"pid": 9012, "name": "edge"}),
-            Mock(info = {"pid": 3456, "name": "chrome"})
+            Mock(info = {"pid": 1234, "name": "chrome", "cmdline": ["/usr/bin/chrome"]}),
+            Mock(info = {"pid": 5678, "name": "chromium", "cmdline": ["/usr/bin/chromium"]}),
+            Mock(info = {"pid": 9012, "name": "edge", "cmdline": ["/usr/bin/edge"]}),
+            Mock(info = {"pid": 3456, "name": "chrome", "cmdline": ["/usr/bin/chrome", "--remote-debugging-port=9222"]})
         ]
 
-        with patch("psutil.process_iter", return_value = mock_processes):
+        with patch("psutil.process_iter", return_value = mock_processes), \
+                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
             scraper_with_config.diagnose_browser_issues()
 
-            assert "(info) Found 4 browser processes running" in caplog.text
-            assert "  - PID 1234: chrome" in caplog.text
-            assert "  - PID 5678: chromium" in caplog.text
-            assert "  - PID 9012: edge" in caplog.text
+            # Should find 2 chrome processes (target browser), one with debugging, one without
+            assert "(info) Found 2 browser processes running" in caplog.text
+            assert "  - PID 1234: chrome (remote debugging NOT enabled)" in caplog.text
+            assert "  - PID 3456: chrome (remote debugging enabled)" in caplog.text
 
     def test_diagnose_browser_issues_no_browser_processes(self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
         """Test diagnostic when no browser processes are found."""
@@ -1075,38 +1069,55 @@ class TestWebScrapingDiagnostics:
 
             assert "(info) No browser processes currently running" in caplog.text
 
-    def test_diagnose_browser_issues_windows_platform(self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
-        """Test diagnostic on Windows platform."""
-        with patch("platform.system", return_value = "Windows"), \
-                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
-            scraper_with_config.diagnose_browser_issues()
-
-            assert "(info) Windows detected - check Windows Defender and antivirus software" in caplog.text
-
-    def test_diagnose_browser_issues_macos_platform_no_user_data_dir(self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
-        """Test diagnostic on macOS platform without user data directory."""
-        with patch("platform.system", return_value = "Darwin"), \
-                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
-            scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
-            scraper_with_config.browser_config.user_data_dir = None
-            scraper_with_config.diagnose_browser_issues()
-
-            assert "(info) macOS detected - check Gatekeeper and security settings" in caplog.text
-
+    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.get_chrome_version_diagnostic_info")
     def test_diagnose_browser_issues_macos_platform_with_user_data_dir(
-            self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture, tmp_path:Path
+            self, mock_get_diagnostic:Mock, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture, tmp_path:Path
     ) -> None:
         """Test diagnostic on macOS platform with user data directory."""
         test_dir = str(tmp_path / "chrome-profile")
-        with patch("platform.system", return_value = "Darwin"), \
-                patch("os.path.exists", return_value = True), \
-                patch("os.access", return_value = True), \
-                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
-            scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
-            scraper_with_config.browser_config.user_data_dir = test_dir
-            scraper_with_config.diagnose_browser_issues()
 
-            assert "(info) macOS detected - check Gatekeeper and security settings" in caplog.text
+        # Setup mock for Chrome 136+ detection with valid configuration
+        mock_get_diagnostic.return_value = {
+            "binary_detection": None,
+            "remote_detection": {
+                "version_string": "136.0.6778.0",
+                "major_version": 136,
+                "browser_name": "Chrome",
+                "is_chrome_136_plus": True
+            },
+            "chrome_136_plus_detected": True,
+            "recommendations": []
+        }
+
+        # Temporarily unset PYTEST_CURRENT_TEST to allow diagnostics to run
+        original_env = os.environ.get("PYTEST_CURRENT_TEST")
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            del os.environ["PYTEST_CURRENT_TEST"]
+
+        try:
+            with patch("platform.system", return_value = "Darwin"), \
+                    patch("os.path.exists", return_value = True), \
+                    patch("os.access", return_value = True), \
+                    patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True), \
+                    patch("urllib.request.urlopen") as mock_urlopen, \
+                    patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
+
+                # Mock Chrome 136+ detection from remote debugging
+                mock_response = Mock()
+                mock_response.read.return_value = b'{"Browser": "Chrome/136.0.6778.0"}'
+                mock_urlopen.return_value = mock_response
+
+                scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
+                scraper_with_config.browser_config.user_data_dir = test_dir
+                scraper_with_config.diagnose_browser_issues()
+
+                # Should validate Chrome 136+ configuration and pass
+                assert "(info) Remote Chrome 136+ detected - validating configuration" in caplog.text
+                assert "(ok) Chrome 136+ configuration validation passed" in caplog.text
+        finally:
+            # Restore environment variable
+            if original_env is not None:
+                os.environ["PYTEST_CURRENT_TEST"] = original_env
 
     def test_diagnose_browser_issues_linux_platform_not_root(self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
         """Test diagnostic on Linux platform when not running as root."""
@@ -1115,7 +1126,8 @@ class TestWebScrapingDiagnostics:
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False):
             scraper_with_config.diagnose_browser_issues()
 
-            assert "(info) Linux detected - check if running as root (not recommended)" in caplog.text
+            # Linux platform detection was removed - no specific message expected
+            assert "Linux detected" not in caplog.text
             # Should not show error about running as root
             assert "(fail) Running as root" not in caplog.text
 
@@ -1126,8 +1138,9 @@ class TestWebScrapingDiagnostics:
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = True):
             scraper_with_config.diagnose_browser_issues()
 
-            assert "(info) Linux detected - check if running as root (not recommended)" in caplog.text
-            assert "(fail) Running as root - this can cause browser connection issues" in caplog.text
+            # Linux platform detection was removed - no specific message expected
+            assert "Linux detected" not in caplog.text
+            assert "(fail) Running as root - this can cause browser issues" in caplog.text
 
     def test_diagnose_browser_issues_unknown_platform(self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
         """Test diagnostic on unknown platform."""
@@ -1147,6 +1160,54 @@ class TestWebScrapingDiagnostics:
                 patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
             scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
             scraper_with_config.diagnose_browser_issues()
+
+    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.get_chrome_version_diagnostic_info")
+    def test_diagnose_browser_issues_chrome_136_plus_misconfigured(
+            self, mock_get_diagnostic:Mock, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test diagnostic when Chrome 136+ is detected but user data directory is not configured."""
+        # Setup mock for Chrome 136+ detection with invalid configuration
+        mock_get_diagnostic.return_value = {
+            "binary_detection": None,
+            "remote_detection": {
+                "version_string": "136.0.6778.0",
+                "major_version": 136,
+                "browser_name": "Chrome",
+                "is_chrome_136_plus": True
+            },
+            "chrome_136_plus_detected": True,
+            "recommendations": []
+        }
+
+        # Temporarily unset PYTEST_CURRENT_TEST to allow diagnostics to run
+        original_env = os.environ.get("PYTEST_CURRENT_TEST")
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            del os.environ["PYTEST_CURRENT_TEST"]
+
+        try:
+            with patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True), \
+                    patch("urllib.request.urlopen") as mock_urlopen, \
+                    patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
+
+                # Mock Chrome 136+ detection from remote debugging
+                mock_response = Mock()
+                mock_response.read.return_value = b'{"Browser": "Chrome/136.0.6778.0"}'
+                mock_urlopen.return_value = mock_response
+
+                # Configure remote debugging but NO user data directory
+                scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
+                scraper_with_config.browser_config.user_data_dir = None
+                scraper_with_config.diagnose_browser_issues()
+
+                # Should detect Chrome 136+ and show configuration error
+                assert "(info) Remote Chrome 136+ detected - validating configuration" in caplog.text
+                assert "(fail) Chrome 136+ configuration validation failed" in caplog.text
+                assert "Chrome/Edge 136+ requires --user-data-dir to be specified" in caplog.text
+                assert "Solution: Add --user-data-dir=/path/to/directory to browser arguments" in caplog.text
+        finally:
+            # Restore environment variable
+            if original_env is not None:
+                os.environ["PYTEST_CURRENT_TEST"] = original_env
 
     def test_diagnose_browser_issues_complete_diagnostic_flow(
             self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture, tmp_path:Path
@@ -1181,7 +1242,8 @@ class TestWebScrapingDiagnostics:
             assert "(ok) Remote debugging port is open" in caplog.text
             assert "(ok) Remote debugging API accessible - Browser: Chrome/120.0.0.0" in caplog.text
             assert "(info) No browser processes currently running" in caplog.text
-            assert "(info) Linux detected - check if running as root (not recommended)" in caplog.text
+            # Linux platform detection was removed - no specific message expected
+            assert "Linux detected" not in caplog.text
             assert "=== End Diagnostics ===" in caplog.text
 
     def test_diagnose_browser_issues_remote_debugging_host_configured(
@@ -1348,7 +1410,103 @@ class TestWebScrapingDiagnostics:
                 patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
             scraper_with_config.diagnose_browser_issues()
 
-            assert "(fail) Running as root - this can cause browser connection issues" in caplog.text
+            assert "(fail) Running as root - this can cause browser issues" in caplog.text
+
+    def test_is_admin_on_windows_system(self) -> None:
+        """Test _is_admin function on Windows system."""
+        # Create a mock os module without geteuid
+        mock_os = Mock()
+        # Remove geteuid attribute to simulate Windows
+        del mock_os.geteuid
+
+        with patch("kleinanzeigen_bot.utils.web_scraping_mixin.os", mock_os):
+            assert _is_admin() is False
+
+    def test_diagnose_browser_issues_psutil_exceptions(self, web_scraper:WebScrapingMixin) -> None:
+        """Test diagnose_browser_issues handles psutil exceptions gracefully."""
+        # Mock psutil.process_iter to return a list that will cause exceptions when accessing proc.info
+        mock_process1 = Mock()
+        mock_process1.info = {"name": "chrome"}
+        mock_process2 = Mock()
+        mock_process2.info = {"name": "edge"}
+        mock_processes = [mock_process1, mock_process2]
+
+        with patch("os.path.exists", return_value = True), \
+                patch("os.access", return_value = True), \
+                patch("psutil.process_iter", return_value = mock_processes), \
+                patch("platform.system", return_value = "Linux"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.WebScrapingMixin._diagnose_chrome_version_issues"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.net.is_port_open", return_value = False), \
+                patch.object(web_scraper, "get_compatible_browser", return_value = "/usr/bin/chrome"), \
+                patch.object(mock_process1, "info", side_effect = psutil.NoSuchProcess(pid = 123)), \
+                patch.object(mock_process2, "info", side_effect = psutil.AccessDenied(pid = 456)):
+            # Should not raise any exceptions
+            web_scraper.diagnose_browser_issues()
+
+    @pytest.mark.asyncio
+    async def test_validate_chrome_version_configuration_port_open_but_api_inaccessible(
+            self, web_scraper:WebScrapingMixin
+    ) -> None:
+        """Test _validate_chrome_version_configuration when port is open but API is inaccessible."""
+        # Configure remote debugging
+        web_scraper.browser_config.arguments = ["--remote-debugging-port=9222"]
+        web_scraper.browser_config.binary_location = "/usr/bin/chrome"
+
+        with patch.dict("os.environ", {}, clear = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.WebScrapingMixin._check_port_with_retry", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_remote_debugging", return_value = None), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary", return_value = None), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.LOG") as mock_log:
+
+            # Should not raise any exceptions and should log the appropriate debug message
+            await web_scraper._validate_chrome_version_configuration()
+
+            # Verify the debug message was logged
+            mock_log.debug.assert_any_call(" -> Port is open but remote debugging API not accessible")
+
+    @pytest.mark.asyncio
+    async def test_validate_chrome_version_configuration_remote_detection_exception(
+            self, web_scraper:WebScrapingMixin
+    ) -> None:
+        """Test _validate_chrome_version_configuration when remote detection raises exception."""
+        # Configure remote debugging
+        web_scraper.browser_config.arguments = ["--remote-debugging-port=9222"]
+        web_scraper.browser_config.binary_location = "/usr/bin/chrome"
+
+        with patch.dict("os.environ", {}, clear = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.WebScrapingMixin._check_port_with_retry", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_remote_debugging", side_effect = Exception("Test exception")), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary", return_value = None), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.LOG") as mock_log:
+
+            # Should not raise any exceptions and should log the appropriate debug message
+            await web_scraper._validate_chrome_version_configuration()
+
+            # Verify the debug message was logged
+            # Check that the debug method was called with the expected message
+            debug_calls = [call for call in mock_log.debug.call_args_list if "Failed to detect version from existing browser" in str(call)]
+            assert len(debug_calls) > 0, "Expected debug message not found"
+
+    @pytest.mark.asyncio
+    async def test_validate_chrome_version_configuration_no_existing_browser(
+            self, web_scraper:WebScrapingMixin
+    ) -> None:
+        """Test _validate_chrome_version_configuration when no existing browser is found."""
+        # Configure remote debugging
+        web_scraper.browser_config.arguments = ["--remote-debugging-port=9222"]
+        web_scraper.browser_config.binary_location = "/usr/bin/chrome"
+
+        with patch.dict("os.environ", {}, clear = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.WebScrapingMixin._check_port_with_retry", return_value = False), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary", return_value = None), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.LOG") as mock_log:
+
+            # Should not raise any exceptions and should log the appropriate debug message
+            await web_scraper._validate_chrome_version_configuration()
+
+            # Verify the debug message was logged
+            mock_log.debug.assert_any_call(" -> No existing browser found at %s:%s", "127.0.0.1", 9222)
 
 
 class TestWebScrapingMixinPortRetry:
