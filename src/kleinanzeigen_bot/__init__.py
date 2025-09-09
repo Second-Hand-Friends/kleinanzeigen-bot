@@ -1112,29 +1112,28 @@ class KleinanzeigenBot(WebScrapingMixin):
             else:
                 try:
                     # no options. only costs. Set custom shipping cost
-                    if ad_cfg.shipping_costs is not None:
+                    await self.web_click(By.XPATH,
+                                         '//button//span[contains(., "Versandmethoden auswählen")]')
+                    try:
+                        # when "Andere Versandmethoden" is not available, then we are already on the individual page
                         await self.web_click(By.XPATH,
-                                             '//button//span[contains(., "Versandmethoden auswählen")]')
+                                             '//dialog//button[contains(., "Andere Versandmethoden")]')
+                    except TimeoutError:
+                        pass
 
-                        try:
-                            # when "Andere Versandmethoden" is not available, then we are already on the individual page
-                            await self.web_click(By.XPATH,
-                                                 '//dialog//button[contains(., "Andere Versandmethoden")]')
-                        except TimeoutError:
-                            pass
+                    try:
+                        # only click on "Individueller Versand" when "IndividualShippingInput" is not available, otherwise its already checked
+                        # (important for mode = UPDATE)
+                        await self.web_find(By.XPATH,
+                                            '//input[contains(@placeholder, "Versandkosten (optional)")]',
+                                            timeout = 2)
+                    except TimeoutError:
+                        await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
 
-                        try:
-                            # only click on "Individueller Versand" when "IndividualShippingInput" is not available, otherwise its already checked
-                            # (important for mode = UPDATE)
-                            await self.web_find(By.XPATH,
-                                                '//input[contains(@placeholder, "Versandkosten (optional)")]',
-                                                timeout = 2)
-                        except TimeoutError:
-                            await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
-
+                    if ad_cfg.shipping_costs is not None:
                         await self.web_input(By.XPATH, '//input[contains(@placeholder, "Versandkosten (optional)")]',
-                                             str.replace(str(ad_cfg.shipping_costs), ".", ","))
-                        await self.web_click(By.XPATH, '//dialog//button[contains(., "Fertig")]')
+                                         str.replace(str(ad_cfg.shipping_costs), ".", ","))
+                    await self.web_click(By.XPATH, '//dialog//button[contains(., "Fertig")]')
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
                     raise TimeoutError(_("Unable to close shipping dialog!")) from ex
