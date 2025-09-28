@@ -22,6 +22,8 @@ from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
 from .utils.misc import ainput, ensure, is_frozen
 from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
+from .message import Messenger
+
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
@@ -60,6 +62,8 @@ class KleinanzeigenBot(WebScrapingMixin):
         self.command = "help"
         self.ads_selector = "due"
         self.keep_old_ads = False
+        self.message_url = None
+        self.message_text = None
 
     def __del__(self) -> None:
         if self.file_log:
@@ -182,6 +186,38 @@ class KleinanzeigenBot(WebScrapingMixin):
                     await self.create_browser_session()
                     await self.login()
                     await self.download_ads()
+                case "message":
+                    self.configure_file_logging()
+                    self.load_config()
+                    # Optional, wie bei anderen Commands:
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
+
+                    if not self.message_url or not self.message_text:
+                        LOG.error('Usage: kleinanzeigen-bot message --url "<listing-url>" --text "<message>"')
+                        sys.exit(2)
+
+                    # URL/Text müssen durch parse_args gesetzt sein
+                    # if not getattr(self, "message_url", None) or not getattr(self, "message_text", None):
+                    #     LOG.error('Usage: kleinanzeigen-bot message --url "<listing-url>" --text "<message>"')
+                    #     sys.exit(2)
+
+                    # genau wie publish/update/delete/download:
+                    await self.create_browser_session()
+                    await self.login()
+
+
+                    messenger = Messenger(self.browser, self.config)
+                    ok = await messenger.send_message_to_listing(self.message_url, self.message_text)
+
+                    if ok:
+                        LOG.info("############################################")
+                        LOG.info("DONE: Message sent.")
+                        LOG.info("############################################")
+                    else:
+                        LOG.info("############################################")
+                        LOG.info("DONE: Message could not be confirmed.")
+                        LOG.info("############################################")
 
                 case _:
                     LOG.error("Unknown command: %s", self.command)
@@ -213,6 +249,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                                     "geändert" gelten und neu veröffentlicht werden.
               create-config - Erstellt eine neue Standard-Konfigurationsdatei, falls noch nicht vorhanden
               diagnose - Diagnostiziert Browser-Verbindungsprobleme und zeigt Troubleshooting-Informationen
+              message  - Sendet eine Nachricht an eine einzelne Anzeige
               --
               help     - Zeigt diese Hilfe an (Standardbefehl)
               version  - Zeigt die Version der Anwendung an
@@ -298,12 +335,18 @@ class KleinanzeigenBot(WebScrapingMixin):
                 "keep-old",
                 "logfile=",
                 "lang=",
-                "verbose"
+                "verbose",
+                "url=",
+                "text=",
             ])
         except getopt.error as ex:
             LOG.error(ex.msg)
             LOG.error("Use --help to display available options.")
             sys.exit(2)
+
+        # reset command-specific state before applying new options
+        self.message_url = None
+        self.message_text = None
 
         for option, value in options:
             match option:
@@ -328,6 +371,10 @@ class KleinanzeigenBot(WebScrapingMixin):
                 case "-v" | "--verbose":
                     LOG.setLevel(loggers.DEBUG)
                     loggers.get_logger("nodriver").setLevel(loggers.INFO)
+                case "--url":
+                    self.message_url = value.strip()
+                case "--text":
+                    self.message_text = value
 
         match len(arguments):
             case 0:
@@ -337,6 +384,10 @@ class KleinanzeigenBot(WebScrapingMixin):
             case _:
                 LOG.error("More than one command given: %s", arguments)
                 sys.exit(2)
+
+        if self.command == "message" and (not self.message_url or not self.message_text):
+            LOG.error('Usage: kleinanzeigen-bot message --url "<listing-url>" --text "<message>"')
+            sys.exit(2)
 
     def configure_file_logging(self) -> None:
         if not self.log_file_path:

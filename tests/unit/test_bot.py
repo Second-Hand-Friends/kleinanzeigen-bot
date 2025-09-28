@@ -31,6 +31,25 @@ class TestKleinanzeigenBot:
         bot.parse_args(["app", "create-config"])
         assert bot.command == "create-config"
 
+    def test_parse_args_message(self, bot:KleinanzeigenBot) -> None:
+        """Test parsing of message command with required options"""
+        bot.parse_args([
+            "app",
+            "message",
+            "--url",
+            "https://example.com/listing",
+            "--text",
+            "Hello there",
+        ])
+        assert bot.command == "message"
+        assert bot.message_url == "https://example.com/listing"
+        assert bot.message_text == "Hello there"
+
+    def test_parse_args_message_requires_url_and_text(self, bot:KleinanzeigenBot) -> None:
+        """Ensure message command exits when required options are missing"""
+        with pytest.raises(SystemExit):
+            bot.parse_args(["app", "message"])
+
     def test_create_default_config_logs_error_if_exists(self, tmp_path:pathlib.Path, bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
         """Test that create_default_config logs an error if the config file already exists."""
         config_path = tmp_path / "config.yaml"
