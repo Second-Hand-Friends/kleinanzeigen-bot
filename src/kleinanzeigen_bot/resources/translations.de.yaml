@@ -143,6 +143,7 @@ kleinanzeigen_bot/__init__.py:
   parse_args:
     "Use --help to display available options.": "Mit --help können die verfügbaren Optionen angezeigt werden."
     "More than one command given: %s": "Mehr als ein Befehl angegeben: %s"
+    "Usage: kleinanzeigen-bot message --url \"<listing-url>\" --text \"<message>\"": "Verwendung: kleinanzeigen-bot message --url \"<anzeigen-url>\" --text \"<nachricht>\""
 
   run:
     "DONE: No configuration errors found.": "FERTIG: Keine Konfigurationsfehler gefunden."
@@ -153,6 +154,9 @@ kleinanzeigen_bot/__init__.py:
     "DONE: No changed ads found.": "FERTIG: Keine geänderten Anzeigen gefunden."
     "You provided no ads selector. Defaulting to \"new\".": "Es wurden keine Anzeigen-Selektor angegeben. Es wird \"new\" verwendet."
     "You provided no ads selector. Defaulting to \"changed\".": "Es wurden keine Anzeigen-Selektor angegeben. Es wird \"changed\" verwendet."
+    "DONE: Message sent.": "FERTIG: Nachricht gesendet."
+    "DONE: Message could not be confirmed.": "FERTIG: Nachricht konnte nicht bestätigt werden."
+    "Usage: kleinanzeigen-bot message --url \"<listing-url>\" --text \"<message>\"": "Verwendung: kleinanzeigen-bot message --url \"<anzeigen-url>\" --text \"<nachricht>\""
     "Unknown command: %s": "Unbekannter Befehl: %s"
 
   fill_login_data_and_send:
@@ -168,6 +172,12 @@ kleinanzeigen_bot/__init__.py:
     "DONE: Updated [content_hash] in %s": "FERTIG: [content_hash] in %s aktualisiert."
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "ad": "Anzeige"
+
+#################################################
+kleinanzeigen_bot/message.py:
+#################################################
+  send_message_to_listing:
+    "Message flow finished (no error detected).": "Nachrichtenablauf abgeschlossen (kein Fehler erkannt)."
 
 #################################################
 kleinanzeigen_bot/extract.py:
