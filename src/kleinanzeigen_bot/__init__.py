@@ -13,6 +13,7 @@ from wcmatch import glob
 
 from . import extract, resources
 from ._version import __version__
+from .message import Messenger
 from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial
 from .model.config_model import Config
 from .update_checker import UpdateChecker
@@ -22,8 +23,6 @@ from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
 from .utils.misc import ainput, ensure, is_frozen
 from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
-from .message import Messenger
-
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
@@ -62,8 +61,8 @@ class KleinanzeigenBot(WebScrapingMixin):
         self.command = "help"
         self.ads_selector = "due"
         self.keep_old_ads = False
-        self.message_url = None
-        self.message_text = None
+        self.message_url: str | None = None
+        self.message_text: str | None = None
 
     def __del__(self) -> None:
         if self.file_log:
@@ -206,7 +205,6 @@ class KleinanzeigenBot(WebScrapingMixin):
                     await self.create_browser_session()
                     await self.login()
 
-
                     messenger = Messenger(self.browser, self.config)
                     ok = await messenger.send_message_to_listing(self.message_url, self.message_text)
 
@@ -343,10 +341,6 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.error(ex.msg)
             LOG.error("Use --help to display available options.")
             sys.exit(2)
-
-        # reset command-specific state before applying new options
-        self.message_url = None
-        self.message_text = None
 
         for option, value in options:
             match option:
