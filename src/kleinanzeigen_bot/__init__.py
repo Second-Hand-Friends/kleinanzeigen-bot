@@ -61,8 +61,8 @@ class KleinanzeigenBot(WebScrapingMixin):
         self.command = "help"
         self.ads_selector = "due"
         self.keep_old_ads = False
-        self.message_url: str | None = None
-        self.message_text: str | None = None
+        self.message_url:str | None = None
+        self.message_text:str | None = None
 
     def __del__(self) -> None:
         if self.file_log:
@@ -972,7 +972,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.warning("# Payment form detected! Please proceed with payment.")
             LOG.warning("############################################")
             await self.web_scroll_page_down()
-            input(_("Press a key to continue..."))
+            await ainput(_("Press a key to continue..."))
         except TimeoutError:
             pass
 
