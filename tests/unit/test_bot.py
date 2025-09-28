@@ -50,6 +50,39 @@ class TestKleinanzeigenBot:
         with pytest.raises(SystemExit):
             bot.parse_args(["app", "message"])
 
+    def test_parse_args_fetch_conversations_with_limit(self, bot:KleinanzeigenBot) -> None:
+        """Ensure fetch-conversations applies the provided limit"""
+        bot.parse_args(["app", "fetch-conversations", "--limit=7"])
+        assert bot.command == "fetch-conversations"
+        assert bot.conversation_limit == 7
+
+    def test_parse_args_fetch_conversations_invalid_limit(self, bot:KleinanzeigenBot) -> None:
+        """Invalid limits should exit"""
+        with pytest.raises(SystemExit):
+            bot.parse_args(["app", "fetch-conversations", "--limit=0"])
+
+    def test_parse_args_fetch_conversation(self, bot:KleinanzeigenBot) -> None:
+        """Ensure fetch-conversation command records the conversation id"""
+        bot.parse_args(["app", "fetch-conversation", "--conversation-id", "abc123"])
+        assert bot.command == "fetch-conversation"
+        assert bot.conversation_id == "abc123"
+
+    def test_parse_args_fetch_conversation_requires_id(self, bot:KleinanzeigenBot) -> None:
+        """Missing conversation id should exit"""
+        with pytest.raises(SystemExit):
+            bot.parse_args(["app", "fetch-conversation"])
+
+    def test_parse_args_fetch_conversations(self, bot:KleinanzeigenBot) -> None:
+        """Test parsing of fetch-conversations command with custom limit"""
+        bot.parse_args(["app", "fetch-conversations", "--limit=5"])
+        assert bot.command == "fetch-conversations"
+        assert bot.conversation_limit == 5
+
+    def test_parse_args_fetch_conversations_requires_positive_limit(self, bot:KleinanzeigenBot) -> None:
+        """Ensure fetch-conversations command validates positive limit"""
+        with pytest.raises(SystemExit):
+            bot.parse_args(["app", "fetch-conversations", "--limit=0"])
+
     def test_create_default_config_logs_error_if_exists(self, tmp_path:pathlib.Path, bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
         """Test that create_default_config logs an error if the config file already exists."""
         config_path = tmp_path / "config.yaml"

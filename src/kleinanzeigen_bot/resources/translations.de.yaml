@@ -144,6 +144,9 @@ kleinanzeigen_bot/__init__.py:
     "Use --help to display available options.": "Mit --help können die verfügbaren Optionen angezeigt werden."
     "More than one command given: %s": "Mehr als ein Befehl angegeben: %s"
     "Usage: kleinanzeigen-bot message --url \"<listing-url>\" --text \"<message>\"": "Verwendung: kleinanzeigen-bot message --url \"<anzeigen-url>\" --text \"<nachricht>\""
+    "--limit expects an integer but got: %s": "--limit erwartet eine Ganzzahl, erhalten: %s"
+    "--limit must be a positive integer": "--limit muss eine positive Ganzzahl sein"
+    "Usage: kleinanzeigen-bot fetch-conversation --conversation-id \"<id>\"": "Verwendung: kleinanzeigen-bot fetch-conversation --conversation-id \"<id>\""
 
   run:
     "DONE: No configuration errors found.": "FERTIG: Keine Konfigurationsfehler gefunden."
@@ -157,7 +160,11 @@ kleinanzeigen_bot/__init__.py:
     "DONE: Message sent.": "FERTIG: Nachricht gesendet."
     "DONE: Message could not be confirmed.": "FERTIG: Nachricht konnte nicht bestätigt werden."
     "Usage: kleinanzeigen-bot message --url \"<listing-url>\" --text \"<message>\"": "Verwendung: kleinanzeigen-bot message --url \"<anzeigen-url>\" --text \"<nachricht>\""
+    "DONE: Retrieved %s": "FERTIG: %s abgerufen"
+    "DONE: No conversations found.": "FERTIG: Keine Unterhaltungen gefunden."
+    "DONE: Conversation retrieved.": "FERTIG: Unterhaltung abgerufen."
     "Unknown command: %s": "Unbekannter Befehl: %s"
+    "conversation": "Unterhaltung"
 
   fill_login_data_and_send:
     "Logging in as [%s]...": "Anmeldung als [%s]..."

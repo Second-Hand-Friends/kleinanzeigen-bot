@@ -121,14 +121,19 @@ class Messenger(WebScrapingMixin):
             except Exception as ex:  # noqa: BLE001
                 last_err = ex
         raise KleinanzeigenBotError(
-            f"Could not locate element for: t{desc}"
+            f"Could not locate element for: {desc}"
         ) from last_err
 
     async def fetch_conversations(self, limit:int = 10) -> list[dict[str, str]]:
         page = 0
         conversations:list[dict[str, str]] = []
         while len(conversations) < limit:
-            convo_url = f"{self.api_root_url}/messagebox/api/users/{self.mein_profil['userId']}/conversations?page={page}&size=10"
+            remaining = max(limit - len(conversations), 1)
+            page_size = min(remaining, 10)
+            convo_url = (
+                f"{self.api_root_url}/messagebox/api/users/{self.mein_profil['userId']}"
+                f"/conversations?page={page}&size={page_size}"
+            )
 
             data = json.loads((await self.web_request(
                 convo_url, headers = self.mein_profil.get("authorization_headers", {})
@@ -138,3 +143,14 @@ class Messenger(WebScrapingMixin):
                 break
             page += 1
         return conversations
+
+    async def fetch_conversation(self, conversation_id:str) -> dict[str, Any]:
+        convo_url = (
+            f"{self.api_root_url}/messagebox/api/users/{self.mein_profil['userId']}"
+            f"/conversations/{conversation_id}?contentWarnings=true"
+        )
+
+        data = json.loads((await self.web_request(
+            convo_url, headers = self.mein_profil.get("authorization_headers", {})
+        ))["content"])
+        return data
