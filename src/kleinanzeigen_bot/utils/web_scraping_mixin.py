@@ -88,6 +88,9 @@ class WebScrapingMixin:
         self.browser_config:Final[BrowserConfig] = BrowserConfig()
         self.browser:Browser = None  # pyright: ignore[reportAttributeAccessIssue]
         self.page:Page = None  # pyright: ignore[reportAttributeAccessIssue]
+        self.mein_profil:dict[str, Any] = {}
+        self.root_url = "https://www.kleinanzeigen.de"
+        self.api_root_url = "https://gateway.kleinanzeigen.de"
 
     async def create_browser_session(self) -> None:
         LOG.info("Creating Browser session...")
