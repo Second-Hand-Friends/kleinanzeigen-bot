@@ -5,7 +5,7 @@ import atexit, enum, json, os, re, signal, sys, textwrap  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 from gettext import gettext as _
-from typing import Any, Final
+from typing import Any, Dict, Final
 
 import certifi, colorama, nodriver  # isort: skip
 from ruamel.yaml import YAML
@@ -205,7 +205,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     await self.create_browser_session()
                     await self.login()
 
-                    messenger = Messenger(self.browser, self.config)
+                    messenger = Messenger(self.browser, self.page, self.config, self.mein_profil)
                     ok = await messenger.send_message_to_listing(self.message_url, self.message_text)
 
                     if ok:
@@ -690,16 +690,26 @@ class KleinanzeigenBot(WebScrapingMixin):
             # Try to find the standard element first
             user_info = await self.web_text(By.CLASS_NAME, "mr-medium")
             if self.config.login.username.lower() in user_info.lower():
+                self.mein_profil = await self.get_user_info()
                 return True
         except TimeoutError:
             try:
                 # If standard element not found, try the alternative
                 user_info = await self.web_text(By.ID, "user-email")
                 if self.config.login.username.lower() in user_info.lower():
+                    self.mein_profil = await self.get_user_info()
                     return True
             except TimeoutError:
                 return False
         return False
+
+    async def get_user_info(self) -> dict[str, Any]:
+        url = f"{self.root_url}/m-mein-profil.json"
+        # Fetch user profile JSON data and parse the string response as JSON
+        info:Dict[str, Any] = json.loads((await self.web_request(url))["content"])
+        authorization_headers = (await self.web_request(f"{self.root_url}/m-access-token.json"))["headers"]
+        info["authorization_headers"] = authorization_headers
+        return info
 
     async def delete_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
