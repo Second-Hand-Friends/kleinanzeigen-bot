@@ -226,6 +226,8 @@ ignore = [
   "ANN401",  # Dynamically typed expressions (typing.Any) are disallowed
   "ASYNC210",  # TODO Async functions should not call blocking HTTP methods
   "ASYNC230",  # TODO Async functions should not open files with blocking methods like `open`
+  "ASYNC240",  # Async functions should not use os.path methods, use trio.Path or anyio.path
+  "ASYNC250",  # Blocking call to input() in async context
   "COM812",  # Trailing comma missing
   "D1",  # Missing docstring in ...
   "D200",  # One-line docstring should fit on one line
@@ -252,6 +254,7 @@ ignore = [
   "PERF203",  # `try`-`except` within a loop incurs performance overhead
   "RET504",  # Unnecessary assignment to `...` before `return` statement
   "PLR6301",  # Method `...` could be a function, class method, or static method
+  "PLR0913",  # Too many arguments in function definition (needed to match parent signature)
   "PYI041",  # Use `float` instead of `int | float`
   "SIM102",  # Use a single `if` statement instead of nested `if` statements
   "SIM105",  # Use `contextlib.suppress(TimeoutError)` instead of `try`-`except`-`pass`
