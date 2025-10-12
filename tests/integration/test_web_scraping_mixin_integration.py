@@ -86,9 +86,9 @@ async def atest_belen_conf_evaluation() -> None:
             assert belen_conf.deep_serialized_value is not None, "deep_serialized_value should not be None"
 
         if is_dict:
-            print(f"✅ BelenConf evaluation successful: {list(belen_conf.keys())}")
+            print(f"[OK] BelenConf evaluation successful: {list(belen_conf.keys())}")
         else:
-            print("✅ BelenConf evaluation successful: RemoteObject with deep_serialized_value")
+            print("[OK] BelenConf evaluation successful: RemoteObject with deep_serialized_value")
 
     finally:
         web_scraping_mixin.close_browser_session()
