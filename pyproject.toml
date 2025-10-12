@@ -38,7 +38,7 @@ dependencies = [
   "certifi",
   "colorama",
   "jaraco.text", # required by pkg_resources during runtime
-  "nodriver==0.39.0", # 0.40-0.44 have issues starting browsers and evaluating self.web_execute("window.BelenConf") fails
+  "nodriver>=0.47.0", # Updated from 0.39.0 - 0.40-0.44 had issues starting browsers and evaluating self.web_execute("window.BelenConf") fails
   "pydantic>=2.0.0",
   "ruamel.yaml",
   "psutil",
