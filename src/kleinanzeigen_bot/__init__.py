@@ -690,13 +690,13 @@ class KleinanzeigenBot(WebScrapingMixin):
                     await self.web_request(
                         url = f"{self.root_url}/m-anzeigen-loeschen.json?ids={published_ad_id}",
                         method = "POST",
-                        headers = {"x-csrf-token": csrf_token}
+                        headers = {"x-csrf-token": str(csrf_token)}
                     )
         elif ad_cfg.id:
             await self.web_request(
                 url = f"{self.root_url}/m-anzeigen-loeschen.json?ids={ad_cfg.id}",
                 method = "POST",
-                headers = {"x-csrf-token": csrf_token},
+                headers = {"x-csrf-token": str(csrf_token)},
                 valid_response_codes = [200, 404]
             )
 
@@ -1048,12 +1048,14 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         LOG.debug("Found %i special attributes", len(ad_cfg.special_attributes))
         for special_attribute_key, special_attribute_value in ad_cfg.special_attributes.items():
+            # Ensure special_attribute_value is treated as a string
+            special_attribute_value_str = str(special_attribute_value)
 
             if special_attribute_key == "condition_s":
-                await self.__set_condition(special_attribute_value)
+                await self.__set_condition(special_attribute_value_str)
                 continue
 
-            LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value)
+            LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
             try:
                 # if the <select> element exists but is inside an invisible container, make the container visible
                 select_container_xpath = f"//div[@class='l-row' and descendant::select[@id='{special_attribute_key}']]"
@@ -1070,20 +1072,20 @@ class KleinanzeigenBot(WebScrapingMixin):
                 raise TimeoutError(f"Failed to set special attribute [{special_attribute_key}] (not found)") from ex
 
             try:
-                elem_id = special_attr_elem.attrs.id
+                elem_id:str = str(special_attr_elem.attrs.id)
                 if special_attr_elem.local_name == "select":
                     LOG.debug("Attribute field '%s' seems to be a select...", special_attribute_key)
-                    await self.web_select(By.ID, elem_id, special_attribute_value)
+                    await self.web_select(By.ID, elem_id, special_attribute_value_str)
                 elif special_attr_elem.attrs.type == "checkbox":
                     LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
                     await self.web_click(By.ID, elem_id)
                 else:
                     LOG.debug("Attribute field '%s' seems to be a text input...", special_attribute_key)
-                    await self.web_input(By.ID, elem_id, special_attribute_value)
+                    await self.web_input(By.ID, elem_id, special_attribute_value_str)
             except TimeoutError as ex:
                 LOG.debug("Attribute field '%s' is not of kind radio button.", special_attribute_key)
                 raise TimeoutError(f"Failed to set special attribute [{special_attribute_key}]") from ex
-            LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value)
+            LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
 
     async def __set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         if ad_cfg.shipping_type == "PICKUP":

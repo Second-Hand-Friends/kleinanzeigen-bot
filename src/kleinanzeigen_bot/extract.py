@@ -85,7 +85,7 @@ class AdExtractor(WebScrapingMixin):
                 if current_img_url is None:
                     continue
 
-                with urllib_request.urlopen(current_img_url) as response:  # noqa: S310 Audit URL open for permitted schemes.
+                with urllib_request.urlopen(str(current_img_url)) as response:  # noqa: S310 Audit URL open for permitted schemes.
                     content_type = response.info().get_content_type()
                     file_ending = mimetypes.guess_extension(content_type)
                     img_path = f"{directory}/{img_fn_prefix}{img_nr}{file_ending}"
@@ -185,8 +185,8 @@ class AdExtractor(WebScrapingMixin):
 
             # Extract references using the CORRECTED selector
             try:
-                page_refs = [
-                    (await self.web_find(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = li)).attrs["href"]
+                page_refs:list[str] = [
+                    str((await self.web_find(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = li)).attrs["href"])
                     for li in list_items
                 ]
                 refs.extend(page_refs)
@@ -405,13 +405,15 @@ class AdExtractor(WebScrapingMixin):
         category_line = await self.web_find(By.ID, "vap-brdcrmb")
         category_first_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
         category_second_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(3)", parent = category_line)
-        cat_num_first = category_first_part.attrs["href"].rsplit("/", maxsplit = 1)[-1][1:]
-        cat_num_second = category_second_part.attrs["href"].rsplit("/", maxsplit = 1)[-1][1:]
+        href_first:str = str(category_first_part.attrs["href"])
+        href_second:str = str(category_second_part.attrs["href"])
+        cat_num_first = href_first.rsplit("/", maxsplit = 1)[-1][1:]
+        cat_num_second = href_second.rsplit("/", maxsplit = 1)[-1][1:]
         category:str = cat_num_first + "/" + cat_num_second
 
         return category
 
-    async def _extract_special_attributes_from_ad_page(self, belen_conf:dict[str, Any]) -> dict[str, Any]:
+    async def _extract_special_attributes_from_ad_page(self, belen_conf:dict[str, Any]) -> dict[str, str]:
         """
         Extracts the special attributes from an ad page.
         If no items are available then special_attributes is empty
