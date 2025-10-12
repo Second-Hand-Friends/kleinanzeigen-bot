@@ -589,6 +589,31 @@ class TestAdExtractorCategory:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
+    async def test_extract_category_with_non_string_href(self, extractor:AdExtractor) -> None:
+        """Test category extraction with non-string href attributes to cover str() conversion."""
+        category_line = MagicMock()
+        first_part = MagicMock()
+        # Use non-string href to test str() conversion
+        first_part.attrs = {"href": 12345}  # This will need str() conversion
+        second_part = MagicMock()
+        second_part.attrs = {"href": 67890}  # This will need str() conversion
+
+        with patch.object(extractor, "web_find", new_callable = AsyncMock) as mock_web_find:
+            mock_web_find.side_effect = [
+                category_line,
+                first_part,
+                second_part
+            ]
+
+            result = await extractor._extract_category_from_ad_page()
+            assert result == "2345/7890"  # After str() conversion and slicing
+
+            mock_web_find.assert_any_call(By.ID, "vap-brdcrmb")
+            mock_web_find.assert_any_call(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
+            mock_web_find.assert_any_call(By.CSS_SELECTOR, "a:nth-of-type(3)", parent = category_line)
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
     async def test_extract_special_attributes_empty(self, extractor:AdExtractor) -> None:
         """Test extraction of special attributes when empty."""
         with patch.object(extractor, "web_execute", new_callable = AsyncMock) as mock_web_execute:
