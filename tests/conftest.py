@@ -1,7 +1,9 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import json
 import os
+from pathlib import Path
 from typing import Any, Final, cast
 from unittest.mock import MagicMock
 
@@ -177,6 +179,22 @@ def mock_web_text_responses() -> list[str]:
         "Test Description",  # Description
         "03.02.2025"  # Creation date
     ]
+
+
+@pytest.fixture
+def belen_conf_sample() -> dict[str, Any]:
+    """Provides sample BelenConf data for testing JavaScript evaluation.
+
+    This fixture loads the BelenConf sample data from the fixtures directory,
+    allowing tests to validate window.BelenConf evaluation without accessing
+    kleinanzeigen.de directly.
+    """
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    belen_conf_path = fixtures_dir / "belen_conf_sample.json"
+
+    with open(belen_conf_path, "r", encoding = "utf-8") as f:
+        data = json.load(f)
+        return cast(dict[str, Any], data)
 
 
 @pytest.fixture(autouse = True)

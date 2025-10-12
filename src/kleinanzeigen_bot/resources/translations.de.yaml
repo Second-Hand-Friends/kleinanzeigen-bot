@@ -391,6 +391,9 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "4. Check browser binary permissions: %s": "4. Überprüfen Sie die Browser-Binärdatei-Berechtigungen: %s"
     "4. Check if any antivirus or security software is blocking the connection": "4. Überprüfen Sie, ob Antiviren- oder Sicherheitssoftware die Verbindung blockiert"
 
+  web_execute:
+    "Failed to convert RemoteObject to dict: %s": "Fehler beim Konvertieren von RemoteObject zu dict: %s"
+
   web_check:
     "Unsupported attribute: %s": "Nicht unterstütztes Attribut: %s"
 

@@ -562,6 +562,24 @@ class WebScrapingMixin:
             LOG.debug("web_execute(`%s`) = `%s`", jscode, result)
         self.__class__.web_execute._prev_jscode = jscode  # type: ignore[attr-defined]  # noqa: SLF001 Private member accessed
 
+        # Handle nodriver 0.47+ RemoteObject behavior
+        # If result is a RemoteObject with deep_serialized_value, convert it to a dict
+        if hasattr(result, "deep_serialized_value"):
+            deep_serialized = getattr(result, "deep_serialized_value", None)
+            if deep_serialized is not None:
+                try:
+                    # Convert the deep_serialized_value to a regular dict
+                    serialized_data = getattr(deep_serialized, "value", None)
+                    if serialized_data is not None:
+                        if isinstance(serialized_data, list):
+                            # Convert list of [key, value] pairs to dict
+                            return dict(serialized_data)
+                        return serialized_data
+                except (AttributeError, TypeError, ValueError) as e:
+                    LOG.warning("Failed to convert RemoteObject to dict: %s", e)
+                    # Return the original result if conversion fails
+                    return result
+
         return result
 
     async def web_find(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float = 5) -> Element:
