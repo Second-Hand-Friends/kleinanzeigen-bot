@@ -6,7 +6,7 @@ from collections.abc import Generator
 from contextlib import redirect_stdout
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -895,7 +895,7 @@ class TestKleinanzeigenBotAdDeletion:
 
         # Create config with ID for deletion by ID
         ad_cfg = Ad.model_validate(minimal_ad_config | {
-            id: "12345"
+            "id": "12345"  # Fixed: use proper dict key syntax
         })
 
         published_ads = [
@@ -910,6 +910,38 @@ class TestKleinanzeigenBotAdDeletion:
             mock_find.return_value.attrs = {"content": "some-token"}
             result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = False)
             assert result is True
+
+    @pytest.mark.asyncio
+    async def test_delete_ad_by_id_with_non_string_csrf_token(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
+        """Test deleting an ad by ID with non-string CSRF token to cover str() conversion."""
+        test_bot.page = MagicMock()
+        test_bot.page.evaluate = AsyncMock(return_value = {"statusCode": 200, "content": "{}"})
+        test_bot.page.sleep = AsyncMock()
+
+        # Create config with ID for deletion by ID
+        ad_cfg = Ad.model_validate(minimal_ad_config | {
+            "id": "12345"
+        })
+
+        published_ads = [
+            {"title": "Different Title", "id": "12345"},
+            {"title": "Other Title", "id": "11111"}
+        ]
+
+        with patch.object(test_bot, "web_open", new_callable = AsyncMock), \
+                patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find, \
+                patch.object(test_bot, "web_click", new_callable = AsyncMock), \
+                patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True), \
+                patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request:
+            # Mock non-string CSRF token to test str() conversion
+            mock_find.return_value.attrs = {"content": 12345}  # Non-string token
+            result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = False)
+            assert result is True
+
+            # Verify that str() was called on the CSRF token
+            mock_request.assert_called_once()
+            call_args = mock_request.call_args
+            assert call_args[1]["headers"]["x-csrf-token"] == "12345"  # Should be converted to string
 
 
 class TestKleinanzeigenBotAdRepublication:
@@ -1066,6 +1098,79 @@ class TestKleinanzeigenBotShippingOptions:
 
             # Verify the file was created in the temporary directory
             assert ad_file.exists()
+
+    @pytest.mark.asyncio
+    async def test_special_attributes_with_non_string_values(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """Test that special attributes with non-string values are converted to strings."""
+        # Create ad config with string special attributes first (to pass validation)
+        ad_cfg = Ad.model_validate(base_ad_config | {
+            "special_attributes": {
+                "art_s": "12345",  # String value initially
+                "condition_s": "67890",  # String value initially
+                "color_s": "red"  # String value
+            },
+            "updated_on": "2024-01-01T00:00:00",
+            "created_on": "2024-01-01T00:00:00"
+        })
+
+        # Now modify the special attributes to non-string values to test str() conversion
+        # This simulates the scenario where the values come from external sources as non-strings
+        # We need to cast to Any to bypass type checking for this test
+        special_attrs = cast(Any, ad_cfg.special_attributes)
+        special_attrs["art_s"] = 12345  # Non-string value
+        special_attrs["condition_s"] = 67890  # Non-string value
+
+        # Mock special attribute elements
+        art_s_elem = MagicMock()
+        art_s_attrs = MagicMock()
+        art_s_attrs.id = "art_s"
+        art_s_attrs.name = "art_s"
+        art_s_elem.attrs = art_s_attrs
+        art_s_elem.local_name = "select"
+
+        condition_s_elem = MagicMock()
+        condition_s_attrs = MagicMock()
+        condition_s_attrs.id = "condition_s"
+        condition_s_attrs.name = "condition_s"
+        condition_s_elem.attrs = condition_s_attrs
+        condition_s_elem.local_name = "select"
+
+        color_s_elem = MagicMock()
+        color_s_attrs = MagicMock()
+        color_s_attrs.id = "color_s"
+        color_s_attrs.name = "color_s"
+        color_s_elem.attrs = color_s_attrs
+        color_s_elem.local_name = "select"
+
+        # Mock the necessary web interaction methods
+        with patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find, \
+                patch.object(test_bot, "web_select", new_callable = AsyncMock) as mock_select, \
+                patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True), \
+                patch.object(test_bot, "_KleinanzeigenBot__set_condition", new_callable = AsyncMock) as mock_set_condition:
+
+            # Mock web_find to simulate element detection
+            async def mock_find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+                # Handle XPath queries for special attributes
+                if selector_type == By.XPATH and "contains(@name" in selector_value:
+                    if "art_s" in selector_value:
+                        return art_s_elem
+                    if "condition_s" in selector_value:
+                        return condition_s_elem
+                    if "color_s" in selector_value:
+                        return color_s_elem
+                return None
+
+            mock_find.side_effect = mock_find_side_effect
+
+            # Test the __set_special_attributes method directly
+            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
+
+            # Verify that web_select was called with string values (str() conversion)
+            mock_select.assert_any_call(By.ID, "art_s", "12345")  # Converted to string
+            mock_select.assert_any_call(By.ID, "color_s", "red")  # Already string
+
+            # Verify that __set_condition was called with string value
+            mock_set_condition.assert_called_once_with("67890")  # Converted to string
 
 
 class TestKleinanzeigenBotUrlConstruction:

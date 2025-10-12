@@ -107,3 +107,28 @@ class TestWebExecuteRemoteObjectHandling:
 
             # Should return the result unchanged
             assert result == mock_result
+
+    @pytest.mark.asyncio
+    async def test_web_execute_remoteobject_conversion_exception(self) -> None:
+        """Test web_execute with RemoteObject that raises exception during conversion."""
+        mixin = WebScrapingMixin()
+
+        # Mock RemoteObject that will raise an exception when trying to convert to dict
+        mock_remote_object = Mock()
+        mock_deep_serialized = Mock()
+
+        # Create a list-like object that raises an exception when dict() is called on it
+        class ExceptionRaisingList(list[str]):
+            def __iter__(self) -> None:  # type: ignore[override]
+                raise ValueError("Simulated conversion error")
+
+        mock_deep_serialized.value = ExceptionRaisingList([["key", "value"]])  # type: ignore[list-item]
+        mock_remote_object.deep_serialized_value = mock_deep_serialized
+
+        with patch.object(mixin, "page") as mock_page:
+            mock_page.evaluate = AsyncMock(return_value = mock_remote_object)
+
+            result = await mixin.web_execute("window.test")
+
+            # Should return the original RemoteObject when conversion fails
+            assert result is mock_remote_object

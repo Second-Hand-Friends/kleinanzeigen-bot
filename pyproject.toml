@@ -366,6 +366,10 @@ data_file = ".temp/coverage.sqlite"
 branch = true  # track branch coverage
 relative_files = true
 
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
 
 #####################
 # yamlfix
