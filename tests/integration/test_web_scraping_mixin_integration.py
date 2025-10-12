@@ -54,7 +54,13 @@ async def atest_belen_conf_evaluation() -> None:
         await web_scraping_mixin.create_browser_session()
 
         # Navigate to a simple page that can execute JavaScript
-        await web_scraping_mixin.web_open("data:text/html,<html><body><script>window.BelenConf = {test: 'data', universalAnalyticsOpts: {dimensions: {dimension92: 'test', dimension108: 'art_s:test'}}};</script></body></html>")
+        html_content = (
+            "data:text/html,<html><body><script>"
+            "window.BelenConf = {test: 'data', universalAnalyticsOpts: "
+            "{dimensions: {dimension92: 'test', dimension108: 'art_s:test'}}};"
+            "</script></body></html>"
+        )
+        await web_scraping_mixin.web_open(html_content)
         await web_scraping_mixin.web_sleep(1000, 2000)  # Wait for page to load
 
         # Test JavaScript evaluation - this is the critical test for nodriver 0.40-0.44 issues
@@ -66,7 +72,7 @@ async def atest_belen_conf_evaluation() -> None:
         # In nodriver 0.47+, JavaScript objects are returned as RemoteObject instances
         # We need to check if it's either a dict (old behavior) or RemoteObject (new behavior)
         is_dict = isinstance(belen_conf, dict)
-        is_remote_object = hasattr(belen_conf, 'deep_serialized_value') and belen_conf.deep_serialized_value is not None
+        is_remote_object = hasattr(belen_conf, "deep_serialized_value") and belen_conf.deep_serialized_value is not None
 
         assert is_dict or is_remote_object, f"window.BelenConf should be a dict or RemoteObject, got {type(belen_conf)}"
 
@@ -76,13 +82,13 @@ async def atest_belen_conf_evaluation() -> None:
             assert "universalAnalyticsOpts" in belen_conf, "window.BelenConf should contain universalAnalyticsOpts"
         else:
             # New behavior - RemoteObject with deep_serialized_value
-            assert hasattr(belen_conf, 'deep_serialized_value'), "RemoteObject should have deep_serialized_value"
+            assert hasattr(belen_conf, "deep_serialized_value"), "RemoteObject should have deep_serialized_value"
             assert belen_conf.deep_serialized_value is not None, "deep_serialized_value should not be None"
 
         if is_dict:
             print(f"✅ BelenConf evaluation successful: {list(belen_conf.keys())}")
         else:
-            print(f"✅ BelenConf evaluation successful: RemoteObject with deep_serialized_value")
+            print("✅ BelenConf evaluation successful: RemoteObject with deep_serialized_value")
 
     finally:
         web_scraping_mixin.close_browser_session()

@@ -192,8 +192,9 @@ def belen_conf_sample() -> dict[str, Any]:
     fixtures_dir = Path(__file__).parent / "fixtures"
     belen_conf_path = fixtures_dir / "belen_conf_sample.json"
 
-    with open(belen_conf_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    with open(belen_conf_path, "r", encoding = "utf-8") as f:
+        data = json.load(f)
+        return cast(dict[str, Any], data)
 
 
 @pytest.fixture(autouse = True)
