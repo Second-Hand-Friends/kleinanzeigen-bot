@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 from gettext import gettext as _
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ValidationError
 from pydantic_core import InitErrorDetails
@@ -23,6 +23,7 @@ class ContextualModel(BaseModel):
         obj:Any,
         *,
         strict:bool | None = None,
+        extra:Literal["allow", "ignore", "forbid"] | None = None,
         from_attributes:bool | None = None,
         context:Any | None = None,
         by_alias:bool | None = None,
@@ -36,6 +37,7 @@ class ContextualModel(BaseModel):
             return super().model_validate(
                 obj,
                 strict = strict,
+                extra = extra,
                 from_attributes = from_attributes,
                 context = context,
                 by_alias = by_alias,

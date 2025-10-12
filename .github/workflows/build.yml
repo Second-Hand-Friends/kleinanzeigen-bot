@@ -144,8 +144,10 @@ jobs:
 
     - name: Check with pip-audit
       # until https://github.com/astral-sh/ruff/issues/8277
+      # TODO: Re-enable pip vulnerability checking when pip 25.3 is released (currently disabled for pip 25.2 due to GHSA-4xh5-x5gv-qwph)
+      # https://github.com/pypa/pip/issues/13607
       run:
-        pdm run pip-audit --progress-spinner off --skip-editable --verbose
+        pdm run pip-audit --progress-spinner off --skip-editable --verbose --ignore-vuln GHSA-4xh5-x5gv-qwph
 
 
     - name: Check with ruff
