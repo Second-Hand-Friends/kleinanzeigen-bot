@@ -35,6 +35,17 @@ class _TestCaseDict(TypedDict):  # noqa: PYI049 Private TypedDict `...` is never
     expected:_SpecialAttributesDict
 
 
+@pytest.fixture
+def test_extractor(browser_mock:MagicMock, test_bot_config:Config) -> AdExtractor:
+    """Provides a fresh AdExtractor instance for testing.
+
+    Dependencies:
+        - browser_mock: Used to mock browser interactions
+        - test_bot_config: Used to initialize the extractor with a valid configuration
+    """
+    return AdExtractor(browser_mock, test_bot_config)
+
+
 class TestAdExtractorBasics:
     """Basic synchronous tests for AdExtractor."""
 
