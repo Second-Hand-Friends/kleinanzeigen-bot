@@ -74,16 +74,16 @@ jobs:
           PYTHON_VERSION: "3.10"
           PUBLISH_RELEASE: false
         - os: macos-13    # X86
-          PYTHON_VERSION: "3.13.5"
+          PYTHON_VERSION: "3.14"
           PUBLISH_RELEASE: true
         - os: macos-latest # ARM
-          PYTHON_VERSION: "3.13.5"
+          PYTHON_VERSION: "3.14"
           PUBLISH_RELEASE: true
         - os: ubuntu-latest
-          PYTHON_VERSION: "3.13.5"
+          PYTHON_VERSION: "3.14"
           PUBLISH_RELEASE: true
         - os: windows-latest
-          PYTHON_VERSION: "3.13.5"
+          PYTHON_VERSION: "3.14"
           PUBLISH_RELEASE: true
 
     runs-on: ${{ matrix.os }} # https://github.com/actions/runner-images#available-images
