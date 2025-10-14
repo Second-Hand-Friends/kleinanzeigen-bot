@@ -249,6 +249,9 @@ class WebScrapingMixin:
             self.browser = await nodriver.start(cfg)
             LOG.info("New Browser session is %s", self.browser.websocket_url)
         except Exception as e:
+            # Clean up any resources that were created during setup
+            self._cleanup_session_resources()
+
             error_msg = str(e)
             if "root" in error_msg.lower():
                 LOG.error("Failed to start browser. This error often occurs when:")
@@ -417,6 +420,12 @@ class WebScrapingMixin:
                 if p.is_running():
                     p.kill()  # terminate orphaned browser processes
             self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
+
+    def _cleanup_session_resources(self) -> None:
+        """Clean up any resources that were created during session setup."""
+        # Reset browser and page references
+        self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
+        self.page = None  # pyright: ignore[reportAttributeAccessIssue]
 
     def get_compatible_browser(self) -> str:
         match platform.system():
