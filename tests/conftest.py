@@ -1,16 +1,26 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import json
+"""
+Shared test fixtures for the kleinanzeigen-bot test suite.
+
+This module contains fixtures that are used across multiple test files.
+Test-specific fixtures should be defined in individual test files or local conftest.py files.
+
+Fixture Organization:
+- Core fixtures: Basic test infrastructure (test_data_dir, test_bot_config, test_bot)
+- Mock fixtures: Mock objects for external dependencies (browser_mock)
+- Utility fixtures: Helper fixtures for common test scenarios (log_file_path)
+- Smoke test fixtures: Special fixtures for smoke tests (smoke_bot, DummyBrowser, etc.)
+- Test data fixtures: Shared test data (description_test_cases)
+"""
 import os
-from pathlib import Path
 from typing import Any, Final, cast
 from unittest.mock import MagicMock
 
 import pytest
 
 from kleinanzeigen_bot import KleinanzeigenBot
-from kleinanzeigen_bot.extract import AdExtractor
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import loggers
@@ -21,6 +31,10 @@ loggers.configure_console_logging()
 LOG:Final[loggers.Logger] = loggers.get_logger("kleinanzeigen_bot")
 LOG.setLevel(loggers.DEBUG)
 
+
+# ============================================================================
+# Core Fixtures - Basic test infrastructure
+# ============================================================================
 
 @pytest.fixture
 def test_data_dir(tmp_path:str) -> str:
@@ -70,6 +84,10 @@ def test_bot(test_bot_config:Config) -> KleinanzeigenBot:
     return bot_instance
 
 
+# ============================================================================
+# Mock Fixtures - Mock objects for external dependencies
+# ============================================================================
+
 @pytest.fixture
 def browser_mock() -> MagicMock:
     """Provides a mock browser instance for testing.
@@ -79,6 +97,10 @@ def browser_mock() -> MagicMock:
     """
     return MagicMock(spec = Browser)
 
+
+# ============================================================================
+# Utility Fixtures - Helper fixtures for common test scenarios
+# ============================================================================
 
 @pytest.fixture
 def log_file_path(test_data_dir:str) -> str:
@@ -90,15 +112,9 @@ def log_file_path(test_data_dir:str) -> str:
     return os.path.join(str(test_data_dir), "test.log")
 
 
-@pytest.fixture
-def test_extractor(browser_mock:MagicMock, test_bot_config:Config) -> AdExtractor:
-    """Provides a fresh AdExtractor instance for testing.
-
-    Dependencies:
-        - browser_mock: Used to mock browser interactions
-        - test_bot_config: Used to initialize the extractor with a valid configuration
-    """
-    return AdExtractor(browser_mock, test_bot_config)
+# ============================================================================
+# Test Data Fixtures - Shared test data
+# ============================================================================
 
 
 @pytest.fixture
@@ -106,6 +122,7 @@ def description_test_cases() -> list[tuple[dict[str, Any], str, str]]:
     """Provides test cases for description prefix/suffix handling.
 
     Returns tuples of (config, raw_description, expected_description)
+    Used by test_init.py and test_extract.py for testing description processing.
     """
     return [
         # Test case 1: New flattened format
@@ -171,38 +188,19 @@ def description_test_cases() -> list[tuple[dict[str, Any], str, str]]:
     ]
 
 
-@pytest.fixture
-def mock_web_text_responses() -> list[str]:
-    """Provides common mock responses for web_text calls."""
-    return [
-        "Test Title",  # Title
-        "Test Description",  # Description
-        "03.02.2025"  # Creation date
-    ]
-
-
-@pytest.fixture
-def belen_conf_sample() -> dict[str, Any]:
-    """Provides sample BelenConf data for testing JavaScript evaluation.
-
-    This fixture loads the BelenConf sample data from the fixtures directory,
-    allowing tests to validate window.BelenConf evaluation without accessing
-    kleinanzeigen.de directly.
-    """
-    fixtures_dir = Path(__file__).parent / "fixtures"
-    belen_conf_path = fixtures_dir / "belen_conf_sample.json"
-
-    with open(belen_conf_path, "r", encoding = "utf-8") as f:
-        data = json.load(f)
-        return cast(dict[str, Any], data)
-
+# ============================================================================
+# Global Setup Fixtures - Applied automatically to all tests
+# ============================================================================
 
 @pytest.fixture(autouse = True)
 def silence_nodriver_logs() -> None:
+    """Silence nodriver logs during testing to reduce noise."""
     loggers.get_logger("nodriver").setLevel(loggers.WARNING)
 
 
-# --- Smoke test fakes and fixtures ---
+# ============================================================================
+# Smoke Test Fixtures - Special fixtures for smoke tests
+# ============================================================================
 
 class DummyBrowser:
     def __init__(self) -> None:
