@@ -787,7 +787,7 @@ class TestWebScrapingBrowserConfiguration:
 
         monkeypatch.setattr(nodriver, "start", mock_start_fail)
         monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue]
-        monkeypatch.setattr(os.path, "exists", lambda p: True)
+        # Don't mock os.path.exists globally - let the file operations work normally
 
         # Attempt to create a session
         scraper = WebScrapingMixin()
