@@ -87,7 +87,7 @@ jobs:
           PUBLISH_RELEASE: true
 
     runs-on: ${{ matrix.os }} # https://github.com/actions/runner-images#available-images
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
     - name: "Show: GitHub context"
