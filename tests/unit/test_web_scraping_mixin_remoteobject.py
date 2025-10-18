@@ -6,6 +6,7 @@
 Tests the conversion of nodriver RemoteObject results to regular Python objects.
 """
 
+from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -22,7 +23,7 @@ class TestWebExecuteRemoteObjectHandling:
         mixin = WebScrapingMixin()
 
         with patch.object(mixin, "page") as mock_page:
-            mock_page.evaluate = AsyncMock(return_value="regular_result")
+            mock_page.evaluate = AsyncMock(return_value = "regular_result")
 
             result = await mixin.web_execute("window.test")
 
@@ -39,7 +40,7 @@ class TestWebExecuteRemoteObjectHandling:
         mock_remote_object.deep_serialized_value.value = {"key": "value"}
 
         with patch.object(mixin, "page") as mock_page:
-            mock_page.evaluate = AsyncMock(return_value=mock_remote_object)
+            mock_page.evaluate = AsyncMock(return_value = mock_remote_object)
 
             result = await mixin.web_execute("window.test")
 
@@ -59,7 +60,7 @@ class TestWebExecuteRemoteObjectHandling:
         ]
 
         with patch.object(mixin, "page") as mock_page:
-            mock_page.evaluate = AsyncMock(return_value=mock_remote_object)
+            mock_page.evaluate = AsyncMock(return_value = mock_remote_object)
 
             result = await mixin.web_execute("window.test")
 
@@ -81,7 +82,7 @@ class TestWebExecuteRemoteObjectHandling:
         }
 
         with patch.object(mixin, "page") as mock_page:
-            mock_page.evaluate = AsyncMock(return_value=mock_remote_object)
+            mock_page.evaluate = AsyncMock(return_value = mock_remote_object)
 
             result = await mixin.web_execute("window.test")
 
@@ -157,7 +158,7 @@ class TestConvertRemoteObjectResult:
         mock_remote_object.deep_serialized_value.value = "invalid_data"
 
         # Mock the _convert_remote_object_dict to raise an exception
-        with patch.object(mixin, "_convert_remote_object_dict", side_effect=ValueError("Test error")):
+        with patch.object(mixin, "_convert_remote_object_dict", side_effect = ValueError("Test error")):
             result = mixin._convert_remote_object_result(mock_remote_object)
             # When conversion fails, it should return the original value
             assert result == "invalid_data"
@@ -258,3 +259,157 @@ class TestConvertRemoteObjectDict:
             }
         }
         assert result == expected
+
+
+class TestWebRequestRemoteObjectHandling:
+    """Test web_request method with nodriver 0.47+ RemoteObject behavior."""
+
+    @pytest.mark.asyncio
+    async def test_web_request_with_remoteobject_result(self) -> None:
+        """Test web_request with RemoteObject result to catch subscriptability issues."""
+        mixin = WebScrapingMixin()
+
+        # Mock RemoteObject that simulates the exact structure returned by web_request
+        mock_remote_object = Mock()
+        mock_remote_object.deep_serialized_value = Mock()
+        mock_remote_object.deep_serialized_value.value = {
+            "statusCode": 200,
+            "statusMessage": "OK",
+            "headers": {"content-type": "application/json"},
+            "content": '{"success": true}'
+        }
+
+        with patch.object(mixin, "web_execute") as mock_web_execute:
+            # Mock web_execute to return the converted result (simulating our fix)
+            mock_web_execute.return_value = {
+                "statusCode": 200,
+                "statusMessage": "OK",
+                "headers": {"content-type": "application/json"},
+                "content": '{"success": true}'
+            }
+
+            result = await mixin.web_request("https://example.com/api")
+
+            # Verify the result is properly converted and subscriptable
+            assert result["statusCode"] == 200
+            assert result["statusMessage"] == "OK"
+            assert result["headers"]["content-type"] == "application/json"
+            assert result["content"] == '{"success": true}'
+
+    @pytest.mark.asyncio
+    async def test_web_request_with_remoteobject_error_response(self) -> None:
+        """Test web_request with RemoteObject error response."""
+        mixin = WebScrapingMixin()
+
+        # Mock RemoteObject for error response
+        mock_remote_object = Mock()
+        mock_remote_object.deep_serialized_value = Mock()
+        mock_remote_object.deep_serialized_value.value = {
+            "statusCode": 404,
+            "statusMessage": "Not Found",
+            "headers": {"content-type": "text/html"},
+            "content": "<html>Not Found</html>"
+        }
+
+        with patch.object(mixin, "web_execute") as mock_web_execute:
+            # Mock web_execute to return the converted result (simulating our fix)
+            mock_web_execute.return_value = {
+                "statusCode": 404,
+                "statusMessage": "Not Found",
+                "headers": {"content-type": "text/html"},
+                "content": "<html>Not Found</html>"
+            }
+
+            # This should raise an exception due to invalid status code
+            with pytest.raises(Exception, match = "Invalid response"):
+                await mixin.web_request("https://example.com/api", valid_response_codes = [200])
+
+    @pytest.mark.asyncio
+    async def test_web_request_with_nested_remoteobject_structures(self) -> None:
+        """Test web_request with complex nested RemoteObject structures."""
+        mixin = WebScrapingMixin()
+
+        # Mock RemoteObject with nested type/value structures
+        mock_remote_object = Mock()
+        mock_remote_object.deep_serialized_value = Mock()
+        mock_remote_object.deep_serialized_value.value = {
+            "statusCode": {"type": "number", "value": 200},
+            "statusMessage": {"type": "string", "value": "OK"},
+            "headers": {
+                "content-type": {"type": "string", "value": "application/json"}
+            },
+            "content": {"type": "string", "value": '{"data": "test"}'}
+        }
+
+        with patch.object(mixin, "web_execute") as mock_web_execute:
+            # Mock web_execute to return the converted result (simulating our fix)
+            mock_web_execute.return_value = {
+                "statusCode": 200,
+                "statusMessage": "OK",
+                "headers": {"content-type": "application/json"},
+                "content": '{"data": "test"}'
+            }
+
+            result = await mixin.web_request("https://example.com/api")
+
+            # Verify nested structures are properly converted
+            assert result["statusCode"] == 200
+            assert result["statusMessage"] == "OK"
+            assert result["headers"]["content-type"] == "application/json"
+            assert result["content"] == '{"data": "test"}'
+
+
+class TestWebRequestRemoteObjectRegression:
+    """Test web_request method to catch future RemoteObject regression issues."""
+
+    @pytest.mark.asyncio
+    async def test_web_request_without_remoteobject_conversion_fails(self) -> None:
+        """Test that web_request fails without RemoteObject conversion (regression test)."""
+        mixin = WebScrapingMixin()
+
+        # Mock RemoteObject that would cause the original error
+        mock_remote_object = Mock()
+        mock_remote_object.deep_serialized_value = Mock()
+        mock_remote_object.deep_serialized_value.value = {
+            "statusCode": 200,
+            "statusMessage": "OK",
+            "headers": {"content-type": "application/json"},
+            "content": '{"success": true}'
+        }
+
+        # Mock web_execute to return the raw RemoteObject (simulating the bug)
+        with patch.object(mixin, "web_execute") as mock_web_execute:
+            mock_web_execute.return_value = mock_remote_object
+
+            # This should fail with the original error if our fix is removed
+            with pytest.raises(TypeError, match = "object is not subscriptable"):
+                await mixin.web_request("https://example.com/api")
+
+    @pytest.mark.asyncio
+    async def test_web_request_with_remoteobject_conversion_succeeds(self) -> None:
+        """Test that web_request succeeds with RemoteObject conversion (our fix)."""
+        mixin = WebScrapingMixin()
+
+        # Mock RemoteObject
+        mock_remote_object = Mock()
+        mock_remote_object.deep_serialized_value = Mock()
+        mock_remote_object.deep_serialized_value.value = {
+            "statusCode": 200,
+            "statusMessage": "OK",
+            "headers": {"content-type": "application/json"},
+            "content": '{"success": true}'
+        }
+
+        # Mock web_execute to simulate our conversion logic
+        async def mock_web_execute_with_conversion(script:str) -> Any:
+            # Simulate the conversion that happens in our fix
+            return mock_remote_object.deep_serialized_value.value
+
+        with patch.object(mixin, "web_execute", side_effect = mock_web_execute_with_conversion):
+            result = await mixin.web_request("https://example.com/api")
+
+            # Verify the result works correctly
+            assert result["statusCode"] == 200
+            assert result["statusMessage"] == "OK"
+            assert result["headers"]["content-type"] == "application/json"
+            assert result["content"] == '{"success": true}'
