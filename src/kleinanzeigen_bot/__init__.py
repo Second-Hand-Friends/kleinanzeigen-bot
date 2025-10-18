@@ -5,7 +5,7 @@ import atexit, enum, json, os, re, signal, sys, textwrap  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 from gettext import gettext as _
-from typing import Any, Final
+from typing import Any, Dict, Final
 
 import certifi, colorama, nodriver  # isort: skip
 from ruamel.yaml import YAML
@@ -13,6 +13,7 @@ from wcmatch import glob
 
 from . import extract, resources
 from ._version import __version__
+from .message import Messenger
 from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial
 from .model.config_model import Config
 from .update_checker import UpdateChecker
@@ -60,6 +61,10 @@ class KleinanzeigenBot(WebScrapingMixin):
         self.command = "help"
         self.ads_selector = "due"
         self.keep_old_ads = False
+        self.message_url:str | None = None
+        self.message_text:str | None = None
+        self.conversation_limit:int = 10
+        self.conversation_id:str | None = None
 
     def __del__(self) -> None:
         if self.file_log:
@@ -182,6 +187,78 @@ class KleinanzeigenBot(WebScrapingMixin):
                     await self.create_browser_session()
                     await self.login()
                     await self.download_ads()
+                case "message":
+                    self.configure_file_logging()
+                    self.load_config()
+                    # Optional, wie bei anderen Commands:
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
+
+                    if not self.message_url or not self.message_text:
+                        LOG.error('Usage: kleinanzeigen-bot message --url "<listing-url>" --text "<message>"')
+                        sys.exit(2)
+
+                    # URL/Text müssen durch parse_args gesetzt sein
+                    # if not getattr(self, "message_url", None) or not getattr(self, "message_text", None):
+                    #     LOG.error('Usage: kleinanzeigen-bot message --url "<listing-url>" --text "<message>"')
+                    #     sys.exit(2)
+
+                    # genau wie publish/update/delete/download:
+                    await self.create_browser_session()
+                    await self.login()
+
+                    messenger = Messenger(self.browser, self.page, self.config, self.mein_profil)
+                    ok = await messenger.send_message_to_listing(self.message_url, self.message_text)
+
+                    if ok:
+                        LOG.info("############################################")
+                        LOG.info("DONE: Message sent.")
+                        LOG.info("############################################")
+                    else:
+                        LOG.info("############################################")
+                        LOG.info("DONE: Message could not be confirmed.")
+                        LOG.info("############################################")
+
+                case "fetch-conversations":
+                    self.configure_file_logging()
+                    self.load_config()
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
+
+                    await self.create_browser_session()
+                    await self.login()
+                    if not self.mein_profil:
+                        self.mein_profil = await self.get_user_info()
+
+                    messenger = Messenger(self.browser, self.page, self.config, self.mein_profil)
+                    conversations = await messenger.fetch_conversations(self.conversation_limit)
+
+                    if conversations:
+                        LOG.info("############################################")
+                        LOG.info("DONE: Retrieved %s", pluralize("conversation", conversations))
+                        LOG.info("############################################")
+                        print(json.dumps(conversations, ensure_ascii = False, indent = 2))
+                    else:
+                        LOG.info("############################################")
+                        LOG.info("DONE: No conversations found.")
+                        LOG.info("############################################")
+
+                case "fetch-conversation":
+                    self.configure_file_logging()
+                    self.load_config()
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
+
+                    await self.create_browser_session()
+                    await self.login()
+
+                    messenger = Messenger(self.browser, self.page, self.config, self.mein_profil)
+                    conversation = await messenger.fetch_conversation(self.conversation_id or "")
+
+                    LOG.info("############################################")
+                    LOG.info("DONE: Conversation retrieved.")
+                    LOG.info("############################################")
+                    print(json.dumps(conversation, ensure_ascii = False, indent = 2))
 
                 case _:
                     LOG.error("Unknown command: %s", self.command)
@@ -213,6 +290,9 @@ class KleinanzeigenBot(WebScrapingMixin):
                                     "geändert" gelten und neu veröffentlicht werden.
               create-config - Erstellt eine neue Standard-Konfigurationsdatei, falls noch nicht vorhanden
               diagnose - Diagnostiziert Browser-Verbindungsprobleme und zeigt Troubleshooting-Informationen
+              message  - Sendet eine Nachricht an eine einzelne Anzeige
+              fetch-conversations - Ruft Nachrichtenunterhaltungen aus der Inbox ab
+              fetch-conversation - Ruft eine einzelne Unterhaltung per ID ab
               --
               help     - Zeigt diese Hilfe an (Standardbefehl)
               version  - Zeigt die Version der Anwendung an
@@ -242,6 +322,8 @@ class KleinanzeigenBot(WebScrapingMixin):
               --logfile=<PATH>  - Pfad zur Protokolldatei (STANDARD: ./kleinanzeigen-bot.log)
               --lang=en|de      - Anzeigesprache (STANDARD: Systemsprache, wenn unterstützt, sonst Englisch)
               -v, --verbose     - Aktiviert detaillierte Ausgabe – nur nützlich zur Fehlerbehebung
+              --limit=<ZAHL>    - (fetch-conversations) Maximale Anzahl abzurufender Unterhaltungen (STANDARD: 10)
+              --conversation-id=<ID> - (fetch-conversation) ID der abzurufenden Unterhaltung
             """.rstrip()))
         else:
             print(textwrap.dedent(f"""\
@@ -258,6 +340,9 @@ class KleinanzeigenBot(WebScrapingMixin):
                                     use this after changing config.yaml/ad_defaults to avoid every ad being marked "changed" and republished
               create-config - creates a new default configuration file if one does not exist
               diagnose - diagnoses browser connection issues and shows troubleshooting information
+              message  - sends a message to a single listing
+              fetch-conversations - retrieves message conversations from your inbox
+              fetch-conversation - retrieves a single conversation by ID
               --
               help     - displays this help (default command)
               version  - displays the application version
@@ -286,6 +371,8 @@ class KleinanzeigenBot(WebScrapingMixin):
               --logfile=<PATH>  - path to the logfile (DEFAULT: ./kleinanzeigen-bot.log)
               --lang=en|de      - display language (STANDARD: system language if supported, otherwise English)
               -v, --verbose     - enables verbose output - only useful when troubleshooting issues
+              --limit=<NUMBER>  - (fetch-conversations) maximum number of conversations to fetch (DEFAULT: 10)
+              --conversation-id=<ID> - (fetch-conversation) ID of the conversation to retrieve
             """.rstrip()))
 
     def parse_args(self, args:list[str]) -> None:
@@ -298,7 +385,11 @@ class KleinanzeigenBot(WebScrapingMixin):
                 "keep-old",
                 "logfile=",
                 "lang=",
-                "verbose"
+                "verbose",
+                "url=",
+                "text=",
+                "limit=",
+                "conversation-id=",
             ])
         except getopt.error as ex:
             LOG.error(ex.msg)
@@ -328,6 +419,18 @@ class KleinanzeigenBot(WebScrapingMixin):
                 case "-v" | "--verbose":
                     LOG.setLevel(loggers.DEBUG)
                     loggers.get_logger("nodriver").setLevel(loggers.INFO)
+                case "--url":
+                    self.message_url = value.strip()
+                case "--text":
+                    self.message_text = value
+                case "--limit":
+                    try:
+                        self.conversation_limit = int(value)
+                    except ValueError:
+                        LOG.error("--limit expects an integer but got: %s", value)
+                        sys.exit(2)
+                case "--conversation-id":
+                    self.conversation_id = value.strip()
 
         match len(arguments):
             case 0:
@@ -337,6 +440,18 @@ class KleinanzeigenBot(WebScrapingMixin):
             case _:
                 LOG.error("More than one command given: %s", arguments)
                 sys.exit(2)
+
+        if self.command == "message" and (not self.message_url or not self.message_text):
+            LOG.error('Usage: kleinanzeigen-bot message --url "<listing-url>" --text "<message>"')
+            sys.exit(2)
+
+        if self.command == "fetch-conversations" and self.conversation_limit <= 0:
+            LOG.error("--limit must be a positive integer")
+            sys.exit(2)
+
+        if self.command == "fetch-conversation" and not self.conversation_id:
+            LOG.error('Usage: kleinanzeigen-bot fetch-conversation --conversation-id "<id>"')
+            sys.exit(2)
 
     def configure_file_logging(self) -> None:
         if not self.log_file_path:
@@ -645,16 +760,35 @@ class KleinanzeigenBot(WebScrapingMixin):
             # Try to find the standard element first
             user_info = await self.web_text(By.CLASS_NAME, "mr-medium")
             if self.config.login.username.lower() in user_info.lower():
+                await self._refresh_mein_profil_if_possible()
                 return True
         except TimeoutError:
             try:
                 # If standard element not found, try the alternative
                 user_info = await self.web_text(By.ID, "user-email")
                 if self.config.login.username.lower() in user_info.lower():
+                    await self._refresh_mein_profil_if_possible()
                     return True
             except TimeoutError:
                 return False
         return False
+
+    async def _refresh_mein_profil_if_possible(self) -> None:
+        if self.page is None:
+            return
+        try:
+            self.mein_profil = await self.get_user_info()
+        except Exception as exc:  # noqa: BLE001
+            LOG.debug("Unable to refresh user profile after login check", exc_info = exc)
+
+    async def get_user_info(self) -> dict[str, Any]:
+        url = f"{self.root_url}/m-mein-profil.json"
+        # Fetch user profile JSON data and parse the string response as JSON
+        info:Dict[str, Any] = json.loads((await self.web_request(url))["content"])
+        auth_response = await self.web_request(f"{self.root_url}/m-access-token.json")
+        authorization_headers = auth_response.get("headers", {})
+        info["authorization_headers"] = authorization_headers
+        return info
 
     async def delete_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
@@ -930,7 +1064,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.warning("# Payment form detected! Please proceed with payment.")
             LOG.warning("############################################")
             await self.web_scroll_page_down()
-            input(_("Press a key to continue..."))
+            await ainput(_("Press a key to continue..."))
         except TimeoutError:
             pass
 
