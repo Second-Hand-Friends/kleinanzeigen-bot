@@ -803,9 +803,12 @@ class KleinanzeigenBot(WebScrapingMixin):
                 pass
             if ad_cfg.price:
                 if mode == AdUpdateStrategy.MODIFY:
-                    # we have to clear the input, otherwise input gets appended
-                    await self.web_input(By.CSS_SELECTOR,
-                                     "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price", "")
+                    # Clear the price field first to prevent concatenation of old and new values
+                    # This is needed because some input fields don't clear properly with just clear_input()
+                    price_field = await self.web_find(By.CSS_SELECTOR, "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price")
+                    await price_field.clear_input()
+                    await price_field.send_keys("")  # Ensure field is completely empty
+                    await self.web_sleep(500)  # Brief pause to ensure clearing is complete
                 await self.web_input(By.CSS_SELECTOR, "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price", str(ad_cfg.price))
 
         #############################
