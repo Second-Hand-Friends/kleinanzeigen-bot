@@ -42,6 +42,9 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 # see https://api.jquery.com/category/selectors/
 METACHAR_ESCAPER:Final[dict[int, str]] = str.maketrans({ch: f"\\{ch}" for ch in '!"#$%&\'()*+,./:;<=>?@[\\]^`{|}~'})
 
+# Constants for RemoteObject handling
+_REMOTE_OBJECT_TYPE_VALUE_PAIR_SIZE:Final[int] = 2
+
 
 def _is_admin() -> bool:
     """Check if the current process is running with admin/root privileges."""
@@ -574,22 +577,60 @@ class WebScrapingMixin:
         # Handle nodriver 0.47+ RemoteObject behavior
         # If result is a RemoteObject with deep_serialized_value, convert it to a dict
         if hasattr(result, "deep_serialized_value"):
-            deep_serialized = getattr(result, "deep_serialized_value", None)
-            if deep_serialized is not None:
-                try:
-                    # Convert the deep_serialized_value to a regular dict
-                    serialized_data = getattr(deep_serialized, "value", None)
-                    if serialized_data is not None:
-                        if isinstance(serialized_data, list):
-                            # Convert list of [key, value] pairs to dict
-                            return dict(serialized_data)
-                        return serialized_data
-                except (AttributeError, TypeError, ValueError) as e:
-                    LOG.warning("Failed to convert RemoteObject to dict: %s", e)
-                    # Return the original result if conversion fails
-                    return result
+            return self._convert_remote_object_result(result)
 
         return result
+
+    def _convert_remote_object_result(self, result:Any) -> Any:
+        """
+        Converts a RemoteObject result to a regular Python object.
+
+        Handles the deep_serialized_value conversion for nodriver 0.47+ compatibility.
+        """
+        deep_serialized = getattr(result, "deep_serialized_value", None)
+        if deep_serialized is None:
+            return result
+
+        try:
+            # Convert the deep_serialized_value to a regular dict
+            serialized_data = getattr(deep_serialized, "value", None)
+            if serialized_data is None:
+                return result
+
+            if isinstance(serialized_data, list):
+                # Convert list of [key, value] pairs to dict, handling nested RemoteObjects
+                converted_dict = {}
+                for key, value in serialized_data:
+                    converted_dict[key] = self._convert_remote_object_dict(value)
+                return converted_dict
+
+            if isinstance(serialized_data, dict):
+                # Handle nested RemoteObject structures like {'type': 'number', 'value': 200}
+                return self._convert_remote_object_dict(serialized_data)
+
+            return serialized_data
+        except (AttributeError, TypeError, ValueError) as e:
+            LOG.warning("Failed to convert RemoteObject to dict: %s", e)
+            # Return the original result if conversion fails
+            return result
+
+    def _convert_remote_object_dict(self, data:Any) -> Any:
+        """
+        Recursively converts RemoteObject dict structures to regular Python objects.
+
+        Handles structures like {'type': 'number', 'value': 200} or {'type': 'string', 'value': 'text'}.
+        """
+        if isinstance(data, dict):
+            # Check if this is a RemoteObject value structure
+            if "type" in data and "value" in data and len(data) == _REMOTE_OBJECT_TYPE_VALUE_PAIR_SIZE:
+                return data["value"]
+            # Recursively convert nested dicts
+            return {key: self._convert_remote_object_dict(value) for key, value in data.items()}
+        if isinstance(data, list):
+            # Recursively convert lists
+            return [self._convert_remote_object_dict(item) for item in data]
+        # Return primitive values as-is
+        return data
 
     async def web_find(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float = 5) -> Element:
         """
@@ -724,10 +765,10 @@ class WebScrapingMixin:
         await self.page.sleep(duration / 1_000)
 
     async def web_request(self, url:str, method:str = "GET", valid_response_codes:int | Iterable[int] = 200,
-            headers:dict[str, str] | None = None) -> dict[str, Any]:
+            headers:dict[str, str] | None = None) -> Any:
         method = method.upper()
         LOG.debug(" -> HTTP %s [%s]...", method, url)
-        response = cast(dict[str, Any], await self.page.evaluate(f"""
+        response = await self.web_execute(f"""
             fetch("{url}", {{
                 method: "{method}",
                 redirect: "follow",
@@ -743,7 +784,7 @@ class WebScrapingMixin:
                     content: responseText
                 }}
             }}))
-        """, await_promise = True, return_by_value = True))
+        """)
         if isinstance(valid_response_codes, int):
             valid_response_codes = [valid_response_codes]
         ensure(
