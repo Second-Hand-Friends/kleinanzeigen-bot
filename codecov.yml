@@ -10,11 +10,37 @@ coverage:
   precision: 2
   round: down
   range: "70...100"  # https://docs.codecov.com/docs/codecovyml-reference#coveragerange
+
   status:
+    # Combined project coverage check (all flags together)
     project:
       default:
-        threshold: "0%"
-        flags: ["unit-tests"]
-      integration:
-        flags: ["integration-tests"]
-        threshold: "0.2%"  # https://docs.codecov.com/docs/commit-status#threshold
+        target: 70%                    # Minimum 70% absolute coverage required
+        threshold: 1.5%                # Allow up to 1.5% coverage drop
+        informational: false           # Block PRs that fail this check
+        # No flags specified = combines all flags (unit, integration, smoke)
+
+    # Patch coverage: check coverage on changed lines only
+    patch:
+      default:
+        target: 80%                    # Require 80% coverage on new/changed code
+        threshold: 0%                  # Don't allow any drop in patch coverage
+        informational: false           # Block PRs that fail this check
+
+# PR Comment Configuration
+comment:
+  layout: "header, diff, flags, files, footer"  # Show comprehensive breakdown
+  behavior: default                              # Update existing comment
+  require_changes: false                         # Always post comment
+  require_base: false                            # Post even without base report
+  require_head: true                             # Only post if head report exists
+  hide_project_coverage: false                   # Show both project and patch
+
+# Flag configuration for visibility (not for status checks)
+flags:
+  unit-tests:
+    carryforward: true  # Reuse previous results if not run
+  integration-tests:
+    carryforward: true
+  smoke-tests:
+    carryforward: true
