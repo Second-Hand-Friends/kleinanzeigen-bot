@@ -468,13 +468,13 @@ class TestWebScrapingBrowserConfiguration:
             def add_extension(self, ext:str) -> None:
                 self._extensions.append(ext)  # Use private extensions list
 
-        # Mock nodriver.start to return a mock browser
+        # Mock nodriver.start to return a mock browser  # type: ignore[attr-defined]
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
 
         # Mock Config class
-        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue]
+        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
 
         # Mock os.path.exists to return True for the browser binary and use real exists for Preferences file (and Edge)
         edge_path = "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
@@ -557,13 +557,13 @@ class TestWebScrapingBrowserConfiguration:
             def add_extension(self, ext:str) -> None:
                 self.extensions.append(ext)
 
-        # Mock nodriver.start to return a mock browser
+        # Mock nodriver.start to return a mock browser  # type: ignore[attr-defined]
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
 
         # Mock Config class
-        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue]
+        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
 
         # Mock os.path.exists to return True for both Chrome and Edge paths
         monkeypatch.setattr(os.path, "exists", lambda p: p in {"/usr/bin/chrome", "/usr/bin/edge"})
@@ -576,7 +576,7 @@ class TestWebScrapingBrowserConfiguration:
         await scraper.create_browser_session()
 
         # Verify browser arguments
-        config = cast(Mock, nodriver.start).call_args[0][0]
+        config = cast(Mock, nodriver.start).call_args[0][0]  # type: ignore[attr-defined]
         assert "--custom-arg=value" in config.browser_args
         assert "--another-arg" in config.browser_args
         assert "--incognito" in config.browser_args
@@ -589,7 +589,7 @@ class TestWebScrapingBrowserConfiguration:
         await scraper.create_browser_session()
 
         # Verify Edge-specific arguments
-        config = cast(Mock, nodriver.start).call_args[0][0]
+        config = cast(Mock, nodriver.start).call_args[0][0]  # type: ignore[attr-defined]
         assert "-inprivate" in config.browser_args
         assert os.environ.get("MSEDGEDRIVER_TELEMETRY_OPTOUT") == "1"
 
@@ -620,13 +620,13 @@ class TestWebScrapingBrowserConfiguration:
         with zipfile.ZipFile(ext2, "w") as z:
             z.writestr("manifest.json", '{"name": "Test Extension 2"}')
 
-        # Mock nodriver.start to return a mock browser
+        # Mock nodriver.start to return a mock browser  # type: ignore[attr-defined]
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
 
         # Mock Config class
-        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue]
+        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
 
         # Mock os.path.exists to return True for browser binaries and extension files, real_exists for others
         real_exists = os.path.exists
@@ -644,7 +644,7 @@ class TestWebScrapingBrowserConfiguration:
         await scraper.create_browser_session()
 
         # Verify extensions were loaded
-        config = cast(Mock, nodriver.start).call_args[0][0]
+        config = cast(Mock, nodriver.start).call_args[0][0]  # type: ignore[attr-defined]
         assert len(config._extensions) == 2
         for ext_path in config._extensions:
             assert os.path.exists(ext_path)
@@ -713,11 +713,11 @@ class TestWebScrapingBrowserConfiguration:
             def add_extension(self, ext:str) -> None:
                 self._extensions.append(ext)
 
-        # Mock nodriver.start to return a mock browser
+        # Mock nodriver.start to return a mock browser  # type: ignore[attr-defined]
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
-        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue]
+        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
         monkeypatch.setattr(os.path, "exists", lambda p: True)
 
         # Simulate state file in user_data_dir
@@ -772,7 +772,7 @@ class TestWebScrapingBrowserConfiguration:
         temp_file = tmp_path / "temp_resource"
         temp_file.write_text("test")
 
-        # Mock nodriver.start to raise an exception
+        # Mock nodriver.start to raise an exception  # type: ignore[attr-defined]
         async def mock_start_fail(*args:object, **kwargs:object) -> NoReturn:
             if temp_file.exists():
                 temp_file.unlink()
@@ -786,7 +786,7 @@ class TestWebScrapingBrowserConfiguration:
             return mock_browser
 
         monkeypatch.setattr(nodriver, "start", mock_start_fail)
-        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue]
+        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
         # Don't mock os.path.exists globally - let the file operations work normally
 
         # Attempt to create a session
@@ -801,7 +801,7 @@ class TestWebScrapingBrowserConfiguration:
         assert scraper.browser is None
         assert scraper.page is None
 
-        # Now patch nodriver.start to return a new mock browser each time
+        # Now patch nodriver.start to return a new mock browser each time  # type: ignore[attr-defined]
         mock_browser = make_mock_browser()
         mock_page = TrulyAwaitableMockPage()
         mock_browser.get = AsyncMock(return_value = mock_page)
@@ -846,7 +846,7 @@ class TestWebScrapingBrowserConfiguration:
         mock_page = TrulyAwaitableMockPage()
         mock_browser.get = AsyncMock(return_value = mock_page)
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
-        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue]
+        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
         monkeypatch.setattr(os.path, "exists", lambda p: True)
 
         # Mock create_browser_session to ensure proper setup

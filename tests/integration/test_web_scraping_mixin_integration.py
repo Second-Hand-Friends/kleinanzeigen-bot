@@ -34,4 +34,4 @@ async def atest_init() -> None:
 @pytest.mark.flaky(reruns = 4, reruns_delay = 5)
 @pytest.mark.itest
 def test_init() -> None:
-    nodriver.loop().run_until_complete(atest_init())
+    nodriver.loop().run_until_complete(atest_init())  # type: ignore[attr-defined]

@@ -12,6 +12,8 @@ except ImportError:
     from typing import NoReturn as Never  # Python <3.11
 
 import nodriver, psutil  # isort: skip
+from typing import TYPE_CHECKING, TypeGuard
+
 from nodriver.core.browser import Browser
 from nodriver.core.config import Config
 from nodriver.core.element import Element
@@ -27,6 +29,18 @@ from .chrome_version_detector import (
 )
 from .misc import T, ensure
 
+if TYPE_CHECKING:
+    from nodriver.cdp.runtime import RemoteObject
+
+# Constants for RemoteObject conversion
+_KEY_VALUE_PAIR_SIZE = 2
+
+
+def _is_remote_object(obj:Any) -> TypeGuard["RemoteObject"]:
+    """Type guard to check if an object is a RemoteObject."""
+    return hasattr(obj, "__class__") and "RemoteObject" in str(type(obj))
+
+
 __all__ = [
     "Browser",
     "BrowserConfig",
@@ -41,9 +55,6 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 # see https://api.jquery.com/category/selectors/
 METACHAR_ESCAPER:Final[dict[int, str]] = str.maketrans({ch: f"\\{ch}" for ch in '!"#$%&\'()*+,./:;<=>?@[\\]^`{|}~'})
-
-# Constants for RemoteObject handling
-_REMOTE_OBJECT_TYPE_VALUE_PAIR_SIZE:Final[int] = 2
 
 
 def _is_admin() -> bool:
@@ -131,7 +142,7 @@ class WebScrapingMixin:
                 )
                 cfg.host = remote_host
                 cfg.port = remote_port
-                self.browser = await nodriver.start(cfg)
+                self.browser = await nodriver.start(cfg)  # type: ignore[attr-defined]
                 LOG.info("New Browser session is %s", self.browser.websocket_url)
                 return
             except Exception as e:
@@ -249,7 +260,7 @@ class WebScrapingMixin:
             cfg.add_extension(crx_extension)
 
         try:
-            self.browser = await nodriver.start(cfg)
+            self.browser = await nodriver.start(cfg)  # type: ignore[attr-defined]
             LOG.info("New Browser session is %s", self.browser.websocket_url)
         except Exception as e:
             # Clean up any resources that were created during setup
@@ -564,9 +575,36 @@ class WebScrapingMixin:
         """
         Executes the given JavaScript code in the context of the current page.
 
-        :return: The javascript's return value
+        Handles nodriver 0.47+ RemoteObject results by converting them to regular Python objects.
+        Uses the RemoteObject API (value, deep_serialized_value) for proper conversion.
+
+        :param jscode: JavaScript code to execute
+        :return: The javascript's return value as a regular Python object
         """
+        # Try to get the result with return_by_value=True first
         result = await self.page.evaluate(jscode, await_promise = True, return_by_value = True)
+
+        # If we got a RemoteObject, use the proper API to get properties
+        if _is_remote_object(result):
+            try:
+                # Type cast to RemoteObject for type checker
+                remote_obj:"RemoteObject" = result
+
+                # Use the proper RemoteObject API - try to get the value directly first
+                if hasattr(remote_obj, "value") and remote_obj.value is not None:
+                    return remote_obj.value
+
+                # For complex objects, use deep_serialized_value which contains the actual data
+                if hasattr(remote_obj, "deep_serialized_value") and remote_obj.deep_serialized_value:
+                    value = remote_obj.deep_serialized_value.value
+                    # Convert the complex nested structure to a proper dictionary
+                    return self._convert_remote_object_value(value)
+
+                # Fallback to the original result
+                return remote_obj
+            except Exception as e:
+                LOG.debug("Failed to extract value from RemoteObject: %s", e)
+                return result
 
         # debug log the jscode but avoid excessive debug logging of window.scrollTo calls
         _prev_jscode:str = getattr(self.__class__.web_execute, "_prev_jscode", "")
@@ -574,61 +612,43 @@ class WebScrapingMixin:
             LOG.debug("web_execute(`%s`) = `%s`", jscode, result)
         self.__class__.web_execute._prev_jscode = jscode  # type: ignore[attr-defined]  # noqa: SLF001 Private member accessed
 
-        # Handle nodriver 0.47+ RemoteObject behavior
-        # If result is a RemoteObject with deep_serialized_value, convert it to a dict
-        if hasattr(result, "deep_serialized_value"):
-            return self._convert_remote_object_result(result)
-
         return result
 
-    def _convert_remote_object_result(self, result:Any) -> Any:
+    def _convert_remote_object_value(self, data:Any) -> Any:
         """
-        Converts a RemoteObject result to a regular Python object.
+        Recursively converts RemoteObject values to regular Python objects.
 
-        Handles the deep_serialized_value conversion for nodriver 0.47+ compatibility.
+        Handles the complex nested structure from deep_serialized_value.
+        Converts key/value lists to dictionaries and processes type/value structures.
+
+        :param data: The data to convert (list, dict, or primitive)
+        :return: Converted Python object
         """
-        deep_serialized = getattr(result, "deep_serialized_value", None)
-        if deep_serialized is None:
-            return result
-
-        try:
-            # Convert the deep_serialized_value to a regular dict
-            serialized_data = getattr(deep_serialized, "value", None)
-            if serialized_data is None:
-                return result
-
-            if isinstance(serialized_data, list):
-                # Convert list of [key, value] pairs to dict, handling nested RemoteObjects
-                converted_dict = {}
-                for key, value in serialized_data:
-                    converted_dict[key] = self._convert_remote_object_dict(value)
-                return converted_dict
-
-            if isinstance(serialized_data, dict):
-                # Handle nested RemoteObject structures like {'type': 'number', 'value': 200}
-                return self._convert_remote_object_dict(serialized_data)
-
-            return serialized_data
-        except (AttributeError, TypeError, ValueError) as e:
-            LOG.warning("Failed to convert RemoteObject to dict: %s", e)
-            # Return the original result if conversion fails
-            return result
-
-    def _convert_remote_object_dict(self, data:Any) -> Any:
-        """
-        Recursively converts RemoteObject dict structures to regular Python objects.
-
-        Handles structures like {'type': 'number', 'value': 200} or {'type': 'string', 'value': 'text'}.
-        """
-        if isinstance(data, dict):
-            # Check if this is a RemoteObject value structure
-            if "type" in data and "value" in data and len(data) == _REMOTE_OBJECT_TYPE_VALUE_PAIR_SIZE:
-                return data["value"]
-            # Recursively convert nested dicts
-            return {key: self._convert_remote_object_dict(value) for key, value in data.items()}
         if isinstance(data, list):
-            # Recursively convert lists
-            return [self._convert_remote_object_dict(item) for item in data]
+            # Check if this is a key/value list format: [["key", "value"], ...]
+            if data and isinstance(data[0], list) and len(data[0]) == _KEY_VALUE_PAIR_SIZE:
+                # Convert list of [key, value] pairs to dict
+                converted_dict = {}
+                for item in data:
+                    if len(item) == _KEY_VALUE_PAIR_SIZE:
+                        key, value = item
+                        # Handle nested structures in values
+                        if isinstance(value, dict) and "type" in value and "value" in value:
+                            # Extract the actual value from the type/value structure
+                            converted_dict[key] = self._convert_remote_object_value(value["value"])
+                        else:
+                            converted_dict[key] = self._convert_remote_object_value(value)
+                return converted_dict
+            # Regular list - convert each item
+            return [self._convert_remote_object_value(item) for item in data]
+
+        if isinstance(data, dict):
+            # Handle type/value structures: {'type': 'string', 'value': 'actual_value'}
+            if "type" in data and "value" in data:
+                return self._convert_remote_object_value(data["value"])
+            # Regular dict - convert each value
+            return {key: self._convert_remote_object_value(value) for key, value in data.items()}
+
         # Return primitive values as-is
         return data
 
