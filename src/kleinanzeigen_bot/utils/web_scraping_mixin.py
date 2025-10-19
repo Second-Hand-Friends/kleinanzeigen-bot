@@ -44,6 +44,7 @@ METACHAR_ESCAPER:Final[dict[int, str]] = str.maketrans({ch: f"\\{ch}" for ch in 
 
 # Constants for RemoteObject handling
 _REMOTE_OBJECT_TYPE_VALUE_PAIR_SIZE:Final[int] = 2
+_KEY_VALUE_PAIR_SIZE:Final[int] = 2
 
 
 def _is_admin() -> bool:
@@ -580,7 +581,7 @@ class WebScrapingMixin:
             return self._convert_remote_object_result(result)
 
         # Fix for nodriver 0.47+ bug: convert list-of-pairs back to dict
-        if isinstance(result, list) and all(isinstance(item, list) and len(item) == 2 for item in result):
+        if isinstance(result, list) and all(isinstance(item, list) and len(item) == _KEY_VALUE_PAIR_SIZE for item in result):
             # This looks like a list of [key, value] pairs that should be a dict
             converted_dict = {}
             for key, value in result:
@@ -638,7 +639,7 @@ class WebScrapingMixin:
             if "type" in data and "value" in data and len(data) == _REMOTE_OBJECT_TYPE_VALUE_PAIR_SIZE:
                 # Extract the actual value and recursively convert it
                 value = data["value"]
-                if isinstance(value, list) and all(isinstance(item, list) and len(item) == 2 for item in value):
+                if isinstance(value, list) and all(isinstance(item, list) and len(item) == _KEY_VALUE_PAIR_SIZE for item in value):
                     # This is a list of [key, value] pairs that should be a dict
                     converted_dict = {}
                     for key, val in value:
@@ -649,7 +650,7 @@ class WebScrapingMixin:
             return {key: self._convert_remote_object_dict(value) for key, value in data.items()}
         if isinstance(data, list):
             # Check if this is a list of [key, value] pairs that should be a dict
-            if all(isinstance(item, list) and len(item) == 2 for item in data):
+            if all(isinstance(item, list) and len(item) == _KEY_VALUE_PAIR_SIZE for item in data):
                 converted_dict = {}
                 for key, value in data:
                     converted_dict[key] = self._convert_remote_object_dict(value)
