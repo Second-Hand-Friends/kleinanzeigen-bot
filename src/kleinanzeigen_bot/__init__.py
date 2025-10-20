@@ -1376,7 +1376,7 @@ def main(args:list[str]) -> None:
     try:
         bot = KleinanzeigenBot()
         atexit.register(bot.close_browser_session)
-        nodriver.loop().run_until_complete(bot.run(args))
+        nodriver.loop().run_until_complete(bot.run(args))  # type: ignore[attr-defined]
     except CaptchaEncountered as ex:
         raise ex
     except Exception:
