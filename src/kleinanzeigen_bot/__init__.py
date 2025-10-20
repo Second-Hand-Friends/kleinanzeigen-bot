@@ -993,33 +993,22 @@ class KleinanzeigenBot(WebScrapingMixin):
         LOG.info("############################################")
 
     async def __set_condition(self, condition_value:str) -> None:
-        condition_mapping = {
-            "new_with_tag": "Neu mit Etikett",
-            "new": "Neu",
-            "like_new": "Sehr Gut",
-            "good": "Gut",
-            "ok": "Gut",
-            "alright": "In Ordnung",
-            "defect": "Defekt",
-        }
-        mapped_condition = condition_mapping.get(condition_value)
-
         try:
             # Open condition dialog
-            await self.web_click(By.XPATH, '//*[@id="j-post-listing-frontend-conditions"]//button[contains(@class, "SelectionButton")]')
+            await self.web_click(By.XPATH, '//*[@id="j-post-listing-frontend-conditions"]//button[@aria-haspopup="true"]')
         except TimeoutError:
             LOG.debug("Unable to open condition dialog and select condition [%s]", condition_value, exc_info = True)
             return
 
         try:
             # Click radio button
-            await self.web_click(By.CSS_SELECTOR, f'.SingleSelectionItem--Main input[type=radio][data-testid="{mapped_condition}"]')
+            await self.web_click(By.ID, f"radio-button-{condition_value}")
         except TimeoutError:
             LOG.debug("Unable to select condition [%s]", condition_value, exc_info = True)
 
         try:
             # Click accept button
-            await self.web_click(By.XPATH, '//*[contains(@id, "j-post-listing-frontend-conditions")]//dialog//button[contains(., "Bestätigen")]')
+            await self.web_click(By.XPATH, '//dialog//button[.//span[text()="Bestätigen"]]')
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close condition dialog!")) from ex
 
