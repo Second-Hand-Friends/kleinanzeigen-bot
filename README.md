@@ -196,6 +196,7 @@ Commands:
                       use this after changing config.yaml/ad_defaults to avoid every ad being marked "changed" and republished
   create-config - creates a new default configuration file if one does not exist
   diagnose - diagnoses browser connection issues and shows troubleshooting information
+  message  - sends a direct message to a single listing (requires --url and --text)
   --
   help     - displays this help (default command)
   version  - displays the application version
@@ -224,11 +225,24 @@ Options:
   --logfile=<PATH>  - path to the logfile (DEFAULT: ./kleinanzeigen-bot.log)
   --lang=en|de      - display language (STANDARD: system language if supported, otherwise English)
   -v, --verbose     - enables verbose output - only useful when troubleshooting issues
+  --url=<LISTING_URL> (message) - Kleinanzeigen listing URL to message
+  --text=<MESSAGE>      (message) - message body to send
 ```
 
 > **Note:** The output of `kleinanzeigen-bot help` is always the most up-to-date reference for available commands and options.
 
 Limitation of `download`: It's only possible to extract the cheapest given shipping option.
+
+### Message command
+
+Use the `message` command to send a one-off inquiry to a listing without launching the full publishing flow:
+
+```bash
+pdm run app message --url "https://www.kleinanzeigen.de/s-anzeige/<listing-id>" \
+  --text "Hi! Ist der Artikel noch verfügbar?"
+```
+
+The command reuses your configured browser profile, so make sure you're logged in before attempting to send messages.
 
 ## <a name="config"></a>Configuration
 
