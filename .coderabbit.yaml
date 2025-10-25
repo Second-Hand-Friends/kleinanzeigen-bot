@@ -1,0 +1,152 @@
+# CodeRabbit Configuration for Kleinanzeigen Bot
+# Maintains project-specific rules for English code and translation system
+
+# =============================================================================
+# GLOBAL SETTINGS
+# =============================================================================
+
+language: "en"
+tone_instructions: "Be strict about English-only code and translation system usage. Focus on simple, maintainable solutions. Avoid unnecessary complexity and abstractions."
+
+# =============================================================================
+# REVIEWS
+# =============================================================================
+
+reviews:
+  profile: "assertive"  # More feedback to catch complexity
+  high_level_summary: true
+  review_status: true
+  commit_status: true
+  changed_files_summary: true
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  suggested_labels: false
+  suggested_reviewers: true
+  poem: false
+
+  # Path filters to focus on important files
+  path_filters:
+    - "src/**/*.py"
+    - "tests/**/*.py"
+    - "scripts/**/*.py"
+    - "!**/__pycache__/**"
+    - "!**/.*"
+    - "!dist/**"
+    - "!build/**"
+    - "!*.log"
+    - "!*.tmp"
+    - "!*.temp"
+
+  # Path-specific instructions for different file types
+  path_instructions:
+    - path: "src/kleinanzeigen_bot/**/*.py"
+      instructions: |
+        CRITICAL RULES FOR KLEINANZEIGEN BOT:
+        1. ALL code, comments, and text MUST be in English
+        2. User-facing messages MUST use translation system (_()) function
+        3. NEVER access live website in tests (bot detection risk)
+        4. Use WebScrapingMixin for browser automation
+        5. Handle TimeoutError for all web operations
+        6. Use ensure() for critical validations
+        7. Don't add features until explicitly needed
+        8. Keep solutions simple and straightforward
+        9. Use async/await for I/O operations
+        10. Follow Pydantic model patterns
+        11. Use proper error handling and logging
+        12. Test business logic separately from web scraping
+        13. Include SPDX license headers on all Python files
+        14. Use type hints for all function parameters and return values
+        15. Use structured logging with context
+    - path: "tests/**/*.py"
+      instructions: |
+        TESTING RULES:
+        1. NEVER access live website in tests (bot detection risk)
+        2. Use @patch for web operations in tests
+        3. Use test fixtures for browser automation
+        4. Test Pydantic models without web scraping
+        5. Mock all web operations in tests
+        6. Use pytest markers: unit, integration, smoke
+        7. Unit tests: fast, isolated, no external dependencies
+        8. Integration tests: use mocks, test with external dependencies
+        9. Smoke tests: critical path, no mocks, no browser (NOT E2E tests)
+        10. All test code must be in English
+        11. Test observable behavior, not implementation
+        12. Use fakes/dummies instead of mocks in smoke tests
+        13. Focus on minimal health checks, not full user workflows
+        14. Include SPDX license headers
+        15. Use descriptive test names in English
+    - path: "scripts/**/*.py"
+      instructions: |
+        SCRIPT RULES:
+        1. All code must be in English
+        2. Use proper error handling
+        3. Follow project conventions
+        4. Keep scripts simple and focused
+        5. Use appropriate logging
+        6. Include SPDX license headers
+        7. Use type hints for all functions
+    - path: "docs/**/*.md"
+      instructions: |
+        DOCUMENTATION RULES:
+        1. All documentation must be in English
+        2. Use clear, concise language
+        3. Include practical examples
+        4. Include troubleshooting information
+        5. Follow markdown best practices
+
+  # Auto review configuration
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    ignore_title_keywords: ["wip", "draft", "temp"]
+    labels: ["!wip", "!draft"]  # Review all PRs except those with wip or draft labels
+
+
+  # Tools configuration
+  tools:
+    ruff:
+      enabled: true
+    gitleaks:
+      enabled: true
+    semgrep:
+      enabled: true
+    markdownlint:
+      enabled: true
+    yamllint:
+      enabled: true
+
+# =============================================================================
+# KNOWLEDGE BASE
+# =============================================================================
+
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "**/.cursorrules"
+      - "**/CLAUDE.md"
+      - "**/GEMINI.md"
+      - "**/.cursor/rules/*"
+      - "**/.windsurfrules"
+      - "**/.clinerules/*"
+      - "**/.rules/*"
+      - "**/AGENT.md"
+      - "**/AGENTS.md"
+      - "README.md"
+      - "CONTRIBUTING.md"
+      - "docs/**/*.md"
+  learnings:
+    scope: "auto"
+  issues:
+    scope: "auto"
+  pull_requests:
+    scope: "auto"
+
+
