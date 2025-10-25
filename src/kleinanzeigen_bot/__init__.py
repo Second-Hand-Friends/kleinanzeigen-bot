@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import atexit, enum, json, os, re, signal, sys, textwrap  # isort: skip
+import asyncio, atexit, enum, json, os, re, signal, sys, textwrap  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 from gettext import gettext as _
@@ -20,7 +20,7 @@ from .utils import dicts, error_handlers, loggers, misc
 from .utils.exceptions import CaptchaEncountered
 from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
-from .utils.misc import ainput, ensure, is_frozen
+from .utils.misc import ainput, ainput_with_timeout, ensure, is_frozen
 from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
@@ -599,16 +599,58 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.info("Already logged in as [%s]. Skipping login.", self.config.login.username)
             return
 
+        # Try automated login (CURRENT BEHAVIOR)
         LOG.info("Opening login page...")
         await self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
 
         await self.fill_login_data_and_send()
         await self.handle_after_login_logic()
 
+        # Check if login succeeded
+        if await self.is_logged_in():
+            LOG.info("Automated login successful!")
+            return
+
         # Sometimes a second login is required
-        if not await self.is_logged_in():
-            await self.fill_login_data_and_send()
-            await self.handle_after_login_logic()
+        await self.fill_login_data_and_send()
+        await self.handle_after_login_logic()
+
+        # Check again after second attempt
+        if await self.is_logged_in():
+            LOG.info("Automated login successful (second attempt)!")
+            return
+
+        # Automated login failed - offer manual option (NEW)
+        LOG.warning("############################################")
+        LOG.warning("# Automated login failed.")
+        LOG.warning("# Do you want to try logging in manually? (y/N)")
+        LOG.warning("# (Giving up in 10 seconds...)")
+        LOG.warning("############################################")
+
+        try:
+            response = await ainput_with_timeout("Try manual login? (y/N): ", timeout = 10)
+            if response and response.lower() in {"y", "yes"}:
+                LOG.info("############################################")
+                LOG.info("# Please login manually in the browser window.")
+                LOG.info("# Solve any captchas if present.")
+                LOG.info("############################################")
+                await ainput("Press ENTER when you have logged in...")
+
+                # Navigate to homepage to check login status
+                LOG.info("Verifying login status...")
+                await self.web_open(f"{self.root_url}")
+
+                # Verify login succeeded
+                if await self.is_logged_in():
+                    LOG.info("Manual login successful!")
+                    return
+                LOG.error("Login still not detected after manual attempt.")
+                raise RuntimeError("Login failed")
+            LOG.error("No manual login - giving up")
+            raise RuntimeError("Automated login failed and user declined manual login")
+        except asyncio.TimeoutError:
+            LOG.error("No response - giving up")
+            raise RuntimeError("Automated login failed and no user response") from None
 
     async def fill_login_data_and_send(self) -> None:
         LOG.info("Logging in as [%s]...", self.config.login.username)
@@ -642,17 +684,20 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     async def is_logged_in(self) -> bool:
         try:
-            # Try to find the standard element first
-            user_info = await self.web_text(By.CLASS_NAME, "mr-medium")
+            # Try to find the standard element first (with increased timeout)
+            user_info = await self.web_text(By.CLASS_NAME, "mr-medium", timeout = 10)
             if self.config.login.username.lower() in user_info.lower():
+                LOG.info("Login detected via DOM element: mr-medium")
                 return True
         except TimeoutError:
             try:
                 # If standard element not found, try the alternative
-                user_info = await self.web_text(By.ID, "user-email")
+                user_info = await self.web_text(By.ID, "user-email", timeout = 10)
                 if self.config.login.username.lower() in user_info.lower():
+                    LOG.info("Login detected via DOM element: user-email")
                     return True
             except TimeoutError:
+                LOG.info("No login detected - no matching DOM elements found")
                 return False
         return False
 

@@ -299,3 +299,27 @@ def sanitize_folder_name(name:str, max_length:int = 100) -> str:
         safe = truncated[:last_break] if last_break > int(max_length * 0.7) else truncated
 
     return safe
+
+
+async def ainput_with_timeout(prompt:str, timeout:float) -> str:
+    """
+    Async input with timeout.
+
+    Args:
+        prompt: The prompt to display
+        timeout: Timeout in seconds
+
+    Returns:
+        User input string, or empty string on timeout
+
+    Raises:
+        asyncio.TimeoutError: If timeout is reached
+    """
+    try:
+        return await asyncio.wait_for(
+            ainput(prompt),
+            timeout = timeout
+        )
+    except asyncio.TimeoutError:
+        print()  # New line after timeout
+        raise
