@@ -599,7 +599,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.info("Already logged in as [%s]. Skipping login.", self.config.login.username)
             return
 
-        # Try automated login (CURRENT BEHAVIOR)
+        # Try automated login
         LOG.info("Opening login page...")
         await self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
 
@@ -608,7 +608,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         # Check if login succeeded
         if await self.is_logged_in():
-            LOG.info("Automated login successful!")
+            LOG.info(_("Automated login successful!"))
             return
 
         # Sometimes a second login is required
@@ -617,10 +617,10 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         # Check again after second attempt
         if await self.is_logged_in():
-            LOG.info("Automated login successful (second attempt)!")
+            LOG.info(_("Automated login successful (second attempt)!"))
             return
 
-        # Automated login failed - offer manual option (NEW)
+        # Automated login failed - offer manual fallback
         LOG.warning("############################################")
         LOG.warning("# Automated login failed.")
         LOG.warning("# Do you want to try logging in manually? (y/N)")
@@ -637,7 +637,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 await ainput("Press ENTER when you have logged in...")
 
                 # Navigate to homepage to check login status
-                LOG.info("Verifying login status...")
+                LOG.debug("Verifying login status...")
                 await self.web_open(f"{self.root_url}")
 
                 # Verify login succeeded
@@ -687,14 +687,14 @@ class KleinanzeigenBot(WebScrapingMixin):
             # Try to find the standard element first (with increased timeout)
             user_info = await self.web_text(By.CLASS_NAME, "mr-medium", timeout = 10)
             if self.config.login.username.lower() in user_info.lower():
-                LOG.info("Login detected via DOM element: mr-medium")
+                LOG.debug("Login detected via DOM element: mr-medium")
                 return True
         except TimeoutError:
             try:
                 # If standard element not found, try the alternative
                 user_info = await self.web_text(By.ID, "user-email", timeout = 10)
                 if self.config.login.username.lower() in user_info.lower():
-                    LOG.info("Login detected via DOM element: user-email")
+                    LOG.debug("Login detected via DOM element: user-email")
                     return True
             except TimeoutError:
                 LOG.info("No login detected - no matching DOM elements found")

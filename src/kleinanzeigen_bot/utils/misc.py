@@ -310,7 +310,7 @@ async def ainput_with_timeout(prompt:str, timeout:float) -> str:
         timeout: Timeout in seconds
 
     Returns:
-        User input string, or empty string on timeout
+        User input string
 
     Raises:
         asyncio.TimeoutError: If timeout is reached

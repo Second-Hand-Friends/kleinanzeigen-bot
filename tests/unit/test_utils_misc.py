@@ -273,116 +273,116 @@ def test_sanitize_folder_name_cross_platform_consistency(
 
 # --- Test ainput_with_timeout function ---
 @pytest.mark.asyncio
-async def test_ainput_with_timeout_success(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_ainput_with_timeout_success(monkeypatch:pytest.MonkeyPatch) -> None:
     """Test ainput_with_timeout with successful input within timeout."""
     # Mock ainput to return immediately
-    async def mock_ainput(prompt: str) -> str:
+    async def mock_ainput(prompt:str) -> str:
         return "test input"
-    
+
     monkeypatch.setattr(misc, "ainput", mock_ainput)
-    
-    result = await misc.ainput_with_timeout("Test prompt: ", timeout=1.0)
+
+    result = await misc.ainput_with_timeout("Test prompt: ", timeout = 1.0)
     assert result == "test input"
 
 
 @pytest.mark.asyncio
-async def test_ainput_with_timeout_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_ainput_with_timeout_timeout(monkeypatch:pytest.MonkeyPatch) -> None:
     """Test ainput_with_timeout with timeout behavior."""
     # Mock ainput to never return (simulate hanging)
-    async def mock_ainput_hanging(prompt: str) -> str:
+    async def mock_ainput_hanging(prompt:str) -> str:
         await asyncio.sleep(10)  # Much longer than timeout
         return "should never reach here"
-    
+
     monkeypatch.setattr(misc, "ainput", mock_ainput_hanging)
-    
+
     with pytest.raises(asyncio.TimeoutError):
-        await misc.ainput_with_timeout("Test prompt: ", timeout=0.1)
+        await misc.ainput_with_timeout("Test prompt: ", timeout = 0.1)
 
 
 @pytest.mark.asyncio
-async def test_ainput_with_timeout_empty_input(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_ainput_with_timeout_empty_input(monkeypatch:pytest.MonkeyPatch) -> None:
     """Test ainput_with_timeout with empty input."""
-    async def mock_ainput_empty(prompt: str) -> str:
+    async def mock_ainput_empty(prompt:str) -> str:
         return ""
-    
+
     monkeypatch.setattr(misc, "ainput", mock_ainput_empty)
-    
-    result = await misc.ainput_with_timeout("Test prompt: ", timeout=1.0)
-    assert result == ""
+
+    result = await misc.ainput_with_timeout("Test prompt: ", timeout = 1.0)
+    assert not result
 
 
 @pytest.mark.asyncio
-async def test_ainput_with_timeout_whitespace_input(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_ainput_with_timeout_whitespace_input(monkeypatch:pytest.MonkeyPatch) -> None:
     """Test ainput_with_timeout with whitespace input."""
-    async def mock_ainput_whitespace(prompt: str) -> str:
+    async def mock_ainput_whitespace(prompt:str) -> str:
         return "   \t\n   "
-    
+
     monkeypatch.setattr(misc, "ainput", mock_ainput_whitespace)
-    
-    result = await misc.ainput_with_timeout("Test prompt: ", timeout=1.0)
+
+    result = await misc.ainput_with_timeout("Test prompt: ", timeout = 1.0)
     assert result == "   \t\n   "
 
 
 @pytest.mark.asyncio
-async def test_ainput_with_timeout_unicode_input(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_ainput_with_timeout_unicode_input(monkeypatch:pytest.MonkeyPatch) -> None:
     """Test ainput_with_timeout with unicode input."""
-    async def mock_ainput_unicode(prompt: str) -> str:
+    async def mock_ainput_unicode(prompt:str) -> str:
         return "café 🚀 测试"
-    
+
     monkeypatch.setattr(misc, "ainput", mock_ainput_unicode)
-    
-    result = await misc.ainput_with_timeout("Test prompt: ", timeout=1.0)
+
+    result = await misc.ainput_with_timeout("Test prompt: ", timeout = 1.0)
     assert result == "café 🚀 测试"
 
 
 @pytest.mark.asyncio
-async def test_ainput_with_timeout_zero_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_ainput_with_timeout_zero_timeout(monkeypatch:pytest.MonkeyPatch) -> None:
     """Test ainput_with_timeout with zero timeout."""
-    async def mock_ainput_slow(prompt: str) -> str:
+    async def mock_ainput_slow(prompt:str) -> str:
         await asyncio.sleep(0.1)
         return "slow input"
-    
+
     monkeypatch.setattr(misc, "ainput", mock_ainput_slow)
-    
+
     with pytest.raises(asyncio.TimeoutError):
-        await misc.ainput_with_timeout("Test prompt: ", timeout=0.0)
+        await misc.ainput_with_timeout("Test prompt: ", timeout = 0.0)
 
 
 @pytest.mark.asyncio
-async def test_ainput_with_timeout_very_short_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_ainput_with_timeout_very_short_timeout(monkeypatch:pytest.MonkeyPatch) -> None:
     """Test ainput_with_timeout with very short timeout."""
-    async def mock_ainput_immediate(prompt: str) -> str:
+    async def mock_ainput_immediate(prompt:str) -> str:
         return "immediate input"
-    
+
     monkeypatch.setattr(misc, "ainput", mock_ainput_immediate)
-    
-    result = await misc.ainput_with_timeout("Test prompt: ", timeout=0.001)
+
+    result = await misc.ainput_with_timeout("Test prompt: ", timeout = 0.001)
     assert result == "immediate input"
 
 
 @pytest.mark.asyncio
-async def test_ainput_with_timeout_ainput_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_ainput_with_timeout_ainput_exception(monkeypatch:pytest.MonkeyPatch) -> None:
     """Test ainput_with_timeout when ainput raises an exception."""
-    async def mock_ainput_exception(prompt: str) -> str:
+    async def mock_ainput_exception(prompt:str) -> str:
         raise ValueError("Mock ainput error")
-    
+
     monkeypatch.setattr(misc, "ainput", mock_ainput_exception)
-    
-    with pytest.raises(ValueError, match="Mock ainput error"):
-        await misc.ainput_with_timeout("Test prompt: ", timeout=1.0)
+
+    with pytest.raises(ValueError, match = "Mock ainput error"):
+        await misc.ainput_with_timeout("Test prompt: ", timeout = 1.0)
 
 
 @pytest.mark.asyncio
-async def test_ainput_with_timeout_prompt_passed_correctly(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_ainput_with_timeout_prompt_passed_correctly(monkeypatch:pytest.MonkeyPatch) -> None:
     """Test that the prompt is passed correctly to ainput."""
     captured_prompt = None
-    
-    async def mock_ainput_capture(prompt: str) -> str:
+
+    async def mock_ainput_capture(prompt:str) -> str:
         nonlocal captured_prompt
         captured_prompt = prompt
         return "captured"
-    
+
     monkeypatch.setattr(misc, "ainput", mock_ainput_capture)
-    
-    await misc.ainput_with_timeout("Custom prompt: ", timeout=1.0)
+
+    await misc.ainput_with_timeout("Custom prompt: ", timeout = 1.0)
     assert captured_prompt == "Custom prompt: "
