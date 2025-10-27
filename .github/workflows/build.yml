@@ -296,7 +296,7 @@ jobs:
 
 
     - name: Download coverage reports
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v6
       with:
         pattern: coverage-*
         path: coverage
@@ -394,7 +394,7 @@ jobs:
 
 
     - name: Download build artifacts
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v6
 
 
     - name: Rename build artifacts
