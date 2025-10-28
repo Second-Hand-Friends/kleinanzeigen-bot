@@ -1,7 +1,9 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import json, mimetypes, os, shutil  # isort: skip
+from gettext import gettext as _
+
+import json, mimetypes, os, re, shutil  # isort: skip
 import urllib.request as urllib_request
 from datetime import datetime
 from typing import Any, Final
@@ -18,6 +20,9 @@ __all__ = [
 ]
 
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
+
+_BREADCRUMB_MIN_DEPTH:Final[int] = 2
+BREADCRUMB_RE = re.compile(r"/c(\d+)")
 
 
 class AdExtractor(WebScrapingMixin):
@@ -402,13 +407,39 @@ class AdExtractor(WebScrapingMixin):
 
         :return: a category string of form abc/def, where a-f are digits
         """
-        category_line = await self.web_find(By.ID, "vap-brdcrmb")
+        try:
+            category_line = await self.web_find(By.ID, "vap-brdcrmb")
+        except TimeoutError as exc:
+            LOG.warning("Breadcrumb container 'vap-brdcrmb' not found; cannot extract ad category: %s", exc)
+            raise
+        try:
+            breadcrumb_links = await self.web_find_all(By.CSS_SELECTOR, "a", parent = category_line)
+        except TimeoutError:
+            breadcrumb_links = []
+
+        category_ids:list[str] = []
+        for link in breadcrumb_links:
+            href = str(link.attrs.get("href", "") or "")
+            matches = BREADCRUMB_RE.findall(href)
+            if matches:
+                category_ids.extend(matches)
+
+        # Use the deepest two breadcrumb category codes when available.
+        if len(category_ids) >= _BREADCRUMB_MIN_DEPTH:
+            return f"{category_ids[-2]}/{category_ids[-1]}"
+        if len(category_ids) == 1:
+            return f"{category_ids[0]}/{category_ids[0]}"
+
+        # Fallback to legacy selectors in case the breadcrumb structure is unexpected.
+        LOG.debug(_("Falling back to legacy breadcrumb selectors; collected ids: %s"), category_ids)
         category_first_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
         category_second_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(3)", parent = category_line)
         href_first:str = str(category_first_part.attrs["href"])
         href_second:str = str(category_second_part.attrs["href"])
-        cat_num_first = href_first.rsplit("/", maxsplit = 1)[-1][1:]
-        cat_num_second = href_second.rsplit("/", maxsplit = 1)[-1][1:]
+        cat_num_first_raw = href_first.rsplit("/", maxsplit = 1)[-1]
+        cat_num_second_raw = href_second.rsplit("/", maxsplit = 1)[-1]
+        cat_num_first = cat_num_first_raw[1:] if cat_num_first_raw.startswith("c") else cat_num_first_raw
+        cat_num_second = cat_num_second_raw[1:] if cat_num_second_raw.startswith("c") else cat_num_second_raw
         category:str = cat_num_first + "/" + cat_num_second
 
         return category
