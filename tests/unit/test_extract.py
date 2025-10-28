@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import json, os  # isort: skip
+from gettext import gettext as _
 from typing import Any, TypedDict
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
@@ -435,7 +436,7 @@ class TestAdExtractorContent:
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
         test_extractor.page = page_mock
 
-        for config, raw_description, _ in description_test_cases:  # Changed to _ since we don't use expected_description
+        for config, raw_description, _expected_description in description_test_cases:
             test_extractor.config = test_bot_config.with_values(config)
 
             with patch.multiple(test_extractor,
@@ -584,32 +585,47 @@ class TestAdExtractorCategory:
         second_part = MagicMock()
         second_part.attrs = {"href": "/s-spielzeug/c23"}
 
-        with patch.object(extractor, "web_find", new_callable = AsyncMock) as mock_web_find:
-            mock_web_find.side_effect = [
-                category_line,
-                first_part,
-                second_part
-            ]
+        with patch.object(extractor, "web_find", new_callable = AsyncMock, side_effect = [category_line]) as mock_web_find, \
+                patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [first_part, second_part]) as mock_web_find_all:
 
             result = await extractor._extract_category_from_ad_page()
             assert result == "17/23"
 
-            mock_web_find.assert_any_call(By.ID, "vap-brdcrmb")
-            mock_web_find.assert_any_call(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
-            mock_web_find.assert_any_call(By.CSS_SELECTOR, "a:nth-of-type(3)", parent = category_line)
+            mock_web_find.assert_awaited_once_with(By.ID, "vap-brdcrmb")
+            mock_web_find_all.assert_awaited_once_with(By.CSS_SELECTOR, "a", parent = category_line)
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_category_with_non_string_href(self, extractor:AdExtractor) -> None:
-        """Test category extraction with non-string href attributes to cover str() conversion."""
+    async def test_extract_category_single_identifier(self, extractor:AdExtractor) -> None:
+        """Test category extraction when only a single breadcrumb code exists."""
         category_line = MagicMock()
         first_part = MagicMock()
-        # Use non-string href to test str() conversion
-        first_part.attrs = {"href": 12345}  # This will need str() conversion
+        first_part.attrs = {"href": "/s-kleidung/c42"}
+
+        with patch.object(extractor, "web_find", new_callable = AsyncMock, side_effect = [category_line]) as mock_web_find, \
+                patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [first_part]) as mock_web_find_all:
+
+            result = await extractor._extract_category_from_ad_page()
+            assert result == "42/42"
+
+            mock_web_find.assert_awaited_once_with(By.ID, "vap-brdcrmb")
+            mock_web_find_all.assert_awaited_once_with(By.CSS_SELECTOR, "a", parent = category_line)
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_category_fallback_to_legacy_selectors(self, extractor:AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
+        """Test category extraction when breadcrumb links are not available and legacy selectors are used."""
+        category_line = MagicMock()
+        first_part = MagicMock()
+        first_part.attrs = {"href": 12345}  # Ensure str() conversion happens
         second_part = MagicMock()
         second_part.attrs = {"href": 67890}  # This will need str() conversion
 
-        with patch.object(extractor, "web_find", new_callable = AsyncMock) as mock_web_find:
+        caplog.set_level("DEBUG")
+        expected_message = _("Falling back to legacy breadcrumb selectors; collected ids: %s") % []
+        with patch.object(extractor, "web_find", new_callable = AsyncMock) as mock_web_find, \
+                patch.object(extractor, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError) as mock_web_find_all:
+
             mock_web_find.side_effect = [
                 category_line,
                 first_part,
@@ -617,11 +633,13 @@ class TestAdExtractorCategory:
             ]
 
             result = await extractor._extract_category_from_ad_page()
-            assert result == "2345/7890"  # After str() conversion and slicing
+            assert result == "12345/67890"
+            assert sum(1 for record in caplog.records if record.message == expected_message) == 1
 
             mock_web_find.assert_any_call(By.ID, "vap-brdcrmb")
             mock_web_find.assert_any_call(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
             mock_web_find.assert_any_call(By.CSS_SELECTOR, "a:nth-of-type(3)", parent = category_line)
+            mock_web_find_all.assert_awaited_once_with(By.CSS_SELECTOR, "a", parent = category_line)
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access

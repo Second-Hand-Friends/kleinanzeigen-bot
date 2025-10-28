@@ -216,6 +216,10 @@ kleinanzeigen_bot/extract.py:
   _extract_contact_from_ad_page:
     "No street given in the contact.": "Keine Straße in den Kontaktdaten angegeben."
 
+  _extract_category_from_ad_page:
+    "Breadcrumb container 'vap-brdcrmb' not found; cannot extract ad category: %s": "Breadcrumb-Container 'vap-brdcrmb' nicht gefunden; kann Anzeigenkategorie nicht extrahieren: %s"
+    "Falling back to legacy breadcrumb selectors; collected ids: %s": "Weiche auf ältere Breadcrumb-Selektoren aus; gesammelte IDs: %s"
+
 #################################################
 kleinanzeigen_bot/utils/i18n.py:
 #################################################
