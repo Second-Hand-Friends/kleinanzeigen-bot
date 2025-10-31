@@ -63,6 +63,24 @@ kleinanzeigen_bot/__init__.py:
     "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
     "Already logged in as [%s]. Skipping login.": "Bereits eingeloggt als [%s]. Überspringe Anmeldung."
     "Opening login page...": "Öffne Anmeldeseite..."
+    "Automated login successful!": "Automatische Anmeldung erfolgreich!"
+    "Automated login successful (second attempt)!": "Automatische Anmeldung erfolgreich (zweiter Versuch)!"
+    "# Automated login failed.": "# Automatische Anmeldung fehlgeschlagen."
+    "# Do you want to try logging in manually? (y/N)": "# Möchten Sie sich manuell anmelden? (j/N)"
+    "# (Giving up in 10 seconds...)": "# (Aufgabe in 10 Sekunden...)"
+    "# Please login manually in the browser window.": "# Bitte melden Sie sich manuell im Browserfenster an."
+    "# Solve any captchas if present.": "# Lösen Sie alle Captchas, falls vorhanden."
+    "Press ENTER when you have logged in...": "EINGABETASTE drücken, wenn Sie sich angemeldet haben..."
+    "Verifying login status...": "Überprüfe Anmeldestatus..."
+    "Manual login successful!": "Manuelle Anmeldung erfolgreich!"
+    "Login still not detected after manual attempt.": "Anmeldung nach manuellem Versuch immer noch nicht erkannt."
+    "No manual login - giving up": "Keine manuelle Anmeldung - Aufgabe"
+    "No response - giving up": "Keine Antwort - Aufgabe"
+
+  is_logged_in:
+    "Login detected via DOM element: mr-medium": "Anmeldung über DOM-Element erkannt: mr-medium"
+    "Login detected via DOM element: user-email": "Anmeldung über DOM-Element erkannt: user-email"
+    "No login detected - no matching DOM elements found": "Keine Anmeldung erkannt - keine passenden DOM-Elemente gefunden"
 
   handle_after_login_logic:
     "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
