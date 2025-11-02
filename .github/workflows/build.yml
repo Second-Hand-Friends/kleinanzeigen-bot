@@ -351,7 +351,8 @@ jobs:
     timeout-minutes: 5
 
     permissions:
-      contents: write
+      contents: write  # to delete/create GitHub releases
+      packages: write  # to delete untagged docker images
 
     # run on 'main' and 'release' branch when:
     #   – build succeeded, AND
