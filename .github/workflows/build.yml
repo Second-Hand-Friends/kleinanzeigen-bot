@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot
 #
-# https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
+# https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
 name: Build
 
-on:
+on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows
   schedule:
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
     - cron: '0 15 1 * *'
   push:
     branches-ignore:  # build all branches except:
@@ -40,7 +41,7 @@ on:
     - '.github/workflows/validate-pr.yml'
     - 'codecov.yml'
   workflow_dispatch:
-    # https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch
 
 
 defaults:
@@ -61,10 +62,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - os: macos-13    # X86
+        - os: macos-15-intel  # X86
           PYTHON_VERSION: "3.10"
           PUBLISH_RELEASE: false
-        - os: macos-latest # ARM
+        - os: macos-latest  # ARM
           PYTHON_VERSION: "3.10"
           PUBLISH_RELEASE: false
         - os: ubuntu-latest
@@ -73,10 +74,10 @@ jobs:
         - os: windows-latest
           PYTHON_VERSION: "3.10"
           PUBLISH_RELEASE: false
-        - os: macos-13    # X86
+        - os: macos-15-intel  # X86
           PYTHON_VERSION: "3.14"
           PUBLISH_RELEASE: true
-        - os: macos-latest # ARM
+        - os: macos-latest  # ARM
           PYTHON_VERSION: "3.14"
           PUBLISH_RELEASE: true
         - os: ubuntu-latest
@@ -93,7 +94,7 @@ jobs:
     - name: "Show: GitHub context"
       env:
         GITHUB_CONTEXT: ${{ toJSON(github) }}
-      run: echo $GITHUB_CONTEXT
+      run: printf '%s' "$GITHUB_CONTEXT" | python -m json.tool
 
 
     - name: "Show: environment variables"
