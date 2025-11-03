@@ -401,7 +401,7 @@ jobs:
 
     - name: Rename build artifacts
       run: |
-        mv artifacts-macos-13/kleinanzeigen-bot kleinanzeigen-bot-darwin-amd64
+        mv artifacts-macos-15-intel/kleinanzeigen-bot kleinanzeigen-bot-darwin-amd64
         mv artifacts-macos-latest/kleinanzeigen-bot kleinanzeigen-bot-darwin-arm64
         mv artifacts-ubuntu-latest/kleinanzeigen-bot kleinanzeigen-bot-linux-amd64
         mv artifacts-windows-latest/kleinanzeigen-bot-uncompressed.exe kleinanzeigen-bot-windows-amd64-uncompressed.exe
