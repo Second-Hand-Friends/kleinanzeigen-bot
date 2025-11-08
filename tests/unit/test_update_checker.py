@@ -59,6 +59,18 @@ class TestUpdateChecker:
         with patch("requests.get", return_value = MagicMock(json = lambda: {"target_commitish": "e7a3d46"})):
             assert checker._get_release_commit("latest") == "e7a3d46"
 
+    def test_request_timeout_uses_config(self, config:Config, mocker:"MockerFixture") -> None:
+        """Ensure HTTP calls honor the timeout configuration."""
+        config.timeouts.multiplier = 1.5
+        checker = UpdateChecker(config)
+        mock_response = MagicMock(json = lambda: {"target_commitish": "abc"})
+        mock_get = mocker.patch("requests.get", return_value = mock_response)
+
+        checker._get_release_commit("latest")
+
+        expected_timeout = config.timeouts.effective("update_check")
+        assert mock_get.call_args.kwargs["timeout"] == expected_timeout
+
     def test_get_commit_date(self, config:Config) -> None:
         """Test that the commit date is correctly retrieved from the GitHub API."""
         checker = UpdateChecker(config)

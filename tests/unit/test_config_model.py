@@ -74,3 +74,33 @@ def test_minimal_config_validation() -> None:
     config = Config.model_validate(minimal_cfg)
     assert config.login.username == "dummy"
     assert config.login.password == "dummy"  # noqa: S105
+
+
+def test_timeout_config_defaults_and_effective_values() -> None:
+    cfg = Config.model_validate({
+        "login": {"username": "dummy", "password": "dummy"},  # noqa: S105
+        "timeouts": {
+            "multiplier": 2.0,
+            "pagination_initial": 12.0,
+            "retry_max_attempts": 3,
+            "retry_backoff_factor": 2.0
+        }
+    })
+
+    timeouts = cfg.timeouts
+    assert timeouts.resolve("pagination_initial") == 12.0
+    assert timeouts.effective("pagination_initial") == 24.0
+    # attempt 1 should apply backoff factor once in addition to multiplier
+    assert timeouts.effective("pagination_initial", attempt = 1) == 48.0
+
+
+def test_timeout_config_overrides() -> None:
+    cfg = Config.model_validate({
+        "login": {"username": "dummy", "password": "dummy"},  # noqa: S105
+        "timeouts": {
+            "overrides": {"custom_timeout": 7.5}
+        }
+    })
+    assert cfg.timeouts.resolve("custom_timeout") == 7.5
+    # Unknown keys fall back to default (5.0)
+    assert cfg.timeouts.resolve("non_existing") == 5.0

@@ -41,8 +41,11 @@ class TestWebScrapingMixinChromeVersionValidation:
             # Test validation
             await scraper._validate_chrome_version_configuration()
 
-            # Verify detection was called correctly
-            mock_detect.assert_called_once_with("/path/to/chrome")
+            # Verify detection was called correctly with timeout
+            assert mock_detect.call_count == 1
+            args, kwargs = mock_detect.call_args
+            assert args[0] == "/path/to/chrome"
+            assert kwargs["timeout"] == pytest.approx(10.0)
 
             # Verify validation passed (no exception raised)
             # The validation is now done internally in _validate_chrome_136_configuration
@@ -73,7 +76,10 @@ class TestWebScrapingMixinChromeVersionValidation:
             # Test validation should log error but not raise exception due to error handling
             await scraper._validate_chrome_version_configuration()
 
-            # Verify error was logged
+            # Verify detection call and logged error
+            assert mock_detect.call_count == 1
+            _, kwargs = mock_detect.call_args
+            assert kwargs["timeout"] == pytest.approx(10.0)
             assert "Chrome 136+ configuration validation failed" in caplog.text
             assert "Chrome 136+ requires --user-data-dir" in caplog.text
         finally:
@@ -104,7 +110,9 @@ class TestWebScrapingMixinChromeVersionValidation:
             await scraper._validate_chrome_version_configuration()
 
             # Verify detection was called but no validation
-            mock_detect.assert_called_once_with("/path/to/chrome")
+            assert mock_detect.call_count == 1
+            _, kwargs = mock_detect.call_args
+            assert kwargs["timeout"] == pytest.approx(10.0)
         finally:
             # Restore environment
             if original_env:
@@ -145,7 +153,9 @@ class TestWebScrapingMixinChromeVersionValidation:
             await scraper._validate_chrome_version_configuration()
 
             # Verify detection was called
-            mock_detect.assert_called_once_with("/path/to/chrome")
+            assert mock_detect.call_count == 1
+            _, kwargs = mock_detect.call_args
+            assert kwargs["timeout"] == pytest.approx(10.0)
 
             # Verify debug log message (line 824)
             assert "Could not detect browser version, skipping validation" in caplog.text
@@ -201,10 +211,13 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
             assert "Chrome 136+ detected - security validation required" in caplog.text
 
             # Verify mocks were called
-            mock_get_diagnostic.assert_called_once_with(
-                binary_path = "/path/to/chrome",
-                remote_port = 9222
-            )
+            assert mock_get_diagnostic.call_count == 1
+            kwargs = mock_get_diagnostic.call_args.kwargs
+            assert kwargs["binary_path"] == "/path/to/chrome"
+            assert kwargs["remote_port"] == 9222
+            assert kwargs["remote_host"] == "127.0.0.1"
+            assert kwargs["remote_timeout"] > 0
+            assert kwargs["binary_timeout"] > 0
         finally:
             # Restore environment
             if original_env:
@@ -364,10 +377,12 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
             assert "Chrome pre-136 detected - no special security requirements" in caplog.text
 
             # Verify that the diagnostic function was called with correct parameters
-            mock_get_diagnostic.assert_called_once_with(
-                binary_path = "/path/to/chrome",
-                remote_port = None
-            )
+            assert mock_get_diagnostic.call_count == 1
+            kwargs = mock_get_diagnostic.call_args.kwargs
+            assert kwargs["binary_path"] == "/path/to/chrome"
+            assert kwargs["remote_port"] is None
+            assert kwargs["remote_timeout"] > 0
+            assert kwargs["binary_timeout"] > 0
         finally:
             # Restore environment
             if original_env:

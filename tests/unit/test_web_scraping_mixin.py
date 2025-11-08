@@ -12,8 +12,9 @@ import os
 import platform
 import shutil
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import NoReturn, Protocol, cast
+from typing import Any, NoReturn, Protocol, cast
 from unittest.mock import AsyncMock, MagicMock, Mock, mock_open, patch
 
 import nodriver
@@ -22,6 +23,7 @@ import pytest
 from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
 
+from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import loggers
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is, WebScrapingMixin, _is_admin  # noqa: PLC2701
 
@@ -33,6 +35,11 @@ class ConfigProtocol(Protocol):
     user_data_dir:str | None
 
     def add_extension(self, ext:str) -> None: ...
+
+
+def _nodriver_start_mock() -> Mock:
+    """Return the nodriver.start mock with proper typing."""
+    return cast(Mock, cast(Any, nodriver).start)
 
 
 class TrulyAwaitableMockPage:
@@ -82,6 +89,7 @@ def web_scraper(mock_browser:AsyncMock, mock_page:TrulyAwaitableMockPage) -> Web
     scraper = WebScrapingMixin()
     scraper.browser = mock_browser
     scraper.page = mock_page  # type: ignore[unused-ignore,reportAttributeAccessIssue]
+    scraper.config = Config.model_validate({"login": {"username": "user@example.com", "password": "secret"}})  # noqa: S105
     return scraper
 
 
@@ -215,6 +223,29 @@ class TestWebScrapingErrorHandling:
         # Test attribute error
         with pytest.raises(Exception, match = "Attribute error"):
             await web_scraper.web_check(By.ID, "test-id", Is.DISPLAYED)
+
+    @pytest.mark.asyncio
+    async def test_web_find_applies_timeout_multiplier_and_backoff(self, web_scraper:WebScrapingMixin) -> None:
+        """Ensure multiplier/backoff logic is honored when timeouts occur."""
+        assert web_scraper.config is not None
+        web_scraper.config.timeouts.multiplier = 2.0
+        web_scraper.config.timeouts.retry_enabled = True
+        web_scraper.config.timeouts.retry_max_attempts = 2
+        web_scraper.config.timeouts.retry_backoff_factor = 2.0
+
+        recorded:list[tuple[float, bool]] = []
+
+        async def fake_web_await(condition:Callable[[], object], *, timeout:float, timeout_error_message:str = "",
+                                 apply_multiplier:bool = True) -> Element:
+            recorded.append((timeout, apply_multiplier))
+            raise TimeoutError(timeout_error_message or "timeout")
+
+        cast(Any, web_scraper).web_await = fake_web_await
+
+        with pytest.raises(TimeoutError):
+            await web_scraper.web_find(By.ID, "test-id", timeout = 0.5)
+
+        assert recorded == [(1.0, False), (2.0, False)]
 
 
 class TestWebScrapingSessionManagement:
@@ -468,7 +499,7 @@ class TestWebScrapingBrowserConfiguration:
             def add_extension(self, ext:str) -> None:
                 self._extensions.append(ext)  # Use private extensions list
 
-        # Mock nodriver.start to return a mock browser  # type: ignore[attr-defined]
+        # Mock nodriver.start to return a mock browser
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
@@ -557,7 +588,7 @@ class TestWebScrapingBrowserConfiguration:
             def add_extension(self, ext:str) -> None:
                 self.extensions.append(ext)
 
-        # Mock nodriver.start to return a mock browser  # type: ignore[attr-defined]
+        # Mock nodriver.start to return a mock browser
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
@@ -576,7 +607,7 @@ class TestWebScrapingBrowserConfiguration:
         await scraper.create_browser_session()
 
         # Verify browser arguments
-        config = cast(Mock, nodriver.start).call_args[0][0]  # type: ignore[attr-defined]
+        config = _nodriver_start_mock().call_args[0][0]
         assert "--custom-arg=value" in config.browser_args
         assert "--another-arg" in config.browser_args
         assert "--incognito" in config.browser_args
@@ -589,7 +620,7 @@ class TestWebScrapingBrowserConfiguration:
         await scraper.create_browser_session()
 
         # Verify Edge-specific arguments
-        config = cast(Mock, nodriver.start).call_args[0][0]  # type: ignore[attr-defined]
+        config = _nodriver_start_mock().call_args[0][0]
         assert "-inprivate" in config.browser_args
         assert os.environ.get("MSEDGEDRIVER_TELEMETRY_OPTOUT") == "1"
 
@@ -620,7 +651,7 @@ class TestWebScrapingBrowserConfiguration:
         with zipfile.ZipFile(ext2, "w") as z:
             z.writestr("manifest.json", '{"name": "Test Extension 2"}')
 
-        # Mock nodriver.start to return a mock browser  # type: ignore[attr-defined]
+        # Mock nodriver.start to return a mock browser
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
@@ -644,7 +675,7 @@ class TestWebScrapingBrowserConfiguration:
         await scraper.create_browser_session()
 
         # Verify extensions were loaded
-        config = cast(Mock, nodriver.start).call_args[0][0]  # type: ignore[attr-defined]
+        config = _nodriver_start_mock().call_args[0][0]
         assert len(config._extensions) == 2
         for ext_path in config._extensions:
             assert os.path.exists(ext_path)
@@ -713,7 +744,7 @@ class TestWebScrapingBrowserConfiguration:
             def add_extension(self, ext:str) -> None:
                 self._extensions.append(ext)
 
-        # Mock nodriver.start to return a mock browser  # type: ignore[attr-defined]
+        # Mock nodriver.start to return a mock browser
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
@@ -772,7 +803,7 @@ class TestWebScrapingBrowserConfiguration:
         temp_file = tmp_path / "temp_resource"
         temp_file.write_text("test")
 
-        # Mock nodriver.start to raise an exception  # type: ignore[attr-defined]
+        # Mock nodriver.start to raise an exception
         async def mock_start_fail(*args:object, **kwargs:object) -> NoReturn:
             if temp_file.exists():
                 temp_file.unlink()
@@ -801,7 +832,7 @@ class TestWebScrapingBrowserConfiguration:
         assert scraper.browser is None
         assert scraper.page is None
 
-        # Now patch nodriver.start to return a new mock browser each time  # type: ignore[attr-defined]
+        # Now patch nodriver.start to return a new mock browser each time
         mock_browser = make_mock_browser()
         mock_page = TrulyAwaitableMockPage()
         mock_browser.get = AsyncMock(return_value = mock_page)
