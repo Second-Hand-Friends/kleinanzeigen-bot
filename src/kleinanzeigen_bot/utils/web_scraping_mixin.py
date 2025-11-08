@@ -149,16 +149,14 @@ class WebScrapingMixin:
         Execute an async callable with retry/backoff handling for TimeoutError.
         """
         attempts = self._timeout_attempts()
-        last_error:TimeoutError | None = None
 
         for attempt in range(attempts):
             effective_timeout = self._effective_timeout(key, override, attempt = attempt)
             try:
                 return await operation(effective_timeout)
-            except TimeoutError as exc:
-                last_error = exc
+            except TimeoutError:
                 if attempt >= attempts - 1:
-                    break
+                    raise
                 LOG.debug(
                     "Retrying %s after TimeoutError (attempt %d/%d, timeout %.1fs)",
                     description,
@@ -167,8 +165,6 @@ class WebScrapingMixin:
                     effective_timeout
                 )
 
-        if last_error:
-            raise last_error
         raise TimeoutError(f"{description} failed without executing operation")
 
     async def create_browser_session(self) -> None:
