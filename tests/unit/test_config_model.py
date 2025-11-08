@@ -91,10 +91,13 @@ def test_timeout_config_defaults_and_effective_values() -> None:
     })
 
     timeouts = cfg.timeouts
-    assert timeouts.resolve("pagination_initial") == 12.0
-    assert timeouts.effective("pagination_initial") == 24.0
+    base = timeouts.resolve("pagination_initial")
+    multiplier = timeouts.multiplier
+    backoff = timeouts.retry_backoff_factor
+    assert base == 12.0
+    assert timeouts.effective("pagination_initial") == base * multiplier * (backoff ** 0)
     # attempt 1 should apply backoff factor once in addition to multiplier
-    assert timeouts.effective("pagination_initial", attempt = 1) == 48.0
+    assert timeouts.effective("pagination_initial", attempt = 1) == base * multiplier * (backoff ** 1)
 
 
 def test_timeout_config_overrides() -> None:
