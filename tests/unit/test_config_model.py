@@ -3,7 +3,6 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import pytest
 
-from kleinanzeigen_bot.model import config_model
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config
 
 
@@ -114,5 +113,15 @@ def test_timeout_config_overrides() -> None:
 
 def test_validate_glob_pattern_rejects_blank_strings() -> None:
     with pytest.raises(ValueError, match = "must be a non-empty, non-blank glob pattern"):
-        config_model._validate_glob_pattern("   ")
-    assert config_model._validate_glob_pattern("*.yaml") == "*.yaml"
+        Config.model_validate({
+            "ad_files": ["   "],
+            "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
+            "login": {"username": "dummy", "password": "dummy"}
+        })
+
+    cfg = Config.model_validate({
+        "ad_files": ["*.yaml"],
+        "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
+        "login": {"username": "dummy", "password": "dummy"}
+    })
+    assert cfg.ad_files == ["*.yaml"]
