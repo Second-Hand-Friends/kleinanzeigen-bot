@@ -138,13 +138,13 @@ class WebScrapingMixin:
         return cfg.retry_max_attempts if cfg.retry_enabled else 1
 
     async def _run_with_timeout_retries(
-            self,
-            operation:Callable[[float], Awaitable[T]],
-            *,
-            description:str,
-            key:str = "default",
-            override:float | None = None
-        ) -> T:
+        self,
+        operation:Callable[[float], Awaitable[T]],
+        *,
+        description:str,
+        key:str = "default",
+        override:float | None = None
+    ) -> T:
         """
         Execute an async callable with retry/backoff handling for TimeoutError.
         """

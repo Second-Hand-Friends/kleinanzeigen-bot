@@ -1,7 +1,9 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-from kleinanzeigen_bot.model.config_model import AdDefaults, Config
+import pytest
+
+from kleinanzeigen_bot.model.config_model import AdDefaults, Config, _validate_glob_pattern
 
 
 def test_migrate_legacy_description_prefix() -> None:
@@ -104,3 +106,9 @@ def test_timeout_config_overrides() -> None:
     assert cfg.timeouts.resolve("custom_timeout") == 7.5
     # Unknown keys fall back to default (5.0)
     assert cfg.timeouts.resolve("non_existing") == 5.0
+
+
+def test_validate_glob_pattern_rejects_blank_strings() -> None:
+    with pytest.raises(ValueError, match = "must be a non-empty, non-blank glob pattern"):
+        _validate_glob_pattern("   ")
+    assert _validate_glob_pattern("*.yaml") == "*.yaml"

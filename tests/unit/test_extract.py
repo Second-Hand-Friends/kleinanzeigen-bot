@@ -708,11 +708,11 @@ class TestAdExtractorCategory:
 
         with patch.object(extractor, "web_find", new_callable = AsyncMock, side_effect = fake_web_find), \
                 patch.object(extractor, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError), \
-                caplog.at_level("ERROR"):
-            with pytest.raises(TimeoutError, match = "Unable to locate breadcrumb fallback selectors"):
-                await extractor._extract_category_from_ad_page()
+                caplog.at_level("ERROR"), pytest.raises(TimeoutError, match = "Unable to locate breadcrumb fallback selectors"):
+            await extractor._extract_category_from_ad_page()
 
         assert any("Legacy breadcrumb selectors not found" in record.message for record in caplog.records)
+
     @pytest.mark.asyncio
     # pylint: disable=protected-access
     async def test_extract_special_attributes_empty(self, extractor:AdExtractor) -> None:
