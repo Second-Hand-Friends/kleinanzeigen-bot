@@ -357,8 +357,8 @@ price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY (default: NEGOTIABLE)
 auto_reduce_price: # true or false to enable automatic price reduction on reposts (default: false)
 min_price: # optional lower bound when auto_reduce_price is true; defaults to the base price
 price_reduction:
-  type: # "percentage" or "fixed"
-  value: # number; interpreted as percent for "percentage" or currency units for "fixed"
+  type: # "PERCENTAGE" or "FIXED"
+  value: # number; interpreted as percent for "PERCENTAGE" or currency units for "FIXED"
 
 special_attributes:
   # haus_mieten.zimmer_d: value # Zimmer
@@ -410,6 +410,8 @@ When `auto_reduce_price` is enabled the bot lowers the configured `price` every 
 
 `repost_count` is tracked for every ad (and persisted inside the corresponding `ad_*.yaml`) so reductions continue across runs.
 
+`min_price` must be less than or equal to `price`; otherwise validation fails to prevent accidental price increases.
+
 Example snippet:
 
 ```yaml
@@ -418,7 +420,7 @@ price_type: FIXED
 auto_reduce_price: true
 min_price: 90
 price_reduction:
-  type: percentage
+  type: PERCENTAGE
   value: 10
 ```
 

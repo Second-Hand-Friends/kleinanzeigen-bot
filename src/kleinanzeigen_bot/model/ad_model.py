@@ -129,11 +129,14 @@ class AdPartial(ContextualModel):
         price_type = values.get("price_type")
         price = values.get("price")
         auto_reduce_price = values.get("auto_reduce_price", False)
+        min_price = values.get("min_price")
 
         if price_type == "GIVE_AWAY" and price is not None:
             raise ValueError("price must not be specified when price_type is GIVE_AWAY")
         if price_type == "FIXED" and price is None:
             raise ValueError("price is required when price_type is FIXED")
+        if min_price is not None and price is not None and min_price > price:
+            raise ValueError("min_price must not exceed price")
         if auto_reduce_price:
             if price is None:
                 raise ValueError("price must be specified when auto_reduce_price is enabled")
@@ -188,7 +191,9 @@ class AdPartial(ContextualModel):
             target = ad_cfg,
             defaults = ad_defaults.model_dump(),
             ignore = lambda k, _: k == "description",  # ignore legacy global description config
-            override = lambda _, v: not isinstance(v, list) and v in {None, ""}  # noqa: PLC1901 can be simplified
+            override = lambda _, v: (
+                not isinstance(v, list) and (v is None or (isinstance(v, str) and v == ""))  # noqa: PLC1901
+            )
         )
         return Ad.model_validate(ad_cfg)
 
@@ -226,7 +231,7 @@ def calculate_auto_price(
     for _ in range(repost_cycles):
         reduction_value = (
             price * Decimal(str(price_reduction.value)) / Decimal("100")
-            if price_reduction.type == "percentage"
+            if price_reduction.type == "PERCENTAGE"
             else Decimal(str(price_reduction.value))
         )
         price -= reduction_value
