@@ -202,7 +202,16 @@ def calculate_auto_price(
     min_price:float | None
 ) -> int | None:
     """
-    Returns the effective price to use for the current run based on how many times the ad was already published.
+    Calculate the effective price for the current run.
+
+    Args:
+        base_price: original configured price used as the starting point.
+        auto_reduce: whether automatic reductions should be applied.
+        price_reduction: reduction configuration describing percentage or fixed steps.
+        repost_count: amount of prior publications used to determine how often to reduce.
+        min_price: optional floor that stops further reductions once reached.
+
+    Percentage reductions apply to the current price each cycle (compounded). Returns an int rounded via ROUND_HALF_UP, or None when base_price is None.
     """
     if base_price is None:
         return None

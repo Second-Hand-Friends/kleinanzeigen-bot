@@ -1,7 +1,11 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+from __future__ import annotations
+
 import math
+
+import pytest
 
 from kleinanzeigen_bot.model.ad_model import AdPartial
 
@@ -60,3 +64,30 @@ def test_shipping_costs() -> None:
     assert AdPartial.model_validate(minimal_ad_cfg | {"shipping_costs": " "}).shipping_costs is None
     assert AdPartial.model_validate(minimal_ad_cfg | {"shipping_costs": None}).shipping_costs is None
     assert AdPartial.model_validate(minimal_ad_cfg).shipping_costs is None
+
+
+def _base_ad_cfg() -> dict[str, object]:
+    return {
+        "title": "Test Ad Title",
+        "category": "160",
+        "description": "Test Description",
+        "price_type": "NEGOTIABLE",
+    }
+
+
+def test_auto_reduce_requires_price() -> None:
+    cfg = _base_ad_cfg() | {
+        "auto_reduce_price": True,
+        "price_reduction": {"type": "fixed", "value": 5}
+    }
+    with pytest.raises(ValueError, match = "price must be specified"):
+        AdPartial.model_validate(cfg)
+
+
+def test_auto_reduce_requires_price_reduction() -> None:
+    cfg = _base_ad_cfg() | {
+        "auto_reduce_price": True,
+        "price": 100
+    }
+    with pytest.raises(ValueError, match = "price_reduction must be specified"):
+        AdPartial.model_validate(cfg)

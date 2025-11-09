@@ -27,18 +27,108 @@ def test_initial_posting_uses_base_price() -> None:
     ) == 100
 
 
+def test_auto_price_returns_none_without_base_price() -> None:
+    reduction = PriceReductionConfig(type = "percentage", value = 10)
+    assert calculate_auto_price(
+        base_price = None,
+        auto_reduce = True,
+        price_reduction = reduction,
+        repost_count = 3,
+        min_price = 10
+    ) is None
+
+
+def test_negative_repost_count_is_treated_like_zero() -> None:
+    reduction = PriceReductionConfig(type = "percentage", value = 25)
+    assert calculate_auto_price(
+        base_price = 100,
+        auto_reduce = True,
+        price_reduction = reduction,
+        repost_count = -3,
+        min_price = 50
+    ) == 100
+
+
+def test_missing_price_reduction_returns_base_price() -> None:
+    assert calculate_auto_price(
+        base_price = 150,
+        auto_reduce = True,
+        price_reduction = None,
+        repost_count = 4,
+        min_price = 50
+    ) == 150
+
+
+def test_percentage_reduction_on_float_rounds_half_up() -> None:
+    reduction = PriceReductionConfig(type = "percentage", value = 12.5)
+    assert calculate_auto_price(
+        base_price = 99.99,
+        auto_reduce = True,
+        price_reduction = reduction,
+        repost_count = 1,
+        min_price = 50
+    ) == 87
+
+
+def test_fixed_reduction_on_float_rounds_half_up() -> None:
+    reduction = PriceReductionConfig(type = "fixed", value = 12.4)
+    assert calculate_auto_price(
+        base_price = 80.51,
+        auto_reduce = True,
+        price_reduction = reduction,
+        repost_count = 1,
+        min_price = 50
+    ) == 68
+
+
 def test_percentage_price_reduction_over_time() -> None:
     reduction = PriceReductionConfig(type = "percentage", value = 10)
-    assert calculate_auto_price(base_price = 100, auto_reduce = True, price_reduction = reduction, repost_count = 1, min_price = 50) == 90
-    assert calculate_auto_price(base_price = 100, auto_reduce = True, price_reduction = reduction, repost_count = 2, min_price = 50) == 81
-    assert calculate_auto_price(base_price = 100, auto_reduce = True, price_reduction = reduction, repost_count = 3, min_price = 50) == 73
+    assert calculate_auto_price(
+        base_price = 100,
+        auto_reduce = True,
+        price_reduction = reduction,
+        repost_count = 1,
+        min_price = 50
+    ) == 90
+    assert calculate_auto_price(
+        base_price = 100,
+        auto_reduce = True,
+        price_reduction = reduction,
+        repost_count = 2,
+        min_price = 50
+    ) == 81
+    assert calculate_auto_price(
+        base_price = 100,
+        auto_reduce = True,
+        price_reduction = reduction,
+        repost_count = 3,
+        min_price = 50
+    ) == 73
 
 
 def test_fixed_price_reduction_over_time() -> None:
     reduction = PriceReductionConfig(type = "fixed", value = 15)
-    assert calculate_auto_price(base_price = 100, auto_reduce = True, price_reduction = reduction, repost_count = 1, min_price = 40) == 85
-    assert calculate_auto_price(base_price = 100, auto_reduce = True, price_reduction = reduction, repost_count = 2, min_price = 40) == 70
-    assert calculate_auto_price(base_price = 100, auto_reduce = True, price_reduction = reduction, repost_count = 3, min_price = 40) == 55
+    assert calculate_auto_price(
+        base_price = 100,
+        auto_reduce = True,
+        price_reduction = reduction,
+        repost_count = 1,
+        min_price = 40
+    ) == 85
+    assert calculate_auto_price(
+        base_price = 100,
+        auto_reduce = True,
+        price_reduction = reduction,
+        repost_count = 2,
+        min_price = 40
+    ) == 70
+    assert calculate_auto_price(
+        base_price = 100,
+        auto_reduce = True,
+        price_reduction = reduction,
+        repost_count = 3,
+        min_price = 40
+    ) == 55
 
 
 def test_min_price_boundary_is_respected() -> None:
@@ -95,3 +185,23 @@ def test_apply_auto_price_reduction_logs_unchanged_price(caplog:pytest.LogCaptur
     expected = _("Auto price reduction using unchanged price %s after %s reposts") % (120, 0)
     assert any(expected in message for message in caplog.messages)
     assert ad_cfg.price == 120
+
+
+def test_apply_auto_price_reduction_warns_when_price_missing(caplog:pytest.LogCaptureFixture) -> None:
+    bot = KleinanzeigenBot()
+    ad_cfg = SimpleNamespace(
+        auto_reduce_price = True,
+        price = None,
+        price_reduction = PriceReductionConfig(type = "percentage", value = 25),
+        repost_count = 2,
+        min_price = 10
+    )
+
+    apply_method = cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
+
+    with caplog.at_level("WARNING"):
+        apply_method(ad_cfg, "ad_warning.yaml")
+
+    expected = _("Auto price reduction is enabled for [%s] but no price is configured.") % ("ad_warning.yaml",)
+    assert any(expected in message for message in caplog.messages)
+    assert ad_cfg.price is None
