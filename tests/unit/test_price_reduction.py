@@ -3,12 +3,17 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 from gettext import gettext as _
 from types import SimpleNamespace
+from typing import Any, Protocol, cast
 
 import pytest
 
 from kleinanzeigen_bot import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import calculate_auto_price
 from kleinanzeigen_bot.model.config_model import PriceReductionConfig
+
+
+class _ApplyAutoPriceReduction(Protocol):
+    def __call__(self, ad_cfg:Any, ad_file_relative:str) -> None: ...
 
 
 def test_initial_posting_uses_base_price() -> None:
@@ -62,8 +67,10 @@ def test_apply_auto_price_reduction_logs_drop(caplog:pytest.LogCaptureFixture) -
         min_price = 50
     )
 
+    apply_method = cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
+
     with caplog.at_level("INFO"):
-        bot._KleinanzeigenBot__apply_auto_price_reduction(ad_cfg, "ad_test.yaml")
+        apply_method(ad_cfg, "ad_test.yaml")
 
     expected = _("Auto price reduction applied: %s -> %s after %s reposts") % (200, 150, 1)
     assert any(expected in message for message in caplog.messages)
@@ -80,8 +87,10 @@ def test_apply_auto_price_reduction_logs_unchanged_price(caplog:pytest.LogCaptur
         min_price = None
     )
 
+    apply_method = cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
+
     with caplog.at_level("INFO"):
-        bot._KleinanzeigenBot__apply_auto_price_reduction(ad_cfg, "ad_test.yaml")
+        apply_method(ad_cfg, "ad_test.yaml")
 
     expected = _("Auto price reduction using unchanged price %s after %s reposts") % (120, 0)
     assert any(expected in message for message in caplog.messages)
