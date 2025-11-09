@@ -13,7 +13,7 @@ from wcmatch import glob
 
 from . import extract, resources
 from ._version import __version__
-from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial
+from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, calculate_auto_price
 from .model.config_model import Config
 from .update_checker import UpdateChecker
 from .utils import dicts, error_handlers, loggers, misc
@@ -559,6 +559,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                 ensure(images or not ad_cfg.images, f"No images found for given file patterns {ad_cfg.images} at {ad_dir}")
                 ad_cfg.images = list(dict.fromkeys(images))
 
+            self.__apply_auto_price_reduction(ad_cfg, ad_file_relative)
+
             ads.append((
                 ad_file,
                 ad_cfg,
@@ -570,6 +572,41 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     def load_ad(self, ad_cfg_orig:dict[str, Any]) -> Ad:
         return AdPartial.model_validate(ad_cfg_orig).to_ad(self.config.ad_defaults)
+
+    def __apply_auto_price_reduction(self, ad_cfg:Ad, ad_file_relative:str) -> None:
+        if not ad_cfg.auto_reduce_price:
+            return
+
+        base_price = ad_cfg.price
+        if base_price is None:
+            LOG.warning(_("Auto price reduction is enabled for [%s] but no price is configured."), ad_file_relative)
+            return
+
+        effective_price = calculate_auto_price(
+            base_price = base_price,
+            auto_reduce = ad_cfg.auto_reduce_price,
+            price_reduction = ad_cfg.price_reduction,
+            repost_count = ad_cfg.repost_count,
+            min_price = ad_cfg.min_price
+        )
+
+        if effective_price is None:
+            return
+
+        if effective_price != base_price:
+            LOG.info(
+                _("Auto price reduction applied: %s -> %s after %s reposts"),
+                base_price,
+                effective_price,
+                ad_cfg.repost_count
+            )
+        else:
+            LOG.info(
+                _("Auto price reduction using unchanged price %s after %s reposts"),
+                effective_price,
+                ad_cfg.repost_count
+            )
+        ad_cfg.price = effective_price
 
     async def check_and_wait_for_captcha(self, *, is_login_page:bool = True) -> None:
         try:
@@ -955,6 +992,10 @@ class KleinanzeigenBot(WebScrapingMixin):
         ad_cfg_orig["updated_on"] = misc.now().isoformat(timespec = "seconds")
         if not ad_cfg.created_on and not ad_cfg.id:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
+
+        current_reposts = int(ad_cfg_orig.get("repost_count", ad_cfg.repost_count or 0))
+        ad_cfg_orig["repost_count"] = current_reposts + 1
+        ad_cfg.repost_count = ad_cfg_orig["repost_count"]
 
         if mode == AdUpdateStrategy.REPLACE:
             LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)

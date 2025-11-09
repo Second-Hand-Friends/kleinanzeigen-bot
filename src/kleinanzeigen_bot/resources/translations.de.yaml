@@ -84,6 +84,10 @@ kleinanzeigen_bot/__init__.py:
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
     "DONE: (Re-)published %s": "FERTIG: %s (erneut) veröffentlicht"
     "ad": "Anzeige"
+  __apply_auto_price_reduction:
+    "Auto price reduction is enabled for [%s] but no price is configured.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber es wurde kein Preis konfiguriert."
+    "Auto price reduction applied: %s -> %s after %s reposts": "Automatische Preisreduzierung angewendet: %s -> %s nach %s erneuten Veröffentlichungen"
+    "Auto price reduction using unchanged price %s after %s reposts": "Automatische Preisreduzierung verwendet unveränderten Preis %s nach %s erneuten Veröffentlichungen"
 
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
