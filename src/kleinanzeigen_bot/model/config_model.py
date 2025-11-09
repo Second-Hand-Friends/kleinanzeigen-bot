@@ -16,7 +16,7 @@ from kleinanzeigen_bot.utils.pydantics import ContextualModel
 
 
 class PriceReductionConfig(ContextualModel):
-    type:Literal["percentage", "fixed"] = Field(
+    type:Literal["FIXED", "PERCENTAGE"] = Field(
         description = "type of reduction to apply on each repost: percentage of the previous price or fixed amount"
     )
     value:float = Field(

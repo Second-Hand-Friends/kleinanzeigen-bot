@@ -78,7 +78,7 @@ def _base_ad_cfg() -> dict[str, object]:
 def test_auto_reduce_requires_price() -> None:
     cfg = _base_ad_cfg() | {
         "auto_reduce_price": True,
-        "price_reduction": {"type": "fixed", "value": 5}
+        "price_reduction": {"type": "FIXED", "value": 5}
     }
     with pytest.raises(ValueError, match = "price must be specified"):
         AdPartial.model_validate(cfg)
@@ -90,4 +90,25 @@ def test_auto_reduce_requires_price_reduction() -> None:
         "price": 100
     }
     with pytest.raises(ValueError, match = "price_reduction must be specified"):
+        AdPartial.model_validate(cfg)
+
+
+def test_auto_reduce_rejects_null_price_reduction() -> None:
+    cfg = _base_ad_cfg() | {
+        "auto_reduce_price": True,
+        "price": 100,
+        "price_reduction": None
+    }
+    with pytest.raises(ValueError, match = "price_reduction must be specified"):
+        AdPartial.model_validate(cfg)
+
+
+def test_min_price_must_not_exceed_price() -> None:
+    cfg = _base_ad_cfg() | {
+        "auto_reduce_price": True,
+        "price": 100,
+        "min_price": 120,
+        "price_reduction": {"type": "FIXED", "value": 5}
+    }
+    with pytest.raises(ValueError, match = "min_price must not exceed price"):
         AdPartial.model_validate(cfg)
