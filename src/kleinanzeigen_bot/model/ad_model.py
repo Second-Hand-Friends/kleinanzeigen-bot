@@ -5,12 +5,13 @@ from __future__ import annotations
 
 import hashlib, json  # isort: skip
 from datetime import datetime  # noqa: TC003 Move import into a type-checking block
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Any, Dict, Final, List, Literal, Mapping, Sequence
 
 from pydantic import AfterValidator, Field, field_validator, model_validator
 from typing_extensions import Self
 
-from kleinanzeigen_bot.model.config_model import AdDefaults  # noqa: TC001 Move application import into a type-checking block
+from kleinanzeigen_bot.model.config_model import AdDefaults, PriceReductionConfig  # noqa: TC001 Move application import into a type-checking block
 from kleinanzeigen_bot.utils import dicts
 from kleinanzeigen_bot.utils.misc import parse_datetime, parse_decimal
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
@@ -72,6 +73,24 @@ class AdPartial(ContextualModel):
     special_attributes:Dict[str, str] | None = _OPTIONAL()
     price:int | None = _OPTIONAL()
     price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] | None = _OPTIONAL()
+    auto_reduce_price:bool = Field(
+        default = False,
+        description = "automatically reduce the price on each repost according to price_reduction"
+    )
+    min_price:float | None = Field(
+        default = None,
+        ge = 0,
+        description = "lowest allowed price when auto_reduce_price is enabled; defaults to the base price"
+    )
+    price_reduction:PriceReductionConfig | None = Field(
+        default = None,
+        description = "reduction to apply per repost; required when auto_reduce_price is enabled"
+    )
+    repost_count:int = Field(
+        default = 0,
+        ge = 0,
+        description = "number of successful publications for this ad (persisted between runs)"
+    )
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] | None = _OPTIONAL()
     shipping_costs:float | None = _OPTIONAL()
     shipping_options:List[ShippingOption] | None = _OPTIONAL()
@@ -109,10 +128,17 @@ class AdPartial(ContextualModel):
     def _validate_price_and_price_type(cls, values:Dict[str, Any]) -> Dict[str, Any]:
         price_type = values.get("price_type")
         price = values.get("price")
+        auto_reduce_price = values.get("auto_reduce_price", False)
+
         if price_type == "GIVE_AWAY" and price is not None:
             raise ValueError("price must not be specified when price_type is GIVE_AWAY")
         if price_type == "FIXED" and price is None:
             raise ValueError("price is required when price_type is FIXED")
+        if auto_reduce_price:
+            if price is None:
+                raise ValueError("price must be specified when auto_reduce_price is enabled")
+            if values.get("price_reduction") is None:
+                raise ValueError("price_reduction must be specified when auto_reduce_price is enabled")
         return values
 
     def update_content_hash(self) -> Self:
@@ -165,6 +191,41 @@ class AdPartial(ContextualModel):
             override = lambda _, v: not isinstance(v, list) and v in {None, ""}  # noqa: PLC1901 can be simplified
         )
         return Ad.model_validate(ad_cfg)
+
+
+def calculate_auto_price(
+    *,
+    base_price:int | float | None,
+    auto_reduce:bool,
+    price_reduction:PriceReductionConfig | None,
+    repost_count:int,
+    min_price:float | None
+) -> int | None:
+    """
+    Returns the effective price to use for the current run based on how many times the ad was already published.
+    """
+    if base_price is None:
+        return None
+
+    price = Decimal(str(base_price))
+    if not auto_reduce or price_reduction is None or repost_count <= 0:
+        return int(price.quantize(Decimal("1"), rounding = ROUND_HALF_UP))
+
+    price_floor = Decimal(str(min_price if min_price is not None else base_price))
+    repost_cycles = max(repost_count, 0)
+
+    for _ in range(repost_cycles):
+        reduction_value = (
+            price * Decimal(str(price_reduction.value)) / Decimal("100")
+            if price_reduction.type == "percentage"
+            else Decimal(str(price_reduction.value))
+        )
+        price -= reduction_value
+        if price <= price_floor:
+            price = price_floor
+            break
+
+    return int(price.quantize(Decimal("1"), rounding = ROUND_HALF_UP))
 
 
 # pyright: reportGeneralTypeIssues=false, reportIncompatibleVariableOverride=false
