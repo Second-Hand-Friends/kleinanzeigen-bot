@@ -64,6 +64,38 @@
           "title": "Price Type",
           "type": "string"
         },
+        "auto_reduce_price": {
+          "default": false,
+          "description": "automatically lower the price of reposted ads according to price_reduction",
+          "title": "Auto Reduce Price",
+          "type": "boolean"
+        },
+        "min_price": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "minimum allowed price when auto_reduce_price is enabled; defaults to the base price if omitted",
+          "title": "Min Price"
+        },
+        "price_reduction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PriceReductionConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "reduction applied after each repost when auto_reduce_price is enabled"
+        },
         "shipping_type": {
           "default": "SHIPPING",
           "enum": [
@@ -328,6 +360,31 @@
         "password"
       ],
       "title": "LoginConfig",
+      "type": "object"
+    },
+    "PriceReductionConfig": {
+      "properties": {
+        "type": {
+          "description": "type of reduction to apply on each repost: percentage of the previous price or fixed amount",
+          "enum": [
+            "percentage",
+            "fixed"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "description": "magnitude of the reduction; interpreted as percent when type=percentage and as currency units when type=fixed",
+          "exclusiveMinimum": 0,
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ],
+      "title": "PriceReductionConfig",
       "type": "object"
     },
     "PublishingConfig": {

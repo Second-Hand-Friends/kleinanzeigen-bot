@@ -212,7 +212,7 @@ def calculate_auto_price(
         return int(price.quantize(Decimal("1"), rounding = ROUND_HALF_UP))
 
     price_floor = Decimal(str(min_price if min_price is not None else base_price))
-    repost_cycles = max(repost_count, 0)
+    repost_cycles = repost_count
 
     for _ in range(repost_cycles):
         reduction_value = (
