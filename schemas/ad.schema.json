@@ -68,6 +68,31 @@
       },
       "title": "ContactPartial",
       "type": "object"
+    },
+    "PriceReductionConfig": {
+      "properties": {
+        "type": {
+          "description": "type of reduction to apply on each repost: percentage of the previous price or fixed amount",
+          "enum": [
+            "percentage",
+            "fixed"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "description": "magnitude of the reduction; interpreted as percent when type=percentage and as currency units when type=fixed",
+          "exclusiveMinimum": 0,
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ],
+      "title": "PriceReductionConfig",
+      "type": "object"
     }
   },
   "properties": {
@@ -180,6 +205,45 @@
       ],
       "default": null,
       "title": "Price Type"
+    },
+    "auto_reduce_price": {
+      "default": false,
+      "description": "automatically reduce the price on each repost according to price_reduction",
+      "title": "Auto Reduce Price",
+      "type": "boolean"
+    },
+    "min_price": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "lowest allowed price when auto_reduce_price is enabled; defaults to the base price",
+      "title": "Min Price"
+    },
+    "price_reduction": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PriceReductionConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "reduction to apply per repost; required when auto_reduce_price is enabled"
+    },
+    "repost_count": {
+      "default": 0,
+      "description": "number of successful publications for this ad (persisted between runs)",
+      "minimum": 0,
+      "title": "Repost Count",
+      "type": "integer"
     },
     "shipping_type": {
       "anyOf": [
