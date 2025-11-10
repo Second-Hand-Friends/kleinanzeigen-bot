@@ -190,6 +190,8 @@ All Python files must start with SPDX license headers:
 #### Timeout configuration
 - The default timeout (`timeouts.default`) already wraps all standard DOM helpers (`web_find`, `web_click`, etc.) via `WebScrapingMixin._timeout/_effective_timeout`. Use it unless a workflow clearly needs a different SLA.
 - Reserve `timeouts.quick_dom` for transient overlays (shipping dialogs, payment prompts, toast banners) that should render almost instantly; call `self._timeout("quick_dom")` in those spots to keep the UI responsive.
+- For single selectors that occasionally need more headroom, pass an inline override instead of creating a new config key, e.g. `custom = self._timeout(override = 12.5); await self.web_find(..., timeout = custom)`.
+- Use `_timeout()` when you just need the raw configured value (with optional override); use `_effective_timeout()` when you rely on the global multiplier and retry backoff for a given attempt (e.g. inside `_run_with_timeout_retries`).
 - Add a new timeout key only when a recurring workflow has its own timing profile (pagination, captcha detection, publishing confirmations, Chrome probes, etc.). Whenever you add one, extend `TimeoutConfig`, document it in the sample `timeouts:` block in `README.md`, and explain it in `docs/BROWSER_TROUBLESHOOTING.md`.
 - Encourage users to raise `timeouts.multiplier` when everything is slow, and override existing keys in `config.yaml` before introducing new ones. This keeps the configuration surface minimal.
 
