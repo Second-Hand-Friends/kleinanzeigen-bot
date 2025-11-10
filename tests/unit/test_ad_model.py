@@ -7,7 +7,7 @@ import math
 
 import pytest
 
-from kleinanzeigen_bot.model.ad_model import AdPartial
+from kleinanzeigen_bot.model.ad_model import Ad, AdPartial
 from kleinanzeigen_bot.model.config_model import AdDefaults
 
 
@@ -95,6 +95,16 @@ def _base_ad_cfg() -> dict[str, object]:
     }
 
 
+def _complete_ad_cfg() -> dict[str, object]:
+    return _base_ad_cfg() | {
+        "republication_interval": 7,
+        "price": 100,
+        "auto_reduce_price": True,
+        "price_reduction": {"type": "FIXED", "value": 5},
+        "min_price": 50
+    }
+
+
 def test_auto_reduce_requires_price() -> None:
     cfg = _base_ad_cfg() | {
         "auto_reduce_price": True,
@@ -145,3 +155,37 @@ def test_auto_reduce_requires_min_price() -> None:
     }
     with pytest.raises(ValueError, match = "min_price must be specified"):
         AdPartial.model_validate(cfg).to_ad(AdDefaults())
+
+
+def test_min_price_without_auto_reduce_must_not_exceed_price() -> None:
+    cfg = _base_ad_cfg() | {
+        "price": 100,
+        "min_price": 150,
+        "auto_reduce_price": False
+    }
+    with pytest.raises(ValueError, match = "min_price must not exceed price"):
+        AdPartial.model_validate(cfg)
+
+
+def test_ad_model_auto_reduce_requires_price() -> None:
+    cfg = _complete_ad_cfg() | {"price": None}
+    with pytest.raises(ValueError, match = "price must be specified"):
+        Ad.model_validate(cfg)
+
+
+def test_ad_model_auto_reduce_requires_price_reduction() -> None:
+    cfg = _complete_ad_cfg() | {"price_reduction": None}
+    with pytest.raises(ValueError, match = "price_reduction must be specified"):
+        Ad.model_validate(cfg)
+
+
+def test_ad_model_auto_reduce_requires_min_price() -> None:
+    cfg = _complete_ad_cfg() | {"min_price": None}
+    with pytest.raises(ValueError, match = "min_price must be specified"):
+        Ad.model_validate(cfg)
+
+
+def test_ad_model_min_price_must_not_exceed_price() -> None:
+    cfg = _complete_ad_cfg() | {"min_price": 150, "price": 100}
+    with pytest.raises(ValueError, match = "min_price must not exceed price"):
+        Ad.model_validate(cfg)
