@@ -18,6 +18,7 @@ import requests
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
+from kleinanzeigen_bot.model import update_check_state as update_check_state_module
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.model.update_check_state import UpdateCheckState
 from kleinanzeigen_bot.update_checker import UpdateChecker
@@ -303,10 +304,25 @@ class TestUpdateChecker:
         state.last_check = now - timedelta(days = 6)
         assert state.should_check("1z") is False
 
-    def test_update_check_state_interval_validation(self) -> None:
+    def test_update_check_state_interval_validation(self, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that interval validation works correctly."""
         state = UpdateCheckState()
-        now = datetime.now(timezone.utc)
+        fixed_now = datetime(2025, 1, 1, 12, 0, tzinfo = timezone.utc)
+
+        class FixedDateTime(datetime):  # type: ignore[misc,valid-type]
+            @classmethod
+            def now(cls, tz:timezone | None = None) -> datetime:
+                if tz is None:
+                    return fixed_now.replace(tzinfo = None)
+                return fixed_now.astimezone(tz)
+
+            @classmethod
+            def utcnow(cls) -> datetime:
+                return fixed_now.replace(tzinfo = None)
+
+        monkeypatch.setattr(update_check_state_module.datetime, "datetime", FixedDateTime)
+
+        now = fixed_now
         state.last_check = now - timedelta(days = 1)
 
         # Test minimum value (1d)
