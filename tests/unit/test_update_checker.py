@@ -312,12 +312,30 @@ class TestUpdateChecker:
         class FixedDateTime(datetime):
             @classmethod
             def now(cls, tz:tzinfo | None = None) -> "FixedDateTime":
-                base = fixed_now if tz is None else fixed_now.astimezone(tz)
-                return cls.fromtimestamp(base.timestamp(), base.tzinfo)
+                base = fixed_now.replace(tzinfo = None) if tz is None else fixed_now.astimezone(tz)
+                return cls(
+                    base.year,
+                    base.month,
+                    base.day,
+                    base.hour,
+                    base.minute,
+                    base.second,
+                    base.microsecond,
+                    tzinfo = base.tzinfo
+                )
 
             @classmethod
             def utcnow(cls) -> "FixedDateTime":
-                return cls.fromtimestamp(fixed_now.timestamp(), timezone.utc)
+                base = fixed_now.astimezone(timezone.utc).replace(tzinfo = None)
+                return cls(
+                    base.year,
+                    base.month,
+                    base.day,
+                    base.hour,
+                    base.minute,
+                    base.second,
+                    base.microsecond
+                )
 
         datetime_module = getattr(update_check_state_module, "datetime")
         monkeypatch.setattr(datetime_module, "datetime", FixedDateTime)
