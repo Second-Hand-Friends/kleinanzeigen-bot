@@ -142,9 +142,21 @@ def test_min_price_boundary_is_respected() -> None:
     ) == 50
 
 
-def test_missing_min_price_defaults_to_base_price_floor() -> None:
+def test_min_price_zero_is_allowed() -> None:
+    reduction = PriceReductionConfig(type = "FIXED", value = 5)
+    assert calculate_auto_price(
+        base_price = 20,
+        auto_reduce = True,
+        price_reduction = reduction,
+        repost_count = 5,
+        min_price = 0
+    ) == 0
+
+
+def test_missing_min_price_raises_error() -> None:
     reduction = PriceReductionConfig(type = "PERCENTAGE", value = 50)
-    assert calculate_auto_price(base_price = 200, auto_reduce = True, price_reduction = reduction, repost_count = 3, min_price = None) == 200
+    with pytest.raises(ValueError, match = "min_price must be specified"):
+        calculate_auto_price(base_price = 200, auto_reduce = True, price_reduction = reduction, repost_count = 3, min_price = None)
 
 
 def test_feature_disabled_path_leaves_price_unchanged() -> None:
@@ -180,7 +192,7 @@ def test_apply_auto_price_reduction_logs_unchanged_price(caplog:pytest.LogCaptur
         price = 120,
         price_reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25),
         repost_count = 0,
-        min_price = None
+        min_price = 120
     )
 
     apply_method = cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))

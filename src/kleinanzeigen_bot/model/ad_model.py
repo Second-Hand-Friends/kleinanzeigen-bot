@@ -73,14 +73,14 @@ class AdPartial(ContextualModel):
     special_attributes:Dict[str, str] | None = _OPTIONAL()
     price:int | None = _OPTIONAL()
     price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] | None = _OPTIONAL()
-    auto_reduce_price:bool = Field(
-        default = False,
+    auto_reduce_price:bool | None = Field(
+        default = None,
         description = "automatically reduce the price on each repost according to price_reduction"
     )
     min_price:float | None = Field(
         default = None,
         ge = 0,
-        description = "lowest allowed price when auto_reduce_price is enabled; defaults to the base price"
+        description = "required per ad when auto_reduce_price is enabled; use 0 for no lower bound"
     )
     price_reduction:PriceReductionConfig | None = Field(
         default = None,
@@ -128,20 +128,25 @@ class AdPartial(ContextualModel):
     def _validate_price_and_price_type(cls, values:Dict[str, Any]) -> Dict[str, Any]:
         price_type = values.get("price_type")
         price = values.get("price")
-        auto_reduce_price = values.get("auto_reduce_price", False)
         min_price = values.get("min_price")
+        auto_reduce_price = values.get("auto_reduce_price")
+        price_reduction = values.get("price_reduction")
 
         if price_type == "GIVE_AWAY" and price is not None:
             raise ValueError("price must not be specified when price_type is GIVE_AWAY")
         if price_type == "FIXED" and price is None:
             raise ValueError("price is required when price_type is FIXED")
-        if min_price is not None and price is not None and min_price > price:
-            raise ValueError("min_price must not exceed price")
         if auto_reduce_price:
             if price is None:
                 raise ValueError("price must be specified when auto_reduce_price is enabled")
-            if values.get("price_reduction") is None:
+            if price_reduction is None:
                 raise ValueError("price_reduction must be specified when auto_reduce_price is enabled")
+            if min_price is None:
+                raise ValueError("min_price must be specified when auto_reduce_price is enabled")
+            if min_price > price:
+                raise ValueError("min_price must not exceed price")
+        elif min_price is not None and price is not None and min_price > price:
+            raise ValueError("min_price must not exceed price")
         return values
 
     def update_content_hash(self) -> Self:
@@ -149,7 +154,7 @@ class AdPartial(ContextualModel):
 
         # 1) Dump to a plain dict, excluding the metadata fields:
         raw = self.model_dump(
-            exclude = {"id", "created_on", "updated_on", "content_hash"},
+            exclude = {"id", "created_on", "updated_on", "content_hash", "repost_count"},
             exclude_none = True,
             exclude_unset = True,
         )
@@ -225,7 +230,10 @@ def calculate_auto_price(
     if not auto_reduce or price_reduction is None or repost_count <= 0:
         return int(price.quantize(Decimal("1"), rounding = ROUND_HALF_UP))
 
-    price_floor = Decimal(str(min_price if min_price is not None else base_price))
+    if min_price is None:
+        raise ValueError("min_price must be specified when auto_reduce_price is enabled")
+
+    price_floor = Decimal(str(min_price))
     repost_cycles = repost_count
 
     for _ in range(repost_cycles):
@@ -258,3 +266,19 @@ class Ad(AdPartial):
     sell_directly:bool
     contact:Contact
     republication_interval:int
+    auto_reduce_price:bool = False
+    min_price:float | None = None
+    price_reduction:PriceReductionConfig | None = None
+
+    @model_validator(mode = "after")
+    def _validate_auto_price_config(self) -> "Ad":
+        if self.auto_reduce_price:
+            if self.price is None:
+                raise ValueError("price must be specified when auto_reduce_price is enabled")
+            if self.price_reduction is None:
+                raise ValueError("price_reduction must be specified when auto_reduce_price is enabled")
+            if self.min_price is None:
+                raise ValueError("min_price must be specified when auto_reduce_price is enabled")
+            if self.min_price > self.price:
+                raise ValueError("min_price must not exceed price")
+        return self

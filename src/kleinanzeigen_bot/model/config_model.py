@@ -49,11 +49,6 @@ class AdDefaults(ContextualModel):
         default = False,
         description = "automatically lower the price of reposted ads according to price_reduction"
     )
-    min_price:float | None = Field(
-        default = None,
-        ge = 0,
-        description = "minimum allowed price when auto_reduce_price is enabled; defaults to the base price if omitted"
-    )
     price_reduction:PriceReductionConfig | None = Field(
         default = None,
         description = "reduction applied after each repost when auto_reduce_price is enabled"
