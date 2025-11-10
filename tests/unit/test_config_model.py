@@ -99,18 +99,6 @@ def test_timeout_config_defaults_and_effective_values() -> None:
     assert timeouts.effective("pagination_initial", attempt = 1) == base * multiplier * (backoff ** 1)
 
 
-def test_timeout_config_overrides() -> None:
-    cfg = Config.model_validate({
-        "login": {"username": "dummy", "password": "dummy"},  # noqa: S105
-        "timeouts": {
-            "overrides": {"custom_timeout": 7.5}
-        }
-    })
-    assert cfg.timeouts.resolve("custom_timeout") == 7.5
-    # Unknown keys fall back to default (5.0)
-    assert cfg.timeouts.resolve("non_existing") == 5.0
-
-
 def test_validate_glob_pattern_rejects_blank_strings() -> None:
     with pytest.raises(ValueError, match = "must be a non-empty, non-blank glob pattern"):
         Config.model_validate({

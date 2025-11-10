@@ -297,7 +297,6 @@ timeouts:
   retry_enabled: true                 # Enables DOM retry/backoff when timeouts occur
   retry_max_attempts: 2
   retry_backoff_factor: 1.5
-  overrides: {}                       # Optional named overrides, e.g. {"my_selector": 12}
 
 # download configuration
 download:
@@ -351,7 +350,7 @@ login:
   password: ""
 ```
 
-Slow networks or sluggish remote browsers often just need a higher `timeouts.multiplier`, while truly problematic selectors can be given explicit values under `timeouts` or `timeouts.overrides`. Remember to regenerate the schemas after changing the configuration model so editors stay in sync.
+Slow networks or sluggish remote browsers often just need a higher `timeouts.multiplier`, while truly problematic selectors can get explicit values directly under `timeouts`. Remember to regenerate the schemas after changing the configuration model so editors stay in sync.
 
 ### <a name="ad-config"></a>2) Ad configuration
 

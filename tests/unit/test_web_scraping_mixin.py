@@ -245,7 +245,7 @@ class TestWebScrapingErrorHandling:
         with pytest.raises(TimeoutError):
             await web_scraper.web_find(By.ID, "test-id", timeout = 0.5)
 
-        assert recorded == [(1.0, False), (2.0, False)]
+        assert recorded == [(1.0, False), (2.0, False), (4.0, False)]
 
 
 class TestWebScrapingSessionManagement:

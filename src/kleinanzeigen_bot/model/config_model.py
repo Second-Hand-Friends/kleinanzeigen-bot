@@ -137,10 +137,6 @@ class TimeoutConfig(ContextualModel):
     retry_enabled:bool = Field(default = True, description = "Enable built-in retry/backoff for DOM operations.")
     retry_max_attempts:int = Field(default = 2, ge = 1, description = "Max retry attempts when retry is enabled.")
     retry_backoff_factor:float = Field(default = 1.5, ge = 1.0, description = "Exponential factor applied per retry attempt.")
-    overrides:dict[str, float] = Field(
-        default_factory = dict,
-        description = "Additional named timeout overrides keyed by identifier."
-    )
 
     def resolve(self, key:str = "default", override:float | None = None) -> float:
         """
@@ -155,9 +151,6 @@ class TimeoutConfig(ContextualModel):
         attr = getattr(self, key, None)
         if isinstance(attr, (int, float)):
             return float(attr)
-
-        if key in self.overrides:
-            return float(self.overrides[key])
 
         return float(self.default)
 

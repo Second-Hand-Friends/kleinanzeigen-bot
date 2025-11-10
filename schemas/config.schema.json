@@ -485,14 +485,6 @@
           "minimum": 1.0,
           "title": "Retry Backoff Factor",
           "type": "number"
-        },
-        "overrides": {
-          "additionalProperties": {
-            "type": "number"
-          },
-          "description": "Additional named timeout overrides keyed by identifier.",
-          "title": "Overrides",
-          "type": "object"
         }
       },
       "title": "TimeoutConfig",

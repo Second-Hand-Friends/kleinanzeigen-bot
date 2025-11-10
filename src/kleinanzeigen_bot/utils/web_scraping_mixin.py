@@ -135,7 +135,10 @@ class WebScrapingMixin:
 
     def _timeout_attempts(self) -> int:
         cfg = self._get_timeout_config()
-        return cfg.retry_max_attempts if cfg.retry_enabled else 1
+        if not cfg.retry_enabled:
+            return 1
+        # Always perform the initial attempt plus the configured number of retries.
+        return 1 + cfg.retry_max_attempts
 
     async def _run_with_timeout_retries(
         self,
