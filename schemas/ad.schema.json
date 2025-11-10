@@ -74,8 +74,8 @@
         "type": {
           "description": "type of reduction to apply on each repost: percentage of the previous price or fixed amount",
           "enum": [
-            "percentage",
-            "fixed"
+            "FIXED",
+            "PERCENTAGE"
           ],
           "title": "Type",
           "type": "string"
@@ -207,10 +207,17 @@
       "title": "Price Type"
     },
     "auto_reduce_price": {
-      "default": false,
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
       "description": "automatically reduce the price on each repost according to price_reduction",
-      "title": "Auto Reduce Price",
-      "type": "boolean"
+      "title": "Auto Reduce Price"
     },
     "min_price": {
       "anyOf": [
@@ -223,7 +230,7 @@
         }
       ],
       "default": null,
-      "description": "lowest allowed price when auto_reduce_price is enabled; defaults to the base price",
+      "description": "required per ad when auto_reduce_price is enabled; use 0 for no lower bound",
       "title": "Min Price"
     },
     "price_reduction": {

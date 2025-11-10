@@ -8,6 +8,7 @@ import math
 import pytest
 
 from kleinanzeigen_bot.model.ad_model import AdPartial
+from kleinanzeigen_bot.model.config_model import AdDefaults
 
 
 def test_update_content_hash() -> None:
@@ -45,6 +46,20 @@ def test_update_content_hash() -> None:
     }).update_content_hash().content_hash != minimal_ad_cfg_hash
 
 
+def test_repost_count_does_not_influence_content_hash() -> None:
+    base_ad_cfg = {
+        "id": "123456789",
+        "title": "Test Ad Title",
+        "category": "160",
+        "description": "Test Description",
+        "price_type": "NEGOTIABLE",
+    }
+
+    hash_without_reposts = AdPartial.model_validate(base_ad_cfg | {"repost_count": 0}).update_content_hash().content_hash
+    hash_with_reposts = AdPartial.model_validate(base_ad_cfg | {"repost_count": 5}).update_content_hash().content_hash
+    assert hash_without_reposts == hash_with_reposts
+
+
 def test_shipping_costs() -> None:
     minimal_ad_cfg = {
         "id": "123456789",
@@ -72,35 +87,43 @@ def _base_ad_cfg() -> dict[str, object]:
         "category": "160",
         "description": "Test Description",
         "price_type": "NEGOTIABLE",
+        "contact": {"name": "Test User", "zipcode": "12345"},
+        "shipping_type": "PICKUP",
+        "sell_directly": False,
+        "type": "OFFER",
+        "active": True
     }
 
 
 def test_auto_reduce_requires_price() -> None:
     cfg = _base_ad_cfg() | {
         "auto_reduce_price": True,
-        "price_reduction": {"type": "FIXED", "value": 5}
+        "price_reduction": {"type": "FIXED", "value": 5},
+        "min_price": 50
     }
     with pytest.raises(ValueError, match = "price must be specified"):
-        AdPartial.model_validate(cfg)
+        AdPartial.model_validate(cfg).to_ad(AdDefaults())
 
 
 def test_auto_reduce_requires_price_reduction() -> None:
     cfg = _base_ad_cfg() | {
         "auto_reduce_price": True,
-        "price": 100
+        "price": 100,
+        "min_price": 50
     }
     with pytest.raises(ValueError, match = "price_reduction must be specified"):
-        AdPartial.model_validate(cfg)
+        AdPartial.model_validate(cfg).to_ad(AdDefaults())
 
 
 def test_auto_reduce_rejects_null_price_reduction() -> None:
     cfg = _base_ad_cfg() | {
         "auto_reduce_price": True,
         "price": 100,
-        "price_reduction": None
+        "price_reduction": None,
+        "min_price": 50
     }
     with pytest.raises(ValueError, match = "price_reduction must be specified"):
-        AdPartial.model_validate(cfg)
+        AdPartial.model_validate(cfg).to_ad(AdDefaults())
 
 
 def test_min_price_must_not_exceed_price() -> None:
@@ -112,3 +135,13 @@ def test_min_price_must_not_exceed_price() -> None:
     }
     with pytest.raises(ValueError, match = "min_price must not exceed price"):
         AdPartial.model_validate(cfg)
+
+
+def test_auto_reduce_requires_min_price() -> None:
+    cfg = _base_ad_cfg() | {
+        "auto_reduce_price": True,
+        "price": 100,
+        "price_reduction": {"type": "FIXED", "value": 5}
+    }
+    with pytest.raises(ValueError, match = "min_price must be specified"):
+        AdPartial.model_validate(cfg).to_ad(AdDefaults())

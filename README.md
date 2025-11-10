@@ -378,7 +378,7 @@ category: # e.g. "Elektronik > Notebooks"
 price: # without decimals, e.g. 75
 price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY (default: NEGOTIABLE)
 auto_reduce_price: # true or false to enable automatic price reduction on reposts (default: false)
-min_price: # optional lower bound when auto_reduce_price is true; defaults to the base price
+min_price: # required when auto_reduce_price is true; explicitly set the floor (e.g. 0)
 price_reduction:
   type: # "PERCENTAGE" or "FIXED"
   value: # number; interpreted as percent for "PERCENTAGE" or currency units for "FIXED"
@@ -429,11 +429,11 @@ repost_count: # how often the ad has been (re)published; used for automatic pric
 
 #### Automatic price reduction on reposts
 
-When `auto_reduce_price` is enabled the bot lowers the configured `price` every time the ad is reposted. The starting point for the calculation is always the base price from your ad file (the value of `price`), ensuring the first publication uses the unchanged amount. For each repost the bot subtracts either a percentage of the previously published price or a fixed amount and clamps the result to `min_price` (or the base price if you omit `min_price`).
+When `auto_reduce_price` is enabled the bot lowers the configured `price` every time the ad is reposted. The starting point for the calculation is always the base price from your ad file (the value of `price`), ensuring the first publication uses the unchanged amount. For each repost the bot subtracts either a percentage of the previously published price or a fixed amount and clamps the result to `min_price`.
 
 `repost_count` is tracked for every ad (and persisted inside the corresponding `ad_*.yaml`) so reductions continue across runs.
 
-`min_price` must be less than or equal to `price`; otherwise validation fails to prevent accidental price increases.
+`min_price` is required whenever `auto_reduce_price` is enabled and must be less than or equal to `price`; this makes an explicit floor (including `0`) mandatory.
 
 Example snippet:
 
@@ -450,6 +450,8 @@ price_reduction:
 The example above posts the ad at 150 € the first time, then 135 €, 121 €, 109 €, and stops decreasing at 90 €.
 
 Set `auto_reduce_price: false` (or omit the field) to keep the existing behaviour—prices stay fixed and `repost_count` only acts as tracked metadata for future changes.
+
+You can configure `auto_reduce_price` and `price_reduction` once under `ad_defaults` in `config.yaml`, but `min_price` must be specified inside each ad file so the floor is explicit.
 
 ### <a name="description-prefix-suffix"></a>3) Description Prefix and Suffix
 
