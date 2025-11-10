@@ -219,8 +219,8 @@ kleinanzeigen_bot/extract.py:
   _extract_category_from_ad_page:
     "Breadcrumb container 'vap-brdcrmb' not found; cannot extract ad category: %s": "Breadcrumb-Container 'vap-brdcrmb' nicht gefunden; kann Anzeigenkategorie nicht extrahieren: %s"
     "Falling back to legacy breadcrumb selectors; collected ids: %s": "Weiche auf ältere Breadcrumb-Selektoren aus; gesammelte IDs: %s"
-    "Legacy breadcrumb selectors not found within %.1f seconds (collected ids: %s)": "Legacy-Breadcrumb-Selektoren nicht innerhalb von %.1f Sekunden gefunden (gesammelte IDs: %s)"
-    "Unable to locate breadcrumb fallback selectors within %(seconds).1f seconds.": "Legacy-Breadcrumb-Selektoren konnten nicht innerhalb von %(seconds).1f Sekunden gefunden werden."
+    "Legacy breadcrumb selectors not found within %.1f seconds (collected ids: %s)": "Ältere Breadcrumb-Selektoren nicht innerhalb von %.1f Sekunden gefunden (gesammelte IDs: %s)"
+    "Unable to locate breadcrumb fallback selectors within %(seconds).1f seconds.": "Ältere Breadcrumb-Selektoren konnten nicht innerhalb von %(seconds).1f Sekunden gefunden werden."
 
 #################################################
 kleinanzeigen_bot/utils/i18n.py:
