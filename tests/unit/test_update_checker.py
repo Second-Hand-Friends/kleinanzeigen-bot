@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
@@ -309,18 +309,18 @@ class TestUpdateChecker:
         state = UpdateCheckState()
         fixed_now = datetime(2025, 1, 1, 12, 0, tzinfo = timezone.utc)
 
-        class FixedDateTime(datetime):  # type: ignore[misc,valid-type]
+        class FixedDateTime(datetime):
             @classmethod
-            def now(cls, tz:timezone | None = None) -> datetime:
-                if tz is None:
-                    return fixed_now.replace(tzinfo = None)
-                return fixed_now.astimezone(tz)
+            def now(cls, tz:tzinfo | None = None) -> "FixedDateTime":
+                base = fixed_now if tz is None else fixed_now.astimezone(tz)
+                return cls.fromtimestamp(base.timestamp(), base.tzinfo)
 
             @classmethod
-            def utcnow(cls) -> datetime:
-                return fixed_now.replace(tzinfo = None)
+            def utcnow(cls) -> "FixedDateTime":
+                return cls.fromtimestamp(fixed_now.timestamp(), timezone.utc)
 
-        monkeypatch.setattr(update_check_state_module.datetime, "datetime", FixedDateTime)
+        datetime_module = getattr(update_check_state_module, "datetime")
+        monkeypatch.setattr(datetime_module, "datetime", FixedDateTime)
 
         now = fixed_now
         state.last_check = now - timedelta(days = 1)
