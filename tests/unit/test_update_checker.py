@@ -24,6 +24,41 @@ from kleinanzeigen_bot.model.update_check_state import UpdateCheckState
 from kleinanzeigen_bot.update_checker import UpdateChecker
 
 
+def _freeze_update_state_datetime(monkeypatch:pytest.MonkeyPatch, fixed_now:datetime) -> None:
+    """Patch UpdateCheckState to return a deterministic datetime.now/utcnow."""
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz:tzinfo | None = None) -> "FixedDateTime":
+            base = fixed_now.replace(tzinfo = None) if tz is None else fixed_now.astimezone(tz)
+            return cls(
+                base.year,
+                base.month,
+                base.day,
+                base.hour,
+                base.minute,
+                base.second,
+                base.microsecond,
+                tzinfo = base.tzinfo
+            )
+
+        @classmethod
+        def utcnow(cls) -> "FixedDateTime":
+            base = fixed_now.astimezone(timezone.utc).replace(tzinfo = None)
+            return cls(
+                base.year,
+                base.month,
+                base.day,
+                base.hour,
+                base.minute,
+                base.second,
+                base.microsecond
+            )
+
+    datetime_module = getattr(update_check_state_module, "datetime")
+    monkeypatch.setattr(datetime_module, "datetime", FixedDateTime)
+
+
 @pytest.fixture
 def config() -> Config:
     return Config.model_validate({
@@ -257,10 +292,12 @@ class TestUpdateChecker:
         # Should not raise an exception
         state.save(state_file)
 
-    def test_update_check_state_interval_units(self) -> None:
+    def test_update_check_state_interval_units(self, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that different interval units are handled correctly."""
         state = UpdateCheckState()
-        now = datetime.now(timezone.utc)
+        fixed_now = datetime(2025, 1, 15, 8, 0, tzinfo = timezone.utc)
+        _freeze_update_state_datetime(monkeypatch, fixed_now)
+        now = fixed_now
 
         # Test seconds (should always be too short, fallback to 7d, only 2 days elapsed, so should_check is False)
         state.last_check = now - timedelta(seconds = 30)
@@ -309,36 +346,7 @@ class TestUpdateChecker:
         state = UpdateCheckState()
         fixed_now = datetime(2025, 1, 1, 12, 0, tzinfo = timezone.utc)
 
-        class FixedDateTime(datetime):
-            @classmethod
-            def now(cls, tz:tzinfo | None = None) -> "FixedDateTime":
-                base = fixed_now.replace(tzinfo = None) if tz is None else fixed_now.astimezone(tz)
-                return cls(
-                    base.year,
-                    base.month,
-                    base.day,
-                    base.hour,
-                    base.minute,
-                    base.second,
-                    base.microsecond,
-                    tzinfo = base.tzinfo
-                )
-
-            @classmethod
-            def utcnow(cls) -> "FixedDateTime":
-                base = fixed_now.astimezone(timezone.utc).replace(tzinfo = None)
-                return cls(
-                    base.year,
-                    base.month,
-                    base.day,
-                    base.hour,
-                    base.minute,
-                    base.second,
-                    base.microsecond
-                )
-
-        datetime_module = getattr(update_check_state_module, "datetime")
-        monkeypatch.setattr(datetime_module, "datetime", FixedDateTime)
+        _freeze_update_state_datetime(monkeypatch, fixed_now)
 
         now = fixed_now
         state.last_check = now - timedelta(days = 1)
