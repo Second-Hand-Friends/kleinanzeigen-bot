@@ -119,6 +119,29 @@ class TestWebScrapingMixinChromeVersionValidation:
                 os.environ["PYTEST_CURRENT_TEST"] = original_env
 
     @patch("kleinanzeigen_bot.utils.chrome_version_detector.detect_chrome_version_from_binary")
+    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_remote_debugging")
+    async def test_validate_chrome_version_logs_remote_detection(
+        self,
+        mock_remote:Mock,
+        mock_binary:Mock,
+        scraper:WebScrapingMixin,
+        caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """When a remote browser responds, the detected version should be logged."""
+        mock_remote.return_value = ChromeVersionInfo("136.0.6778.0", 136, "Chrome")
+        mock_binary.return_value = None
+        scraper.browser_config.arguments = ["--remote-debugging-port=9222"]
+        scraper.browser_config.binary_location = "/path/to/chrome"
+        caplog.set_level("DEBUG")
+
+        with patch.dict(os.environ, {}, clear = True), \
+                patch.object(scraper, "_check_port_with_retry", return_value = True):
+            await scraper._validate_chrome_version_configuration()
+
+        assert "Detected version from existing browser" in caplog.text
+        mock_remote.assert_called_once()
+
+    @patch("kleinanzeigen_bot.utils.chrome_version_detector.detect_chrome_version_from_binary")
     async def test_validate_chrome_version_configuration_no_binary_location(
         self, mock_detect:Mock, scraper:WebScrapingMixin
     ) -> None:

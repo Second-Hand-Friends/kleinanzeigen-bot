@@ -3,7 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import pytest
 
-from kleinanzeigen_bot.model.config_model import AdDefaults, Config
+from kleinanzeigen_bot.model.config_model import AdDefaults, Config, TimeoutConfig
 
 
 def test_migrate_legacy_description_prefix() -> None:
@@ -113,3 +113,13 @@ def test_validate_glob_pattern_rejects_blank_strings() -> None:
         "login": {"username": "dummy", "password": "dummy"}
     })
     assert cfg.ad_files == ["*.yaml"]
+
+
+def test_timeout_config_resolve_returns_specific_value() -> None:
+    timeouts = TimeoutConfig(default = 4.0, page_load = 12.5)
+    assert timeouts.resolve("page_load") == 12.5
+
+
+def test_timeout_config_resolve_falls_back_to_default() -> None:
+    timeouts = TimeoutConfig(default = 3.0)
+    assert timeouts.resolve("nonexistent_key") == 3.0
