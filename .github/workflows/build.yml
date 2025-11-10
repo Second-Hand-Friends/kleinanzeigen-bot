@@ -10,8 +10,9 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
     - cron: '0 15 1 * *'
   push:
-    branches:
-    - main
+    branches-ignore:  # build all branches except:
+    - 'dependabot/**'     # prevent GHA triggered twice (once for commit to the branch and once for opening/syncing the PR)
+    - 'dependencies/pdm'  # prevent GHA triggered twice (once for commit to the branch and once for opening/syncing the PR)
     tags-ignore:  # don't build tags
     - '**'
     paths-ignore:
