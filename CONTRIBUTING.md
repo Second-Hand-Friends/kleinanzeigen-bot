@@ -187,6 +187,12 @@ All Python files must start with SPDX license headers:
 - Use appropriate log levels (DEBUG, INFO, WARNING, ERROR)
 - Log important state changes and decision points
 
+#### Timeout configuration
+- The default timeout (`timeouts.default`) already wraps all standard DOM helpers (`web_find`, `web_click`, etc.) via `WebScrapingMixin._timeout/_effective_timeout`. Use it unless a workflow clearly needs a different SLA.
+- Reserve `timeouts.quick_dom` for transient overlays (shipping dialogs, payment prompts, toast banners) that should render almost instantly; call `self._timeout("quick_dom")` in those spots to keep the UI responsive.
+- Add a new timeout key only when a recurring workflow has its own timing profile (pagination, captcha detection, publishing confirmations, Chrome probes, etc.). Whenever you add one, extend `TimeoutConfig`, document it in the sample `timeouts:` block in `README.md`, and explain it in `docs/BROWSER_TROUBLESHOOTING.md`.
+- Encourage users to raise `timeouts.multiplier` when everything is slow, and override existing keys in `config.yaml` before introducing new ones. This keeps the configuration surface minimal.
+
 #### Examples
 ```python
 def parse_duration(text: str) -> timedelta:
@@ -297,4 +303,3 @@ See the [LICENSE.txt](LICENSE.txt) file for our project's licensing. All source 
 - Use the translation system for all output—**never hardcode German or other languages** in the code.
 - If you add or change a user-facing message, update the translation file and ensure that translation completeness tests pass (`tests/unit/test_translations.py`).
 - Review the translation guidelines and patterns in the codebase for correct usage.
-

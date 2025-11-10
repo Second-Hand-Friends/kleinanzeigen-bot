@@ -73,6 +73,13 @@ The bot will also provide specific instructions on how to fix your configuration
 
 After updating the config, rerun `scripts/generate_schemas.py` so tooling picks up the new schema and restart the bot.
 
+### Choosing the right timeout knob
+
+- Use the **default timeout** for standard DOM interactions (`web_find`, `web_click`, `web_input`, etc.). This is the baseline defined by `timeouts.default` in `config.yaml` and mirrored in `TimeoutConfig.default`.
+- Use **`quick_dom`** only for transient UI such as shipping dialogs, payment prompts, or other overlays that should render almost immediately. These lookups pass `self._timeout("quick_dom")` to keep the UI responsive while still benefiting from retry/backoff.
+- Introduce a **new timeout key** only when a recurring workflow has distinct timing requirements (e.g., long publishing confirmations, pagination, captcha probes, Chrome diagnostics). When you add one, update `TimeoutConfig`, the sample `timeouts:` block in `README.md`, and this guide so users know how to tune it.
+- Prefer adjusting `timeouts.multiplier` when the entire environment is slow, and override an existing key before inventing a new one if the behavior already fits one of the documented categories.
+
 ## Common Issues and Solutions
 
 ### Issue 1: "Failed to connect to browser" with "root" error
