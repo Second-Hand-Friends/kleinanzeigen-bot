@@ -364,7 +364,11 @@ class KleinanzeigenBot(WebScrapingMixin):
         dicts.save_dict(
             self.config_file_path,
             default_config.model_dump(exclude_none = True, exclude = {"ad_defaults": {"description"}}),
-            header = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/config.schema.json"
+            header = (
+                "# yaml-language-server: "
+                "$schema=https://raw.githubusercontent.com/Second-Hand-Friends/"
+                "kleinanzeigen-bot/refs/heads/main/schemas/config.schema.json"
+            )
         )
 
     def load_config(self) -> None:

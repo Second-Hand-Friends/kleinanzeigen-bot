@@ -13,7 +13,8 @@ from kleinanzeigen_bot.model.config_model import PriceReductionConfig
 
 
 class _ApplyAutoPriceReduction(Protocol):
-    def __call__(self, ad_cfg:Any, ad_file_relative:str) -> None: ...
+    def __call__(self, ad_cfg:Any, ad_file_relative:str) -> None:
+        ...
 
 
 def test_initial_posting_uses_base_price() -> None:
