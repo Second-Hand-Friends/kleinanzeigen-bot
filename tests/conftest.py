@@ -15,6 +15,7 @@ Fixture Organization:
 - Test data fixtures: Shared test data (description_test_cases)
 """
 import os
+from collections.abc import Iterator
 from typing import Any, Final, cast
 from unittest.mock import MagicMock
 
@@ -23,13 +24,15 @@ import pytest
 from kleinanzeigen_bot import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import Config
-from kleinanzeigen_bot.utils import loggers
+from kleinanzeigen_bot.utils import i18n, loggers
 from kleinanzeigen_bot.utils.web_scraping_mixin import Browser
 
 loggers.configure_console_logging()
 
 LOG:Final[loggers.Logger] = loggers.get_logger("kleinanzeigen_bot")
 LOG.setLevel(loggers.DEBUG)
+
+os.environ.setdefault("PYTEST_XDIST_AUTO_NUM_WORKERS", str(max(1, (os.cpu_count() or 1))))
 
 
 # ============================================================================
@@ -196,6 +199,15 @@ def description_test_cases() -> list[tuple[dict[str, Any], str, str]]:
 def silence_nodriver_logs() -> None:
     """Silence nodriver logs during testing to reduce noise."""
     loggers.get_logger("nodriver").setLevel(loggers.WARNING)
+
+
+@pytest.fixture(autouse = True)
+def force_english_locale() -> Iterator[None]:
+    """Ensure tests run with a deterministic English locale."""
+    previous_locale = i18n.get_current_locale()
+    i18n.set_current_locale(i18n.Locale("en", "US", "UTF-8"))
+    yield
+    i18n.set_current_locale(previous_locale)
 
 
 # ============================================================================
