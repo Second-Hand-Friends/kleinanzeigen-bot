@@ -32,7 +32,8 @@ class ConfigProtocol(Protocol):
     browser_args:list[str]
     user_data_dir:str | None
 
-    def add_extension(self, ext:str) -> None: ...
+    def add_extension(self, ext:str) -> None:
+        ...
 
 
 class TrulyAwaitableMockPage:
