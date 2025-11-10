@@ -32,8 +32,6 @@ loggers.configure_console_logging()
 LOG:Final[loggers.Logger] = loggers.get_logger("kleinanzeigen_bot")
 LOG.setLevel(loggers.DEBUG)
 
-os.environ.setdefault("PYTEST_XDIST_AUTO_NUM_WORKERS", str(max(1, (os.cpu_count() or 1))))
-
 
 # ============================================================================
 # Core Fixtures - Basic test infrastructure
