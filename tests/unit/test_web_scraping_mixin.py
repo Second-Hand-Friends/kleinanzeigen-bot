@@ -1394,6 +1394,7 @@ class TestWebScrapingDiagnostics:
 
         with patch("os.path.exists", return_value = True), \
                 patch("os.access", return_value = True), \
+                patch("psutil.process_iter", return_value = []), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.net.is_port_open", return_value = False), \
                 patch("platform.system", return_value = "Darwin"), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False), \
