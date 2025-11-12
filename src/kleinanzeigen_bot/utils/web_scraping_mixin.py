@@ -5,7 +5,6 @@ import asyncio, enum, inspect, json, os, platform, secrets, shutil, subprocess, 
 from collections.abc import Callable, Coroutine, Iterable
 from gettext import gettext as _
 from typing import Any, Final, cast
-import json
 
 try:
     from typing import Never  # type: ignore[attr-defined,unused-ignore] # mypy
@@ -854,7 +853,7 @@ class WebScrapingMixin:
         await elem.apply(f"""
             function (element) {{
                 const wanted = String({js_value});
-    
+
                 // 1) Try by value
                 for (let i = 0; i < element.options.length; i++) {{
                     if (element.options[i].value === wanted) {{
@@ -863,7 +862,7 @@ class WebScrapingMixin:
                         return;
                     }}
                 }}
-    
+
                 // 2) Fallback by displayed text (trimmed)
                 const needle = wanted.trim();
                 for (let i = 0; i < element.options.length; i++) {{
@@ -875,7 +874,7 @@ class WebScrapingMixin:
                         return;
                     }}
                 }}
-    
+
                 throw new Error("Option not found by value or displayed text: " + wanted);
             }}
         """)
@@ -890,7 +889,7 @@ class WebScrapingMixin:
         :raises TimeoutError: if element could not be found within time
         :raises UnexpectedTagNameException: if element is not a <select> element
         """
-        input_field = await self.web_find(selector_type, selector_value, timeout=timeout)
+        input_field = await self.web_find(selector_type, selector_value, timeout = timeout)
         await input_field.clear_input()
         await input_field.send_keys(str(selected_value))
         await self.web_sleep()
@@ -905,11 +904,11 @@ class WebScrapingMixin:
         ok = await dropdown_elem.apply("""
             function (element) {
                 // Click on first <li>: because the Input is filtered already...
-                const li = element.querySelector(':scope > li') || 
+                const li = element.querySelector(':scope > li') ||
                          (element.firstElementChild && element.firstElementChild.tagName === 'LI' ? element.firstElementChild : null);
-                if (!li) 
+                if (!li)
                     return false;
-                    
+
                 li.click();
                 return true;
             }

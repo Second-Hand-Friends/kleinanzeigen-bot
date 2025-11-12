@@ -1059,7 +1059,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             try:
                 # finding element by name cause id are composed sometimes eg. autos.marke_s+autos.model_s for Modell by cars
                 special_attr_elem = await self.web_find(By.XPATH, f"//*[contains(@name, '{special_attribute_key}')]")
-            except TimeoutError as ex:
+            except TimeoutError:
                 # Trying to find element by ID instead cause sometimes there is NO name attribute...
                 try:
                     special_attr_elem = await self.web_find(By.ID, special_attribute_key)
