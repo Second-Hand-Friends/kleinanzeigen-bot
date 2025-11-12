@@ -62,6 +62,13 @@ This project uses a layered testing approach, with a focus on reliability and fa
 - **All tests in order:**
   - Run with: `pdm run test` (runs unit, then integration, then smoke)
 
+### Parallel Execution and Slow-Test Tracking
+
+- `pytest-xdist` runs every invocation with `-n auto`, so the suite is split across CPU cores automatically.
+- Pytest now reports the slowest 25 tests (`--durations=25 --durations-min=0.5`), making regressions easy to spot in CI logs.
+- Long-running scenarios are tagged with `@pytest.mark.slow` (smoke CLI checks and browser integrations). Keep them in CI, but skip locally via `pytest -m "not slow"` when you only need a quick signal.
+- Coverage commands (`pdm run test:cov`, etc.) remain compatible—`pytest-cov` merges the per-worker data transparently.
+
 ### CI Test Order
 
 - CI runs unit tests first, then integration tests, then smoke tests.
