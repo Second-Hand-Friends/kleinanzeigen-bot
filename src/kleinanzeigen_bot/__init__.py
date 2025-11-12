@@ -1060,8 +1060,12 @@ class KleinanzeigenBot(WebScrapingMixin):
                 # finding element by name cause id are composed sometimes eg. autos.marke_s+autos.model_s for Modell by cars
                 special_attr_elem = await self.web_find(By.XPATH, f"//*[contains(@name, '{special_attribute_key}')]")
             except TimeoutError as ex:
-                LOG.debug("Attribute field '%s' could not be found.", special_attribute_key)
-                raise TimeoutError(f"Failed to set special attribute [{special_attribute_key}] (not found)") from ex
+                # Trying to find element by ID instead cause sometimes there is NO name attribute...
+                try:
+                    special_attr_elem = await self.web_find(By.ID, special_attribute_key)
+                except TimeoutError as ex:
+                    LOG.debug("Attribute field '%s' could not be found.", special_attribute_key)
+                    raise TimeoutError(f"Failed to set special attribute by either ID or Name [{special_attribute_key}] (not found)") from ex
 
             try:
                 elem_id:str = str(special_attr_elem.attrs.id)
@@ -1071,6 +1075,9 @@ class KleinanzeigenBot(WebScrapingMixin):
                 elif special_attr_elem.attrs.type == "checkbox":
                     LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
                     await self.web_click(By.ID, elem_id)
+                elif special_attr_elem.attrs.type == "text" and special_attr_elem.attrs.get("role") == "combobox":
+                    LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
+                    await self.web_select_combobox(By.ID, elem_id, special_attribute_value_str)
                 else:
                     LOG.debug("Attribute field '%s' seems to be a text input...", special_attribute_key)
                     await self.web_input(By.ID, elem_id, special_attribute_value_str)

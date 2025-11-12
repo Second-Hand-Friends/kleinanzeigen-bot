@@ -5,6 +5,7 @@ import asyncio, enum, inspect, json, os, platform, secrets, shutil, subprocess, 
 from collections.abc import Callable, Coroutine, Iterable
 from gettext import gettext as _
 from typing import Any, Final, cast
+import json
 
 try:
     from typing import Never  # type: ignore[attr-defined,unused-ignore] # mypy
@@ -848,21 +849,77 @@ class WebScrapingMixin:
             timeout_error_message = f"No clickable HTML element with selector: {selector_type}='{selector_value}' found"
         )
         elem = await self.web_find(selector_type, selector_value)
+
+        js_value = json.dumps(selected_value)  # safe escaping for JS
         await elem.apply(f"""
             function (element) {{
-              for(let i=0; i < element.options.length; i++)
-                {{
-                  if(element.options[i].value == "{selected_value}") {{
-                    element.selectedIndex = i;
-                    element.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                    break;
+                const wanted = String({js_value});
+    
+                // 1) Try by value
+                for (let i = 0; i < element.options.length; i++) {{
+                    if (element.options[i].value === wanted) {{
+                        element.selectedIndex = i;
+                        element.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                        return;
+                    }}
                 }}
-              }}
-              throw new Error("Option with value {selected_value} not found.");
+    
+                // 2) Fallback by displayed text (trimmed)
+                const needle = wanted.trim();
+                for (let i = 0; i < element.options.length; i++) {{
+                    const opt = element.options[i];
+                    const shown = (opt.label ?? opt.text ?? opt.textContent ?? '').trim();
+                    if (shown === needle) {{
+                        element.selectedIndex = i;
+                        element.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                        return;
+                    }}
+                }}
+    
+                throw new Error("Option not found by value or displayed text: " + wanted);
             }}
         """)
         await self.web_sleep()
         return elem
+
+    async def web_select_combobox(self, selector_type:By, selector_value:str, selected_value:Any, timeout:int | float = 5) -> Element:
+        """
+        Selects an <li> Optoin of a <input/> HTML Combobox element by visible text.
+
+        :param timeout: timeout in seconds
+        :raises TimeoutError: if element could not be found within time
+        :raises UnexpectedTagNameException: if element is not a <select> element
+        """
+        input_field = await self.web_find(selector_type, selector_value, timeout=timeout)
+        await input_field.clear_input()
+        await input_field.send_keys(str(selected_value))
+        await self.web_sleep()
+
+        # From the Inputfield, get the attribute "aria-controls" which POINTS to the Dropdown ul #id:
+        dropdown_id = input_field.attrs.get("aria-controls")
+        if not dropdown_id:
+            LOG.error("Combobox input field does not have 'aria-controls' attribute to locate dropdown options.")
+            raise AssertionError("Cannot locate combobox dropdown options.")
+
+        dropdown_elem = await self.web_find(By.ID, dropdown_id)
+        ok = await dropdown_elem.apply("""
+            function (element) {
+                // Click on first <li>: because the Input is filtered already...
+                const li = element.querySelector(':scope > li') || 
+                         (element.firstElementChild && element.firstElementChild.tagName === 'LI' ? element.firstElementChild : null);
+                if (!li) 
+                    return false;
+                    
+                li.click();
+                return true;
+            }
+        """)
+        if not ok:
+            LOG.error("No <li> options found in combobox dropdown with id '%s'.", dropdown_id)
+            raise AssertionError("Cannot locate combobox dropdown options.")
+
+        await self.web_sleep()
+        return dropdown_elem
 
     async def _validate_chrome_version_configuration(self) -> None:
         """
