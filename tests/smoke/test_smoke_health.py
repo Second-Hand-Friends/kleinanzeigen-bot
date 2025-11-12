@@ -6,28 +6,91 @@ Minimal smoke tests: post-deployment health checks for kleinanzeigen-bot.
 These tests verify that the most essential components are operational.
 """
 
+import contextlib
+import io
 import json
+import logging
+import os
 import re
-import subprocess  # noqa: S404
-import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
+from unittest.mock import patch
 
 import pytest
 from ruyaml import YAML
 
+import kleinanzeigen_bot
 from kleinanzeigen_bot.model.config_model import Config
+from kleinanzeigen_bot.utils.i18n import get_current_locale, set_current_locale
 from tests.conftest import SmokeKleinanzeigenBot
 
+pytestmark = pytest.mark.slow
 
-def run_cli_subcommand(args:list[str], cwd:str | None = None) -> subprocess.CompletedProcess[str]:
+
+@dataclass(slots = True)
+class CLIResult:
+    returncode:int
+    stdout:str
+    stderr:str
+
+
+def invoke_cli(args:list[str], cwd:Path | None = None) -> CLIResult:
     """
-    Run the kleinanzeigen-bot CLI as a subprocess with the given arguments.
-    Returns the CompletedProcess object.
+    Run the kleinanzeigen-bot CLI in-process and capture stdout/stderr.
     """
-    cli_module = "kleinanzeigen_bot.__main__"
-    cmd = [sys.executable, "-m", cli_module] + args
-    return subprocess.run(cmd, check = False, capture_output = True, text = True, cwd = cwd)  # noqa: S603
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    previous_cwd:Path | None = None
+    previous_locale = get_current_locale()
+
+    def capture_register(func:Callable[..., object], *_cb_args:Any, **_cb_kwargs:Any) -> Callable[..., object]:
+        return func
+
+    log_capture = io.StringIO()
+    log_handler = logging.StreamHandler(log_capture)
+    log_handler.setLevel(logging.DEBUG)
+
+    def build_result(exit_code:object) -> CLIResult:
+        if exit_code is None:
+            normalized = 0
+        elif isinstance(exit_code, int):
+            normalized = exit_code
+        else:
+            normalized = 1
+        combined_stderr = stderr.getvalue() + log_capture.getvalue()
+        return CLIResult(normalized, stdout.getvalue(), combined_stderr)
+
+    try:
+        if cwd is not None:
+            previous_cwd = Path.cwd()
+            os.chdir(os.fspath(cwd))
+        logging.getLogger().addHandler(log_handler)
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(patch("kleinanzeigen_bot.atexit.register", capture_register))
+            stack.enter_context(contextlib.redirect_stdout(stdout))
+            stack.enter_context(contextlib.redirect_stderr(stderr))
+            try:
+                kleinanzeigen_bot.main(["kleinanzeigen-bot", *args])
+            except SystemExit as exc:
+                return build_result(exc.code)
+            return build_result(0)
+    finally:
+        logging.getLogger().removeHandler(log_handler)
+        log_handler.close()
+        if previous_cwd is not None:
+            os.chdir(previous_cwd)
+        set_current_locale(previous_locale)
+
+
+@pytest.fixture(autouse = True)
+def disable_update_checker(monkeypatch:pytest.MonkeyPatch) -> None:
+    """Prevent smoke tests from hitting GitHub for update checks."""
+
+    def _no_update(*_args:object, **_kwargs:object) -> None:
+        return None
+
+    monkeypatch.setattr("kleinanzeigen_bot.update_checker.UpdateChecker.check_for_updates", _no_update)
 
 
 @pytest.mark.smoke
@@ -50,7 +113,7 @@ def test_cli_subcommands_no_config(subcommand:str, tmp_path:Path) -> None:
     Smoke: CLI subcommands that do not require a config file (--help, help, version, diagnose).
     """
     args = [subcommand]
-    result = run_cli_subcommand(args, cwd = str(tmp_path))
+    result = invoke_cli(args, cwd = tmp_path)
     assert result.returncode == 0
     out = (result.stdout + "\n" + result.stderr).lower()
     if subcommand in {"--help", "help"}:
@@ -66,7 +129,7 @@ def test_cli_subcommands_create_config_creates_file(tmp_path:Path) -> None:
     """
     Smoke: CLI 'create-config' creates a config.yaml file in the current directory.
     """
-    result = run_cli_subcommand(["create-config"], cwd = str(tmp_path))
+    result = invoke_cli(["create-config"], cwd = tmp_path)
     config_file = tmp_path / "config.yaml"
     assert result.returncode == 0
     assert config_file.exists(), "config.yaml was not created by create-config command"
@@ -82,7 +145,7 @@ def test_cli_subcommands_create_config_fails_if_exists(tmp_path:Path) -> None:
     """
     config_file = tmp_path / "config.yaml"
     config_file.write_text("# dummy config\n", encoding = "utf-8")
-    result = run_cli_subcommand(["create-config"], cwd = str(tmp_path))
+    result = invoke_cli(["create-config"], cwd = tmp_path)
     assert result.returncode == 0
     assert config_file.exists(), "config.yaml was deleted or not present after second create-config run"
     out = (result.stdout + "\n" + result.stderr).lower()
@@ -126,7 +189,7 @@ def test_cli_subcommands_with_config_formats(
     elif serializer is not None:
         config_path.write_text(serializer(config_dict), encoding = "utf-8")
     args = [subcommand, "--config", str(config_path)]
-    result = run_cli_subcommand(args, cwd = str(tmp_path))
+    result = invoke_cli(args, cwd = tmp_path)
     assert result.returncode == 0
     out = (result.stdout + "\n" + result.stderr).lower()
     if subcommand == "verify":

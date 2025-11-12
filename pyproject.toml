@@ -51,6 +51,7 @@ dev = [
     "pip-audit",
     "pytest>=8.3.4",
     "pytest-asyncio>=0.25.3",
+    "pytest-xdist>=3.6.1",
     "pytest-rerunfailures",
     "pytest-cov>=6.0.0",
     "ruff",
@@ -347,8 +348,12 @@ addopts = """
   --strict-markers
   --doctest-modules
   --cov-report=term-missing
+  -n auto
+  --durations=25
+  --durations-min=0.5
 """
 markers = [
+  "slow: marks a test as long running",
   "smoke: marks a test as a high-level smoke test (critical path, no mocks)",
   "itest: marks a test as an integration test (i.e. a test with external dependencies)",
   "asyncio: mark test as async"
