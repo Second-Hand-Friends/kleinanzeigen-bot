@@ -10,6 +10,8 @@ import pytest
 from kleinanzeigen_bot.utils.misc import ensure
 from kleinanzeigen_bot.utils.web_scraping_mixin import WebScrapingMixin
 
+pytestmark = pytest.mark.slow
+
 # Configure logging for integration tests
 # The main bot already handles nodriver logging via silence_nodriver_logs fixture
 # and pytest handles verbosity with -v flag automatically
