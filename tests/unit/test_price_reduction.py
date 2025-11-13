@@ -4,7 +4,7 @@
 from datetime import datetime, timedelta, timezone
 from gettext import gettext as _
 from types import SimpleNamespace
-from typing import Any, Protocol, cast
+from typing import Any, Protocol, cast, runtime_checkable
 
 import pytest
 
@@ -13,9 +13,16 @@ from kleinanzeigen_bot.model.ad_model import calculate_auto_price
 from kleinanzeigen_bot.model.config_model import PriceReductionConfig
 
 
+@runtime_checkable
 class _ApplyAutoPriceReduction(Protocol):
-    def __call__(self, ad_cfg:Any, ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
+    def __call__(self, ad_cfg:SimpleNamespace, ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
         ...
+
+
+@pytest.fixture
+def apply_auto_price_reduction() -> _ApplyAutoPriceReduction:
+    bot = KleinanzeigenBot()
+    return cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
 
 
 def test_initial_posting_uses_base_price() -> None:
@@ -161,39 +168,16 @@ def test_missing_min_price_raises_error() -> None:
         calculate_auto_price(base_price = 200, auto_reduce = True, price_reduction = reduction, price_reduction_count = 3, min_price = None)
 
 
-def test_apply_auto_price_reduction_warns_when_price_missing_early(caplog:pytest.LogCaptureFixture) -> None:
-    bot = KleinanzeigenBot()
-    ad_cfg = SimpleNamespace(
-        auto_reduce_price = True,
-        price = None,
-        price_reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25),
-        price_reduction_count = 1,
-        repost_count = 3,
-        min_price = 15,
-        price_reduction_delay_reposts = 0,
-        price_reduction_delay_days = 0
-    )
-
-    apply_method = cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
-    ad_orig:dict[str, Any] = {}
-
-    with caplog.at_level("WARNING"):
-        apply_method(ad_cfg, ad_orig, "warn_price_missing.yaml")
-
-    expected = _("Auto price reduction is enabled for [%s] but no price is configured.") % ("warn_price_missing.yaml",)
-    assert any(expected in message for message in caplog.messages)
-    assert ad_cfg.price is None
-    assert "price_reduction_count" not in ad_orig
-
-
 def test_feature_disabled_path_leaves_price_unchanged() -> None:
     reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25)
     price = calculate_auto_price(base_price = 100, auto_reduce = False, price_reduction = reduction, price_reduction_count = 4, min_price = 40)
     assert price == 100
 
 
-def test_apply_auto_price_reduction_logs_drop(caplog:pytest.LogCaptureFixture) -> None:
-    bot = KleinanzeigenBot()
+def test_apply_auto_price_reduction_logs_drop(
+    caplog:pytest.LogCaptureFixture,
+    apply_auto_price_reduction:_ApplyAutoPriceReduction
+) -> None:
     ad_cfg = SimpleNamespace(
         auto_reduce_price = True,
         price = 200,
@@ -205,11 +189,10 @@ def test_apply_auto_price_reduction_logs_drop(caplog:pytest.LogCaptureFixture) -
         price_reduction_delay_days = 0
     )
 
-    apply_method = cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
     ad_orig:dict[str, Any] = {}
 
     with caplog.at_level("INFO"):
-        apply_method(ad_cfg, ad_orig, "ad_test.yaml")
+        apply_auto_price_reduction(ad_cfg, ad_orig, "ad_test.yaml")
 
     expected = _("Auto price reduction applied: %s -> %s after %s reduction cycles") % (200, 150, 1)
     assert any(expected in message for message in caplog.messages)
@@ -218,8 +201,10 @@ def test_apply_auto_price_reduction_logs_drop(caplog:pytest.LogCaptureFixture) -
     assert ad_orig["price_reduction_count"] == 1
 
 
-def test_apply_auto_price_reduction_logs_unchanged_price(caplog:pytest.LogCaptureFixture) -> None:
-    bot = KleinanzeigenBot()
+def test_apply_auto_price_reduction_logs_unchanged_price(
+    caplog:pytest.LogCaptureFixture,
+    apply_auto_price_reduction:_ApplyAutoPriceReduction
+) -> None:
     ad_cfg = SimpleNamespace(
         auto_reduce_price = True,
         price = 120,
@@ -231,11 +216,10 @@ def test_apply_auto_price_reduction_logs_unchanged_price(caplog:pytest.LogCaptur
         price_reduction_delay_days = 0
     )
 
-    apply_method = cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
     ad_orig:dict[str, Any] = {}
 
     with caplog.at_level("INFO"):
-        apply_method(ad_cfg, ad_orig, "ad_test.yaml")
+        apply_auto_price_reduction(ad_cfg, ad_orig, "ad_test.yaml")
 
     expected = _("Auto price reduction kept price %s after attempting %s reduction cycles") % (120, 1)
     assert any(expected in message for message in caplog.messages)
@@ -244,8 +228,10 @@ def test_apply_auto_price_reduction_logs_unchanged_price(caplog:pytest.LogCaptur
     assert "price_reduction_count" not in ad_orig
 
 
-def test_apply_auto_price_reduction_warns_when_price_missing(caplog:pytest.LogCaptureFixture) -> None:
-    bot = KleinanzeigenBot()
+def test_apply_auto_price_reduction_warns_when_price_missing(
+    caplog:pytest.LogCaptureFixture,
+    apply_auto_price_reduction:_ApplyAutoPriceReduction
+) -> None:
     ad_cfg = SimpleNamespace(
         auto_reduce_price = True,
         price = None,
@@ -257,19 +243,20 @@ def test_apply_auto_price_reduction_warns_when_price_missing(caplog:pytest.LogCa
         price_reduction_delay_days = 0
     )
 
-    apply_method = cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
     ad_orig:dict[str, Any] = {}
 
     with caplog.at_level("WARNING"):
-        apply_method(ad_cfg, ad_orig, "ad_warning.yaml")
+        apply_auto_price_reduction(ad_cfg, ad_orig, "ad_warning.yaml")
 
     expected = _("Auto price reduction is enabled for [%s] but no price is configured.") % ("ad_warning.yaml",)
     assert any(expected in message for message in caplog.messages)
     assert ad_cfg.price is None
 
 
-def test_apply_auto_price_reduction_respects_repost_delay(caplog:pytest.LogCaptureFixture) -> None:
-    bot = KleinanzeigenBot()
+def test_apply_auto_price_reduction_respects_repost_delay(
+    caplog:pytest.LogCaptureFixture,
+    apply_auto_price_reduction:_ApplyAutoPriceReduction
+) -> None:
     ad_cfg = SimpleNamespace(
         auto_reduce_price = True,
         price = 200,
@@ -281,19 +268,19 @@ def test_apply_auto_price_reduction_respects_repost_delay(caplog:pytest.LogCaptu
         price_reduction_delay_days = 0
     )
 
-    apply_method = cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
     ad_orig:dict[str, Any] = {}
 
     with caplog.at_level("INFO"):
-        apply_method(ad_cfg, ad_orig, "ad_delay.yaml")
+        apply_auto_price_reduction(ad_cfg, ad_orig, "ad_delay.yaml")
 
     assert ad_cfg.price == 200
     delayed_message = _("Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)") % ("ad_delay.yaml", 2, 2, 0)
     assert any(delayed_message in message for message in caplog.messages)
 
 
-def test_apply_auto_price_reduction_after_repost_delay_reduces_once() -> None:
-    bot = KleinanzeigenBot()
+def test_apply_auto_price_reduction_after_repost_delay_reduces_once(
+    apply_auto_price_reduction:_ApplyAutoPriceReduction
+) -> None:
     ad_cfg = SimpleNamespace(
         auto_reduce_price = True,
         price = 100,
@@ -306,16 +293,17 @@ def test_apply_auto_price_reduction_after_repost_delay_reduces_once() -> None:
     )
 
     ad_cfg_orig:dict[str, Any] = {}
-    apply_method = cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
-    apply_method(ad_cfg, ad_cfg_orig, "ad_after_delay.yaml")
+    apply_auto_price_reduction(ad_cfg, ad_cfg_orig, "ad_after_delay.yaml")
 
     assert ad_cfg.price == 90
     assert ad_cfg.price_reduction_count == 1
     assert ad_cfg_orig["price_reduction_count"] == 1
 
 
-def test_apply_auto_price_reduction_waits_when_reduction_already_applied(caplog:pytest.LogCaptureFixture) -> None:
-    bot = KleinanzeigenBot()
+def test_apply_auto_price_reduction_waits_when_reduction_already_applied(
+    caplog:pytest.LogCaptureFixture,
+    apply_auto_price_reduction:_ApplyAutoPriceReduction
+) -> None:
     ad_cfg = SimpleNamespace(
         auto_reduce_price = True,
         price = 100,
@@ -327,11 +315,10 @@ def test_apply_auto_price_reduction_waits_when_reduction_already_applied(caplog:
         price_reduction_delay_days = 0
     )
 
-    apply_method = cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
     ad_orig:dict[str, Any] = {}
 
     with caplog.at_level("INFO"):
-        apply_method(ad_cfg, ad_orig, "ad_already.yaml")
+        apply_auto_price_reduction(ad_cfg, ad_orig, "ad_already.yaml")
 
     expected = _("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts") % ("ad_already.yaml", 3, 3)
     assert any(expected in message for message in caplog.messages)
@@ -340,8 +327,11 @@ def test_apply_auto_price_reduction_waits_when_reduction_already_applied(caplog:
     assert "price_reduction_count" not in ad_orig
 
 
-def test_apply_auto_price_reduction_respects_day_delay(monkeypatch:pytest.MonkeyPatch, caplog:pytest.LogCaptureFixture) -> None:
-    bot = KleinanzeigenBot()
+def test_apply_auto_price_reduction_respects_day_delay(
+    monkeypatch:pytest.MonkeyPatch,
+    caplog:pytest.LogCaptureFixture,
+    apply_auto_price_reduction:_ApplyAutoPriceReduction
+) -> None:
     reference = datetime(2025, 1, 1, tzinfo = timezone.utc)
     ad_cfg = SimpleNamespace(
         auto_reduce_price = True,
@@ -358,19 +348,20 @@ def test_apply_auto_price_reduction_respects_day_delay(monkeypatch:pytest.Monkey
 
     monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: reference + timedelta(days = 1))
 
-    apply_method = cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
     ad_orig:dict[str, Any] = {}
 
     with caplog.at_level("INFO"):
-        apply_method(ad_cfg, ad_orig, "ad_delay_days.yaml")
+        apply_auto_price_reduction(ad_cfg, ad_orig, "ad_delay_days.yaml")
 
     assert ad_cfg.price == 150
     delayed_message = _("Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)") % ("ad_delay_days.yaml", 3, 1)
     assert any(delayed_message in message for message in caplog.messages)
 
 
-def test_apply_auto_price_reduction_runs_after_delays(monkeypatch:pytest.MonkeyPatch) -> None:
-    bot = KleinanzeigenBot()
+def test_apply_auto_price_reduction_runs_after_delays(
+    monkeypatch:pytest.MonkeyPatch,
+    apply_auto_price_reduction:_ApplyAutoPriceReduction
+) -> None:
     reference = datetime(2025, 1, 1, tzinfo = timezone.utc)
     ad_cfg = SimpleNamespace(
         auto_reduce_price = True,
@@ -387,15 +378,16 @@ def test_apply_auto_price_reduction_runs_after_delays(monkeypatch:pytest.MonkeyP
 
     monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: reference)
 
-    apply_method = cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
     ad_orig:dict[str, Any] = {}
-    apply_method(ad_cfg, ad_orig, "ad_ready.yaml")
+    apply_auto_price_reduction(ad_cfg, ad_orig, "ad_ready.yaml")
 
     assert ad_cfg.price == 90
 
 
-def test_apply_auto_price_reduction_delayed_when_timestamp_missing(caplog:pytest.LogCaptureFixture) -> None:
-    bot = KleinanzeigenBot()
+def test_apply_auto_price_reduction_delayed_when_timestamp_missing(
+    caplog:pytest.LogCaptureFixture,
+    apply_auto_price_reduction:_ApplyAutoPriceReduction
+) -> None:
     ad_cfg = SimpleNamespace(
         auto_reduce_price = True,
         price = 200,
@@ -409,11 +401,10 @@ def test_apply_auto_price_reduction_delayed_when_timestamp_missing(caplog:pytest
         created_on = None
     )
 
-    apply_method = cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
     ad_orig:dict[str, Any] = {}
 
     with caplog.at_level("INFO"):
-        apply_method(ad_cfg, ad_orig, "ad_missing_time.yaml")
+        apply_auto_price_reduction(ad_cfg, ad_orig, "ad_missing_time.yaml")
 
     expected = _("Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing") % ("ad_missing_time.yaml", 2)
     assert any(expected in message for message in caplog.messages)
