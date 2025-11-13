@@ -33,7 +33,7 @@ class AdExtractor(WebScrapingMixin):
     def __init__(self, browser:Browser, config:Config) -> None:
         super().__init__()
         self.browser = browser
-        self.config = config
+        self.config:Config = config
 
     async def download_ad(self, ad_id:int) -> None:
         """
@@ -151,9 +151,10 @@ class AdExtractor(WebScrapingMixin):
 
         # --- Pagination handling ---
         multi_page = False
+        pagination_timeout = self._timeout("pagination_initial")
         try:
             # Correct selector: Use uppercase '.Pagination'
-            pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout = 10)  # Increased timeout slightly
+            pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout = pagination_timeout)  # Increased timeout slightly
             # Correct selector: Use 'aria-label'
             # Also check if the button is actually present AND potentially enabled (though enabled check isn't strictly necessary here, only for clicking later)
             next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section)
@@ -209,9 +210,10 @@ class AdExtractor(WebScrapingMixin):
                 break
 
             # --- Navigate to next page ---
+            follow_up_timeout = self._timeout("pagination_follow_up")
             try:
                 # Find the pagination section again (scope might have changed after scroll/wait)
-                pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout = 5)
+                pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout = follow_up_timeout)
                 # Find the "Next" button using the correct aria-label selector and ensure it's not disabled
                 next_button_element = None
                 possible_next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section)
@@ -437,8 +439,19 @@ class AdExtractor(WebScrapingMixin):
 
         # Fallback to legacy selectors in case the breadcrumb structure is unexpected.
         LOG.debug(_("Falling back to legacy breadcrumb selectors; collected ids: %s"), category_ids)
-        category_first_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
-        category_second_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(3)", parent = category_line)
+        fallback_timeout = self._effective_timeout()
+        try:
+            category_first_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
+            category_second_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(3)", parent = category_line)
+        except TimeoutError as exc:
+            LOG.error(
+                "Legacy breadcrumb selectors not found within %.1f seconds (collected ids: %s)",
+                fallback_timeout,
+                category_ids
+            )
+            raise TimeoutError(
+                _("Unable to locate breadcrumb fallback selectors within %(seconds).1f seconds.") % {"seconds": fallback_timeout}
+            ) from exc
         href_first:str = str(category_first_part.attrs["href"])
         href_second:str = str(category_second_part.attrs["href"])
         cat_num_first_raw = href_first.rsplit("/", maxsplit = 1)[-1]

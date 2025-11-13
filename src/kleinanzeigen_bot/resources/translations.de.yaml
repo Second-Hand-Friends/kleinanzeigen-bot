@@ -86,8 +86,16 @@ kleinanzeigen_bot/__init__.py:
     "ad": "Anzeige"
   __apply_auto_price_reduction:
     "Auto price reduction is enabled for [%s] but no price is configured.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber es wurde kein Preis konfiguriert."
-    "Auto price reduction applied: %s -> %s after %s reposts": "Automatische Preisreduzierung angewendet: %s -> %s nach %s erneuten Veröffentlichungen"
-    "Auto price reduction using unchanged price %s after %s reposts": "Automatische Preisreduzierung verwendet unveränderten Preis %s nach %s erneuten Veröffentlichungen"
+    "Auto price reduction applied: %s -> %s after %s reduction cycles": "Automatische Preisreduzierung angewendet: %s -> %s nach %s Reduktionszyklen"
+    "Auto price reduction kept price %s after attempting %s reduction cycles": "Automatische Preisreduzierung behält Preis %s nach Versuch von %s Reduktionszyklen bei"
+
+  __repost_cycle_ready:
+    "Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)": "Automatische Preisreduzierung für [%s] verzögert: Warte %s weitere Reposts (abgeschlossen %s, angewandte Reduktionen %s)"
+    "Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts": "Automatische Preisreduzierung bereits angewendet für [%s]: %s Reduktionen entsprechen %s zulässigen Reposts"
+
+  __day_delay_elapsed:
+    "Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)": "Automatische Preisreduzierung für [%s] verzögert: Warte %s Tage (vergangen %s)"
+    "Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing": "Automatische Preisreduzierung für [%s] verzögert: Warte %s Tage, aber Veröffentlichungszeitpunkt fehlt"
 
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
@@ -223,6 +231,8 @@ kleinanzeigen_bot/extract.py:
   _extract_category_from_ad_page:
     "Breadcrumb container 'vap-brdcrmb' not found; cannot extract ad category: %s": "Breadcrumb-Container 'vap-brdcrmb' nicht gefunden; kann Anzeigenkategorie nicht extrahieren: %s"
     "Falling back to legacy breadcrumb selectors; collected ids: %s": "Weiche auf ältere Breadcrumb-Selektoren aus; gesammelte IDs: %s"
+    "Legacy breadcrumb selectors not found within %.1f seconds (collected ids: %s)": "Ältere Breadcrumb-Selektoren nicht innerhalb von %.1f Sekunden gefunden (gesammelte IDs: %s)"
+    "Unable to locate breadcrumb fallback selectors within %(seconds).1f seconds.": "Ältere Breadcrumb-Selektoren konnten nicht innerhalb von %(seconds).1f Sekunden gefunden werden."
 
 #################################################
 kleinanzeigen_bot/utils/i18n.py:
@@ -402,11 +412,6 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
   web_check:
     "Unsupported attribute: %s": "Nicht unterstütztes Attribut: %s"
 
-  web_find:
-    "Unsupported selector type: %s": "Nicht unterstützter Selektor-Typ: %s"
-
-  web_find_all:
-    "Unsupported selector type: %s": "Nicht unterstützter Selektor-Typ: %s"
   close_browser_session:
     "Closing Browser session...": "Schließe Browser-Sitzung..."
 
@@ -420,6 +425,12 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
 
   web_request:
     " -> HTTP %s [%s]...": " -> HTTP %s [%s]..."
+
+  _web_find_once:
+    "Unsupported selector type: %s": "Nicht unterstützter Selektor-Typ: %s"
+
+  _web_find_all_once:
+    "Unsupported selector type: %s": "Nicht unterstützter Selektor-Typ: %s"
 
   diagnose_browser_issues:
     "=== Browser Connection Diagnostics ===": "=== Browser-Verbindungsdiagnose ==="
@@ -437,6 +448,8 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "(info) User data directory does not exist (will be created): %s": "(Info) Benutzerdatenverzeichnis existiert nicht (wird erstellt): %s"
     "(info) Remote debugging port configured: %d": "(Info) Remote-Debugging-Port konfiguriert: %d"
     "(info) Remote debugging port is not open": "(Info) Remote-Debugging-Port ist nicht offen"
+
+    "(warn) Unable to inspect browser processes: %s": "(Warnung) Browser-Prozesse konnten nicht überprüft werden: %s"
 
     "(info) No browser processes currently running": "(Info) Derzeit keine Browser-Prozesse aktiv"
     "(fail) Running as root - this can cause browser issues": "(Fehler) Läuft als Root - dies kann Browser-Probleme verursachen"

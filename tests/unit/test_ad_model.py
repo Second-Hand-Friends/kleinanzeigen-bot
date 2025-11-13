@@ -8,7 +8,7 @@ import math
 import pytest
 
 from kleinanzeigen_bot.model.ad_model import Ad, AdPartial
-from kleinanzeigen_bot.model.config_model import AdDefaults
+from kleinanzeigen_bot.model.config_model import AdDefaults, PriceReductionConfig
 
 
 def test_update_content_hash() -> None:
@@ -46,6 +46,20 @@ def test_update_content_hash() -> None:
     }).update_content_hash().content_hash != minimal_ad_cfg_hash
 
 
+def test_price_reduction_count_does_not_influence_content_hash() -> None:
+    base_ad_cfg = {
+        "id": "123456789",
+        "title": "Test Ad Title",
+        "category": "160",
+        "description": "Test Description",
+        "price_type": "NEGOTIABLE",
+    }
+
+    hash_without_reposts = AdPartial.model_validate(base_ad_cfg | {"price_reduction_count": 0}).update_content_hash().content_hash
+    hash_with_reposts = AdPartial.model_validate(base_ad_cfg | {"price_reduction_count": 5}).update_content_hash().content_hash
+    assert hash_without_reposts == hash_with_reposts
+
+
 def test_repost_count_does_not_influence_content_hash() -> None:
     base_ad_cfg = {
         "id": "123456789",
@@ -56,7 +70,7 @@ def test_repost_count_does_not_influence_content_hash() -> None:
     }
 
     hash_without_reposts = AdPartial.model_validate(base_ad_cfg | {"repost_count": 0}).update_content_hash().content_hash
-    hash_with_reposts = AdPartial.model_validate(base_ad_cfg | {"repost_count": 5}).update_content_hash().content_hash
+    hash_with_reposts = AdPartial.model_validate(base_ad_cfg | {"repost_count": 7}).update_content_hash().content_hash
     assert hash_without_reposts == hash_with_reposts
 
 
@@ -177,6 +191,31 @@ def test_ad_model_auto_reduce_requires_price_reduction() -> None:
     cfg = _complete_ad_cfg() | {"price_reduction": None}
     with pytest.raises(ValueError, match = "price_reduction must be specified"):
         Ad.model_validate(cfg)
+
+
+def test_price_reduction_delay_inherited_from_defaults() -> None:
+    cfg = _complete_ad_cfg()
+    defaults = AdDefaults(
+        auto_reduce_price = True,
+        price_reduction = PriceReductionConfig(type = "FIXED", value = 5),
+        price_reduction_delay_reposts = 4
+    )
+    cfg_without_delay = cfg.copy()
+    cfg_without_delay.pop("price_reduction_delay_reposts", None)
+    cfg_without_delay.pop("price_reduction_delay_days", None)
+    ad = AdPartial.model_validate(cfg_without_delay).to_ad(defaults)
+    assert ad.price_reduction_delay_reposts == 4
+
+
+def test_price_reduction_delay_override_zero() -> None:
+    cfg = _complete_ad_cfg() | {"price_reduction_delay_reposts": 0}
+    defaults = AdDefaults(
+        auto_reduce_price = True,
+        price_reduction = PriceReductionConfig(type = "FIXED", value = 5),
+        price_reduction_delay_reposts = 4
+    )
+    ad = AdPartial.model_validate(cfg).to_ad(defaults)
+    assert ad.price_reduction_delay_reposts == 0
 
 
 def test_ad_model_auto_reduce_requires_min_price() -> None:
