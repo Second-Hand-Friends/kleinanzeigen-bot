@@ -1076,7 +1076,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
                     await self.web_click(By.ID, elem_id)
                 elif special_attr_elem.attrs.type == "text" and special_attr_elem.attrs.get("role") == "combobox":
-                    LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
+                    LOG.debug(_("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)..."), special_attribute_key)
                     await self.web_select_combobox(By.ID, elem_id, special_attribute_value_str)
                 else:
                     LOG.debug("Attribute field '%s' seems to be a text input...", special_attribute_key)

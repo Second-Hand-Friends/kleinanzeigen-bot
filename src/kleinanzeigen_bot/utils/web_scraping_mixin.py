@@ -883,7 +883,7 @@ class WebScrapingMixin:
 
     async def web_select_combobox(self, selector_type:By, selector_value:str, selected_value:Any, timeout:int | float = 5) -> Element:
         """
-        Selects an <li> Optoin of a <input/> HTML Combobox element by visible text.
+        Selects an <li> Option of a <input/> HTML Combobox element by visible text.
 
         :param timeout: timeout in seconds
         :raises TimeoutError: if element could not be found within time
@@ -897,25 +897,48 @@ class WebScrapingMixin:
         # From the Inputfield, get the attribute "aria-controls" which POINTS to the Dropdown ul #id:
         dropdown_id = input_field.attrs.get("aria-controls")
         if not dropdown_id:
-            LOG.error("Combobox input field does not have 'aria-controls' attribute to locate dropdown options.")
-            raise AssertionError("Cannot locate combobox dropdown options.")
+            LOG.error(_("Combobox input field does not have 'aria-controls' attribute to locate dropdown options."))
+            raise TimeoutError(_("Cannot locate combobox dropdown options."))
 
         dropdown_elem = await self.web_find(By.ID, dropdown_id)
-        ok = await dropdown_elem.apply("""
-            function (element) {
-                // Click on first <li>: because the Input is filtered already...
-                const li = element.querySelector(':scope > li') ||
-                         (element.firstElementChild && element.firstElementChild.tagName === 'LI' ? element.firstElementChild : null);
-                if (!li)
-                    return false;
+        js_value = json.dumps(selected_value)  # safe escaping for JS
 
-                li.click();
-                return true;
-            }
+        # This selects the correct <li> by visible text inside the dropdown. It includes normalization, i.e. trimming
+        # leading/trailing spaces and collapsing multiple spaces to single spaces for matching. It is done case-insensitive.
+        ok = await dropdown_elem.apply(f"""
+        function (element) {{
+          const selected = String({js_value});
+          const normalize = s => (s ?? '').replace(/\\s+/g, ' ').trim().toLowerCase();
+          // Normalize whitespace and convert to lowercase for comparison
+
+          // Get all <li> elements inside the dropdown
+          const items = element.querySelectorAll(':scope > li[role="option"], :scope > li');
+
+          for (const li of items) {{
+            // The visible label is typically inside the last <span>
+            const labelEl = li.querySelector(':scope > span:last-of-type');
+            const label = normalize(labelEl ? labelEl.textContent : li.textContent);
+
+            // Compare normalized lowercase values
+            if (label === normalize(selected)) {{
+              // Scroll to make sure the element is visible
+              try {{
+                li.scrollIntoView({{block: 'nearest'}});
+              }} catch (e) {{}}
+
+              // Click the matched element
+              li.click();
+              return true;
+            }}
+          }}
+
+          // Return false if no matching item was found
+          return false;
+        }}
         """)
         if not ok:
-            LOG.error("No <li> options found in combobox dropdown with id '%s'.", dropdown_id)
-            raise AssertionError("Cannot locate combobox dropdown options.")
+            LOG.error(_("No <li> options found in combobox dropdown with id '%s'."), dropdown_id)
+            raise TimeoutError(_("Cannot locate combobox dropdown options."))
 
         await self.web_sleep()
         return dropdown_elem

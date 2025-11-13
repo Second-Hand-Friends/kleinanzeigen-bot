@@ -125,6 +125,7 @@ kleinanzeigen_bot/__init__.py:
     "Attribute field '%s' is not of kind radio button.": "Attributfeld '%s' ist kein Radiobutton."
     "Attribute field '%s' seems to be a checkbox...": "Attributfeld '%s' scheint eine Checkbox zu sein..."
     "Attribute field '%s' seems to be a text input...": "Attributfeld '%s' scheint ein Texteingabefeld zu sein..."
+    "Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...": "Attributfeld '%s' scheint eine Combobox zu sein (d.h. Texteingabefeld mit Dropdown-Filter)..."
 
   download_ads:
     "Scanning your ad overview...": "Scanne Anzeigenübersicht..."
@@ -401,8 +402,14 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
   web_find:
     "Unsupported selector type: %s": "Nicht unterstützter Selektor-Typ: %s"
 
+  web_select_combobox:
+    "Combobox input field does not have 'aria-controls' attribute to locate dropdown options.": "Das Eingabefeld der Combobox hat kein 'aria-controls'-Attribut, um Dropdown-Optionen zu finden."
+    "Cannot locate combobox dropdown options.": "Kann Combobox-Dropdown-Optionen nicht finden."
+    "No <li> options found in combobox dropdown with id '%s'.": "Keine <li>-Optionen im Combobox-Dropdown mit der ID '%s' gefunden."
+    
   web_find_all:
     "Unsupported selector type: %s": "Nicht unterstützter Selektor-Typ: %s"
+    
   close_browser_session:
     "Closing Browser session...": "Schließe Browser-Sitzung..."
 
