@@ -412,6 +412,60 @@ class TestAdExtractorNavigation:
                 call(By.CLASS_NAME, "cardbox", parent = ad_list_container_mock),
             ], any_order = False)
 
+    @pytest.mark.asyncio
+    async def test_extract_own_ads_urls_paginates_with_enabled_next_button(self, test_extractor:AdExtractor) -> None:
+        """Ensure the paginator clicks the first enabled next button and advances."""
+        ad_list_container_mock = MagicMock()
+        pagination_section_mock = MagicMock()
+        cardbox_page_one = MagicMock()
+        cardbox_page_two = MagicMock()
+        link_page_one = MagicMock(attrs = {"href": "/s-anzeige/page-one/111"})
+        link_page_two = MagicMock(attrs = {"href": "/s-anzeige/page-two/222"})
+
+        next_button_enabled = AsyncMock()
+        next_button_enabled.attrs = {}
+        disabled_button = MagicMock()
+        disabled_button.attrs = {"disabled": True}
+
+        link_queue = [link_page_one, link_page_two]
+        next_button_call = {"count": 0}
+        cardbox_call = {"count": 0}
+
+        async def fake_web_find(selector_type:By, selector_value:str, *, parent:Element | None = None,
+                timeout:int | float | None = None) -> Element:
+            if selector_type == By.ID and selector_value == "my-manageitems-adlist":
+                return ad_list_container_mock
+            if selector_type == By.CSS_SELECTOR and selector_value == ".Pagination":
+                return pagination_section_mock
+            if selector_type == By.CSS_SELECTOR and selector_value == "div h3 a.text-onSurface":
+                return link_queue.pop(0)
+            raise AssertionError(f"Unexpected selector {selector_type} {selector_value}")
+
+        async def fake_web_find_all(selector_type:By, selector_value:str, *, parent:Element | None = None,
+                timeout:int | float | None = None) -> list[Element]:
+            if selector_type == By.CSS_SELECTOR and selector_value == 'button[aria-label="Nächste"]':
+                next_button_call["count"] += 1
+                if next_button_call["count"] == 1:
+                    return [next_button_enabled]  # initial detection -> multi page
+                if next_button_call["count"] == 2:
+                    return [disabled_button, next_button_enabled]  # navigation on page 1
+                return []  # after navigating, stop
+            if selector_type == By.CLASS_NAME and selector_value == "cardbox":
+                cardbox_call["count"] += 1
+                return [cardbox_page_one] if cardbox_call["count"] == 1 else [cardbox_page_two]
+            raise AssertionError(f"Unexpected find_all selector {selector_type} {selector_value}")
+
+        with patch.object(test_extractor, "web_open", new_callable = AsyncMock), \
+                patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock), \
+                patch.object(test_extractor, "web_sleep", new_callable = AsyncMock), \
+                patch.object(test_extractor, "web_find", new_callable = AsyncMock, side_effect = fake_web_find), \
+                patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, side_effect = fake_web_find_all):
+
+            refs = await test_extractor.extract_own_ads_urls()
+
+        assert refs == ["/s-anzeige/page-one/111", "/s-anzeige/page-two/222"]
+        next_button_enabled.click.assert_awaited()  # triggered once during navigation
+
 
 class TestAdExtractorContent:
     """Tests for content extraction functionality."""
@@ -640,6 +694,24 @@ class TestAdExtractorCategory:
             mock_web_find.assert_any_call(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
             mock_web_find.assert_any_call(By.CSS_SELECTOR, "a:nth-of-type(3)", parent = category_line)
             mock_web_find_all.assert_awaited_once_with(By.CSS_SELECTOR, "a", parent = category_line)
+
+    @pytest.mark.asyncio
+    async def test_extract_category_legacy_selectors_timeout(self, extractor:AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
+        """Ensure fallback timeout logs the error and re-raises with translated message."""
+        category_line = MagicMock()
+
+        async def fake_web_find(selector_type:By, selector_value:str, *, parent:Element | None = None,
+                timeout:int | float | None = None) -> Element:
+            if selector_type == By.ID and selector_value == "vap-brdcrmb":
+                return category_line
+            raise TimeoutError("legacy selectors missing")
+
+        with patch.object(extractor, "web_find", new_callable = AsyncMock, side_effect = fake_web_find), \
+                patch.object(extractor, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError), \
+                caplog.at_level("ERROR"), pytest.raises(TimeoutError, match = "Unable to locate breadcrumb fallback selectors"):
+            await extractor._extract_category_from_ad_page()
+
+        assert any("Legacy breadcrumb selectors not found" in record.message for record in caplog.records)
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access

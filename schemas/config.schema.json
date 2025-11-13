@@ -359,6 +359,137 @@
       "title": "PublishingConfig",
       "type": "object"
     },
+    "TimeoutConfig": {
+      "properties": {
+        "multiplier": {
+          "default": 1.0,
+          "description": "Global multiplier applied to all timeout values.",
+          "minimum": 0.1,
+          "title": "Multiplier",
+          "type": "number"
+        },
+        "default": {
+          "type": "number",
+          "minimum": 0.0,
+          "default": 5.0,
+          "description": "Baseline timeout for DOM interactions.",
+          "title": "Default"
+        },
+        "page_load": {
+          "default": 15.0,
+          "description": "Page load timeout for web_open.",
+          "minimum": 1.0,
+          "title": "Page Load",
+          "type": "number"
+        },
+        "captcha_detection": {
+          "default": 2.0,
+          "description": "Timeout for captcha iframe detection.",
+          "minimum": 0.1,
+          "title": "Captcha Detection",
+          "type": "number"
+        },
+        "sms_verification": {
+          "default": 4.0,
+          "description": "Timeout for SMS verification prompts.",
+          "minimum": 0.1,
+          "title": "Sms Verification",
+          "type": "number"
+        },
+        "gdpr_prompt": {
+          "default": 10.0,
+          "description": "Timeout for GDPR/consent dialogs.",
+          "minimum": 1.0,
+          "title": "Gdpr Prompt",
+          "type": "number"
+        },
+        "publishing_result": {
+          "default": 300.0,
+          "description": "Timeout for publishing result checks.",
+          "minimum": 10.0,
+          "title": "Publishing Result",
+          "type": "number"
+        },
+        "publishing_confirmation": {
+          "default": 20.0,
+          "description": "Timeout for publish confirmation redirect.",
+          "minimum": 1.0,
+          "title": "Publishing Confirmation",
+          "type": "number"
+        },
+        "pagination_initial": {
+          "default": 10.0,
+          "description": "Timeout for initial pagination lookup.",
+          "minimum": 1.0,
+          "title": "Pagination Initial",
+          "type": "number"
+        },
+        "pagination_follow_up": {
+          "default": 5.0,
+          "description": "Timeout for subsequent pagination navigation.",
+          "minimum": 1.0,
+          "title": "Pagination Follow Up",
+          "type": "number"
+        },
+        "quick_dom": {
+          "default": 2.0,
+          "description": "Generic short timeout for transient UI.",
+          "minimum": 0.1,
+          "title": "Quick Dom",
+          "type": "number"
+        },
+        "update_check": {
+          "default": 10.0,
+          "description": "Timeout for GitHub update checks.",
+          "minimum": 1.0,
+          "title": "Update Check",
+          "type": "number"
+        },
+        "chrome_remote_probe": {
+          "default": 2.0,
+          "description": "Timeout for local remote-debugging probes.",
+          "minimum": 0.1,
+          "title": "Chrome Remote Probe",
+          "type": "number"
+        },
+        "chrome_remote_debugging": {
+          "default": 5.0,
+          "description": "Timeout for remote debugging API calls.",
+          "minimum": 1.0,
+          "title": "Chrome Remote Debugging",
+          "type": "number"
+        },
+        "chrome_binary_detection": {
+          "default": 10.0,
+          "description": "Timeout for chrome --version subprocesses.",
+          "minimum": 1.0,
+          "title": "Chrome Binary Detection",
+          "type": "number"
+        },
+        "retry_enabled": {
+          "default": true,
+          "description": "Enable built-in retry/backoff for DOM operations.",
+          "title": "Retry Enabled",
+          "type": "boolean"
+        },
+        "retry_max_attempts": {
+          "default": 2,
+          "description": "Max retry attempts when retry is enabled.",
+          "minimum": 1,
+          "title": "Retry Max Attempts",
+          "type": "integer"
+        },
+        "retry_backoff_factor": {
+          "default": 1.5,
+          "description": "Exponential factor applied per retry attempt.",
+          "minimum": 1.0,
+          "title": "Retry Backoff Factor",
+          "type": "number"
+        }
+      },
+      "title": "TimeoutConfig",
+      "type": "object"
+    },
     "UpdateCheckConfig": {
       "description": "Configuration for update checking functionality.\n\nAttributes:\n    enabled: Whether update checking is enabled.\n    channel: Which release channel to check ('latest' for stable, 'preview' for prereleases).\n    interval: How often to check for updates (e.g. '7d', '1d').\n        If the interval is invalid, too short (<1d), or too long (>30d),\n        the bot will log a warning and use a default interval for this run:\n            - 1d for 'preview' channel\n            - 7d for 'latest' channel\n        The config file is not changed automatically; please fix your config to avoid repeated warnings.",
       "properties": {
@@ -428,6 +559,10 @@
     "update_check": {
       "$ref": "#/$defs/UpdateCheckConfig",
       "description": "Update check configuration"
+    },
+    "timeouts": {
+      "$ref": "#/$defs/TimeoutConfig",
+      "description": "Centralized timeout configuration."
     }
   },
   "title": "Config",

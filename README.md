@@ -277,6 +277,27 @@ categories:
   Verschenken & Tauschen > Verleihen: 272/274
   Verschenken & Tauschen > Verschenken: 272/192
 
+# timeout tuning (optional)
+timeouts:
+  multiplier: 1.0                     # Scale all timeouts (e.g. 2.0 for slower networks)
+  default: 5.0                        # Base timeout for web_find/web_click/etc.
+  page_load: 15.0                     # Timeout for web_open page loads
+  captcha_detection: 2.0              # Timeout for captcha iframe detection
+  sms_verification: 4.0               # Timeout for SMS verification banners
+  gdpr_prompt: 10.0                   # Timeout when handling GDPR dialogs
+  publishing_result: 300.0            # Timeout for publishing status checks
+  publishing_confirmation: 20.0       # Timeout for publish confirmation redirect
+  pagination_initial: 10.0            # Timeout for first pagination lookup
+  pagination_follow_up: 5.0           # Timeout for subsequent pagination clicks
+  quick_dom: 2.0                      # Generic short DOM timeout (shipping dialogs, etc.)
+  update_check: 10.0                  # Timeout for GitHub update requests
+  chrome_remote_probe: 2.0            # Timeout for local remote-debugging probes
+  chrome_remote_debugging: 5.0        # Timeout for remote debugging API calls
+  chrome_binary_detection: 10.0       # Timeout for chrome --version subprocess
+  retry_enabled: true                 # Enables DOM retry/backoff when timeouts occur
+  retry_max_attempts: 2
+  retry_backoff_factor: 1.5
+
 # download configuration
 download:
   include_all_matching_shipping_options: false  # if true, all shipping options matching the package size will be included
@@ -328,6 +349,8 @@ login:
   username: ""
   password: ""
 ```
+
+Slow networks or sluggish remote browsers often just need a higher `timeouts.multiplier`, while truly problematic selectors can get explicit values directly under `timeouts`. Remember to regenerate the schemas after changing the configuration model so editors stay in sync.
 
 ### <a name="ad-config"></a>2) Ad configuration
 
