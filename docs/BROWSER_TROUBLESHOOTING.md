@@ -59,6 +59,18 @@ Please update your configuration to include --user-data-dir for remote debugging
 
 The bot will also provide specific instructions on how to fix your configuration.
 
+### Issue: Slow page loads or recurring TimeoutError
+
+**Symptoms:**
+- `_extract_category_from_ad_page` fails intermittently due to breadcrumb lookups timing out
+- Captcha/SMS/GDPR prompts appear right after a timeout
+- Requests to GitHub's API fail sporadically with timeout errors
+
+**Solutions:**
+1. Increase `timeouts.multiplier` in `config.yaml` (e.g. `2.0` doubles every timeout consistently).
+2. Override specific keys under `timeouts` (e.g. `pagination_initial: 20.0`) if only a single selector is problematic.
+3. Keep `retry_enabled` on so that DOM lookups are retried with exponential backoff.
+
 ## Common Issues and Solutions
 
 ### Issue 1: "Failed to connect to browser" with "root" error
