@@ -8,12 +8,14 @@ All rights reserved.
 """
 
 import json
+import logging
 import os
 import platform
 import shutil
 import zipfile
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import NoReturn, Protocol, cast
+from typing import Any, NoReturn, Protocol, cast
 from unittest.mock import AsyncMock, MagicMock, Mock, mock_open, patch
 
 import nodriver
@@ -22,6 +24,7 @@ import pytest
 from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
 
+from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import loggers
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is, WebScrapingMixin, _is_admin  # noqa: PLC2701
 
@@ -34,6 +37,11 @@ class ConfigProtocol(Protocol):
 
     def add_extension(self, ext:str) -> None:
         ...
+
+
+def _nodriver_start_mock() -> Mock:
+    """Return the nodriver.start mock with proper typing."""
+    return cast(Mock, cast(Any, nodriver).start)
 
 
 class TrulyAwaitableMockPage:
@@ -83,6 +91,7 @@ def web_scraper(mock_browser:AsyncMock, mock_page:TrulyAwaitableMockPage) -> Web
     scraper = WebScrapingMixin()
     scraper.browser = mock_browser
     scraper.page = mock_page  # type: ignore[unused-ignore,reportAttributeAccessIssue]
+    scraper.config = Config.model_validate({"login": {"username": "user@example.com", "password": "secret"}})  # noqa: S105
     return scraper
 
 
@@ -158,6 +167,21 @@ class TestWebScrapingErrorHandling:
             await web_scraper.web_input(By.ID, "test-id", "test text")
 
     @pytest.mark.asyncio
+    async def test_web_input_success_returns_element(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
+        """Successful web_input should send keys, wait, and return the element."""
+        mock_element = AsyncMock(spec = Element)
+        mock_page.query_selector.return_value = mock_element
+        mock_sleep = AsyncMock()
+        cast(Any, web_scraper).web_sleep = mock_sleep
+
+        result = await web_scraper.web_input(By.ID, "username", "hello world", timeout = 1)
+
+        assert result is mock_element
+        mock_element.clear_input.assert_awaited_once()
+        mock_element.send_keys.assert_awaited_once_with("hello world")
+        mock_sleep.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_web_open_timeout(self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock) -> None:
         """Test page load timeout in web_open."""
         # Mock browser.get to return a page that never loads
@@ -173,6 +197,19 @@ class TestWebScrapingErrorHandling:
         # Test page load timeout
         with pytest.raises(TimeoutError, match = "Page did not finish loading within"):
             await web_scraper.web_open("https://example.com", timeout = 0.1)
+
+    @pytest.mark.asyncio
+    async def test_web_open_skip_when_url_already_loaded(self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock, mock_page:TrulyAwaitableMockPage) -> None:
+        """web_open should short-circuit when the requested URL is already active."""
+        mock_browser.get.reset_mock()
+        mock_page.url = "https://example.com"
+        mock_execute = AsyncMock()
+        cast(Any, web_scraper).web_execute = mock_execute
+
+        await web_scraper.web_open("https://example.com", reload_if_already_open = False)
+
+        mock_browser.get.assert_not_awaited()
+        mock_execute.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_web_request_invalid_response(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
@@ -216,6 +253,179 @@ class TestWebScrapingErrorHandling:
         # Test attribute error
         with pytest.raises(Exception, match = "Attribute error"):
             await web_scraper.web_check(By.ID, "test-id", Is.DISPLAYED)
+
+    @pytest.mark.asyncio
+    async def test_web_find_applies_timeout_multiplier_and_backoff(self, web_scraper:WebScrapingMixin) -> None:
+        """Ensure multiplier/backoff logic is honored when timeouts occur."""
+        assert web_scraper.config is not None
+        web_scraper.config.timeouts.multiplier = 2.0
+        web_scraper.config.timeouts.retry_enabled = True
+        web_scraper.config.timeouts.retry_max_attempts = 2
+        web_scraper.config.timeouts.retry_backoff_factor = 2.0
+
+        recorded:list[tuple[float, bool]] = []
+
+        async def fake_web_await(condition:Callable[[], object], *, timeout:float, timeout_error_message:str = "",
+                                 apply_multiplier:bool = True) -> Element:
+            recorded.append((timeout, apply_multiplier))
+            raise TimeoutError(timeout_error_message or "timeout")
+
+        cast(Any, web_scraper).web_await = fake_web_await
+
+        with pytest.raises(TimeoutError):
+            await web_scraper.web_find(By.ID, "test-id", timeout = 0.5)
+
+        assert recorded == [(1.0, False), (2.0, False), (4.0, False)]
+
+
+class TestTimeoutAndRetryHelpers:
+    """Test timeout helper utilities in WebScrapingMixin."""
+
+    def test_get_timeout_config_prefers_config_timeouts(self, web_scraper:WebScrapingMixin) -> None:
+        """_get_timeout_config should return the config-provided timeout model when available."""
+        custom_config = Config.model_validate({
+            "login": {"username": "user@example.com", "password": "secret"},  # noqa: S105
+            "timeouts": {"default": 7.5}
+        })
+        web_scraper.config = custom_config
+
+        assert web_scraper._get_timeout_config() is custom_config.timeouts
+
+    def test_timeout_attempts_respects_retry_switch(self, web_scraper:WebScrapingMixin) -> None:
+        """_timeout_attempts should collapse to a single attempt when retries are disabled."""
+        web_scraper.config.timeouts.retry_enabled = False
+        assert web_scraper._timeout_attempts() == 1
+
+        web_scraper.config.timeouts.retry_enabled = True
+        web_scraper.config.timeouts.retry_max_attempts = 3
+        assert web_scraper._timeout_attempts() == 4
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_retries_operation(self, web_scraper:WebScrapingMixin) -> None:
+        """_run_with_timeout_retries should retry when TimeoutError is raised before succeeding."""
+        attempts:list[float] = []
+
+        async def flaky_operation(timeout:float) -> str:
+            attempts.append(timeout)
+            if len(attempts) == 1:
+                raise TimeoutError("first attempt")
+            return "done"
+
+        web_scraper.config.timeouts.retry_max_attempts = 1
+        result = await web_scraper._run_with_timeout_retries(flaky_operation, description = "retry-op")
+
+        assert result == "done"
+        assert len(attempts) == 2
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_guard_clause(self, web_scraper:WebScrapingMixin) -> None:
+        """_run_with_timeout_retries should guard against zero-attempt edge cases."""
+        async def never_called(timeout:float) -> None:
+            pytest.fail("operation should not run when attempts are zero")
+
+        with patch.object(web_scraper, "_timeout_attempts", return_value = 0), \
+                pytest.raises(TimeoutError, match = "guarded-op failed without executing operation"):
+            await web_scraper._run_with_timeout_retries(never_called, description = "guarded-op")
+
+
+class TestSelectorTimeoutMessages:
+    """Ensure selector helpers provide informative timeout messages."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("selector_type", "selector_value", "expected_message"),
+        [
+            (By.TAG_NAME, "section", "No HTML element found of tag <section> within 2.0 seconds."),
+            (By.CSS_SELECTOR, ".hero", "No HTML element found using CSS selector '.hero' within 2.0 seconds."),
+            (By.TEXT, "Submit", "No HTML element found containing text 'Submit' within 2.0 seconds."),
+            (By.XPATH, "//div[@class='hero']", "No HTML element found using XPath '//div[@class='hero']' within 2.0 seconds."),
+        ]
+    )
+    async def test_web_find_timeout_suffixes(
+            self,
+            web_scraper:WebScrapingMixin,
+            selector_type:By,
+            selector_value:str,
+            expected_message:str
+    ) -> None:
+        """web_find should pass descriptive timeout messages for every selector strategy."""
+        mock_element = AsyncMock(spec = Element)
+        mock_wait = AsyncMock(return_value = mock_element)
+        cast(Any, web_scraper).web_await = mock_wait
+
+        result = await web_scraper.web_find(selector_type, selector_value, timeout = 2)
+
+        assert result is mock_element
+        call = mock_wait.await_args_list[0]
+        assert expected_message == call.kwargs["timeout_error_message"]
+        assert call.kwargs["apply_multiplier"] is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("selector_type", "selector_value", "expected_message"),
+        [
+            (By.CLASS_NAME, "hero", "No HTML elements found with CSS class 'hero' within 1 seconds."),
+            (By.CSS_SELECTOR, ".card", "No HTML elements found using CSS selector '.card' within 1 seconds."),
+            (By.TAG_NAME, "article", "No HTML elements found of tag <article> within 1 seconds."),
+            (By.TEXT, "Listings", "No HTML elements found containing text 'Listings' within 1 seconds."),
+            (By.XPATH, "//footer", "No HTML elements found using XPath '//footer' within 1 seconds."),
+        ]
+    )
+    async def test_web_find_all_once_timeout_suffixes(
+            self,
+            web_scraper:WebScrapingMixin,
+            selector_type:By,
+            selector_value:str,
+            expected_message:str
+    ) -> None:
+        """_web_find_all_once should surface informative timeout errors for each selector."""
+        elements = [AsyncMock(spec = Element)]
+        mock_wait = AsyncMock(return_value = elements)
+        cast(Any, web_scraper).web_await = mock_wait
+
+        result = await web_scraper._web_find_all_once(selector_type, selector_value, 1)
+
+        assert result is elements
+        call = mock_wait.await_args_list[0]
+        assert expected_message == call.kwargs["timeout_error_message"]
+        assert call.kwargs["apply_multiplier"] is False
+
+    @pytest.mark.asyncio
+    async def test_web_find_all_delegates_to_retry_helper(self, web_scraper:WebScrapingMixin) -> None:
+        """web_find_all should execute via the timeout retry helper."""
+        elements = [AsyncMock(spec = Element)]
+
+        async def fake_retry(operation:Callable[[float], Awaitable[list[Element]]], **kwargs:Any) -> list[Element]:
+            assert kwargs["description"] == "web_find_all(CLASS_NAME, hero)"
+            assert kwargs["override"] == 1.5
+            result = await operation(0.42)
+            return result
+
+        retry_mock = AsyncMock(side_effect = fake_retry)
+        once_mock = AsyncMock(return_value = elements)
+        cast(Any, web_scraper)._run_with_timeout_retries = retry_mock
+        cast(Any, web_scraper)._web_find_all_once = once_mock
+
+        result = await web_scraper.web_find_all(By.CLASS_NAME, "hero", timeout = 1.5)
+
+        assert result is elements
+        retry_call = retry_mock.await_args_list[0]
+        assert retry_call.kwargs["key"] == "default"
+        assert retry_call.kwargs["override"] == 1.5
+
+        once_call = once_mock.await_args_list[0]
+        assert once_call.args[:2] == (By.CLASS_NAME, "hero")
+        assert once_call.args[2] == 0.42
+
+    @pytest.mark.asyncio
+    async def test_web_check_unsupported_attribute(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
+        """web_check should raise for unsupported attribute queries."""
+        mock_element = AsyncMock(spec = Element)
+        mock_element.attrs = {}
+        mock_page.query_selector.return_value = mock_element
+
+        with pytest.raises(AssertionError, match = "Unsupported attribute"):
+            await web_scraper.web_check(By.ID, "test-id", cast(Is, object()), timeout = 0.1)
 
 
 class TestWebScrapingSessionManagement:
@@ -296,9 +506,42 @@ class TestWebScrapingSessionManagement:
         with patch("psutil.Process") as mock_proc:
             mock_proc.return_value.children.return_value = []
             scraper.close_browser_session()
-            stop_mock.assert_called_once()
-            assert scraper.browser is None
-            assert scraper.page is None
+        stop_mock.assert_called_once()
+        assert scraper.browser is None
+        assert scraper.page is None
+
+
+class TestWebScrolling:
+    """Test scrolling helpers."""
+
+    @pytest.mark.asyncio
+    async def test_web_scroll_page_down_scrolls_and_returns(self, web_scraper:WebScrapingMixin) -> None:
+        """web_scroll_page_down should scroll both directions when requested."""
+        scripts:list[str] = []
+
+        async def exec_side_effect(script:str) -> int | None:
+            scripts.append(script)
+            if script == "document.body.scrollHeight":
+                return 20
+            return None
+
+        cast(Any, web_scraper).web_execute = AsyncMock(side_effect = exec_side_effect)
+
+        with patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.sleep", new_callable = AsyncMock) as mock_sleep:
+            await web_scraper.web_scroll_page_down(scroll_length = 10, scroll_speed = 10, scroll_back_top = True)
+
+        assert scripts[0] == "document.body.scrollHeight"
+        # Expect four scrollTo operations: two down, two up
+        assert scripts.count("document.body.scrollHeight") == 1
+        scroll_calls = [script for script in scripts if script.startswith("window.scrollTo")]
+        assert scroll_calls == [
+            "window.scrollTo(0, 10)",
+            "window.scrollTo(0, 20)",
+            "window.scrollTo(0, 10)",
+            "window.scrollTo(0, 0)"
+        ]
+        sleep_durations = [call.args[0] for call in mock_sleep.await_args_list]
+        assert sleep_durations == [1.0, 1.0, 0.5, 0.5]
 
     @pytest.mark.asyncio
     async def test_session_expiration_handling(self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock) -> None:
@@ -469,7 +712,7 @@ class TestWebScrapingBrowserConfiguration:
             def add_extension(self, ext:str) -> None:
                 self._extensions.append(ext)  # Use private extensions list
 
-        # Mock nodriver.start to return a mock browser  # type: ignore[attr-defined]
+        # Mock nodriver.start to return a mock browser
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
@@ -558,7 +801,7 @@ class TestWebScrapingBrowserConfiguration:
             def add_extension(self, ext:str) -> None:
                 self.extensions.append(ext)
 
-        # Mock nodriver.start to return a mock browser  # type: ignore[attr-defined]
+        # Mock nodriver.start to return a mock browser
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
@@ -577,7 +820,7 @@ class TestWebScrapingBrowserConfiguration:
         await scraper.create_browser_session()
 
         # Verify browser arguments
-        config = cast(Mock, nodriver.start).call_args[0][0]  # type: ignore[attr-defined]
+        config = _nodriver_start_mock().call_args[0][0]
         assert "--custom-arg=value" in config.browser_args
         assert "--another-arg" in config.browser_args
         assert "--incognito" in config.browser_args
@@ -590,7 +833,7 @@ class TestWebScrapingBrowserConfiguration:
         await scraper.create_browser_session()
 
         # Verify Edge-specific arguments
-        config = cast(Mock, nodriver.start).call_args[0][0]  # type: ignore[attr-defined]
+        config = _nodriver_start_mock().call_args[0][0]
         assert "-inprivate" in config.browser_args
         assert os.environ.get("MSEDGEDRIVER_TELEMETRY_OPTOUT") == "1"
 
@@ -621,7 +864,7 @@ class TestWebScrapingBrowserConfiguration:
         with zipfile.ZipFile(ext2, "w") as z:
             z.writestr("manifest.json", '{"name": "Test Extension 2"}')
 
-        # Mock nodriver.start to return a mock browser  # type: ignore[attr-defined]
+        # Mock nodriver.start to return a mock browser
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
@@ -645,7 +888,7 @@ class TestWebScrapingBrowserConfiguration:
         await scraper.create_browser_session()
 
         # Verify extensions were loaded
-        config = cast(Mock, nodriver.start).call_args[0][0]  # type: ignore[attr-defined]
+        config = _nodriver_start_mock().call_args[0][0]
         assert len(config._extensions) == 2
         for ext_path in config._extensions:
             assert os.path.exists(ext_path)
@@ -714,7 +957,7 @@ class TestWebScrapingBrowserConfiguration:
             def add_extension(self, ext:str) -> None:
                 self._extensions.append(ext)
 
-        # Mock nodriver.start to return a mock browser  # type: ignore[attr-defined]
+        # Mock nodriver.start to return a mock browser
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
@@ -773,7 +1016,7 @@ class TestWebScrapingBrowserConfiguration:
         temp_file = tmp_path / "temp_resource"
         temp_file.write_text("test")
 
-        # Mock nodriver.start to raise an exception  # type: ignore[attr-defined]
+        # Mock nodriver.start to raise an exception
         async def mock_start_fail(*args:object, **kwargs:object) -> NoReturn:
             if temp_file.exists():
                 temp_file.unlink()
@@ -802,7 +1045,7 @@ class TestWebScrapingBrowserConfiguration:
         assert scraper.browser is None
         assert scraper.page is None
 
-        # Now patch nodriver.start to return a new mock browser each time  # type: ignore[attr-defined]
+        # Now patch nodriver.start to return a new mock browser each time
         mock_browser = make_mock_browser()
         mock_page = TrulyAwaitableMockPage()
         mock_browser.get = AsyncMock(return_value = mock_page)
@@ -1445,6 +1688,46 @@ class TestWebScrapingDiagnostics:
                 patch.object(mock_process2, "info", side_effect = psutil.AccessDenied(pid = 456)):
             # Should not raise any exceptions
             web_scraper.diagnose_browser_issues()
+
+    def test_diagnose_browser_issues_handles_per_process_errors(
+            self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """diagnose_browser_issues should ignore psutil errors raised per process."""
+        caplog.set_level(logging.INFO)
+
+        class FailingProcess:
+
+            @property
+            def info(self) -> dict[str, object]:
+                raise psutil.AccessDenied(pid = 999)
+
+        with patch("os.path.exists", return_value = True), \
+                patch("os.access", return_value = True), \
+                patch("psutil.process_iter", return_value = [FailingProcess()]), \
+                patch("platform.system", return_value = "Linux"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False), \
+                patch.object(scraper_with_config, "_diagnose_chrome_version_issues"):
+            scraper_with_config.browser_config.binary_location = "/usr/bin/chrome"
+            scraper_with_config.diagnose_browser_issues()
+
+        assert "(info) No browser processes currently running" in caplog.text
+
+    def test_diagnose_browser_issues_handles_global_psutil_failure(
+            self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """diagnose_browser_issues should log a warning if psutil.process_iter fails entirely."""
+        caplog.set_level(logging.WARNING)
+
+        with patch("os.path.exists", return_value = True), \
+                patch("os.access", return_value = True), \
+                patch("psutil.process_iter", side_effect = psutil.Error("boom")), \
+                patch("platform.system", return_value = "Linux"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False), \
+                patch.object(scraper_with_config, "_diagnose_chrome_version_issues"):
+            scraper_with_config.browser_config.binary_location = "/usr/bin/chrome"
+            scraper_with_config.diagnose_browser_issues()
+
+        assert "(warn) Unable to inspect browser processes:" in caplog.text
 
     @pytest.mark.asyncio
     async def test_validate_chrome_version_configuration_port_open_but_api_inaccessible(

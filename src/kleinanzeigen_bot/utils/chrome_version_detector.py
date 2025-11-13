@@ -78,23 +78,25 @@ def _normalize_browser_name(browser_name:str) -> str:
     return "Chrome"
 
 
-def detect_chrome_version_from_binary(binary_path:str) -> ChromeVersionInfo | None:
+def detect_chrome_version_from_binary(binary_path:str, *, timeout:float | None = None) -> ChromeVersionInfo | None:
     """
     Detect Chrome version by running the browser binary.
 
     Args:
         binary_path: Path to the Chrome binary
+        timeout: Optional timeout (seconds) for the subprocess call
 
     Returns:
         ChromeVersionInfo if successful, None if detection fails
     """
+    effective_timeout = timeout if timeout is not None else 10.0
     try:
         # Run browser with --version flag
         result = subprocess.run(  # noqa: S603
             [binary_path, "--version"],
             check = False, capture_output = True,
             text = True,
-            timeout = 10
+            timeout = effective_timeout
         )
 
         if result.returncode != 0:
@@ -114,28 +116,30 @@ def detect_chrome_version_from_binary(binary_path:str) -> ChromeVersionInfo | No
         return ChromeVersionInfo(version_string, major_version, browser_name)
 
     except subprocess.TimeoutExpired:
-        LOG.debug("Browser version command timed out")
+        LOG.debug("Browser version command timed out after %.1fs", effective_timeout)
         return None
     except (subprocess.SubprocessError, ValueError) as e:
         LOG.debug("Failed to detect browser version: %s", str(e))
         return None
 
 
-def detect_chrome_version_from_remote_debugging(host:str = "127.0.0.1", port:int = 9222) -> ChromeVersionInfo | None:
+def detect_chrome_version_from_remote_debugging(host:str = "127.0.0.1", port:int = 9222, *, timeout:float | None = None) -> ChromeVersionInfo | None:
     """
     Detect Chrome version from remote debugging API.
 
     Args:
         host: Remote debugging host
         port: Remote debugging port
+        timeout: Optional timeout (seconds) for the HTTP request
 
     Returns:
         ChromeVersionInfo if successful, None if detection fails
     """
+    effective_timeout = timeout if timeout is not None else 5.0
     try:
         # Query the remote debugging API
         url = f"http://{host}:{port}/json/version"
-        response = urllib.request.urlopen(url, timeout = 5)  # noqa: S310
+        response = urllib.request.urlopen(url, timeout = effective_timeout)  # noqa: S310
         version_data = json.loads(response.read().decode())
 
         # Extract version information
@@ -200,7 +204,10 @@ def validate_chrome_136_configuration(browser_arguments:list[str], user_data_dir
 def get_chrome_version_diagnostic_info(
     binary_path:str | None = None,
     remote_host:str = "127.0.0.1",
-    remote_port:int | None = None
+    remote_port:int | None = None,
+    *,
+    remote_timeout:float | None = None,
+    binary_timeout:float | None = None
 ) -> dict[str, Any]:
     """
     Get comprehensive Chrome version diagnostic information.
@@ -209,6 +216,8 @@ def get_chrome_version_diagnostic_info(
         binary_path: Path to Chrome binary (optional)
         remote_host: Remote debugging host
         remote_port: Remote debugging port (optional)
+        remote_timeout: Timeout for remote debugging detection
+        binary_timeout: Timeout for binary detection
 
     Returns:
         Dictionary with diagnostic information
@@ -223,7 +232,7 @@ def get_chrome_version_diagnostic_info(
 
     # Try binary detection
     if binary_path:
-        version_info = detect_chrome_version_from_binary(binary_path)
+        version_info = detect_chrome_version_from_binary(binary_path, timeout = binary_timeout)
         if version_info:
             diagnostic_info["binary_detection"] = {
                 "version_string": version_info.version_string,
@@ -235,7 +244,7 @@ def get_chrome_version_diagnostic_info(
 
     # Try remote debugging detection
     if remote_port:
-        version_info = detect_chrome_version_from_remote_debugging(remote_host, remote_port)
+        version_info = detect_chrome_version_from_remote_debugging(remote_host, remote_port, timeout = remote_timeout)
         if version_info:
             diagnostic_info["remote_detection"] = {
                 "version_string": version_info.version_string,

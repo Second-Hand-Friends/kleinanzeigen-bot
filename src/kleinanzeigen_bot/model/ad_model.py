@@ -86,10 +86,25 @@ class AdPartial(ContextualModel):
         default = None,
         description = "reduction to apply per repost; required when auto_reduce_price is enabled"
     )
+    price_reduction_delay_reposts:int | None = Field(
+        default = None,
+        ge = 0,
+        description = "number of automatic reduction cycles to skip before reductions start (0 = immediate)"
+    )
+    price_reduction_delay_days:int | None = Field(
+        default = None,
+        ge = 0,
+        description = "delay automatic price reductions until this many days have passed since the last publish (0 = immediate)"
+    )
+    price_reduction_count:int = Field(
+        default = 0,
+        ge = 0,
+        description = "number of automatic price reduction cycles already applied"
+    )
     repost_count:int = Field(
         default = 0,
         ge = 0,
-        description = "number of successful publications for this ad (persisted between runs)"
+        description = "number of successful (re)publishes performed by the bot"
     )
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] | None = _OPTIONAL()
     shipping_costs:float | None = _OPTIONAL()
@@ -131,7 +146,6 @@ class AdPartial(ContextualModel):
         min_price = values.get("min_price")
         auto_reduce_price = values.get("auto_reduce_price")
         price_reduction = values.get("price_reduction")
-
         if price_type == "GIVE_AWAY" and price is not None:
             raise ValueError("price must not be specified when price_type is GIVE_AWAY")
         if price_type == "FIXED" and price is None:
@@ -154,7 +168,7 @@ class AdPartial(ContextualModel):
 
         # 1) Dump to a plain dict, excluding the metadata fields:
         raw = self.model_dump(
-            exclude = {"id", "created_on", "updated_on", "content_hash", "repost_count"},
+            exclude = {"id", "created_on", "updated_on", "content_hash", "price_reduction_count", "repost_count"},
             exclude_none = True,
             exclude_unset = True,
         )
@@ -200,6 +214,14 @@ class AdPartial(ContextualModel):
                 not isinstance(v, list) and (v is None or (isinstance(v, str) and v == ""))  # noqa: PLC1901
             )
         )
+        if ad_cfg.get("price_reduction_delay_reposts") is None:
+            ad_cfg["price_reduction_delay_reposts"] = 0
+        if ad_cfg.get("price_reduction_delay_days") is None:
+            ad_cfg["price_reduction_delay_days"] = 0
+        if ad_cfg.get("price_reduction_count") is None:
+            ad_cfg["price_reduction_count"] = 0
+        if ad_cfg.get("repost_count") is None:
+            ad_cfg["repost_count"] = 0
         return Ad.model_validate(ad_cfg)
 
 
@@ -208,7 +230,7 @@ def calculate_auto_price(
     base_price:int | float | None,
     auto_reduce:bool,
     price_reduction:PriceReductionConfig | None,
-    repost_count:int,
+    price_reduction_count:int,
     min_price:float | None
 ) -> int | None:
     """
@@ -218,7 +240,7 @@ def calculate_auto_price(
         base_price: original configured price used as the starting point.
         auto_reduce: whether automatic reductions should be applied.
         price_reduction: reduction configuration describing percentage or fixed steps.
-        repost_count: amount of prior publications used to determine how often to reduce.
+        price_reduction_count: number of automatic reduction cycles that have already been applied.
         min_price: optional floor that stops further reductions once reached.
 
     Percentage reductions apply to the current price each cycle (compounded). Returns an int rounded via ROUND_HALF_UP, or None when base_price is None.
@@ -227,14 +249,14 @@ def calculate_auto_price(
         return None
 
     price = Decimal(str(base_price))
-    if not auto_reduce or price_reduction is None or repost_count <= 0:
+    if not auto_reduce or price_reduction is None or price_reduction_count <= 0:
         return int(price.quantize(Decimal("1"), rounding = ROUND_HALF_UP))
 
     if min_price is None:
         raise ValueError("min_price must be specified when auto_reduce_price is enabled")
 
     price_floor = Decimal(str(min_price))
-    repost_cycles = repost_count
+    repost_cycles = price_reduction_count
 
     for _ in range(repost_cycles):
         reduction_value = (
@@ -269,6 +291,8 @@ class Ad(AdPartial):
     auto_reduce_price:bool = False
     min_price:float | None = None
     price_reduction:PriceReductionConfig | None = None
+    price_reduction_delay_reposts:int = 0
+    price_reduction_delay_days:int = 0
 
     @model_validator(mode = "after")
     def _validate_auto_price_config(self) -> "Ad":

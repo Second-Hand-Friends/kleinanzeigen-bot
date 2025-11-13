@@ -245,9 +245,44 @@
       "default": null,
       "description": "reduction to apply per repost; required when auto_reduce_price is enabled"
     },
+    "price_reduction_delay_reposts": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "number of automatic reduction cycles to skip before reductions start (0 = immediate)",
+      "title": "Price Reduction Delay Reposts"
+    },
+    "price_reduction_delay_days": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "delay automatic price reductions until this many days have passed since the last publish (0 = immediate)",
+      "title": "Price Reduction Delay Days"
+    },
+    "price_reduction_count": {
+      "default": 0,
+      "description": "number of automatic price reduction cycles already applied",
+      "minimum": 0,
+      "title": "Price Reduction Count",
+      "type": "integer"
+    },
     "repost_count": {
       "default": 0,
-      "description": "number of successful publications for this ad (persisted between runs)",
+      "description": "number of successful (re)publishes performed by the bot",
       "minimum": 0,
       "title": "Repost Count",
       "type": "integer"

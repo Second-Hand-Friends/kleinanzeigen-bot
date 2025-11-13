@@ -277,6 +277,27 @@ categories:
   Verschenken & Tauschen > Verleihen: 272/274
   Verschenken & Tauschen > Verschenken: 272/192
 
+# timeout tuning (optional)
+timeouts:
+  multiplier: 1.0                     # Scale all timeouts (e.g. 2.0 for slower networks)
+  default: 5.0                        # Base timeout for web_find/web_click/etc.
+  page_load: 15.0                     # Timeout for web_open page loads
+  captcha_detection: 2.0              # Timeout for captcha iframe detection
+  sms_verification: 4.0               # Timeout for SMS verification banners
+  gdpr_prompt: 10.0                   # Timeout when handling GDPR dialogs
+  publishing_result: 300.0            # Timeout for publishing status checks
+  publishing_confirmation: 20.0       # Timeout for publish confirmation redirect
+  pagination_initial: 10.0            # Timeout for first pagination lookup
+  pagination_follow_up: 5.0           # Timeout for subsequent pagination clicks
+  quick_dom: 2.0                      # Generic short DOM timeout (shipping dialogs, etc.)
+  update_check: 10.0                  # Timeout for GitHub update requests
+  chrome_remote_probe: 2.0            # Timeout for local remote-debugging probes
+  chrome_remote_debugging: 5.0        # Timeout for remote debugging API calls
+  chrome_binary_detection: 10.0       # Timeout for chrome --version subprocess
+  retry_enabled: true                 # Enables DOM retry/backoff when timeouts occur
+  retry_max_attempts: 2
+  retry_backoff_factor: 1.5
+
 # download configuration
 download:
   include_all_matching_shipping_options: false  # if true, all shipping options matching the package size will be included
@@ -329,6 +350,8 @@ login:
   password: ""
 ```
 
+Slow networks or sluggish remote browsers often just need a higher `timeouts.multiplier`, while truly problematic selectors can get explicit values directly under `timeouts`. Remember to regenerate the schemas after changing the configuration model so editors stay in sync.
+
 ### <a name="ad-config"></a>2) Ad configuration
 
 Each ad is described in a separate JSON or YAML file with prefix `ad_<filename>`. The prefix is configurable in config file.
@@ -359,6 +382,8 @@ min_price: # required when auto_reduce_price is true; explicitly set the floor (
 price_reduction:
   type: # "PERCENTAGE" or "FIXED"
   value: # number; interpreted as percent for "PERCENTAGE" or currency units for "FIXED"
+price_reduction_delay_reposts: # optional delay: skip the first N automatic reductions (default: 0)
+price_reduction_delay_days: # optional delay: start reducing only after X days since the last publish (default: 0)
 
 special_attributes:
   # haus_mieten.zimmer_d: value # Zimmer
@@ -401,14 +426,17 @@ id: # the ID assigned by kleinanzeigen.de
 created_on: # ISO timestamp when the ad was first published
 updated_on: # ISO timestamp when the ad was last published
 content_hash: # hash of the ad content, used to detect changes
-repost_count: # how often the ad has been (re)published; used for automatic price reductions
+price_reduction_count: # number of automatic price reductions actually applied (managed by the bot)
+repost_count: # number of times the ad has been published/reposted (managed by the bot)
 ```
 
 #### Automatic price reduction on reposts
 
 When `auto_reduce_price` is enabled the bot lowers the configured `price` every time the ad is reposted. The starting point for the calculation is always the base price from your ad file (the value of `price`), ensuring the first publication uses the unchanged amount. For each repost the bot subtracts either a percentage of the previously published price or a fixed amount and clamps the result to `min_price`.
 
-`repost_count` is tracked for every ad (and persisted inside the corresponding `ad_*.yaml`) so reductions continue across runs.
+`price_reduction_count` is tracked for every ad (and persisted inside the corresponding `ad_*.yaml`) so reductions continue across runs. The bot only increments the counter when a repost actually lowers the price, so there is no “catch up” when delays have paused reductions.
+
+`repost_count` is also persisted and increments after each successful publish. It feeds into `price_reduction_delay_reposts` so you can keep the configured price for the first *N* reposts before the automatic reductions start.
 
 `min_price` is required whenever `auto_reduce_price` is enabled and must be less than or equal to `price`; this makes an explicit floor (including `0`) mandatory.
 
@@ -426,9 +454,16 @@ price_reduction:
 
 The example above posts the ad at 150 € the first time, then 135 €, 121 €, 109 €, and stops decreasing at 90 €.
 
-Set `auto_reduce_price: false` (or omit the field) to keep the existing behaviour—prices stay fixed and `repost_count` only acts as tracked metadata for future changes.
+Set `auto_reduce_price: false` (or omit the field) to keep the existing behaviour—prices stay fixed and `price_reduction_count` only acts as tracked metadata for future changes.
 
 You can configure `auto_reduce_price` and `price_reduction` once under `ad_defaults` in `config.yaml`, but `min_price` must be specified inside each ad file so the floor is explicit.
+
+Automatic reductions can also be delayed:
+
+- `price_reduction_delay_reposts`: skip the first N automatic reductions (useful when you want the price to stay fixed for the first N reposts that trigger the feature). The bot compares this value with `repost_count`, so only one reduction can occur per new publish.
+- `price_reduction_delay_days`: postpone reductions until X days have passed since the last successful publish (uses `updated_on`, falls back to `created_on`). Once the day delay is satisfied the bot applies at most one new reduction, preventing back-to-back “catch ups”.
+
+Set both to `0` (default) to apply reductions as soon as an ad has been published at least once and the configured delays (if any) have elapsed. You can define default delays in `ad_defaults` and override them per ad. When both delay types are non-zero, the bot waits until *each* threshold has been satisfied before applying reductions.
 
 ### <a name="description-prefix-suffix"></a>3) Description Prefix and Suffix
 

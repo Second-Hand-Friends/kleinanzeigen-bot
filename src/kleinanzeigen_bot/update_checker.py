@@ -49,6 +49,10 @@ class UpdateChecker:
         """
         return __version__
 
+    def _request_timeout(self) -> float:
+        """Return the effective timeout for HTTP calls."""
+        return self.config.timeouts.effective("update_check")
+
     def _get_commit_hash(self, version:str) -> str | None:
         """Extract the commit hash from a version string.
 
@@ -74,7 +78,7 @@ class UpdateChecker:
         try:
             response = requests.get(
                 f"https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases/tags/{tag_name}",
-                timeout = 10
+                timeout = self._request_timeout()
             )
             response.raise_for_status()
             data = response.json()
@@ -97,7 +101,7 @@ class UpdateChecker:
         try:
             response = requests.get(
                 f"https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/commits/{commit}",
-                timeout = 10
+                timeout = self._request_timeout()
             )
             response.raise_for_status()
             data = response.json()
@@ -148,7 +152,7 @@ class UpdateChecker:
                 # Use /releases/latest endpoint for stable releases
                 response = requests.get(
                     "https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases/latest",
-                    timeout = 10
+                    timeout = self._request_timeout()
                 )
                 response.raise_for_status()
                 release = response.json()
@@ -160,7 +164,7 @@ class UpdateChecker:
                 # Use /releases endpoint and select the most recent prerelease
                 response = requests.get(
                     "https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases",
-                    timeout = 10
+                    timeout = self._request_timeout()
                 )
                 response.raise_for_status()
                 releases = response.json()
