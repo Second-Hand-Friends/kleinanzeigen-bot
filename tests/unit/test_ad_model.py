@@ -111,7 +111,7 @@ def base_ad_cfg() -> dict[str, object]:
 
 
 @pytest.fixture
-def complete_ad_cfg(base_ad_cfg: dict[str, object]) -> dict[str, object]:
+def complete_ad_cfg(base_ad_cfg:dict[str, object]) -> dict[str, object]:
     return base_ad_cfg | {
         "republication_interval": 7,
         "price": 100,
@@ -121,7 +121,7 @@ def complete_ad_cfg(base_ad_cfg: dict[str, object]) -> dict[str, object]:
     }
 
 
-def test_auto_reduce_requires_price(base_ad_cfg: dict[str, object]) -> None:
+def test_auto_reduce_requires_price(base_ad_cfg:dict[str, object]) -> None:
     cfg = base_ad_cfg.copy() | {
         "auto_reduce_price": True,
         "price_reduction": {"type": "FIXED", "value": 5},
@@ -131,7 +131,7 @@ def test_auto_reduce_requires_price(base_ad_cfg: dict[str, object]) -> None:
         AdPartial.model_validate(cfg).to_ad(AdDefaults())
 
 
-def test_auto_reduce_requires_price_reduction(base_ad_cfg: dict[str, object]) -> None:
+def test_auto_reduce_requires_price_reduction(base_ad_cfg:dict[str, object]) -> None:
     cfg = base_ad_cfg.copy() | {
         "auto_reduce_price": True,
         "price": 100,
@@ -141,7 +141,7 @@ def test_auto_reduce_requires_price_reduction(base_ad_cfg: dict[str, object]) ->
         AdPartial.model_validate(cfg).to_ad(AdDefaults())
 
 
-def test_prepare_ad_model_fills_missing_counters(base_ad_cfg: dict[str, object]) -> None:
+def test_prepare_ad_model_fills_missing_counters(base_ad_cfg:dict[str, object]) -> None:
     cfg = base_ad_cfg.copy() | {
         "price": 120,
         "shipping_type": "SHIPPING",
@@ -155,42 +155,7 @@ def test_prepare_ad_model_fills_missing_counters(base_ad_cfg: dict[str, object])
     assert ad.repost_count == 0
 
 
-def test_ad_model_auto_reduce_validator_rejects_missing_price(complete_ad_cfg: dict[str, object]) -> None:
-    cfg = complete_ad_cfg.copy() | {"price": None}
-    with pytest.raises(ValueError, match = "price must be specified"):
-        Ad.model_validate(cfg)
-
-
-def test_ad_model_auto_reduce_validator_rejects_missing_price_reduction(complete_ad_cfg: dict[str, object]) -> None:
-    cfg = complete_ad_cfg.copy() | {"price_reduction": None}
-    with pytest.raises(ValueError, match = "price_reduction must be specified"):
-        Ad.model_validate(cfg)
-
-
-def test_ad_model_auto_reduce_validator_rejects_missing_min_price(complete_ad_cfg: dict[str, object]) -> None:
-    cfg = complete_ad_cfg.copy() | {"min_price": None}
-    with pytest.raises(ValueError, match = "min_price must be specified"):
-        Ad.model_validate(cfg)
-
-
-def test_ad_model_auto_reduce_validator_rejects_min_price_above_price(complete_ad_cfg: dict[str, object]) -> None:
-    cfg = complete_ad_cfg.copy() | {"min_price": 150, "price": 100}
-    with pytest.raises(ValueError, match = "min_price must not exceed price"):
-        Ad.model_validate(cfg)
-
-
-def test_auto_reduce_rejects_null_price_reduction(base_ad_cfg: dict[str, object]) -> None:
-    cfg = base_ad_cfg.copy() | {
-        "auto_reduce_price": True,
-        "price": 100,
-        "price_reduction": None,
-        "min_price": 50
-    }
-    with pytest.raises(ValueError, match = "price_reduction must be specified"):
-        AdPartial.model_validate(cfg).to_ad(AdDefaults())
-
-
-def test_min_price_must_not_exceed_price(base_ad_cfg: dict[str, object]) -> None:
+def test_min_price_must_not_exceed_price(base_ad_cfg:dict[str, object]) -> None:
     cfg = base_ad_cfg.copy() | {
         "auto_reduce_price": True,
         "price": 100,
@@ -201,7 +166,7 @@ def test_min_price_must_not_exceed_price(base_ad_cfg: dict[str, object]) -> None
         AdPartial.model_validate(cfg)
 
 
-def test_auto_reduce_requires_min_price(base_ad_cfg: dict[str, object]) -> None:
+def test_auto_reduce_requires_min_price(base_ad_cfg:dict[str, object]) -> None:
     cfg = base_ad_cfg.copy() | {
         "auto_reduce_price": True,
         "price": 100,
@@ -211,7 +176,7 @@ def test_auto_reduce_requires_min_price(base_ad_cfg: dict[str, object]) -> None:
         AdPartial.model_validate(cfg).to_ad(AdDefaults())
 
 
-def test_min_price_without_auto_reduce_must_not_exceed_price(base_ad_cfg: dict[str, object]) -> None:
+def test_min_price_without_auto_reduce_must_not_exceed_price(base_ad_cfg:dict[str, object]) -> None:
     cfg = base_ad_cfg.copy() | {
         "price": 100,
         "min_price": 150,
@@ -221,19 +186,19 @@ def test_min_price_without_auto_reduce_must_not_exceed_price(base_ad_cfg: dict[s
         AdPartial.model_validate(cfg)
 
 
-def test_ad_model_auto_reduce_requires_price(complete_ad_cfg: dict[str, object]) -> None:
+def test_ad_model_auto_reduce_requires_price(complete_ad_cfg:dict[str, object]) -> None:
     cfg = complete_ad_cfg.copy() | {"price": None}
     with pytest.raises(ValueError, match = "price must be specified"):
         Ad.model_validate(cfg)
 
 
-def test_ad_model_auto_reduce_requires_price_reduction(complete_ad_cfg: dict[str, object]) -> None:
+def test_ad_model_auto_reduce_requires_price_reduction(complete_ad_cfg:dict[str, object]) -> None:
     cfg = complete_ad_cfg.copy() | {"price_reduction": None}
     with pytest.raises(ValueError, match = "price_reduction must be specified"):
         Ad.model_validate(cfg)
 
 
-def test_price_reduction_delay_inherited_from_defaults(complete_ad_cfg: dict[str, object]) -> None:
+def test_price_reduction_delay_inherited_from_defaults(complete_ad_cfg:dict[str, object]) -> None:
     cfg = complete_ad_cfg.copy()
     defaults = AdDefaults(
         auto_reduce_price = True,
@@ -247,7 +212,7 @@ def test_price_reduction_delay_inherited_from_defaults(complete_ad_cfg: dict[str
     assert ad.price_reduction_delay_reposts == 4
 
 
-def test_price_reduction_delay_override_zero(complete_ad_cfg: dict[str, object]) -> None:
+def test_price_reduction_delay_override_zero(complete_ad_cfg:dict[str, object]) -> None:
     cfg = complete_ad_cfg.copy() | {"price_reduction_delay_reposts": 0}
     defaults = AdDefaults(
         auto_reduce_price = True,
@@ -258,13 +223,13 @@ def test_price_reduction_delay_override_zero(complete_ad_cfg: dict[str, object])
     assert ad.price_reduction_delay_reposts == 0
 
 
-def test_ad_model_auto_reduce_requires_min_price(complete_ad_cfg: dict[str, object]) -> None:
+def test_ad_model_auto_reduce_requires_min_price(complete_ad_cfg:dict[str, object]) -> None:
     cfg = complete_ad_cfg.copy() | {"min_price": None}
     with pytest.raises(ValueError, match = "min_price must be specified"):
         Ad.model_validate(cfg)
 
 
-def test_ad_model_min_price_must_not_exceed_price(complete_ad_cfg: dict[str, object]) -> None:
+def test_ad_model_min_price_must_not_exceed_price(complete_ad_cfg:dict[str, object]) -> None:
     cfg = complete_ad_cfg.copy() | {"min_price": 150, "price": 100}
     with pytest.raises(ValueError, match = "min_price must not exceed price"):
         Ad.model_validate(cfg)
