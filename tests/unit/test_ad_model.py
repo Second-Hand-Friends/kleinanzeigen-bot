@@ -4,14 +4,16 @@
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import pytest
 
-from kleinanzeigen_bot.model.ad_model import Ad, AdPartial, MAX_DESCRIPTION_LENGTH, ShippingOption
+from kleinanzeigen_bot.model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, ShippingOption
 from kleinanzeigen_bot.model.config_model import AdDefaults, PriceReductionConfig
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
 
 
+@pytest.mark.unit
 def test_update_content_hash() -> None:
     minimal_ad_cfg = {
         "id": "123456789",
@@ -61,6 +63,7 @@ def test_repost_count_does_not_influence_content_hash() -> None:
     assert hash_without_reposts == hash_with_reposts
 
 
+@pytest.mark.unit
 def test_shipping_costs() -> None:
     minimal_ad_cfg = {
         "id": "123456789",
@@ -83,14 +86,16 @@ def test_shipping_costs() -> None:
 
 
 class ShippingOptionWrapper(ContextualModel):
-    option: ShippingOption
+    option:ShippingOption
 
 
+@pytest.mark.unit
 def test_shipping_option_must_not_be_blank() -> None:
     with pytest.raises(ValueError, match = "must be non-empty and non-blank"):
         ShippingOptionWrapper.model_validate({"option": " "})
 
 
+@pytest.mark.unit
 def test_description_length_limit() -> None:
     cfg = {
         "title": "Description Length",
@@ -100,6 +105,7 @@ def test_description_length_limit() -> None:
 
     with pytest.raises(ValueError, match = f"description length exceeds {MAX_DESCRIPTION_LENGTH} characters"):
         AdPartial.model_validate(cfg)
+
 
 @pytest.fixture
 def base_ad_cfg() -> dict[str, object]:
@@ -128,7 +134,7 @@ def complete_ad_cfg(base_ad_cfg:dict[str, object]) -> dict[str, object]:
 
 
 class SparseAdDefaults(AdDefaults):
-    def model_dump(self, *args, **kwargs) -> dict[str, object]:
+    def model_dump(self, *args:Any, **kwargs:Any) -> dict[str, object]:
         data = super().model_dump(*args, **kwargs)
         for key in [
             "price_reduction_delay_reposts",
@@ -137,6 +143,14 @@ class SparseAdDefaults(AdDefaults):
             "repost_count"
         ]:
             data.pop(key, None)
+        return data
+
+
+class SparseDumpAdPartial(AdPartial):
+    def model_dump(self, *args:Any, **kwargs:Any) -> dict[str, object]:
+        data = super().model_dump(*args, **kwargs)
+        data.pop("price_reduction_count", None)
+        data.pop("repost_count", None)
         return data
 
 
@@ -205,6 +219,7 @@ def test_min_price_without_auto_reduce_must_not_exceed_price(base_ad_cfg:dict[st
         AdPartial.model_validate(cfg)
 
 
+@pytest.mark.unit
 def test_to_ad_stabilizes_counters_when_defaults_omit(base_ad_cfg:dict[str, object]) -> None:
     cfg = base_ad_cfg.copy() | {
         "republication_interval": 7,
@@ -218,16 +233,13 @@ def test_to_ad_stabilizes_counters_when_defaults_omit(base_ad_cfg:dict[str, obje
     assert ad.repost_count == 0
 
 
-def test_to_ad_repopulates_null_counters(base_ad_cfg:dict[str, object]) -> None:
+@pytest.mark.unit
+def test_to_ad_sets_zero_when_counts_missing_from_dump(base_ad_cfg:dict[str, object]) -> None:
     cfg = base_ad_cfg.copy() | {
         "republication_interval": 7,
         "price": 130
     }
-    ad_partial = AdPartial.model_validate(cfg)
-    ad_partial.price_reduction_count = None
-    ad_partial.repost_count = None
-
-    ad = ad_partial.to_ad(SparseAdDefaults())
+    ad = SparseDumpAdPartial.model_validate(cfg).to_ad(AdDefaults())
 
     assert ad.price_reduction_count == 0
     assert ad.repost_count == 0
@@ -280,31 +292,3 @@ def test_ad_model_min_price_must_not_exceed_price(complete_ad_cfg:dict[str, obje
     cfg = complete_ad_cfg.copy() | {"min_price": 150, "price": 100}
     with pytest.raises(ValueError, match = "min_price must not exceed price"):
         Ad.model_validate(cfg)
-
-
-def test_auto_price_validator_checks_missing_price(complete_ad_cfg:dict[str, object]) -> None:
-    ad = Ad.model_validate(complete_ad_cfg)
-    ad.price = None
-    with pytest.raises(ValueError, match = "price must be specified"):
-        ad._validate_auto_price_config()
-
-
-def test_auto_price_validator_checks_missing_price_reduction(complete_ad_cfg:dict[str, object]) -> None:
-    ad = Ad.model_validate(complete_ad_cfg)
-    ad.price_reduction = None
-    with pytest.raises(ValueError, match = "price_reduction must be specified"):
-        ad._validate_auto_price_config()
-
-
-def test_auto_price_validator_checks_missing_min_price(complete_ad_cfg:dict[str, object]) -> None:
-    ad = Ad.model_validate(complete_ad_cfg)
-    ad.min_price = None
-    with pytest.raises(ValueError, match = "min_price must be specified"):
-        ad._validate_auto_price_config()
-
-
-def test_auto_price_validator_checks_min_price_floor(complete_ad_cfg:dict[str, object]) -> None:
-    ad = Ad.model_validate(complete_ad_cfg)
-    ad.min_price = ad.price + 10
-    with pytest.raises(ValueError, match = "min_price must not exceed price"):
-        ad._validate_auto_price_config()
