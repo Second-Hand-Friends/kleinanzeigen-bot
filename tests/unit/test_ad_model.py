@@ -139,6 +139,44 @@ def test_auto_reduce_requires_price_reduction() -> None:
         AdPartial.model_validate(cfg).to_ad(AdDefaults())
 
 
+def test_prepare_ad_model_fills_missing_counters() -> None:
+    cfg = _base_ad_cfg() | {
+        "price": 120,
+        "shipping_type": "SHIPPING",
+        "sell_directly": False
+    }
+    ad = AdPartial.model_validate(cfg).to_ad(AdDefaults())
+
+    assert ad.price_reduction_delay_reposts == 0
+    assert ad.price_reduction_delay_days == 0
+    assert ad.price_reduction_count == 0
+    assert ad.repost_count == 0
+
+
+def test_ad_model_auto_reduce_validator_rejects_missing_price() -> None:
+    cfg = _complete_ad_cfg() | {"price": None}
+    with pytest.raises(ValueError, match = "price must be specified"):
+        Ad.model_validate(cfg)
+
+
+def test_ad_model_auto_reduce_validator_rejects_missing_price_reduction() -> None:
+    cfg = _complete_ad_cfg() | {"price_reduction": None}
+    with pytest.raises(ValueError, match = "price_reduction must be specified"):
+        Ad.model_validate(cfg)
+
+
+def test_ad_model_auto_reduce_validator_rejects_missing_min_price() -> None:
+    cfg = _complete_ad_cfg() | {"min_price": None}
+    with pytest.raises(ValueError, match = "min_price must be specified"):
+        Ad.model_validate(cfg)
+
+
+def test_ad_model_auto_reduce_validator_rejects_min_price_above_price() -> None:
+    cfg = _complete_ad_cfg() | {"min_price": 150, "price": 100}
+    with pytest.raises(ValueError, match = "min_price must not exceed price"):
+        Ad.model_validate(cfg)
+
+
 def test_auto_reduce_rejects_null_price_reduction() -> None:
     cfg = _base_ad_cfg() | {
         "auto_reduce_price": True,

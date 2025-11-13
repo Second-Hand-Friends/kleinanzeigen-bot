@@ -151,6 +151,14 @@ class TestFormatValidationError:
                 [{"loc": ("decimal_max_digits",), "msg": "dummy", "type": "decimal_max_digits", "ctx": {"max_digits": 10, "expected_plural": "s"}}],
                 "Decimal input should have no more than 10 digits in total",
             ),
+            (
+                [{"loc": ("decimal_max_places",), "msg": "dummy", "type": "decimal_max_places", "ctx": {"decimal_places": 2, "expected_plural": "s"}}],
+                "Decimal input should have no more than 2 decimal places",
+            ),
+            (
+                [{"loc": ("decimal_whole_digits",), "msg": "dummy", "type": "decimal_whole_digits", "ctx": {"whole_digits": 3, "expected_plural": ""}}],
+                "Decimal input should have no more than 3 digits before the decimal point",
+            ),
             # Complex number related errors
             (
                 [{"loc": ("complex",), "msg": "dummy", "type": "complex_type"}],
