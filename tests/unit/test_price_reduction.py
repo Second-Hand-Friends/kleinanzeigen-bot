@@ -161,6 +161,31 @@ def test_missing_min_price_raises_error() -> None:
         calculate_auto_price(base_price = 200, auto_reduce = True, price_reduction = reduction, price_reduction_count = 3, min_price = None)
 
 
+def test_apply_auto_price_reduction_warns_when_price_missing_early(caplog:pytest.LogCaptureFixture) -> None:
+    bot = KleinanzeigenBot()
+    ad_cfg = SimpleNamespace(
+        auto_reduce_price = True,
+        price = None,
+        price_reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25),
+        price_reduction_count = 1,
+        repost_count = 3,
+        min_price = 15,
+        price_reduction_delay_reposts = 0,
+        price_reduction_delay_days = 0
+    )
+
+    apply_method = cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
+    ad_orig:dict[str, Any] = {}
+
+    with caplog.at_level("WARNING"):
+        apply_method(ad_cfg, ad_orig, "warn_price_missing.yaml")
+
+    expected = _("Auto price reduction is enabled for [%s] but no price is configured.") % ("warn_price_missing.yaml",)
+    assert any(expected in message for message in caplog.messages)
+    assert ad_cfg.price is None
+    assert "price_reduction_count" not in ad_orig
+
+
 def test_feature_disabled_path_leaves_price_unchanged() -> None:
     reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25)
     price = calculate_auto_price(base_price = 100, auto_reduce = False, price_reduction = reduction, price_reduction_count = 4, min_price = 40)
