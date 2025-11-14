@@ -123,11 +123,12 @@ test = { composite = ["utest", "itest", "smoke"] }
 # Coverage scripts:
 # - Each group writes its own data file to .temp/.coverage.<group>.xml
 #
-"test:cov"  = { composite = ["utest:cov", "itest:cov", "smoke:cov", "coverage:combine"] }
-"utest:cov" = { shell = "python -m pytest --capture=tee-sys -m \"not itest and not smoke\" --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-unit.xml --cov-append" }
-"itest:cov" = { shell = "python -m pytest --capture=tee-sys -m \"itest and not smoke\" --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-integration.xml --cov-append" }
-"smoke:cov" = { shell = "python -m pytest --capture=tee-sys -m smoke --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-smoke.xml --cov-append" }
-"coverage:combine" = { shell = "coverage report -m" }
+"coverage:prepare" = { shell = "mkdir -p .temp && rm -f .temp/coverage-*.xml .temp/.coverage-*.sqlite .temp/coverage.sqlite .coverage && coverage erase" }
+"test:cov"  = { composite = ["coverage:prepare", "utest:cov", "itest:cov", "smoke:cov", "coverage:combine"] }
+"utest:cov" = { shell = "COVERAGE_FILE=.temp/.coverage-unit.sqlite python -m pytest --capture=tee-sys -m \"not itest and not smoke\" --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-unit.xml" }
+"itest:cov" = { shell = "COVERAGE_FILE=.temp/.coverage-itest.sqlite python -m pytest --capture=tee-sys -m \"itest and not smoke\" --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-integration.xml" }
+"smoke:cov" = { shell = "COVERAGE_FILE=.temp/.coverage-smoke.sqlite python -m pytest --capture=tee-sys -m smoke --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-smoke.xml" }
+"coverage:combine" = { shell = "COVERAGE_FILE=.temp/coverage.sqlite coverage combine .temp/.coverage-unit.sqlite .temp/.coverage-itest.sqlite .temp/.coverage-smoke.sqlite && COVERAGE_FILE=.temp/coverage.sqlite coverage report -m" }
 # Run all tests with coverage in a single invocation
 "test:cov:unified" = "python -m pytest --capture=tee-sys --cov=src/kleinanzeigen_bot --cov-report=term-missing"
 
@@ -375,6 +376,7 @@ relative_files = true
 precision = 2
 show_missing = true
 skip_covered = false
+include = ["src/kleinanzeigen_bot/*"]
 
 #####################
 # yamlfix
