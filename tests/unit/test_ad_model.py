@@ -49,6 +49,7 @@ def test_update_content_hash() -> None:
     }).update_content_hash().content_hash != minimal_ad_cfg_hash
 
 
+@pytest.mark.unit
 def test_price_reduction_count_does_not_influence_content_hash() -> None:
     base_ad_cfg = {
         "id": "123456789",
@@ -229,6 +230,7 @@ def test_auto_reduce_requires_min_price(base_ad_cfg:dict[str, object]) -> None:
         AdPartial.model_validate(cfg).to_ad(AdDefaults())
 
 
+@pytest.mark.unit
 def test_min_price_without_auto_reduce_must_not_exceed_price(base_ad_cfg:dict[str, object]) -> None:
     cfg = base_ad_cfg.copy() | {
         "price": 100,
@@ -265,18 +267,21 @@ def test_to_ad_sets_zero_when_counts_missing_from_dump(base_ad_cfg:dict[str, obj
     assert ad.repost_count == 0
 
 
+@pytest.mark.unit
 def test_ad_model_auto_reduce_requires_price(complete_ad_cfg:dict[str, object]) -> None:
     cfg = complete_ad_cfg.copy() | {"price": None}
     with pytest.raises(ValueError, match = "price must be specified"):
         Ad.model_validate(cfg)
 
 
+@pytest.mark.unit
 def test_ad_model_auto_reduce_requires_price_reduction(complete_ad_cfg:dict[str, object]) -> None:
     cfg = complete_ad_cfg.copy() | {"price_reduction": None}
     with pytest.raises(ValueError, match = "price_reduction must be specified"):
         Ad.model_validate(cfg)
 
 
+@pytest.mark.unit
 def test_price_reduction_delay_inherited_from_defaults(complete_ad_cfg:dict[str, object]) -> None:
     cfg = complete_ad_cfg.copy()
     defaults = AdDefaults(
