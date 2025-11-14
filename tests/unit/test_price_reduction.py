@@ -24,6 +24,7 @@ def apply_auto_price_reduction() -> _ApplyAutoPriceReduction:
     return cast(_ApplyAutoPriceReduction, getattr(bot, "_KleinanzeigenBot__apply_auto_price_reduction"))
 
 
+@pytest.mark.unit
 def test_initial_posting_uses_base_price() -> None:
     reduction = PriceReductionConfig(type = "PERCENTAGE", value = 10)
     assert calculate_auto_price(
@@ -35,6 +36,7 @@ def test_initial_posting_uses_base_price() -> None:
     ) == 100
 
 
+@pytest.mark.unit
 def test_auto_price_returns_none_without_base_price() -> None:
     reduction = PriceReductionConfig(type = "PERCENTAGE", value = 10)
     assert calculate_auto_price(
@@ -46,7 +48,8 @@ def test_auto_price_returns_none_without_base_price() -> None:
     ) is None
 
 
-def test_negative_repost_count_is_treated_like_zero() -> None:
+@pytest.mark.unit
+def test_negative_price_reduction_count_is_treated_like_zero() -> None:
     reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25)
     assert calculate_auto_price(
         base_price = 100,
@@ -57,6 +60,7 @@ def test_negative_repost_count_is_treated_like_zero() -> None:
     ) == 100
 
 
+@pytest.mark.unit
 def test_missing_price_reduction_returns_base_price() -> None:
     assert calculate_auto_price(
         base_price = 150,
@@ -67,6 +71,7 @@ def test_missing_price_reduction_returns_base_price() -> None:
     ) == 150
 
 
+@pytest.mark.unit
 def test_percentage_reduction_on_float_rounds_half_up() -> None:
     reduction = PriceReductionConfig(type = "PERCENTAGE", value = 12.5)
     assert calculate_auto_price(
@@ -78,6 +83,7 @@ def test_percentage_reduction_on_float_rounds_half_up() -> None:
     ) == 87
 
 
+@pytest.mark.unit
 def test_fixed_reduction_on_float_rounds_half_up() -> None:
     reduction = PriceReductionConfig(type = "FIXED", value = 12.4)
     assert calculate_auto_price(
@@ -89,6 +95,7 @@ def test_fixed_reduction_on_float_rounds_half_up() -> None:
     ) == 68
 
 
+@pytest.mark.unit
 def test_percentage_price_reduction_over_time() -> None:
     reduction = PriceReductionConfig(type = "PERCENTAGE", value = 10)
     assert calculate_auto_price(
@@ -114,6 +121,7 @@ def test_percentage_price_reduction_over_time() -> None:
     ) == 73
 
 
+@pytest.mark.unit
 def test_fixed_price_reduction_over_time() -> None:
     reduction = PriceReductionConfig(type = "FIXED", value = 15)
     assert calculate_auto_price(
@@ -139,6 +147,7 @@ def test_fixed_price_reduction_over_time() -> None:
     ) == 55
 
 
+@pytest.mark.unit
 def test_min_price_boundary_is_respected() -> None:
     reduction = PriceReductionConfig(type = "FIXED", value = 20)
     assert calculate_auto_price(
@@ -150,6 +159,7 @@ def test_min_price_boundary_is_respected() -> None:
     ) == 50
 
 
+@pytest.mark.unit
 def test_min_price_zero_is_allowed() -> None:
     reduction = PriceReductionConfig(type = "FIXED", value = 5)
     assert calculate_auto_price(
@@ -161,18 +171,21 @@ def test_min_price_zero_is_allowed() -> None:
     ) == 0
 
 
+@pytest.mark.unit
 def test_missing_min_price_raises_error() -> None:
     reduction = PriceReductionConfig(type = "PERCENTAGE", value = 50)
     with pytest.raises(ValueError, match = "min_price must be specified"):
         calculate_auto_price(base_price = 200, auto_reduce = True, price_reduction = reduction, repost_count = 3, min_price = None)
 
 
+@pytest.mark.unit
 def test_feature_disabled_path_leaves_price_unchanged() -> None:
     reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25)
     price = calculate_auto_price(base_price = 100, auto_reduce = False, price_reduction = reduction, repost_count = 4, min_price = 40)
     assert price == 100
 
 
+@pytest.mark.unit
 def test_apply_auto_price_reduction_logs_drop(
     caplog:pytest.LogCaptureFixture,
     apply_auto_price_reduction:_ApplyAutoPriceReduction
@@ -195,6 +208,7 @@ def test_apply_auto_price_reduction_logs_drop(
     assert ad_cfg.price == 150
 
 
+@pytest.mark.unit
 def test_apply_auto_price_reduction_logs_unchanged_price(
     caplog:pytest.LogCaptureFixture,
     apply_auto_price_reduction:_ApplyAutoPriceReduction
@@ -217,6 +231,7 @@ def test_apply_auto_price_reduction_logs_unchanged_price(
     assert ad_cfg.price == 120
 
 
+@pytest.mark.unit
 def test_apply_auto_price_reduction_warns_when_price_missing(
     caplog:pytest.LogCaptureFixture,
     apply_auto_price_reduction:_ApplyAutoPriceReduction
@@ -238,6 +253,7 @@ def test_apply_auto_price_reduction_warns_when_price_missing(
     assert any(expected in message for message in caplog.messages)
 
 
+@pytest.mark.unit
 def test_apply_auto_price_reduction_respects_repost_delay(
     caplog:pytest.LogCaptureFixture,
     apply_auto_price_reduction:_ApplyAutoPriceReduction
@@ -263,6 +279,7 @@ def test_apply_auto_price_reduction_respects_repost_delay(
     assert any(delayed_message in message for message in caplog.messages)
 
 
+@pytest.mark.unit
 def test_apply_auto_price_reduction_after_repost_delay_reduces_once(
     apply_auto_price_reduction:_ApplyAutoPriceReduction
 ) -> None:
@@ -285,6 +302,7 @@ def test_apply_auto_price_reduction_after_repost_delay_reduces_once(
     assert ad_cfg_orig["price_reduction_count"] == 1
 
 
+@pytest.mark.unit
 def test_apply_auto_price_reduction_waits_when_reduction_already_applied(
     caplog:pytest.LogCaptureFixture,
     apply_auto_price_reduction:_ApplyAutoPriceReduction
@@ -312,6 +330,7 @@ def test_apply_auto_price_reduction_waits_when_reduction_already_applied(
     assert "price_reduction_count" not in ad_orig
 
 
+@pytest.mark.unit
 def test_apply_auto_price_reduction_respects_day_delay(
     monkeypatch:pytest.MonkeyPatch,
     caplog:pytest.LogCaptureFixture,
@@ -343,6 +362,7 @@ def test_apply_auto_price_reduction_respects_day_delay(
     assert any(delayed_message in message for message in caplog.messages)
 
 
+@pytest.mark.unit
 def test_apply_auto_price_reduction_runs_after_delays(
     monkeypatch:pytest.MonkeyPatch,
     apply_auto_price_reduction:_ApplyAutoPriceReduction
@@ -369,6 +389,7 @@ def test_apply_auto_price_reduction_runs_after_delays(
     assert ad_cfg.price == 90
 
 
+@pytest.mark.unit
 def test_apply_auto_price_reduction_delayed_when_timestamp_missing(
     caplog:pytest.LogCaptureFixture,
     apply_auto_price_reduction:_ApplyAutoPriceReduction
