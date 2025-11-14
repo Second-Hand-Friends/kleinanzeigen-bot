@@ -157,6 +157,62 @@ class TestWebScrapingErrorHandling:
             await web_scraper.web_input(By.ID, "test-id", "test text")
 
     @pytest.mark.asyncio
+    async def test_web_select_combobox_missing_dropdown_options(self, web_scraper: WebScrapingMixin) -> None:
+        """Test combobox selection when aria-controls attribute is missing."""
+        input_field = AsyncMock(spec=Element)
+        input_field.attrs = {}
+        input_field.clear_input = AsyncMock()
+        input_field.send_keys = AsyncMock()
+        web_scraper.web_find = AsyncMock(return_value=input_field)
+
+        with pytest.raises(TimeoutError, match="Cannot locate combobox dropdown options."):
+            await web_scraper.web_select_combobox(By.ID, "combo-id", "Option", timeout=0.1)
+
+        input_field.clear_input.assert_awaited_once()
+        input_field.send_keys.assert_awaited_once_with("Option")
+
+    @pytest.mark.asyncio
+    async def test_web_select_combobox_selects_matching_option(self, web_scraper: WebScrapingMixin) -> None:
+        """Test combobox selection matches a visible <li> option."""
+        input_field = AsyncMock(spec=Element)
+        input_field.attrs = {"aria-controls": "dropdown-id"}
+        input_field.clear_input = AsyncMock()
+        input_field.send_keys = AsyncMock()
+
+        dropdown_elem = AsyncMock(spec=Element)
+        dropdown_elem.apply = AsyncMock(return_value=True)
+
+        web_scraper.web_find = AsyncMock(side_effect=[input_field, dropdown_elem])
+        web_scraper.web_sleep = AsyncMock()
+
+        result = await web_scraper.web_select_combobox(By.ID, "combo-id", "Visible Label")
+
+        assert result is dropdown_elem
+        input_field.clear_input.assert_awaited_once()
+        input_field.send_keys.assert_awaited_once_with("Visible Label")
+        dropdown_elem.apply.assert_awaited_once()
+        assert web_scraper.web_sleep.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_web_select_combobox_no_matching_option_raises(self, web_scraper: WebScrapingMixin) -> None:
+        """Test combobox selection raises when no <li> matches the entered text."""
+        input_field = AsyncMock(spec=Element)
+        input_field.attrs = {"aria-controls": "dropdown-id"}
+        input_field.clear_input = AsyncMock()
+        input_field.send_keys = AsyncMock()
+
+        dropdown_elem = AsyncMock(spec=Element)
+        dropdown_elem.apply = AsyncMock(return_value=False)
+
+        web_scraper.web_find = AsyncMock(side_effect=[input_field, dropdown_elem])
+        web_scraper.web_sleep = AsyncMock()
+
+        with pytest.raises(TimeoutError, match="Cannot locate combobox dropdown options."):
+            await web_scraper.web_select_combobox(By.ID, "combo-id", "Missing Label")
+
+        dropdown_elem.apply.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_web_open_timeout(self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock) -> None:
         """Test page load timeout in web_open."""
         # Mock browser.get to return a page that never loads
