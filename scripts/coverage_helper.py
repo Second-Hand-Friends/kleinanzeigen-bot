@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import subprocess  # noqa: S404 subprocess usage is limited to known internal binaries
 import sys
@@ -13,15 +14,32 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TEMP = ROOT / ".temp"
 
+logging.basicConfig(level = logging.INFO, format = "%(asctime)s %(levelname)s %(name)s %(message)s")
+logger = logging.getLogger(__name__)
+
 
 def prepare() -> None:
-    TEMP.mkdir(parents = True, exist_ok = True)
-    for pattern in ("coverage-*.xml", ".coverage-*.sqlite"):
-        for coverage_file in TEMP.glob(pattern):
-            coverage_file.unlink()
-    for path in (TEMP / "coverage.sqlite", ROOT / ".coverage"):
-        if path.exists():
-            path.unlink()
+    logger.info("Preparing coverage artifacts in %s", TEMP)
+    try:
+        TEMP.mkdir(parents = True, exist_ok = True)
+        removed_patterns = 0
+        for pattern in ("coverage-*.xml", ".coverage-*.sqlite"):
+            for coverage_file in TEMP.glob(pattern):
+                coverage_file.unlink()
+                removed_patterns += 1
+        removed_paths = 0
+        for path in (TEMP / "coverage.sqlite", ROOT / ".coverage"):
+            if path.exists():
+                path.unlink()
+                removed_paths += 1
+    except Exception as exc:  # noqa: S110 suppress to log
+        logger.exception("Failed to clean coverage artifacts: %s", exc)
+        raise
+    logger.info(
+        "Removed %d pattern-matching files and %d fixed paths during prepare",
+        removed_patterns,
+        removed_paths,
+    )
 
 
 def run_suite(data_file:Path, xml_file:Path, marker:str, extra_args:list[str]) -> None:
@@ -38,14 +56,30 @@ def run_suite(data_file:Path, xml_file:Path, marker:str, extra_args:list[str]) -
     ]
     if extra_args:
         cmd.extend(extra_args)
+    logger.info("Running pytest marker=%s coverage_data=%s xml=%s", marker, data_file, xml_file)
     subprocess.run(cmd, cwd = ROOT, check = True)  # noqa: S603 arguments are constant and controlled
+    logger.info("Pytest marker=%s finished", marker)
 
 
 def combine(data_files:list[Path]) -> None:
     combined = TEMP / "coverage.sqlite"
     os.environ["COVERAGE_FILE"] = str(combined)
-    cmd = [sys.executable, "-m", "coverage", "combine"] + [str(ROOT / data) for data in data_files]
+    resolved = []
+    missing = []
+    for data in data_files:
+        candidate = ROOT / data
+        if not candidate.exists():
+            missing.append(str(candidate))
+        else:
+            resolved.append(candidate)
+    if missing:
+        message = f"Coverage data files missing: {', '.join(missing)}"
+        logger.error(message)
+        raise FileNotFoundError(message)
+    cmd = [sys.executable, "-m", "coverage", "combine"] + [str(path) for path in resolved]
+    logger.info("Combining coverage data files: %s", ", ".join(str(path) for path in resolved))
     subprocess.run(cmd, cwd = ROOT, check = True)  # noqa: S603 arguments controlled by this script
+    logger.info("Coverage combine completed, generating report")
     subprocess.run([sys.executable, "-m", "coverage", "report", "-m"], cwd = ROOT, check = True)  # noqa: S603
 
 
