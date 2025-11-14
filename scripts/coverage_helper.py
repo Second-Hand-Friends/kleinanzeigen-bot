@@ -15,7 +15,7 @@ TEMP = ROOT / ".temp"
 
 
 def prepare() -> None:
-    TEMP.mkdir(parents=True, exist_ok=True)
+    TEMP.mkdir(parents = True, exist_ok = True)
     for pattern in ("coverage-*.xml", ".coverage-*.sqlite"):
         for coverage_file in TEMP.glob(pattern):
             coverage_file.unlink()
@@ -24,7 +24,7 @@ def prepare() -> None:
             path.unlink()
 
 
-def run_suite(data_file: Path, xml_file: Path, marker: str) -> None:
+def run_suite(data_file:Path, xml_file:Path, marker:str, extra_args:list[str]) -> None:
     os.environ["COVERAGE_FILE"] = str(ROOT / data_file)
     cmd = [
         sys.executable,
@@ -36,15 +36,17 @@ def run_suite(data_file: Path, xml_file: Path, marker: str) -> None:
         "--cov=src/kleinanzeigen_bot",
         f"--cov-report=xml:{ROOT / xml_file}",
     ]
-    subprocess.run(cmd, cwd=ROOT, check=True)  # noqa: S603 arguments are constant and controlled
+    if extra_args:
+        cmd.extend(extra_args)
+    subprocess.run(cmd, cwd = ROOT, check = True)  # noqa: S603 arguments are constant and controlled
 
 
-def combine(data_files: list[Path]) -> None:
+def combine(data_files:list[Path]) -> None:
     combined = TEMP / "coverage.sqlite"
     os.environ["COVERAGE_FILE"] = str(combined)
     cmd = [sys.executable, "-m", "coverage", "combine"] + [str(ROOT / data) for data in data_files]
-    subprocess.run(cmd, cwd=ROOT, check=True)  # noqa: S603 arguments controlled by this script
-    subprocess.run([sys.executable, "-m", "coverage", "report", "-m"], cwd=ROOT, check=True)  # noqa: S603
+    subprocess.run(cmd, cwd = ROOT, check = True)  # noqa: S603 arguments controlled by this script
+    subprocess.run([sys.executable, "-m", "coverage", "report", "-m"], cwd = ROOT, check = True)  # noqa: S603
 
 
 def main() -> None:
@@ -66,12 +68,12 @@ def main() -> None:
         help = "List of coverage data files to combine",
     )
 
-    args = parser.parse_args()
+    args, extra_args = parser.parse_known_args()
 
     if args.command == "prepare":
         prepare()
     elif args.command == "run":
-        run_suite(args.data_file, args.xml_file, args.marker)
+        run_suite(args.data_file, args.xml_file, args.marker, extra_args)
     else:
         combine(args.data_files)
 
