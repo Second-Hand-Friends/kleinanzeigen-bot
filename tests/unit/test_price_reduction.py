@@ -20,7 +20,7 @@ class _ApplyAutoPriceReduction(Protocol):
 
 @pytest.fixture
 def apply_auto_price_reduction() -> _ApplyAutoPriceReduction:
-    bot: Any = KleinanzeigenBot()
+    bot:Any = KleinanzeigenBot()
     return cast(_ApplyAutoPriceReduction, bot._KleinanzeigenBot__apply_auto_price_reduction)
 
 
