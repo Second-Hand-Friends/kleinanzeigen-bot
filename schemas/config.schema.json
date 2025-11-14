@@ -64,6 +64,45 @@
           "title": "Price Type",
           "type": "string"
         },
+        "auto_reduce_price": {
+          "default": false,
+          "description": "automatically lower the price of reposted ads according to price_reduction",
+          "title": "Auto Reduce Price",
+          "type": "boolean"
+        },
+        "price_reduction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PriceReductionConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "reduction applied after each repost when auto_reduce_price is enabled"
+        },
+        "price_reduction_delay_reposts": {
+          "default": 0,
+          "description": "delay reductions until more than this many reposts occurred (0 = immediate)",
+          "minimum": 0,
+          "title": "Price Reduction Delay Reposts",
+          "type": "integer"
+        },
+        "price_reduction_delay_days": {
+          "default": 0,
+          "description": "delay reductions until this many days have passed since the last publish (0 = immediate)",
+          "minimum": 0,
+          "title": "Price Reduction Delay Days",
+          "type": "integer"
+        },
+        "repost_count": {
+          "default": 0,
+          "description": "number of times an ad has already been (re)published; managed by the bot",
+          "minimum": 0,
+          "title": "Repost Count",
+          "type": "integer"
+        },
         "shipping_type": {
           "default": "SHIPPING",
           "enum": [
@@ -328,6 +367,31 @@
         "password"
       ],
       "title": "LoginConfig",
+      "type": "object"
+    },
+    "PriceReductionConfig": {
+      "properties": {
+        "type": {
+          "description": "type of reduction to apply on each repost: percentage of the previous price or fixed amount",
+          "enum": [
+            "FIXED",
+            "PERCENTAGE"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "description": "magnitude of the reduction; interpreted as percent when type=percentage and as currency units when type=fixed",
+          "exclusiveMinimum": 0,
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ],
+      "title": "PriceReductionConfig",
       "type": "object"
     },
     "PublishingConfig": {

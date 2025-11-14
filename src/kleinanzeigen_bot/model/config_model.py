@@ -15,6 +15,16 @@ from kleinanzeigen_bot.utils.misc import get_attr
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
 
 
+class PriceReductionConfig(ContextualModel):
+    type:Literal["FIXED", "PERCENTAGE"] = Field(
+        description = "type of reduction to apply on each repost: percentage of the previous price or fixed amount"
+    )
+    value:float = Field(
+        gt = 0,
+        description = "magnitude of the reduction; interpreted as percent when type=percentage and as currency units when type=fixed"
+    )
+
+
 class ContactDefaults(ContextualModel):
     name:str | None = None
     street:str | None = None
@@ -35,6 +45,29 @@ class AdDefaults(ContextualModel):
     description_prefix:str | None = Field(default = None, description = "prefix for the ad description")
     description_suffix:str | None = Field(default = None, description = " suffix for the ad description")
     price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] = "NEGOTIABLE"
+    auto_reduce_price:bool = Field(
+        default = False,
+        description = "automatically lower the price of reposted ads according to price_reduction"
+    )
+    price_reduction:PriceReductionConfig | None = Field(
+        default = None,
+        description = "reduction applied after each repost when auto_reduce_price is enabled"
+    )
+    price_reduction_delay_reposts:int = Field(
+        default = 0,
+        ge = 0,
+        description = "delay reductions until more than this many reposts occurred (0 = immediate)"
+    )
+    price_reduction_delay_days:int = Field(
+        default = 0,
+        ge = 0,
+        description = "delay reductions until this many days have passed since the last publish (0 = immediate)"
+    )
+    repost_count:int = Field(
+        default = 0,
+        ge = 0,
+        description = "number of times an ad has already been (re)published; managed by the bot"
+    )
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] = "SHIPPING"
     sell_directly:bool = Field(default = False, description = "requires shipping_type SHIPPING to take effect")
     images:List[str] | None = Field(default = None)

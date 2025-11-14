@@ -84,6 +84,18 @@ kleinanzeigen_bot/__init__.py:
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
     "DONE: (Re-)published %s": "FERTIG: %s (erneut) veröffentlicht"
     "ad": "Anzeige"
+  __apply_auto_price_reduction:
+    "Auto price reduction is enabled for [%s] but no price is configured.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber es wurde kein Preis konfiguriert."
+    "Auto price reduction applied: %s -> %s after %s reduction cycles": "Automatische Preisreduzierung angewendet: %s -> %s nach %s Reduktionszyklen"
+    "Auto price reduction kept price %s after attempting %s reduction cycles": "Automatische Preisreduzierung behält Preis %s nach Versuch von %s Reduktionszyklen bei"
+
+  __repost_cycle_ready:
+    "Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)": "Automatische Preisreduzierung für [%s] verzögert: Warte %s weitere Reposts (abgeschlossen %s, angewandte Reduktionen %s)"
+    "Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts": "Automatische Preisreduzierung bereits angewendet für [%s]: %s Reduktionen entsprechen %s zulässigen Reposts"
+
+  __day_delay_elapsed:
+    "Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)": "Automatische Preisreduzierung für [%s] verzögert: Warte %s Tage (vergangen %s)"
+    "Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing": "Automatische Preisreduzierung für [%s] verzögert: Warte %s Tage, aber Veröffentlichungszeitpunkt fehlt"
 
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
