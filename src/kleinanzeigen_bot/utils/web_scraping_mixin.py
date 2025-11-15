@@ -900,7 +900,7 @@ class WebScrapingMixin:
             LOG.error(_("Combobox input field does not have 'aria-controls' attribute to locate dropdown options."))
             raise TimeoutError(_("Cannot locate combobox dropdown options."))
 
-        dropdown_elem = await self.web_find(By.ID, dropdown_id)
+        dropdown_elem = await self.web_find(By.ID, dropdown_id, timeout = timeout)
         js_value = json.dumps(selected_value)  # safe escaping for JS
 
         # This selects the correct <li> by visible text inside the dropdown. It includes normalization, i.e. trimming
