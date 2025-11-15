@@ -220,6 +220,8 @@ kleinanzeigen_bot/extract.py:
   _extract_category_from_ad_page:
     "Breadcrumb container 'vap-brdcrmb' not found; cannot extract ad category: %s": "Breadcrumb-Container 'vap-brdcrmb' nicht gefunden; kann Anzeigenkategorie nicht extrahieren: %s"
     "Falling back to legacy breadcrumb selectors; collected ids: %s": "Weiche auf ältere Breadcrumb-Selektoren aus; gesammelte IDs: %s"
+    "Legacy breadcrumb selectors not found within %.1f seconds (collected ids: %s)": "Ältere Breadcrumb-Selektoren nicht innerhalb von %.1f Sekunden gefunden (gesammelte IDs: %s)"
+    "Unable to locate breadcrumb fallback selectors within %(seconds).1f seconds.": "Ältere Breadcrumb-Selektoren konnten nicht innerhalb von %(seconds).1f Sekunden gefunden werden."
 
 #################################################
 kleinanzeigen_bot/utils/i18n.py:
@@ -424,6 +426,12 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
   web_request:
     " -> HTTP %s [%s]...": " -> HTTP %s [%s]..."
 
+  _web_find_once:
+    "Unsupported selector type: %s": "Nicht unterstützter Selektor-Typ: %s"
+
+  _web_find_all_once:
+    "Unsupported selector type: %s": "Nicht unterstützter Selektor-Typ: %s"
+
   diagnose_browser_issues:
     "=== Browser Connection Diagnostics ===": "=== Browser-Verbindungsdiagnose ==="
     "=== End Diagnostics ===": "=== Ende der Diagnose ==="
@@ -440,6 +448,8 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "(info) User data directory does not exist (will be created): %s": "(Info) Benutzerdatenverzeichnis existiert nicht (wird erstellt): %s"
     "(info) Remote debugging port configured: %d": "(Info) Remote-Debugging-Port konfiguriert: %d"
     "(info) Remote debugging port is not open": "(Info) Remote-Debugging-Port ist nicht offen"
+
+    "(warn) Unable to inspect browser processes: %s": "(Warnung) Browser-Prozesse konnten nicht überprüft werden: %s"
 
     "(info) No browser processes currently running": "(Info) Derzeit keine Browser-Prozesse aktiv"
     "(fail) Running as root - this can cause browser issues": "(Fehler) Läuft als Root - dies kann Browser-Probleme verursachen"

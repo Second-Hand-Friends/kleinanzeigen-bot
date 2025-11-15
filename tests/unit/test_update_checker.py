@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
@@ -18,9 +18,45 @@ import requests
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
+from kleinanzeigen_bot.model import update_check_state as update_check_state_module
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.model.update_check_state import UpdateCheckState
 from kleinanzeigen_bot.update_checker import UpdateChecker
+
+
+def _freeze_update_state_datetime(monkeypatch:pytest.MonkeyPatch, fixed_now:datetime) -> None:
+    """Patch UpdateCheckState to return a deterministic datetime.now/utcnow."""
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz:tzinfo | None = None) -> "FixedDateTime":
+            base = fixed_now.replace(tzinfo = None) if tz is None else fixed_now.astimezone(tz)
+            return cls(
+                base.year,
+                base.month,
+                base.day,
+                base.hour,
+                base.minute,
+                base.second,
+                base.microsecond,
+                tzinfo = base.tzinfo
+            )
+
+        @classmethod
+        def utcnow(cls) -> "FixedDateTime":
+            base = fixed_now.astimezone(timezone.utc).replace(tzinfo = None)
+            return cls(
+                base.year,
+                base.month,
+                base.day,
+                base.hour,
+                base.minute,
+                base.second,
+                base.microsecond
+            )
+
+    datetime_module = getattr(update_check_state_module, "datetime")
+    monkeypatch.setattr(datetime_module, "datetime", FixedDateTime)
 
 
 @pytest.fixture
@@ -58,6 +94,18 @@ class TestUpdateChecker:
         checker = UpdateChecker(config)
         with patch("requests.get", return_value = MagicMock(json = lambda: {"target_commitish": "e7a3d46"})):
             assert checker._get_release_commit("latest") == "e7a3d46"
+
+    def test_request_timeout_uses_config(self, config:Config, mocker:"MockerFixture") -> None:
+        """Ensure HTTP calls honor the timeout configuration."""
+        config.timeouts.multiplier = 1.5
+        checker = UpdateChecker(config)
+        mock_response = MagicMock(json = lambda: {"target_commitish": "abc"})
+        mock_get = mocker.patch("requests.get", return_value = mock_response)
+
+        checker._get_release_commit("latest")
+
+        expected_timeout = config.timeouts.effective("update_check")
+        assert mock_get.call_args.kwargs["timeout"] == expected_timeout
 
     def test_get_commit_date(self, config:Config) -> None:
         """Test that the commit date is correctly retrieved from the GitHub API."""
@@ -256,10 +304,12 @@ class TestUpdateChecker:
         # Should not raise an exception
         state.save(state_file)
 
-    def test_update_check_state_interval_units(self) -> None:
+    def test_update_check_state_interval_units(self, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that different interval units are handled correctly."""
         state = UpdateCheckState()
-        now = datetime.now(timezone.utc)
+        fixed_now = datetime(2025, 1, 15, 8, 0, tzinfo = timezone.utc)
+        _freeze_update_state_datetime(monkeypatch, fixed_now)
+        now = fixed_now
 
         # Test seconds (should always be too short, fallback to 7d, only 2 days elapsed, so should_check is False)
         state.last_check = now - timedelta(seconds = 30)
@@ -303,10 +353,14 @@ class TestUpdateChecker:
         state.last_check = now - timedelta(days = 6)
         assert state.should_check("1z") is False
 
-    def test_update_check_state_interval_validation(self) -> None:
+    def test_update_check_state_interval_validation(self, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that interval validation works correctly."""
         state = UpdateCheckState()
-        now = datetime.now(timezone.utc)
+        fixed_now = datetime(2025, 1, 1, 12, 0, tzinfo = timezone.utc)
+
+        _freeze_update_state_datetime(monkeypatch, fixed_now)
+
+        now = fixed_now
         state.last_check = now - timedelta(days = 1)
 
         # Test minimum value (1d)

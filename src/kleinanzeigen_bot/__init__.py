@@ -573,8 +573,9 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     async def check_and_wait_for_captcha(self, *, is_login_page:bool = True) -> None:
         try:
+            captcha_timeout = self._timeout("captcha_detection")
             await self.web_find(By.CSS_SELECTOR,
-                                "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']", timeout = 2)
+                                "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']", timeout = captcha_timeout)
 
             if not is_login_page and self.config.captcha.auto_restart:
                 LOG.warning("Captcha recognized - auto-restart enabled, abort run...")
@@ -624,7 +625,8 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     async def handle_after_login_logic(self) -> None:
         try:
-            await self.web_find(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout = 4)
+            sms_timeout = self._timeout("sms_verification")
+            await self.web_find(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout = sms_timeout)
             LOG.warning("############################################")
             LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
             LOG.warning("############################################")
@@ -634,9 +636,12 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         try:
             LOG.info("Handling GDPR disclaimer...")
-            await self.web_find(By.ID, "gdpr-banner-accept", timeout = 10)
+            gdpr_timeout = self._timeout("gdpr_prompt")
+            await self.web_find(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
             await self.web_click(By.ID, "gdpr-banner-cmp-button")
-            await self.web_click(By.XPATH, "//div[@id='ConsentManagementPage']//*//button//*[contains(., 'Alle ablehnen und fortfahren')]", timeout = 10)
+            await self.web_click(By.XPATH,
+                                 "//div[@id='ConsentManagementPage']//*//button//*[contains(., 'Alle ablehnen und fortfahren')]",
+                                 timeout = gdpr_timeout)
         except TimeoutError:
             pass
 
@@ -724,7 +729,8 @@ class KleinanzeigenBot(WebScrapingMixin):
             count += 1
 
             await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.REPLACE)
-            await self.web_await(self.__check_publishing_result, timeout = 5 * 60)
+            publish_timeout = self._timeout("publishing_result")
+            await self.web_await(self.__check_publishing_result, timeout = publish_timeout)
 
             if self.config.publishing.delete_old_ads == "AFTER_PUBLISH" and not self.keep_old_ads:
                 await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = False)
@@ -924,7 +930,8 @@ class KleinanzeigenBot(WebScrapingMixin):
         # wait for payment form if commercial account is used
         #############################
         try:
-            await self.web_find(By.ID, "myftr-shppngcrt-frm", timeout = 2)
+            short_timeout = self._timeout("quick_dom")
+            await self.web_find(By.ID, "myftr-shppngcrt-frm", timeout = short_timeout)
 
             LOG.warning("############################################")
             LOG.warning("# Payment form detected! Please proceed with payment.")
@@ -934,7 +941,8 @@ class KleinanzeigenBot(WebScrapingMixin):
         except TimeoutError:
             pass
 
-        await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = 20)
+        confirmation_timeout = self._timeout("publishing_confirmation")
+        await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = confirmation_timeout)
 
         # extract the ad id from the URL's query parameter
         current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(self.page.url).query)
@@ -986,7 +994,8 @@ class KleinanzeigenBot(WebScrapingMixin):
             count += 1
 
             await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.MODIFY)
-            await self.web_await(self.__check_publishing_result, timeout = 5 * 60)
+            publish_timeout = self._timeout("publishing_result")
+            await self.web_await(self.__check_publishing_result, timeout = publish_timeout)
 
         LOG.info("############################################")
         LOG.info("DONE: updated %s", pluralize("ad", count))
@@ -1087,6 +1096,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
 
     async def __set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
+        short_timeout = self._timeout("quick_dom")
         if ad_cfg.shipping_type == "PICKUP":
             try:
                 await self.web_click(By.ID, "radio-pickup")
@@ -1098,7 +1108,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             if mode == AdUpdateStrategy.MODIFY:
                 try:
                     # when "Andere Versandmethoden" is not available, go back and start over new
-                    await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]', timeout = 2)
+                    await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
                 except TimeoutError:
                     await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
 
@@ -1127,7 +1137,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                         # (important for mode = UPDATE)
                         await self.web_find(By.XPATH,
                                             '//input[contains(@placeholder, "Versandkosten (optional)")]',
-                                            timeout = 2)
+                                            timeout = short_timeout)
                     except TimeoutError:
                         await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
 

@@ -114,6 +114,55 @@ class CaptchaConfig(ContextualModel):
     restart_delay:str = "6h"
 
 
+class TimeoutConfig(ContextualModel):
+    multiplier:float = Field(
+        default = 1.0,
+        ge = 0.1,
+        description = "Global multiplier applied to all timeout values."
+    )
+    default:float = Field(default = 5.0, ge = 0.0, description = "Baseline timeout for DOM interactions.")
+    page_load:float = Field(default = 15.0, ge = 1.0, description = "Page load timeout for web_open.")
+    captcha_detection:float = Field(default = 2.0, ge = 0.1, description = "Timeout for captcha iframe detection.")
+    sms_verification:float = Field(default = 4.0, ge = 0.1, description = "Timeout for SMS verification prompts.")
+    gdpr_prompt:float = Field(default = 10.0, ge = 1.0, description = "Timeout for GDPR/consent dialogs.")
+    publishing_result:float = Field(default = 300.0, ge = 10.0, description = "Timeout for publishing result checks.")
+    publishing_confirmation:float = Field(default = 20.0, ge = 1.0, description = "Timeout for publish confirmation redirect.")
+    pagination_initial:float = Field(default = 10.0, ge = 1.0, description = "Timeout for initial pagination lookup.")
+    pagination_follow_up:float = Field(default = 5.0, ge = 1.0, description = "Timeout for subsequent pagination navigation.")
+    quick_dom:float = Field(default = 2.0, ge = 0.1, description = "Generic short timeout for transient UI.")
+    update_check:float = Field(default = 10.0, ge = 1.0, description = "Timeout for GitHub update checks.")
+    chrome_remote_probe:float = Field(default = 2.0, ge = 0.1, description = "Timeout for local remote-debugging probes.")
+    chrome_remote_debugging:float = Field(default = 5.0, ge = 1.0, description = "Timeout for remote debugging API calls.")
+    chrome_binary_detection:float = Field(default = 10.0, ge = 1.0, description = "Timeout for chrome --version subprocesses.")
+    retry_enabled:bool = Field(default = True, description = "Enable built-in retry/backoff for DOM operations.")
+    retry_max_attempts:int = Field(default = 2, ge = 1, description = "Max retry attempts when retry is enabled.")
+    retry_backoff_factor:float = Field(default = 1.5, ge = 1.0, description = "Exponential factor applied per retry attempt.")
+
+    def resolve(self, key:str = "default", override:float | None = None) -> float:
+        """
+        Return the base timeout (seconds) for the given key without applying modifiers.
+        """
+        if override is not None:
+            return float(override)
+
+        if key == "default":
+            return float(self.default)
+
+        attr = getattr(self, key, None)
+        if isinstance(attr, (int, float)):
+            return float(attr)
+
+        return float(self.default)
+
+    def effective(self, key:str = "default", override:float | None = None, *, attempt:int = 0) -> float:
+        """
+        Return the effective timeout (seconds) with multiplier/backoff applied.
+        """
+        base = self.resolve(key, override)
+        backoff = self.retry_backoff_factor ** attempt if attempt > 0 else 1.0
+        return base * self.multiplier * backoff
+
+
 def _validate_glob_pattern(v:str) -> str:
     if not v.strip():
         raise ValueError("must be a non-empty, non-blank glob pattern")
@@ -154,6 +203,7 @@ Example:
     login:LoginConfig = Field(default_factory = LoginConfig.model_construct, description = "Login credentials")
     captcha:CaptchaConfig = Field(default_factory = CaptchaConfig)
     update_check:UpdateCheckConfig = Field(default_factory = UpdateCheckConfig, description = "Update check configuration")
+    timeouts:TimeoutConfig = Field(default_factory = TimeoutConfig, description = "Centralized timeout configuration.")
 
     def with_values(self, values:dict[str, Any]) -> Config:
         return Config.model_validate(
