@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone, tzinfo
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
@@ -273,6 +274,25 @@ class TestUpdateChecker:
 
         expected = "You are on the latest version: 2025+fb00f11 (compared to fb00f11 in channel latest)"
         assert any(expected in r.getMessage() for r in caplog.records)
+
+    def test_check_for_updates_respects_interval_gate(
+        self,
+        config:Config,
+        caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Ensure the interval guard short-circuits update checks without touching the network."""
+        caplog.set_level(logging.WARNING)
+
+        checker = UpdateChecker(config)
+        checker.state.should_check = MagicMock(return_value = False)
+        checker.state.update_last_check = MagicMock()
+
+        with patch("requests.get") as mock_get:
+            checker.check_for_updates()
+
+        mock_get.assert_not_called()
+        checker.state.update_last_check.assert_not_called()
+        assert all("Could not determine local version" not in message for message in caplog.messages)
 
     def test_update_check_state_empty_file(self, state_file:Path) -> None:
         """Test that loading an empty state file returns a new state."""

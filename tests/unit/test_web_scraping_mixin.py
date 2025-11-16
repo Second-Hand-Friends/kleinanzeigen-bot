@@ -431,51 +431,70 @@ class TestSelectorTimeoutMessages:
 class TestWebScrapingSessionManagement:
     """Test session management edge cases in WebScrapingMixin."""
 
-    def test_close_browser_session_cleans_up(self, mock_browser:AsyncMock) -> None:
-        """Test that close_browser_session cleans up browser and page references and kills child processes."""
+    def test_close_browser_session_cleans_up_resources(self) -> None:
+        """Ensure browser and page references are cleared and child processes are killed."""
         scraper = WebScrapingMixin()
         scraper.browser = MagicMock()
-        scraper.page = MagicMock()
-        scraper.browser._process_pid = 12345
-        stop_mock = scraper.browser.stop = MagicMock()
-        # Patch psutil.Process and its children
-        with patch("psutil.Process") as mock_proc:
-            mock_child = MagicMock()
-            mock_child.is_running.return_value = True
-            mock_proc.return_value.children.return_value = [mock_child]
-            scraper.close_browser_session()
-            # Browser stop should be called
-            stop_mock.assert_called_once()
-            # Child process kill should be called
-            mock_child.kill.assert_called_once()
-            # Browser and page references should be cleared
-            assert scraper.browser is None
-            assert scraper.page is None
-
-    def test_close_browser_session_double_close(self) -> None:
-        """Test that calling close_browser_session twice does not raise and is idempotent."""
-        scraper = WebScrapingMixin()
-        scraper.browser = MagicMock()
-        scraper.page = MagicMock()
-        scraper.browser._process_pid = 12345
+        scraper.browser._process_pid = 42
         scraper.browser.stop = MagicMock()
+        scraper.page = MagicMock(spec = Page)
+
         with patch("psutil.Process") as mock_proc:
             mock_child = MagicMock()
             mock_child.is_running.return_value = True
             mock_proc.return_value.children.return_value = [mock_child]
-            scraper.close_browser_session()
-            # Second call should not raise
+
             scraper.close_browser_session()
 
-    def test_close_browser_session_no_browser(self) -> None:
-        """Test that close_browser_session is a no-op if browser is None."""
+        mock_proc.assert_called_once_with(42)
+        scraper.browser.stop.assert_called_once()
+        mock_child.kill.assert_called_once()
+        assert scraper.browser is None
+        assert scraper.page is None
+
+    def test_close_browser_session_idempotent(self) -> None:
+        """Repeated calls should leave the state clean without re-running cleanup logic."""
+        scraper = WebScrapingMixin()
+        scraper.browser = MagicMock()
+        scraper.browser._process_pid = 99
+        scraper.browser.stop = MagicMock()
+        scraper.page = MagicMock(spec = Page)
+
+        with patch("psutil.Process") as mock_proc:
+            mock_proc.return_value.children.return_value = []
+            scraper.close_browser_session()
+            scraper.close_browser_session()
+
+        mock_proc.assert_called_once()
+        scraper.browser.stop.assert_called_once()
+
+    def test_close_browser_session_without_browser_skips_inspection(self) -> None:
+        """When no browser exists, no process inspection should run and the page should stay untouched."""
         scraper = WebScrapingMixin()
         scraper.browser = None  # type: ignore[unused-ignore,reportAttributeAccessIssue]
-        scraper.page = MagicMock()
-        # Should not raise
-        scraper.close_browser_session()
-        # Page should remain unchanged
-        assert scraper.page is not None
+        preserved_page = MagicMock(spec = Page)
+        scraper.page = preserved_page
+
+        with patch("psutil.Process") as mock_proc:
+            scraper.close_browser_session()
+
+        mock_proc.assert_not_called()
+        assert scraper.page is preserved_page
+
+    def test_close_browser_session_handles_missing_children(self) -> None:
+        """Child-less browsers should still stop cleanly without raising."""
+        scraper = WebScrapingMixin()
+        scraper.browser = MagicMock()
+        scraper.browser._process_pid = 123
+        scraper.browser.stop = MagicMock()
+        scraper.page = MagicMock(spec = Page)
+
+        with patch("psutil.Process") as mock_proc:
+            mock_proc.return_value.children.return_value = []
+            scraper.close_browser_session()
+
+        mock_proc.assert_called_once()
+        scraper.browser.stop.assert_called_once()
 
     def test_get_compatible_browser_raises_on_unknown_os(self) -> None:
         """Test get_compatible_browser raises AssertionError on unknown OS."""
