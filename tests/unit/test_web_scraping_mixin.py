@@ -513,6 +513,7 @@ class TestWebScrapingSessionManagement:
         ):
             scraper.get_compatible_browser()
 
+
 class TestWebScrolling:
     """Test scrolling helpers."""
 

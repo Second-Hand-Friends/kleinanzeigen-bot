@@ -284,14 +284,16 @@ class TestUpdateChecker:
         caplog.set_level(logging.WARNING)
 
         checker = UpdateChecker(config)
-        checker.state.should_check = MagicMock(return_value = False)
-        checker.state.update_last_check = MagicMock()
 
-        with patch("requests.get") as mock_get:
+        with patch.object(checker.state, "should_check", return_value = False) as should_check_mock, \
+                patch.object(checker.state, "update_last_check") as update_last_check_mock, \
+                patch("requests.get") as mock_get:
+
             checker.check_for_updates()
 
+        should_check_mock.assert_called_once()
         mock_get.assert_not_called()
-        checker.state.update_last_check.assert_not_called()
+        update_last_check_mock.assert_not_called()
         assert all("Could not determine local version" not in message for message in caplog.messages)
 
     def test_update_check_state_empty_file(self, state_file:Path) -> None:

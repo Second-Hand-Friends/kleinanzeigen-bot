@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from kleinanzeigen_bot import LOG, KleinanzeigenBot, AdUpdateStrategy, misc
+from kleinanzeigen_bot import LOG, AdUpdateStrategy, KleinanzeigenBot, misc
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, PublishingConfig
@@ -91,6 +91,7 @@ def remove_fields(config:dict[str, Any], *fields:str) -> dict[str, Any]:
         elif field in result:
             del result[field]
     return result
+
 
 @pytest.fixture
 def minimal_ad_config(base_ad_config:dict[str, Any]) -> dict[str, Any]:
@@ -489,21 +490,20 @@ class TestKleinanzeigenBotBasics:
         test_bot.config.publishing.delete_old_ads = "AFTER_PUBLISH"
         test_bot.keep_old_ads = False
 
-        payload = {"ads": []}
-        test_bot.web_request = AsyncMock(return_value = {"content": json.dumps(payload)})
-        test_bot.publish_ad = AsyncMock()
-        test_bot.web_await = AsyncMock(return_value = True)
-        test_bot.delete_ad = AsyncMock()
+        payload:dict[str, list[Any]] = {"ads": []}
+        ad_cfgs:list[tuple[str, Ad, dict[str, Any]]] = [("ad.yaml", Ad.model_validate(base_ad_config), {})]
 
-        ad = Ad.model_validate(base_ad_config)
-        ad_cfgs = [("ad.yaml", ad, {})]
+        with patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps(payload)}) as web_request_mock, \
+                patch.object(test_bot, "publish_ad", new_callable = AsyncMock) as publish_ad_mock, \
+                patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True) as web_await_mock, \
+                patch.object(test_bot, "delete_ad", new_callable = AsyncMock) as delete_ad_mock:
 
-        await test_bot.publish_ads(ad_cfgs)
+            await test_bot.publish_ads(ad_cfgs)
 
-        test_bot.web_request.assert_awaited_once_with(f"{test_bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT")
-        test_bot.publish_ad.assert_awaited_once_with("ad.yaml", ad, {}, [], AdUpdateStrategy.REPLACE)
-        test_bot.web_await.assert_awaited_once()
-        test_bot.delete_ad.assert_awaited_once_with(ad, [], delete_old_ads_by_title = False)
+            web_request_mock.assert_awaited_once_with(f"{test_bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT")
+            publish_ad_mock.assert_awaited_once_with("ad.yaml", ad_cfgs[0][1], {}, [], AdUpdateStrategy.REPLACE)
+            web_await_mock.assert_awaited_once()
+            delete_ad_mock.assert_awaited_once_with(ad_cfgs[0][1], [], delete_old_ads_by_title = False)
 
     def test_get_root_url(self, test_bot:KleinanzeigenBot) -> None:
         """Test root URL retrieval."""
