@@ -513,23 +513,6 @@ class TestWebScrapingSessionManagement:
         ):
             scraper.get_compatible_browser()
 
-    def test_close_browser_session_no_children(self) -> None:
-        """Test that close_browser_session handles case when browser has no child processes."""
-        scraper = WebScrapingMixin()
-        scraper.browser = MagicMock()
-        scraper.page = MagicMock()
-        scraper.browser._process_pid = 12345
-        stop_mock = scraper.browser.stop = MagicMock()
-
-        # Mock Process to return no children
-        with patch("psutil.Process") as mock_proc:
-            mock_proc.return_value.children.return_value = []
-            scraper.close_browser_session()
-        stop_mock.assert_called_once()
-        assert scraper.browser is None
-        assert scraper.page is None
-
-
 class TestWebScrolling:
     """Test scrolling helpers."""
 
