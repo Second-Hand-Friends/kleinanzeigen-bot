@@ -123,11 +123,12 @@ test = { composite = ["utest", "itest", "smoke"] }
 # Coverage scripts:
 # - Each group writes its own data file to .temp/.coverage.<group>.xml
 #
-"test:cov"  = { composite = ["utest:cov", "itest:cov", "smoke:cov", "coverage:combine"] }
-"utest:cov" = { shell = "python -m pytest --capture=tee-sys -m \"not itest and not smoke\" --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-unit.xml --cov-append" }
-"itest:cov" = { shell = "python -m pytest --capture=tee-sys -m \"itest and not smoke\" --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-integration.xml --cov-append" }
-"smoke:cov" = { shell = "python -m pytest --capture=tee-sys -m smoke --cov=src/kleinanzeigen_bot --cov-report=xml:.temp/coverage-smoke.xml --cov-append" }
-"coverage:combine" = { shell = "coverage report -m" }
+"coverage:prepare" = { shell = "python scripts/coverage_helper.py prepare" }
+"test:cov"  = { composite = ["coverage:prepare", "utest:cov", "itest:cov", "smoke:cov", "coverage:combine"] }
+"utest:cov" = { shell = "python scripts/coverage_helper.py run .temp/.coverage-unit.sqlite .temp/coverage-unit.xml \"not itest and not smoke\"" }
+"itest:cov" = { shell = "python scripts/coverage_helper.py run .temp/.coverage-itest.sqlite .temp/coverage-integration.xml \"itest and not smoke\"" }
+"smoke:cov" = { shell = "python scripts/coverage_helper.py run .temp/.coverage-smoke.sqlite .temp/coverage-smoke.xml smoke" }
+"coverage:combine" = { shell = "python scripts/coverage_helper.py combine .temp/.coverage-unit.sqlite .temp/.coverage-itest.sqlite .temp/.coverage-smoke.sqlite" }
 # Run all tests with coverage in a single invocation
 "test:cov:unified" = "python -m pytest --capture=tee-sys --cov=src/kleinanzeigen_bot --cov-report=term-missing"
 
@@ -376,6 +377,7 @@ relative_files = true
 precision = 2
 show_missing = true
 skip_covered = false
+include = ["src/kleinanzeigen_bot/*"]
 
 #####################
 # yamlfix
