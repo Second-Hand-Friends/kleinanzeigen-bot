@@ -436,7 +436,7 @@ class TestWebScrapingSessionManagement:
         scraper = WebScrapingMixin()
         scraper.browser = MagicMock()
         scraper.browser._process_pid = 42
-        scraper.browser.stop = MagicMock()
+        stop_mock = scraper.browser.stop = MagicMock()
         scraper.page = MagicMock(spec = Page)
 
         with patch("psutil.Process") as mock_proc:
@@ -447,7 +447,7 @@ class TestWebScrapingSessionManagement:
             scraper.close_browser_session()
 
         mock_proc.assert_called_once_with(42)
-        scraper.browser.stop.assert_called_once()
+        stop_mock.assert_called_once()
         mock_child.kill.assert_called_once()
         assert scraper.browser is None
         assert scraper.page is None
@@ -457,7 +457,7 @@ class TestWebScrapingSessionManagement:
         scraper = WebScrapingMixin()
         scraper.browser = MagicMock()
         scraper.browser._process_pid = 99
-        scraper.browser.stop = MagicMock()
+        stop_mock = scraper.browser.stop = MagicMock()
         scraper.page = MagicMock(spec = Page)
 
         with patch("psutil.Process") as mock_proc:
@@ -466,7 +466,7 @@ class TestWebScrapingSessionManagement:
             scraper.close_browser_session()
 
         mock_proc.assert_called_once()
-        scraper.browser.stop.assert_called_once()
+        stop_mock.assert_called_once()
 
     def test_close_browser_session_without_browser_skips_inspection(self) -> None:
         """When no browser exists, no process inspection should run and the page should stay untouched."""
@@ -486,7 +486,7 @@ class TestWebScrapingSessionManagement:
         scraper = WebScrapingMixin()
         scraper.browser = MagicMock()
         scraper.browser._process_pid = 123
-        scraper.browser.stop = MagicMock()
+        stop_mock = scraper.browser.stop = MagicMock()
         scraper.page = MagicMock(spec = Page)
 
         with patch("psutil.Process") as mock_proc:
@@ -494,7 +494,7 @@ class TestWebScrapingSessionManagement:
             scraper.close_browser_session()
 
         mock_proc.assert_called_once()
-        scraper.browser.stop.assert_called_once()
+        stop_mock.assert_called_once()
 
     def test_get_compatible_browser_raises_on_unknown_os(self) -> None:
         """Test get_compatible_browser raises AssertionError on unknown OS."""
