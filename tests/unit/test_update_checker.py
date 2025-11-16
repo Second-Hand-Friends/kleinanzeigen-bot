@@ -283,12 +283,10 @@ class TestUpdateChecker:
         """Ensure the interval guard short-circuits update checks without touching the network."""
         caplog.set_level(logging.WARNING)
 
-        checker = UpdateChecker(config)
-
-        with patch.object(checker.state, "should_check", return_value = False) as should_check_mock, \
-                patch.object(checker.state, "update_last_check") as update_last_check_mock, \
+        with patch.object(UpdateCheckState, "should_check", return_value = False) as should_check_mock, \
+                patch.object(UpdateCheckState, "update_last_check") as update_last_check_mock, \
                 patch("requests.get") as mock_get:
-
+            checker = UpdateChecker(config)
             checker.check_for_updates()
 
         should_check_mock.assert_called_once()
