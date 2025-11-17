@@ -365,9 +365,9 @@ class KleinanzeigenBot(WebScrapingMixin):
             self.config_file_path,
             default_config.model_dump(exclude_none = True, exclude = {"ad_defaults": {"description"}}),
             header = (
-                "# yaml-language-server: "
-                "$schema=https://raw.githubusercontent.com/Second-Hand-Friends/"
-                "kleinanzeigen-bot/refs/heads/main/schemas/config.schema.json"
+                "# yaml-language-server: $schema="
+                "https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot"
+                "/refs/heads/main/schemas/config.schema.json"
             )
         )
 
@@ -590,7 +590,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             base_price = base_price,
             auto_reduce = ad_cfg.auto_reduce_price,
             price_reduction = ad_cfg.price_reduction,
-            repost_count = ad_cfg.repost_count,
+            target_reduction_cycle = next_cycle,
             min_price = ad_cfg.min_price
         )
 
@@ -611,6 +611,64 @@ class KleinanzeigenBot(WebScrapingMixin):
                 ad_cfg.repost_count
             )
         ad_cfg.price = effective_price
+        ad_cfg.price_reduction_count = next_cycle
+        ad_cfg_orig["price_reduction_count"] = next_cycle
+
+    def __repost_cycle_ready(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
+        total_reposts = ad_cfg.repost_count or 0
+        delay_reposts = ad_cfg.price_reduction_delay_reposts or 0
+        applied_cycles = ad_cfg.price_reduction_count or 0
+        eligible_cycles = max(total_reposts - delay_reposts, 0)
+
+        if total_reposts <= delay_reposts:
+            remaining = (delay_reposts + 1) - total_reposts
+            LOG.info(
+                _("Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)"),
+                ad_file_relative,
+                max(remaining, 1),  # Clamp to 1 to avoid showing "0 more reposts" when at threshold
+                total_reposts,
+                applied_cycles
+            )
+            return False
+
+        if eligible_cycles <= applied_cycles:
+            LOG.info(
+                _("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts"),
+                ad_file_relative,
+                applied_cycles,
+                eligible_cycles
+            )
+            return False
+
+        return True
+
+    def __day_delay_elapsed(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
+        delay_days = ad_cfg.price_reduction_delay_days or 0
+        if delay_days == 0:
+            return True
+
+        reference = ad_cfg.updated_on or ad_cfg.created_on
+        if not reference:
+            LOG.info(
+                _("Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing"),
+                ad_file_relative,
+                delay_days
+            )
+            return False
+
+        # Note: .days truncates to whole days (e.g., 1.9 days -> 1 day)
+        # This is intentional: delays count complete 24-hour periods since publish
+        elapsed_days = (misc.now() - reference).days
+        if elapsed_days < delay_days:
+            LOG.info(
+                _("Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)"),
+                ad_file_relative,
+                delay_days,
+                elapsed_days
+            )
+            return False
+
+        return True
 
     async def check_and_wait_for_captcha(self, *, is_login_page:bool = True) -> None:
         try:
