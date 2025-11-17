@@ -5,12 +5,13 @@ from __future__ import annotations
 
 import hashlib, json  # isort: skip
 from datetime import datetime  # noqa: TC003 Move import into a type-checking block
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Any, Dict, Final, List, Literal, Mapping, Sequence
 
 from pydantic import AfterValidator, Field, field_validator, model_validator
 from typing_extensions import Self
 
-from kleinanzeigen_bot.model.config_model import AdDefaults  # noqa: TC001 Move application import into a type-checking block
+from kleinanzeigen_bot.model.config_model import AdDefaults, PriceReductionConfig  # noqa: TC001 Move application import into a type-checking block
 from kleinanzeigen_bot.utils import dicts
 from kleinanzeigen_bot.utils.misc import parse_datetime, parse_decimal
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
@@ -72,6 +73,39 @@ class AdPartial(ContextualModel):
     special_attributes:Dict[str, str] | None = _OPTIONAL()
     price:int | None = _OPTIONAL()
     price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] | None = _OPTIONAL()
+    auto_reduce_price:bool | None = Field(
+        default = None,
+        description = "automatically reduce the price on each repost according to price_reduction"
+    )
+    min_price:float | None = Field(
+        default = None,
+        ge = 0,
+        description = "required per ad when auto_reduce_price is enabled; use 0 for no lower bound"
+    )
+    price_reduction:PriceReductionConfig | None = Field(
+        default = None,
+        description = "reduction to apply per repost; required when auto_reduce_price is enabled"
+    )
+    price_reduction_delay_reposts:int | None = Field(
+        default = None,
+        ge = 0,
+        description = "number of automatic reduction cycles to skip before reductions start (0 = immediate)"
+    )
+    price_reduction_delay_days:int | None = Field(
+        default = None,
+        ge = 0,
+        description = "delay automatic price reductions until this many days have passed since the last publish (0 = immediate)"
+    )
+    price_reduction_count:int = Field(
+        default = 0,
+        ge = 0,
+        description = "number of automatic price reduction cycles already applied"
+    )
+    repost_count:int = Field(
+        default = 0,
+        ge = 0,
+        description = "number of successful (re)publishes performed by the bot"
+    )
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] | None = _OPTIONAL()
     shipping_costs:float | None = _OPTIONAL()
     shipping_options:List[ShippingOption] | None = _OPTIONAL()
@@ -109,10 +143,24 @@ class AdPartial(ContextualModel):
     def _validate_price_and_price_type(cls, values:Dict[str, Any]) -> Dict[str, Any]:
         price_type = values.get("price_type")
         price = values.get("price")
+        min_price = values.get("min_price")
+        auto_reduce_price = values.get("auto_reduce_price")
+        price_reduction = values.get("price_reduction")
         if price_type == "GIVE_AWAY" and price is not None:
             raise ValueError("price must not be specified when price_type is GIVE_AWAY")
         if price_type == "FIXED" and price is None:
             raise ValueError("price is required when price_type is FIXED")
+        if auto_reduce_price:
+            if price is None:
+                raise ValueError("price must be specified when auto_reduce_price is enabled")
+            if price_reduction is None:
+                raise ValueError("price_reduction must be specified when auto_reduce_price is enabled")
+            if min_price is None:
+                raise ValueError("min_price must be specified when auto_reduce_price is enabled")
+            if min_price > price:
+                raise ValueError("min_price must not exceed price")
+        elif min_price is not None and price is not None and min_price > price:
+            raise ValueError("min_price must not exceed price")
         return values
 
     def update_content_hash(self) -> Self:
@@ -120,7 +168,7 @@ class AdPartial(ContextualModel):
 
         # 1) Dump to a plain dict, excluding the metadata fields:
         raw = self.model_dump(
-            exclude = {"id", "created_on", "updated_on", "content_hash"},
+            exclude = {"id", "created_on", "updated_on", "content_hash", "price_reduction_count", "repost_count"},
             exclude_none = True,
             exclude_unset = True,
         )
@@ -162,9 +210,66 @@ class AdPartial(ContextualModel):
             target = ad_cfg,
             defaults = ad_defaults.model_dump(),
             ignore = lambda k, _: k == "description",  # ignore legacy global description config
-            override = lambda _, v: not isinstance(v, list) and v in {None, ""}  # noqa: PLC1901 can be simplified
+            override = lambda _, v: (
+                not isinstance(v, list) and (v is None or (isinstance(v, str) and v == ""))  # noqa: PLC1901
+            )
         )
+        if ad_cfg.get("price_reduction_delay_reposts") is None:
+            ad_cfg["price_reduction_delay_reposts"] = 0
+        if ad_cfg.get("price_reduction_delay_days") is None:
+            ad_cfg["price_reduction_delay_days"] = 0
+        if ad_cfg.get("price_reduction_count") is None:
+            ad_cfg["price_reduction_count"] = 0
+        if ad_cfg.get("repost_count") is None:
+            ad_cfg["repost_count"] = 0
         return Ad.model_validate(ad_cfg)
+
+
+def calculate_auto_price(
+    *,
+    base_price:int | float | None,
+    auto_reduce:bool,
+    price_reduction:PriceReductionConfig | None,
+    target_reduction_cycle:int,
+    min_price:float | None
+) -> int | None:
+    """
+    Calculate the effective price for the current run.
+
+    Args:
+        base_price: original configured price used as the starting point.
+        auto_reduce: whether automatic reductions should be applied.
+        price_reduction: reduction configuration describing percentage or fixed steps.
+        target_reduction_cycle: which reduction cycle to calculate the price for (0 = no reduction, 1 = first reduction, etc.).
+        min_price: optional floor that stops further reductions once reached.
+
+    Percentage reductions apply to the current price each cycle (compounded). Returns an int rounded via ROUND_HALF_UP, or None when base_price is None.
+    """
+    if base_price is None:
+        return None
+
+    price = Decimal(str(base_price))
+    if not auto_reduce or price_reduction is None or target_reduction_cycle <= 0:
+        return int(price.quantize(Decimal("1"), rounding = ROUND_HALF_UP))
+
+    if min_price is None:
+        raise ValueError("min_price must be specified when auto_reduce_price is enabled")
+
+    price_floor = Decimal(str(min_price))
+    repost_cycles = target_reduction_cycle
+
+    for _ in range(repost_cycles):
+        reduction_value = (
+            price * Decimal(str(price_reduction.value)) / Decimal("100")
+            if price_reduction.type == "PERCENTAGE"
+            else Decimal(str(price_reduction.value))
+        )
+        price -= reduction_value
+        if price <= price_floor:
+            price = price_floor
+            break
+
+    return int(price.quantize(Decimal("1"), rounding = ROUND_HALF_UP))
 
 
 # pyright: reportGeneralTypeIssues=false, reportIncompatibleVariableOverride=false
@@ -183,3 +288,24 @@ class Ad(AdPartial):
     sell_directly:bool
     contact:Contact
     republication_interval:int
+    auto_reduce_price:bool = False
+    min_price:float | None = None
+    price_reduction:PriceReductionConfig | None = None
+    price_reduction_delay_reposts:int = 0
+    price_reduction_delay_days:int = 0
+
+    @model_validator(mode = "after")
+    def _validate_auto_price_config(self) -> "Ad":
+        # Note: This validation duplicates checks from AdPartial._validate_price_and_price_type
+        # This is intentional: AdPartial validates raw YAML (with optional None values),
+        # while this validator ensures the final Ad object (after merging defaults) is valid
+        if self.auto_reduce_price:
+            if self.price is None:
+                raise ValueError("price must be specified when auto_reduce_price is enabled")
+            if self.price_reduction is None:
+                raise ValueError("price_reduction must be specified when auto_reduce_price is enabled")
+            if self.min_price is None:
+                raise ValueError("min_price must be specified when auto_reduce_price is enabled")
+            if self.min_price > self.price:
+                raise ValueError("min_price must not exceed price")
+        return self

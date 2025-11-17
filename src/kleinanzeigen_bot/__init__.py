@@ -13,7 +13,7 @@ from wcmatch import glob
 
 from . import extract, resources
 from ._version import __version__
-from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial
+from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, calculate_auto_price
 from .model.config_model import Config
 from .update_checker import UpdateChecker
 from .utils import dicts, error_handlers, loggers, misc
@@ -364,7 +364,11 @@ class KleinanzeigenBot(WebScrapingMixin):
         dicts.save_dict(
             self.config_file_path,
             default_config.model_dump(exclude_none = True, exclude = {"ad_defaults": {"description"}}),
-            header = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/config.schema.json"
+            header = (
+                "# yaml-language-server: $schema="
+                "https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot"
+                "/refs/heads/main/schemas/config.schema.json"
+            )
         )
 
     def load_config(self) -> None:
@@ -559,6 +563,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                 ensure(images or not ad_cfg.images, f"No images found for given file patterns {ad_cfg.images} at {ad_dir}")
                 ad_cfg.images = list(dict.fromkeys(images))
 
+            self.__apply_auto_price_reduction(ad_cfg, ad_cfg_orig, ad_file_relative)
+
             ads.append((
                 ad_file,
                 ad_cfg,
@@ -570,6 +576,107 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     def load_ad(self, ad_cfg_orig:dict[str, Any]) -> Ad:
         return AdPartial.model_validate(ad_cfg_orig).to_ad(self.config.ad_defaults)
+
+    def __apply_auto_price_reduction(self, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
+        if not ad_cfg.auto_reduce_price:
+            return
+
+        base_price = ad_cfg.price
+        if base_price is None:
+            LOG.warning(_("Auto price reduction is enabled for [%s] but no price is configured."), ad_file_relative)
+            return
+
+        if not self.__repost_cycle_ready(ad_cfg, ad_file_relative):
+            return
+
+        if not self.__day_delay_elapsed(ad_cfg, ad_file_relative):
+            return
+
+        next_cycle = (ad_cfg.price_reduction_count or 0) + 1
+        effective_price = calculate_auto_price(
+            base_price = base_price,
+            auto_reduce = ad_cfg.auto_reduce_price,
+            price_reduction = ad_cfg.price_reduction,
+            target_reduction_cycle = next_cycle,
+            min_price = ad_cfg.min_price
+        )
+
+        if effective_price is None:
+            return
+
+        if effective_price >= base_price:
+            LOG.info(
+                _("Auto price reduction kept price %s after attempting %s reduction cycles"),
+                effective_price,
+                next_cycle
+            )
+            return
+
+        LOG.info(
+            _("Auto price reduction applied: %s -> %s after %s reduction cycles"),
+            base_price,
+            effective_price,
+            next_cycle
+        )
+        ad_cfg.price = effective_price
+        ad_cfg.price_reduction_count = next_cycle
+        ad_cfg_orig["price_reduction_count"] = next_cycle
+
+    def __repost_cycle_ready(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
+        total_reposts = ad_cfg.repost_count or 0
+        delay_reposts = ad_cfg.price_reduction_delay_reposts or 0
+        applied_cycles = ad_cfg.price_reduction_count or 0
+        eligible_cycles = max(total_reposts - delay_reposts, 0)
+
+        if total_reposts <= delay_reposts:
+            remaining = (delay_reposts + 1) - total_reposts
+            LOG.info(
+                _("Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)"),
+                ad_file_relative,
+                max(remaining, 1),  # Clamp to 1 to avoid showing "0 more reposts" when at threshold
+                total_reposts,
+                applied_cycles
+            )
+            return False
+
+        if eligible_cycles <= applied_cycles:
+            LOG.info(
+                _("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts"),
+                ad_file_relative,
+                applied_cycles,
+                eligible_cycles
+            )
+            return False
+
+        return True
+
+    def __day_delay_elapsed(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
+        delay_days = ad_cfg.price_reduction_delay_days or 0
+        if delay_days == 0:
+            return True
+
+        reference = ad_cfg.updated_on or ad_cfg.created_on
+        if not reference:
+            LOG.info(
+                _("Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing"),
+                ad_file_relative,
+                delay_days
+            )
+            return False
+
+        # Note: .days truncates to whole days (e.g., 1.9 days -> 1 day)
+        # This is intentional: delays count complete 24-hour periods since publish
+        elapsed_days = (misc.now() - reference).days
+        if elapsed_days < delay_days:
+            LOG.info(
+                _("Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)"),
+                ad_file_relative,
+                delay_days,
+                elapsed_days
+            )
+            return False
+
+        return True
 
     async def check_and_wait_for_captcha(self, *, is_login_page:bool = True) -> None:
         try:
@@ -955,6 +1062,11 @@ class KleinanzeigenBot(WebScrapingMixin):
         ad_cfg_orig["updated_on"] = misc.now().isoformat(timespec = "seconds")
         if not ad_cfg.created_on and not ad_cfg.id:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
+
+        current_reposts = int(ad_cfg_orig.get("repost_count", ad_cfg.repost_count or 0))
+        ad_cfg_orig["repost_count"] = current_reposts + 1
+        ad_cfg.repost_count = ad_cfg_orig["repost_count"]
+        ad_cfg_orig["price_reduction_count"] = ad_cfg.price_reduction_count or 0
 
         if mode == AdUpdateStrategy.REPLACE:
             LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)

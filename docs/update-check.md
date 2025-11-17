@@ -22,15 +22,16 @@ The interval is specified as a number followed by a unit:
 - `m`: minutes
 - `h`: hours
 - `d`: days
+- `w`: weeks
 
 Examples:
 - `7d`: Check every 7 days
 - `12h`: Check every 12 hours
-- `30d`: Check every 30 days
+- `1w`: Check every week
 
 Validation rules:
 - Minimum interval: 1 day (`1d`)
-- Maximum interval: 30 days (`30d`, roughly 4 weeks)
+- Maximum interval: 4 weeks (`4w`)
 - Value must be positive
 - Only supported units are allowed
 

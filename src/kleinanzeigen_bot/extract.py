@@ -60,7 +60,12 @@ class AdExtractor(WebScrapingMixin):
         dicts.save_dict(
             ad_file_path,
             ad_cfg.model_dump(),
-            header = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json")
+            header = (
+                "# yaml-language-server: $schema="
+                "https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot"
+                "/refs/heads/main/schemas/ad.schema.json"
+            )
+        )
 
     async def _download_images_from_ad_page(self, directory:str, ad_id:int) -> list[str]:
         """

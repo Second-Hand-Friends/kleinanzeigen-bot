@@ -357,7 +357,8 @@ markers = [
   "slow: marks a test as long running",
   "smoke: marks a test as a high-level smoke test (critical path, no mocks)",
   "itest: marks a test as an integration test (i.e. a test with external dependencies)",
-  "asyncio: mark test as async"
+  "asyncio: mark test as async",
+  "unit: marks a test as a unit test"
 ]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
