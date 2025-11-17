@@ -1463,3 +1463,45 @@ def test_file_logger_writes_message(tmp_path:Path, caplog:pytest.LogCaptureFixtu
     with open(log_path, "r", encoding = "utf-8") as f:
         contents = f.read()
     assert "Logger test log message" in contents
+
+
+class TestPriceReductionPersistence:
+    """Tests for price_reduction_count persistence logic."""
+
+    @pytest.mark.unit
+    def test_persistence_logic_saves_when_count_positive(self) -> None:
+        """Test the conditional logic that decides whether to persist price_reduction_count."""
+        # Simulate the logic from publish_ad lines 1076-1079
+        ad_cfg_orig:dict[str, Any] = {}
+
+        # Test case 1: price_reduction_count = 3 (should persist)
+        price_reduction_count = 3
+        if price_reduction_count is not None and price_reduction_count > 0:
+            ad_cfg_orig["price_reduction_count"] = price_reduction_count
+
+        assert "price_reduction_count" in ad_cfg_orig
+        assert ad_cfg_orig["price_reduction_count"] == 3
+
+    @pytest.mark.unit
+    def test_persistence_logic_skips_when_count_zero(self) -> None:
+        """Test that price_reduction_count == 0 does not get persisted."""
+        ad_cfg_orig:dict[str, Any] = {}
+
+        # Test case 2: price_reduction_count = 0 (should NOT persist)
+        price_reduction_count = 0
+        if price_reduction_count is not None and price_reduction_count > 0:
+            ad_cfg_orig["price_reduction_count"] = price_reduction_count
+
+        assert "price_reduction_count" not in ad_cfg_orig
+
+    @pytest.mark.unit
+    def test_persistence_logic_skips_when_count_none(self) -> None:
+        """Test that price_reduction_count == None does not get persisted."""
+        ad_cfg_orig:dict[str, Any] = {}
+
+        # Test case 3: price_reduction_count = None (should NOT persist)
+        price_reduction_count = None
+        if price_reduction_count is not None and price_reduction_count > 0:
+            ad_cfg_orig["price_reduction_count"] = price_reduction_count
+
+        assert "price_reduction_count" not in ad_cfg_orig

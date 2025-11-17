@@ -86,6 +86,7 @@ kleinanzeigen_bot/__init__.py:
     "ad": "Anzeige"
   __apply_auto_price_reduction:
     "Auto price reduction is enabled for [%s] but no price is configured.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber es wurde kein Preis konfiguriert."
+    "Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber min_price entspricht dem Preis (%s) - es werden keine Reduktionen auftreten."
     "Auto price reduction applied: %s -> %s after %s reduction cycles": "Automatische Preisreduzierung angewendet: %s -> %s nach %s Reduktionszyklen"
     "Auto price reduction kept price %s after attempting %s reduction cycles": "Automatische Preisreduzierung hat Preis %s beibehalten nach dem Versuch von %s Reduktionszyklen"
   __repost_cycle_ready:

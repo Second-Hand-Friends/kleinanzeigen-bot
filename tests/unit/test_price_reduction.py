@@ -217,21 +217,24 @@ def test_apply_auto_price_reduction_logs_drop(
     assert any(expected in message for message in caplog.messages)
     assert ad_cfg.price == 150
     assert ad_cfg.price_reduction_count == 1
-    assert ad_orig["price_reduction_count"] == 1
+    # Note: price_reduction_count is NOT persisted to ad_orig until after successful publish
+    assert "price_reduction_count" not in ad_orig
 
 
 @pytest.mark.unit
-def test_apply_auto_price_reduction_logs_unchanged_price(
+def test_apply_auto_price_reduction_logs_unchanged_price_at_floor(
     caplog:pytest.LogCaptureFixture,
     apply_auto_price_reduction:_ApplyAutoPriceReduction
 ) -> None:
+    # Test scenario: price has been reduced to just above min_price,
+    # and the next reduction would drop it below, so it gets clamped
     ad_cfg = SimpleNamespace(
         auto_reduce_price = True,
-        price = 120,
-        price_reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25),
+        price = 95,
+        price_reduction = PriceReductionConfig(type = "FIXED", value = 10),
         price_reduction_count = 0,
         repost_count = 1,
-        min_price = 120,
+        min_price = 90,
         price_reduction_delay_reposts = 0,
         price_reduction_delay_days = 0
     )
@@ -241,10 +244,12 @@ def test_apply_auto_price_reduction_logs_unchanged_price(
     with caplog.at_level("INFO"):
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_test.yaml")
 
-    expected = _("Auto price reduction kept price %s after attempting %s reduction cycles") % (120, 1)
+    # Price: 95 - 10 = 85, clamped to 90 (floor)
+    # So the effective price is 90, not 95, meaning reduction was applied
+    expected = _("Auto price reduction applied: %s -> %s after %s reduction cycles") % (95, 90, 1)
     assert any(expected in message for message in caplog.messages)
-    assert ad_cfg.price == 120
-    assert ad_cfg.price_reduction_count == 0
+    assert ad_cfg.price == 90
+    assert ad_cfg.price_reduction_count == 1
     assert "price_reduction_count" not in ad_orig
 
 
@@ -272,6 +277,33 @@ def test_apply_auto_price_reduction_warns_when_price_missing(
     expected = _("Auto price reduction is enabled for [%s] but no price is configured.") % ("ad_warning.yaml",)
     assert any(expected in message for message in caplog.messages)
     assert ad_cfg.price is None
+
+
+@pytest.mark.unit
+def test_apply_auto_price_reduction_warns_when_min_price_equals_price(
+    caplog:pytest.LogCaptureFixture,
+    apply_auto_price_reduction:_ApplyAutoPriceReduction
+) -> None:
+    ad_cfg = SimpleNamespace(
+        auto_reduce_price = True,
+        price = 100,
+        price_reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25),
+        price_reduction_count = 0,
+        repost_count = 1,
+        min_price = 100,
+        price_reduction_delay_reposts = 0,
+        price_reduction_delay_days = 0
+    )
+
+    ad_orig:dict[str, Any] = {}
+
+    with caplog.at_level("WARNING"):
+        apply_auto_price_reduction(ad_cfg, ad_orig, "ad_equal_prices.yaml")
+
+    expected = _("Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur.") % ("ad_equal_prices.yaml", 100)
+    assert any(expected in message for message in caplog.messages)
+    assert ad_cfg.price == 100
+    assert ad_cfg.price_reduction_count == 0
 
 
 @pytest.mark.unit
@@ -320,7 +352,8 @@ def test_apply_auto_price_reduction_after_repost_delay_reduces_once(
 
     assert ad_cfg.price == 90
     assert ad_cfg.price_reduction_count == 1
-    assert ad_cfg_orig["price_reduction_count"] == 1
+    # Note: price_reduction_count is NOT persisted to ad_orig until after successful publish
+    assert "price_reduction_count" not in ad_cfg_orig
 
 
 @pytest.mark.unit
@@ -435,3 +468,57 @@ def test_apply_auto_price_reduction_delayed_when_timestamp_missing(
 
     expected = _("Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing") % ("ad_missing_time.yaml", 2)
     assert any(expected in message for message in caplog.messages)
+
+
+@pytest.mark.unit
+def test_reduction_value_zero_raises_error() -> None:
+    with pytest.raises(ValueError, match = "Input should be greater than 0"):
+        PriceReductionConfig(type = "PERCENTAGE", value = 0)
+
+
+@pytest.mark.unit
+def test_reduction_value_negative_raises_error() -> None:
+    with pytest.raises(ValueError, match = "Input should be greater than 0"):
+        PriceReductionConfig(type = "FIXED", value = -5)
+
+
+@pytest.mark.unit
+def test_percentage_reduction_100_percent() -> None:
+    reduction = PriceReductionConfig(type = "PERCENTAGE", value = 100)
+    assert calculate_auto_price(
+        base_price = 150,
+        auto_reduce = True,
+        price_reduction = reduction,
+        target_reduction_cycle = 1,
+        min_price = 0
+    ) == 0
+
+
+@pytest.mark.unit
+def test_extreme_reduction_cycles() -> None:
+    # Test that extreme cycle counts don't cause performance issues or errors
+    reduction = PriceReductionConfig(type = "PERCENTAGE", value = 10)
+    result = calculate_auto_price(
+        base_price = 1000,
+        auto_reduce = True,
+        price_reduction = reduction,
+        target_reduction_cycle = 100,
+        min_price = 0
+    )
+    # After 100 cycles of 10% reduction, price should be effectively 0 (1000 * 0.9^100 ≈ 0.00003)
+    assert result == 0
+
+
+@pytest.mark.unit
+def test_extreme_reduction_cycles_with_floor() -> None:
+    # Test that extreme cycles stop at min_price and don't cause issues
+    reduction = PriceReductionConfig(type = "PERCENTAGE", value = 10)
+    result = calculate_auto_price(
+        base_price = 1000,
+        auto_reduce = True,
+        price_reduction = reduction,
+        target_reduction_cycle = 1000,
+        min_price = 50
+    )
+    # Should stop at min_price, not go to 0, regardless of cycle count
+    assert result == 50

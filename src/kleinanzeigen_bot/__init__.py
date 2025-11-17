@@ -577,13 +577,21 @@ class KleinanzeigenBot(WebScrapingMixin):
     def load_ad(self, ad_cfg_orig:dict[str, Any]) -> Ad:
         return AdPartial.model_validate(ad_cfg_orig).to_ad(self.config.ad_defaults)
 
-    def __apply_auto_price_reduction(self, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
+    def __apply_auto_price_reduction(self, ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
         if not ad_cfg.auto_reduce_price:
             return
 
         base_price = ad_cfg.price
         if base_price is None:
             LOG.warning(_("Auto price reduction is enabled for [%s] but no price is configured."), ad_file_relative)
+            return
+
+        if ad_cfg.min_price is not None and ad_cfg.min_price == base_price:
+            LOG.warning(
+                _("Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur."),
+                ad_file_relative,
+                base_price
+            )
             return
 
         if not self.__repost_cycle_ready(ad_cfg, ad_file_relative):
@@ -622,7 +630,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         )
         ad_cfg.price = effective_price
         ad_cfg.price_reduction_count = next_cycle
-        ad_cfg_orig["price_reduction_count"] = next_cycle
+        # Note: price_reduction_count is persisted to ad_cfg_orig only after successful publish
 
     def __repost_cycle_ready(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
         total_reposts = ad_cfg.repost_count or 0
@@ -668,6 +676,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         # Note: .days truncates to whole days (e.g., 1.9 days -> 1 day)
         # This is intentional: delays count complete 24-hour periods since publish
+        # Both misc.now() and stored timestamps use UTC (via misc.now()), ensuring consistent calculations
         elapsed_days = (misc.now() - reference).days
         if elapsed_days < delay_days:
             LOG.info(
@@ -1065,9 +1074,18 @@ class KleinanzeigenBot(WebScrapingMixin):
         if not ad_cfg.created_on and not ad_cfg.id:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
 
+        # Increment repost_count after successful publish
+        # Note: This happens AFTER publish, so price reduction logic (which runs during load)
+        # sees the count from the PREVIOUS run. This is intentional: the first publish uses
+        # repost_count=0 (no reduction), the second publish uses repost_count=1 (first reduction), etc.
         current_reposts = int(ad_cfg_orig.get("repost_count", ad_cfg.repost_count or 0))
         ad_cfg_orig["repost_count"] = current_reposts + 1
         ad_cfg.repost_count = ad_cfg_orig["repost_count"]
+
+        # Persist price_reduction_count after successful publish
+        # This ensures failed publishes don't incorrectly increment the reduction counter
+        if ad_cfg.price_reduction_count is not None and ad_cfg.price_reduction_count > 0:
+            ad_cfg_orig["price_reduction_count"] = ad_cfg.price_reduction_count
 
         if mode == AdUpdateStrategy.REPLACE:
             LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
