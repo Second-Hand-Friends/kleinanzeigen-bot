@@ -1207,14 +1207,6 @@ class KleinanzeigenBot(WebScrapingMixin):
                     shipping_package_checkbox = await self.web_find(By.XPATH, f'//dialog//input[contains(@data-testid, "{shipping_package}")]')
                     shipping_package_checkbox_is_checked = hasattr(shipping_package_checkbox.attrs, "checked")
 
-                    # to_be_clicked_shipping_packages contains unwanted package options, so deselect them if checked already
-                    if shipping_package in to_be_clicked_shipping_packages:
-                        if shipping_package_checkbox_is_checked:
-                            # deselect
-                            await self.web_click(
-                                By.XPATH,
-                                f'//dialog//input[contains(@data-testid, "{shipping_package}")]')
-
                     # select wanted packages if not checked already
                     if shipping_package in shipping_packages:
                         if not shipping_package_checkbox_is_checked:
@@ -1222,6 +1214,11 @@ class KleinanzeigenBot(WebScrapingMixin):
                             await self.web_click(
                                 By.XPATH,
                                 f'//dialog//input[contains(@data-testid, "{shipping_package}")]')
+                    # deselect unwanted if selected
+                    elif shipping_package_checkbox_is_checked:
+                        await self.web_click(
+                            By.XPATH,
+                            f'//dialog//input[contains(@data-testid, "{shipping_package}")]')
             else:
                 for shipping_package in to_be_clicked_shipping_packages:
                     await self.web_click(
