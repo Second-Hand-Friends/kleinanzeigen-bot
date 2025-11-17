@@ -615,6 +615,8 @@ class KleinanzeigenBot(WebScrapingMixin):
             return
 
         if effective_price == base_price:
+            # Still increment counter so small fractional reductions can accumulate over multiple cycles
+            ad_cfg.price_reduction_count = next_cycle
             LOG.info(
                 _("Auto price reduction kept price %s after attempting %s reduction cycles"),
                 effective_price,

@@ -471,6 +471,38 @@ def test_apply_auto_price_reduction_delayed_when_timestamp_missing(
 
 
 @pytest.mark.unit
+def test_fractional_reduction_increments_counter_even_when_price_unchanged(
+    caplog:pytest.LogCaptureFixture,
+    apply_auto_price_reduction:_ApplyAutoPriceReduction
+) -> None:
+    # Test that small fractional reductions increment the counter even when rounded price doesn't change
+    # This allows cumulative reductions to eventually show visible effect
+    ad_cfg = SimpleNamespace(
+        auto_reduce_price = True,
+        price = 100,
+        price_reduction = PriceReductionConfig(type = "FIXED", value = 0.3),
+        price_reduction_count = 0,
+        repost_count = 1,
+        min_price = 50,
+        price_reduction_delay_reposts = 0,
+        price_reduction_delay_days = 0
+    )
+
+    ad_orig:dict[str, Any] = {}
+
+    with caplog.at_level("INFO"):
+        apply_auto_price_reduction(ad_cfg, ad_orig, "ad_fractional.yaml")
+
+    # Price: 100 - 0.3 = 99.7, rounds to 100 (no visible change)
+    # But counter should still increment for future cumulative reductions
+    expected = _("Auto price reduction kept price %s after attempting %s reduction cycles") % (100, 1)
+    assert any(expected in message for message in caplog.messages)
+    assert ad_cfg.price == 100
+    assert ad_cfg.price_reduction_count == 1  # Counter incremented despite no visible price change
+    assert "price_reduction_count" not in ad_orig
+
+
+@pytest.mark.unit
 def test_reduction_value_zero_raises_error() -> None:
     with pytest.raises(ValueError, match = "Input should be greater than 0"):
         PriceReductionConfig(type = "PERCENTAGE", value = 0)
