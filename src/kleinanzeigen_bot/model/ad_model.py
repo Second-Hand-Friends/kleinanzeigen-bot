@@ -230,7 +230,7 @@ def calculate_auto_price(
     base_price:int | float | None,
     auto_reduce:bool,
     price_reduction:PriceReductionConfig | None,
-    price_reduction_count:int,
+    target_reduction_cycle:int,
     min_price:float | None
 ) -> int | None:
     """
@@ -240,7 +240,7 @@ def calculate_auto_price(
         base_price: original configured price used as the starting point.
         auto_reduce: whether automatic reductions should be applied.
         price_reduction: reduction configuration describing percentage or fixed steps.
-        price_reduction_count: number of automatic reduction cycles that have already been applied.
+        target_reduction_cycle: which reduction cycle to calculate the price for (0 = no reduction, 1 = first reduction, etc.).
         min_price: optional floor that stops further reductions once reached.
 
     Percentage reductions apply to the current price each cycle (compounded). Returns an int rounded via ROUND_HALF_UP, or None when base_price is None.
@@ -249,14 +249,14 @@ def calculate_auto_price(
         return None
 
     price = Decimal(str(base_price))
-    if not auto_reduce or price_reduction is None or price_reduction_count <= 0:
+    if not auto_reduce or price_reduction is None or target_reduction_cycle <= 0:
         return int(price.quantize(Decimal("1"), rounding = ROUND_HALF_UP))
 
     if min_price is None:
         raise ValueError("min_price must be specified when auto_reduce_price is enabled")
 
     price_floor = Decimal(str(min_price))
-    repost_cycles = price_reduction_count
+    repost_cycles = target_reduction_cycle
 
     for _ in range(repost_cycles):
         reduction_value = (
@@ -296,6 +296,9 @@ class Ad(AdPartial):
 
     @model_validator(mode = "after")
     def _validate_auto_price_config(self) -> "Ad":
+        # Note: This validation duplicates checks from AdPartial._validate_price_and_price_type
+        # This is intentional: AdPartial validates raw YAML (with optional None values),
+        # while this validator ensures the final Ad object (after merging defaults) is valid
         if self.auto_reduce_price:
             if self.price is None:
                 raise ValueError("price must be specified when auto_reduce_price is enabled")

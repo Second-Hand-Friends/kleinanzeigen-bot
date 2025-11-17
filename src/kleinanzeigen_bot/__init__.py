@@ -365,9 +365,9 @@ class KleinanzeigenBot(WebScrapingMixin):
             self.config_file_path,
             default_config.model_dump(exclude_none = True, exclude = {"ad_defaults": {"description"}}),
             header = (
-                "# yaml-language-server: "
-                "$schema=https://raw.githubusercontent.com/Second-Hand-Friends/"
-                "kleinanzeigen-bot/refs/heads/main/schemas/config.schema.json"
+                "# yaml-language-server: $schema="
+                "https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot"
+                "/refs/heads/main/schemas/config.schema.json"
             )
         )
 
@@ -597,7 +597,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             base_price = base_price,
             auto_reduce = ad_cfg.auto_reduce_price,
             price_reduction = ad_cfg.price_reduction,
-            price_reduction_count = next_cycle,
+            target_reduction_cycle = next_cycle,
             min_price = ad_cfg.min_price
         )
 
@@ -633,7 +633,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.info(
                 _("Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)"),
                 ad_file_relative,
-                max(remaining, 1),
+                max(remaining, 1),  # Clamp to 1 to avoid showing "0 more reposts" when at threshold
                 total_reposts,
                 applied_cycles
             )
@@ -664,6 +664,8 @@ class KleinanzeigenBot(WebScrapingMixin):
             )
             return False
 
+        # Note: .days truncates to whole days (e.g., 1.9 days -> 1 day)
+        # This is intentional: delays count complete 24-hour periods since publish
         elapsed_days = (misc.now() - reference).days
         if elapsed_days < delay_days:
             LOG.info(

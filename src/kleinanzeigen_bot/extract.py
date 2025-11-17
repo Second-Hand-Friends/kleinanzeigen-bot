@@ -61,9 +61,9 @@ class AdExtractor(WebScrapingMixin):
             ad_file_path,
             ad_cfg.model_dump(),
             header = (
-                "# yaml-language-server: "
-                "$schema=https://raw.githubusercontent.com/Second-Hand-Friends/"
-                "kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
+                "# yaml-language-server: $schema="
+                "https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot"
+                "/refs/heads/main/schemas/ad.schema.json"
             )
         )
 

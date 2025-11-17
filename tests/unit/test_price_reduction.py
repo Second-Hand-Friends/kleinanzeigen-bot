@@ -32,7 +32,7 @@ def test_initial_posting_uses_base_price() -> None:
         base_price = 100,
         auto_reduce = True,
         price_reduction = reduction,
-        price_reduction_count = 0,
+        target_reduction_cycle = 0,
         min_price = 50
     ) == 100
 
@@ -44,7 +44,7 @@ def test_auto_price_returns_none_without_base_price() -> None:
         base_price = None,
         auto_reduce = True,
         price_reduction = reduction,
-        price_reduction_count = 3,
+        target_reduction_cycle = 3,
         min_price = 10
     ) is None
 
@@ -56,7 +56,7 @@ def test_negative_price_reduction_count_is_treated_like_zero() -> None:
         base_price = 100,
         auto_reduce = True,
         price_reduction = reduction,
-        price_reduction_count = -3,
+        target_reduction_cycle = -3,
         min_price = 50
     ) == 100
 
@@ -67,7 +67,7 @@ def test_missing_price_reduction_returns_base_price() -> None:
         base_price = 150,
         auto_reduce = True,
         price_reduction = None,
-        price_reduction_count = 4,
+        target_reduction_cycle = 4,
         min_price = 50
     ) == 150
 
@@ -79,7 +79,7 @@ def test_percentage_reduction_on_float_rounds_half_up() -> None:
         base_price = 99.99,
         auto_reduce = True,
         price_reduction = reduction,
-        price_reduction_count = 1,
+        target_reduction_cycle = 1,
         min_price = 50
     ) == 87
 
@@ -91,7 +91,7 @@ def test_fixed_reduction_on_float_rounds_half_up() -> None:
         base_price = 80.51,
         auto_reduce = True,
         price_reduction = reduction,
-        price_reduction_count = 1,
+        target_reduction_cycle = 1,
         min_price = 50
     ) == 68
 
@@ -103,21 +103,21 @@ def test_percentage_price_reduction_over_time() -> None:
         base_price = 100,
         auto_reduce = True,
         price_reduction = reduction,
-        price_reduction_count = 1,
+        target_reduction_cycle = 1,
         min_price = 50
     ) == 90
     assert calculate_auto_price(
         base_price = 100,
         auto_reduce = True,
         price_reduction = reduction,
-        price_reduction_count = 2,
+        target_reduction_cycle = 2,
         min_price = 50
     ) == 81
     assert calculate_auto_price(
         base_price = 100,
         auto_reduce = True,
         price_reduction = reduction,
-        price_reduction_count = 3,
+        target_reduction_cycle = 3,
         min_price = 50
     ) == 73
 
@@ -129,21 +129,21 @@ def test_fixed_price_reduction_over_time() -> None:
         base_price = 100,
         auto_reduce = True,
         price_reduction = reduction,
-        price_reduction_count = 1,
+        target_reduction_cycle = 1,
         min_price = 40
     ) == 85
     assert calculate_auto_price(
         base_price = 100,
         auto_reduce = True,
         price_reduction = reduction,
-        price_reduction_count = 2,
+        target_reduction_cycle = 2,
         min_price = 40
     ) == 70
     assert calculate_auto_price(
         base_price = 100,
         auto_reduce = True,
         price_reduction = reduction,
-        price_reduction_count = 3,
+        target_reduction_cycle = 3,
         min_price = 40
     ) == 55
 
@@ -155,7 +155,7 @@ def test_min_price_boundary_is_respected() -> None:
         base_price = 100,
         auto_reduce = True,
         price_reduction = reduction,
-        price_reduction_count = 5,
+        target_reduction_cycle = 5,
         min_price = 50
     ) == 50
 
@@ -167,7 +167,7 @@ def test_min_price_zero_is_allowed() -> None:
         base_price = 20,
         auto_reduce = True,
         price_reduction = reduction,
-        price_reduction_count = 5,
+        target_reduction_cycle = 5,
         min_price = 0
     ) == 0
 
@@ -176,13 +176,19 @@ def test_min_price_zero_is_allowed() -> None:
 def test_missing_min_price_raises_error() -> None:
     reduction = PriceReductionConfig(type = "PERCENTAGE", value = 50)
     with pytest.raises(ValueError, match = "min_price must be specified"):
-        calculate_auto_price(base_price = 200, auto_reduce = True, price_reduction = reduction, price_reduction_count = 3, min_price = None)
+        calculate_auto_price(base_price = 200, auto_reduce = True, price_reduction = reduction, target_reduction_cycle = 3, min_price = None)
+
+
+@pytest.mark.unit
+def test_percentage_above_100_raises_error() -> None:
+    with pytest.raises(ValueError, match = "Percentage reduction value must not exceed 100"):
+        PriceReductionConfig(type = "PERCENTAGE", value = 150)
 
 
 @pytest.mark.unit
 def test_feature_disabled_path_leaves_price_unchanged() -> None:
     reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25)
-    price = calculate_auto_price(base_price = 100, auto_reduce = False, price_reduction = reduction, price_reduction_count = 4, min_price = 40)
+    price = calculate_auto_price(base_price = 100, auto_reduce = False, price_reduction = reduction, target_reduction_cycle = 4, min_price = 40)
     assert price == 100
 
 

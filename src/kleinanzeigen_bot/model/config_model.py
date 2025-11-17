@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import copy
-from typing import Annotated, Any, List, Literal
+from typing import Annotated, Any, Final, List, Literal
 
 from pydantic import AfterValidator, Field, model_validator
 from typing_extensions import deprecated
@@ -13,6 +13,8 @@ from kleinanzeigen_bot.model.update_check_model import UpdateCheckConfig
 from kleinanzeigen_bot.utils import dicts
 from kleinanzeigen_bot.utils.misc import get_attr
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
+
+_MAX_PERCENTAGE:Final[int] = 100
 
 
 class PriceReductionConfig(ContextualModel):
@@ -23,6 +25,12 @@ class PriceReductionConfig(ContextualModel):
         gt = 0,
         description = "magnitude of the reduction; interpreted as percent when type=percentage and as currency units when type=fixed"
     )
+
+    @model_validator(mode = "after")
+    def _validate_percentage_range(self) -> "PriceReductionConfig":
+        if self.type == "PERCENTAGE" and self.value > _MAX_PERCENTAGE:
+            raise ValueError(f"Percentage reduction value must not exceed {_MAX_PERCENTAGE}")
+        return self
 
 
 class ContactDefaults(ContextualModel):
