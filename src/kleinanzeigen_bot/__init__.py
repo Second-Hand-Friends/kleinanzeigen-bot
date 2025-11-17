@@ -1197,28 +1197,37 @@ class KleinanzeigenBot(WebScrapingMixin):
 
             if mode == AdUpdateStrategy.MODIFY:
                 # in update mode we cannot rely on any information and have to (de-)select every package
+                LOG.debug("Using MODIFY mode logic for shipping options")
+
                 # get only correct size
                 selected_size_shipping_packages = [
                     package for size, selector, package in shipping_options_mapping.values()
                     if size == shipping_size
                 ]
+                LOG.debug("Processing %d packages for size '%s'", len(selected_size_shipping_packages), shipping_size)
 
                 for shipping_package in selected_size_shipping_packages:
-                    shipping_package_checkbox = await self.web_find(By.XPATH, f'//dialog//input[contains(@data-testid, "{shipping_package}")]')
+                    shipping_package_xpath = f'//dialog//input[contains(@data-testid, "{shipping_package}")]'
+                    shipping_package_checkbox = await self.web_find(By.XPATH, shipping_package_xpath)
                     shipping_package_checkbox_is_checked = hasattr(shipping_package_checkbox.attrs, "checked")
+
+                    LOG.debug(
+                        "Package '%s': checked=%s, wanted=%s",
+                        shipping_package,
+                        shipping_package_checkbox_is_checked,
+                        shipping_package in shipping_packages
+                    )
 
                     # select wanted packages if not checked already
                     if shipping_package in shipping_packages:
                         if not shipping_package_checkbox_is_checked:
                             # select
-                            await self.web_click(
-                                By.XPATH,
-                                f'//dialog//input[contains(@data-testid, "{shipping_package}")]')
+                            LOG.debug("Selecting package '%s'", shipping_package)
+                            await self.web_click(By.XPATH, shipping_package_xpath)
                     # deselect unwanted if selected
                     elif shipping_package_checkbox_is_checked:
-                        await self.web_click(
-                            By.XPATH,
-                            f'//dialog//input[contains(@data-testid, "{shipping_package}")]')
+                        LOG.debug("Deselecting package '%s'", shipping_package)
+                        await self.web_click(By.XPATH, shipping_package_xpath)
             else:
                 for shipping_package in to_be_clicked_shipping_packages:
                     await self.web_click(
