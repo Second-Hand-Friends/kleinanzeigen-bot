@@ -82,6 +82,27 @@
           "default": null,
           "description": "reduction applied after each repost when auto_reduce_price is enabled"
         },
+        "price_reduction_delay_reposts": {
+          "default": 0,
+          "description": "number of reposts to wait before applying the first automatic price reduction",
+          "minimum": 0,
+          "title": "Price Reduction Delay Reposts",
+          "type": "integer"
+        },
+        "price_reduction_delay_days": {
+          "default": 0,
+          "description": "number of days to wait after publication before applying automatic price reductions",
+          "minimum": 0,
+          "title": "Price Reduction Delay Days",
+          "type": "integer"
+        },
+        "price_reduction_count": {
+          "default": 0,
+          "description": "number of automatic price reductions already applied",
+          "minimum": 0,
+          "title": "Price Reduction Count",
+          "type": "integer"
+        },
         "shipping_type": {
           "default": "SHIPPING",
           "enum": [

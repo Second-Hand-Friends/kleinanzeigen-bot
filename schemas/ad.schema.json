@@ -245,6 +245,48 @@
       "default": null,
       "description": "reduction to apply per repost; required when auto_reduce_price is enabled"
     },
+    "price_reduction_delay_reposts": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "number of reposts to wait before the first automatic price reduction",
+      "title": "Price Reduction Delay Reposts"
+    },
+    "price_reduction_delay_days": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "number of days to wait after publication before applying automatic price reductions",
+      "title": "Price Reduction Delay Days"
+    },
+    "price_reduction_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "number of automatic price reductions already applied",
+      "title": "Price Reduction Count"
+    },
     "repost_count": {
       "default": 0,
       "description": "number of successful publications for this ad (persisted between runs)",
