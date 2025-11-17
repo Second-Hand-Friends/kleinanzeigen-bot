@@ -86,6 +86,21 @@ class AdPartial(ContextualModel):
         default = None,
         description = "reduction to apply per repost; required when auto_reduce_price is enabled"
     )
+    price_reduction_delay_reposts:int | None = Field(
+        default = None,
+        ge = 0,
+        description = "number of reposts to wait before the first automatic price reduction"
+    )
+    price_reduction_delay_days:int | None = Field(
+        default = None,
+        ge = 0,
+        description = "number of days to wait after publication before applying automatic price reductions"
+    )
+    price_reduction_count:int | None = Field(
+        default = None,
+        ge = 0,
+        description = "number of automatic price reductions already applied"
+    )
     repost_count:int = Field(
         default = 0,
         ge = 0,
@@ -154,7 +169,16 @@ class AdPartial(ContextualModel):
 
         # 1) Dump to a plain dict, excluding the metadata fields:
         raw = self.model_dump(
-            exclude = {"id", "created_on", "updated_on", "content_hash", "repost_count"},
+            exclude = {
+                "id",
+                "created_on",
+                "updated_on",
+                "content_hash",
+                "repost_count",
+                "price_reduction_delay_reposts",
+                "price_reduction_delay_days",
+                "price_reduction_count",
+            },
             exclude_none = True,
             exclude_unset = True,
         )
@@ -200,6 +224,13 @@ class AdPartial(ContextualModel):
                 not isinstance(v, list) and (v is None or (isinstance(v, str) and v == ""))  # noqa: PLC1901
             )
         )
+        for key in (
+            "price_reduction_delay_reposts",
+            "price_reduction_delay_days",
+            "price_reduction_count"
+        ):
+            if not isinstance(ad_cfg.get(key), int):
+                ad_cfg[key] = 0
         return Ad.model_validate(ad_cfg)
 
 
@@ -269,6 +300,9 @@ class Ad(AdPartial):
     auto_reduce_price:bool = False
     min_price:float | None = None
     price_reduction:PriceReductionConfig | None = None
+    price_reduction_delay_reposts:int = 0
+    price_reduction_delay_days:int = 0
+    price_reduction_count:int = 0
 
     @model_validator(mode = "after")
     def _validate_auto_price_config(self) -> "Ad":

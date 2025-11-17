@@ -563,7 +563,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 ensure(images or not ad_cfg.images, f"No images found for given file patterns {ad_cfg.images} at {ad_dir}")
                 ad_cfg.images = list(dict.fromkeys(images))
 
-            self.__apply_auto_price_reduction(ad_cfg, ad_file_relative)
+            self.__apply_auto_price_reduction(ad_cfg, ad_cfg_orig, ad_file_relative)
 
             ads.append((
                 ad_file,
@@ -577,7 +577,7 @@ class KleinanzeigenBot(WebScrapingMixin):
     def load_ad(self, ad_cfg_orig:dict[str, Any]) -> Ad:
         return AdPartial.model_validate(ad_cfg_orig).to_ad(self.config.ad_defaults)
 
-    def __apply_auto_price_reduction(self, ad_cfg:Ad, ad_file_relative:str) -> None:
+    def __apply_auto_price_reduction(self, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
         if not ad_cfg.auto_reduce_price:
             return
 
@@ -585,6 +585,15 @@ class KleinanzeigenBot(WebScrapingMixin):
         if base_price is None:
             LOG.warning(_("Auto price reduction is enabled for [%s] but no price is configured."), ad_file_relative)
             return
+
+        if not self.__repost_cycle_ready(ad_cfg, ad_file_relative):
+            return
+
+        if not self.__day_delay_elapsed(ad_cfg, ad_file_relative):
+            return
+
+        applied_cycles = ad_cfg.price_reduction_count or 0
+        next_cycle = applied_cycles + 1
 
         effective_price = calculate_auto_price(
             base_price = base_price,
@@ -597,19 +606,20 @@ class KleinanzeigenBot(WebScrapingMixin):
         if effective_price is None:
             return
 
-        if effective_price != base_price:
+        if effective_price == base_price:
             LOG.info(
-                _("Auto price reduction applied: %s -> %s after %s reposts"),
-                base_price,
+                _("Auto price reduction kept price %s after attempting %s reduction cycles"),
                 effective_price,
-                ad_cfg.repost_count
+                next_cycle
             )
-        else:
-            LOG.info(
-                _("Auto price reduction using unchanged price %s after %s reposts"),
-                effective_price,
-                ad_cfg.repost_count
-            )
+            return
+
+        LOG.info(
+            _("Auto price reduction applied: %s -> %s after %s reduction cycles"),
+            base_price,
+            effective_price,
+            next_cycle
+        )
         ad_cfg.price = effective_price
         ad_cfg.price_reduction_count = next_cycle
         ad_cfg_orig["price_reduction_count"] = next_cycle

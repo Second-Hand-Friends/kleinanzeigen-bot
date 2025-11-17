@@ -61,6 +61,21 @@ class AdDefaults(ContextualModel):
         default = None,
         description = "reduction applied after each repost when auto_reduce_price is enabled"
     )
+    price_reduction_delay_reposts:int = Field(
+        default = 0,
+        ge = 0,
+        description = "number of reposts to wait before applying the first automatic price reduction"
+    )
+    price_reduction_delay_days:int = Field(
+        default = 0,
+        ge = 0,
+        description = "number of days to wait after publication before applying automatic price reductions"
+    )
+    price_reduction_count:int = Field(
+        default = 0,
+        ge = 0,
+        description = "number of automatic price reductions already applied"
+    )
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] = "SHIPPING"
     sell_directly:bool = Field(default = False, description = "requires shipping_type SHIPPING to take effect")
     images:List[str] | None = Field(default = None)
