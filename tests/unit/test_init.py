@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import copy, io, logging, os, tempfile  # isort: skip
+import copy, io, json, logging, os, tempfile  # isort: skip
 from collections.abc import Generator
 from contextlib import redirect_stdout
 from datetime import timedelta
@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from kleinanzeigen_bot import LOG, KleinanzeigenBot, misc
+from kleinanzeigen_bot import LOG, AdUpdateStrategy, KleinanzeigenBot, misc
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, PublishingConfig
@@ -24,7 +24,6 @@ from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 def mock_page() -> MagicMock:
     """Provide a mock page object for testing."""
     mock = MagicMock()
-    # Mock async methods
     mock.sleep = AsyncMock()
     mock.evaluate = AsyncMock()
     mock.click = AsyncMock()
@@ -37,26 +36,6 @@ def mock_page() -> MagicMock:
     mock.goto = AsyncMock()
     mock.close = AsyncMock()
     return mock
-
-
-@pytest.mark.asyncio
-async def test_mock_page_fixture(mock_page:MagicMock) -> None:
-    """Test that the mock_page fixture is properly configured."""
-    # Test that all required async methods are present
-    assert hasattr(mock_page, "sleep")
-    assert hasattr(mock_page, "evaluate")
-    assert hasattr(mock_page, "click")
-    assert hasattr(mock_page, "type")
-    assert hasattr(mock_page, "select")
-    assert hasattr(mock_page, "wait_for_selector")
-    assert hasattr(mock_page, "wait_for_navigation")
-    assert hasattr(mock_page, "wait_for_load_state")
-    assert hasattr(mock_page, "content")
-    assert hasattr(mock_page, "goto")
-    assert hasattr(mock_page, "close")
-
-    # Test that content returns expected value
-    assert await mock_page.content() == "<html></html>"
 
 
 @pytest.fixture
@@ -114,30 +93,6 @@ def remove_fields(config:dict[str, Any], *fields:str) -> dict[str, Any]:
     return result
 
 
-def test_remove_fields() -> None:
-    """Test the remove_fields helper function."""
-    test_config = {
-        "field1": "value1",
-        "field2": "value2",
-        "nested": {
-            "field3": "value3"
-        }
-    }
-
-    # Test removing top-level field
-    result = remove_fields(test_config, "field1")
-    assert "field1" not in result
-    assert "field2" in result
-
-    # Test removing nested field
-    result = remove_fields(test_config, "nested.field3")
-    assert "field3" not in result["nested"]
-
-    # Test removing non-existent field
-    result = remove_fields(test_config, "nonexistent")
-    assert result == test_config
-
-
 @pytest.fixture
 def minimal_ad_config(base_ad_config:dict[str, Any]) -> dict[str, Any]:
     """Provide a minimal ad configuration with only required fields."""
@@ -187,24 +142,37 @@ class TestKleinanzeigenBotInitialization:
 class TestKleinanzeigenBotLogging:
     """Tests for logging functionality."""
 
-    def test_configure_file_logging_creates_log_file(self, test_bot:KleinanzeigenBot, log_file_path:str) -> None:
-        """Verify that file logging configuration creates the log file."""
-        test_bot.log_file_path = log_file_path
+    def test_configure_file_logging_adds_and_removes_handlers(
+        self,
+        test_bot:KleinanzeigenBot,
+        tmp_path:Path
+    ) -> None:
+        """Ensure file logging registers a handler and cleans it up afterward."""
+        log_path = tmp_path / "bot.log"
+        test_bot.log_file_path = str(log_path)
+        root_logger = logging.getLogger()
+        initial_handlers = list(root_logger.handlers)
+
         test_bot.configure_file_logging()
 
         assert test_bot.file_log is not None
-        assert os.path.exists(log_file_path)
+        assert log_path.exists()
+        assert len(root_logger.handlers) == len(initial_handlers) + 1
 
-        # Test that calling again doesn't recreate logger
-        original_file_log = test_bot.file_log
-        test_bot.configure_file_logging()
-        assert test_bot.file_log is original_file_log
+        test_bot.file_log.close()
+        assert test_bot.file_log.is_closed()
+        assert len(root_logger.handlers) == len(initial_handlers)
 
-    def test_configure_file_logging_disabled_when_no_path(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that logging is disabled when no path is provided."""
+    def test_configure_file_logging_skips_when_path_missing(self, test_bot:KleinanzeigenBot) -> None:
+        """Ensure no handler is added when no log path is configured."""
+        root_logger = logging.getLogger()
+        initial_handlers = list(root_logger.handlers)
+
         test_bot.log_file_path = None
         test_bot.configure_file_logging()
+
         assert test_bot.file_log is None
+        assert list(root_logger.handlers) == initial_handlers
 
 
 class TestKleinanzeigenBotCommandLine:
@@ -510,26 +478,32 @@ class TestKleinanzeigenBotBasics:
         """Test version retrieval."""
         assert test_bot.get_version() == __version__
 
-    def test_configure_file_logging(self, test_bot:KleinanzeigenBot, log_file_path:str) -> None:
-        """Test file logging configuration."""
-        test_bot.log_file_path = log_file_path
-        test_bot.configure_file_logging()
-        assert test_bot.file_log is not None
-        assert os.path.exists(log_file_path)
+    @pytest.mark.asyncio
+    async def test_publish_ads_triggers_publish_and_cleanup(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """Simulate publish job wiring without hitting the live site."""
+        test_bot.page = mock_page
+        test_bot.config.publishing.delete_old_ads = "AFTER_PUBLISH"
+        test_bot.keep_old_ads = False
 
-    def test_configure_file_logging_no_path(self, test_bot:KleinanzeigenBot) -> None:
-        """Test file logging configuration with no path."""
-        test_bot.log_file_path = None
-        test_bot.configure_file_logging()
-        assert test_bot.file_log is None
+        payload:dict[str, list[Any]] = {"ads": []}
+        ad_cfgs:list[tuple[str, Ad, dict[str, Any]]] = [("ad.yaml", Ad.model_validate(base_ad_config), {})]
 
-    def test_close_browser_session(self, test_bot:KleinanzeigenBot) -> None:
-        """Test closing browser session."""
-        mock_close = MagicMock()
-        test_bot.page = MagicMock()  # Ensure page exists to trigger cleanup
-        with patch.object(test_bot, "close_browser_session", new = mock_close):
-            test_bot.close_browser_session()  # Call directly instead of relying on __del__
-            mock_close.assert_called_once()
+        with patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps(payload)}) as web_request_mock, \
+                patch.object(test_bot, "publish_ad", new_callable = AsyncMock) as publish_ad_mock, \
+                patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True) as web_await_mock, \
+                patch.object(test_bot, "delete_ad", new_callable = AsyncMock) as delete_ad_mock:
+
+            await test_bot.publish_ads(ad_cfgs)
+
+            web_request_mock.assert_awaited_once_with(f"{test_bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT")
+            publish_ad_mock.assert_awaited_once_with("ad.yaml", ad_cfgs[0][1], {}, [], AdUpdateStrategy.REPLACE)
+            web_await_mock.assert_awaited_once()
+            delete_ad_mock.assert_awaited_once_with(ad_cfgs[0][1], [], delete_old_ads_by_title = False)
 
     def test_get_root_url(self, test_bot:KleinanzeigenBot) -> None:
         """Test root URL retrieval."""
