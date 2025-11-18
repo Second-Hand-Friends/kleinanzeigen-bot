@@ -279,9 +279,9 @@ class Ad(AdPartial):
         # This is intentional: AdPartial validates raw YAML (with optional None values),
         # while this validator ensures the final Ad object (after merging defaults) is valid
         if self.auto_price_reduction.enabled:
-            if self.price is None:
-                raise ValueError("price must be specified when auto_price_reduction is enabled")
-            if self.auto_price_reduction.min_price is not None and self.price is not None:
+            # Type narrowing: AutoPriceReductionConfig validator ensures min_price is not None when enabled
+            # AdPartial validator ensures price is not None when auto_price_reduction is enabled
+            if self.price is not None and self.auto_price_reduction.min_price is not None:
                 if self.auto_price_reduction.min_price > self.price:
                     raise ValueError("min_price must not exceed price")
         return self

@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from kleinanzeigen_bot.model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, Contact, ShippingOption
+from kleinanzeigen_bot.model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, ShippingOption, calculate_auto_price
 from kleinanzeigen_bot.model.config_model import AdDefaults, AutoPriceReductionConfig
 from kleinanzeigen_bot.utils.pydantics import ContextualModel, ContextualValidationError
 
@@ -107,7 +107,7 @@ class ShippingOptionWrapper(ContextualModel):
 
 @pytest.mark.unit
 def test_shipping_option_must_not_be_blank() -> None:
-    with pytest.raises(ValueError, match = "must be non-empty and non-blank"):
+    with pytest.raises(ContextualValidationError, match = "must be non-empty and non-blank"):
         ShippingOptionWrapper.model_validate({"option": " "})
 
 
@@ -119,7 +119,7 @@ def test_description_length_limit() -> None:
         "description": "x" * (MAX_DESCRIPTION_LENGTH + 1)
     }
 
-    with pytest.raises(ValueError, match = f"description length exceeds {MAX_DESCRIPTION_LENGTH} characters"):
+    with pytest.raises(ContextualValidationError, match = f"description length exceeds {MAX_DESCRIPTION_LENGTH} characters"):
         AdPartial.model_validate(cfg)
 
 
@@ -353,9 +353,6 @@ def test_ad_model_min_price_must_not_exceed_price(complete_ad_cfg:dict[str, obje
 @pytest.mark.unit
 def test_calculate_auto_price_with_missing_strategy() -> None:
     """Test calculate_auto_price when strategy is None but enabled is True (defensive check)"""
-    from kleinanzeigen_bot.model.ad_model import calculate_auto_price
-    from kleinanzeigen_bot.model.config_model import AutoPriceReductionConfig
-
     # Use model_construct to bypass validation and reach defensive lines 234-235
     config = AutoPriceReductionConfig.model_construct(
         enabled = True, strategy = None, amount = None, min_price = 50
@@ -371,9 +368,6 @@ def test_calculate_auto_price_with_missing_strategy() -> None:
 @pytest.mark.unit
 def test_calculate_auto_price_with_missing_amount() -> None:
     """Test calculate_auto_price when amount is None but enabled is True (defensive check)"""
-    from kleinanzeigen_bot.model.ad_model import calculate_auto_price
-    from kleinanzeigen_bot.model.config_model import AutoPriceReductionConfig
-
     # Use model_construct to bypass validation and reach defensive lines 234-235
     config = AutoPriceReductionConfig.model_construct(
         enabled = True, strategy = "FIXED", amount = None, min_price = 50
@@ -389,9 +383,6 @@ def test_calculate_auto_price_with_missing_amount() -> None:
 @pytest.mark.unit
 def test_calculate_auto_price_raises_when_min_price_none_and_enabled() -> None:
     """Test that calculate_auto_price raises ValueError when min_price is None during calculation (defensive check)"""
-    from kleinanzeigen_bot.model.ad_model import calculate_auto_price
-    from kleinanzeigen_bot.model.config_model import AutoPriceReductionConfig
-
     # Use model_construct to bypass validation and reach defensive line 237-238
     config = AutoPriceReductionConfig.model_construct(
         enabled = True, strategy = "FIXED", amount = 10, min_price = None
@@ -406,87 +397,7 @@ def test_calculate_auto_price_raises_when_min_price_none_and_enabled() -> None:
 
 
 @pytest.mark.unit
-def test_ad_validator_requires_price_when_enabled() -> None:
-    """Test Ad model validator requires price when auto_price_reduction is enabled (defensive check on Ad)"""
-    from kleinanzeigen_bot.model.config_model import AutoPriceReductionConfig
-
-    # Use model_construct to bypass AdPartial validation and reach the Ad._validate_auto_price_config validator
-    ad = Ad.model_construct(
-        title = "Test Ad",
-        category = "160",
-        description = "Test description",
-        price_type = "NEGOTIABLE",
-        shipping_type = "PICKUP",
-        type = "OFFER",
-        active = True,
-        sell_directly = False,
-        republication_interval = 7,
-        contact = Contact(name = "Test", zipcode = "12345"),
-        auto_price_reduction = AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = 5, min_price = 50),
-        price = None
-    )
-
-    # Call the validator directly to reach line 283
-    with pytest.raises(ValueError, match = "price must be specified when auto_price_reduction is enabled"):
-        ad._validate_auto_price_config()
-
-
-@pytest.mark.unit
-def test_ad_validator_min_price_exceeds_price() -> None:
-    """Test Ad model validator when min_price > price (defensive check on Ad)"""
-    from kleinanzeigen_bot.model.config_model import AutoPriceReductionConfig
-
-    # Use model_construct to bypass AdPartial validation and reach the Ad._validate_auto_price_config validator
-    ad = Ad.model_construct(
-        title = "Test Ad",
-        category = "160",
-        description = "Test description",
-        price_type = "NEGOTIABLE",
-        shipping_type = "PICKUP",
-        type = "OFFER",
-        active = True,
-        sell_directly = False,
-        republication_interval = 7,
-        contact = Contact(name = "Test", zipcode = "12345"),
-        price = 50,
-        auto_price_reduction = AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = 5, min_price = 100)
-    )
-
-    # Call the validator directly to reach line 286
-    with pytest.raises(ValueError, match = "min_price must not exceed price"):
-        ad._validate_auto_price_config()
-
-
-@pytest.mark.unit
 def test_auto_price_reduction_config_requires_amount_when_enabled() -> None:
     """Test AutoPriceReductionConfig validator requires amount when enabled"""
-    from kleinanzeigen_bot.model.config_model import AutoPriceReductionConfig
-
     with pytest.raises(ValueError, match = "amount must be specified when auto_price_reduction is enabled"):
         AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = None, min_price = 50)
-
-
-@pytest.mark.unit
-def test_ad_validator_when_min_price_is_none() -> None:
-    """Test Ad model validator when auto_price_reduction is enabled but min_price is None (covers line 284->287 branch)"""
-    from kleinanzeigen_bot.model.config_model import AutoPriceReductionConfig
-
-    # Use model_construct to bypass validation and create an Ad with enabled=True but min_price=None
-    ad = Ad.model_construct(
-        title = "Test Ad",
-        category = "160",
-        description = "Test description",
-        price_type = "NEGOTIABLE",
-        shipping_type = "PICKUP",
-        type = "OFFER",
-        active = True,
-        sell_directly = False,
-        republication_interval = 7,
-        contact = Contact(name = "Test", zipcode = "12345"),
-        price = 100,
-        auto_price_reduction = AutoPriceReductionConfig.model_construct(enabled = True, strategy = "FIXED", amount = 5, min_price = None)
-    )
-
-    # This should pass validation (line 284 condition is False, goes to line 287)
-    result = ad._validate_auto_price_config()
-    assert result == ad
