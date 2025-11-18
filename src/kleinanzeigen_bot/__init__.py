@@ -1238,8 +1238,15 @@ class KleinanzeigenBot(WebScrapingMixin):
                 except TimeoutError:
                     await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
 
+                    # in some categories we need to go another dialog back
+                    try:
+                        await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]',
+                                            timeout=short_timeout)
+                    except TimeoutError:
+                        await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
+
             await self.web_click(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]')
-            await self.__set_shipping_options(ad_cfg)
+            await self.__set_shipping_options(ad_cfg, mode)
         else:
             special_shipping_selector = '//select[contains(@id, ".versand_s")]'
             if await self.web_check(By.XPATH, special_shipping_selector, Is.DISPLAYED):
@@ -1275,7 +1282,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     LOG.debug(ex, exc_info = True)
                     raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 
-    async def __set_shipping_options(self, ad_cfg:Ad) -> None:
+    async def __set_shipping_options(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         if not ad_cfg.shipping_options:
             return
 
@@ -1308,25 +1315,57 @@ class KleinanzeigenBot(WebScrapingMixin):
             shipping_size_radio_is_checked = hasattr(shipping_size_radio.attrs, "checked")
 
             if shipping_size_radio_is_checked:
+                # in the same size category all options are preselected, so deselect the unwanted ones
                 unwanted_shipping_packages = [
                     package for size, selector, package in shipping_options_mapping.values()
                     if size == shipping_size and package not in shipping_packages
                 ]
                 to_be_clicked_shipping_packages = unwanted_shipping_packages
             else:
+                # in a different size category nothing is preselected, so select all we want
                 await self.web_click(By.ID, f"radio-button-{shipping_radio_selector}")
                 to_be_clicked_shipping_packages = list(shipping_packages)
 
             await self.web_click(By.XPATH, '//dialog//button[contains(., "Weiter")]')
 
-            for shipping_package in to_be_clicked_shipping_packages:
-                try:
+            if mode == AdUpdateStrategy.MODIFY:
+                # in update mode we cannot rely on any information and have to (de-)select every package
+                LOG.debug("Using MODIFY mode logic for shipping options")
+
+                # get only correct size
+                selected_size_shipping_packages = [
+                    package for size, selector, package in shipping_options_mapping.values()
+                    if size == shipping_size
+                ]
+                LOG.debug("Processing %d packages for size '%s'", len(selected_size_shipping_packages), shipping_size)
+
+                for shipping_package in selected_size_shipping_packages:
+                    shipping_package_xpath = f'//dialog//input[contains(@data-testid, "{shipping_package}")]'
+                    shipping_package_checkbox = await self.web_find(By.XPATH, shipping_package_xpath)
+                    shipping_package_checkbox_is_checked = hasattr(shipping_package_checkbox.attrs, "checked")
+
+                    LOG.debug(
+                        "Package '%s': checked=%s, wanted=%s",
+                        shipping_package,
+                        shipping_package_checkbox_is_checked,
+                        shipping_package in shipping_packages
+                    )
+
+                    # select wanted packages if not checked already
+                    if shipping_package in shipping_packages:
+                        if not shipping_package_checkbox_is_checked:
+                            # select
+                            LOG.debug("Selecting package '%s'", shipping_package)
+                            await self.web_click(By.XPATH, shipping_package_xpath)
+                    # deselect unwanted if selected
+                    elif shipping_package_checkbox_is_checked:
+                        LOG.debug("Deselecting package '%s'", shipping_package)
+                        await self.web_click(By.XPATH, shipping_package_xpath)
+            else:
+                for shipping_package in to_be_clicked_shipping_packages:
                     await self.web_click(
                         By.XPATH,
                         f'//dialog//input[contains(@data-testid, "{shipping_package}")]')
-                except TimeoutError as ex:
-                    LOG.debug(ex, exc_info = True)
-
         except TimeoutError as ex:
             LOG.debug(ex, exc_info = True)
         try:
