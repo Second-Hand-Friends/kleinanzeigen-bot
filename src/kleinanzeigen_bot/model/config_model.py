@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import copy
-from typing import Annotated, Any, Final, List, Literal
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import AfterValidator, Field, model_validator
 from typing_extensions import deprecated
@@ -87,7 +87,7 @@ class AdDefaults(ContextualModel):
     )
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] = "SHIPPING"
     sell_directly:bool = Field(default = False, description = "requires shipping_type SHIPPING to take effect")
-    images:List[str] | None = Field(default = None)
+    images:list[str] | None = Field(default = None)
     contact:ContactDefaults = Field(default_factory = ContactDefaults)
     republication_interval:int = 7
 
@@ -112,7 +112,7 @@ class DownloadConfig(ContextualModel):
         default = False,
         description = "if true, all shipping options matching the package size will be included"
     )
-    excluded_shipping_options:List[str] = Field(
+    excluded_shipping_options:list[str] = Field(
         default_factory = list,
         description = "list of shipping options to exclude, e.g. ['DHL_2', 'DHL_5']"
     )
@@ -129,7 +129,7 @@ class DownloadConfig(ContextualModel):
 
 
 class BrowserConfig(ContextualModel):
-    arguments:List[str] = Field(
+    arguments:list[str] = Field(
         default_factory = list,
         description = "See https://peter.sh/experiments/chromium-command-line-switches/"
     )
@@ -137,7 +137,7 @@ class BrowserConfig(ContextualModel):
         default = None,
         description = "path to custom browser executable, if not specified will be looked up on PATH"
     )
-    extensions:List[str] = Field(
+    extensions:list[str] = Field(
         default_factory = list,
         description = "a list of .crx extension files to be loaded"
     )
@@ -223,7 +223,7 @@ GlobPattern = Annotated[str, AfterValidator(_validate_glob_pattern)]
 
 
 class Config(ContextualModel):
-    ad_files:List[GlobPattern] = Field(
+    ad_files:list[GlobPattern] = Field(
         default_factory = lambda: ["./**/ad_*.{json,yml,yaml}"],
         min_items = 1,
         description = """

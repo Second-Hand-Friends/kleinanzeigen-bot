@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import hashlib, json  # isort: skip
+from collections.abc import Mapping, Sequence
 from datetime import datetime  # noqa: TC003 Move import into a type-checking block
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Annotated, Any, Dict, Final, List, Literal, Mapping, Sequence
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import AfterValidator, Field, field_validator, model_validator
 from typing_extensions import Self
@@ -70,7 +71,7 @@ class AdPartial(ContextualModel):
     description_prefix:str | None = _OPTIONAL()
     description_suffix:str | None = _OPTIONAL()
     category:str
-    special_attributes:Dict[str, str] | None = _OPTIONAL()
+    special_attributes:dict[str, str] | None = _OPTIONAL()
     price:int | None = _OPTIONAL()
     price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] | None = _OPTIONAL()
     auto_price_reduction:AutoPriceReductionConfig | None = Field(
@@ -89,9 +90,9 @@ class AdPartial(ContextualModel):
     )
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] | None = _OPTIONAL()
     shipping_costs:float | None = _OPTIONAL()
-    shipping_options:List[ShippingOption] | None = _OPTIONAL()
+    shipping_options:list[ShippingOption] | None = _OPTIONAL()
     sell_directly:bool | None = _OPTIONAL()
-    images:List[str] | None = _OPTIONAL()
+    images:list[str] | None = _OPTIONAL()
     contact:ContactPartial | None = _OPTIONAL()
     republication_interval:int | None = _OPTIONAL()
 
@@ -121,7 +122,7 @@ class AdPartial(ContextualModel):
 
     @model_validator(mode = "before")
     @classmethod
-    def _validate_price_and_price_type(cls, values:Dict[str, Any]) -> Dict[str, Any]:
+    def _validate_price_and_price_type(cls, values:dict[str, Any]) -> dict[str, Any]:
         price_type = values.get("price_type")
         price = values.get("price")
         auto_price_reduction = values.get("auto_price_reduction")
