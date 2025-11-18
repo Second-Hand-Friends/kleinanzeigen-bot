@@ -1,5 +1,76 @@
 {
   "$defs": {
+    "AutoPriceReductionConfig": {
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "automatically lower the price of reposted ads",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "strategy": {
+          "anyOf": [
+            {
+              "enum": [
+                "FIXED",
+                "PERCENTAGE"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "PERCENTAGE reduces by a percentage of the previous price, FIXED reduces by a fixed amount",
+          "title": "Strategy"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "magnitude of the reduction; interpreted as percent for PERCENTAGE or currency units for FIXED",
+          "title": "Amount"
+        },
+        "min_price": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "required when enabled is true; minimum price floor (use 0 for no lower bound)",
+          "title": "Min Price"
+        },
+        "delay_reposts": {
+          "default": 0,
+          "description": "number of reposts to wait before applying the first automatic price reduction",
+          "minimum": 0,
+          "title": "Delay Reposts",
+          "type": "integer"
+        },
+        "delay_days": {
+          "default": 0,
+          "description": "number of days to wait after publication before applying automatic price reductions",
+          "minimum": 0,
+          "title": "Delay Days",
+          "type": "integer"
+        }
+      },
+      "title": "AutoPriceReductionConfig",
+      "type": "object"
+    },
     "ContactPartial": {
       "properties": {
         "name": {
@@ -67,31 +138,6 @@
         }
       },
       "title": "ContactPartial",
-      "type": "object"
-    },
-    "PriceReductionConfig": {
-      "properties": {
-        "type": {
-          "description": "type of reduction to apply on each repost: percentage of the previous price or fixed amount",
-          "enum": [
-            "FIXED",
-            "PERCENTAGE"
-          ],
-          "title": "Type",
-          "type": "string"
-        },
-        "value": {
-          "description": "magnitude of the reduction; interpreted as percent when type=percentage and as currency units when type=fixed",
-          "exclusiveMinimum": 0,
-          "title": "Value",
-          "type": "number"
-        }
-      },
-      "required": [
-        "type",
-        "value"
-      ],
-      "title": "PriceReductionConfig",
       "type": "object"
     }
   },
@@ -206,92 +252,30 @@
       "default": null,
       "title": "Price Type"
     },
-    "auto_reduce_price": {
+    "auto_price_reduction": {
       "anyOf": [
         {
-          "type": "boolean"
+          "$ref": "#/$defs/AutoPriceReductionConfig"
         },
         {
           "type": "null"
         }
       ],
       "default": null,
-      "description": "automatically reduce the price on each repost according to price_reduction",
-      "title": "Auto Reduce Price"
-    },
-    "min_price": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "number"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "required per ad when auto_reduce_price is enabled; use 0 for no lower bound",
-      "title": "Min Price"
-    },
-    "price_reduction": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/PriceReductionConfig"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "reduction to apply per repost; required when auto_reduce_price is enabled"
-    },
-    "price_reduction_delay_reposts": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "number of reposts to wait before the first automatic price reduction",
-      "title": "Price Reduction Delay Reposts"
-    },
-    "price_reduction_delay_days": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "number of days to wait after publication before applying automatic price reductions",
-      "title": "Price Reduction Delay Days"
-    },
-    "price_reduction_count": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "number of automatic price reductions already applied",
-      "title": "Price Reduction Count"
+      "description": "automatic price reduction configuration"
     },
     "repost_count": {
       "default": 0,
       "description": "number of successful publications for this ad (persisted between runs)",
       "minimum": 0,
       "title": "Repost Count",
+      "type": "integer"
+    },
+    "price_reduction_count": {
+      "default": 0,
+      "description": "internal counter: number of automatic price reductions already applied",
+      "minimum": 0,
+      "title": "Price Reduction Count",
       "type": "integer"
     },
     "shipping_type": {

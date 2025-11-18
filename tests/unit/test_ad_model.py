@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from kleinanzeigen_bot.model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, ShippingOption
-from kleinanzeigen_bot.model.config_model import AdDefaults, PriceReductionConfig
+from kleinanzeigen_bot.model.config_model import AdDefaults, AutoPriceReductionConfig
 from kleinanzeigen_bot.utils.pydantics import ContextualModel, ContextualValidationError
 
 
@@ -143,23 +143,15 @@ def complete_ad_cfg(base_ad_cfg:dict[str, object]) -> dict[str, object]:
     return base_ad_cfg | {
         "republication_interval": 7,
         "price": 100,
-        "auto_reduce_price": True,
-        "price_reduction": {"type": "FIXED", "value": 5},
-        "min_price": 50
+        "auto_price_reduction": {
+            "enabled": True,
+            "strategy": "FIXED",
+            "amount": 5,
+            "min_price": 50,
+            "delay_reposts": 0,
+            "delay_days": 0
+        }
     }
-
-
-class SparseAdDefaults(AdDefaults):
-    def model_dump(self, *args:Any, **kwargs:Any) -> dict[str, object]:  # noqa: ANN401
-        data = super().model_dump(*args, **kwargs)
-        for key in [
-            "price_reduction_delay_reposts",
-            "price_reduction_delay_days",
-            "price_reduction_count",
-            "repost_count"
-        ]:
-            data.pop(key, None)
-        return data
 
 
 class SparseDumpAdPartial(AdPartial):
@@ -173,22 +165,27 @@ class SparseDumpAdPartial(AdPartial):
 @pytest.mark.unit
 def test_auto_reduce_requires_price(base_ad_cfg:dict[str, object]) -> None:
     cfg = base_ad_cfg.copy() | {
-        "auto_reduce_price": True,
-        "price_reduction": {"type": "FIXED", "value": 5},
-        "min_price": 50
+        "auto_price_reduction": {
+            "enabled": True,
+            "strategy": "FIXED",
+            "amount": 5,
+            "min_price": 50
+        }
     }
     with pytest.raises(ContextualValidationError, match = "price must be specified"):
         AdPartial.model_validate(cfg).to_ad(AdDefaults())
 
 
 @pytest.mark.unit
-def test_auto_reduce_requires_price_reduction(base_ad_cfg:dict[str, object]) -> None:
+def test_auto_reduce_requires_strategy(base_ad_cfg:dict[str, object]) -> None:
     cfg = base_ad_cfg.copy() | {
-        "auto_reduce_price": True,
         "price": 100,
-        "min_price": 50
+        "auto_price_reduction": {
+            "enabled": True,
+            "min_price": 50
+        }
     }
-    with pytest.raises(ContextualValidationError, match = "price_reduction must be specified"):
+    with pytest.raises(ContextualValidationError, match = "strategy must be specified"):
         AdPartial.model_validate(cfg).to_ad(AdDefaults())
 
 
@@ -201,8 +198,8 @@ def test_prepare_ad_model_fills_missing_counters(base_ad_cfg:dict[str, object]) 
     }
     ad = AdPartial.model_validate(cfg).to_ad(AdDefaults())
 
-    assert ad.price_reduction_delay_reposts == 0
-    assert ad.price_reduction_delay_days == 0
+    assert ad.auto_price_reduction.delay_reposts == 0
+    assert ad.auto_price_reduction.delay_days == 0
     assert ad.price_reduction_count == 0
     assert ad.repost_count == 0
 
@@ -210,10 +207,13 @@ def test_prepare_ad_model_fills_missing_counters(base_ad_cfg:dict[str, object]) 
 @pytest.mark.unit
 def test_min_price_must_not_exceed_price(base_ad_cfg:dict[str, object]) -> None:
     cfg = base_ad_cfg.copy() | {
-        "auto_reduce_price": True,
         "price": 100,
-        "min_price": 120,
-        "price_reduction": {"type": "FIXED", "value": 5}
+        "auto_price_reduction": {
+            "enabled": True,
+            "strategy": "FIXED",
+            "amount": 5,
+            "min_price": 120
+        }
     }
     with pytest.raises(ContextualValidationError, match = "min_price must not exceed price"):
         AdPartial.model_validate(cfg)
@@ -222,23 +222,15 @@ def test_min_price_must_not_exceed_price(base_ad_cfg:dict[str, object]) -> None:
 @pytest.mark.unit
 def test_auto_reduce_requires_min_price(base_ad_cfg:dict[str, object]) -> None:
     cfg = base_ad_cfg.copy() | {
-        "auto_reduce_price": True,
         "price": 100,
-        "price_reduction": {"type": "FIXED", "value": 5}
+        "auto_price_reduction": {
+            "enabled": True,
+            "strategy": "FIXED",
+            "amount": 5
+        }
     }
     with pytest.raises(ContextualValidationError, match = "min_price must be specified"):
         AdPartial.model_validate(cfg).to_ad(AdDefaults())
-
-
-@pytest.mark.unit
-def test_min_price_without_auto_reduce_must_not_exceed_price(base_ad_cfg:dict[str, object]) -> None:
-    cfg = base_ad_cfg.copy() | {
-        "price": 100,
-        "min_price": 150,
-        "auto_reduce_price": False
-    }
-    with pytest.raises(ContextualValidationError, match = "min_price must not exceed price"):
-        AdPartial.model_validate(cfg)
 
 
 @pytest.mark.unit
@@ -247,10 +239,10 @@ def test_to_ad_stabilizes_counters_when_defaults_omit(base_ad_cfg:dict[str, obje
         "republication_interval": 7,
         "price": 120
     }
-    ad = AdPartial.model_validate(cfg).to_ad(SparseAdDefaults())
+    ad = AdPartial.model_validate(cfg).to_ad(AdDefaults())
 
-    assert ad.price_reduction_delay_reposts == 0
-    assert ad.price_reduction_delay_days == 0
+    assert ad.auto_price_reduction.delay_reposts == 0
+    assert ad.auto_price_reduction.delay_days == 0
     assert ad.price_reduction_count == 0
     assert ad.repost_count == 0
 
@@ -275,48 +267,84 @@ def test_ad_model_auto_reduce_requires_price(complete_ad_cfg:dict[str, object]) 
 
 
 @pytest.mark.unit
-def test_ad_model_auto_reduce_requires_price_reduction(complete_ad_cfg:dict[str, object]) -> None:
-    cfg = complete_ad_cfg.copy() | {"price_reduction": None}
-    with pytest.raises(ContextualValidationError, match = "price_reduction must be specified"):
-        Ad.model_validate(cfg)
+def test_ad_model_auto_reduce_requires_strategy(complete_ad_cfg:dict[str, object]) -> None:
+    cfg_copy = complete_ad_cfg.copy()
+    cfg_copy["auto_price_reduction"] = {
+        "enabled": True,
+        "min_price": 50
+    }
+    with pytest.raises(ContextualValidationError, match = "strategy must be specified"):
+        Ad.model_validate(cfg_copy)
 
 
 @pytest.mark.unit
 def test_price_reduction_delay_inherited_from_defaults(complete_ad_cfg:dict[str, object]) -> None:
+    # When auto_price_reduction is not specified in ad config, it inherits from defaults
     cfg = complete_ad_cfg.copy()
+    cfg.pop("auto_price_reduction", None)  # Remove to inherit from defaults
     defaults = AdDefaults(
-        auto_reduce_price = True,
-        price_reduction = PriceReductionConfig(type = "FIXED", value = 5),
-        price_reduction_delay_reposts = 4
+        auto_price_reduction = AutoPriceReductionConfig(
+            enabled = True,
+            strategy = "FIXED",
+            amount = 5,
+            min_price = 50,
+            delay_reposts = 4,
+            delay_days = 0
+        )
     )
-    cfg_without_delay = cfg.copy()
-    cfg_without_delay.pop("price_reduction_delay_reposts", None)
-    cfg_without_delay.pop("price_reduction_delay_days", None)
-    ad = AdPartial.model_validate(cfg_without_delay).to_ad(defaults)
-    assert ad.price_reduction_delay_reposts == 4
+    ad = AdPartial.model_validate(cfg).to_ad(defaults)
+    assert ad.auto_price_reduction.delay_reposts == 4
 
 
 @pytest.mark.unit
 def test_price_reduction_delay_override_zero(complete_ad_cfg:dict[str, object]) -> None:
-    cfg = complete_ad_cfg.copy() | {"price_reduction_delay_reposts": 0}
+    cfg = complete_ad_cfg.copy()
+    # Type-safe way to modify nested dict
+    cfg["auto_price_reduction"] = {
+        "enabled": True,
+        "strategy": "FIXED",
+        "amount": 5,
+        "min_price": 50,
+        "delay_reposts": 0,
+        "delay_days": 0
+    }
     defaults = AdDefaults(
-        auto_reduce_price = True,
-        price_reduction = PriceReductionConfig(type = "FIXED", value = 5),
-        price_reduction_delay_reposts = 4
+        auto_price_reduction = AutoPriceReductionConfig(
+            enabled = True,
+            strategy = "FIXED",
+            amount = 5,
+            min_price = 50,
+            delay_reposts = 4,
+            delay_days = 0
+        )
     )
     ad = AdPartial.model_validate(cfg).to_ad(defaults)
-    assert ad.price_reduction_delay_reposts == 0
+    assert ad.auto_price_reduction.delay_reposts == 0
 
 
 @pytest.mark.unit
 def test_ad_model_auto_reduce_requires_min_price(complete_ad_cfg:dict[str, object]) -> None:
-    cfg = complete_ad_cfg.copy() | {"min_price": None}
+    cfg_copy = complete_ad_cfg.copy()
+    cfg_copy["auto_price_reduction"] = {
+        "enabled": True,
+        "strategy": "FIXED",
+        "amount": 5
+    }
     with pytest.raises(ContextualValidationError, match = "min_price must be specified"):
-        Ad.model_validate(cfg)
+        Ad.model_validate(cfg_copy)
 
 
 @pytest.mark.unit
 def test_ad_model_min_price_must_not_exceed_price(complete_ad_cfg:dict[str, object]) -> None:
-    cfg = complete_ad_cfg.copy() | {"min_price": 150, "price": 100}
+    cfg_copy = complete_ad_cfg.copy()
+    cfg_copy["price"] = 100
+    cfg_copy["auto_price_reduction"] = {
+        "enabled": True,
+        "strategy": "FIXED",
+        "amount": 5,
+        "min_price": 150,
+        "delay_reposts": 0,
+        "delay_days": 0
+    }
     with pytest.raises(ContextualValidationError, match = "min_price must not exceed price"):
-        Ad.model_validate(cfg)
+        Ad.model_validate(cfg_copy)

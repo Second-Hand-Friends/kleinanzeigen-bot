@@ -17,19 +17,47 @@ from kleinanzeigen_bot.utils.pydantics import ContextualModel
 _MAX_PERCENTAGE:Final[int] = 100
 
 
-class PriceReductionConfig(ContextualModel):
-    type:Literal["FIXED", "PERCENTAGE"] = Field(
-        description = "type of reduction to apply on each repost: percentage of the previous price or fixed amount"
+class AutoPriceReductionConfig(ContextualModel):
+    enabled:bool = Field(
+        default = False,
+        description = "automatically lower the price of reposted ads"
     )
-    value:float = Field(
+    strategy:Literal["FIXED", "PERCENTAGE"] | None = Field(
+        default = None,
+        description = "PERCENTAGE reduces by a percentage of the previous price, FIXED reduces by a fixed amount"
+    )
+    amount:float | None = Field(
+        default = None,
         gt = 0,
-        description = "magnitude of the reduction; interpreted as percent when type=percentage and as currency units when type=fixed"
+        description = "magnitude of the reduction; interpreted as percent for PERCENTAGE or currency units for FIXED"
+    )
+    min_price:float | None = Field(
+        default = None,
+        ge = 0,
+        description = "required when enabled is true; minimum price floor (use 0 for no lower bound)"
+    )
+    delay_reposts:int = Field(
+        default = 0,
+        ge = 0,
+        description = "number of reposts to wait before applying the first automatic price reduction"
+    )
+    delay_days:int = Field(
+        default = 0,
+        ge = 0,
+        description = "number of days to wait after publication before applying automatic price reductions"
     )
 
     @model_validator(mode = "after")
-    def _validate_percentage_range(self) -> "PriceReductionConfig":
-        if self.type == "PERCENTAGE" and self.value > _MAX_PERCENTAGE:
-            raise ValueError(f"Percentage reduction value must not exceed {_MAX_PERCENTAGE}")
+    def _validate_config(self) -> "AutoPriceReductionConfig":
+        if self.enabled:
+            if self.strategy is None:
+                raise ValueError("strategy must be specified when auto_price_reduction is enabled")
+            if self.amount is None:
+                raise ValueError("amount must be specified when auto_price_reduction is enabled")
+            if self.min_price is None:
+                raise ValueError("min_price must be specified when auto_price_reduction is enabled")
+            if self.strategy == "PERCENTAGE" and self.amount > _MAX_PERCENTAGE:
+                raise ValueError(f"Percentage reduction amount must not exceed {_MAX_PERCENTAGE}")
         return self
 
 
@@ -53,28 +81,9 @@ class AdDefaults(ContextualModel):
     description_prefix:str | None = Field(default = None, description = "prefix for the ad description")
     description_suffix:str | None = Field(default = None, description = " suffix for the ad description")
     price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] = "NEGOTIABLE"
-    auto_reduce_price:bool = Field(
-        default = False,
-        description = "automatically lower the price of reposted ads according to price_reduction"
-    )
-    price_reduction:PriceReductionConfig | None = Field(
-        default = None,
-        description = "reduction applied after each repost when auto_reduce_price is enabled"
-    )
-    price_reduction_delay_reposts:int = Field(
-        default = 0,
-        ge = 0,
-        description = "number of reposts to wait before applying the first automatic price reduction"
-    )
-    price_reduction_delay_days:int = Field(
-        default = 0,
-        ge = 0,
-        description = "number of days to wait after publication before applying automatic price reductions"
-    )
-    price_reduction_count:int = Field(
-        default = 0,
-        ge = 0,
-        description = "number of automatic price reductions already applied"
+    auto_price_reduction:AutoPriceReductionConfig = Field(
+        default_factory = AutoPriceReductionConfig,
+        description = "automatic price reduction configuration"
     )
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] = "SHIPPING"
     sell_directly:bool = Field(default = False, description = "requires shipping_type SHIPPING to take effect")

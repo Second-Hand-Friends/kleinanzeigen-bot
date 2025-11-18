@@ -578,7 +578,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         return AdPartial.model_validate(ad_cfg_orig).to_ad(self.config.ad_defaults)
 
     def __apply_auto_price_reduction(self, ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
-        if not ad_cfg.auto_reduce_price:
+        if not ad_cfg.auto_price_reduction.enabled:
             return
 
         base_price = ad_cfg.price
@@ -586,7 +586,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.warning(_("Auto price reduction is enabled for [%s] but no price is configured."), ad_file_relative)
             return
 
-        if ad_cfg.min_price is not None and ad_cfg.min_price == base_price:
+        if ad_cfg.auto_price_reduction.min_price is not None and ad_cfg.auto_price_reduction.min_price == base_price:
             LOG.warning(
                 _("Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur."),
                 ad_file_relative,
@@ -605,10 +605,8 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         effective_price = calculate_auto_price(
             base_price = base_price,
-            auto_reduce = ad_cfg.auto_reduce_price,
-            price_reduction = ad_cfg.price_reduction,
-            target_reduction_cycle = next_cycle,
-            min_price = ad_cfg.min_price
+            auto_price_reduction = ad_cfg.auto_price_reduction,
+            target_reduction_cycle = next_cycle
         )
 
         if effective_price is None:
@@ -636,7 +634,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     def __repost_cycle_ready(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
         total_reposts = ad_cfg.repost_count or 0
-        delay_reposts = ad_cfg.price_reduction_delay_reposts or 0
+        delay_reposts = ad_cfg.auto_price_reduction.delay_reposts
         applied_cycles = ad_cfg.price_reduction_count or 0
         eligible_cycles = max(total_reposts - delay_reposts, 0)
 
@@ -663,7 +661,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         return True
 
     def __day_delay_elapsed(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
-        delay_days = ad_cfg.price_reduction_delay_days or 0
+        delay_days = ad_cfg.auto_price_reduction.delay_days
         if delay_days == 0:
             return True
 
@@ -1241,7 +1239,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     # in some categories we need to go another dialog back
                     try:
                         await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]',
-                                            timeout=short_timeout)
+                                            timeout = short_timeout)
                     except TimeoutError:
                         await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
 

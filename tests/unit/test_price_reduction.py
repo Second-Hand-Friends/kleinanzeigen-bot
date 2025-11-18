@@ -10,7 +10,7 @@ import pytest
 
 from kleinanzeigen_bot import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import calculate_auto_price
-from kleinanzeigen_bot.model.config_model import PriceReductionConfig
+from kleinanzeigen_bot.model.config_model import AutoPriceReductionConfig
 
 
 @runtime_checkable
@@ -27,37 +27,31 @@ def apply_auto_price_reduction() -> _ApplyAutoPriceReduction:
 
 @pytest.mark.unit
 def test_initial_posting_uses_base_price() -> None:
-    reduction = PriceReductionConfig(type = "PERCENTAGE", value = 10)
+    config = AutoPriceReductionConfig(enabled = True, strategy = "PERCENTAGE", amount = 10, min_price = 50)
     assert calculate_auto_price(
         base_price = 100,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = 0,
-        min_price = 50
+        auto_price_reduction = config,
+        target_reduction_cycle = 0
     ) == 100
 
 
 @pytest.mark.unit
 def test_auto_price_returns_none_without_base_price() -> None:
-    reduction = PriceReductionConfig(type = "PERCENTAGE", value = 10)
+    config = AutoPriceReductionConfig(enabled = True, strategy = "PERCENTAGE", amount = 10, min_price = 10)
     assert calculate_auto_price(
         base_price = None,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = 3,
-        min_price = 10
+        auto_price_reduction = config,
+        target_reduction_cycle = 3
     ) is None
 
 
 @pytest.mark.unit
 def test_negative_price_reduction_count_is_treated_like_zero() -> None:
-    reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25)
+    config = AutoPriceReductionConfig(enabled = True, strategy = "PERCENTAGE", amount = 25, min_price = 50)
     assert calculate_auto_price(
         base_price = 100,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = -3,
-        min_price = 50
+        auto_price_reduction = config,
+        target_reduction_cycle = -3
     ) == 100
 
 
@@ -65,130 +59,112 @@ def test_negative_price_reduction_count_is_treated_like_zero() -> None:
 def test_missing_price_reduction_returns_base_price() -> None:
     assert calculate_auto_price(
         base_price = 150,
-        auto_reduce = True,
-        price_reduction = None,
-        target_reduction_cycle = 4,
-        min_price = 50
+        auto_price_reduction = None,
+        target_reduction_cycle = 4
     ) == 150
 
 
 @pytest.mark.unit
 def test_percentage_reduction_on_float_rounds_half_up() -> None:
-    reduction = PriceReductionConfig(type = "PERCENTAGE", value = 12.5)
+    config = AutoPriceReductionConfig(enabled = True, strategy = "PERCENTAGE", amount = 12.5, min_price = 50)
     assert calculate_auto_price(
         base_price = 99.99,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = 1,
-        min_price = 50
+        auto_price_reduction = config,
+        target_reduction_cycle = 1
     ) == 87
 
 
 @pytest.mark.unit
 def test_fixed_reduction_on_float_rounds_half_up() -> None:
-    reduction = PriceReductionConfig(type = "FIXED", value = 12.4)
+    config = AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = 12.4, min_price = 50)
     assert calculate_auto_price(
         base_price = 80.51,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = 1,
-        min_price = 50
+        auto_price_reduction = config,
+        target_reduction_cycle = 1
     ) == 68
 
 
 @pytest.mark.unit
 def test_percentage_price_reduction_over_time() -> None:
-    reduction = PriceReductionConfig(type = "PERCENTAGE", value = 10)
+    config = AutoPriceReductionConfig(enabled = True, strategy = "PERCENTAGE", amount = 10, min_price = 50)
     assert calculate_auto_price(
         base_price = 100,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = 1,
-        min_price = 50
+        auto_price_reduction = config,
+        target_reduction_cycle = 1
     ) == 90
     assert calculate_auto_price(
         base_price = 100,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = 2,
-        min_price = 50
+        auto_price_reduction = config,
+        target_reduction_cycle = 2
     ) == 81
     assert calculate_auto_price(
         base_price = 100,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = 3,
-        min_price = 50
+        auto_price_reduction = config,
+        target_reduction_cycle = 3
     ) == 73
 
 
 @pytest.mark.unit
 def test_fixed_price_reduction_over_time() -> None:
-    reduction = PriceReductionConfig(type = "FIXED", value = 15)
+    config = AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = 15, min_price = 50)
     assert calculate_auto_price(
         base_price = 100,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = 1,
-        min_price = 40
+        auto_price_reduction = config,
+        target_reduction_cycle = 1
     ) == 85
     assert calculate_auto_price(
         base_price = 100,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = 2,
-        min_price = 40
+        auto_price_reduction = config,
+        target_reduction_cycle = 2
     ) == 70
     assert calculate_auto_price(
         base_price = 100,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = 3,
-        min_price = 40
+        auto_price_reduction = config,
+        target_reduction_cycle = 3
     ) == 55
 
 
 @pytest.mark.unit
 def test_min_price_boundary_is_respected() -> None:
-    reduction = PriceReductionConfig(type = "FIXED", value = 20)
+    config = AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = 20, min_price = 50)
     assert calculate_auto_price(
         base_price = 100,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = 5,
-        min_price = 50
+        auto_price_reduction = config,
+        target_reduction_cycle = 5
     ) == 50
 
 
 @pytest.mark.unit
 def test_min_price_zero_is_allowed() -> None:
-    reduction = PriceReductionConfig(type = "FIXED", value = 5)
+    config = AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = 5, min_price = 0)
     assert calculate_auto_price(
         base_price = 20,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = 5,
-        min_price = 0
+        auto_price_reduction = config,
+        target_reduction_cycle = 5
     ) == 0
 
 
 @pytest.mark.unit
 def test_missing_min_price_raises_error() -> None:
-    reduction = PriceReductionConfig(type = "PERCENTAGE", value = 50)
+    # min_price validation happens at config initialization when enabled=True
     with pytest.raises(ValueError, match = "min_price must be specified"):
-        calculate_auto_price(base_price = 200, auto_reduce = True, price_reduction = reduction, target_reduction_cycle = 3, min_price = None)
+        AutoPriceReductionConfig(enabled = True, strategy = "PERCENTAGE", amount = 50, min_price = None)
 
 
 @pytest.mark.unit
 def test_percentage_above_100_raises_error() -> None:
-    with pytest.raises(ValueError, match = "Percentage reduction value must not exceed 100"):
-        PriceReductionConfig(type = "PERCENTAGE", value = 150)
+    with pytest.raises(ValueError, match = "Percentage reduction amount must not exceed 100"):
+        AutoPriceReductionConfig(enabled = True, strategy = "PERCENTAGE", amount = 150, min_price = 50)
 
 
 @pytest.mark.unit
 def test_feature_disabled_path_leaves_price_unchanged() -> None:
-    reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25)
-    price = calculate_auto_price(base_price = 100, auto_reduce = False, price_reduction = reduction, target_reduction_cycle = 4, min_price = 40)
+    config = AutoPriceReductionConfig(enabled = False, strategy = "PERCENTAGE", amount = 25, min_price = 50)
+    price = calculate_auto_price(
+        base_price = 100,
+        auto_price_reduction = config,
+        target_reduction_cycle = 4
+    )
     assert price == 100
 
 
@@ -198,14 +174,12 @@ def test_apply_auto_price_reduction_logs_drop(
     apply_auto_price_reduction:_ApplyAutoPriceReduction
 ) -> None:
     ad_cfg = SimpleNamespace(
-        auto_reduce_price = True,
         price = 200,
-        price_reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25),
+        auto_price_reduction = AutoPriceReductionConfig(
+            enabled = True, strategy = "PERCENTAGE", amount = 25, min_price = 50, delay_reposts = 0, delay_days = 0
+        ),
         price_reduction_count = 0,
-        repost_count = 1,
-        min_price = 50,
-        price_reduction_delay_reposts = 0,
-        price_reduction_delay_days = 0
+        repost_count = 1
     )
 
     ad_orig:dict[str, Any] = {}
@@ -229,14 +203,12 @@ def test_apply_auto_price_reduction_logs_unchanged_price_at_floor(
     # Test scenario: price has been reduced to just above min_price,
     # and the next reduction would drop it below, so it gets clamped
     ad_cfg = SimpleNamespace(
-        auto_reduce_price = True,
         price = 95,
-        price_reduction = PriceReductionConfig(type = "FIXED", value = 10),
+        auto_price_reduction = AutoPriceReductionConfig(
+            enabled = True, strategy = "FIXED", amount = 10, min_price = 90, delay_reposts = 0, delay_days = 0
+        ),
         price_reduction_count = 0,
-        repost_count = 1,
-        min_price = 90,
-        price_reduction_delay_reposts = 0,
-        price_reduction_delay_days = 0
+        repost_count = 1
     )
 
     ad_orig:dict[str, Any] = {}
@@ -259,14 +231,12 @@ def test_apply_auto_price_reduction_warns_when_price_missing(
     apply_auto_price_reduction:_ApplyAutoPriceReduction
 ) -> None:
     ad_cfg = SimpleNamespace(
-        auto_reduce_price = True,
         price = None,
-        price_reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25),
+        auto_price_reduction = AutoPriceReductionConfig(
+            enabled = True, strategy = "PERCENTAGE", amount = 25, min_price = 10, delay_reposts = 0, delay_days = 0
+        ),
         price_reduction_count = 2,
-        repost_count = 2,
-        min_price = 10,
-        price_reduction_delay_reposts = 0,
-        price_reduction_delay_days = 0
+        repost_count = 2
     )
 
     ad_orig:dict[str, Any] = {}
@@ -285,14 +255,12 @@ def test_apply_auto_price_reduction_warns_when_min_price_equals_price(
     apply_auto_price_reduction:_ApplyAutoPriceReduction
 ) -> None:
     ad_cfg = SimpleNamespace(
-        auto_reduce_price = True,
         price = 100,
-        price_reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25),
+        auto_price_reduction = AutoPriceReductionConfig(
+            enabled = True, strategy = "PERCENTAGE", amount = 25, min_price = 100, delay_reposts = 0, delay_days = 0
+        ),
         price_reduction_count = 0,
-        repost_count = 1,
-        min_price = 100,
-        price_reduction_delay_reposts = 0,
-        price_reduction_delay_days = 0
+        repost_count = 1
     )
 
     ad_orig:dict[str, Any] = {}
@@ -312,14 +280,12 @@ def test_apply_auto_price_reduction_respects_repost_delay(
     apply_auto_price_reduction:_ApplyAutoPriceReduction
 ) -> None:
     ad_cfg = SimpleNamespace(
-        auto_reduce_price = True,
         price = 200,
-        price_reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25),
+        auto_price_reduction = AutoPriceReductionConfig(
+            enabled = True, strategy = "PERCENTAGE", amount = 25, min_price = 50, delay_reposts = 3, delay_days = 0
+        ),
         price_reduction_count = 0,
-        repost_count = 2,
-        min_price = 50,
-        price_reduction_delay_reposts = 3,
-        price_reduction_delay_days = 0
+        repost_count = 2
     )
 
     ad_orig:dict[str, Any] = {}
@@ -337,14 +303,12 @@ def test_apply_auto_price_reduction_after_repost_delay_reduces_once(
     apply_auto_price_reduction:_ApplyAutoPriceReduction
 ) -> None:
     ad_cfg = SimpleNamespace(
-        auto_reduce_price = True,
         price = 100,
-        price_reduction = PriceReductionConfig(type = "PERCENTAGE", value = 10),
+        auto_price_reduction = AutoPriceReductionConfig(
+            enabled = True, strategy = "PERCENTAGE", amount = 10, min_price = 50, delay_reposts = 2, delay_days = 0
+        ),
         price_reduction_count = 0,
-        repost_count = 3,
-        min_price = 50,
-        price_reduction_delay_reposts = 2,
-        price_reduction_delay_days = 0
+        repost_count = 3
     )
 
     ad_cfg_orig:dict[str, Any] = {}
@@ -362,14 +326,12 @@ def test_apply_auto_price_reduction_waits_when_reduction_already_applied(
     apply_auto_price_reduction:_ApplyAutoPriceReduction
 ) -> None:
     ad_cfg = SimpleNamespace(
-        auto_reduce_price = True,
         price = 100,
-        price_reduction = PriceReductionConfig(type = "PERCENTAGE", value = 10),
+        auto_price_reduction = AutoPriceReductionConfig(
+            enabled = True, strategy = "PERCENTAGE", amount = 10, min_price = 50, delay_reposts = 0, delay_days = 0
+        ),
         price_reduction_count = 3,
-        repost_count = 3,
-        min_price = 50,
-        price_reduction_delay_reposts = 0,
-        price_reduction_delay_days = 0
+        repost_count = 3
     )
 
     ad_orig:dict[str, Any] = {}
@@ -392,14 +354,12 @@ def test_apply_auto_price_reduction_respects_day_delay(
 ) -> None:
     reference = datetime(2025, 1, 1, tzinfo = timezone.utc)
     ad_cfg = SimpleNamespace(
-        auto_reduce_price = True,
         price = 150,
-        price_reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25),
+        auto_price_reduction = AutoPriceReductionConfig(
+            enabled = True, strategy = "PERCENTAGE", amount = 25, min_price = 50, delay_reposts = 0, delay_days = 3
+        ),
         price_reduction_count = 0,
         repost_count = 1,
-        min_price = 50,
-        price_reduction_delay_reposts = 0,
-        price_reduction_delay_days = 3,
         updated_on = reference,
         created_on = reference
     )
@@ -423,14 +383,12 @@ def test_apply_auto_price_reduction_runs_after_delays(
 ) -> None:
     reference = datetime(2025, 1, 1, tzinfo = timezone.utc)
     ad_cfg = SimpleNamespace(
-        auto_reduce_price = True,
         price = 120,
-        price_reduction = PriceReductionConfig(type = "PERCENTAGE", value = 25),
+        auto_price_reduction = AutoPriceReductionConfig(
+            enabled = True, strategy = "PERCENTAGE", amount = 25, min_price = 60, delay_reposts = 2, delay_days = 3
+        ),
         price_reduction_count = 0,
         repost_count = 3,
-        min_price = 60,
-        price_reduction_delay_reposts = 2,
-        price_reduction_delay_days = 3,
         updated_on = reference - timedelta(days = 5),
         created_on = reference - timedelta(days = 10)
     )
@@ -449,14 +407,12 @@ def test_apply_auto_price_reduction_delayed_when_timestamp_missing(
     apply_auto_price_reduction:_ApplyAutoPriceReduction
 ) -> None:
     ad_cfg = SimpleNamespace(
-        auto_reduce_price = True,
         price = 200,
-        price_reduction = PriceReductionConfig(type = "FIXED", value = 20),
+        auto_price_reduction = AutoPriceReductionConfig(
+            enabled = True, strategy = "FIXED", amount = 20, min_price = 50, delay_reposts = 0, delay_days = 2
+        ),
         price_reduction_count = 0,
         repost_count = 1,
-        min_price = 50,
-        price_reduction_delay_reposts = 0,
-        price_reduction_delay_days = 2,
         updated_on = None,
         created_on = None
     )
@@ -478,14 +434,12 @@ def test_fractional_reduction_increments_counter_even_when_price_unchanged(
     # Test that small fractional reductions increment the counter even when rounded price doesn't change
     # This allows cumulative reductions to eventually show visible effect
     ad_cfg = SimpleNamespace(
-        auto_reduce_price = True,
         price = 100,
-        price_reduction = PriceReductionConfig(type = "FIXED", value = 0.3),
+        auto_price_reduction = AutoPriceReductionConfig(
+            enabled = True, strategy = "FIXED", amount = 0.3, min_price = 50, delay_reposts = 0, delay_days = 0
+        ),
         price_reduction_count = 0,
-        repost_count = 1,
-        min_price = 50,
-        price_reduction_delay_reposts = 0,
-        price_reduction_delay_days = 0
+        repost_count = 1
     )
 
     ad_orig:dict[str, Any] = {}
@@ -505,37 +459,33 @@ def test_fractional_reduction_increments_counter_even_when_price_unchanged(
 @pytest.mark.unit
 def test_reduction_value_zero_raises_error() -> None:
     with pytest.raises(ValueError, match = "Input should be greater than 0"):
-        PriceReductionConfig(type = "PERCENTAGE", value = 0)
+        AutoPriceReductionConfig(enabled = True, strategy = "PERCENTAGE", amount = 0, min_price = 50)
 
 
 @pytest.mark.unit
 def test_reduction_value_negative_raises_error() -> None:
     with pytest.raises(ValueError, match = "Input should be greater than 0"):
-        PriceReductionConfig(type = "FIXED", value = -5)
+        AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = -5, min_price = 50)
 
 
 @pytest.mark.unit
 def test_percentage_reduction_100_percent() -> None:
-    reduction = PriceReductionConfig(type = "PERCENTAGE", value = 100)
+    config = AutoPriceReductionConfig(enabled = True, strategy = "PERCENTAGE", amount = 100, min_price = 0)
     assert calculate_auto_price(
         base_price = 150,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = 1,
-        min_price = 0
+        auto_price_reduction = config,
+        target_reduction_cycle = 1
     ) == 0
 
 
 @pytest.mark.unit
 def test_extreme_reduction_cycles() -> None:
     # Test that extreme cycle counts don't cause performance issues or errors
-    reduction = PriceReductionConfig(type = "PERCENTAGE", value = 10)
+    config = AutoPriceReductionConfig(enabled = True, strategy = "PERCENTAGE", amount = 10, min_price = 0)
     result = calculate_auto_price(
         base_price = 1000,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = 100,
-        min_price = 0
+        auto_price_reduction = config,
+        target_reduction_cycle = 100
     )
     # After 100 cycles of 10% reduction, price should be effectively 0 (1000 * 0.9^100 ≈ 0.00003)
     assert result == 0
@@ -544,13 +494,11 @@ def test_extreme_reduction_cycles() -> None:
 @pytest.mark.unit
 def test_extreme_reduction_cycles_with_floor() -> None:
     # Test that extreme cycles stop at min_price and don't cause issues
-    reduction = PriceReductionConfig(type = "PERCENTAGE", value = 10)
+    config = AutoPriceReductionConfig(enabled = True, strategy = "PERCENTAGE", amount = 10, min_price = 50)
     result = calculate_auto_price(
         base_price = 1000,
-        auto_reduce = True,
-        price_reduction = reduction,
-        target_reduction_cycle = 1000,
-        min_price = 50
+        auto_price_reduction = config,
+        target_reduction_cycle = 1000
     )
     # Should stop at min_price, not go to 0, regardless of cycle count
     assert result == 50
