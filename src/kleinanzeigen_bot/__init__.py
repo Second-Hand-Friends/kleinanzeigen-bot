@@ -1091,7 +1091,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     LOG.debug(_("Attribute field '%s' seems to be a text input..."), special_attribute_key)
                     await self.web_input(By.ID, elem_id, special_attribute_value_str)
             except TimeoutError as ex:
-                LOG.debug(_("Attribute field '%s' is not of kind radio button."), special_attribute_key)
+                LOG.debug(_("Failed to set attribute field '%s' via known input types."), special_attribute_key)
                 raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
             LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
 
@@ -1115,7 +1115,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     # in some categories we need to go another dialog back
                     try:
                         await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]',
-                                            timeout=short_timeout)
+                                            timeout = short_timeout)
                     except TimeoutError:
                         await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
 
