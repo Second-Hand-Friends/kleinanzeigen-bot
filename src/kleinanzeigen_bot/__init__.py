@@ -1073,8 +1073,8 @@ class KleinanzeigenBot(WebScrapingMixin):
                 try:
                     special_attr_elem = await self.web_find(By.ID, special_attribute_key)
                 except TimeoutError as ex:
-                    LOG.debug("Attribute field '%s' could not be found.", special_attribute_key)
-                    raise TimeoutError(f"Failed to set special attribute by either ID or Name [{special_attribute_key}] (not found)") from ex
+                    LOG.debug(_("Attribute field '%s' could not be found."), special_attribute_key)
+                    raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
 
             try:
                 elem_id:str = str(special_attr_elem.attrs.id)

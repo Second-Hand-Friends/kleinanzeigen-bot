@@ -965,48 +965,56 @@ class WebScrapingMixin:
             lambda: self.web_check(selector_type, selector_value, Is.CLICKABLE), timeout = timeout,
             timeout_error_message = f"No clickable HTML element with selector: {selector_type}='{selector_value}' found"
         )
-        elem = await self.web_find(selector_type, selector_value)
+        elem = await self.web_find(selector_type, selector_value, timeout = timeout)
 
         js_value = json.dumps(selected_value)  # safe escaping for JS
-        await elem.apply(f"""
-            function (element) {{
-                const wanted = String({js_value});
+        try:
+            await elem.apply(f"""
+                function (element) {{
+                    const wanted = String({js_value});
 
-                // 1) Try by value
-                for (let i = 0; i < element.options.length; i++) {{
-                    if (element.options[i].value === wanted) {{
-                        element.selectedIndex = i;
-                        element.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                        return;
+                    // 1) Try by value
+                    for (let i = 0; i < element.options.length; i++) {{
+                        if (element.options[i].value === wanted) {{
+                            element.selectedIndex = i;
+                            element.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            return;
+                        }}
                     }}
-                }}
 
-                // 2) Fallback by displayed text (trimmed)
-                const needle = wanted.trim();
-                for (let i = 0; i < element.options.length; i++) {{
-                    const opt = element.options[i];
-                    const shown = (opt.label ?? opt.text ?? opt.textContent ?? '').trim();
-                    if (shown === needle) {{
-                        element.selectedIndex = i;
-                        element.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                        return;
+                    // 2) Fallback by displayed text (trimmed)
+                    const needle = wanted.trim();
+                    for (let i = 0; i < element.options.length; i++) {{
+                        const opt = element.options[i];
+                        const shown = (opt.label ?? opt.text ?? opt.textContent ?? '').trim();
+                        if (shown === needle) {{
+                            element.selectedIndex = i;
+                            element.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            return;
+                        }}
                     }}
-                }}
 
-                throw new Error("Option not found by value or displayed text: " + wanted);
-            }}
-        """)
+                    throw new Error("Option not found by value or displayed text: " + wanted);
+                }}
+            """)
+        except Exception as ex:
+            # Normalize selection failures to TimeoutError
+            raise TimeoutError(_("Option not found by value or displayed text: %s") % selected_value) from ex
         await self.web_sleep()
         return elem
 
-    async def web_select_combobox(self, selector_type:By, selector_value:str, selected_value:Any, timeout:int | float = 5) -> Element:
+    async def web_select_combobox(self, selector_type:By, selector_value:str, selected_value:str | int, timeout:int | float | None = None) -> Element:
         """
-        Selects an <li> Option of a <input/> HTML Combobox element by visible text.
+        Selects an option from a text-input combobox by typing the given value to
+        filter the dropdown and clicking the first <li> whose visible text matches.
+        Returns the dropdown <ul> element on success.
 
         :param timeout: timeout in seconds
-        :raises TimeoutError: if element could not be found within time
-        :raises UnexpectedTagNameException: if element is not a <select> element
+        :raises TimeoutError: when the input or matching dropdown option cannot be located
         """
+        if timeout is None:
+            timeout = self._timeout("default")
+
         input_field = await self.web_find(selector_type, selector_value, timeout = timeout)
         await input_field.clear_input()
         await input_field.send_keys(str(selected_value))
@@ -1015,8 +1023,8 @@ class WebScrapingMixin:
         # From the Inputfield, get the attribute "aria-controls" which POINTS to the Dropdown ul #id:
         dropdown_id = input_field.attrs.get("aria-controls")
         if not dropdown_id:
-            LOG.error(_("Combobox input field does not have 'aria-controls' attribute to locate dropdown options."))
-            raise TimeoutError(_("Cannot locate combobox dropdown options."))
+            LOG.error(_("Combobox input field does not have 'aria-controls' attribute."))
+            raise TimeoutError(_("Combobox missing aria-controls attribute"))
 
         dropdown_elem = await self.web_find(By.ID, dropdown_id, timeout = timeout)
         js_value = json.dumps(selected_value)  # safe escaping for JS
@@ -1055,8 +1063,8 @@ class WebScrapingMixin:
         }}
         """)
         if not ok:
-            LOG.error(_("No <li> options found in combobox dropdown with id '%s'."), dropdown_id)
-            raise TimeoutError(_("Cannot locate combobox dropdown options."))
+            LOG.error(_("No matching option found in combobox: '%s'"), selected_value)
+            raise TimeoutError(_("No matching option found in combobox: '%s'") % selected_value)
 
         await self.web_sleep()
         return dropdown_elem
