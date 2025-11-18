@@ -1079,20 +1079,20 @@ class KleinanzeigenBot(WebScrapingMixin):
             try:
                 elem_id:str = str(special_attr_elem.attrs.id)
                 if special_attr_elem.local_name == "select":
-                    LOG.debug("Attribute field '%s' seems to be a select...", special_attribute_key)
+                    LOG.debug(_("Attribute field '%s' seems to be a select..."), special_attribute_key)
                     await self.web_select(By.ID, elem_id, special_attribute_value_str)
                 elif special_attr_elem.attrs.type == "checkbox":
-                    LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
+                    LOG.debug(_("Attribute field '%s' seems to be a checkbox..."), special_attribute_key)
                     await self.web_click(By.ID, elem_id)
                 elif special_attr_elem.attrs.type == "text" and special_attr_elem.attrs.get("role") == "combobox":
                     LOG.debug(_("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)..."), special_attribute_key)
                     await self.web_select_combobox(By.ID, elem_id, special_attribute_value_str)
                 else:
-                    LOG.debug("Attribute field '%s' seems to be a text input...", special_attribute_key)
+                    LOG.debug(_("Attribute field '%s' seems to be a text input..."), special_attribute_key)
                     await self.web_input(By.ID, elem_id, special_attribute_value_str)
             except TimeoutError as ex:
-                LOG.debug("Attribute field '%s' is not of kind radio button.", special_attribute_key)
-                raise TimeoutError(f"Failed to set special attribute [{special_attribute_key}]") from ex
+                LOG.debug(_("Attribute field '%s' is not of kind radio button."), special_attribute_key)
+                raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
             LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
 
     async def __set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
