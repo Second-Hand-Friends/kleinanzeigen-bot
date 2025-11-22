@@ -66,6 +66,122 @@ class TestAdExtractorBasics:
         """Test extraction of ad ID from different URL formats."""
         assert test_extractor.extract_ad_id_from_ad_url(url) == expected_id
 
+    def test_path_exists_helper(self, tmp_path:Any) -> None:
+        """Test _path_exists helper function."""
+
+        from kleinanzeigen_bot.extract import _path_exists  # noqa: PLC0415, PLC2701
+
+        # Test with existing path
+        existing_file = tmp_path / "test.txt"
+        existing_file.write_text("test")
+        assert _path_exists(existing_file) is True
+        assert _path_exists(str(existing_file)) is True
+
+        # Test with non-existing path
+        non_existing = tmp_path / "nonexistent.txt"
+        assert _path_exists(non_existing) is False
+        assert _path_exists(str(non_existing)) is False
+
+    def test_path_is_dir_helper(self, tmp_path:Any) -> None:
+        """Test _path_is_dir helper function."""
+
+        from kleinanzeigen_bot.extract import _path_is_dir  # noqa: PLC0415, PLC2701
+
+        # Test with directory
+        test_dir = tmp_path / "testdir"
+        test_dir.mkdir()
+        assert _path_is_dir(test_dir) is True
+        assert _path_is_dir(str(test_dir)) is True
+
+        # Test with file
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("test")
+        assert _path_is_dir(test_file) is False
+        assert _path_is_dir(str(test_file)) is False
+
+        # Test with non-existing path
+        non_existing = tmp_path / "nonexistent"
+        assert _path_is_dir(non_existing) is False
+        assert _path_is_dir(str(non_existing)) is False
+
+    @pytest.mark.asyncio
+    async def test_exists_async_helper(self, tmp_path:Any) -> None:
+        """Test _exists async helper function."""
+        from kleinanzeigen_bot.extract import _exists  # noqa: PLC0415, PLC2701
+
+        # Test with existing path
+        existing_file = tmp_path / "test.txt"
+        existing_file.write_text("test")
+        assert await _exists(existing_file) is True
+        assert await _exists(str(existing_file)) is True
+
+        # Test with non-existing path
+        non_existing = tmp_path / "nonexistent.txt"
+        assert await _exists(non_existing) is False
+        assert await _exists(str(non_existing)) is False
+
+    @pytest.mark.asyncio
+    async def test_isdir_async_helper(self, tmp_path:Any) -> None:
+        """Test _isdir async helper function."""
+        from kleinanzeigen_bot.extract import _isdir  # noqa: PLC0415, PLC2701
+
+        # Test with directory
+        test_dir = tmp_path / "testdir"
+        test_dir.mkdir()
+        assert await _isdir(test_dir) is True
+        assert await _isdir(str(test_dir)) is True
+
+        # Test with file
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("test")
+        assert await _isdir(test_file) is False
+        assert await _isdir(str(test_file)) is False
+
+        # Test with non-existing path
+        non_existing = tmp_path / "nonexistent"
+        assert await _isdir(non_existing) is False
+        assert await _isdir(str(non_existing)) is False
+
+    def test_download_and_save_image_sync_success(self, tmp_path:Any) -> None:
+        """Test _download_and_save_image_sync with successful download."""
+        from unittest.mock import MagicMock, mock_open  # noqa: PLC0415
+
+        test_dir = tmp_path / "images"
+        test_dir.mkdir()
+
+        # Mock urllib response
+        mock_response = MagicMock()
+        mock_response.info().get_content_type.return_value = "image/jpeg"
+        mock_response.__enter__ = MagicMock(return_value = mock_response)
+        mock_response.__exit__ = MagicMock(return_value = False)
+
+        with patch("kleinanzeigen_bot.extract.urllib_request.urlopen", return_value = mock_response), \
+                patch("kleinanzeigen_bot.extract.open", mock_open()), \
+                patch("kleinanzeigen_bot.extract.shutil.copyfileobj"):
+
+            result = AdExtractor._download_and_save_image_sync(
+                "http://example.com/image.jpg",
+                str(test_dir),
+                "test_",
+                1
+            )
+
+            assert result is not None
+            assert result.endswith((".jpe", ".jpeg", ".jpg"))
+            assert "test_1" in result
+
+    def test_download_and_save_image_sync_failure(self, tmp_path:Any) -> None:
+        """Test _download_and_save_image_sync with download failure."""
+        with patch("kleinanzeigen_bot.extract.urllib_request.urlopen", side_effect = Exception("Network error")):
+            result = AdExtractor._download_and_save_image_sync(
+                "http://example.com/image.jpg",
+                str(tmp_path),
+                "test_",
+                1
+            )
+
+            assert result is None
+
 
 class TestAdExtractorPricing:
     """Tests for pricing related functionality."""
@@ -854,11 +970,11 @@ class TestAdExtractorDownload:
     @pytest.mark.asyncio
     async def test_download_ad_existing_directory(self, extractor:AdExtractor) -> None:
         """Test downloading an ad when the directory already exists."""
-        with patch("os.path.exists") as mock_exists, \
-                patch("os.path.isdir") as mock_isdir, \
-                patch("os.makedirs") as mock_makedirs, \
-                patch("os.mkdir") as mock_mkdir, \
-                patch("os.rename") as mock_rename, \
+
+        with patch("kleinanzeigen_bot.extract._path_exists") as mock_exists, \
+                patch("kleinanzeigen_bot.extract._path_is_dir") as mock_isdir, \
+                patch("pathlib.Path.mkdir") as mock_mkdir, \
+                patch("pathlib.Path.rename") as mock_rename, \
                 patch("shutil.rmtree") as mock_rmtree, \
                 patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict, \
                 patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
@@ -868,9 +984,8 @@ class TestAdExtractorDownload:
             yaml_path = os.path.join(final_dir, "ad_12345.yaml")
 
             # Configure mocks for directory checks
-            existing_paths = {base_dir, final_dir}  # Final directory with title exists
-            mock_exists.side_effect = lambda path: path in existing_paths
-            mock_isdir.side_effect = lambda path: path == base_dir
+            mock_exists.side_effect = lambda path: str(path) in {base_dir, final_dir}
+            mock_isdir.side_effect = lambda path: str(path) == base_dir
 
             # Mock the new method that handles directory creation and extraction
             mock_extract_with_dir.return_value = (
@@ -898,7 +1013,6 @@ class TestAdExtractorDownload:
             # so we don't expect rmtree/mkdir to be called directly in download_ad
             mock_rmtree.assert_not_called()  # Directory handling is done internally
             mock_mkdir.assert_not_called()  # Directory handling is done internally
-            mock_makedirs.assert_not_called()  # Directory already exists
             mock_rename.assert_not_called()  # No renaming needed
 
             # Get the actual call arguments
@@ -911,11 +1025,11 @@ class TestAdExtractorDownload:
     @pytest.mark.asyncio
     async def test_download_ad(self, extractor:AdExtractor) -> None:
         """Test downloading an entire ad."""
-        with patch("os.path.exists") as mock_exists, \
-                patch("os.path.isdir") as mock_isdir, \
-                patch("os.makedirs") as mock_makedirs, \
-                patch("os.mkdir") as mock_mkdir, \
-                patch("os.rename") as mock_rename, \
+
+        with patch("kleinanzeigen_bot.extract._path_exists") as mock_exists, \
+                patch("kleinanzeigen_bot.extract._path_is_dir") as mock_isdir, \
+                patch("pathlib.Path.mkdir") as mock_mkdir, \
+                patch("pathlib.Path.rename") as mock_rename, \
                 patch("shutil.rmtree") as mock_rmtree, \
                 patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict, \
                 patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
@@ -924,7 +1038,7 @@ class TestAdExtractorDownload:
             final_dir = os.path.join(base_dir, "ad_12345_Test Advertisement Title")
             yaml_path = os.path.join(final_dir, "ad_12345.yaml")
 
-            # Configure mocks for directory checks
+            # Configure mocks for directory checks - nothing exists
             mock_exists.return_value = False
             mock_isdir.return_value = False
 
@@ -952,8 +1066,7 @@ class TestAdExtractorDownload:
             mock_extract_with_dir.assert_called_once()
             # Directory handling is now done inside _extract_ad_page_info_with_directory_handling
             mock_rmtree.assert_not_called()  # Directory handling is done internally
-            mock_mkdir.assert_has_calls([call(base_dir)])  # Only base directory creation
-            mock_makedirs.assert_not_called()  # Using mkdir instead
+            assert mock_mkdir.call_count == 1  # Only base directory creation
             mock_rename.assert_not_called()  # No renaming needed
 
             # Get the actual call arguments
@@ -966,11 +1079,11 @@ class TestAdExtractorDownload:
     @pytest.mark.asyncio
     async def test_download_ad_use_existing_folder(self, extractor:AdExtractor) -> None:
         """Test downloading an ad when an old folder without title exists (default behavior)."""
-        with patch("os.path.exists") as mock_exists, \
-                patch("os.path.isdir") as mock_isdir, \
-                patch("os.makedirs") as mock_makedirs, \
-                patch("os.mkdir") as mock_mkdir, \
-                patch("os.rename") as mock_rename, \
+
+        with patch("kleinanzeigen_bot.extract._path_exists") as mock_exists, \
+                patch("kleinanzeigen_bot.extract._path_is_dir") as mock_isdir, \
+                patch("pathlib.Path.mkdir") as mock_mkdir, \
+                patch("pathlib.Path.rename") as mock_rename, \
                 patch("shutil.rmtree") as mock_rmtree, \
                 patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict, \
                 patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
@@ -981,9 +1094,8 @@ class TestAdExtractorDownload:
 
             # Configure mocks for directory checks
             # Base directory exists, temp directory exists
-            existing_paths = {base_dir, temp_dir}
-            mock_exists.side_effect = lambda path: path in existing_paths
-            mock_isdir.side_effect = lambda path: path == base_dir
+            mock_exists.side_effect = lambda path: str(path) in {base_dir, temp_dir}
+            mock_isdir.side_effect = lambda path: str(path) == base_dir
 
             # Mock the new method that handles directory creation and extraction
             mock_extract_with_dir.return_value = (
@@ -1009,7 +1121,6 @@ class TestAdExtractorDownload:
             mock_extract_with_dir.assert_called_once()
             mock_rmtree.assert_not_called()  # No directory to remove
             mock_mkdir.assert_not_called()  # Base directory already exists
-            mock_makedirs.assert_not_called()  # Using mkdir instead
             mock_rename.assert_not_called()  # No renaming (default behavior)
 
             # Get the actual call arguments
@@ -1022,14 +1133,14 @@ class TestAdExtractorDownload:
     @pytest.mark.asyncio
     async def test_download_ad_rename_existing_folder_when_enabled(self, extractor:AdExtractor) -> None:
         """Test downloading an ad when an old folder without title exists and renaming is enabled."""
+
         # Enable renaming in config
         extractor.config.download.rename_existing_folders = True
 
-        with patch("os.path.exists") as mock_exists, \
-                patch("os.path.isdir") as mock_isdir, \
-                patch("os.makedirs") as mock_makedirs, \
-                patch("os.mkdir") as mock_mkdir, \
-                patch("os.rename") as mock_rename, \
+        with patch("kleinanzeigen_bot.extract._path_exists") as mock_exists, \
+                patch("kleinanzeigen_bot.extract._path_is_dir") as mock_isdir, \
+                patch("pathlib.Path.mkdir") as mock_mkdir, \
+                patch("pathlib.Path.rename") as mock_rename, \
                 patch("shutil.rmtree") as mock_rmtree, \
                 patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict, \
                 patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
@@ -1041,9 +1152,8 @@ class TestAdExtractorDownload:
 
             # Configure mocks for directory checks
             # Base directory exists, temp directory exists, final directory doesn't exist
-            existing_paths = {base_dir, temp_dir}
-            mock_exists.side_effect = lambda path: path in existing_paths
-            mock_isdir.side_effect = lambda path: path == base_dir
+            mock_exists.side_effect = lambda path: str(path) in {base_dir, temp_dir}
+            mock_isdir.side_effect = lambda path: str(path) == base_dir
 
             # Mock the new method that handles directory creation and extraction
             mock_extract_with_dir.return_value = (
@@ -1070,7 +1180,6 @@ class TestAdExtractorDownload:
             # Directory handling (including renaming) is now done inside _extract_ad_page_info_with_directory_handling
             mock_rmtree.assert_not_called()  # Directory handling is done internally
             mock_mkdir.assert_not_called()  # Directory handling is done internally
-            mock_makedirs.assert_not_called()  # Using mkdir instead
             mock_rename.assert_not_called()  # Directory handling is done internally
 
             # Get the actual call arguments

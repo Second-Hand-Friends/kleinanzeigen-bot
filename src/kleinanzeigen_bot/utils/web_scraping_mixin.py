@@ -100,6 +100,41 @@ class BrowserConfig:
         self.profile_name:str | None = None
 
 
+def _write_initial_prefs(prefs_file:str) -> None:
+    with open(prefs_file, "w", encoding = "UTF-8") as fd:
+        json.dump({
+            "credentials_enable_service": False,
+            "enable_do_not_track": True,
+            "google": {
+                "services": {
+                    "consented_to_sync": False
+                }
+            },
+            "profile": {
+                "default_content_setting_values": {
+                    "popups": 0,
+                    "notifications": 2  # 1 = allow, 2 = block browser notifications
+                },
+                "password_manager_enabled": False
+            },
+            "signin": {
+                "allowed": False
+            },
+            "translate_site_blacklist": [
+                "www.kleinanzeigen.de"
+            ],
+            "devtools": {
+                "preferences": {
+                    "currentDockState": '"bottom"'
+                }
+            }
+        }, fd)
+
+
+async def _exists(path:str) -> bool:
+    return await asyncio.get_running_loop().run_in_executor(None, os.path.exists, path)
+
+
 class WebScrapingMixin:
 
     def __init__(self) -> None:
@@ -174,7 +209,7 @@ class WebScrapingMixin:
         LOG.info("Creating Browser session...")
 
         if self.browser_config.binary_location:
-            ensure(os.path.exists(self.browser_config.binary_location), f"Specified browser binary [{self.browser_config.binary_location}] does not exist.")
+            ensure(await _exists(self.browser_config.binary_location), f"Specified browser binary [{self.browser_config.binary_location}] does not exist.")
         else:
             self.browser_config.binary_location = self.get_compatible_browser()
         LOG.info(" -> Browser binary location: %s", self.browser_config.binary_location)
@@ -289,41 +324,14 @@ class WebScrapingMixin:
             profile_dir = os.path.join(cfg.user_data_dir, self.browser_config.profile_name or "Default")
             os.makedirs(profile_dir, exist_ok = True)
             prefs_file = os.path.join(profile_dir, "Preferences")
-            if not os.path.exists(prefs_file):
+            if not await _exists(prefs_file):
                 LOG.info(" -> Setting chrome prefs [%s]...", prefs_file)
-                with open(prefs_file, "w", encoding = "UTF-8") as fd:
-                    json.dump({
-                        "credentials_enable_service": False,
-                        "enable_do_not_track": True,
-                        "google": {
-                            "services": {
-                                "consented_to_sync": False
-                            }
-                        },
-                        "profile": {
-                            "default_content_setting_values": {
-                                "popups": 0,
-                                "notifications": 2  # 1 = allow, 2 = block browser notifications
-                            },
-                            "password_manager_enabled": False
-                        },
-                        "signin": {
-                            "allowed": False
-                        },
-                        "translate_site_blacklist": [
-                            "www.kleinanzeigen.de"
-                        ],
-                        "devtools": {
-                            "preferences": {
-                                "currentDockState": '"bottom"'
-                            }
-                        }
-                    }, fd)
+                await asyncio.get_running_loop().run_in_executor(None, _write_initial_prefs, prefs_file)
 
         # load extensions
         for crx_extension in self.browser_config.extensions:
             LOG.info(" -> Adding Browser extension: [%s]", crx_extension)
-            ensure(os.path.exists(crx_extension), f"Configured extension-file [{crx_extension}] does not exist.")
+            ensure(await _exists(crx_extension), f"Configured extension-file [{crx_extension}] does not exist.")
             cfg.add_extension(crx_extension)
 
         try:
