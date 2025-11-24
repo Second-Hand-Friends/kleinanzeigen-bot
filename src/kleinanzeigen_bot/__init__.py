@@ -937,7 +937,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.warning("# Payment form detected! Please proceed with payment.")
             LOG.warning("############################################")
             await self.web_scroll_page_down()
-            await ainput(_("Press a key to continue..."))  # noqa: ASYNC240
+            await ainput(_("Press a key to continue..."))
         except TimeoutError:
             pass
 

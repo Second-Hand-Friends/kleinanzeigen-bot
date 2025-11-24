@@ -5,6 +5,7 @@ import asyncio
 from gettext import gettext as _
 
 import json, mimetypes, re, shutil  # isort: skip
+import urllib.error as urllib_error
 import urllib.request as urllib_request
 from datetime import datetime
 from pathlib import Path
@@ -38,13 +39,13 @@ def _path_is_dir(path:Path | str) -> bool:
 
 
 async def _exists(path:Path | str) -> bool:
-    result = await asyncio.get_running_loop().run_in_executor(None, _path_exists, path)  # noqa: ASYNC240
+    result = await asyncio.get_running_loop().run_in_executor(None, _path_exists, path)
     LOG.debug("Path exists check: %s -> %s", path, result)
     return result
 
 
 async def _isdir(path:Path | str) -> bool:
-    result = await asyncio.get_running_loop().run_in_executor(None, _path_is_dir, path)  # noqa: ASYNC240
+    result = await asyncio.get_running_loop().run_in_executor(None, _path_is_dir, path)
     LOG.debug("Path is_dir check: %s -> %s", path, result)
     return result
 
@@ -69,23 +70,22 @@ class AdExtractor(WebScrapingMixin):
 
         # create sub-directory for ad(s) to download (if necessary):
         relative_directory = Path("downloaded-ads")
-        # make sure configured base directory exists
-        if not await _exists(relative_directory) or not await _isdir(relative_directory):
-            LOG.debug("Creating base directory: %s", relative_directory)
-            await asyncio.get_running_loop().run_in_executor(None, relative_directory.mkdir)
-            LOG.info("Created ads directory at ./%s.", relative_directory)
+        # make sure configured base directory exists (using exist_ok=True to avoid TOCTOU race)
+        await asyncio.get_running_loop().run_in_executor(None, lambda: relative_directory.mkdir(exist_ok = True))  # noqa: ASYNC240
+        LOG.info("Ensured ads directory exists at ./%s.", relative_directory)
 
         # Extract ad info and determine final directory path
         ad_cfg, final_dir = await self._extract_ad_page_info_with_directory_handling(
             relative_directory, ad_id
         )
 
-        # Save the ad configuration file
+        # Save the ad configuration file (offload to executor to avoid blocking the event loop)
         ad_file_path = str(Path(final_dir) / f"ad_{ad_id}.yaml")
-        dicts.save_dict(
-            ad_file_path,
-            ad_cfg.model_dump(),
-            header = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json")
+        header_string = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
+        await asyncio.get_running_loop().run_in_executor(
+            None,
+            lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(), header = header_string)
+        )
 
     @staticmethod
     def _download_and_save_image_sync(url:str, directory:str, filename_prefix:str, img_nr:int) -> str | None:
@@ -93,11 +93,13 @@ class AdExtractor(WebScrapingMixin):
             with urllib_request.urlopen(url) as response:  # noqa: S310 Audit URL open for permitted schemes.
                 content_type = response.info().get_content_type()
                 file_ending = mimetypes.guess_extension(content_type) or ""
-                img_path = f"{directory}/{filename_prefix}{img_nr}{file_ending}"
+                # Use pathlib.Path for OS-agnostic path handling
+                img_path = Path(directory) / f"{filename_prefix}{img_nr}{file_ending}"
                 with open(img_path, "wb") as f:
                     shutil.copyfileobj(response, f)
-                return img_path
-        except Exception as e:
+                return str(img_path)
+        except (urllib_error.URLError, urllib_error.HTTPError, OSError, shutil.Error) as e:
+            # Narrow exception handling to expected network/filesystem errors
             LOG.warning("Failed to download image %s: %s", url, e)
             return None
 
@@ -142,7 +144,8 @@ class AdExtractor(WebScrapingMixin):
 
                 if img_path:
                     dl_counter += 1
-                    img_paths.append(img_path.rsplit("/", maxsplit = 1)[-1])
+                    # Use pathlib.Path for OS-agnostic path handling
+                    img_paths.append(Path(img_path).name)
 
                 img_nr += 1
             LOG.info("Downloaded %s.", i18n.pluralize("image", dl_counter))
