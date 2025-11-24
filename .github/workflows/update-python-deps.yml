@@ -49,7 +49,7 @@ jobs:
 
 
     - name: Git Checkout
-      uses: actions/checkout@v5  # https://github.com/actions/checkout
+      uses: actions/checkout@v6  # https://github.com/actions/checkout
       with:
         token: ${{ steps.generate_token.outputs.token }}
 
