@@ -173,7 +173,7 @@ kleinanzeigen_bot/__init__.py:
 kleinanzeigen_bot/extract.py:
 #################################################
   download_ad:
-    "Ensured ads directory exists at ./%s.": "Verzeichnis für Anzeigen sichergestellt unter ./%s."
+    "Ensured ads directory exists at ./%s.": "Verzeichnis [%s] für Anzeige vorhanden."
 
   _download_and_save_image_sync:
     "Failed to download image %s: %s": "Fehler beim Herunterladen des Bildes %s: %s"
