@@ -74,7 +74,7 @@ jobs:
         pdm sync --clean -v
 
 
-    - name: Update Python dependencies 
+    - name: Update Python dependencies
       id: update_deps
       run: |
         set -euo pipefail

@@ -1,0 +1,85 @@
+# SPDX-FileCopyrightText: © Jens Bergmann and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+#
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+#
+# Installation:
+#   pdm install
+#   pdm run hooks:install
+#
+# Manual run (all files):
+#   pdm run hooks:run
+#
+# Update hooks to latest versions:
+#   pdm run hooks:update
+
+repos:
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.patch$
+      - id: end-of-file-fixer
+        exclude: \.patch$
+      - id: check-yaml
+        args: ['--unsafe']  # Allow custom YAML tags
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: mixed-line-ending
+
+  # Python code formatting and linting via PDM
+  - repo: local
+    hooks:
+      # Format Python code
+      - id: format-python
+        name: Format Python code (autopep8)
+        entry: pdm run format:py
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      # Format YAML files
+      - id: format-yaml
+        name: Format YAML files (yamlfix)
+        entry: pdm run format:yaml
+        language: system
+        types: [yaml]
+        pass_filenames: false
+
+      # Lint with ruff
+      - id: lint-ruff
+        name: Lint with ruff
+        entry: pdm run lint:ruff
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      # Type check with mypy
+      - id: lint-mypy
+        name: Type check with mypy
+        entry: pdm run lint:mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      # Type check with basedpyright
+      - id: lint-pyright
+        name: Type check with basedpyright
+        entry: pdm run lint:pyright
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      # Run all tests
+      - id: test-all
+        name: Run all tests (unit + integration + smoke)
+        entry: pdm run test
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]

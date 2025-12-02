@@ -31,7 +31,38 @@ Please read through this document before submitting any contributions to ensure 
 ### Local Setup
 1. Fork and clone the repository
 2. Install dependencies: `pdm install`
-3. Run tests to verify setup: `pdm run test:cov`
+3. Install pre-commit hooks: `pdm run hooks:install`
+4. Run tests to verify setup: `pdm run test:cov`
+
+### Pre-commit Hooks
+
+This project uses **pre-commit hooks** to automatically enforce code quality on every commit. Once installed, the hooks will run automatically before each commit and prevent commits that don't meet quality standards.
+
+**Installation** (one-time setup):
+```bash
+pdm run hooks:install
+```
+
+**What runs on every commit:**
+- Code formatting (autopep8, yamlfix)
+- Linting (ruff, mypy, basedpyright)
+- All tests (unit + integration + smoke)
+
+**Manual execution** (run hooks on all files without committing):
+```bash
+pdm run hooks:run
+```
+
+**Updating hooks** (update to latest versions):
+```bash
+pdm run hooks:update
+```
+
+**Bypassing hooks** (not recommended):
+```bash
+git commit --no-verify
+```
+⚠️ **Warning**: Bypassing hooks is discouraged. CI will still run all checks and fail if quality standards aren't met.
 
 ## Development Notes
 
@@ -55,6 +86,13 @@ This section provides quick reference commands for common development tasks. See
 ## Development Workflow
 
 ### Before Submitting
+
+**If you've installed pre-commit hooks** (recommended - see [Local Setup](#local-setup)):
+- Pre-commit hooks will **automatically** run format, lint, and tests on every commit
+- Just make your changes and commit - the hooks handle quality checks
+- If hooks fail, fix the issues and commit again
+
+**If you haven't installed pre-commit hooks** or want to run checks manually:
 1. **Format your code**: Ensure your code is auto-formatted
    ```bash
    pdm run format
@@ -67,9 +105,11 @@ This section provides quick reference commands for common development tasks. See
    ```bash
    pdm run test
    ```
+
+**Always verify**:
 4. **Check code quality**: Verify your code follows project standards
    - Type hints are complete
-   - Docstrings are present
+   - Docstrings are present for complex functions
    - SPDX headers are included
    - Imports are properly organized
 5. **Test your changes**: Add appropriate tests for new functionality
@@ -258,17 +298,18 @@ Before submitting a pull request, please ensure you:
 
 1. **Work from the latest source on the main branch**
 2. **Create a feature branch** for your changes: `git checkout -b feature/your-feature-name`
-3. **Format your code**: `pdm run format`
-4. **Lint your code**: `pdm run lint`
-5. **Run all tests**: `pdm run test`
-6. **Check code quality**: Type hints, docstrings, SPDX headers, import organization
-7. **Add appropriate tests** for new functionality (smoke/unit/integration as needed)
-8. **Write clear, descriptive commit messages**
-9. **Provide a concise summary and motivation for the change in the PR**
-10. **List all key changes and dependencies**
-11. **Select the correct type(s) of change** (bug fix, feature, breaking change)
-12. **Complete the checklist in the PR template**
-13. **Confirm your contribution can be used under the project license**
+3. **Install pre-commit hooks**: `pdm run hooks:install` (one-time setup - hooks will automatically run on commit)
+4. **Format your code**: `pdm run format` (or let pre-commit hooks do this automatically)
+5. **Lint your code**: `pdm run lint` (or let pre-commit hooks do this automatically)
+6. **Run all tests**: `pdm run test` (or let pre-commit hooks do this automatically)
+7. **Check code quality**: Type hints, docstrings, SPDX headers, import organization
+8. **Add appropriate tests** for new functionality (smoke/unit/integration as needed)
+9. **Write clear, descriptive commit messages**
+10. **Provide a concise summary and motivation for the change in the PR**
+11. **List all key changes and dependencies**
+12. **Select the correct type(s) of change** (bug fix, feature, breaking change)
+13. **Complete the checklist in the PR template**
+14. **Confirm your contribution can be used under the project license**
 
 See the [Pull Request template](.github/PULL_REQUEST_TEMPLATE.md) for the full checklist and required fields.
 

@@ -63,6 +63,7 @@ dev = [
     "platformdirs",
     "types-requests>=2.32.0.20250515",
     "pytest-mock>=3.14.0",
+    "pre-commit",
 ]
 
 [project.urls]
@@ -106,6 +107,11 @@ lint = { composite = ["lint:ruff", "lint:mypy", "lint:pyright"] }
 "lint:mypy"    = "mypy"
 "lint:pyright" = "basedpyright"
 "lint:fix"     = {shell = "ruff check --preview --fix" }
+
+# pre-commit hooks
+"hooks:install" = "pre-commit install"
+"hooks:update"  = "pre-commit autoupdate"
+"hooks:run"     = "pre-commit run --all-files"
 
 # tests
 # Run unit tests only (exclude smoke and itest)
