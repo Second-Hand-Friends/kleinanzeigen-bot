@@ -1856,6 +1856,7 @@ class TestWebScrapingMixinPortRetry:
     ) -> None:
         """Test error handling when browser connection fails."""
         with patch("os.path.exists", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.files.exists", AsyncMock(return_value = True)), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.net.is_port_open", return_value = True), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", side_effect = Exception("Failed to connect as root user")), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.Config") as mock_config_class:
@@ -1875,6 +1876,7 @@ class TestWebScrapingMixinPortRetry:
     ) -> None:
         """Test error handling when browser connection fails with non-root error."""
         with patch("os.path.exists", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.files.exists", AsyncMock(return_value = True)), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.net.is_port_open", return_value = True), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", side_effect = Exception("Connection timeout")), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.Config") as mock_config_class:
@@ -1902,6 +1904,7 @@ class TestWebScrapingMixinPortRetry:
     ) -> None:
         """Test error handling when browser startup fails with root error."""
         with patch("os.path.exists", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.files.exists", AsyncMock(return_value = True)), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", side_effect = Exception("Failed to start as root user")), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.Config") as mock_config_class:
 
@@ -1920,6 +1923,7 @@ class TestWebScrapingMixinPortRetry:
     ) -> None:
         """Test error handling when browser startup fails with non-root error."""
         with patch("os.path.exists", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.files.exists", AsyncMock(return_value = True)), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", side_effect = Exception("Browser binary not found")), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.Config") as mock_config_class:
 
