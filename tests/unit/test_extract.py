@@ -68,81 +68,83 @@ class TestAdExtractorBasics:
         """Test extraction of ad ID from different URL formats."""
         assert test_extractor.extract_ad_id_from_ad_url(url) == expected_id
 
-    def test_path_exists_helper(self, tmp_path:Path) -> None:
-        """Test _path_exists helper function."""
+    @pytest.mark.asyncio
+    async def test_path_exists_helper(self, tmp_path:Path) -> None:
+        """Test files.exists helper function."""
 
-        from kleinanzeigen_bot.extract import _path_exists  # noqa: PLC0415, PLC2701
+        from kleinanzeigen_bot.utils import files  # noqa: PLC0415
 
         # Test with existing path
         existing_file = tmp_path / "test.txt"
         existing_file.write_text("test")
-        assert _path_exists(existing_file) is True
-        assert _path_exists(str(existing_file)) is True
+        assert await files.exists(existing_file) is True
+        assert await files.exists(str(existing_file)) is True
 
         # Test with non-existing path
         non_existing = tmp_path / "nonexistent.txt"
-        assert _path_exists(non_existing) is False
-        assert _path_exists(str(non_existing)) is False
+        assert await files.exists(non_existing) is False
+        assert await files.exists(str(non_existing)) is False
 
-    def test_path_is_dir_helper(self, tmp_path:Path) -> None:
-        """Test _path_is_dir helper function."""
+    @pytest.mark.asyncio
+    async def test_path_is_dir_helper(self, tmp_path:Path) -> None:
+        """Test files.is_dir helper function."""
 
-        from kleinanzeigen_bot.extract import _path_is_dir  # noqa: PLC0415, PLC2701
+        from kleinanzeigen_bot.utils import files  # noqa: PLC0415
 
         # Test with directory
         test_dir = tmp_path / "testdir"
         test_dir.mkdir()
-        assert _path_is_dir(test_dir) is True
-        assert _path_is_dir(str(test_dir)) is True
+        assert await files.is_dir(test_dir) is True
+        assert await files.is_dir(str(test_dir)) is True
 
         # Test with file
         test_file = tmp_path / "test.txt"
         test_file.write_text("test")
-        assert _path_is_dir(test_file) is False
-        assert _path_is_dir(str(test_file)) is False
+        assert await files.is_dir(test_file) is False
+        assert await files.is_dir(str(test_file)) is False
 
         # Test with non-existing path
         non_existing = tmp_path / "nonexistent"
-        assert _path_is_dir(non_existing) is False
-        assert _path_is_dir(str(non_existing)) is False
+        assert await files.is_dir(non_existing) is False
+        assert await files.is_dir(str(non_existing)) is False
 
     @pytest.mark.asyncio
     async def test_exists_async_helper(self, tmp_path:Path) -> None:
-        """Test _exists async helper function."""
-        from kleinanzeigen_bot.extract import _exists  # noqa: PLC0415, PLC2701
+        """Test files.exists async helper function."""
+        from kleinanzeigen_bot.utils import files  # noqa: PLC0415
 
         # Test with existing path
         existing_file = tmp_path / "test.txt"
         existing_file.write_text("test")
-        assert await _exists(existing_file) is True
-        assert await _exists(str(existing_file)) is True
+        assert await files.exists(existing_file) is True
+        assert await files.exists(str(existing_file)) is True
 
         # Test with non-existing path
         non_existing = tmp_path / "nonexistent.txt"
-        assert await _exists(non_existing) is False
-        assert await _exists(str(non_existing)) is False
+        assert await files.exists(non_existing) is False
+        assert await files.exists(str(non_existing)) is False
 
     @pytest.mark.asyncio
     async def test_isdir_async_helper(self, tmp_path:Path) -> None:
-        """Test _isdir async helper function."""
-        from kleinanzeigen_bot.extract import _isdir  # noqa: PLC0415, PLC2701
+        """Test files.is_dir async helper function."""
+        from kleinanzeigen_bot.utils import files  # noqa: PLC0415
 
         # Test with directory
         test_dir = tmp_path / "testdir"
         test_dir.mkdir()
-        assert await _isdir(test_dir) is True
-        assert await _isdir(str(test_dir)) is True
+        assert await files.is_dir(test_dir) is True
+        assert await files.is_dir(str(test_dir)) is True
 
         # Test with file
         test_file = tmp_path / "test.txt"
         test_file.write_text("test")
-        assert await _isdir(test_file) is False
-        assert await _isdir(str(test_file)) is False
+        assert await files.is_dir(test_file) is False
+        assert await files.is_dir(str(test_file)) is False
 
         # Test with non-existing path
         non_existing = tmp_path / "nonexistent"
-        assert await _isdir(non_existing) is False
-        assert await _isdir(str(non_existing)) is False
+        assert await files.is_dir(non_existing) is False
+        assert await files.is_dir(str(non_existing)) is False
 
     def test_download_and_save_image_sync_success(self, tmp_path:Path) -> None:
         """Test _download_and_save_image_sync with successful download."""

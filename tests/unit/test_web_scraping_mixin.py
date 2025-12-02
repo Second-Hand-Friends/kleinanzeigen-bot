@@ -7,7 +7,6 @@ Copyright (c) 2024, kleinanzeigen-bot contributors.
 All rights reserved.
 """
 
-import asyncio
 import json
 import logging
 import os
@@ -26,7 +25,7 @@ from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
 
 from kleinanzeigen_bot.model.config_model import Config
-from kleinanzeigen_bot.utils import loggers
+from kleinanzeigen_bot.utils import files, loggers
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is, WebScrapingMixin, _is_admin  # noqa: PLC2701
 
 
@@ -753,7 +752,7 @@ class TestWebScrapingBrowserConfiguration:
         chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
         real_exists = os.path.exists
 
-        def mock_exists(path:str) -> bool:
+        def mock_exists_sync(path:str) -> bool:
             # Handle all browser paths
             if path in {
                 # Linux paths
@@ -779,7 +778,12 @@ class TestWebScrapingBrowserConfiguration:
             if "Preferences" in str(path) and str(tmp_path) in str(path):
                 return real_exists(path)
             return False
-        monkeypatch.setattr(os.path, "exists", mock_exists)
+
+        async def mock_exists_async(path:str | Path) -> bool:
+            return mock_exists_sync(str(path))
+
+        monkeypatch.setattr(os.path, "exists", mock_exists_sync)
+        monkeypatch.setattr(files, "exists", mock_exists_async)
 
         # Create test profile directory
         profile_dir = tmp_path / "Default"
@@ -836,6 +840,10 @@ class TestWebScrapingBrowserConfiguration:
 
         # Mock os.path.exists to return True for both Chrome and Edge paths
         monkeypatch.setattr(os.path, "exists", lambda p: p in {"/usr/bin/chrome", "/usr/bin/edge"})
+
+        async def mock_exists_async(path:str | Path) -> bool:
+            return str(path) in {"/usr/bin/chrome", "/usr/bin/edge"}
+        monkeypatch.setattr(files, "exists", mock_exists_async)
 
         # Test with custom arguments
         scraper = WebScrapingMixin()
@@ -897,27 +905,41 @@ class TestWebScrapingBrowserConfiguration:
         # Mock Config class
         monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
 
-        # Mock os.path.exists to return True for browser binaries and extension files, real_exists for others
-        real_exists = os.path.exists
-        monkeypatch.setattr(
-            os.path,
-            "exists",
-            lambda p: p in {"/usr/bin/chrome", "/usr/bin/edge", str(ext1), str(ext2)} or real_exists(p),
-        )
+        # Mock files.exists and files.is_dir to return appropriate values
+        async def mock_exists(path:str | Path) -> bool:
+            path_str = str(path)
+            # Resolve real paths to handle symlinks (e.g., /var -> /private/var on macOS)
+            real_path = str(Path(path_str).resolve())  # noqa: ASYNC240 Test mock, runs synchronously
+            real_ext1 = str(Path(ext1).resolve())  # noqa: ASYNC240 Test mock, runs synchronously
+            real_ext2 = str(Path(ext2).resolve())  # noqa: ASYNC240 Test mock, runs synchronously
+            return path_str in {"/usr/bin/chrome", "/usr/bin/edge"} or real_path in {real_ext1, real_ext2} or os.path.exists(path_str)  # noqa: ASYNC240
+
+        async def mock_is_dir(path:str | Path) -> bool:
+            path_str = str(path)
+            # Resolve real paths to handle symlinks
+            real_path = str(Path(path_str).resolve())  # noqa: ASYNC240 Test mock, runs synchronously
+            real_ext1 = str(Path(ext1).resolve())  # noqa: ASYNC240 Test mock, runs synchronously
+            real_ext2 = str(Path(ext2).resolve())  # noqa: ASYNC240 Test mock, runs synchronously
+            # Nodriver extracts CRX files to temp directories, so they appear as directories
+            if real_path in {real_ext1, real_ext2}:
+                return True
+            return Path(path_str).is_dir()  # noqa: ASYNC240 Test mock, runs synchronously
+
+        monkeypatch.setattr(files, "exists", mock_exists)
+        monkeypatch.setattr(files, "is_dir", mock_is_dir)
 
         # Test extension loading
         scraper = WebScrapingMixin()
         scraper.browser_config.extensions = [str(ext1), str(ext2)]
         scraper.browser_config.binary_location = "/usr/bin/chrome"
-        # Removed monkeypatch for os.path.exists so extension files are detected
         await scraper.create_browser_session()
 
         # Verify extensions were loaded
         config = _nodriver_start_mock().call_args[0][0]
         assert len(config._extensions) == 2
         for ext_path in config._extensions:
-            assert await asyncio.get_running_loop().run_in_executor(None, Path(ext_path).exists)
-            assert await asyncio.get_running_loop().run_in_executor(None, Path(ext_path).is_dir)
+            assert await files.exists(ext_path)
+            assert await files.is_dir(ext_path)
 
         # Test with non-existent extension
         scraper.browser_config.extensions = ["non_existent.crx"]

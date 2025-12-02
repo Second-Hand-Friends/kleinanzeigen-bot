@@ -22,7 +22,7 @@ from nodriver.core.tab import Tab as Page
 from kleinanzeigen_bot.model.config_model import Config as BotConfig
 from kleinanzeigen_bot.model.config_model import TimeoutConfig
 
-from . import loggers, net
+from . import files, loggers, net
 from .chrome_version_detector import (
     ChromeVersionInfo,
     detect_chrome_version_from_binary,
@@ -131,10 +131,6 @@ def _write_initial_prefs(prefs_file:str) -> None:
         }, fd)
 
 
-async def _exists(path:str) -> bool:
-    return await asyncio.get_running_loop().run_in_executor(None, os.path.exists, path)
-
-
 class WebScrapingMixin:
 
     def __init__(self) -> None:
@@ -209,7 +205,7 @@ class WebScrapingMixin:
         LOG.info("Creating Browser session...")
 
         if self.browser_config.binary_location:
-            ensure(await _exists(self.browser_config.binary_location), f"Specified browser binary [{self.browser_config.binary_location}] does not exist.")
+            ensure(await files.exists(self.browser_config.binary_location), f"Specified browser binary [{self.browser_config.binary_location}] does not exist.")
         else:
             self.browser_config.binary_location = self.get_compatible_browser()
         LOG.info(" -> Browser binary location: %s", self.browser_config.binary_location)
@@ -324,14 +320,14 @@ class WebScrapingMixin:
             profile_dir = os.path.join(cfg.user_data_dir, self.browser_config.profile_name or "Default")
             os.makedirs(profile_dir, exist_ok = True)
             prefs_file = os.path.join(profile_dir, "Preferences")
-            if not await _exists(prefs_file):
+            if not await files.exists(prefs_file):
                 LOG.info(" -> Setting chrome prefs [%s]...", prefs_file)
                 await asyncio.get_running_loop().run_in_executor(None, _write_initial_prefs, prefs_file)
 
         # load extensions
         for crx_extension in self.browser_config.extensions:
             LOG.info(" -> Adding Browser extension: [%s]", crx_extension)
-            ensure(await _exists(crx_extension), f"Configured extension-file [{crx_extension}] does not exist.")
+            ensure(await files.exists(crx_extension), f"Configured extension-file [{crx_extension}] does not exist.")
             cfg.add_extension(crx_extension)
 
         try:

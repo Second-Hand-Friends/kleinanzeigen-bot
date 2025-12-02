@@ -15,7 +15,7 @@ from kleinanzeigen_bot.model.ad_model import ContactPartial
 
 from .model.ad_model import AdPartial
 from .model.config_model import Config
-from .utils import dicts, i18n, loggers, misc, reflect
+from .utils import dicts, files, i18n, loggers, misc, reflect
 from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
 
 __all__ = [
@@ -26,28 +26,6 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 _BREADCRUMB_MIN_DEPTH:Final[int] = 2
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
-
-
-def _path_exists(path:Path | str) -> bool:
-    """Helper for Path.exists() that can be mocked in tests."""
-    return Path(path).exists()
-
-
-def _path_is_dir(path:Path | str) -> bool:
-    """Helper for Path.is_dir() that can be mocked in tests."""
-    return Path(path).is_dir()
-
-
-async def _exists(path:Path | str) -> bool:
-    result = await asyncio.get_running_loop().run_in_executor(None, _path_exists, path)
-    LOG.debug("Path exists check: %s -> %s", path, result)
-    return result
-
-
-async def _isdir(path:Path | str) -> bool:
-    result = await asyncio.get_running_loop().run_in_executor(None, _path_is_dir, path)
-    LOG.debug("Path is_dir check: %s -> %s", path, result)
-    return result
 
 
 class AdExtractor(WebScrapingMixin):
@@ -427,13 +405,13 @@ class AdExtractor(WebScrapingMixin):
         loop = asyncio.get_running_loop()
 
         # Handle existing directories
-        if await _exists(final_dir):
+        if await files.exists(final_dir):
             # If the folder with title already exists, delete it
             LOG.info("Deleting current folder of ad %s...", ad_id)
             LOG.debug("Removing directory tree: %s", final_dir)
             await loop.run_in_executor(None, shutil.rmtree, str(final_dir))
 
-        if await _exists(temp_dir):
+        if await files.exists(temp_dir):
             if self.config.download.rename_existing_folders:
                 # Rename the old folder to the new name with title
                 LOG.info("Renaming folder from %s to %s for ad %s...",
