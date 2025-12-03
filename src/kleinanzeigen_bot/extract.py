@@ -466,7 +466,9 @@ class AdExtractor(WebScrapingMixin):
         """
 
         # e.g. "art_s:lautsprecher_kopfhoerer|condition_s:like_new|versand_s:t"
-        special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"]["dimension108"]
+        special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"].get("dimension108")
+        if not special_attributes_str:
+            return {}
         special_attributes = dict(item.split(":") for item in special_attributes_str.split("|") if ":" in item)
         special_attributes = {k: v for k, v in special_attributes.items() if not k.endswith(".versand_s") and k != "versand_s"}
         return special_attributes
