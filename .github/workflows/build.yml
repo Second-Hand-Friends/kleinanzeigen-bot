@@ -107,7 +107,7 @@ jobs:
 
 
     - name: Git Checkout
-      uses: actions/checkout@v5  # https://github.com/actions/checkout
+      uses: actions/checkout@v6  # https://github.com/actions/checkout
 
 
     - name: "Install: Chromium Browser"
@@ -294,7 +294,7 @@ jobs:
 
     steps:
     - name: Git Checkout # required to avoid https://docs.codecov.com/docs/error-reference#unusable-reports
-      uses: actions/checkout@v5  # https://github.com/actions/checkout
+      uses: actions/checkout@v6  # https://github.com/actions/checkout
 
 
     - name: Download coverage reports
@@ -383,7 +383,7 @@ jobs:
 
     - name: Git Checkout
       # only required by "gh release create" to prevent "fatal: Not a git repository"
-      uses: actions/checkout@v5  # https://github.com/actions/checkout
+      uses: actions/checkout@v6  # https://github.com/actions/checkout
 
 
     - name: Delete untagged docker image
