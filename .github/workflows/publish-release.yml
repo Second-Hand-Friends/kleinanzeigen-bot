@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot
+#
+# https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
+name: Publish Release
+
+on:
+  workflow_dispatch:
+    # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows
+
+
+defaults:
+  run:
+    shell: bash
+
+
+jobs:
+
+  ###########################################################
+  publish-release:
+  ###########################################################
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: write
+
+    steps:
+    - name: "Show: GitHub context"
+      env:
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
+      run: echo $GITHUB_CONTEXT
+
+
+    - name: "Show: environment variables"
+      run: env | sort
+
+
+    - name: Git Checkout
+      uses: actions/checkout@v5  # https://github.com/actions/checkout
+      with:
+        ref: main
+
+
+    - name: Push main to release branch
+      run: |
+        set -eux
+
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        # Push current main state to release branch to trigger release creation
+        git push origin HEAD:release

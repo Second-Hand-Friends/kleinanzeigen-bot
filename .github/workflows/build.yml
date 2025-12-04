@@ -12,6 +12,7 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
   push:
     branches:
     - main
+    - release
     tags-ignore:  # don't build tags
     - '**'
     paths-ignore:
@@ -22,6 +23,7 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
     - '.github/*.yml'
     - '.github/ISSUE_TEMPLATE/*'
     - '.github/workflows/codeql-analysis.yml'
+    - '.github/workflows/publish-release.yml'
     - '.github/workflows/stale.yml'
     - '.github/workflows/update-python-deps.yml'
     - '.github/workflows/validate-pr.yml'
@@ -35,6 +37,7 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
     - '.github/*.yml'
     - '.github/ISSUE_TEMPLATE/*'
     - '.github/workflows/codeql-analysis.yml'
+    - '.github/workflows/publish-release.yml'
     - '.github/workflows/stale.yml'
     - '.github/workflows/update-python-deps.yml'
     - '.github/workflows/validate-pr.yml'
