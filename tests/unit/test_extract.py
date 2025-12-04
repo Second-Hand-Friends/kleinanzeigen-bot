@@ -754,6 +754,20 @@ class TestAdExtractorCategory:
         assert "art_s" in result
         assert result["art_s"] == "maedchen"
 
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_missing_dimension108(self, extractor:AdExtractor) -> None:
+        """Test extraction of special attributes when dimension108 key is missing."""
+        belen_conf:dict[str, Any] = {
+            "universalAnalyticsOpts": {
+                "dimensions": {
+                    # dimension108 key is completely missing
+                }
+            }
+        }
+        result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
+        assert result == {}
+
 
 class TestAdExtractorContact:
     """Tests for contact information extraction."""
