@@ -163,6 +163,10 @@ jobs:
       run: pdm run basedpyright
 
 
+    - name: Verify pre-commit hooks work
+      run: SKIP=test-all,lint-mypy,lint-pyright pdm run pre-commit run --all-files
+
+
     - name: Run unit tests
       run: pdm run utest:cov -vv
 
