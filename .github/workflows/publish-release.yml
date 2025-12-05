@@ -50,5 +50,9 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+        # Fetch and merge remote release branch before pushing
+        git fetch origin release || true
+        git merge origin/release --no-edit || true
+
         # Push current main state to release branch to trigger release creation
         git push origin HEAD:release
