@@ -641,12 +641,11 @@ class TestKleinanzeigenBotCommands:
     async def test_verify_command(self, test_bot:KleinanzeigenBot, tmp_path:Any) -> None:
         """Test verify command with minimal config."""
         config_path = Path(tmp_path) / "config.yaml"
-        with open(config_path, "w", encoding = "utf-8") as f:
-            f.write("""
+        config_path.write_text("""
 login:
     username: test
     password: test
-""")
+""", encoding = "utf-8")
         test_bot.config_file_path = str(config_path)
         await test_bot.run(["script.py", "verify"])
         assert test_bot.config.login.username == "test"

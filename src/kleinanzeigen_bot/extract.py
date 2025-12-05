@@ -1,18 +1,21 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import asyncio
 from gettext import gettext as _
 
-import json, mimetypes, os, re, shutil  # isort: skip
+import json, mimetypes, re, shutil  # isort: skip
+import urllib.error as urllib_error
 import urllib.request as urllib_request
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Final
 
 from kleinanzeigen_bot.model.ad_model import ContactPartial
 
 from .model.ad_model import AdPartial
 from .model.config_model import Config
-from .utils import dicts, i18n, loggers, misc, reflect
+from .utils import dicts, files, i18n, loggers, misc, reflect
 from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
 
 __all__ = [
@@ -44,23 +47,39 @@ class AdExtractor(WebScrapingMixin):
         """
 
         # create sub-directory for ad(s) to download (if necessary):
-        relative_directory = "downloaded-ads"
-        # make sure configured base directory exists
-        if not os.path.exists(relative_directory) or not os.path.isdir(relative_directory):
-            os.mkdir(relative_directory)
-            LOG.info("Created ads directory at ./%s.", relative_directory)
+        relative_directory = Path("downloaded-ads")
+        # make sure configured base directory exists (using exist_ok=True to avoid TOCTOU race)
+        await asyncio.get_running_loop().run_in_executor(None, lambda: relative_directory.mkdir(exist_ok = True))  # noqa: ASYNC240
+        LOG.info("Ensured ads directory exists at ./%s.", relative_directory)
 
         # Extract ad info and determine final directory path
         ad_cfg, final_dir = await self._extract_ad_page_info_with_directory_handling(
             relative_directory, ad_id
         )
 
-        # Save the ad configuration file
-        ad_file_path = final_dir + "/" + f"ad_{ad_id}.yaml"
-        dicts.save_dict(
-            ad_file_path,
-            ad_cfg.model_dump(),
-            header = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json")
+        # Save the ad configuration file (offload to executor to avoid blocking the event loop)
+        ad_file_path = str(Path(final_dir) / f"ad_{ad_id}.yaml")
+        header_string = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
+        await asyncio.get_running_loop().run_in_executor(
+            None,
+            lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(), header = header_string)
+        )
+
+    @staticmethod
+    def _download_and_save_image_sync(url:str, directory:str, filename_prefix:str, img_nr:int) -> str | None:
+        try:
+            with urllib_request.urlopen(url) as response:  # noqa: S310 Audit URL open for permitted schemes.
+                content_type = response.info().get_content_type()
+                file_ending = mimetypes.guess_extension(content_type) or ""
+                # Use pathlib.Path for OS-agnostic path handling
+                img_path = Path(directory) / f"{filename_prefix}{img_nr}{file_ending}"
+                with open(img_path, "wb") as f:
+                    shutil.copyfileobj(response, f)
+                return str(img_path)
+        except (urllib_error.URLError, urllib_error.HTTPError, OSError, shutil.Error) as e:
+            # Narrow exception handling to expected network/filesystem errors
+            LOG.warning("Failed to download image %s: %s", url, e)
+            return None
 
     async def _download_images_from_ad_page(self, directory:str, ad_id:int) -> list[str]:
         """
@@ -85,19 +104,26 @@ class AdExtractor(WebScrapingMixin):
             img_nr = 1
             dl_counter = 0
 
+            loop = asyncio.get_running_loop()
+
             for img_element in images:
                 current_img_url = img_element.attrs["src"]  # URL of the image
                 if current_img_url is None:
                     continue
 
-                with urllib_request.urlopen(str(current_img_url)) as response:  # noqa: S310 Audit URL open for permitted schemes.
-                    content_type = response.info().get_content_type()
-                    file_ending = mimetypes.guess_extension(content_type)
-                    img_path = f"{directory}/{img_fn_prefix}{img_nr}{file_ending}"
-                    with open(img_path, "wb") as f:
-                        shutil.copyfileobj(response, f)
+                img_path = await loop.run_in_executor(
+                    None,
+                    self._download_and_save_image_sync,
+                    str(current_img_url),
+                    directory,
+                    img_fn_prefix,
+                    img_nr
+                )
+
+                if img_path:
                     dl_counter += 1
-                    img_paths.append(img_path.rsplit("/", maxsplit = 1)[-1])
+                    # Use pathlib.Path for OS-agnostic path handling
+                    img_paths.append(Path(img_path).name)
 
                 img_nr += 1
             LOG.info("Downloaded %s.", i18n.pluralize("image", dl_counter))
@@ -354,8 +380,8 @@ class AdExtractor(WebScrapingMixin):
         return ad_cfg
 
     async def _extract_ad_page_info_with_directory_handling(
-        self, relative_directory:str, ad_id:int
-    ) -> tuple[AdPartial, str]:
+        self, relative_directory:Path, ad_id:int
+    ) -> tuple[AdPartial, Path]:
         """
         Extracts ad information and handles directory creation/renaming.
 
@@ -373,32 +399,37 @@ class AdExtractor(WebScrapingMixin):
 
         # Determine the final directory path
         sanitized_title = misc.sanitize_folder_name(title, self.config.download.folder_name_max_length)
-        final_dir = os.path.join(relative_directory, f"ad_{ad_id}_{sanitized_title}")
-        temp_dir = os.path.join(relative_directory, f"ad_{ad_id}")
+        final_dir = relative_directory / f"ad_{ad_id}_{sanitized_title}"
+        temp_dir = relative_directory / f"ad_{ad_id}"
+
+        loop = asyncio.get_running_loop()
 
         # Handle existing directories
-        if os.path.exists(final_dir):
+        if await files.exists(final_dir):
             # If the folder with title already exists, delete it
             LOG.info("Deleting current folder of ad %s...", ad_id)
-            shutil.rmtree(final_dir)
+            LOG.debug("Removing directory tree: %s", final_dir)
+            await loop.run_in_executor(None, shutil.rmtree, str(final_dir))
 
-        if os.path.exists(temp_dir):
+        if await files.exists(temp_dir):
             if self.config.download.rename_existing_folders:
                 # Rename the old folder to the new name with title
                 LOG.info("Renaming folder from %s to %s for ad %s...",
-                        os.path.basename(temp_dir), os.path.basename(final_dir), ad_id)
-                os.rename(temp_dir, final_dir)
+                        temp_dir.name, final_dir.name, ad_id)
+                LOG.debug("Renaming: %s -> %s", temp_dir, final_dir)
+                await loop.run_in_executor(None, temp_dir.rename, final_dir)
             else:
                 # Use the existing folder without renaming
                 final_dir = temp_dir
                 LOG.info("Using existing folder for ad %s at %s.", ad_id, final_dir)
         else:
             # Create new directory with title
-            os.mkdir(final_dir)
+            LOG.debug("Creating new directory: %s", final_dir)
+            await loop.run_in_executor(None, final_dir.mkdir)
             LOG.info("New directory for ad created at %s.", final_dir)
 
         # Now extract complete ad info (including images) to the final directory
-        ad_cfg = await self._extract_ad_page_info(final_dir, ad_id)
+        ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id)
 
         return ad_cfg, final_dir
 

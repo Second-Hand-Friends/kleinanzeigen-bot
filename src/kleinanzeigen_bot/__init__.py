@@ -937,7 +937,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.warning("# Payment form detected! Please proceed with payment.")
             LOG.warning("############################################")
             await self.web_scroll_page_down()
-            input(_("Press a key to continue..."))
+            await ainput(_("Press a key to continue..."))
         except TimeoutError:
             pass
 
@@ -1108,7 +1108,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     # in some categories we need to go another dialog back
                     try:
                         await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]',
-                                            timeout=short_timeout)
+                                            timeout = short_timeout)
                     except TimeoutError:
                         await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
 
