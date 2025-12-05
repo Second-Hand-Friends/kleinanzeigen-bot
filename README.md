@@ -24,8 +24,15 @@ For details on the new smoke test strategy and contributor guidance, see [TESTIN
 
 ## <a name="about"></a>About
 
-**kleinanzeigen-bot** is a console-based application to simplify the process of publishing ads on kleinanzeigen.de.
-It is a spiritual successor to [Second-Hand-Friends/ebayKleinanzeigen](https://github.com/Second-Hand-Friends/ebayKleinanzeigen).
+**kleinanzeigen-bot** is a command-line application to **publish, update, delete, and republish listings** on kleinanzeigen.de.
+
+### Key Features
+- **Automated Publishing**: Publish new listings from YAML/JSON configuration files
+- **Smart Republishing**: Automatically republish listings at configurable intervals to keep them at the top of search results
+- **Bulk Management**: Update or delete multiple listings at once
+- **Download Listings**: Download existing listings from your profile to local configuration files
+- **Browser Automation**: Uses Chromium-based browsers (Chrome, Edge, Chromium) for reliable automation
+- **Flexible Configuration**: Configure defaults once, override per listing as needed
 
 ### ⚠️ Legal Disclaimer
 
@@ -261,7 +268,7 @@ ad_defaults:
 
   price_type: NEGOTIABLE # one of: FIXED, NEGOTIABLE, GIVE_AWAY, NOT_APPLICABLE
   shipping_type: SHIPPING # one of: PICKUP, SHIPPING, NOT_APPLICABLE
-  shipping_costs: # e.g. 2.95
+  # NOTE: shipping_costs and shipping_options must be configured per-ad, not as defaults
   sell_directly: false # requires shipping_options to take effect
   contact:
     name: ""
