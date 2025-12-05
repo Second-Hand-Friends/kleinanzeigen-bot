@@ -121,10 +121,12 @@ kleinanzeigen_bot/__init__.py:
     "Setting special attribute [%s] to [%s]...": "Setze spezielles Attribut [%s] auf [%s]..."
     "Successfully set attribute field [%s] to [%s]...": "Attributfeld [%s] erfolgreich auf [%s] gesetzt..."
     "Attribute field '%s' could not be found.": "Attributfeld '%s' konnte nicht gefunden werden."
+    "Failed to set attribute '%s'": "Fehler beim Setzen des Attributs '%s'"
     "Attribute field '%s' seems to be a select...": "Attributfeld '%s' scheint ein Auswahlfeld zu sein..."
-    "Attribute field '%s' is not of kind radio button.": "Attributfeld '%s' ist kein Radiobutton."
+    "Failed to set attribute field '%s' via known input types.": "Fehler beim Setzen des Attributfelds '%s' über bekannte Eingabetypen."
     "Attribute field '%s' seems to be a checkbox...": "Attributfeld '%s' scheint eine Checkbox zu sein..."
     "Attribute field '%s' seems to be a text input...": "Attributfeld '%s' scheint ein Texteingabefeld zu sein..."
+    "Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...": "Attributfeld '%s' scheint eine Combobox zu sein (d.h. Texteingabefeld mit Dropdown-Filter)..."
 
   download_ads:
     "Scanning your ad overview...": "Scanne Anzeigenübersicht..."
@@ -402,6 +404,14 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
 
   web_check:
     "Unsupported attribute: %s": "Nicht unterstütztes Attribut: %s"
+
+  web_select:
+    "Option not found by value or displayed text: %s": "Option nicht gefunden nach Wert oder angezeigtem Text: %s"
+
+  web_select_combobox:
+    "Combobox input field does not have 'aria-controls' attribute.": "Das Eingabefeld der Combobox hat kein 'aria-controls'-Attribut."
+    "Combobox missing aria-controls attribute": "Combobox fehlt aria-controls Attribut"
+    "No matching option found in combobox: '%s'": "Keine passende Option in Combobox gefunden: '%s'"
 
   close_browser_session:
     "Closing Browser session...": "Schließe Browser-Sitzung..."

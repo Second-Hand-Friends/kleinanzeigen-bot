@@ -191,6 +191,119 @@ class TestWebScrapingErrorHandling:
             await web_scraper.web_input(By.ID, "test-id", "test text")
 
     @pytest.mark.asyncio
+    async def test_web_select_combobox_missing_dropdown_options(self, web_scraper:WebScrapingMixin) -> None:
+        """Test combobox selection when aria-controls attribute is missing."""
+        input_field = AsyncMock(spec = Element)
+        input_field.attrs = {}
+        input_field.clear_input = AsyncMock()
+        input_field.send_keys = AsyncMock()
+        web_scraper.web_find = AsyncMock(return_value = input_field)  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        with pytest.raises(TimeoutError, match = "Combobox missing aria-controls attribute"):
+            await web_scraper.web_select_combobox(By.ID, "combo-id", "Option", timeout = 0.1)
+
+        input_field.clear_input.assert_awaited_once()
+        input_field.send_keys.assert_awaited_once_with("Option")
+        assert web_scraper.web_sleep.await_count == 1  # Only one sleep before checking aria-controls
+
+    @pytest.mark.asyncio
+    async def test_web_select_combobox_selects_matching_option(self, web_scraper:WebScrapingMixin) -> None:
+        """Test combobox selection matches a visible <li> option."""
+        input_field = AsyncMock(spec = Element)
+        input_field.attrs = {"aria-controls": "dropdown-id"}
+        input_field.clear_input = AsyncMock()
+        input_field.send_keys = AsyncMock()
+
+        dropdown_elem = AsyncMock(spec = Element)
+        dropdown_elem.apply = AsyncMock(return_value = True)
+
+        web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        result = await web_scraper.web_select_combobox(By.ID, "combo-id", "Visible Label")
+
+        assert result is dropdown_elem
+        input_field.clear_input.assert_awaited_once()
+        input_field.send_keys.assert_awaited_once_with("Visible Label")
+        dropdown_elem.apply.assert_awaited_once()
+        assert web_scraper.web_sleep.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_web_select_combobox_no_matching_option_raises(self, web_scraper:WebScrapingMixin) -> None:
+        """Test combobox selection raises when no <li> matches the entered text."""
+        input_field = AsyncMock(spec = Element)
+        input_field.attrs = {"aria-controls": "dropdown-id"}
+        input_field.clear_input = AsyncMock()
+        input_field.send_keys = AsyncMock()
+
+        dropdown_elem = AsyncMock(spec = Element)
+        dropdown_elem.apply = AsyncMock(return_value = False)
+
+        web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        with pytest.raises(TimeoutError, match = "No matching option found in combobox"):
+            await web_scraper.web_select_combobox(By.ID, "combo-id", "Missing Label")
+
+        dropdown_elem.apply.assert_awaited_once()
+        assert web_scraper.web_sleep.await_count == 1  # One sleep after typing, error before second sleep
+
+    @pytest.mark.asyncio
+    async def test_web_select_combobox_special_characters(self, web_scraper:WebScrapingMixin) -> None:
+        """Test combobox selection with special characters (quotes, newlines, etc)."""
+        input_field = AsyncMock(spec = Element)
+        input_field.attrs = {"aria-controls": "dropdown-id"}
+        input_field.clear_input = AsyncMock()
+        input_field.send_keys = AsyncMock()
+
+        dropdown_elem = AsyncMock(spec = Element)
+        dropdown_elem.apply = AsyncMock(return_value = True)
+
+        web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        # Test with quotes, backslashes, and newlines
+        special_value = 'Value with "quotes" and \\ backslash'
+        result = await web_scraper.web_select_combobox(By.ID, "combo-id", special_value)
+
+        assert result is dropdown_elem
+        input_field.send_keys.assert_awaited_once_with(special_value)
+        # Verify that the JavaScript received properly escaped value
+        call_args = dropdown_elem.apply.call_args[0][0]
+        assert '"quotes"' in call_args or r'\"quotes\"' in call_args  # JSON escaping should handle quotes
+
+    @pytest.mark.asyncio
+    async def test_web_select_by_value(self, web_scraper:WebScrapingMixin) -> None:
+        """Test web_select successfully matches by option value."""
+        select_elem = AsyncMock(spec = Element)
+        select_elem.apply = AsyncMock()
+
+        web_scraper.web_check = AsyncMock(return_value = True)  # type: ignore[method-assign]
+        web_scraper.web_await = AsyncMock(return_value = True)  # type: ignore[method-assign]
+        web_scraper.web_find = AsyncMock(return_value = select_elem)  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        result = await web_scraper.web_select(By.ID, "select-id", "option-value")
+
+        assert result is select_elem
+        select_elem.apply.assert_awaited_once()
+        web_scraper.web_sleep.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_web_select_raises_on_missing_option(self, web_scraper:WebScrapingMixin) -> None:
+        """Test web_select raises TimeoutError when option not found."""
+        select_elem = AsyncMock(spec = Element)
+        # Simulate JS throwing an error when option not found
+        select_elem.apply = AsyncMock(side_effect = Exception("Option not found by value or displayed text: missing"))
+
+        web_scraper.web_check = AsyncMock(return_value = True)  # type: ignore[method-assign]
+        web_scraper.web_await = AsyncMock(return_value = True)  # type: ignore[method-assign]
+        web_scraper.web_find = AsyncMock(return_value = select_elem)  # type: ignore[method-assign]
+
+        with pytest.raises(TimeoutError, match = "Option not found by value or displayed text"):
+            await web_scraper.web_select(By.ID, "select-id", "missing-option")
+
     async def test_web_input_success_returns_element(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
         """Successful web_input should send keys, wait, and return the element."""
         mock_element = AsyncMock(spec = Element)

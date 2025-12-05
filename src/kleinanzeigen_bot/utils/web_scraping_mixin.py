@@ -969,22 +969,109 @@ class WebScrapingMixin:
             lambda: self.web_check(selector_type, selector_value, Is.CLICKABLE), timeout = timeout,
             timeout_error_message = f"No clickable HTML element with selector: {selector_type}='{selector_value}' found"
         )
-        elem = await self.web_find(selector_type, selector_value)
-        await elem.apply(f"""
-            function (element) {{
-              for(let i=0; i < element.options.length; i++)
-                {{
-                  if(element.options[i].value == "{selected_value}") {{
-                    element.selectedIndex = i;
-                    element.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                    break;
+        elem = await self.web_find(selector_type, selector_value, timeout = timeout)
+
+        js_value = json.dumps(selected_value)  # safe escaping for JS
+        try:
+            await elem.apply(f"""
+                function (element) {{
+                    const wanted = String({js_value});
+
+                    // 1) Try by value
+                    for (let i = 0; i < element.options.length; i++) {{
+                        if (element.options[i].value === wanted) {{
+                            element.selectedIndex = i;
+                            element.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            return;
+                        }}
+                    }}
+
+                    // 2) Fallback by displayed text (trimmed)
+                    const needle = wanted.trim();
+                    for (let i = 0; i < element.options.length; i++) {{
+                        const opt = element.options[i];
+                        const shown = (opt.label ?? opt.text ?? opt.textContent ?? '').trim();
+                        if (shown === needle) {{
+                            element.selectedIndex = i;
+                            element.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            return;
+                        }}
+                    }}
+
+                    throw new Error("Option not found by value or displayed text: " + wanted);
                 }}
-              }}
-              throw new Error("Option with value {selected_value} not found.");
-            }}
-        """)
+            """)
+        except Exception as ex:
+            # Normalize selection failures to TimeoutError
+            raise TimeoutError(_("Option not found by value or displayed text: %s") % selected_value) from ex
         await self.web_sleep()
         return elem
+
+    async def web_select_combobox(self, selector_type:By, selector_value:str, selected_value:str | int, timeout:int | float | None = None) -> Element:
+        """
+        Selects an option from a text-input combobox by typing the given value to
+        filter the dropdown and clicking the first <li> whose visible text matches.
+        Returns the dropdown <ul> element on success.
+
+        :param timeout: timeout in seconds
+        :raises TimeoutError: when the input or matching dropdown option cannot be located
+        """
+        if timeout is None:
+            timeout = self._timeout("default")
+
+        input_field = await self.web_find(selector_type, selector_value, timeout = timeout)
+        await input_field.clear_input()
+        await input_field.send_keys(str(selected_value))
+        await self.web_sleep()
+
+        # From the Inputfield, get the attribute "aria-controls" which POINTS to the Dropdown ul #id:
+        dropdown_id = input_field.attrs.get("aria-controls")
+        if not dropdown_id:
+            LOG.error(_("Combobox input field does not have 'aria-controls' attribute."))
+            raise TimeoutError(_("Combobox missing aria-controls attribute"))
+
+        dropdown_elem = await self.web_find(By.ID, dropdown_id, timeout = timeout)
+        js_value = json.dumps(selected_value)  # safe escaping for JS
+
+        # This selects the correct <li> by visible text inside the dropdown. It includes normalization, i.e. trimming
+        # leading/trailing spaces and collapsing multiple spaces to single spaces for matching. It is done case-insensitive.
+        ok = await dropdown_elem.apply(f"""
+        function (element) {{
+          const selected = String({js_value});
+          const normalize = s => (s ?? '').replace(/\\s+/g, ' ').trim().toLowerCase();
+          // Normalize whitespace and convert to lowercase for comparison
+
+          // Get all <li> elements inside the dropdown
+          const items = element.querySelectorAll(':scope > li[role="option"], :scope > li');
+
+          for (const li of items) {{
+            // The visible label is typically inside the last <span>
+            const labelEl = li.querySelector(':scope > span:last-of-type');
+            const label = normalize(labelEl ? labelEl.textContent : li.textContent);
+
+            // Compare normalized lowercase values
+            if (label === normalize(selected)) {{
+              // Scroll to make sure the element is visible
+              try {{
+                li.scrollIntoView({{block: 'nearest'}});
+              }} catch (e) {{}}
+
+              // Click the matched element
+              li.click();
+              return true;
+            }}
+          }}
+
+          // Return false if no matching item was found
+          return false;
+        }}
+        """)
+        if not ok:
+            LOG.error(_("No matching option found in combobox: '%s'"), selected_value)
+            raise TimeoutError(_("No matching option found in combobox: '%s'") % selected_value)
+
+        await self.web_sleep()
+        return dropdown_elem
 
     async def _validate_chrome_version_configuration(self) -> None:
         """
