@@ -15,7 +15,7 @@ tone_instructions: "Be strict about English-only code and translation system usa
 reviews:
   profile: "assertive"  # More feedback to catch complexity
   high_level_summary: true
-  review_status: true
+  review_status: false
   commit_status: true
   changed_files_summary: true
   sequence_diagrams: true
@@ -29,16 +29,41 @@ reviews:
 
   # Path filters to focus on important files
   path_filters:
+    # Source code
     - "src/**/*.py"
     - "tests/**/*.py"
     - "scripts/**/*.py"
+
+    # GitHub automation - workflows, dependabot, templates, etc.
+    - ".github/**"
+
+    # Root config files
+    - "pyproject.toml"
+    - "*.yaml"
+    - "*.yml"
+    - "**/*.md"
+
+    # Exclude build/cache artifacts
     - "!**/__pycache__/**"
-    - "!**/.*"
+    - "!**/.pytest_cache/**"
+    - "!**/.mypy_cache/**"
+    - "!**/.ruff_cache/**"
     - "!dist/**"
     - "!build/**"
+    - "!*.egg-info/**"
+
+    # Exclude IDE-specific files
+    - "!.vscode/**"
+    - "!.idea/**"
+    - "!.DS_Store"
+
+    # Exclude temporary files
     - "!*.log"
     - "!*.tmp"
     - "!*.temp"
+
+    # Exclude lock files (too noisy)
+    - "!pdm.lock"
 
   # Path-specific instructions for different file types
   path_instructions:
@@ -46,20 +71,19 @@ reviews:
       instructions: |
         CRITICAL RULES FOR KLEINANZEIGEN BOT:
         1. ALL code, comments, and text MUST be in English
-        2. User-facing messages MUST use translation system (_()) function
-        3. NEVER access live website in tests (bot detection risk)
-        4. Use WebScrapingMixin for browser automation
-        5. Handle TimeoutError for all web operations
-        6. Use ensure() for critical validations
-        7. Don't add features until explicitly needed
-        8. Keep solutions simple and straightforward
-        9. Use async/await for I/O operations
-        10. Follow Pydantic model patterns
-        11. Use proper error handling and logging
-        12. Test business logic separately from web scraping
-        13. Include SPDX license headers on all Python files
-        14. Use type hints for all function parameters and return values
-        15. Use structured logging with context
+        2. NEVER access live website in tests (bot detection risk)
+        3. Use WebScrapingMixin for browser automation
+        4. Handle TimeoutError for all web operations
+        5. Use ensure() for critical validations
+        6. Don't add features until explicitly needed
+        7. Keep solutions simple and straightforward
+        8. Use async/await for I/O operations
+        9. Follow Pydantic model patterns
+        10. Use proper error handling and logging
+        11. Test business logic separately from web scraping
+        12. Include SPDX license headers on all Python files
+        13. Use type hints for all function parameters and return values
+        14. Use structured logging with context
     - path: "tests/**/*.py"
       instructions: |
         TESTING RULES:
