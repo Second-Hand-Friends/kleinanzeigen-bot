@@ -34,14 +34,6 @@ For details on the new smoke test strategy and contributor guidance, see [TESTIN
 - **Browser Automation**: Uses Chromium-based browsers (Chrome, Edge, Chromium) for reliable automation
 - **Flexible Configuration**: Configure defaults once, override per listing as needed
 
-### Why This Project?
-
-This is a complete Python rewrite of [Second-Hand-Friends/ebayKleinanzeigen](https://github.com/Second-Hand-Friends/ebayKleinanzeigen). The rewrite provides:
-- **Modern Browser Control**: Uses nodriver (undetected-chromedriver successor) for better reliability
-- **Better Maintainability**: Clean Python architecture with Pydantic validation
-- **Enhanced Features**: Content hash tracking, smart republishing, comprehensive timeout configuration
-- **Active Development**: Regular updates and community support
-
 ### ⚠️ Legal Disclaimer
 
 The use of this program could violate the terms of service of kleinanzeigen.de applicable at the time of use.
