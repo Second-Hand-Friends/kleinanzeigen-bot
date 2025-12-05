@@ -37,18 +37,27 @@ jobs:
       run: env | sort
 
 
+    - name: Generate GitHub Access Token
+      uses: tibdex/github-app-token@v2  # https://github.com/tibdex/github-app-token
+      id: generate_token
+      # see https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#authenticating-with-github-app-generated-tokens
+      with:
+        # see https://github.com/organizations/Second-Hand-Friends/settings/apps/kleinanzeigen-bot-tu
+        app_id: ${{ secrets.DEPS_UPDATER_APP_ID }}
+        private_key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
+
+
     - name: Git Checkout
       uses: actions/checkout@v5  # https://github.com/actions/checkout
       with:
+        token: ${{ steps.generate_token.outputs.token }}
         ref: main
+        fetch-depth: 0
 
 
     - name: Push main to release branch
       run: |
         set -eux
-
-        git config user.name "github-actions[bot]"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
         # Push current main state to release branch to trigger release creation
         git push origin HEAD:release

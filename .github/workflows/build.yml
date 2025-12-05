@@ -10,11 +10,8 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
     - cron: '0 15 1 * *'
   push:
-    branches:
-    - main
-    - release
-    tags-ignore:  # don't build tags
-    - '**'
+    branches: ['**']  # build all branches
+    tags-ignore: ['**'] # don't build tags
     paths-ignore:
     - '**/*.md'
     - '.act*'
@@ -57,7 +54,8 @@ jobs:
   build:
   ###########################################################
 
-    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    # Run on push for all branches; on pull_request only for forked PRs to avoid duplicate builds for same-repo branches
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
 
     permissions:
       packages: write
