@@ -384,6 +384,13 @@ category: # e.g. "Elektronik > Notebooks"
 
 price: # without decimals, e.g. 75
 price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY (default: NEGOTIABLE)
+auto_price_reduction:
+  enabled: # true or false to enable automatic price reduction on reposts (default: false)
+  strategy: # "PERCENTAGE" or "FIXED" (required when enabled is true)
+  amount: # reduction amount; interpreted as percent for PERCENTAGE or currency units for FIXED
+  min_price: # required when enabled is true; minimum price floor (use 0 for no lower bound)
+  delay_reposts: # number of reposts to wait before first reduction (default: 0)
+  delay_days: # number of days to wait after publication before reductions (default: 0)
 
 special_attributes:
   # haus_mieten.zimmer_d: value # Zimmer
@@ -426,7 +433,36 @@ id: # the ID assigned by kleinanzeigen.de
 created_on: # ISO timestamp when the ad was first published
 updated_on: # ISO timestamp when the ad was last published
 content_hash: # hash of the ad content, used to detect changes
+repost_count: # how often the ad has been (re)published; used for automatic price reductions
 ```
+
+#### Automatic price reduction on reposts
+
+When `auto_price_reduction.enabled` is set to `true`, the bot lowers the configured `price` every time the ad is reposted. The starting point for the calculation is always the base price from your ad file (the value of `price`), ensuring the first publication uses the unchanged amount. For each repost the bot subtracts either a percentage of the previously published price (strategy: PERCENTAGE) or a fixed amount (strategy: FIXED) and clamps the result to `min_price`.
+
+`repost_count` is tracked for every ad (and persisted inside the corresponding `ad_*.yaml`) so reductions continue across runs.
+
+`min_price` is required whenever `enabled` is `true` and must be less than or equal to `price`; this makes an explicit floor (including `0`) mandatory.
+
+Example snippet:
+
+```yaml
+price: 150
+price_type: FIXED
+auto_price_reduction:
+  enabled: true
+  strategy: PERCENTAGE
+  amount: 10
+  min_price: 90
+  delay_reposts: 0
+  delay_days: 0
+```
+
+The example above posts the ad at 150 € the first time, then 135 €, 121 €, 109 €, and stops decreasing at 90 €.
+
+Set `auto_price_reduction.enabled: false` (or omit the entire `auto_price_reduction` section) to keep the existing behaviour—prices stay fixed and `repost_count` only acts as tracked metadata for future changes.
+
+You can configure `auto_price_reduction` once under `ad_defaults` in `config.yaml`. The `min_price` can be set there or overridden per ad file as needed.
 
 ### <a name="description-prefix-suffix"></a>3) Description Prefix and Suffix
 
