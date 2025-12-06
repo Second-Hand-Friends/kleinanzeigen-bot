@@ -71,19 +71,20 @@ reviews:
       instructions: |
         CRITICAL RULES FOR KLEINANZEIGEN BOT:
         1. ALL code, comments, and text MUST be in English
-        2. NEVER access live website in tests (bot detection risk)
-        3. Use WebScrapingMixin for browser automation
-        4. Handle TimeoutError for all web operations
-        5. Use ensure() for critical validations
-        6. Don't add features until explicitly needed
-        7. Keep solutions simple and straightforward
-        8. Use async/await for I/O operations
-        9. Follow Pydantic model patterns
-        10. Use proper error handling and logging
-        11. Test business logic separately from web scraping
-        12. Include SPDX license headers on all Python files
-        13. Use type hints for all function parameters and return values
-        14. Use structured logging with context
+        2. User-facing messages MUST use translation system (_()) function	
+        3. NEVER access live website in tests (bot detection risk)
+        4. Use WebScrapingMixin for browser automation
+        5. Handle TimeoutError for all web operations
+        6. Use ensure() for critical validations
+        7. Don't add features until explicitly needed
+        8. Keep solutions simple and straightforward
+        9. Use async/await for I/O operations
+        10. Follow Pydantic model patterns
+        11. Use proper error handling and logging
+        12. Test business logic separately from web scraping
+        13. Include SPDX license headers on all Python files
+        14. Use type hints for all function parameters and return values
+        15. Use structured logging with context
     - path: "tests/**/*.py"
       instructions: |
         TESTING RULES:
