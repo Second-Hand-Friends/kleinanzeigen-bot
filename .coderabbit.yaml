@@ -71,7 +71,7 @@ reviews:
       instructions: |
         CRITICAL RULES FOR KLEINANZEIGEN BOT:
         1. ALL code, comments, and text MUST be in English
-        2. User-facing messages MUST use translation system (_()) function	
+        2. User-facing messages MUST use translation system (_()) function
         3. NEVER access live website in tests (bot detection risk)
         4. Use WebScrapingMixin for browser automation
         5. Handle TimeoutError for all web operations
