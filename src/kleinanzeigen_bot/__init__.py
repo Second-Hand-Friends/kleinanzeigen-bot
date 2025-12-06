@@ -1260,6 +1260,36 @@ class KleinanzeigenBot(WebScrapingMixin):
             await image_upload.send_file(image)
             await self.web_sleep()
 
+        # Wait for all images to be processed and thumbnails to appear
+        expected_count = len(ad_cfg.images)
+        LOG.info(" -> waiting for %s to be processed...", pluralize("image", ad_cfg.images))
+
+        async def check_thumbnails_uploaded() -> bool:
+            thumbnails = await self.web_find_all(By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li.ui-sortable-handle")
+            current_count = len(thumbnails)
+            if current_count < expected_count:
+                LOG.debug(" -> %d of %d images processed", current_count, expected_count)
+            return current_count == expected_count
+
+        try:
+            await self.web_await(
+                check_thumbnails_uploaded,
+                timeout = self.config.timeouts.resolve("image_upload"),
+                timeout_error_message = _("Image upload timeout exceeded")
+            )
+        except TimeoutError as ex:
+            # Get current count for better error message
+            thumbnails = await self.web_find_all(By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li.ui-sortable-handle")
+            current_count = len(thumbnails)
+            raise TimeoutError(
+                _("Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d thumbnails.") % {
+                    "expected": expected_count,
+                    "found": current_count
+                }
+            ) from ex
+
+        LOG.info(" -> all images uploaded successfully")
+
     async def download_ads(self) -> None:
         """
         Determines which download mode was chosen with the arguments, and calls the specified download routine.
