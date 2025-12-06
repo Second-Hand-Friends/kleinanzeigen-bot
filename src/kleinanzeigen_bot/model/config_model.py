@@ -80,7 +80,7 @@ class DownloadConfig(ContextualModel):
 
 class BrowserConfig(ContextualModel):
     arguments:List[str] = Field(
-        default_factory = list,
+        default_factory = lambda: ["--user-data-dir=.temp/browser-profile"],
         description = "See https://peter.sh/experiments/chromium-command-line-switches/"
     )
     binary_location:str | None = Field(
@@ -93,7 +93,7 @@ class BrowserConfig(ContextualModel):
     )
     use_private_window:bool = True
     user_data_dir:str | None = Field(
-        default = None,
+        default = ".temp/browser-profile",
         description = "See https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md"
     )
     profile_name:str | None = None
