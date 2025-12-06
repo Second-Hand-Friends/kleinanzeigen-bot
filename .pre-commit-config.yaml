@@ -37,6 +37,7 @@ repos:
     rev: v0.19.1
     hooks:
       - id: markdownlint-cli2
+        name: Format and lint Markdown files
         args: ['--fix']
         exclude: '^(\.venv/|\.temp/|data/)'
 
