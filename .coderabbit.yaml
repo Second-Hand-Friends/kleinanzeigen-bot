@@ -120,6 +120,18 @@ reviews:
         3. Include practical examples
         4. Include troubleshooting information
         5. Follow markdown best practices
+    - path: "**/*.md"
+      instructions: |
+        MARKDOWN RULES:
+        1. All documentation must be in English
+        2. Use clear, concise language
+        3. Follow markdown best practices
+        4. SPDX headers are NOT required for markdown files
+    - path: "**/*.yaml"
+      instructions: |
+        YAML RULES:
+        1. Follow YAML best practices
+        2. SPDX headers are NOT required for YAML configuration files (only for Python files)
 
   # Auto review configuration
   auto_review:

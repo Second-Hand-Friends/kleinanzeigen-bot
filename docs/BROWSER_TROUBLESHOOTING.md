@@ -27,7 +27,7 @@ browser:
 
 **The bot will automatically detect Chrome 136+ and provide clear error messages if your configuration is missing the required `--user-data-dir` setting.**
 
-For more details, see [Chrome 136+ Security Changes](#5-chrome-136-security-changes-march-2025) below.
+For more details, see [Chrome 136+ Security Changes](#chrome-136-security-changes-march-2025) below.
 
 ## Quick Diagnosis
 
@@ -278,7 +278,7 @@ taskkill /f /im chrome.exe  # Windows
 - Try using a fresh user data directory to avoid conflicts
 - Ensure you're using the latest version of the bot
 
-#### 5. Chrome 136+ Security Changes (March 2025)
+### Chrome 136+ Security Changes (March 2025)
 
 If you're using Chrome 136 or later and remote debugging stopped working:
 
@@ -385,7 +385,7 @@ browser:
 
 - **Gatekeeper**: Allow browser in System Preferences > Security & Privacy
 - **SIP**: System Integrity Protection might block some operations
-- **Permissions**: Grant full disk access to terminal/IDE
+- **Permissions**: Grant full-disk access to terminal/IDE
 
 #### Linux
 

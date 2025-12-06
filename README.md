@@ -54,7 +54,7 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 ### Installation using pre-compiled exe
 
 1. The following components need to be installed:
-   1. [Chromium](https://www.chromium.org/getting-involved/download-chromium), [Google Chrome](https://www.google.com/chrome/),
+   - [Chromium](https://www.chromium.org/getting-involved/download-chromium), [Google Chrome](https://www.google.com/chrome/),
       or Chromium based [Microsoft Edge](https://www.microsoft.com/edge) browser
 
 1. Open a command/terminal window
@@ -92,6 +92,7 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 ### Installation using Docker
 
 The following components need to be installed:
+
    1. [Docker](https://www.docker.com/)
    1. [Bash](https://www.gnu.org/software/bash/) (on Windows e.g. via [Cygwin](https://www.cygwin.com/), [MSys2](https://www.msys2.org/) or git)
    1. [X11 - X Window System](https://en.wikipedia.org/wiki/X_Window_System) display server (on Windows e.g. <https://github.com/P-St/Portable-X-Server/releases/latest>)
@@ -120,7 +121,7 @@ The following components need to be installed:
 
 1. The following components need to be installed:
    - [Chromium](https://www.chromium.org/getting-involved/download-chromium), [Google Chrome](https://www.google.com/chrome/),
-      or Chromium based [Microsoft Edge](https://www.microsoft.com/edge) browser
+      or Chromium-based [Microsoft Edge](https://www.microsoft.com/edge) browser
    - [Python](https://www.python.org/) **3.10** or newer
    - [pip](https://pypi.org/project/pip/)
    - [git client](https://git-scm.com/downloads)
