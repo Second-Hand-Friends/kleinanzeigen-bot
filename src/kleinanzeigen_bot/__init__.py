@@ -1055,7 +1055,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.warning("# Payment form detected! Please proceed with payment.")
             LOG.warning("############################################")
             await self.web_scroll_page_down()
-            input(_("Press a key to continue..."))
+            await ainput(_("Press a key to continue..."))
         except TimeoutError:
             pass
 
@@ -1199,24 +1199,31 @@ class KleinanzeigenBot(WebScrapingMixin):
             try:
                 # finding element by name cause id are composed sometimes eg. autos.marke_s+autos.model_s for Modell by cars
                 special_attr_elem = await self.web_find(By.XPATH, f"//*[contains(@name, '{special_attribute_key}')]")
-            except TimeoutError as ex:
-                LOG.debug("Attribute field '%s' could not be found.", special_attribute_key)
-                raise TimeoutError(f"Failed to set special attribute [{special_attribute_key}] (not found)") from ex
+            except TimeoutError:
+                # Trying to find element by ID instead cause sometimes there is NO name attribute...
+                try:
+                    special_attr_elem = await self.web_find(By.ID, special_attribute_key)
+                except TimeoutError as ex:
+                    LOG.debug(_("Attribute field '%s' could not be found."), special_attribute_key)
+                    raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
 
             try:
                 elem_id:str = str(special_attr_elem.attrs.id)
                 if special_attr_elem.local_name == "select":
-                    LOG.debug("Attribute field '%s' seems to be a select...", special_attribute_key)
+                    LOG.debug(_("Attribute field '%s' seems to be a select..."), special_attribute_key)
                     await self.web_select(By.ID, elem_id, special_attribute_value_str)
                 elif special_attr_elem.attrs.type == "checkbox":
-                    LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
+                    LOG.debug(_("Attribute field '%s' seems to be a checkbox..."), special_attribute_key)
                     await self.web_click(By.ID, elem_id)
+                elif special_attr_elem.attrs.type == "text" and special_attr_elem.attrs.get("role") == "combobox":
+                    LOG.debug(_("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)..."), special_attribute_key)
+                    await self.web_select_combobox(By.ID, elem_id, special_attribute_value_str)
                 else:
-                    LOG.debug("Attribute field '%s' seems to be a text input...", special_attribute_key)
+                    LOG.debug(_("Attribute field '%s' seems to be a text input..."), special_attribute_key)
                     await self.web_input(By.ID, elem_id, special_attribute_value_str)
             except TimeoutError as ex:
-                LOG.debug("Attribute field '%s' is not of kind radio button.", special_attribute_key)
-                raise TimeoutError(f"Failed to set special attribute [{special_attribute_key}]") from ex
+                LOG.debug(_("Failed to set attribute field '%s' via known input types."), special_attribute_key)
+                raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
             LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
 
     async def __set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:

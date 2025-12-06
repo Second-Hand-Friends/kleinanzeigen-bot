@@ -25,7 +25,7 @@ from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
 
 from kleinanzeigen_bot.model.config_model import Config
-from kleinanzeigen_bot.utils import loggers
+from kleinanzeigen_bot.utils import files, loggers
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is, WebScrapingMixin, _is_admin  # noqa: PLC2701
 
 
@@ -93,6 +93,30 @@ def web_scraper(mock_browser:AsyncMock, mock_page:TrulyAwaitableMockPage) -> Web
     scraper.page = mock_page  # type: ignore[unused-ignore,reportAttributeAccessIssue]
     scraper.config = Config.model_validate({"login": {"username": "user@example.com", "password": "secret"}})  # noqa: S105
     return scraper
+
+
+def test_write_initial_prefs(tmp_path:Path) -> None:
+    """Test _write_initial_prefs helper function."""
+    from kleinanzeigen_bot.utils.web_scraping_mixin import _write_initial_prefs  # noqa: PLC0415, PLC2701
+
+    prefs_file = tmp_path / "Preferences"
+    _write_initial_prefs(str(prefs_file))
+
+    # Verify file was created
+    assert prefs_file.exists()
+
+    # Verify content is valid JSON with expected structure
+    with open(prefs_file, encoding = "UTF-8") as f:
+        prefs = json.load(f)
+
+    assert prefs["credentials_enable_service"] is False
+    assert prefs["enable_do_not_track"] is True
+    assert prefs["google"]["services"]["consented_to_sync"] is False
+    assert prefs["profile"]["password_manager_enabled"] is False
+    assert prefs["profile"]["default_content_setting_values"]["notifications"] == 2
+    assert prefs["signin"]["allowed"] is False
+    assert "www.kleinanzeigen.de" in prefs["translate_site_blacklist"]
+    assert prefs["devtools"]["preferences"]["currentDockState"] == '"bottom"'
 
 
 class TestWebScrapingErrorHandling:
@@ -167,6 +191,119 @@ class TestWebScrapingErrorHandling:
             await web_scraper.web_input(By.ID, "test-id", "test text")
 
     @pytest.mark.asyncio
+    async def test_web_select_combobox_missing_dropdown_options(self, web_scraper:WebScrapingMixin) -> None:
+        """Test combobox selection when aria-controls attribute is missing."""
+        input_field = AsyncMock(spec = Element)
+        input_field.attrs = {}
+        input_field.clear_input = AsyncMock()
+        input_field.send_keys = AsyncMock()
+        web_scraper.web_find = AsyncMock(return_value = input_field)  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        with pytest.raises(TimeoutError, match = "Combobox missing aria-controls attribute"):
+            await web_scraper.web_select_combobox(By.ID, "combo-id", "Option", timeout = 0.1)
+
+        input_field.clear_input.assert_awaited_once()
+        input_field.send_keys.assert_awaited_once_with("Option")
+        assert web_scraper.web_sleep.await_count == 1  # Only one sleep before checking aria-controls
+
+    @pytest.mark.asyncio
+    async def test_web_select_combobox_selects_matching_option(self, web_scraper:WebScrapingMixin) -> None:
+        """Test combobox selection matches a visible <li> option."""
+        input_field = AsyncMock(spec = Element)
+        input_field.attrs = {"aria-controls": "dropdown-id"}
+        input_field.clear_input = AsyncMock()
+        input_field.send_keys = AsyncMock()
+
+        dropdown_elem = AsyncMock(spec = Element)
+        dropdown_elem.apply = AsyncMock(return_value = True)
+
+        web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        result = await web_scraper.web_select_combobox(By.ID, "combo-id", "Visible Label")
+
+        assert result is dropdown_elem
+        input_field.clear_input.assert_awaited_once()
+        input_field.send_keys.assert_awaited_once_with("Visible Label")
+        dropdown_elem.apply.assert_awaited_once()
+        assert web_scraper.web_sleep.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_web_select_combobox_no_matching_option_raises(self, web_scraper:WebScrapingMixin) -> None:
+        """Test combobox selection raises when no <li> matches the entered text."""
+        input_field = AsyncMock(spec = Element)
+        input_field.attrs = {"aria-controls": "dropdown-id"}
+        input_field.clear_input = AsyncMock()
+        input_field.send_keys = AsyncMock()
+
+        dropdown_elem = AsyncMock(spec = Element)
+        dropdown_elem.apply = AsyncMock(return_value = False)
+
+        web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        with pytest.raises(TimeoutError, match = "No matching option found in combobox"):
+            await web_scraper.web_select_combobox(By.ID, "combo-id", "Missing Label")
+
+        dropdown_elem.apply.assert_awaited_once()
+        assert web_scraper.web_sleep.await_count == 1  # One sleep after typing, error before second sleep
+
+    @pytest.mark.asyncio
+    async def test_web_select_combobox_special_characters(self, web_scraper:WebScrapingMixin) -> None:
+        """Test combobox selection with special characters (quotes, newlines, etc)."""
+        input_field = AsyncMock(spec = Element)
+        input_field.attrs = {"aria-controls": "dropdown-id"}
+        input_field.clear_input = AsyncMock()
+        input_field.send_keys = AsyncMock()
+
+        dropdown_elem = AsyncMock(spec = Element)
+        dropdown_elem.apply = AsyncMock(return_value = True)
+
+        web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        # Test with quotes, backslashes, and newlines
+        special_value = 'Value with "quotes" and \\ backslash'
+        result = await web_scraper.web_select_combobox(By.ID, "combo-id", special_value)
+
+        assert result is dropdown_elem
+        input_field.send_keys.assert_awaited_once_with(special_value)
+        # Verify that the JavaScript received properly escaped value
+        call_args = dropdown_elem.apply.call_args[0][0]
+        assert '"quotes"' in call_args or r'\"quotes\"' in call_args  # JSON escaping should handle quotes
+
+    @pytest.mark.asyncio
+    async def test_web_select_by_value(self, web_scraper:WebScrapingMixin) -> None:
+        """Test web_select successfully matches by option value."""
+        select_elem = AsyncMock(spec = Element)
+        select_elem.apply = AsyncMock()
+
+        web_scraper.web_check = AsyncMock(return_value = True)  # type: ignore[method-assign]
+        web_scraper.web_await = AsyncMock(return_value = True)  # type: ignore[method-assign]
+        web_scraper.web_find = AsyncMock(return_value = select_elem)  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        result = await web_scraper.web_select(By.ID, "select-id", "option-value")
+
+        assert result is select_elem
+        select_elem.apply.assert_awaited_once()
+        web_scraper.web_sleep.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_web_select_raises_on_missing_option(self, web_scraper:WebScrapingMixin) -> None:
+        """Test web_select raises TimeoutError when option not found."""
+        select_elem = AsyncMock(spec = Element)
+        # Simulate JS throwing an error when option not found
+        select_elem.apply = AsyncMock(side_effect = Exception("Option not found by value or displayed text: missing"))
+
+        web_scraper.web_check = AsyncMock(return_value = True)  # type: ignore[method-assign]
+        web_scraper.web_await = AsyncMock(return_value = True)  # type: ignore[method-assign]
+        web_scraper.web_find = AsyncMock(return_value = select_elem)  # type: ignore[method-assign]
+
+        with pytest.raises(TimeoutError, match = "Option not found by value or displayed text"):
+            await web_scraper.web_select(By.ID, "select-id", "missing-option")
+
     async def test_web_input_success_returns_element(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
         """Successful web_input should send keys, wait, and return the element."""
         mock_element = AsyncMock(spec = Element)
@@ -728,7 +865,7 @@ class TestWebScrapingBrowserConfiguration:
         chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
         real_exists = os.path.exists
 
-        def mock_exists(path:str) -> bool:
+        def mock_exists_sync(path:str) -> bool:
             # Handle all browser paths
             if path in {
                 # Linux paths
@@ -754,7 +891,12 @@ class TestWebScrapingBrowserConfiguration:
             if "Preferences" in str(path) and str(tmp_path) in str(path):
                 return real_exists(path)
             return False
-        monkeypatch.setattr(os.path, "exists", mock_exists)
+
+        async def mock_exists_async(path:str | Path) -> bool:
+            return mock_exists_sync(str(path))
+
+        monkeypatch.setattr(os.path, "exists", mock_exists_sync)
+        monkeypatch.setattr(files, "exists", mock_exists_async)
 
         # Create test profile directory
         profile_dir = tmp_path / "Default"
@@ -762,8 +904,7 @@ class TestWebScrapingBrowserConfiguration:
         prefs_file = profile_dir / "Preferences"
 
         # Test with existing preferences file
-        with open(prefs_file, "w", encoding = "UTF-8") as f:
-            json.dump({"existing": "prefs"}, f)
+        prefs_file.write_text(json.dumps({"existing": "prefs"}), encoding = "UTF-8")
 
         scraper = WebScrapingMixin()
         scraper.browser_config.user_data_dir = str(tmp_path)
@@ -771,22 +912,20 @@ class TestWebScrapingBrowserConfiguration:
         await scraper.create_browser_session()
 
         # Verify preferences file was not overwritten
-        with open(prefs_file, "r", encoding = "UTF-8") as f:
-            prefs = json.load(f)
-            assert prefs["existing"] == "prefs"
+        prefs = json.loads(prefs_file.read_text(encoding = "UTF-8"))
+        assert prefs["existing"] == "prefs"
 
         # Test with missing preferences file
         prefs_file.unlink()
         await scraper.create_browser_session()
 
         # Verify new preferences file was created with correct settings
-        with open(prefs_file, "r", encoding = "UTF-8") as f:
-            prefs = json.load(f)
-            assert prefs["credentials_enable_service"] is False
-            assert prefs["enable_do_not_track"] is True
-            assert prefs["profile"]["password_manager_enabled"] is False
-            assert prefs["signin"]["allowed"] is False
-            assert "www.kleinanzeigen.de" in prefs["translate_site_blacklist"]
+        prefs = json.loads(prefs_file.read_text(encoding = "UTF-8"))
+        assert prefs["credentials_enable_service"] is False
+        assert prefs["enable_do_not_track"] is True
+        assert prefs["profile"]["password_manager_enabled"] is False
+        assert prefs["signin"]["allowed"] is False
+        assert "www.kleinanzeigen.de" in prefs["translate_site_blacklist"]
 
     @pytest.mark.asyncio
     async def test_browser_arguments_configuration(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
@@ -814,6 +953,10 @@ class TestWebScrapingBrowserConfiguration:
 
         # Mock os.path.exists to return True for both Chrome and Edge paths
         monkeypatch.setattr(os.path, "exists", lambda p: p in {"/usr/bin/chrome", "/usr/bin/edge"})
+
+        async def mock_exists_async(path:str | Path) -> bool:
+            return str(path) in {"/usr/bin/chrome", "/usr/bin/edge"}
+        monkeypatch.setattr(files, "exists", mock_exists_async)
 
         # Test with custom arguments
         scraper = WebScrapingMixin()
@@ -875,27 +1018,41 @@ class TestWebScrapingBrowserConfiguration:
         # Mock Config class
         monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
 
-        # Mock os.path.exists to return True for browser binaries and extension files, real_exists for others
-        real_exists = os.path.exists
-        monkeypatch.setattr(
-            os.path,
-            "exists",
-            lambda p: p in {"/usr/bin/chrome", "/usr/bin/edge", str(ext1), str(ext2)} or real_exists(p),
-        )
+        # Mock files.exists and files.is_dir to return appropriate values
+        async def mock_exists(path:str | Path) -> bool:
+            path_str = str(path)
+            # Resolve real paths to handle symlinks (e.g., /var -> /private/var on macOS)
+            real_path = str(Path(path_str).resolve())  # noqa: ASYNC240 Test mock, runs synchronously
+            real_ext1 = str(Path(ext1).resolve())  # noqa: ASYNC240 Test mock, runs synchronously
+            real_ext2 = str(Path(ext2).resolve())  # noqa: ASYNC240 Test mock, runs synchronously
+            return path_str in {"/usr/bin/chrome", "/usr/bin/edge"} or real_path in {real_ext1, real_ext2} or os.path.exists(path_str)  # noqa: ASYNC240
+
+        async def mock_is_dir(path:str | Path) -> bool:
+            path_str = str(path)
+            # Resolve real paths to handle symlinks
+            real_path = str(Path(path_str).resolve())  # noqa: ASYNC240 Test mock, runs synchronously
+            real_ext1 = str(Path(ext1).resolve())  # noqa: ASYNC240 Test mock, runs synchronously
+            real_ext2 = str(Path(ext2).resolve())  # noqa: ASYNC240 Test mock, runs synchronously
+            # Nodriver extracts CRX files to temp directories, so they appear as directories
+            if real_path in {real_ext1, real_ext2}:
+                return True
+            return Path(path_str).is_dir()  # noqa: ASYNC240 Test mock, runs synchronously
+
+        monkeypatch.setattr(files, "exists", mock_exists)
+        monkeypatch.setattr(files, "is_dir", mock_is_dir)
 
         # Test extension loading
         scraper = WebScrapingMixin()
         scraper.browser_config.extensions = [str(ext1), str(ext2)]
         scraper.browser_config.binary_location = "/usr/bin/chrome"
-        # Removed monkeypatch for os.path.exists so extension files are detected
         await scraper.create_browser_session()
 
         # Verify extensions were loaded
         config = _nodriver_start_mock().call_args[0][0]
         assert len(config._extensions) == 2
         for ext_path in config._extensions:
-            assert os.path.exists(ext_path)
-            assert os.path.isdir(ext_path)
+            assert await files.exists(ext_path)
+            assert await files.is_dir(ext_path)
 
         # Test with non-existent extension
         scraper.browser_config.extensions = ["non_existent.crx"]
@@ -976,8 +1133,7 @@ class TestWebScrapingBrowserConfiguration:
         scraper.browser_config.user_data_dir = str(tmp_path)
         scraper.browser_config.profile_name = "Default"
         await scraper.create_browser_session()
-        with open(state_file, "w", encoding = "utf-8") as f:
-            f.write('{"foo": "bar"}')
+        state_file.write_text('{"foo": "bar"}', encoding = "utf-8")
         scraper.browser._process_pid = 12345
         scraper.browser.stop = MagicMock()
         with patch("psutil.Process") as mock_proc:
@@ -989,8 +1145,7 @@ class TestWebScrapingBrowserConfiguration:
         scraper2.browser_config.user_data_dir = str(tmp_path)
         scraper2.browser_config.profile_name = "Default"
         await scraper2.create_browser_session()
-        with open(state_file, "r", encoding = "utf-8") as f:
-            data = f.read()
+        data = state_file.read_text(encoding = "utf-8")
         assert data == '{"foo": "bar"}'
         scraper2.browser._process_pid = 12346
         scraper2.browser.stop = MagicMock()
@@ -1814,6 +1969,7 @@ class TestWebScrapingMixinPortRetry:
     ) -> None:
         """Test error handling when browser connection fails."""
         with patch("os.path.exists", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.files.exists", AsyncMock(return_value = True)), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.net.is_port_open", return_value = True), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", side_effect = Exception("Failed to connect as root user")), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.Config") as mock_config_class:
@@ -1833,6 +1989,7 @@ class TestWebScrapingMixinPortRetry:
     ) -> None:
         """Test error handling when browser connection fails with non-root error."""
         with patch("os.path.exists", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.files.exists", AsyncMock(return_value = True)), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.net.is_port_open", return_value = True), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", side_effect = Exception("Connection timeout")), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.Config") as mock_config_class:
@@ -1860,6 +2017,7 @@ class TestWebScrapingMixinPortRetry:
     ) -> None:
         """Test error handling when browser startup fails with root error."""
         with patch("os.path.exists", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.files.exists", AsyncMock(return_value = True)), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", side_effect = Exception("Failed to start as root user")), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.Config") as mock_config_class:
 
@@ -1878,6 +2036,7 @@ class TestWebScrapingMixinPortRetry:
     ) -> None:
         """Test error handling when browser startup fails with non-root error."""
         with patch("os.path.exists", return_value = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.files.exists", AsyncMock(return_value = True)), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", side_effect = Exception("Browser binary not found")), \
                 patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.Config") as mock_config_class:
 

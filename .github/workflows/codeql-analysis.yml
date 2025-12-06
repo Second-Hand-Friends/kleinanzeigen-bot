@@ -1,47 +1,40 @@
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot
+#
 # https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/customizing-your-advanced-setup-for-code-scanning
 name: "CodeQL"
 
-on:
+on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows
+  schedule:
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
+    - cron: '10 10 * * 1'  # Mondays 10:10 UTC
   push:
-    branches-ignore: # build all branches except:
-    - 'dependabot/**'    # prevent GHA triggered twice (once for commit to the branch and once for opening/syncing the PR)
-    - 'dependencies/pdm' # prevent GHA triggered twice (once for commit to the branch and once for opening/syncing the PR)
-    tags-ignore:
-    - '**'
+    branches: ['**']  # build all branches
+    tags-ignore: ['**'] # don't build tags
     paths-ignore:
     - '**/*.md'
     - '.act*'
     - '.editorconfig'
     - '.git*'
-    - '.github/ISSUE_TEMPLATE/*'
-    - '.github/workflows/build.yml'
-    - '.github/workflows/stale.yml'
-    - '.github/workflows/update-python-deps.yml'
-    - '.github/workflows/validate-pr.yml'
-    - 'codevoc.yml'
+    - 'codecov.yml'
   pull_request:
     paths-ignore:
     - '**/*.md'
     - '.act*'
     - '.editorconfig'
     - '.git*'
-    - '.github/ISSUE_TEMPLATE/*'
-    - '.github/workflows/build.yml'
-    - '.github/workflows/stale.yml'
-    - '.github/workflows/update-python-deps.yml'
-    - '.github/workflows/validate-pr.yml'
     - 'codecov.yml'
-  schedule:
-    - cron: '10 10 * * 1'
   workflow_dispatch:
-    # https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch
+
 
 defaults:
   run:
     shell: bash
 
 env:
-  PYTHON_VERSION: "3.13.5"
+  PYTHON_VERSION: "3.14"
 
 jobs:
 
@@ -50,19 +43,34 @@ jobs:
   ###########################################################
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
     permissions:
+      # required for all workflows
       security-events: write
 
+      # required to fetch internal or private CodeQL packs
+      packages: read
+
+      # only required for workflows in private repositories
+      actions: read
+      contents: read
+
     steps:
-    - name: Show environment variables
+    - name: "Show: GitHub context"
+      env:
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
+      run: printf '%s' "$GITHUB_CONTEXT" | python -m json.tool
+
+
+    - name: "Show: environment variables"
       run: env | sort
 
 
-    - name: Git checkout
+    - name: Git Checkout
       uses: actions/checkout@v6  # https://github.com/actions/checkout
 
 
-    - name: "Install Python and PDM"  # https://github.com/pdm-project/setup-pdm
+    - name: "Install: Python and PDM"  # https://github.com/pdm-project/setup-pdm
       uses: pdm-project/setup-pdm@v4
       with:
         python-version: "${{ env.PYTHON_VERSION }}"
@@ -79,14 +87,17 @@ jobs:
         if [[ ! -e .venv ]]; then
           pdm venv create || true
         fi
-        pdm install -v
+        pdm sync --clean -v
 
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4  # https://github.com/github/codeql-action/blob/main/init/action.yml
       with:
-        languages: python
-
+        languages: actions,python
+        # https://github.com/github/codeql-action#build-modes
+        build-mode: none
+        # https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/customizing-your-advanced-setup-for-code-scanning#using-queries-in-ql-packs
+        queries: security-and-quality
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4  # https://github.com/github/codeql-action

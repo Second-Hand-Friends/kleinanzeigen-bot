@@ -1,0 +1,63 @@
+# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot
+#
+# https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
+name: Publish Release
+
+on:
+  workflow_dispatch:
+    # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows
+
+
+defaults:
+  run:
+    shell: bash
+
+
+jobs:
+
+  ###########################################################
+  publish-release:
+  ###########################################################
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: write
+
+    steps:
+    - name: "Show: GitHub context"
+      env:
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
+      run: echo $GITHUB_CONTEXT
+
+
+    - name: "Show: environment variables"
+      run: env | sort
+
+
+    - name: Generate GitHub Access Token
+      uses: tibdex/github-app-token@v2  # https://github.com/tibdex/github-app-token
+      id: generate_token
+      # see https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#authenticating-with-github-app-generated-tokens
+      with:
+        # see https://github.com/organizations/Second-Hand-Friends/settings/apps/kleinanzeigen-bot-tu
+        app_id: ${{ secrets.DEPS_UPDATER_APP_ID }}
+        private_key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
+
+
+    - name: Git Checkout
+      uses: actions/checkout@v5  # https://github.com/actions/checkout
+      with:
+        token: ${{ steps.generate_token.outputs.token }}
+        ref: main
+        fetch-depth: 0
+
+
+    - name: Push main to release branch
+      run: |
+        set -eux
+
+        # Push current main state to release branch to trigger release creation
+        git push origin HEAD:release

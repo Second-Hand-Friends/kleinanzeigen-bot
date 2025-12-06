@@ -10,10 +10,8 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
     - cron: '0 15 1 * *'
   push:
-    branches:
-    - main
-    tags-ignore:  # don't build tags
-    - '**'
+    branches: ['**']  # build all branches
+    tags-ignore: ['**'] # don't build tags
     paths-ignore:
     - '**/*.md'
     - '.act*'
@@ -22,6 +20,7 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
     - '.github/*.yml'
     - '.github/ISSUE_TEMPLATE/*'
     - '.github/workflows/codeql-analysis.yml'
+    - '.github/workflows/publish-release.yml'
     - '.github/workflows/stale.yml'
     - '.github/workflows/update-python-deps.yml'
     - '.github/workflows/validate-pr.yml'
@@ -35,6 +34,7 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
     - '.github/*.yml'
     - '.github/ISSUE_TEMPLATE/*'
     - '.github/workflows/codeql-analysis.yml'
+    - '.github/workflows/publish-release.yml'
     - '.github/workflows/stale.yml'
     - '.github/workflows/update-python-deps.yml'
     - '.github/workflows/validate-pr.yml'
@@ -54,7 +54,8 @@ jobs:
   build:
   ###########################################################
 
-    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    # Run on push for all branches; on pull_request only for forked PRs to avoid duplicate builds for same-repo branches
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
 
     permissions:
       packages: write
