@@ -39,6 +39,7 @@ This project uses a layered testing approach, with a focus on reliability and fa
 - All smoke tests **must** be marked with `@pytest.mark.smoke`.
 - Place smoke tests in `tests/smoke/` for discoverability.
 - Example:
+
   ```python
   import pytest
 

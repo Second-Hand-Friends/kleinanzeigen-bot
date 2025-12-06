@@ -24,11 +24,13 @@ Please read through this document before submitting any contributions to ensure 
 ## Development Setup
 
 ### Prerequisites
+
 - Python 3.10 or higher
 - PDM for dependency management
 - Git
 
 ### Local Setup
+
 1. Fork and clone the repository
 2. Install dependencies: `pdm install`
 3. Install pre-commit hooks: `pdm run hooks:install`
@@ -39,29 +41,35 @@ Please read through this document before submitting any contributions to ensure 
 This project uses **pre-commit hooks** to automatically enforce code quality on every commit. Once installed, the hooks will run automatically before each commit and prevent commits that don't meet quality standards.
 
 **Installation** (one-time setup):
+
 ```bash
 pdm run hooks:install
 ```
 
 **What runs on every commit:**
+
 - Code formatting (autopep8, yamlfix)
 - Linting (ruff, mypy, basedpyright)
 - All tests (unit + integration + smoke)
 
 **Manual execution** (run hooks on all files without committing):
+
 ```bash
 pdm run hooks:run
 ```
 
 **Updating hooks** (update to latest versions):
+
 ```bash
 pdm run hooks:update
 ```
 
 **Bypassing hooks** (not recommended):
+
 ```bash
 git commit --no-verify
 ```
+
 ⚠️ **Warning**: Bypassing hooks is discouraged. CI will still run all checks and fail if quality standards aren't met.
 
 ## Development Notes
@@ -75,6 +83,7 @@ This section provides quick reference commands for common development tasks. See
 - Derive JSON schema files from Pydantic data model: `pdm run generate-schemas`
 - Create platform-specific executable: `pdm run compile`
 - Application bootstrap works like this:
+
   ```python
   pdm run app
   |-> executes 'python -m kleinanzeigen_bot'
@@ -88,43 +97,56 @@ This section provides quick reference commands for common development tasks. See
 ### Before Submitting
 
 **If you've installed pre-commit hooks** (recommended - see [Local Setup](#local-setup)):
+
 - Pre-commit hooks will **automatically** run format, lint, and tests on every commit
-- Just make your changes and commit - the hooks handle quality checks
-- If hooks fail, fix the issues and commit again
+- Simply make your changes and commit; the hooks will automatically handle quality checks
+- If hooks fail, resolve the issues and commit again
 
 **If you haven't installed pre-commit hooks** or want to run checks manually:
+
 1. **Format your code**: Ensure your code is auto-formatted
+
    ```bash
    pdm run format
    ```
+
 2. **Lint your code**: Check for linting errors and warnings
+
    ```bash
    pdm run lint
    ```
+
 3. **Run tests**: Ensure all tests pass locally
+
    ```bash
    pdm run test
    ```
 
 **Always verify**:
 4. **Check code quality**: Verify your code follows project standards
-   - Type hints are complete
-   - Docstrings are present for complex functions
-   - SPDX headers are included
-   - Imports are properly organized
-5. **Test your changes**: Add appropriate tests for new functionality
-   - Add smoke tests for critical paths
-   - Add unit tests for new components
-   - Add integration tests for external dependencies
+
+- Type hints are complete
+- Docstrings are present for complex functions
+- SPDX headers are included
+- Imports are properly organized
+
+1. **Test your changes**: Add appropriate tests for new functionality
+
+- Add smoke tests for critical paths
+- Add unit tests for new components
+- Add integration tests for external dependencies
 
 ### Commit Messages
+
 Use clear, descriptive commit messages that explain:
+
 - What was changed
 - Why it was changed
 - Any breaking changes or important notes
 
 Example:
-```
+
+```text
 feat: add smoke test for bot startup
 
 - Add test_bot_starts_without_crashing to verify core workflow
@@ -137,11 +159,13 @@ feat: add smoke test for bot startup
 This project uses a comprehensive testing strategy with three test types:
 
 ### Test Types
+
 - **Unit tests** (`tests/unit/`): Isolated component tests with mocks. Run first.
 - **Integration tests** (`tests/integration/`): Tests with real external dependencies. Run after unit tests.
 - **Smoke tests** (`tests/smoke/`): Minimal, post-deployment health checks that verify the most essential workflows (e.g., app starts, config loads, login page reachable). Run after integration tests. Smoke tests are not end-to-end (E2E) tests and should not cover full user workflows.
 
 ### Running Tests
+
 ```bash
 # Run all tests in order (unit → integration → smoke)
 pdm run test:cov
@@ -158,31 +182,37 @@ pdm run smoke:cov  # Smoke tests with coverage
 ```
 
 ### Adding New Tests
+
 1. **Determine test type** based on what you're testing:
-   - **Smoke tests**: Minimal, critical health checks (not full user workflows)
-   - **Unit tests**: Individual components, isolated functionality
-   - **Integration tests**: External dependencies, real network calls
 
-2. **Place in correct directory**:
-   - `tests/smoke/` for smoke tests
-   - `tests/unit/` for unit tests
-   - `tests/integration/` for integration tests
+- **Smoke tests**: Minimal, critical health checks (not full user workflows)
+- **Unit tests**: Individual components, isolated functionality
+- **Integration tests**: External dependencies, real network calls
 
-3. **Add proper markers**:
+1. **Place in correct directory**:
+
+- `tests/smoke/` for smoke tests
+- `tests/unit/` for unit tests
+- `tests/integration/` for integration tests
+
+1. **Add proper markers**:
+
    ```python
    @pytest.mark.smoke      # For smoke tests
    @pytest.mark.itest      # For integration tests
    @pytest.mark.asyncio    # For async tests
    ```
 
-4. **Use existing fixtures** when possible (see `tests/conftest.py`)
+2. **Use existing fixtures** when possible (see `tests/conftest.py`)
 
 For detailed testing guidelines, see [docs/TESTING.md](docs/TESTING.md).
 
 ## Code Quality Standards
 
 ### File Headers
+
 All Python files must start with SPDX license headers:
+
 ```python
 # SPDX-FileCopyrightText: © <your name> and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
@@ -190,11 +220,13 @@ All Python files must start with SPDX license headers:
 ```
 
 ### Import Organization
+
 - Use absolute imports for project modules: `from kleinanzeigen_bot import KleinanzeigenBot`
 - Use relative imports for test utilities: `from tests.conftest import SmokeKleinanzeigenBot`
 - Group imports: standard library, third-party, local (with blank lines between groups)
 
 ### Type Hints
+
 - Always use type hints for function parameters and return values
 - Use `Any` from `typing` for complex types
 - Use `Final` for constants
@@ -203,31 +235,37 @@ All Python files must start with SPDX license headers:
 ### Documentation
 
 #### Docstrings
+
 - Use docstrings for **complex functions and classes that need explanation**
 - Include examples in docstrings for complex functions (see `utils/misc.py` for examples)
 
 #### Comments
+
 - **Use comments to explain your code logic and reasoning**
 - Comment on complex algorithms, business logic, and non-obvious decisions
 - Explain "why" not just "what" - the reasoning behind implementation choices
 - Use comments for edge cases, workarounds, and platform-specific code
 
 #### Module Documentation
+
 - Add module docstrings for packages and complex modules
 - Document the purpose and contents of each module
 
 #### Model Documentation
+
 - Use `Field(description="...")` for Pydantic model fields to document their purpose
 - Include examples in field descriptions for complex configurations
 - Document validation rules and constraints
 
 #### Logging
+
 - Use structured logging with `loggers.get_logger()`
 - Include context in log messages to help with debugging
 - Use appropriate log levels (DEBUG, INFO, WARNING, ERROR)
 - Log important state changes and decision points
 
 #### Timeout configuration
+
 - The default timeout (`timeouts.default`) already wraps all standard DOM helpers (`web_find`, `web_click`, etc.) via `WebScrapingMixin._timeout/_effective_timeout`. Use it unless a workflow clearly needs a different SLA.
 - Reserve `timeouts.quick_dom` for transient overlays (shipping dialogs, payment prompts, toast banners) that should render almost instantly; call `self._timeout("quick_dom")` in those spots to keep the UI responsive.
 - For single selectors that occasionally need more headroom, pass an inline override instead of creating a new config key, e.g. `custom = self._timeout(override = 12.5); await self.web_find(..., timeout = custom)`.
@@ -236,6 +274,7 @@ All Python files must start with SPDX license headers:
 - Encourage users to raise `timeouts.multiplier` when everything is slow, and override existing keys in `config.yaml` before introducing new ones. This keeps the configuration surface minimal.
 
 #### Examples
+
 ```python
 def parse_duration(text: str) -> timedelta:
     """
@@ -265,7 +304,9 @@ def parse_duration(text: str) -> timedelta:
         # ... handle other units
     return timedelta(**kwargs)
 ```
+
 ### Error Handling
+
 - Use specific exception types when possible
 - Include meaningful error messages
 - Use `pytest.fail()` with descriptive messages in tests
@@ -276,7 +317,9 @@ def parse_duration(text: str) -> timedelta:
 We use GitHub issues to track bugs and feature requests. Please ensure your description is clear and has sufficient instructions to be able to reproduce the issue.
 
 ### Bug Reports
+
 When reporting a bug, please ensure you:
+
 - Confirm the issue is reproducible on the latest release
 - Clearly describe the expected and actual behavior
 - Provide detailed steps to reproduce the issue
@@ -287,7 +330,9 @@ When reporting a bug, please ensure you:
 This helps maintainers quickly triage and address issues.
 
 ### Feature Requests
+
 Include:
+
 - Clear description of the desired feature
 - Use case or problem it solves
 - Any implementation ideas or considerations
@@ -314,6 +359,7 @@ Before submitting a pull request, please ensure you:
 See the [Pull Request template](.github/PULL_REQUEST_TEMPLATE.md) for the full checklist and required fields.
 
 To submit a pull request:
+
 - Fork our repository
 - Push your feature branch to your fork
 - Open a pull request on GitHub, answering any default questions in the interface

@@ -27,6 +27,7 @@ For details on the new smoke test strategy and contributor guidance, see [TESTIN
 **kleinanzeigen-bot** is a command-line application to **publish, update, delete, and republish listings** on kleinanzeigen.de.
 
 ### Key Features
+
 - **Automated Publishing**: Publish new listings from YAML/JSON configuration files
 - **Smart Republishing**: Automatically republish listings at configurable intervals to keep them at the top of search results
 - **Bulk Management**: Update or delete multiple listings at once
@@ -48,7 +49,6 @@ Es liegt in Ihrer Verantwortung, die rechtliche Zulässigkeit der Nutzung dieses
 Die Entwickler übernehmen keinerlei Haftung für mögliche Schäden oder rechtliche Konsequenzen.
 Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist untersagt.
 
-
 ## <a name="installation"></a>Installation
 
 ### Installation using pre-compiled exe
@@ -62,6 +62,7 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 1. Download and run the app by entering the following commands:
 
    1. On Windows:
+
        ```batch
        curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-windows-amd64.exe -o kleinanzeigen-bot.exe
 
@@ -69,6 +70,7 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
        ```
 
    1. On Linux:
+
        ```shell
        curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-linux-amd64 -o kleinanzeigen-bot
 
@@ -78,6 +80,7 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
        ```
 
    1. On macOS:
+
        ```shell
        curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-darwin-amd64 -o kleinanzeigen-bot
 
@@ -88,12 +91,13 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 
 ### Installation using Docker
 
-1. The following components need to be installed:
+The following components need to be installed:
    1. [Docker](https://www.docker.com/)
    1. [Bash](https://www.gnu.org/software/bash/) (on Windows e.g. via [Cygwin](https://www.cygwin.com/), [MSys2](https://www.msys2.org/) or git)
-   1. [X11 - X Window System](https://en.wikipedia.org/wiki/X_Window_System) display server (on Windows e.g. https://github.com/P-St/Portable-X-Server/releases/latest)
+   1. [X11 - X Window System](https://en.wikipedia.org/wiki/X_Window_System) display server (on Windows e.g. <https://github.com/P-St/Portable-X-Server/releases/latest>)
 
 **Running the docker image:**
+
 1. Ensure the X11 Server is running
 
 1. Run the docker image:
@@ -115,42 +119,50 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 ### Installation from source
 
 1. The following components need to be installed:
-   1. [Chromium](https://www.chromium.org/getting-involved/download-chromium), [Google Chrome](https://www.google.com/chrome/),
+   - [Chromium](https://www.chromium.org/getting-involved/download-chromium), [Google Chrome](https://www.google.com/chrome/),
       or Chromium based [Microsoft Edge](https://www.microsoft.com/edge) browser
-   1. [Python](https://www.python.org/) **3.10** or newer
-   1. [pip](https://pypi.org/project/pip/)
-   1. [git client](https://git-scm.com/downloads)
+   - [Python](https://www.python.org/) **3.10** or newer
+   - [pip](https://pypi.org/project/pip/)
+   - [git client](https://git-scm.com/downloads)
 
 1. Open a command/terminal window
 1. Clone the repo using
-   ```
+
+   ```bash
    git clone https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
    ```
+
 1. Change into the directory:
-   ```
+
+   ```bash
    cd kleinanzeigen-bot
    ```
+
 1. Install the Python dependencies using:
+
    ```bash
    pip install pdm
 
    pdm install
    ```
+
 1. Run the app:
-   ```
+
+   ```bash
    pdm run app --help
    ```
 
 ### Installation from source using Docker
 
 1. The following components need to be installed:
-   1. [Docker](https://www.docker.com/)
-   1. [git client](https://git-scm.com/downloads)
-   1. [Bash](https://www.gnu.org/software/bash/) (on Windows e.g. via [Cygwin](https://www.cygwin.com/), [MSys2](https://www.msys2.org/) or git)
-   1. [X11 - X Window System](https://en.wikipedia.org/wiki/X_Window_System) display server (on Windows e.g. https://github.com/P-St/Portable-X-Server/releases/latest)
+   - [Docker](https://www.docker.com/)
+   - [git client](https://git-scm.com/downloads)
+   - [Bash](https://www.gnu.org/software/bash/) (on Windows e.g. via [Cygwin](https://www.cygwin.com/), [MSys2](https://www.msys2.org/) or git)
+   - [X11 - X Window System](https://en.wikipedia.org/wiki/X_Window_System) display server (on Windows e.g. <https://github.com/P-St/Portable-X-Server/releases/latest>)
 
 1. Clone the repo using
-   ```
+
+   ```bash
    git clone https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
    ```
 
@@ -160,7 +172,7 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 
 1. Ensure the image is built:
 
-   ```
+   ```console
    $ docker image ls
    REPOSITORY                            TAG      IMAGE ID       CREATED       SIZE
    second-hand-friends/kleinanzeigen-bot latest   c31fd256eeea   1 minute ago  590MB
@@ -168,6 +180,7 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
    ```
 
 **Running the docker image:**
+
 1. Ensure the X11 Server is running
 
 1. Run the docker image:
@@ -186,10 +199,9 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
      --help
    ```
 
-
 ## <a name="usage"></a>Usage
 
-```
+```text
 Usage: kleinanzeigen-bot COMMAND [OPTIONS]
 
 Commands:
@@ -473,11 +485,13 @@ By default a new browser process will be launched. To reuse a manually launched 
    Starting with Chrome 136 (March 2025), Google has implemented security changes that require `--user-data-dir` to be specified when using `--remote-debugging-port`. This prevents attackers from accessing the default Chrome profile and stealing cookies/credentials.
 
    **You must now use:**
+
    ```bash
    chrome --remote-debugging-port=9222 --user-data-dir=/path/to/custom/directory
    ```
 
    **And in your config.yaml:**
+
    ```yaml
    browser:
      arguments:
@@ -489,6 +503,7 @@ By default a new browser process will be launched. To reuse a manually launched 
    **The bot will automatically detect Chrome 136+ and validate your configuration. If validation fails, you'll see clear error messages with specific instructions on how to fix your configuration.**
 
 1. In your config.yaml specify the same flags as browser arguments, e.g.:
+
    ```yaml
    browser:
      arguments:
@@ -509,11 +524,13 @@ By default a new browser process will be launched. To reuse a manually launched 
 If you encounter browser connection problems, the bot includes a diagnostic command to help identify issues:
 
 **For binary users:**
+
 ```bash
 kleinanzeigen-bot diagnose
 ```
 
 **For source users:**
+
 ```bash
 pdm run app diagnose
 ```
@@ -534,14 +551,14 @@ This command will check your browser setup and provide troubleshooting informati
 - [tillvogt/KleinanzeigenScraper](https://github.com/tillvogt/KleinanzeigenScraper) (Python) Webscraper which stores scraped info from kleinanzeigen.de in an SQL database
 - [TLINDEN/Kleingebäck](https://github.com/TLINDEN/kleingebaeck) (Go) kleinanzeigen.de Backup
 
-
 ## <a name="license"></a>License
 
 All files in this repository are released under the [GNU Affero General Public License v3.0 or later](LICENSE.txt).
 
 Individual files contain the following tag instead of the full license text:
-```
+
+```text
 SPDX-License-Identifier: AGPL-3.0-or-later
 ```
 
-This enables machine processing of license information based on the SPDX License Identifiers that are available here: https://spdx.org/licenses/.
+This enables machine processing of license information based on the SPDX License Identifiers that are available here: <https://spdx.org/licenses/>.

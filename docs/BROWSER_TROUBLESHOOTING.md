@@ -9,12 +9,14 @@ This guide helps you resolve common browser connection issues with the kleinanze
 Google implemented security changes in Chrome 136 that require `--user-data-dir` to be specified when using `--remote-debugging-port`. This prevents attackers from accessing the default Chrome profile and stealing cookies/credentials.
 
 **Quick Fix:**
+
 ```bash
 # Start Chrome with custom user data directory
 chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug-profile
 ```
 
 **In your config.yaml:**
+
 ```yaml
 browser:
   arguments:
@@ -32,16 +34,19 @@ For more details, see [Chrome 136+ Security Changes](#5-chrome-136-security-chan
 Run the diagnostic command to automatically check your setup:
 
 **For binary users:**
+
 ```bash
 kleinanzeigen-bot diagnose
 ```
 
 **For source users:**
+
 ```bash
 pdm run app diagnose
 ```
 
 This will check:
+
 - Browser binary availability and permissions
 - User data directory permissions
 - Remote debugging port status
@@ -52,7 +57,7 @@ This will check:
 **Automatic Chrome 136+ Validation:**
 The bot automatically detects Chrome/Edge 136+ and validates your configuration. If you're using Chrome 136+ with remote debugging but missing the required `--user-data-dir` setting, you'll see clear error messages like:
 
-```
+```text
 Chrome 136+ configuration validation failed: Chrome 136+ requires --user-data-dir
 Please update your configuration to include --user-data-dir for remote debugging
 ```
@@ -62,11 +67,13 @@ The bot will also provide specific instructions on how to fix your configuration
 ### Issue: Slow page loads or recurring TimeoutError
 
 **Symptoms:**
+
 - `_extract_category_from_ad_page` fails intermittently due to breadcrumb lookups timing out
 - Captcha/SMS/GDPR prompts appear right after a timeout
 - Requests to GitHub's API fail sporadically with timeout errors
 
 **Solutions:**
+
 1. Increase `timeouts.multiplier` in `config.yaml` (e.g. `2.0` doubles every timeout consistently).
 2. Override specific keys under `timeouts` (e.g. `pagination_initial: 20.0`) if only a single selector is problematic.
 3. Keep `retry_enabled` on so that DOM lookups are retried with exponential backoff.
@@ -76,10 +83,12 @@ The bot will also provide specific instructions on how to fix your configuration
 ### Issue 1: "Failed to connect to browser" with "root" error
 
 **Symptoms:**
+
 - Error message mentions "One of the causes could be when you are running as root"
 - Connection fails when using existing browser profiles
 
 **Causes:**
+
 1. Running the application as root user
 2. Browser profile is locked or in use by another process
 3. Insufficient permissions to access the browser profile
@@ -88,6 +97,7 @@ The bot will also provide specific instructions on how to fix your configuration
 **Solutions:**
 
 #### 1. Don't run as root
+
 ```bash
 # ❌ Don't do this
 sudo pdm run app publish
@@ -97,6 +107,7 @@ pdm run app publish
 ```
 
 #### 2. Close all browser instances
+
 ```bash
 # On Linux/macOS
 pkill -f chrome
@@ -109,7 +120,9 @@ taskkill /f /im msedge.exe
 ```
 
 #### 3. Remove user_data_dir temporarily
+
 Edit your `config.yaml` and comment out or remove the `user_data_dir` line:
+
 ```yaml
 browser:
   # user_data_dir: C:\Users\user\AppData\Local\Microsoft\Edge\User Data  # Comment this out
@@ -117,6 +130,7 @@ browser:
 ```
 
 #### 4. Start browser manually with remote debugging
+
 ```bash
 # For Chrome (macOS)
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug-profile
@@ -138,6 +152,7 @@ chromium --remote-debugging-port=9222 --user-data-dir=/tmp/chromium-debug-profil
 ```
 
 Then in your `config.yaml`:
+
 ```yaml
 browser:
   arguments:
@@ -146,17 +161,19 @@ browser:
   user_data_dir: "/tmp/chrome-debug-profile"     # Must match the argument above
 ```
 
-**⚠️ IMPORTANT: Chrome 136+ Security Requirement**
+#### ⚠️ IMPORTANT: Chrome 136+ Security Requirement
 
 Starting with Chrome 136 (March 2025), Google has implemented security changes that require `--user-data-dir` to be specified when using `--remote-debugging-port`. This prevents attackers from accessing the default Chrome profile and stealing cookies/credentials. See [Chrome's security announcement](https://developer.chrome.com/blog/remote-debugging-port?hl=de) for more details.
 
 ### Issue 2: "Browser process not reachable at 127.0.0.1:9222"
 
 **Symptoms:**
+
 - Port check fails when trying to connect to existing browser
 - Browser appears to be running but connection fails
 
 **Causes:**
+
 1. Browser not started with remote debugging port
 2. Port is blocked by firewall
 3. Browser crashed or closed
@@ -168,7 +185,9 @@ Starting with Chrome 136 (March 2025), Google has implemented security changes t
 **Solutions:**
 
 #### 1. Verify browser is started with remote debugging
+
 Make sure your browser is started with the correct flag:
+
 ```bash
 # Check if browser is running with remote debugging
 netstat -an | grep 9222  # Linux/macOS
@@ -176,6 +195,7 @@ netstat -an | findstr 9222  # Windows
 ```
 
 #### 2. Start browser manually first
+
 ```bash
 # Start browser with remote debugging
 chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug
@@ -187,9 +207,10 @@ pdm run app publish        # For source users
 ```
 
 #### 3. macOS-specific: Chrome started but connection fails
+
 If you're on macOS and Chrome is started with remote debugging but the bot still can't connect:
 
-**⚠️ IMPORTANT: This is a Chrome/macOS security issue that requires a dedicated user data directory**
+#### ⚠️ IMPORTANT: This is a Chrome/macOS security issue that requires a dedicated user data directory
 
 ```bash
 # Method 1: Use the full path to Chrome with dedicated user data directory
@@ -221,12 +242,14 @@ browser:
 ```
 
 **Common macOS issues:**
+
 - Chrome/macOS security restrictions require a dedicated user data directory
 - The `--user-data-dir` flag is **mandatory** for remote debugging on macOS
 - Use `--disable-dev-shm-usage` to avoid shared memory issues
 - The user data directory must match between manual Chrome startup and config.yaml
 
 #### 4. Browser update issues
+
 If it worked before but stopped working after a browser update:
 
 ```bash
@@ -249,12 +272,14 @@ taskkill /f /im chrome.exe  # Windows
 ```
 
 **After browser updates:**
+
 - Chrome may have changed how remote debugging works
 - Security restrictions may have been updated
 - Try using a fresh user data directory to avoid conflicts
 - Ensure you're using the latest version of the bot
 
 #### 5. Chrome 136+ Security Changes (March 2025)
+
 If you're using Chrome 136 or later and remote debugging stopped working:
 
 **The Problem:**
@@ -272,6 +297,7 @@ chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug-profile
 ```
 
 **In your config.yaml:**
+
 ```yaml
 browser:
   arguments:
@@ -281,22 +307,27 @@ browser:
 ```
 
 **Why this change was made:**
+
 - Prevents attackers from accessing the default Chrome profile
 - Protects cookies and login credentials
 - Uses a different encryption key for the custom profile
 - Makes debugging more secure
 
 **For more information:**
+
 - [Chrome's security announcement](https://developer.chrome.com/blog/remote-debugging-port?hl=de)
 - [GitHub issue discussion](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/604)
 
 #### 5. Check firewall settings
+
 - Windows: Check Windows Defender Firewall
 - macOS: Check System Preferences > Security & Privacy > Firewall
 - Linux: Check iptables or ufw settings
 
 #### 6. Use different port
+
 Try a different port in case 9222 is blocked:
+
 ```yaml
 browser:
   arguments:
@@ -306,6 +337,7 @@ browser:
 ### Issue 3: Profile directory issues
 
 **Symptoms:**
+
 - Errors about profile directory not found
 - Permission denied errors
 - Profile locked errors
@@ -313,6 +345,7 @@ browser:
 **Solutions:**
 
 #### 1. Use temporary profile
+
 ```yaml
 browser:
   user_data_dir: "/tmp/chrome-temp"  # Linux/macOS
@@ -321,6 +354,7 @@ browser:
 ```
 
 #### 2. Check profile permissions
+
 ```bash
 # Linux/macOS
 ls -la ~/.config/google-chrome/
@@ -331,6 +365,7 @@ chmod 755 ~/.config/google-chrome/
 ```
 
 #### 3. Remove profile temporarily
+
 ```yaml
 browser:
   # user_data_dir: ""  # Comment out or remove
@@ -341,16 +376,19 @@ browser:
 ### Issue 4: Platform-specific issues
 
 #### Windows
+
 - **Antivirus software**: Add browser executable to exclusions
 - **Windows Defender**: Add folder to exclusions
 - **UAC**: Run as administrator if needed (but not recommended)
 
 #### macOS
+
 - **Gatekeeper**: Allow browser in System Preferences > Security & Privacy
 - **SIP**: System Integrity Protection might block some operations
 - **Permissions**: Grant full disk access to terminal/IDE
 
 #### Linux
+
 - **Sandbox**: Add `--no-sandbox` to browser arguments
 - **Root user**: Never run as root, use regular user
 - **Display**: Ensure X11 or Wayland is properly configured
@@ -358,6 +396,7 @@ browser:
 ## Configuration Examples
 
 ### Basic working configuration
+
 ```yaml
 browser:
   arguments:
@@ -367,6 +406,7 @@ browser:
 ```
 
 ### Using existing browser
+
 ```yaml
 browser:
   arguments:
@@ -377,6 +417,7 @@ browser:
 ```
 
 ### Using existing browser on macOS (REQUIRED configuration)
+
 ```yaml
 browser:
   arguments:
@@ -388,6 +429,7 @@ browser:
 ```
 
 ### Using specific profile
+
 ```yaml
 browser:
   user_data_dir: "C:\\Users\\username\\AppData\\Local\\Google\\Chrome\\User Data"
@@ -399,6 +441,7 @@ browser:
 ## Advanced Troubleshooting
 
 ### Check browser compatibility
+
 ```bash
 # Test if browser can be started manually
 # macOS
@@ -416,6 +459,7 @@ msedge --version
 ```
 
 ### Monitor browser processes
+
 ```bash
 # Linux/macOS
 ps aux | grep chrome
@@ -427,6 +471,7 @@ netstat -an | findstr 9222
 ```
 
 ### Debug with verbose logging
+
 ```bash
 kleinanzeigen-bot -v publish  # For binary users
 # or
@@ -434,6 +479,7 @@ pdm run app -v publish        # For source users
 ```
 
 ### Test browser connection manually
+
 ```bash
 # Test if port is accessible
 curl http://localhost:9222/json/version

@@ -1,4 +1,5 @@
 ## ℹ️ Description
+
 *Provide a concise summary of the changes introduced in this pull request.*
 
 - Link to the related issue(s): Issue #
@@ -10,14 +11,17 @@ Bullet-point key changes introduced.
 Mention any dependencies, configuration changes, or additional requirements introduced.
 
 ### ⚙️ Type of Change
+
 Select the type(s) of change(s) included in this pull request:
+
 - [ ] 🐞 Bug fix (non-breaking change which fixes an issue)
 - [ ] ✨ New feature (adds new functionality without breaking existing usage)
 - [ ] 💥 Breaking change (changes that might break existing user setups, scripts, or configurations)
 
-
 ## ✅ Checklist
+
 Before requesting a review, confirm the following:
+
 - [ ] I have reviewed my changes to ensure they meet the project's standards.
 - [ ] I have tested my changes and ensured that all tests pass  (`pdm run test`).
 - [ ] I have formatted the code (`pdm run format`).
