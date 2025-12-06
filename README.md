@@ -294,6 +294,7 @@ timeouts:
   gdpr_prompt: 10.0                   # Timeout when handling GDPR dialogs
   publishing_result: 300.0            # Timeout for publishing status checks
   publishing_confirmation: 20.0       # Timeout for publish confirmation redirect
+  image_upload: 30.0                  # Timeout for image upload and server-side processing
   pagination_initial: 10.0            # Timeout for first pagination lookup
   pagination_follow_up: 5.0           # Timeout for subsequent pagination clicks
   quick_dom: 2.0                      # Generic short DOM timeout (shipping dialogs, etc.)
