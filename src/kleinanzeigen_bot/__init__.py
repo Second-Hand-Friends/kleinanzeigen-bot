@@ -1265,11 +1265,19 @@ class KleinanzeigenBot(WebScrapingMixin):
         LOG.info(_(" -> waiting for %s to be processed..."), pluralize("image", ad_cfg.images))
 
         async def check_thumbnails_uploaded() -> bool:
-            thumbnails = await self.web_find_all(By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li.ui-sortable-handle")
-            current_count = len(thumbnails)
-            if current_count < expected_count:
-                LOG.debug(_(" -> %d of %d images processed"), current_count, expected_count)
-            return current_count == expected_count
+            try:
+                thumbnails = await self.web_find_all(
+                    By.CSS_SELECTOR,
+                    "ul#j-pictureupload-thumbnails > li.ui-sortable-handle",
+                    timeout = self._timeout("quick_dom")  # Fast timeout for polling
+                )
+                current_count = len(thumbnails)
+                if current_count < expected_count:
+                    LOG.debug(_(" -> %d of %d images processed"), current_count, expected_count)
+                return current_count == expected_count
+            except TimeoutError:
+                # No thumbnails found yet, continue polling
+                return False
 
         try:
             await self.web_await(
@@ -1279,8 +1287,16 @@ class KleinanzeigenBot(WebScrapingMixin):
             )
         except TimeoutError as ex:
             # Get current count for better error message
-            thumbnails = await self.web_find_all(By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li.ui-sortable-handle")
-            current_count = len(thumbnails)
+            try:
+                thumbnails = await self.web_find_all(
+                    By.CSS_SELECTOR,
+                    "ul#j-pictureupload-thumbnails > li.ui-sortable-handle",
+                    timeout = self._timeout("quick_dom")
+                )
+                current_count = len(thumbnails)
+            except TimeoutError:
+                # Still no thumbnails after full timeout
+                current_count = 0
             raise TimeoutError(
                 _("Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d thumbnails.") % {
                     "expected": expected_count,
