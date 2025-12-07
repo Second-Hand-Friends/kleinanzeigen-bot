@@ -524,6 +524,15 @@ kleinanzeigen_bot/update_checker.py:
     : "Sie befinden sich auf einem anderen Commit als das Release für Kanal '%s' (Tag: %s). Dies kann bedeuten, dass Sie voraus, hinterher oder auf einem anderen Branch sind. Lokaler Commit: %s (%s UTC), Release-Commit: %s (%s UTC)"
 
 #################################################
+kleinanzeigen_bot/model/config_model.py:
+#################################################
+  _validate_config:
+    "strategy must be specified when auto_price_reduction is enabled": "strategy muss angegeben werden, wenn auto_price_reduction aktiviert ist"
+    "amount must be specified when auto_price_reduction is enabled": "amount muss angegeben werden, wenn auto_price_reduction aktiviert ist"
+    "min_price must be specified when auto_price_reduction is enabled": "min_price muss angegeben werden, wenn auto_price_reduction aktiviert ist"
+    "Percentage reduction amount must not exceed %s": "Prozentuale Reduktionsmenge darf %s nicht überschreiten"
+
+#################################################
 kleinanzeigen_bot/model/update_check_state.py:
 #################################################
   _parse_timestamp:

@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import math
-from typing import Any
 
 import pytest
 
@@ -155,8 +154,8 @@ def complete_ad_cfg(base_ad_cfg:dict[str, object]) -> dict[str, object]:
 
 
 class SparseDumpAdPartial(AdPartial):
-    def model_dump(self, *args:Any, **kwargs:Any) -> dict[str, object]:  # noqa: ANN401
-        data = super().model_dump(*args, **kwargs)
+    def model_dump(self, *args:object, **kwargs:object) -> dict[str, object]:
+        data = super().model_dump(*args, **kwargs)  # type: ignore[arg-type]
         data.pop("price_reduction_count", None)
         data.pop("repost_count", None)
         return data

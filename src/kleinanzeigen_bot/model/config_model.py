@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+from gettext import gettext as _
 from typing import Annotated, Any, Final, Literal
 
 from pydantic import AfterValidator, Field, model_validator
@@ -51,13 +52,13 @@ class AutoPriceReductionConfig(ContextualModel):
     def _validate_config(self) -> "AutoPriceReductionConfig":
         if self.enabled:
             if self.strategy is None:
-                raise ValueError("strategy must be specified when auto_price_reduction is enabled")
+                raise ValueError(_("strategy must be specified when auto_price_reduction is enabled"))
             if self.amount is None:
-                raise ValueError("amount must be specified when auto_price_reduction is enabled")
+                raise ValueError(_("amount must be specified when auto_price_reduction is enabled"))
             if self.min_price is None:
-                raise ValueError("min_price must be specified when auto_price_reduction is enabled")
+                raise ValueError(_("min_price must be specified when auto_price_reduction is enabled"))
             if self.strategy == "PERCENTAGE" and self.amount > _MAX_PERCENTAGE:
-                raise ValueError(f"Percentage reduction amount must not exceed {_MAX_PERCENTAGE}")
+                raise ValueError(_("Percentage reduction amount must not exceed %s") % _MAX_PERCENTAGE)
         return self
 
 
