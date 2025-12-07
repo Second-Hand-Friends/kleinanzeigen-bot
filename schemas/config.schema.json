@@ -152,7 +152,7 @@
               "type": "null"
             }
           ],
-          "default": null,
+          "default": ".temp/browser-profile",
           "description": "See https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md",
           "title": "User Data Dir"
         },
