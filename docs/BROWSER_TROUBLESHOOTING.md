@@ -69,7 +69,7 @@ The bot will also provide specific instructions on how to fix your configuration
 **Solutions:**
 1. Increase `timeouts.multiplier` in `config.yaml` (e.g. `2.0` doubles every timeout consistently).
 2. Override specific keys under `timeouts` (e.g. `pagination_initial: 20.0`) if only a single selector is problematic.
-3. Keep `retry_enabled` on so that DOM lookups are retried with exponential backoff.
+3. Enable `retry_enabled` temporarily if your environment needs backoff instead of failing fast.
 
 ## Common Issues and Solutions
 

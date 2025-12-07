@@ -519,10 +519,11 @@ class TestAdExtractorNavigation:
             # --- Assertions ---
             assert refs == ["/s-anzeige/test/12345"]  # Now it should match
 
+            pagination_timeout = test_extractor._timeout("pagination_initial")
             # Optional: Verify calls were made as expected
             mock_web_find.assert_has_calls([
                 call(By.ID, "my-manageitems-adlist"),
-                call(By.CSS_SELECTOR, ".Pagination", timeout = 10),
+                call(By.CSS_SELECTOR, ".Pagination", timeout = pagination_timeout),
                 call(By.ID, "my-manageitems-adlist"),
                 call(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = cardbox_mock),
             ], any_order = False)  # Check order if important

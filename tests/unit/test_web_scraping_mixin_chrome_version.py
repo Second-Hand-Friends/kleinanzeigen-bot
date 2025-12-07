@@ -45,7 +45,7 @@ class TestWebScrapingMixinChromeVersionValidation:
             assert mock_detect.call_count == 1
             args, kwargs = mock_detect.call_args
             assert args[0] == "/path/to/chrome"
-            assert kwargs["timeout"] == pytest.approx(10.0)
+            assert kwargs["timeout"] == pytest.approx(6.0)
 
             # Verify validation passed (no exception raised)
             # The validation is now done internally in _validate_chrome_136_configuration
@@ -79,7 +79,7 @@ class TestWebScrapingMixinChromeVersionValidation:
             # Verify detection call and logged error
             assert mock_detect.call_count == 1
             _, kwargs = mock_detect.call_args
-            assert kwargs["timeout"] == pytest.approx(10.0)
+            assert kwargs["timeout"] == pytest.approx(6.0)
             assert "Chrome 136+ configuration validation failed" in caplog.text
             assert "Chrome 136+ requires --user-data-dir" in caplog.text
         finally:
@@ -112,7 +112,7 @@ class TestWebScrapingMixinChromeVersionValidation:
             # Verify detection was called but no validation
             assert mock_detect.call_count == 1
             _, kwargs = mock_detect.call_args
-            assert kwargs["timeout"] == pytest.approx(10.0)
+            assert kwargs["timeout"] == pytest.approx(6.0)
         finally:
             # Restore environment
             if original_env:
@@ -178,7 +178,7 @@ class TestWebScrapingMixinChromeVersionValidation:
             # Verify detection was called
             assert mock_detect.call_count == 1
             _, kwargs = mock_detect.call_args
-            assert kwargs["timeout"] == pytest.approx(10.0)
+            assert kwargs["timeout"] == pytest.approx(6.0)
 
             # Verify debug log message (line 824)
             assert "Could not detect browser version, skipping validation" in caplog.text

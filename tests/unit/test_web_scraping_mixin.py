@@ -448,6 +448,7 @@ class TestTimeoutAndRetryHelpers:
                 raise TimeoutError("first attempt")
             return "done"
 
+        web_scraper.config.timeouts.retry_enabled = True
         web_scraper.config.timeouts.retry_max_attempts = 1
         result = await web_scraper._run_with_timeout_retries(flaky_operation, description = "retry-op")
 
