@@ -893,7 +893,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             # delete previous images because we don't know which have changed
             #############################
             img_items = await self.web_find_all(By.CSS_SELECTOR,
-                                                "ul#j-pictureupload-thumbnails > li.ui-sortable-handle")
+                                                "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)")
             for element in img_items:
                 btn = await self.web_find(By.CSS_SELECTOR, "button.pictureupload-thumbnails-remove", parent = element)
                 await btn.click()
@@ -1268,7 +1268,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             try:
                 thumbnails = await self.web_find_all(
                     By.CSS_SELECTOR,
-                    "ul#j-pictureupload-thumbnails > li.ui-sortable-handle",
+                    "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)",
                     timeout = self._timeout("quick_dom")  # Fast timeout for polling
                 )
                 current_count = len(thumbnails)
@@ -1290,7 +1290,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             try:
                 thumbnails = await self.web_find_all(
                     By.CSS_SELECTOR,
-                    "ul#j-pictureupload-thumbnails > li.ui-sortable-handle",
+                    "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)",
                     timeout = self._timeout("quick_dom")
                 )
                 current_count = len(thumbnails)
