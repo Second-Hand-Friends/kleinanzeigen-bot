@@ -214,14 +214,16 @@ def calculate_auto_price(
     target_reduction_cycle:int
 ) -> int | None:
     """
-    Calculate the effective price for the current run.
+    Calculate the effective price for the current run using commercial rounding.
 
     Args:
         base_price: original configured price used as the starting point.
         auto_price_reduction: reduction configuration (enabled, strategy, amount, min_price, delays).
         target_reduction_cycle: which reduction cycle to calculate the price for (0 = no reduction, 1 = first reduction, etc.).
 
-    Percentage reductions apply to the current price each cycle (compounded). Returns an int rounded via ROUND_HALF_UP, or None when base_price is None.
+    Percentage reductions apply to the current price each cycle (compounded). Each reduction step is rounded
+    to full euros (commercial rounding with ROUND_HALF_UP) before the next reduction is applied.
+    Returns an int representing whole euros, or None when base_price is None.
     """
     if base_price is None:
         return None
@@ -247,11 +249,13 @@ def calculate_auto_price(
             else Decimal(str(auto_price_reduction.amount))
         )
         price -= reduction_value
+        # Commercial rounding: round to full euros after each reduction step
+        price = price.quantize(Decimal("1"), rounding = ROUND_HALF_UP)
         if price <= price_floor:
             price = price_floor
             break
 
-    return int(price.quantize(Decimal("1"), rounding = ROUND_HALF_UP))
+    return int(price)
 
 
 # pyright: reportGeneralTypeIssues=false, reportIncompatibleVariableOverride=false

@@ -487,8 +487,25 @@ def test_extreme_reduction_cycles() -> None:
         auto_price_reduction = config,
         target_reduction_cycle = 100
     )
-    # After 100 cycles of 10% reduction, price should be effectively 0 (1000 * 0.9^100 ≈ 0.00003)
-    assert result == 0
+    # With commercial rounding (round after each step), price stabilizes at 5
+    # because 5 * 0.9 = 4.5 rounds back to 5 with ROUND_HALF_UP
+    assert result == 5
+
+
+@pytest.mark.unit
+def test_commercial_rounding_each_step() -> None:
+    """Test that commercial rounding is applied after each reduction step, not just at the end."""
+    config = AutoPriceReductionConfig(enabled = True, strategy = "PERCENTAGE", amount = 10, min_price = 0)
+    # With 135 EUR and 2x 10% reduction:
+    # Step 1: 135 * 0.9 = 121.5 → rounds to 122 EUR
+    # Step 2: 122 * 0.9 = 109.8 → rounds to 110 EUR
+    # (Without intermediate rounding, it would be: 135 * 0.9^2 = 109.35 → 109 EUR)
+    result = calculate_auto_price(
+        base_price = 135,
+        auto_price_reduction = config,
+        target_reduction_cycle = 2
+    )
+    assert result == 110  # Commercial rounding result
 
 
 @pytest.mark.unit
