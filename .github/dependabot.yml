@@ -17,4 +17,4 @@ updates:
   - pinned
   groups:
     all-actions:
-      patterns: [ "*" ]
+      patterns: ["*"]
