@@ -16,5 +16,5 @@ updates:
   - gha
   - pinned
   groups:
-  all-actions:
-    patterns: [ "*" ]
+    all-actions:
+      patterns: [ "*" ]
