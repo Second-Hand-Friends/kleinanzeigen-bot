@@ -17,7 +17,8 @@ def get_caller(depth:int = 1) -> inspect.FrameInfo | None:
         # inspect.stack() returns FrameInfo objects that contain references to frame objects,
         # which can create circular references. While Python's GC handles this, explicit cleanup
         # is recommended per Python docs: https://docs.python.org/3/library/inspect.html#the-interpreter-stack
-        del stack  # lgtm[py/unnecessary-delete]
+        # codeql[py/unnecessary-delete]: Intentional cleanup to avoid reference cycles with frame objects
+        del stack
 
 
 def is_integer(obj:Any) -> bool:
