@@ -15,3 +15,10 @@ updates:
   - dependencies
   - gha
   - pinned
+  # Group all GitHub Actions updates into a single PR for easier review
+  groups:
+    github-actions:
+      patterns:
+      - "*"
+  # Enable automatic rebasing when conflicts occur
+  rebase-strategy: auto

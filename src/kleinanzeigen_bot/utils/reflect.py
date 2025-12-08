@@ -13,7 +13,11 @@ def get_caller(depth:int = 1) -> inspect.FrameInfo | None:
                 return frame
         return None
     finally:
-        del stack  # Clean up the stack to avoid reference cycles
+        # Explicitly delete stack frames to prevent reference cycles and potential memory leaks.
+        # inspect.stack() returns FrameInfo objects that contain references to frame objects,
+        # which can create circular references. While Python's GC handles this, explicit cleanup
+        # is recommended per Python docs: https://docs.python.org/3/library/inspect.html#the-interpreter-stack
+        del stack  # lgtm[py/unnecessary-delete]
 
 
 def is_integer(obj:Any) -> bool:
