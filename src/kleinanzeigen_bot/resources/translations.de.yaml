@@ -112,6 +112,13 @@ kleinanzeigen_bot/__init__.py:
     " -> found %s": "-> %s gefunden"
     "image": "Bild"
     " -> uploading image [%s]": " -> Lade Bild [%s] hoch"
+    " -> waiting for %s to be processed...": " -> Warte auf Verarbeitung von %s..."
+    " -> all images uploaded successfully": " -> Alle Bilder erfolgreich hochgeladen"
+    "Image upload timeout exceeded": "Zeitüberschreitung beim Hochladen der Bilder"
+    "Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d thumbnails.": "Nicht alle Bilder wurden innerhalb der Zeitüberschreitung hochgeladen. Erwartet: %(expected)d, gefunden: %(found)d Miniaturansichten."
+
+  check_thumbnails_uploaded:
+    " -> %d of %d images processed": " -> %d von %d Bildern verarbeitet"
 
   __check_ad_republication:
     " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days": " -> ÜBERSPRUNGEN: Anzeige [%s] wurde zuletzt vor %d Tagen veröffentlicht. Erneute Veröffentlichung ist erst nach %s Tagen erforderlich"
