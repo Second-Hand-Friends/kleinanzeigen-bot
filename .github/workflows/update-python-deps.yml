@@ -19,6 +19,10 @@ defaults:
 env:
   PYTHON_VERSION: "3.10"
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
 
   ###########################################################
@@ -39,7 +43,8 @@ jobs:
 
 
     - name: Generate GitHub Access Token
-      uses: tibdex/github-app-token@v2  # https://github.com/tibdex/github-app-token
+      uses: tibdex/github-app-token@3beb63f4bd073e61482598c45c71c1019b59b73a # v2.1.0
+      # https://github.com/tibdex/github-app-token
       id: generate_token
       # see https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#authenticating-with-github-app-generated-tokens
       with:
@@ -49,13 +54,14 @@ jobs:
 
 
     - name: Git Checkout
-      uses: actions/checkout@v6  # https://github.com/actions/checkout
+      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.0
+      # https://github.com/actions/checkout
       with:
         token: ${{ steps.generate_token.outputs.token }}
 
 
     - name: "Install: Python and PDM"  # https://github.com/pdm-project/setup-pdm
-      uses: pdm-project/setup-pdm@v4
+      uses: pdm-project/setup-pdm@9e87bfc944c539be61c7653113bdb80ea5fe09d6 # v4.4
       with:
         python-version: "${{ env.PYTHON_VERSION }}"
         cache: true
@@ -101,7 +107,8 @@ jobs:
 
 
     - name: Create PR
-      uses: peter-evans/create-pull-request@v7  # https://github.com/peter-evans/create-pull-request
+      uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.5
+      # https://github.com/peter-evans/create-pull-request
       if: "${{ steps.update_deps.outputs.updates != '' }}"
       with:
         title: "chore: ${{ steps.update_deps.outputs.title }}"
