@@ -451,9 +451,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         RELEASE_NAME: ${{ steps.release.outputs.name }}
-        COMMIT_MSG: |  # https://stackoverflow.com/a/78420438/5116073
-          ${{ github.event.head_commit.message }}
-
+        LEGAL_NOTICE: |
           ---
           #### ⚠️ Rechtlicher Hinweis
           <p>Die Verwendung dieses Programms kann unter Umständen gegen die zum jeweiligen Zeitpunkt bei kleinanzeigen.de geltenden Nutzungsbedingungen verstoßen.
@@ -473,7 +471,8 @@ jobs:
           --title "$RELEASE_NAME" \
           ${{ steps.release.outputs.name == 'latest' && '--latest' || '' }} \
           ${{ steps.release.outputs.name == 'preview' && '--prerelease' || '' }} \
-          --notes "$COMMIT_MSG" \
+          --generate-notes \
+          --notes "$LEGAL_NOTICE" \
           --target "${{ github.sha }}" \
           kleinanzeigen-bot-darwin-amd64 \
           kleinanzeigen-bot-darwin-arm64 \
