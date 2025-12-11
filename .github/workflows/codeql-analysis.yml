@@ -67,11 +67,12 @@ jobs:
 
 
     - name: Git Checkout
-      uses: actions/checkout@v6  # https://github.com/actions/checkout
+      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.0
+      # https://github.com/actions/checkout
 
 
     - name: "Install: Python and PDM"  # https://github.com/pdm-project/setup-pdm
-      uses: pdm-project/setup-pdm@v4
+      uses: pdm-project/setup-pdm@94a823180e06fcde4ad29308721954a521c96ed0 # v4.4
       with:
         python-version: "${{ env.PYTHON_VERSION }}"
         cache: true
@@ -91,7 +92,8 @@ jobs:
 
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v4  # https://github.com/github/codeql-action/blob/main/init/action.yml
+      uses: github/codeql-action/init@cf1bb45a277cb3c205638b2cd5c984db1c46a412 # v4.0.0
+      # https://github.com/github/codeql-action/blob/main/init/action.yml
       with:
         languages: actions,python
         # https://github.com/github/codeql-action#build-modes
@@ -100,4 +102,5 @@ jobs:
         queries: security-and-quality
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v4  # https://github.com/github/codeql-action
+      uses: github/codeql-action/analyze@cf1bb45a277cb3c205638b2cd5c984db1c46a412 # v4.0.0
+      # https://github.com/github/codeql-action

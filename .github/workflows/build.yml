@@ -104,11 +104,12 @@ jobs:
 
 
     - name: Configure Fast APT Mirror
-      uses: vegardit/fast-apt-mirror.sh@v1
+      uses: vegardit/fast-apt-mirror.sh@e5288ed7a13da650050035a7d47c2aa17779bbb3 # v1.4.1
 
 
     - name: Git Checkout
-      uses: actions/checkout@v6  # https://github.com/actions/checkout
+      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.0
+      # https://github.com/actions/checkout
 
 
     - name: "Install: Chromium Browser"
@@ -122,7 +123,7 @@ jobs:
 
 
     - name: "Install: Python and PDM"  # https://github.com/pdm-project/setup-pdm
-      uses: pdm-project/setup-pdm@v4
+      uses: pdm-project/setup-pdm@94a823180e06fcde4ad29308721954a521c96ed0 # v4.4
       with:
         python-version: "${{ matrix.PYTHON_VERSION }}"
         cache: ${{ !startsWith(matrix.os, 'macos') }}  # https://github.com/pdm-project/setup-pdm/issues/55
@@ -246,7 +247,7 @@ jobs:
 
 
     - name: Upload self-contained executable
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
       if: (github.ref_name == 'main' || github.ref_name == 'release') && matrix.PUBLISH_RELEASE && !env.ACT
       with:
         name: artifacts-${{ matrix.os }}
@@ -276,7 +277,7 @@ jobs:
 
 
     - name: Collect coverage reports
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
       if: (github.ref_name == 'main' || github.event_name == 'pull_request') && !env.ACT
       with:
         name: coverage-${{ matrix.os }}-py${{ matrix.PYTHON_VERSION }}
@@ -293,13 +294,17 @@ jobs:
     timeout-minutes: 5
     if: (github.ref_name == 'main' || github.event_name == 'pull_request') && !github.event.act
 
+    permissions:
+      contents: read
+
     steps:
     - name: Git Checkout # required to avoid https://docs.codecov.com/docs/error-reference#unusable-reports
-      uses: actions/checkout@v6  # https://github.com/actions/checkout
+      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.0
+      # https://github.com/actions/checkout
 
 
     - name: Download coverage reports
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
       with:
         pattern: coverage-*
         path: coverage
@@ -310,7 +315,8 @@ jobs:
 
 
     - name: Publish unit-test coverage
-      uses: codecov/codecov-action@v5  # https://github.com/codecov/codecov-action
+      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.0.0
+      # https://github.com/codecov/codecov-action
       with:
         slug: ${{ github.repository }}
         name: unit-coverage
@@ -322,7 +328,8 @@ jobs:
 
 
     - name: Publish integration-test coverage
-      uses: codecov/codecov-action@v5  # https://github.com/codecov/codecov-action
+      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.0.0
+      # https://github.com/codecov/codecov-action
       with:
         slug: ${{ github.repository }}
         name: integration-coverage
@@ -334,7 +341,8 @@ jobs:
 
 
     - name: Publish smoke-test coverage
-      uses: codecov/codecov-action@v5  # https://github.com/codecov/codecov-action
+      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.0.0
+      # https://github.com/codecov/codecov-action
       with:
         slug: ${{ github.repository }}
         name: smoke-coverage
@@ -379,17 +387,18 @@ jobs:
 
 
     - name: Configure Fast APT Mirror
-      uses: vegardit/fast-apt-mirror.sh@v1
+      uses: vegardit/fast-apt-mirror.sh@e5288ed7a13da650050035a7d47c2aa17779bbb3 # v1.4.1
 
 
     - name: Git Checkout
       # only required by "gh release create" to prevent "fatal: Not a git repository"
-      uses: actions/checkout@v6  # https://github.com/actions/checkout
+      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.0
+      # https://github.com/actions/checkout
 
 
     - name: Delete untagged docker image
       continue-on-error: true
-      uses: actions/delete-package-versions@v5
+      uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5.0.0
       with:
         token: ${{ github.token }}
         delete-only-untagged-versions: true
@@ -398,7 +407,7 @@ jobs:
 
 
     - name: Download build artifacts
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
 
 
     - name: Rename build artifacts
@@ -482,7 +491,8 @@ jobs:
 
 
     - name: "Delete intermediate build artifacts"
-      uses: geekyeggo/delete-artifact@v5  # https://github.com/GeekyEggo/delete-artifact/
+      uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.0.0
+      # https://github.com/GeekyEggo/delete-artifact/
       with:
         name: "*"
         failOnError: false
