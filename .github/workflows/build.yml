@@ -123,7 +123,7 @@ jobs:
 
 
     - name: "Install: Python and PDM"  # https://github.com/pdm-project/setup-pdm
-      uses: pdm-project/setup-pdm@9e87bfc944c539be61c7653113bdb80ea5fe09d6 # v4.4
+      uses: pdm-project/setup-pdm@94a823180e06fcde4ad29308721954a521c96ed0 # v4.4
       with:
         python-version: "${{ matrix.PYTHON_VERSION }}"
         cache: ${{ !startsWith(matrix.os, 'macos') }}  # https://github.com/pdm-project/setup-pdm/issues/55
@@ -315,7 +315,7 @@ jobs:
 
 
     - name: Publish unit-test coverage
-      uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.0.0
+      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.0.0
       # https://github.com/codecov/codecov-action
       with:
         slug: ${{ github.repository }}
@@ -328,7 +328,7 @@ jobs:
 
 
     - name: Publish integration-test coverage
-      uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.0.0
+      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.0.0
       # https://github.com/codecov/codecov-action
       with:
         slug: ${{ github.repository }}
@@ -341,7 +341,7 @@ jobs:
 
 
     - name: Publish smoke-test coverage
-      uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.0.0
+      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.0.0
       # https://github.com/codecov/codecov-action
       with:
         slug: ${{ github.repository }}
@@ -398,7 +398,7 @@ jobs:
 
     - name: Delete untagged docker image
       continue-on-error: true
-      uses: actions/delete-package-versions@25ad4af5be03aef10e0b3376b248688b7a44c40b # v5.0.0
+      uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5.0.0
       with:
         token: ${{ github.token }}
         delete-only-untagged-versions: true
@@ -491,7 +491,7 @@ jobs:
 
 
     - name: "Delete intermediate build artifacts"
-      uses: geekyeggo/delete-artifact@b54d29a59e55046d1f7fc8226cdda507e6b9cf62 # v5.0.0
+      uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.0.0
       # https://github.com/GeekyEggo/delete-artifact/
       with:
         name: "*"
