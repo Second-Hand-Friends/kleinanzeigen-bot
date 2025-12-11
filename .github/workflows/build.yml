@@ -451,7 +451,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         RELEASE_NAME: ${{ steps.release.outputs.name }}
-        LEGAL_NOTICE: |  # https://stackoverflow.com/a/78420438/5116073
+        LEGAL_NOTICE: |
           ---
           #### ⚠️ Rechtlicher Hinweis
           <p>Die Verwendung dieses Programms kann unter Umständen gegen die zum jeweiligen Zeitpunkt bei kleinanzeigen.de geltenden Nutzungsbedingungen verstoßen.
