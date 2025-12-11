@@ -646,18 +646,27 @@ class KleinanzeigenBot(WebScrapingMixin):
             pass
 
     async def is_logged_in(self) -> bool:
+        # Use login_detection timeout (10s default) instead of default (5s)
+        # to allow sufficient time for client-side JavaScript rendering after page load.
+        # This is especially important for older sessions (20+ days) that require
+        # additional server-side validation time.
+        login_check_timeout = self._timeout("login_detection")
+
         try:
             # Try to find the standard element first
-            user_info = await self.web_text(By.CLASS_NAME, "mr-medium")
+            user_info = await self.web_text(By.CLASS_NAME, "mr-medium", timeout = login_check_timeout)
             if self.config.login.username.lower() in user_info.lower():
+                LOG.debug("Login detected via .mr-medium element")
                 return True
         except TimeoutError:
             try:
                 # If standard element not found, try the alternative
-                user_info = await self.web_text(By.ID, "user-email")
+                user_info = await self.web_text(By.ID, "user-email", timeout = login_check_timeout)
                 if self.config.login.username.lower() in user_info.lower():
+                    LOG.debug("Login detected via #user-email element")
                     return True
             except TimeoutError:
+                LOG.debug("No login detected - neither .mr-medium nor #user-email found with username")
                 return False
         return False
 
