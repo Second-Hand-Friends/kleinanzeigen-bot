@@ -3,6 +3,7 @@
 ## Overview
 
 The update check feature automatically checks for newer versions of the bot on GitHub. It supports two channels:
+
 - `latest`: Only final releases
 - `prerelease`: Includes pre-releases
 
@@ -18,17 +19,20 @@ update_check:
 ### Interval Format
 
 The interval is specified as a number followed by a unit:
+
 - `s`: seconds
 - `m`: minutes
 - `h`: hours
 - `d`: days
 
 Examples:
+
 - `7d`: Check every 7 days
 - `12h`: Check every 12 hours
 - `30d`: Check every 30 days
 
 Validation rules:
+
 - Minimum interval: 1 day (`1d`)
 - Maximum interval: 30 days (`30d`, roughly 4 weeks)
 - Value must be positive
@@ -53,12 +57,14 @@ The update check state is stored in `.temp/update_check_state.json`. The file fo
 ### Migration
 
 The state file supports version migration:
+
 - Version 0 to 1: Added version field
 - Future versions will be migrated automatically
 
 ### Timezone Handling
 
 All timestamps are stored in UTC:
+
 - When loading:
   - Timestamps without timezone are assumed to be UTC
   - Timestamps with timezone are converted to UTC
@@ -69,6 +75,7 @@ All timestamps are stored in UTC:
 ### Edge Cases
 
 The following edge cases are handled:
+
 - Missing state file: Creates new state file
 - Corrupted state file: Creates new state file
 - Invalid timestamp format: Logs warning, uses current time
@@ -79,6 +86,7 @@ The following edge cases are handled:
 ## Error Handling
 
 The update check feature handles various error scenarios:
+
 - Network errors: Logs error, continues without check
 - GitHub API errors: Logs error, continues without check
 - Version parsing errors: Logs error, continues without check
@@ -88,6 +96,7 @@ The update check feature handles various error scenarios:
 ## Logging
 
 The feature logs various events:
+
 - Check results (new version available, up to date, etc.)
 - State file operations (load, save, migration)
 - Error conditions (network, API, parsing, etc.)
