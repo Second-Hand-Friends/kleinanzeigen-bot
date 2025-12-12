@@ -595,6 +595,7 @@ class KleinanzeigenBot(WebScrapingMixin):
     async def login(self) -> None:
         LOG.info("Checking if already logged in...")
         await self.web_open(f"{self.root_url}")
+        LOG.debug("Current page URL after opening homepage: %s", self.page.url)
 
         if await self.is_logged_in():
             LOG.info("Already logged in as [%s]. Skipping login.", self.config.login.username)
@@ -608,8 +609,14 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         # Sometimes a second login is required
         if not await self.is_logged_in():
+            LOG.debug("First login attempt did not succeed, trying second login attempt")
             await self.fill_login_data_and_send()
             await self.handle_after_login_logic()
+
+            if await self.is_logged_in():
+                LOG.debug("Second login attempt succeeded")
+            else:
+                LOG.warning("Second login attempt also failed - login may not have succeeded")
 
     async def fill_login_data_and_send(self) -> None:
         LOG.info("Logging in as [%s]...", self.config.login.username)
@@ -651,6 +658,8 @@ class KleinanzeigenBot(WebScrapingMixin):
         # This is especially important for older sessions (20+ days) that require
         # additional server-side validation time.
         login_check_timeout = self._timeout("login_detection")
+        effective_timeout = self._effective_timeout("login_detection")
+        LOG.debug("Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)", login_check_timeout, effective_timeout)
 
         try:
             # Try to find the standard element first
@@ -659,6 +668,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 LOG.debug("Login detected via .mr-medium element")
                 return True
         except TimeoutError:
+            LOG.debug("Timeout waiting for .mr-medium element after %.1fs", effective_timeout)
             try:
                 # If standard element not found, try the alternative
                 user_info = await self.web_text(By.ID, "user-email", timeout = login_check_timeout)
@@ -666,6 +676,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     LOG.debug("Login detected via #user-email element")
                     return True
             except TimeoutError:
+                LOG.debug("Timeout waiting for #user-email element after %.1fs", effective_timeout)
                 LOG.debug("No login detected - neither .mr-medium nor #user-email found with username")
                 return False
         return False
