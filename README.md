@@ -444,7 +444,7 @@ When `auto_price_reduction.enabled` is set to `true`, the bot lowers the configu
 
 `min_price` is required whenever `enabled` is `true` and must be less than or equal to `price`; this makes an explicit floor (including `0`) mandatory.
 
-Example snippet:
+**PERCENTAGE strategy example:**
 
 ```yaml
 price: 150
@@ -458,7 +458,25 @@ auto_price_reduction:
   delay_days: 0
 ```
 
-The example above posts the ad at 150 € the first time, then 135 €, 121 €, 109 €, and stops decreasing at 90 €.
+This posts the ad at 150 € the first time, then 135 € (−10%), 121 € (−10%), 109 € (−10%), and stops decreasing at 90 €.
+
+**FIXED strategy example:**
+
+```yaml
+price: 150
+price_type: FIXED
+auto_price_reduction:
+  enabled: true
+  strategy: FIXED
+  amount: 15
+  min_price: 90
+  delay_reposts: 0
+  delay_days: 0
+```
+
+This posts the ad at 150 € the first time, then 135 € (−15 €), 120 € (−15 €), 105 € (−15 €), and stops decreasing at 90 €.
+
+**Note on `delay_days` behavior:** The `delay_days` parameter counts complete 24-hour periods (whole days) since the ad was published. For example, if `delay_days: 7` and the ad was published 6 days and 23 hours ago, the reduction will not yet apply. This ensures predictable behavior and avoids partial-day ambiguity.
 
 Set `auto_price_reduction.enabled: false` (or omit the entire `auto_price_reduction` section) to keep the existing behaviour—prices stay fixed and `repost_count` only acts as tracked metadata for future changes.
 

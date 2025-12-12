@@ -336,7 +336,7 @@ def test_apply_auto_price_reduction_waits_when_reduction_already_applied(
 
     ad_orig:dict[str, Any] = {}
 
-    with caplog.at_level("INFO"):
+    with caplog.at_level("DEBUG"):
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_already.yaml")
 
     expected = _("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts") % ("ad_already.yaml", 3, 3)

@@ -650,7 +650,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             return False
 
         if eligible_cycles <= applied_cycles:
-            LOG.info(
+            LOG.debug(
                 _("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts"),
                 ad_file_relative,
                 applied_cycles,

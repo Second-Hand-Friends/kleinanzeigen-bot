@@ -18,6 +18,7 @@ from kleinanzeigen_bot.utils.misc import parse_datetime, parse_decimal
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
 
 MAX_DESCRIPTION_LENGTH:Final[int] = 4000
+EURO_PRECISION:Final[Decimal] = Decimal("1")
 
 
 def _OPTIONAL() -> Any:
@@ -61,6 +62,38 @@ def _validate_shipping_option_item(v:str) -> str:
 
 
 ShippingOption = Annotated[str, AfterValidator(_validate_shipping_option_item)]
+
+
+def _validate_auto_price_reduction_constraints(
+    price:int | None,
+    auto_price_reduction:AutoPriceReductionConfig | dict[str, Any] | None
+) -> None:
+    """
+    Validate auto_price_reduction configuration constraints.
+
+    Raises ValueError if:
+    - auto_price_reduction is enabled but price is None
+    - min_price exceeds price
+    """
+    if not auto_price_reduction:
+        return
+
+    # Handle both dict (from before validation) and AutoPriceReductionConfig (after validation)
+    if isinstance(auto_price_reduction, dict):
+        enabled = auto_price_reduction.get("enabled", False)
+        min_price = auto_price_reduction.get("min_price")
+    else:
+        enabled = auto_price_reduction.enabled
+        min_price = auto_price_reduction.min_price
+
+    if not enabled:
+        return
+
+    if price is None:
+        raise ValueError("price must be specified when auto_price_reduction is enabled")
+
+    if min_price is not None and min_price > price:
+        raise ValueError("min_price must not exceed price")
 
 
 class AdPartial(ContextualModel):
@@ -133,13 +166,7 @@ class AdPartial(ContextualModel):
             raise ValueError("price is required when price_type is FIXED")
 
         # Validate auto_price_reduction configuration
-        if auto_price_reduction and isinstance(auto_price_reduction, dict):
-            if auto_price_reduction.get("enabled"):
-                if price is None:
-                    raise ValueError("price must be specified when auto_price_reduction is enabled")
-                min_price = auto_price_reduction.get("min_price")
-                if min_price is not None and price is not None and min_price > price:
-                    raise ValueError("min_price must not exceed price")
+        _validate_auto_price_reduction_constraints(price, auto_price_reduction)
 
         return values
 
@@ -231,10 +258,10 @@ def calculate_auto_price(
     price = Decimal(str(base_price))
 
     if not auto_price_reduction or not auto_price_reduction.enabled or target_reduction_cycle <= 0:
-        return int(price.quantize(Decimal("1"), rounding = ROUND_HALF_UP))
+        return int(price.quantize(EURO_PRECISION, rounding = ROUND_HALF_UP))
 
     if auto_price_reduction.strategy is None or auto_price_reduction.amount is None:
-        return int(price.quantize(Decimal("1"), rounding = ROUND_HALF_UP))
+        return int(price.quantize(EURO_PRECISION, rounding = ROUND_HALF_UP))
 
     if auto_price_reduction.min_price is None:
         raise ValueError("min_price must be specified when auto_price_reduction is enabled")
@@ -250,7 +277,7 @@ def calculate_auto_price(
         )
         price -= reduction_value
         # Commercial rounding: round to full euros after each reduction step
-        price = price.quantize(Decimal("1"), rounding = ROUND_HALF_UP)
+        price = price.quantize(EURO_PRECISION, rounding = ROUND_HALF_UP)
         if price <= price_floor:
             price = price_floor
             break
@@ -279,13 +306,7 @@ class Ad(AdPartial):
 
     @model_validator(mode = "after")
     def _validate_auto_price_config(self) -> "Ad":
-        # Note: This validation duplicates checks from AdPartial._validate_price_and_price_type
-        # This is intentional: AdPartial validates raw YAML (with optional None values),
-        # while this validator ensures the final Ad object (after merging defaults) is valid
-        if self.auto_price_reduction.enabled:
-            # Type narrowing: AutoPriceReductionConfig validator ensures min_price is not None when enabled
-            # AdPartial validator ensures price is not None when auto_price_reduction is enabled
-            if self.price is not None and self.auto_price_reduction.min_price is not None:
-                if self.auto_price_reduction.min_price > self.price:
-                    raise ValueError("min_price must not exceed price")
+        # Validate the final Ad object after merging with defaults
+        # This ensures the merged configuration is valid even if raw YAML had None values
+        _validate_auto_price_reduction_constraints(self.price, self.auto_price_reduction)
         return self
