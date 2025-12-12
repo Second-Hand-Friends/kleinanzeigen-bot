@@ -403,6 +403,13 @@
           "title": "Gdpr Prompt",
           "type": "number"
         },
+        "login_detection": {
+          "default": 10.0,
+          "description": "Timeout for detecting existing login session via DOM elements.",
+          "minimum": 1.0,
+          "title": "Login Detection",
+          "type": "number"
+        },
         "publishing_result": {
           "default": 300.0,
           "description": "Timeout for publishing result checks.",

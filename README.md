@@ -292,6 +292,7 @@ timeouts:
   captcha_detection: 2.0              # Timeout for captcha iframe detection
   sms_verification: 4.0               # Timeout for SMS verification banners
   gdpr_prompt: 10.0                   # Timeout when handling GDPR dialogs
+  login_detection: 10.0               # Timeout for detecting existing login session via DOM elements
   publishing_result: 300.0            # Timeout for publishing status checks
   publishing_confirmation: 20.0       # Timeout for publish confirmation redirect
   image_upload: 30.0                  # Timeout for image upload and server-side processing
