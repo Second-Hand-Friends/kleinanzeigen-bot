@@ -533,6 +533,15 @@ kleinanzeigen_bot/model/config_model.py:
     "Percentage reduction amount must not exceed %s": "Prozentuale Reduktionsmenge darf %s nicht überschreiten"
 
 #################################################
+kleinanzeigen_bot/model/ad_model.py:
+#################################################
+  _validate_auto_price_reduction_constraints:
+    "price must be specified when auto_price_reduction is enabled": "price muss angegeben werden, wenn auto_price_reduction aktiviert ist"
+    "min_price must not exceed price": "min_price darf price nicht überschreiten"
+  calculate_auto_price:
+    "min_price must be specified when auto_price_reduction is enabled": "min_price muss angegeben werden, wenn auto_price_reduction aktiviert ist"
+
+#################################################
 kleinanzeigen_bot/model/update_check_state.py:
 #################################################
   _parse_timestamp:

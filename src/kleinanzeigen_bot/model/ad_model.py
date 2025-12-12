@@ -7,6 +7,7 @@ import hashlib, json  # isort: skip
 from collections.abc import Mapping, Sequence
 from datetime import datetime  # noqa: TC003 Move import into a type-checking block
 from decimal import ROUND_HALF_UP, Decimal
+from gettext import gettext as _
 from typing import Annotated, Any, Final, Literal
 
 from pydantic import AfterValidator, Field, field_validator, model_validator
@@ -90,10 +91,10 @@ def _validate_auto_price_reduction_constraints(
         return
 
     if price is None:
-        raise ValueError("price must be specified when auto_price_reduction is enabled")
+        raise ValueError(_("price must be specified when auto_price_reduction is enabled"))
 
     if min_price is not None and min_price > price:
-        raise ValueError("min_price must not exceed price")
+        raise ValueError(_("min_price must not exceed price"))
 
 
 class AdPartial(ContextualModel):
@@ -264,12 +265,12 @@ def calculate_auto_price(
         return int(price.quantize(EURO_PRECISION, rounding = ROUND_HALF_UP))
 
     if auto_price_reduction.min_price is None:
-        raise ValueError("min_price must be specified when auto_price_reduction is enabled")
+        raise ValueError(_("min_price must be specified when auto_price_reduction is enabled"))
 
     price_floor = Decimal(str(auto_price_reduction.min_price))
     repost_cycles = target_reduction_cycle
 
-    for _ in range(repost_cycles):
+    for _cycle in range(repost_cycles):
         reduction_value = (
             price * Decimal(str(auto_price_reduction.amount)) / Decimal("100")
             if auto_price_reduction.strategy == "PERCENTAGE"

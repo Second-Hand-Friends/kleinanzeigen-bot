@@ -563,8 +563,6 @@ class KleinanzeigenBot(WebScrapingMixin):
                 ensure(images or not ad_cfg.images, f"No images found for given file patterns {ad_cfg.images} at {ad_dir}")
                 ad_cfg.images = list(dict.fromkeys(images))
 
-            self.__apply_auto_price_reduction(ad_cfg, ad_cfg_orig, ad_file_relative)
-
             ads.append((
                 ad_file,
                 ad_cfg,
@@ -870,6 +868,11 @@ class KleinanzeigenBot(WebScrapingMixin):
             if self.config.publishing.delete_old_ads == "BEFORE_PUBLISH" and not self.keep_old_ads:
                 await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title)
 
+            # Apply auto price reduction only for REPLACE operations (actual reposts)
+            # This ensures price reductions only happen on republish, not on UPDATE
+            ad_file_relative = os.path.relpath(ad_file, os.path.dirname(self.config_file_path))  # noqa: ASYNC240 - relpath is pure string manipulation, no I/O
+            self.__apply_auto_price_reduction(ad_cfg, ad_cfg_orig, ad_file_relative)
+
             LOG.info("Publishing ad '%s'...", ad_cfg.title)
             await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html")
         else:
@@ -1074,18 +1077,21 @@ class KleinanzeigenBot(WebScrapingMixin):
         if not ad_cfg.created_on and not ad_cfg.id:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
 
-        # Increment repost_count after successful publish
-        # Note: This happens AFTER publish, so price reduction logic (which runs during load)
-        # sees the count from the PREVIOUS run. This is intentional: the first publish uses
-        # repost_count=0 (no reduction), the second publish uses repost_count=1 (first reduction), etc.
-        current_reposts = int(ad_cfg_orig.get("repost_count", ad_cfg.repost_count or 0))
-        ad_cfg_orig["repost_count"] = current_reposts + 1
-        ad_cfg.repost_count = ad_cfg_orig["repost_count"]
+        # Increment repost_count and persist price_reduction_count only for REPLACE operations (actual reposts)
+        # This ensures counters only advance on republish, not on UPDATE
+        if mode == AdUpdateStrategy.REPLACE:
+            # Increment repost_count after successful publish
+            # Note: This happens AFTER publish, so price reduction logic (which runs before publish)
+            # sees the count from the PREVIOUS run. This is intentional: the first publish uses
+            # repost_count=0 (no reduction), the second publish uses repost_count=1 (first reduction), etc.
+            current_reposts = int(ad_cfg_orig.get("repost_count", ad_cfg.repost_count or 0))
+            ad_cfg_orig["repost_count"] = current_reposts + 1
+            ad_cfg.repost_count = ad_cfg_orig["repost_count"]
 
-        # Persist price_reduction_count after successful publish
-        # This ensures failed publishes don't incorrectly increment the reduction counter
-        if ad_cfg.price_reduction_count is not None and ad_cfg.price_reduction_count > 0:
-            ad_cfg_orig["price_reduction_count"] = ad_cfg.price_reduction_count
+            # Persist price_reduction_count after successful publish
+            # This ensures failed publishes don't incorrectly increment the reduction counter
+            if ad_cfg.price_reduction_count is not None and ad_cfg.price_reduction_count > 0:
+                ad_cfg_orig["price_reduction_count"] = ad_cfg.price_reduction_count
 
         if mode == AdUpdateStrategy.REPLACE:
             LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)

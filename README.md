@@ -440,6 +440,8 @@ repost_count: # how often the ad has been (re)published; used for automatic pric
 
 When `auto_price_reduction.enabled` is set to `true`, the bot lowers the configured `price` every time the ad is reposted. The starting point for the calculation is always the base price from your ad file (the value of `price`), ensuring the first publication uses the unchanged amount. For each repost the bot subtracts either a percentage of the previously published price (strategy: PERCENTAGE) or a fixed amount (strategy: FIXED) and clamps the result to `min_price`.
 
+**Important:** Price reductions only apply when using the `publish` command (which deletes the old ad and creates a new one). Using the `update` command to modify ad content does NOT trigger price reductions or increment `repost_count`.
+
 `repost_count` is tracked for every ad (and persisted inside the corresponding `ad_*.yaml`) so reductions continue across runs.
 
 `min_price` is required whenever `enabled` is `true` and must be less than or equal to `price`; this makes an explicit floor (including `0`) mandatory.
@@ -458,7 +460,9 @@ auto_price_reduction:
   delay_days: 0
 ```
 
-This posts the ad at 150 € the first time, then 135 € (−10%), 121 € (−10%), 109 € (−10%), and stops decreasing at 90 €.
+This posts the ad at 150 € the first time, then 135 € (−10%), 122 € (−10%), 110 € (−10%), 99 € (−10%), and stops decreasing at 90 €.
+
+**Note:** The bot applies commercial rounding (ROUND_HALF_UP) to full euros after each reduction step. For example, 121.5 rounds to 122, and 109.8 rounds to 110. This step-wise rounding affects the final price progression, especially for percentage-based reductions.
 
 **FIXED strategy example:**
 
