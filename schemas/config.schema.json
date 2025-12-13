@@ -64,6 +64,10 @@
           "title": "Price Type",
           "type": "string"
         },
+        "auto_price_reduction": {
+          "$ref": "#/$defs/AutoPriceReductionConfig",
+          "description": "automatic price reduction configuration"
+        },
         "shipping_type": {
           "default": "SHIPPING",
           "enum": [
@@ -105,6 +109,77 @@
         }
       },
       "title": "AdDefaults",
+      "type": "object"
+    },
+    "AutoPriceReductionConfig": {
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "automatically lower the price of reposted ads",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "strategy": {
+          "anyOf": [
+            {
+              "enum": [
+                "FIXED",
+                "PERCENTAGE"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "PERCENTAGE reduces by a percentage of the previous price, FIXED reduces by a fixed amount",
+          "title": "Strategy"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "magnitude of the reduction; interpreted as percent for PERCENTAGE or currency units for FIXED",
+          "title": "Amount"
+        },
+        "min_price": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "required when enabled is true; minimum price floor (use 0 for no lower bound)",
+          "title": "Min Price"
+        },
+        "delay_reposts": {
+          "default": 0,
+          "description": "number of reposts to wait before applying the first automatic price reduction",
+          "minimum": 0,
+          "title": "Delay Reposts",
+          "type": "integer"
+        },
+        "delay_days": {
+          "default": 0,
+          "description": "number of days to wait after publication before applying automatic price reductions",
+          "minimum": 0,
+          "title": "Delay Days",
+          "type": "integer"
+        }
+      },
+      "title": "AutoPriceReductionConfig",
       "type": "object"
     },
     "BrowserConfig": {
