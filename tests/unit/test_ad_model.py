@@ -219,6 +219,38 @@ def test_min_price_must_not_exceed_price(base_ad_cfg:dict[str, object]) -> None:
 
 
 @pytest.mark.unit
+def test_min_price_validation_defers_to_pydantic_for_invalid_types(base_ad_cfg:dict[str, object]) -> None:
+    # Test that invalid price/min_price types are handled gracefully
+    # The safe Decimal comparison should catch conversion errors and defer to Pydantic
+    cfg = base_ad_cfg.copy() | {
+        "price": "not_a_number",
+        "auto_price_reduction": {
+            "enabled": True,
+            "strategy": "FIXED",
+            "amount": 5,
+            "min_price": 100
+        }
+    }
+    # Should raise Pydantic validation error for invalid price type, not our custom validation error
+    with pytest.raises(ContextualValidationError):
+        AdPartial.model_validate(cfg)
+
+    # Test with invalid min_price type
+    cfg2 = base_ad_cfg.copy() | {
+        "price": 100,
+        "auto_price_reduction": {
+            "enabled": True,
+            "strategy": "FIXED",
+            "amount": 5,
+            "min_price": "invalid"
+        }
+    }
+    # Should raise Pydantic validation error for invalid min_price type
+    with pytest.raises(ContextualValidationError):
+        AdPartial.model_validate(cfg2)
+
+
+@pytest.mark.unit
 def test_auto_reduce_requires_min_price(base_ad_cfg:dict[str, object]) -> None:
     cfg = base_ad_cfg.copy() | {
         "price": 100,

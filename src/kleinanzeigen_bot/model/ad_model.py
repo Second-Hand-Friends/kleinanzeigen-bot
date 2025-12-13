@@ -6,7 +6,7 @@ from __future__ import annotations
 import hashlib, json  # isort: skip
 from collections.abc import Mapping, Sequence
 from datetime import datetime  # noqa: TC003 Move import into a type-checking block
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
 from gettext import gettext as _
 from typing import Annotated, Any, Final, Literal
 
@@ -93,8 +93,15 @@ def _validate_auto_price_reduction_constraints(
     if price is None:
         raise ValueError(_("price must be specified when auto_price_reduction is enabled"))
 
-    if min_price is not None and min_price > price:
-        raise ValueError(_("min_price must not exceed price"))
+    if min_price is not None:
+        try:
+            min_price_dec = Decimal(str(min_price))
+            price_dec = Decimal(str(price))
+        except Exception:
+            # Let Pydantic's type validation surface the underlying issue
+            return
+        if min_price_dec > price_dec:
+            raise ValueError(_("min_price must not exceed price"))
 
 
 class AdPartial(ContextualModel):
@@ -229,9 +236,11 @@ class AdPartial(ContextualModel):
                 not isinstance(v, list) and (v is None or (isinstance(v, str) and v == ""))  # noqa: PLC1901
             )
         )
-        # Ensure price_reduction_count is an integer (internal counter, not user-configurable)
+        # Ensure internal counters are integers (not user-configurable)
         if not isinstance(ad_cfg.get("price_reduction_count"), int):
             ad_cfg["price_reduction_count"] = 0
+        if not isinstance(ad_cfg.get("repost_count"), int):
+            ad_cfg["repost_count"] = 0
         return Ad.model_validate(ad_cfg)
 
 
@@ -267,7 +276,8 @@ def calculate_auto_price(
     if auto_price_reduction.min_price is None:
         raise ValueError(_("min_price must be specified when auto_price_reduction is enabled"))
 
-    price_floor = Decimal(str(auto_price_reduction.min_price))
+    # Prices are published as whole euros; ensure the configured floor cannot be undercut by int() conversion.
+    price_floor = Decimal(str(auto_price_reduction.min_price)).quantize(EURO_PRECISION, rounding = ROUND_CEILING)
     repost_cycles = target_reduction_cycle
 
     for _cycle in range(repost_cycles):

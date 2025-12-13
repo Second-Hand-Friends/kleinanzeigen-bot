@@ -519,3 +519,30 @@ def test_extreme_reduction_cycles_with_floor() -> None:
     )
     # Should stop at min_price, not go to 0, regardless of cycle count
     assert result == 50
+
+
+@pytest.mark.unit
+def test_fractional_min_price_is_rounded_up_with_ceiling() -> None:
+    # Test that fractional min_price is rounded UP using ROUND_CEILING
+    # This prevents the price from going below min_price due to int() conversion
+    # Example: min_price=90.5 should become floor of 91, not 90
+    config = AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = 10, min_price = 90.5)
+
+    # Start at 100, reduce by 10 = 90
+    # But min_price=90.5 rounds UP to 91 with ROUND_CEILING
+    # So the result should be 91, not 90
+    result = calculate_auto_price(
+        base_price = 100,
+        auto_price_reduction = config,
+        target_reduction_cycle = 1
+    )
+    assert result == 91  # Rounded up from 90.5 floor
+
+    # Verify with another fractional value
+    config2 = AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = 5, min_price = 49.1)
+    result2 = calculate_auto_price(
+        base_price = 60,
+        auto_price_reduction = config2,
+        target_reduction_cycle = 3  # 60 - 5 - 5 - 5 = 45, clamped to ceil(49.1) = 50
+    )
+    assert result2 == 50  # Rounded up from 49.1 floor

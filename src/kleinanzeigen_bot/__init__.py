@@ -5,6 +5,7 @@ import atexit, enum, json, os, re, signal, sys, textwrap  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 from gettext import gettext as _
+from pathlib import Path
 from typing import Any, Final
 
 import certifi, colorama, nodriver  # isort: skip
@@ -870,7 +871,11 @@ class KleinanzeigenBot(WebScrapingMixin):
 
             # Apply auto price reduction only for REPLACE operations (actual reposts)
             # This ensures price reductions only happen on republish, not on UPDATE
-            ad_file_relative = os.path.relpath(ad_file, os.path.dirname(self.config_file_path))  # noqa: ASYNC240 - relpath is pure string manipulation, no I/O
+            try:
+                ad_file_relative = str(Path(ad_file).relative_to(Path(self.config_file_path).parent))
+            except ValueError:
+                # On Windows, relative_to fails when paths are on different drives
+                ad_file_relative = ad_file
             self.__apply_auto_price_reduction(ad_cfg, ad_cfg_orig, ad_file_relative)
 
             LOG.info("Publishing ad '%s'...", ad_cfg.title)

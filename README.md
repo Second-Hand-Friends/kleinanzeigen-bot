@@ -391,6 +391,9 @@ auto_price_reduction:
   min_price: # required when enabled is true; minimum price floor (use 0 for no lower bound)
   delay_reposts: # number of reposts to wait before first reduction (default: 0)
   delay_days: # number of days to wait after publication before reductions (default: 0)
+  # NOTE: All prices are rounded to whole euros after each reduction step.
+  # Fractional values (e.g., 99.99) will be rounded to the nearest whole euro.
+  # For predictable results, use whole euro values for price, amount, and min_price.
 
 special_attributes:
   # haus_mieten.zimmer_d: value # Zimmer
@@ -444,7 +447,9 @@ When `auto_price_reduction.enabled` is set to `true`, the bot lowers the configu
 
 `repost_count` is tracked for every ad (and persisted inside the corresponding `ad_*.yaml`) so reductions continue across runs.
 
-`min_price` is required whenever `enabled` is `true` and must be less than or equal to `price`; this makes an explicit floor (including `0`) mandatory.
+`min_price` is required whenever `enabled` is `true` and must be less than or equal to `price`; this makes an explicit floor (including `0`) mandatory. If `min_price` equals the current price, the bot will log a warning and perform no reduction.
+
+**Note:** `repost_count` and price reduction counters are only incremented and persisted after a successful publish. Failed publish attempts do not advance the counters.
 
 **PERCENTAGE strategy example:**
 

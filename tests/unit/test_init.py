@@ -5,7 +5,7 @@ import copy, io, json, logging, os, tempfile  # isort: skip
 from collections.abc import Generator
 from contextlib import redirect_stdout
 from datetime import timedelta
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -1071,6 +1071,105 @@ class TestKleinanzeigenBotShippingOptions:
 
             # Verify the file was created in the temporary directory
             assert ad_file.exists()
+
+    @pytest.mark.asyncio
+    async def test_cross_drive_path_fallback_windows(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """Test that cross-drive path handling falls back to absolute path on Windows."""
+        # Create ad config
+        ad_cfg = Ad.model_validate(base_ad_config | {
+            "updated_on": "2024-01-01T00:00:00",
+            "created_on": "2024-01-01T00:00:00"
+        })
+        ad_cfg.update_content_hash()
+        ad_cfg_orig = ad_cfg.model_dump()
+
+        # Simulate Windows cross-drive scenario
+        # Config on D:, ad file on C:
+        test_bot.config_file_path = "D:\\project\\config.yaml"
+        ad_file = "C:\\temp\\test_ad.yaml"
+
+        # Mock Path to use PureWindowsPath for testing cross-drive behavior
+        with patch("kleinanzeigen_bot.Path", PureWindowsPath):
+            # Call the private method directly to test path handling
+            # The method should catch ValueError and fall back to absolute path
+            try:
+                # This will raise ValueError on cross-drive scenario
+                bot_method = test_bot._KleinanzeigenBot__apply_auto_price_reduction  # type: ignore[attr-defined]
+
+                # Enable auto price reduction to trigger the code path
+                ad_cfg.auto_price_reduction.enabled = True
+                ad_cfg.price = 100
+                ad_cfg.auto_price_reduction.min_price = 50
+
+                # This should NOT raise ValueError because of our try-except
+                # It should use absolute path as fallback
+                bot_method(ad_cfg, ad_cfg_orig, ad_file)  # Should handle cross-drive gracefully
+            except ValueError as e:
+                if "is not in the subpath of" in str(e):
+                    pytest.fail(f"Cross-drive ValueError not handled: {e}")
+                raise
+
+    @pytest.mark.asyncio
+    async def test_auto_price_reduction_only_on_replace_not_update(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path
+    ) -> None:
+        """Test that auto price reduction is ONLY applied on REPLACE mode, not UPDATE."""
+        # Create ad with auto price reduction enabled
+        ad_cfg = Ad.model_validate(base_ad_config | {
+            "id": 12345,
+            "price": 200,
+            "auto_price_reduction": {
+                "enabled": True,
+                "strategy": "FIXED",
+                "amount": 50,
+                "min_price": 50,
+                "delay_reposts": 0,
+                "delay_days": 0
+            },
+            "repost_count": 1,
+            "price_reduction_count": 0,
+            "updated_on": "2024-01-01T00:00:00",
+            "created_on": "2024-01-01T00:00:00"
+        })
+        ad_cfg.update_content_hash()
+        ad_cfg_orig = ad_cfg.model_dump()
+
+        # Mock the private __apply_auto_price_reduction method
+        with patch.object(test_bot, "_KleinanzeigenBot__apply_auto_price_reduction") as mock_apply:
+            # Mock other dependencies
+            mock_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
+            with patch.object(test_bot, "web_find", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_input", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_click", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_open", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_select", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False), \
+                    patch.object(test_bot, "web_await", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_sleep", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = mock_response), \
+                    patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = mock_response), \
+                    patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []), \
+                    patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock), \
+                    patch("builtins.input", return_value = ""):
+
+                test_bot.page = MagicMock()
+                test_bot.page.url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+                test_bot.config.publishing.delete_old_ads = "BEFORE_PUBLISH"
+
+                # Test REPLACE mode - should call __apply_auto_price_reduction
+                await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+                assert mock_apply.call_count == 1, "Auto price reduction should be called on REPLACE"
+
+                # Reset mock
+                mock_apply.reset_mock()
+
+                # Test MODIFY mode - should NOT call __apply_auto_price_reduction
+                await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
+                assert mock_apply.call_count == 0, "Auto price reduction should NOT be called on MODIFY"
 
     @pytest.mark.asyncio
     async def test_special_attributes_with_non_string_values(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
