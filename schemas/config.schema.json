@@ -492,6 +492,13 @@
           "title": "Publishing Confirmation",
           "type": "number"
         },
+        "image_upload": {
+          "default": 30.0,
+          "description": "Timeout for image upload and server-side processing.",
+          "minimum": 5.0,
+          "title": "Image Upload",
+          "type": "number"
+        },
         "pagination_initial": {
           "default": 10.0,
           "description": "Timeout for initial pagination lookup.",
