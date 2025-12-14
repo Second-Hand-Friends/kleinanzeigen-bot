@@ -596,7 +596,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         LOG.info("Checking if already logged in...")
         await self.web_open(f"{self.root_url}")
         if getattr(self, "page", None) is not None:
-            LOG.debug("Current page URL after opening homepage: %s", self.page.url)
+            LOG.debug(_("Current page URL after opening homepage: %s"), self.page.url)
 
         if await self.is_logged_in():
             LOG.info("Already logged in as [%s]. Skipping login.", self.config.login.username)
