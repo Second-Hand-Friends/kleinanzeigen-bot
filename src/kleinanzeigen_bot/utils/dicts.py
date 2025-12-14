@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import copy, json, os, unicodedata  # isort: skip
+import copy, json, os  # isort: skip
 from collections import defaultdict
 from collections.abc import Callable
 from gettext import gettext as _
@@ -115,22 +115,11 @@ def save_dict(filepath:str | Path, content:dict[str, Any], *, header:str | None 
     filepath = Path(filepath)
     parent = filepath.parent
 
-    # Handle Unicode normalization mismatches (issue #728) without creating duplicate directories.
-    # If the parent doesn't exist, prefer an existing sibling whose name matches after normalization.
-    if not parent.exists():
-        target_norm = unicodedata.normalize("NFC", parent.name)
-        if parent.parent.exists():
-            for candidate in parent.parent.iterdir():
-                if unicodedata.normalize("NFC", candidate.name) == target_norm:
-                    parent = candidate
-                    break
-        if not parent.exists():
-            parent.mkdir(parents = True, exist_ok = True)
+    # Create parent first so resolve() cannot fail due to Unicode normalization quirks (issue #728).
+    parent.mkdir(parents = True, exist_ok = True)
 
-    filepath = parent / filepath.name
-
-    # Now resolve to absolute path
-    filepath = filepath.resolve()
+    # Resolve non-strict to keep working even if the platform normalizes names (e.g., macOS HFS+).
+    filepath = (parent / filepath.name).resolve(strict = False)
 
     LOG.info("Saving [%s]...", filepath)
     with open(filepath, "w", encoding = "utf-8") as file:
