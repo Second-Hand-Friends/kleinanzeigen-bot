@@ -116,15 +116,18 @@ def save_dict(filepath:str | Path, content:dict[str, Any], *, header:str | None 
     parent = filepath.parent
 
     # Handle Unicode normalization mismatches (issue #728) without creating duplicate directories.
-    # If the requested parent doesn't exist, prefer an already-existing directory whose name
-    # matches in another normalization form before creating a new one.
+    # If the requested parent doesn't exist, try to reuse an already-existing directory whose name
+    # matches in another normalization form before creating a new one. This checks sibling names
+    # directly to avoid OS normalization differences (e.g., macOS HFS+ using NFD).
     if not parent.exists():
-        for form in ("NFC", "NFD"):
-            normalized_parent = Path(unicodedata.normalize(form, str(parent)))
-            if normalized_parent.exists():
-                parent = normalized_parent
-                break
-        else:
+        target_norms = {unicodedata.normalize(form, parent.name) for form in ("NFC", "NFD")}
+        if parent.parent.exists():
+            for candidate in parent.parent.iterdir():
+                cand_norms = {unicodedata.normalize(form, candidate.name) for form in ("NFC", "NFD")}
+                if target_norms & cand_norms:
+                    parent = candidate
+                    break
+        if not parent.exists():
             parent.mkdir(parents = True, exist_ok = True)
 
     filepath = parent / filepath.name
