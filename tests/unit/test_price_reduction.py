@@ -1,16 +1,18 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import logging
 from datetime import datetime, timedelta, timezone
 from gettext import gettext as _
 from types import SimpleNamespace
-from typing import Any, Protocol, cast, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import pytest
 
-from kleinanzeigen_bot import KleinanzeigenBot
+import kleinanzeigen_bot
 from kleinanzeigen_bot.model.ad_model import calculate_auto_price
 from kleinanzeigen_bot.model.config_model import AutoPriceReductionConfig
+from kleinanzeigen_bot.utils.pydantics import ContextualValidationError
 
 
 @runtime_checkable
@@ -21,8 +23,8 @@ class _ApplyAutoPriceReduction(Protocol):
 
 @pytest.fixture
 def apply_auto_price_reduction() -> _ApplyAutoPriceReduction:
-    bot:Any = KleinanzeigenBot()
-    return cast(_ApplyAutoPriceReduction, bot._KleinanzeigenBot__apply_auto_price_reduction)
+    # Return the module-level function directly (no more name-mangling!)
+    return kleinanzeigen_bot.apply_auto_price_reduction  # type: ignore[return-value]
 
 
 @pytest.mark.unit
@@ -147,14 +149,14 @@ def test_min_price_zero_is_allowed() -> None:
 @pytest.mark.unit
 def test_missing_min_price_raises_error() -> None:
     # min_price validation happens at config initialization when enabled=True
-    with pytest.raises(ValueError, match = "min_price must be specified"):
-        AutoPriceReductionConfig(enabled = True, strategy = "PERCENTAGE", amount = 50, min_price = None)
+    with pytest.raises(ContextualValidationError, match = "min_price must be specified"):
+        AutoPriceReductionConfig.model_validate({"enabled": True, "strategy": "PERCENTAGE", "amount": 50, "min_price": None})
 
 
 @pytest.mark.unit
 def test_percentage_above_100_raises_error() -> None:
-    with pytest.raises(ValueError, match = "Percentage reduction amount must not exceed 100"):
-        AutoPriceReductionConfig(enabled = True, strategy = "PERCENTAGE", amount = 150, min_price = 50)
+    with pytest.raises(ContextualValidationError, match = "Percentage reduction amount must not exceed 100"):
+        AutoPriceReductionConfig.model_validate({"enabled": True, "strategy": "PERCENTAGE", "amount": 150, "min_price": 50})
 
 
 @pytest.mark.unit
@@ -184,7 +186,7 @@ def test_apply_auto_price_reduction_logs_drop(
 
     ad_orig:dict[str, Any] = {}
 
-    with caplog.at_level("INFO"):
+    with caplog.at_level(logging.INFO):
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_test.yaml")
 
     expected = _("Auto price reduction applied: %s -> %s after %s reduction cycles") % (200, 150, 1)
@@ -213,7 +215,7 @@ def test_apply_auto_price_reduction_logs_unchanged_price_at_floor(
 
     ad_orig:dict[str, Any] = {}
 
-    with caplog.at_level("INFO"):
+    with caplog.at_level(logging.INFO):
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_test.yaml")
 
     # Price: 95 - 10 = 85, clamped to 90 (floor)
@@ -241,7 +243,7 @@ def test_apply_auto_price_reduction_warns_when_price_missing(
 
     ad_orig:dict[str, Any] = {}
 
-    with caplog.at_level("WARNING"):
+    with caplog.at_level(logging.WARNING):
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_warning.yaml")
 
     expected = _("Auto price reduction is enabled for [%s] but no price is configured.") % ("ad_warning.yaml",)
@@ -265,7 +267,7 @@ def test_apply_auto_price_reduction_warns_when_min_price_equals_price(
 
     ad_orig:dict[str, Any] = {}
 
-    with caplog.at_level("WARNING"):
+    with caplog.at_level(logging.WARNING):
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_equal_prices.yaml")
 
     expected = _("Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur.") % ("ad_equal_prices.yaml", 100)
@@ -290,7 +292,7 @@ def test_apply_auto_price_reduction_respects_repost_delay(
 
     ad_orig:dict[str, Any] = {}
 
-    with caplog.at_level("INFO"):
+    with caplog.at_level(logging.INFO):
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_delay.yaml")
 
     assert ad_cfg.price == 200
@@ -336,7 +338,7 @@ def test_apply_auto_price_reduction_waits_when_reduction_already_applied(
 
     ad_orig:dict[str, Any] = {}
 
-    with caplog.at_level("DEBUG"):
+    with caplog.at_level(logging.DEBUG):
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_already.yaml")
 
     expected = _("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts") % ("ad_already.yaml", 3, 3)
@@ -444,7 +446,7 @@ def test_fractional_reduction_increments_counter_even_when_price_unchanged(
 
     ad_orig:dict[str, Any] = {}
 
-    with caplog.at_level("INFO"):
+    with caplog.at_level(logging.INFO):
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_fractional.yaml")
 
     # Price: 100 - 0.3 = 99.7, rounds to 100 (no visible change)
@@ -458,14 +460,14 @@ def test_fractional_reduction_increments_counter_even_when_price_unchanged(
 
 @pytest.mark.unit
 def test_reduction_value_zero_raises_error() -> None:
-    with pytest.raises(ValueError, match = "Input should be greater than 0"):
-        AutoPriceReductionConfig(enabled = True, strategy = "PERCENTAGE", amount = 0, min_price = 50)
+    with pytest.raises(ContextualValidationError, match = "Input should be greater than 0"):
+        AutoPriceReductionConfig.model_validate({"enabled": True, "strategy": "PERCENTAGE", "amount": 0, "min_price": 50})
 
 
 @pytest.mark.unit
 def test_reduction_value_negative_raises_error() -> None:
-    with pytest.raises(ValueError, match = "Input should be greater than 0"):
-        AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = -5, min_price = 50)
+    with pytest.raises(ContextualValidationError, match = "Input should be greater than 0"):
+        AutoPriceReductionConfig.model_validate({"enabled": True, "strategy": "FIXED", "amount": -5, "min_price": 50})
 
 
 @pytest.mark.unit

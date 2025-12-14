@@ -37,6 +37,145 @@ class AdUpdateStrategy(enum.Enum):
     MODIFY = enum.auto()
 
 
+def _repost_cycle_ready(ad_cfg:Ad, ad_file_relative:str) -> bool:
+    """
+    Check if the repost cycle delay has been satisfied.
+
+    :param ad_cfg: The ad configuration
+    :param ad_file_relative: Relative path to the ad file for logging
+    :return: True if ready to apply price reduction, False otherwise
+    """
+    total_reposts = ad_cfg.repost_count or 0
+    delay_reposts = ad_cfg.auto_price_reduction.delay_reposts
+    applied_cycles = ad_cfg.price_reduction_count or 0
+    eligible_cycles = max(total_reposts - delay_reposts, 0)
+
+    if total_reposts <= delay_reposts:
+        remaining = (delay_reposts + 1) - total_reposts
+        LOG.info(
+            _("Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)"),
+            ad_file_relative,
+            max(remaining, 1),  # Clamp to 1 to avoid showing "0 more reposts" when at threshold
+            total_reposts,
+            applied_cycles
+        )
+        return False
+
+    if eligible_cycles <= applied_cycles:
+        LOG.debug(
+            _("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts"),
+            ad_file_relative,
+            applied_cycles,
+            eligible_cycles
+        )
+        return False
+
+    return True
+
+
+def _day_delay_elapsed(ad_cfg:Ad, ad_file_relative:str) -> bool:
+    """
+    Check if the day delay has elapsed since the ad was last published.
+
+    :param ad_cfg: The ad configuration
+    :param ad_file_relative: Relative path to the ad file for logging
+    :return: True if the delay has elapsed, False otherwise
+    """
+    delay_days = ad_cfg.auto_price_reduction.delay_days
+    if delay_days == 0:
+        return True
+
+    reference = ad_cfg.updated_on or ad_cfg.created_on
+    if not reference:
+        LOG.info(
+            _("Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing"),
+            ad_file_relative,
+            delay_days
+        )
+        return False
+
+    # Note: .days truncates to whole days (e.g., 1.9 days -> 1 day)
+    # This is intentional: delays count complete 24-hour periods since publish
+    # Both misc.now() and stored timestamps use UTC (via misc.now()), ensuring consistent calculations
+    elapsed_days = (misc.now() - reference).days
+    if elapsed_days < delay_days:
+        LOG.info(
+            _("Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)"),
+            ad_file_relative,
+            delay_days,
+            elapsed_days
+        )
+        return False
+
+    return True
+
+
+def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
+    """
+    Apply automatic price reduction to an ad based on repost count and configuration.
+
+    This function modifies ad_cfg in-place, updating the price and price_reduction_count
+    fields when a reduction is applicable.
+
+    :param ad_cfg: The ad configuration to potentially modify
+    :param _ad_cfg_orig: The original ad configuration (unused, kept for compatibility)
+    :param ad_file_relative: Relative path to the ad file for logging
+    """
+    if not ad_cfg.auto_price_reduction.enabled:
+        return
+
+    base_price = ad_cfg.price
+    if base_price is None:
+        LOG.warning(_("Auto price reduction is enabled for [%s] but no price is configured."), ad_file_relative)
+        return
+
+    if ad_cfg.auto_price_reduction.min_price is not None and ad_cfg.auto_price_reduction.min_price == base_price:
+        LOG.warning(
+            _("Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur."),
+            ad_file_relative,
+            base_price
+        )
+        return
+
+    if not _repost_cycle_ready(ad_cfg, ad_file_relative):
+        return
+
+    if not _day_delay_elapsed(ad_cfg, ad_file_relative):
+        return
+
+    applied_cycles = ad_cfg.price_reduction_count or 0
+    next_cycle = applied_cycles + 1
+
+    effective_price = calculate_auto_price(
+        base_price = base_price,
+        auto_price_reduction = ad_cfg.auto_price_reduction,
+        target_reduction_cycle = next_cycle
+    )
+
+    if effective_price is None:
+        return
+
+    if effective_price == base_price:
+        # Still increment counter so small fractional reductions can accumulate over multiple cycles
+        ad_cfg.price_reduction_count = next_cycle
+        LOG.info(
+            _("Auto price reduction kept price %s after attempting %s reduction cycles"),
+            effective_price,
+            next_cycle
+        )
+        return
+
+    LOG.info(
+        _("Auto price reduction applied: %s -> %s after %s reduction cycles"),
+        base_price,
+        effective_price,
+        next_cycle
+    )
+    ad_cfg.price = effective_price
+    ad_cfg.price_reduction_count = next_cycle
+    # Note: price_reduction_count is persisted to ad_cfg_orig only after successful publish
+
+
 class KleinanzeigenBot(WebScrapingMixin):
 
     def __init__(self) -> None:
@@ -577,116 +716,16 @@ class KleinanzeigenBot(WebScrapingMixin):
         return AdPartial.model_validate(ad_cfg_orig).to_ad(self.config.ad_defaults)
 
     def __apply_auto_price_reduction(self, ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
-        if not ad_cfg.auto_price_reduction.enabled:
-            return
-
-        base_price = ad_cfg.price
-        if base_price is None:
-            LOG.warning(_("Auto price reduction is enabled for [%s] but no price is configured."), ad_file_relative)
-            return
-
-        if ad_cfg.auto_price_reduction.min_price is not None and ad_cfg.auto_price_reduction.min_price == base_price:
-            LOG.warning(
-                _("Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur."),
-                ad_file_relative,
-                base_price
-            )
-            return
-
-        if not self.__repost_cycle_ready(ad_cfg, ad_file_relative):
-            return
-
-        if not self.__day_delay_elapsed(ad_cfg, ad_file_relative):
-            return
-
-        applied_cycles = ad_cfg.price_reduction_count or 0
-        next_cycle = applied_cycles + 1
-
-        effective_price = calculate_auto_price(
-            base_price = base_price,
-            auto_price_reduction = ad_cfg.auto_price_reduction,
-            target_reduction_cycle = next_cycle
-        )
-
-        if effective_price is None:
-            return
-
-        if effective_price == base_price:
-            # Still increment counter so small fractional reductions can accumulate over multiple cycles
-            ad_cfg.price_reduction_count = next_cycle
-            LOG.info(
-                _("Auto price reduction kept price %s after attempting %s reduction cycles"),
-                effective_price,
-                next_cycle
-            )
-            return
-
-        LOG.info(
-            _("Auto price reduction applied: %s -> %s after %s reduction cycles"),
-            base_price,
-            effective_price,
-            next_cycle
-        )
-        ad_cfg.price = effective_price
-        ad_cfg.price_reduction_count = next_cycle
-        # Note: price_reduction_count is persisted to ad_cfg_orig only after successful publish
+        """Delegate to the module-level function."""
+        apply_auto_price_reduction(ad_cfg, _ad_cfg_orig, ad_file_relative)
 
     def __repost_cycle_ready(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
-        total_reposts = ad_cfg.repost_count or 0
-        delay_reposts = ad_cfg.auto_price_reduction.delay_reposts
-        applied_cycles = ad_cfg.price_reduction_count or 0
-        eligible_cycles = max(total_reposts - delay_reposts, 0)
-
-        if total_reposts <= delay_reposts:
-            remaining = (delay_reposts + 1) - total_reposts
-            LOG.info(
-                _("Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)"),
-                ad_file_relative,
-                max(remaining, 1),  # Clamp to 1 to avoid showing "0 more reposts" when at threshold
-                total_reposts,
-                applied_cycles
-            )
-            return False
-
-        if eligible_cycles <= applied_cycles:
-            LOG.debug(
-                _("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts"),
-                ad_file_relative,
-                applied_cycles,
-                eligible_cycles
-            )
-            return False
-
-        return True
+        """Delegate to the module-level function."""
+        return _repost_cycle_ready(ad_cfg, ad_file_relative)
 
     def __day_delay_elapsed(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
-        delay_days = ad_cfg.auto_price_reduction.delay_days
-        if delay_days == 0:
-            return True
-
-        reference = ad_cfg.updated_on or ad_cfg.created_on
-        if not reference:
-            LOG.info(
-                _("Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing"),
-                ad_file_relative,
-                delay_days
-            )
-            return False
-
-        # Note: .days truncates to whole days (e.g., 1.9 days -> 1 day)
-        # This is intentional: delays count complete 24-hour periods since publish
-        # Both misc.now() and stored timestamps use UTC (via misc.now()), ensuring consistent calculations
-        elapsed_days = (misc.now() - reference).days
-        if elapsed_days < delay_days:
-            LOG.info(
-                _("Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)"),
-                ad_file_relative,
-                delay_days,
-                elapsed_days
-            )
-            return False
-
-        return True
+        """Delegate to the module-level function."""
+        return _day_delay_elapsed(ad_cfg, ad_file_relative)
 
     async def check_and_wait_for_captcha(self, *, is_login_page:bool = True) -> None:
         try:

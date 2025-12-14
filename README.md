@@ -383,18 +383,16 @@ description_suffix: # optional suffix to be added to the description overriding 
 # or category ID (e.g. 161/278)
 category: # e.g. "Elektronik > Notebooks"
 
-price: # without decimals, e.g. 75
+price: # price in euros; decimals allowed but will be rounded to nearest whole euro on processing (prefer whole euros for predictability)
 price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY (default: NEGOTIABLE)
 auto_price_reduction:
   enabled: # true or false to enable automatic price reduction on reposts (default: false)
   strategy: # "PERCENTAGE" or "FIXED" (required when enabled is true)
-  amount: # reduction amount; interpreted as percent for PERCENTAGE or currency units for FIXED
-  min_price: # required when enabled is true; minimum price floor (use 0 for no lower bound)
+  amount: # reduction amount; interpreted as percent for PERCENTAGE or currency units for FIXED (prefer whole euros for predictability)
+  min_price: # required when enabled is true; minimum price floor (use 0 for no lower bound, prefer whole euros for predictability)
   delay_reposts: # number of reposts to wait before first reduction (default: 0)
   delay_days: # number of days to wait after publication before reductions (default: 0)
   # NOTE: All prices are rounded to whole euros after each reduction step.
-  # Fractional values (e.g., 99.99) will be rounded to the nearest whole euro.
-  # For predictable results, use whole euro values for price, amount, and min_price.
 
 special_attributes:
   # haus_mieten.zimmer_d: value # Zimmer
