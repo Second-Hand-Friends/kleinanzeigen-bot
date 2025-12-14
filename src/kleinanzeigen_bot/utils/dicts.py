@@ -112,7 +112,17 @@ def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "
 
 
 def save_dict(filepath:str | Path, content:dict[str, Any], *, header:str | None = None) -> None:
-    filepath = Path(filepath).resolve(strict = False)
+    filepath = Path(filepath)
+
+    # Ensure parent directory exists to handle Unicode normalization edge cases (issue #728)
+    # On some filesystems (especially Nextcloud), umlauts can cause Path.resolve() to fail
+    # finding the directory due to NFC vs NFD normalization differences.
+    # Creating the directory here ensures it exists with the exact Unicode form from the Path object.
+    filepath.parent.mkdir(parents = True, exist_ok = True)
+
+    # Now resolve to absolute path
+    filepath = filepath.resolve()
+
     LOG.info("Saving [%s]...", filepath)
     with open(filepath, "w", encoding = "utf-8") as file:
         if header:
