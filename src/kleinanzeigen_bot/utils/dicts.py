@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import copy, json, os  # isort: skip
+import copy, json, os, unicodedata  # isort: skip
 from collections import defaultdict
 from collections.abc import Callable
 from gettext import gettext as _
@@ -115,7 +115,15 @@ def save_dict(filepath:str | Path, content:dict[str, Any], *, header:str | None 
     filepath = Path(filepath)
     parent = filepath.parent
 
-    # Create parent first so resolve() cannot fail due to Unicode normalization quirks (issue #728).
+    # Prefer an existing sibling whose name matches after normalization to avoid duplicate NFC/NFD dirs (issue #728).
+    target_norm = unicodedata.normalize("NFC", parent.name)
+    if parent.parent.exists():
+        for candidate in parent.parent.iterdir():
+            if unicodedata.normalize("NFC", candidate.name) == target_norm:
+                parent = candidate
+                break
+
+    # Create parent so resolve() cannot fail due to missing path on platforms that normalize names (e.g., macOS).
     parent.mkdir(parents = True, exist_ok = True)
 
     # Resolve non-strict to keep working even if the platform normalizes names (e.g., macOS HFS+).
