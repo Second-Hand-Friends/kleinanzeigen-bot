@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import copy, json, os  # isort: skip
+import copy, json, os, unicodedata  # isort: skip
 from collections import defaultdict
 from collections.abc import Callable
 from gettext import gettext as _
@@ -113,12 +113,21 @@ def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "
 
 def save_dict(filepath:str | Path, content:dict[str, Any], *, header:str | None = None) -> None:
     filepath = Path(filepath)
+    parent = filepath.parent
 
-    # Ensure parent directory exists to handle Unicode normalization edge cases (issue #728)
-    # On some filesystems (especially Nextcloud), umlauts can cause Path.resolve() to fail
-    # finding the directory due to NFC vs NFD normalization differences.
-    # Creating the directory here ensures it exists with the exact Unicode form from the Path object.
-    filepath.parent.mkdir(parents = True, exist_ok = True)
+    # Handle Unicode normalization mismatches (issue #728) without creating duplicate directories.
+    # If the requested parent doesn't exist, prefer an already-existing directory whose name
+    # matches in another normalization form before creating a new one.
+    if not parent.exists():
+        for form in ("NFC", "NFD"):
+            normalized_parent = Path(unicodedata.normalize(form, str(parent)))
+            if normalized_parent.exists():
+                parent = normalized_parent
+                break
+        else:
+            parent.mkdir(parents = True, exist_ok = True)
+
+    filepath = parent / filepath.name
 
     # Now resolve to absolute path
     filepath = filepath.resolve()
