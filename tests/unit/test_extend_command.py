@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import json  # isort: skip
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -135,7 +136,7 @@ class TestExtendAdsMethod:
         with patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request, \
                 patch.object(test_bot, "web_sleep", new_callable = AsyncMock), \
                 patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad:
-            mock_request.return_value = {"content": str(published_ads_json).replace("'", '"')}
+            mock_request.return_value = {"content": json.dumps(published_ads_json)}
 
             await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
 
@@ -165,7 +166,7 @@ class TestExtendAdsMethod:
         with patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request, \
                 patch.object(test_bot, "web_sleep", new_callable = AsyncMock), \
                 patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad:
-            mock_request.return_value = {"content": str(published_ads_json).replace("'", '"')}
+            mock_request.return_value = {"content": json.dumps(published_ads_json)}
 
             await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
 
@@ -199,7 +200,7 @@ class TestExtendAdsMethod:
         with patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request, \
                 patch.object(test_bot, "web_sleep", new_callable = AsyncMock), \
                 patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad:
-            mock_request.return_value = {"content": str(published_ads_json).replace("'", '"')}
+            mock_request.return_value = {"content": json.dumps(published_ads_json)}
 
             await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
 
@@ -233,7 +234,7 @@ class TestExtendAdsMethod:
         with patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request, \
                 patch.object(test_bot, "web_sleep", new_callable = AsyncMock), \
                 patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad:
-            mock_request.return_value = {"content": str(published_ads_json).replace("'", '"')}
+            mock_request.return_value = {"content": json.dumps(published_ads_json)}
             mock_extend_ad.return_value = True
 
             await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
@@ -268,7 +269,7 @@ class TestExtendAdsMethod:
         with patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request, \
                 patch.object(test_bot, "web_sleep", new_callable = AsyncMock), \
                 patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad:
-            mock_request.return_value = {"content": str(published_ads_json).replace("'", '"')}
+            mock_request.return_value = {"content": json.dumps(published_ads_json)}
 
             await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
 
@@ -314,7 +315,7 @@ class TestExtendAdsMethod:
         with patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request, \
                 patch.object(test_bot, "web_sleep", new_callable = AsyncMock), \
                 patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad:
-            mock_request.return_value = {"content": str(published_ads_json).replace("'", '"')}
+            mock_request.return_value = {"content": json.dumps(published_ads_json)}
             mock_extend_ad.return_value = True
 
             await test_bot.extend_ads([
@@ -489,7 +490,7 @@ class TestExtendEdgeCases:
         with patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request, \
                 patch.object(test_bot, "web_sleep", new_callable = AsyncMock), \
                 patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad:
-            mock_request.return_value = {"content": str(published_ads_json).replace("'", '"')}
+            mock_request.return_value = {"content": json.dumps(published_ads_json)}
             mock_extend_ad.return_value = True
 
             await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
@@ -524,7 +525,7 @@ class TestExtendEdgeCases:
         with patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request, \
                 patch.object(test_bot, "web_sleep", new_callable = AsyncMock), \
                 patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad:
-            mock_request.return_value = {"content": str(published_ads_json).replace("'", '"')}
+            mock_request.return_value = {"content": json.dumps(published_ads_json)}
 
             await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
 
@@ -559,7 +560,7 @@ class TestExtendEdgeCases:
             # Mock now() to return a date where 05.02.2026 would be within 8 days
             # Test mock datetime - timezone not relevant for date comparison test
             mock_now.return_value = datetime(2026, 1, 28)  # noqa: DTZ001
-            mock_request.return_value = {"content": str(published_ads_json).replace("'", '"')}
+            mock_request.return_value = {"content": json.dumps(published_ads_json)}
             mock_extend_ad.return_value = True
 
             await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
