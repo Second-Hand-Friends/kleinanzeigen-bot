@@ -144,9 +144,9 @@ def test_ensure_non_callable_truthy_and_falsy() -> None:
         # Basic sanitization
         ("My Ad Title!", "My Ad Title!", "Basic sanitization"),
 
-        # Unicode normalization (sanitize-filename changes normalization)
-        ("café", "cafe\u0301", "Unicode normalization"),
-        ("caf\u00e9", "cafe\u0301", "Unicode normalization from escaped"),
+        # Unicode normalization - sanitize-filename converts to NFD, then we normalize to NFC (issue #728)
+        ("café", "café", "Unicode NFC → NFD (by sanitize) → NFC (by normalize)"),
+        ("caf\u00e9", "café", "Unicode NFC (escaped) → NFD → NFC"),
 
         # Edge cases
         ("", "untitled", "Empty string"),

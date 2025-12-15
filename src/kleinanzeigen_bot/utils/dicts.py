@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import copy, json, os  # isort: skip
+import copy, json, os, unicodedata  # isort: skip
 from collections import defaultdict
 from collections.abc import Callable
 from gettext import gettext as _
@@ -112,7 +112,14 @@ def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "
 
 
 def save_dict(filepath:str | Path, content:dict[str, Any], *, header:str | None = None) -> None:
-    filepath = Path(filepath).resolve(strict = False)
+    # Normalize filepath to NFC for cross-platform consistency (issue #728)
+    # Ensures file paths match NFC-normalized directory names from sanitize_folder_name()
+    # Also handles edge cases where paths don't originate from sanitize_folder_name()
+    filepath = Path(unicodedata.normalize("NFC", str(filepath)))
+
+    # Create parent directory if needed
+    filepath.parent.mkdir(parents = True, exist_ok = True)
+
     LOG.info("Saving [%s]...", filepath)
     with open(filepath, "w", encoding = "utf-8") as file:
         if header:

@@ -1225,3 +1225,71 @@ class TestAdExtractorDownload:
             assert result_dir.exists()
             assert (result_dir / "existing_image.jpg").exists()  # File should be preserved
             assert ad_cfg.title == "Test Title"
+
+    @pytest.mark.asyncio
+    async def test_download_ad_with_umlauts_in_title(self, extractor:AdExtractor, tmp_path:Path) -> None:
+        """Test cross-platform Unicode handling for ad titles with umlauts (issue #728).
+
+        Verifies that:
+        1. Directories are created with NFC-normalized names (via sanitize_folder_name)
+        2. Files can be saved to those directories (via save_dict's NFC normalization)
+        3. No FileNotFoundError occurs due to NFC/NFD mismatch on Linux/Windows
+        """
+        # Title with German umlauts (ä) - common in real ads
+        title_with_umlauts = "KitchenAid Zuhälter - nie benutzt"
+
+        # Mock the page
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+        extractor.page = page_mock
+
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+
+        with patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = [
+                title_with_umlauts,  # Title extraction
+                title_with_umlauts,  # Second title call for full extraction
+                "Description text",  # Description
+                "03.02.2025"  # Creation date
+            ]), \
+                patch.object(extractor, "web_execute", new_callable = AsyncMock, return_value = {
+                    "universalAnalyticsOpts": {
+                        "dimensions": {
+                            "dimension92": "",
+                            "dimension108": ""
+                        }
+                    }
+                }), \
+                patch.object(extractor, "_extract_category_from_ad_page", new_callable = AsyncMock, return_value = "160"), \
+                patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable = AsyncMock, return_value = {}), \
+                patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable = AsyncMock, return_value = (None, "NOT_APPLICABLE")), \
+                patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)), \
+                patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False), \
+                patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []), \
+                patch.object(extractor, "_extract_contact_from_ad_page", new_callable = AsyncMock, return_value = ContactPartial(
+                    name = "Test", zipcode = "12345", location = "Berlin"
+                )):
+
+            ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(
+                base_dir, 12345
+            )
+
+            # Verify directory was created with NFC-normalized name
+            assert result_dir.exists()
+            assert ad_cfg.title == title_with_umlauts
+
+            # Test saving YAML file to the Unicode directory path
+            # Before fix: Failed on Linux/Windows due to NFC/NFD mismatch
+            # After fix: Both directory and file use NFC normalization
+            ad_file_path = Path(result_dir) / "ad_12345.yaml"
+
+            from kleinanzeigen_bot.utils import dicts  # noqa: PLC0415
+
+            header_string = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
+
+            # save_dict normalizes path to NFC, matching the NFC directory name
+            dicts.save_dict(str(ad_file_path), ad_cfg.model_dump(), header = header_string)
+
+            # Verify file was created successfully (no FileNotFoundError)
+            assert ad_file_path.exists()
+            assert ad_file_path.is_file()
