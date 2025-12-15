@@ -112,22 +112,12 @@ def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "
 
 
 def save_dict(filepath:str | Path, content:dict[str, Any], *, header:str | None = None) -> None:
-    filepath = Path(filepath)
-    parent = filepath.parent
+    # Normalize path to NFC to match sanitize_folder_name() behavior (issue #728)
+    # This ensures consistency across platforms with different Unicode normalization (macOS HFS+, Linux, Nextcloud)
+    filepath = Path(unicodedata.normalize("NFC", str(filepath)))
 
-    # Prefer an existing sibling whose name matches after normalization to avoid duplicate NFC/NFD dirs (issue #728).
-    target_norm = unicodedata.normalize("NFC", parent.name)
-    if parent.parent.exists():
-        for candidate in parent.parent.iterdir():
-            if unicodedata.normalize("NFC", candidate.name) == target_norm:
-                parent = candidate
-                break
-
-    # Create parent so resolve() cannot fail due to missing path on platforms that normalize names (e.g., macOS).
-    parent.mkdir(parents = True, exist_ok = True)
-
-    # Resolve non-strict to keep working even if the platform normalizes names (e.g., macOS HFS+).
-    filepath = (parent / filepath.name).resolve(strict = False)
+    # Create parent directory if needed
+    filepath.parent.mkdir(parents = True, exist_ok = True)
 
     LOG.info("Saving [%s]...", filepath)
     with open(filepath, "w", encoding = "utf-8") as file:
