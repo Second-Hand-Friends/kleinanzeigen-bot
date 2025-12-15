@@ -94,7 +94,7 @@ kleinanzeigen_bot/__init__.py:
 
   extend_ad:
     "Extending ad '%s' (ID: %s)...": "Verlängere Anzeige '%s' (ID: %s)..."
-    " -> FAILED: Could not find 'Verlängern' button for ad ID %s": " -> FEHLER: 'Verlängern'-Button für Anzeigen-ID %s nicht gefunden"
+    " -> FAILED: Could not find extend button for ad ID %s": " -> FEHLER: 'Verlängern'-Button für Anzeigen-ID %s nicht gefunden"
     " -> No confirmation dialog found, extension may have completed directly": " -> Kein Bestätigungsdialog gefunden"
     " -> SUCCESS: ad extended with ID %s": " -> ERFOLG: Anzeige mit ID %s verlängert"
     " -> FAILED: Could not extend ad '%s': %s": " -> FEHLER: Anzeige '%s' konnte nicht verlängert werden: %s"

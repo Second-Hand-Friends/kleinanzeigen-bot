@@ -815,7 +815,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             try:
                 await self.web_click(By.XPATH, extend_button_xpath)
             except TimeoutError:
-                LOG.error(_(" -> FAILED: Could not find 'Verlängern' button for ad ID %s"), ad_cfg.id)
+                LOG.error(_(" -> FAILED: Could not find extend button for ad ID %s"), ad_cfg.id)
                 return False
 
             # Handle confirmation dialog
