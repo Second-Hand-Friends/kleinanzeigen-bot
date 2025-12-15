@@ -740,8 +740,6 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     async def extend_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         """Extends ads that are close to expiry."""
-        count = 0
-
         # Fetch currently published ads from API
         published_ads = json.loads(
             (await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
@@ -791,14 +789,15 @@ class KleinanzeigenBot(WebScrapingMixin):
             return
 
         # Process extensions
-        for (ad_file, ad_cfg, ad_cfg_orig, _published_ad) in ads_to_extend:
-            count += 1
-            LOG.info(_("Processing %s/%s: '%s' from [%s]..."), count, len(ads_to_extend), ad_cfg.title, ad_file)
-            await self.extend_ad(ad_file, ad_cfg, ad_cfg_orig)
+        success_count = 0
+        for idx, (ad_file, ad_cfg, ad_cfg_orig, _published_ad) in enumerate(ads_to_extend, start = 1):
+            LOG.info(_("Processing %s/%s: '%s' from [%s]..."), idx, len(ads_to_extend), ad_cfg.title, ad_file)
+            if await self.extend_ad(ad_file, ad_cfg, ad_cfg_orig):
+                success_count += 1
             await self.web_sleep()
 
         LOG.info("############################################")
-        LOG.info(_("DONE: Extended %s"), pluralize("ad", count))
+        LOG.info(_("DONE: Extended %s"), pluralize("ad", success_count))
         LOG.info("############################################")
 
     async def extend_ad(self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any]) -> bool:
