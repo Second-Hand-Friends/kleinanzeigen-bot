@@ -1,11 +1,10 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import tempfile  # isort: skip
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -347,7 +346,8 @@ class TestExtendAdMethod:
         with patch.object(test_bot, "web_open", new_callable = AsyncMock), \
                 patch.object(test_bot, "web_click", new_callable = AsyncMock), \
                 patch("kleinanzeigen_bot.misc.now") as mock_now:
-            mock_now.return_value = datetime(2025, 1, 28, 14, 30, 0)
+            # Test mock datetime - timezone not relevant for timestamp formatting test
+            mock_now.return_value = datetime(2025, 1, 28, 14, 30, 0)  # noqa: DTZ001
 
             result = await test_bot.extend_ad(str(ad_file), ad_cfg, base_ad_config_with_id)
 
@@ -397,7 +397,8 @@ class TestExtendAdMethod:
         with patch.object(test_bot, "web_open", new_callable = AsyncMock), \
                 patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click, \
                 patch("kleinanzeigen_bot.misc.now") as mock_now:
-            mock_now.return_value = datetime(2025, 1, 28, 14, 30, 0)
+            # Test mock datetime - timezone not relevant for timestamp formatting test
+            mock_now.return_value = datetime(2025, 1, 28, 14, 30, 0)  # noqa: DTZ001
 
             # First click (Verlängern button) succeeds, second click (dialog close) times out
             mock_click.side_effect = [None, TimeoutError("Dialog not found")]
@@ -447,7 +448,8 @@ class TestExtendAdMethod:
         with patch.object(test_bot, "web_open", new_callable = AsyncMock), \
                 patch.object(test_bot, "web_click", new_callable = AsyncMock), \
                 patch("kleinanzeigen_bot.misc.now") as mock_now:
-            mock_now.return_value = datetime(2025, 1, 28, 14, 30, 0)
+            # Test mock datetime - timezone not relevant for timestamp formatting test
+            mock_now.return_value = datetime(2025, 1, 28, 14, 30, 0)  # noqa: DTZ001
 
             await test_bot.extend_ad(str(ad_file), ad_cfg, base_ad_config_with_id)
 
@@ -555,7 +557,8 @@ class TestExtendEdgeCases:
                 patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad, \
                 patch("kleinanzeigen_bot.misc.now") as mock_now:
             # Mock now() to return a date where 05.02.2026 would be within 8 days
-            mock_now.return_value = datetime(2026, 1, 28)
+            # Test mock datetime - timezone not relevant for date comparison test
+            mock_now.return_value = datetime(2026, 1, 28)  # noqa: DTZ001
             mock_request.return_value = {"content": str(published_ads_json).replace("'", '"')}
             mock_extend_ad.return_value = True
 
