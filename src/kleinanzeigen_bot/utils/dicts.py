@@ -112,8 +112,9 @@ def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "
 
 
 def save_dict(filepath:str | Path, content:dict[str, Any], *, header:str | None = None) -> None:
-    # Normalize path to NFC to match sanitize_folder_name() behavior (issue #728)
-    # This ensures consistency across platforms with different Unicode normalization (macOS HFS+, Linux, Nextcloud)
+    # Normalize filepath to NFC for cross-platform consistency (issue #728)
+    # Ensures file paths match NFC-normalized directory names from sanitize_folder_name()
+    # Also handles edge cases where paths don't originate from sanitize_folder_name()
     filepath = Path(unicodedata.normalize("NFC", str(filepath)))
 
     # Create parent directory if needed

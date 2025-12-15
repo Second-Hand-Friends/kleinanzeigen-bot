@@ -1228,8 +1228,14 @@ class TestAdExtractorDownload:
 
     @pytest.mark.asyncio
     async def test_download_ad_with_umlauts_in_title(self, extractor:AdExtractor, tmp_path:Path) -> None:
-        """Test downloading an ad with German umlauts (ä, ö, ü) in the title - issue #728."""
-        # Test with a title containing umlauts like in the bug report
+        """Test cross-platform Unicode handling for ad titles with umlauts (issue #728).
+
+        Verifies that:
+        1. Directories are created with NFC-normalized names (via sanitize_folder_name)
+        2. Files can be saved to those directories (via save_dict's NFC normalization)
+        3. No FileNotFoundError occurs due to NFC/NFD mismatch on Linux/Windows
+        """
+        # Title with German umlauts (ä) - common in real ads
         title_with_umlauts = "KitchenAid Zuhälter - nie benutzt"
 
         # Mock the page
@@ -1268,22 +1274,22 @@ class TestAdExtractorDownload:
                 base_dir, 12345
             )
 
-            # Verify the directory was created successfully with umlauts
+            # Verify directory was created with NFC-normalized name
             assert result_dir.exists()
             assert ad_cfg.title == title_with_umlauts
 
-            # Now test saving the YAML file to the directory with umlauts
-            # This is where the bug occurs - the file path should be valid
+            # Test saving YAML file to the Unicode directory path
+            # Before fix: Failed on Linux/Windows due to NFC/NFD mismatch
+            # After fix: Both directory and file use NFC normalization
             ad_file_path = Path(result_dir) / "ad_12345.yaml"
 
-            # Import save_dict and test it actually works
             from kleinanzeigen_bot.utils import dicts  # noqa: PLC0415
 
             header_string = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
 
-            # This should NOT raise FileNotFoundError
+            # save_dict normalizes path to NFC, matching the NFC directory name
             dicts.save_dict(str(ad_file_path), ad_cfg.model_dump(), header = header_string)
 
-            # Verify the file was created successfully
+            # Verify file was created successfully (no FileNotFoundError)
             assert ad_file_path.exists()
             assert ad_file_path.is_file()

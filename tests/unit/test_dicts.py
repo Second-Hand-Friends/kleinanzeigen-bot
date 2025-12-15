@@ -7,11 +7,12 @@ from pathlib import Path
 
 
 def test_save_dict_normalizes_unicode_paths(tmp_path:Path) -> None:
-    """Test that save_dict normalizes paths to NFC, preventing duplicate directories (issue #728).
+    """Test that save_dict normalizes paths to NFC for cross-platform consistency (issue #728).
 
-    When a directory is created with NFC normalization (e.g., "ä" as single character),
-    but save_dict is called with an NFD path (e.g., "ä" as "a" + combining diacritic),
-    it should normalize to NFC and use the existing directory instead of creating a duplicate.
+    Directories are created with NFC normalization (via sanitize_folder_name).
+    This test verifies save_dict's defensive normalization handles edge cases where
+    an NFD path is passed (e.g., "ä" as "a" + combining diacritic vs single character).
+    It should normalize to NFC and use the existing NFC directory.
     """
     from kleinanzeigen_bot.utils import dicts  # noqa: PLC0415
 

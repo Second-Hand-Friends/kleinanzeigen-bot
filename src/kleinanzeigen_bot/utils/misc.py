@@ -289,8 +289,12 @@ def sanitize_folder_name(name:str, max_length:int = 100) -> str:
     if not raw:
         return "untitled"
 
-    raw = unicodedata.normalize("NFC", raw)
+    # Apply sanitization, then normalize to NFC
+    # Note: sanitize-filename converts to NFD, so we must normalize AFTER sanitizing
+    # to ensure consistent NFC encoding across platforms (macOS HFS+, Linux, Windows)
+    # This prevents path mismatches when saving files to sanitized directories (issue #728)
     safe:str = sanitize(raw)
+    safe = unicodedata.normalize("NFC", safe)
 
     # Truncate with word-boundary preference
     if len(safe) > max_length:
