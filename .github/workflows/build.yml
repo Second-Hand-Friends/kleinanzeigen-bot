@@ -247,7 +247,7 @@ jobs:
 
 
     - name: Upload self-contained executable
-      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
       if: (github.ref_name == 'main' || github.ref_name == 'release') && matrix.PUBLISH_RELEASE && !env.ACT
       with:
         name: artifacts-${{ matrix.os }}
@@ -277,7 +277,7 @@ jobs:
 
 
     - name: Collect coverage reports
-      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
       if: (github.ref_name == 'main' || github.event_name == 'pull_request') && !env.ACT
       with:
         name: coverage-${{ matrix.os }}-py${{ matrix.PYTHON_VERSION }}
@@ -304,7 +304,7 @@ jobs:
 
 
     - name: Download coverage reports
-      uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+      uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
       with:
         pattern: coverage-*
         path: coverage
@@ -407,7 +407,7 @@ jobs:
 
 
     - name: Download build artifacts
-      uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+      uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
 
 
     - name: Rename build artifacts
