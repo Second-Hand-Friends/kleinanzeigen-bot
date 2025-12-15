@@ -4,6 +4,7 @@
 import atexit, enum, json, os, re, signal, sys, textwrap  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
+from datetime import datetime
 from gettext import gettext as _
 from typing import Any, Final
 
@@ -169,6 +170,26 @@ class KleinanzeigenBot(WebScrapingMixin):
                         LOG.info("############################################")
                         LOG.info("DONE: No ads to delete found.")
                         LOG.info("############################################")
+                case "extend":
+                    self.configure_file_logging()
+                    self.load_config()
+                    # Check for updates on startup
+                    checker = UpdateChecker(self.config)
+                    checker.check_for_updates()
+
+                    # Default to all ads if no selector provided
+                    if not re.compile(r"\d+[,\d+]*").search(self.ads_selector):
+                        LOG.info("Extending all ads within 8-day window...")
+                        self.ads_selector = "all"
+
+                    if ads := self.load_ads():
+                        await self.create_browser_session()
+                        await self.login()
+                        await self.extend_ads(ads)
+                    else:
+                        LOG.info("############################################")
+                        LOG.info("DONE: No ads found to extend.")
+                        LOG.info("############################################")
                 case "download":
                     self.configure_file_logging()
                     # ad IDs depends on selector
@@ -206,6 +227,7 @@ class KleinanzeigenBot(WebScrapingMixin):
               verify   - Überprüft die Konfigurationsdateien
               delete   - Löscht Anzeigen
               update   - Aktualisiert bestehende Anzeigen
+              extend   - Verlängert Anzeigen innerhalb des 8-Tage-Zeitfensters
               download - Lädt eine oder mehrere Anzeigen herunter
               update-check - Prüft auf verfügbare Updates
               update-content-hash - Berechnet den content_hash aller Anzeigen anhand der aktuellen ad_defaults neu;
@@ -236,6 +258,9 @@ class KleinanzeigenBot(WebScrapingMixin):
                     Mögliche Werte:
                     * changed: Aktualisiert nur Anzeigen, die seit der letzten Veröffentlichung geändert wurden
                     * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs zum Aktualisieren an, z. B. "--ads=1,2,3"
+              --ads=<id(s)> (extend) - Gibt an, welche Anzeigen verlängert werden sollen
+                    Standardmäßig werden alle Anzeigen verlängert, die innerhalb von 8 Tagen ablaufen.
+                    Mit dieser Option können Sie bestimmte Anzeigen-IDs angeben, z. B. "--ads=1,2,3"
               --force           - Alias für '--ads=all'
               --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
               --config=<PATH>   - Pfad zur YAML- oder JSON-Konfigurationsdatei (STANDARD: ./config.yaml)
@@ -252,6 +277,7 @@ class KleinanzeigenBot(WebScrapingMixin):
               verify   - verifies the configuration files
               delete   - deletes ads
               update   - updates published ads
+              extend   - extends ads within the 8-day window before expiry
               download - downloads one or multiple ads
               update-check - checks for available updates
               update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;
@@ -280,6 +306,9 @@ class KleinanzeigenBot(WebScrapingMixin):
                     Possible values:
                     * changed: only update ads that have been modified since last publication
                     * <id(s)>: provide one or several ads by ID to update, like e.g. "--ads=1,2,3"
+              --ads=<id(s)> (extend) - specifies which ads to extend
+                    By default, extends all ads expiring within 8 days.
+                    Use this option to specify ad IDs, e.g. "--ads=1,2,3"
               --force           - alias for '--ads=all'
               --keep-old        - don't delete old ads on republication
               --config=<PATH>   - path to the config YAML or JSON file (DEFAULT: ./config.yaml)
@@ -708,6 +737,111 @@ class KleinanzeigenBot(WebScrapingMixin):
         await self.web_sleep()
         ad_cfg.id = None
         return True
+
+    async def extend_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
+        """Extends ads that are close to expiry."""
+        count = 0
+
+        # Fetch currently published ads from API
+        published_ads = json.loads(
+            (await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
+
+        # Filter ads that need extension
+        ads_to_extend = []
+        for (ad_file, ad_cfg, ad_cfg_orig) in ad_cfgs:
+            # Skip unpublished ads (no ID)
+            if not ad_cfg.id:
+                LOG.info(_(" -> SKIPPED: ad '%s' is not published yet"), ad_cfg.title)
+                continue
+
+            # Find ad in published list
+            published_ad = next((ad for ad in published_ads if ad["id"] == ad_cfg.id), None)
+            if not published_ad:
+                LOG.warning(_(" -> SKIPPED: ad '%s' (ID: %s) not found in published ads"), ad_cfg.title, ad_cfg.id)
+                continue
+
+            # Skip non-active ads
+            if published_ad.get("state") != "active":
+                LOG.info(_(" -> SKIPPED: ad '%s' is not active (state: %s)"), ad_cfg.title, published_ad.get("state"))
+                continue
+
+            # Check if ad is within 8-day extension window using API's endDate
+            end_date_str = published_ad.get("endDate")
+            if not end_date_str:
+                LOG.warning(_(" -> SKIPPED: ad '%s' has no endDate in API response"), ad_cfg.title)
+                continue
+
+            # Intentionally parsing naive datetime from kleinanzeigen API's German date format, timezone not relevant for date-only comparison
+            end_date = datetime.strptime(end_date_str, "%d.%m.%Y")  # noqa: DTZ007
+            days_until_expiry = (end_date.date() - misc.now().date()).days
+
+            # Magic value 8 is kleinanzeigen.de's platform policy: extensions only possible within 8 days of expiry
+            if days_until_expiry <= 8:  # noqa: PLR2004
+                LOG.info(_(" -> ad '%s' expires in %d days, will extend"), ad_cfg.title, days_until_expiry)
+                ads_to_extend.append((ad_file, ad_cfg, ad_cfg_orig, published_ad))
+            else:
+                LOG.info(_(" -> SKIPPED: ad '%s' expires in %d days (can only extend within 8 days)"),
+                        ad_cfg.title, days_until_expiry)
+
+        if not ads_to_extend:
+            LOG.info(_("No ads need extension at this time."))
+            LOG.info("############################################")
+            LOG.info(_("DONE: No ads extended."))
+            LOG.info("############################################")
+            return
+
+        # Process extensions
+        for (ad_file, ad_cfg, ad_cfg_orig, _published_ad) in ads_to_extend:
+            count += 1
+            LOG.info(_("Processing %s/%s: '%s' from [%s]..."), count, len(ads_to_extend), ad_cfg.title, ad_file)
+            await self.extend_ad(ad_file, ad_cfg, ad_cfg_orig)
+            await self.web_sleep()
+
+        LOG.info("############################################")
+        LOG.info(_("DONE: Extended %s"), pluralize("ad", count))
+        LOG.info("############################################")
+
+    async def extend_ad(self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any]) -> bool:
+        """Extends a single ad listing."""
+        LOG.info(_("Extending ad '%s' (ID: %s)..."), ad_cfg.title, ad_cfg.id)
+
+        try:
+            # Navigate to ad management page
+            await self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
+
+            # Find and click "Verlängern" (extend) button for this ad
+            extend_button_xpath = f'//article[@data-adid="{ad_cfg.id}"]//button[contains(., "Verlängern")]'
+
+            try:
+                await self.web_click(By.XPATH, extend_button_xpath)
+            except TimeoutError:
+                LOG.error(_(" -> FAILED: Could not find 'Verlängern' button for ad ID %s"), ad_cfg.id)
+                return False
+
+            # Handle confirmation dialog
+            # After clicking "Verlängern", a dialog appears with:
+            # - Title: "Vielen Dank!"
+            # - Message: "Deine Anzeige ... wurde erfolgreich verlängert."
+            # - Paid bump-up option (skipped by closing dialog)
+            # Simply close the dialog with the X button (aria-label="Schließen")
+            try:
+                dialog_close_timeout = self._timeout("quick_dom")
+                await self.web_click(By.CSS_SELECTOR, 'button[aria-label="Schließen"]', timeout = dialog_close_timeout)
+                LOG.debug(" -> Closed confirmation dialog")
+            except TimeoutError:
+                LOG.warning(_(" -> No confirmation dialog found, extension may have completed directly"))
+
+            # Update metadata in YAML file
+            # Update updated_on to track when ad was extended
+            ad_cfg_orig["updated_on"] = misc.now().isoformat(timespec = "seconds")
+            dicts.save_dict(ad_file, ad_cfg_orig)
+
+            LOG.info(_(" -> SUCCESS: ad extended with ID %s"), ad_cfg.id)
+            return True
+
+        except Exception as ex:
+            LOG.error(_(" -> FAILED: Could not extend ad '%s': %s"), ad_cfg.title, ex)
+            return False
 
     async def __check_publishing_result(self) -> bool:
         # Check for success messages
