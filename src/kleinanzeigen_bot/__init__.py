@@ -595,6 +595,8 @@ class KleinanzeigenBot(WebScrapingMixin):
     async def login(self) -> None:
         LOG.info("Checking if already logged in...")
         await self.web_open(f"{self.root_url}")
+        if getattr(self, "page", None) is not None:
+            LOG.debug(_("Current page URL after opening homepage: %s"), self.page.url)
 
         if await self.is_logged_in():
             LOG.info("Already logged in as [%s]. Skipping login.", self.config.login.username)
@@ -608,8 +610,14 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         # Sometimes a second login is required
         if not await self.is_logged_in():
+            LOG.debug(_("First login attempt did not succeed, trying second login attempt"))
             await self.fill_login_data_and_send()
             await self.handle_after_login_logic()
+
+            if await self.is_logged_in():
+                LOG.debug(_("Second login attempt succeeded"))
+            else:
+                LOG.warning(_("Second login attempt also failed - login may not have succeeded"))
 
     async def fill_login_data_and_send(self) -> None:
         LOG.info("Logging in as [%s]...", self.config.login.username)
@@ -646,19 +654,34 @@ class KleinanzeigenBot(WebScrapingMixin):
             pass
 
     async def is_logged_in(self) -> bool:
+        # Use login_detection timeout (10s default) instead of default (5s)
+        # to allow sufficient time for client-side JavaScript rendering after page load.
+        # This is especially important for older sessions (20+ days) that require
+        # additional server-side validation time.
+        login_check_timeout = self._timeout("login_detection")
+        effective_timeout = self._effective_timeout("login_detection")
+        username = self.config.login.username.lower()
+        LOG.debug(_("Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)"), login_check_timeout, effective_timeout)
+
+        # Try to find the standard element first
         try:
-            # Try to find the standard element first
-            user_info = await self.web_text(By.CLASS_NAME, "mr-medium")
-            if self.config.login.username.lower() in user_info.lower():
+            user_info = await self.web_text(By.CLASS_NAME, "mr-medium", timeout = login_check_timeout)
+            if username in user_info.lower():
+                LOG.debug(_("Login detected via .mr-medium element"))
                 return True
         except TimeoutError:
-            try:
-                # If standard element not found, try the alternative
-                user_info = await self.web_text(By.ID, "user-email")
-                if self.config.login.username.lower() in user_info.lower():
-                    return True
-            except TimeoutError:
-                return False
+            LOG.debug(_("Timeout waiting for .mr-medium element after %.1fs"), effective_timeout)
+
+        # If standard element not found or didn't contain username, try the alternative
+        try:
+            user_info = await self.web_text(By.ID, "user-email", timeout = login_check_timeout)
+            if username in user_info.lower():
+                LOG.debug(_("Login detected via #user-email element"))
+                return True
+        except TimeoutError:
+            LOG.debug(_("Timeout waiting for #user-email element after %.1fs"), effective_timeout)
+
+        LOG.debug(_("No login detected - neither .mr-medium nor #user-email found with username"))
         return False
 
     async def delete_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:

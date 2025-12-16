@@ -61,8 +61,20 @@ kleinanzeigen_bot/__init__.py:
 
   login:
     "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
+    "Current page URL after opening homepage: %s": "Aktuelle Seiten-URL nach dem Öffnen der Startseite: %s"
     "Already logged in as [%s]. Skipping login.": "Bereits eingeloggt als [%s]. Überspringe Anmeldung."
     "Opening login page...": "Öffne Anmeldeseite..."
+    "First login attempt did not succeed, trying second login attempt": "Erster Anmeldeversuch war nicht erfolgreich, versuche zweiten Anmeldeversuch"
+    "Second login attempt succeeded": "Zweiter Anmeldeversuch erfolgreich"
+    "Second login attempt also failed - login may not have succeeded": "Zweiter Anmeldeversuch ebenfalls fehlgeschlagen - Anmeldung möglicherweise nicht erfolgreich"
+
+  is_logged_in:
+    "Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)": "Starte Login-Erkennung (Timeout: %.1fs Basis, %.1fs effektiv mit Multiplikator/Backoff)"
+    "Login detected via .mr-medium element": "Login erkannt über .mr-medium Element"
+    "Timeout waiting for .mr-medium element after %.1fs": "Timeout beim Warten auf .mr-medium Element nach %.1fs"
+    "Login detected via #user-email element": "Login erkannt über #user-email Element"
+    "Timeout waiting for #user-email element after %.1fs": "Timeout beim Warten auf #user-email Element nach %.1fs"
+    "No login detected - neither .mr-medium nor #user-email found with username": "Kein Login erkannt - weder .mr-medium noch #user-email mit Benutzername gefunden"
 
   handle_after_login_logic:
     "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
