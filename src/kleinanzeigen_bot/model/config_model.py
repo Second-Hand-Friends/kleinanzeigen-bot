@@ -80,8 +80,11 @@ class DownloadConfig(ContextualModel):
 
 class BrowserConfig(ContextualModel):
     arguments:List[str] = Field(
-        default_factory = lambda: ["--user-data-dir=.temp/browser-profile"],
-        description = "See https://peter.sh/experiments/chromium-command-line-switches/"
+        default_factory = list,
+        description = (
+            "Extra Chromium command-line switches. The bot sets --user-data-dir automatically based on installation "
+            "mode (portable vs XDG); only add this flag if you need a custom profile path."
+        )
     )
     binary_location:str | None = Field(
         default = None,
@@ -93,8 +96,11 @@ class BrowserConfig(ContextualModel):
     )
     use_private_window:bool = True
     user_data_dir:str | None = Field(
-        default = ".temp/browser-profile",
-        description = "See https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md"
+        default = None,
+        description = (
+            "Browser profile directory. If not specified, uses XDG cache directory or legacy .temp/browser-profile. "
+            "See https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md"
+        )
     )
     profile_name:str | None = None
 

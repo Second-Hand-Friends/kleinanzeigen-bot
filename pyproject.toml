@@ -44,6 +44,7 @@ dependencies = [
   "psutil",
   "wcmatch",
   "sanitize-filename>=1.2.0",
+  "platformdirs",
 ]
 
 [dependency-groups] # https://peps.python.org/pep-0735/
@@ -60,7 +61,6 @@ dev = [
     "autopep8",
     "yamlfix",
     "pyinstaller",
-    "platformdirs",
     "types-requests>=2.32.0.20250515",
     "pytest-mock>=3.14.0",
 ]
