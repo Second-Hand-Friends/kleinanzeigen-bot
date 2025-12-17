@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 import copy
-from typing import Annotated, Any, List, Literal
+from gettext import gettext as _
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import AfterValidator, Field, model_validator
 from typing_extensions import deprecated
@@ -13,6 +14,52 @@ from kleinanzeigen_bot.model.update_check_model import UpdateCheckConfig
 from kleinanzeigen_bot.utils import dicts
 from kleinanzeigen_bot.utils.misc import get_attr
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
+
+_MAX_PERCENTAGE:Final[int] = 100
+
+
+class AutoPriceReductionConfig(ContextualModel):
+    enabled:bool = Field(
+        default = False,
+        description = "automatically lower the price of reposted ads"
+    )
+    strategy:Literal["FIXED", "PERCENTAGE"] | None = Field(
+        default = None,
+        description = "PERCENTAGE reduces by a percentage of the previous price, FIXED reduces by a fixed amount"
+    )
+    amount:float | None = Field(
+        default = None,
+        gt = 0,
+        description = "magnitude of the reduction; interpreted as percent for PERCENTAGE or currency units for FIXED"
+    )
+    min_price:float | None = Field(
+        default = None,
+        ge = 0,
+        description = "required when enabled is true; minimum price floor (use 0 for no lower bound)"
+    )
+    delay_reposts:int = Field(
+        default = 0,
+        ge = 0,
+        description = "number of reposts to wait before applying the first automatic price reduction"
+    )
+    delay_days:int = Field(
+        default = 0,
+        ge = 0,
+        description = "number of days to wait after publication before applying automatic price reductions"
+    )
+
+    @model_validator(mode = "after")
+    def _validate_config(self) -> "AutoPriceReductionConfig":
+        if self.enabled:
+            if self.strategy is None:
+                raise ValueError(_("strategy must be specified when auto_price_reduction is enabled"))
+            if self.amount is None:
+                raise ValueError(_("amount must be specified when auto_price_reduction is enabled"))
+            if self.min_price is None:
+                raise ValueError(_("min_price must be specified when auto_price_reduction is enabled"))
+            if self.strategy == "PERCENTAGE" and self.amount > _MAX_PERCENTAGE:
+                raise ValueError(_("Percentage reduction amount must not exceed %s") % _MAX_PERCENTAGE)
+        return self
 
 
 class ContactDefaults(ContextualModel):
@@ -35,9 +82,13 @@ class AdDefaults(ContextualModel):
     description_prefix:str | None = Field(default = None, description = "prefix for the ad description")
     description_suffix:str | None = Field(default = None, description = " suffix for the ad description")
     price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] = "NEGOTIABLE"
+    auto_price_reduction:AutoPriceReductionConfig = Field(
+        default_factory = AutoPriceReductionConfig,
+        description = "automatic price reduction configuration"
+    )
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] = "SHIPPING"
     sell_directly:bool = Field(default = False, description = "requires shipping_type SHIPPING to take effect")
-    images:List[str] | None = Field(default = None)
+    images:list[str] | None = Field(default = None)
     contact:ContactDefaults = Field(default_factory = ContactDefaults)
     republication_interval:int = 7
 
@@ -62,7 +113,7 @@ class DownloadConfig(ContextualModel):
         default = False,
         description = "if true, all shipping options matching the package size will be included"
     )
-    excluded_shipping_options:List[str] = Field(
+    excluded_shipping_options:list[str] = Field(
         default_factory = list,
         description = "list of shipping options to exclude, e.g. ['DHL_2', 'DHL_5']"
     )
@@ -79,7 +130,7 @@ class DownloadConfig(ContextualModel):
 
 
 class BrowserConfig(ContextualModel):
-    arguments:List[str] = Field(
+    arguments:list[str] = Field(
         default_factory = lambda: ["--user-data-dir=.temp/browser-profile"],
         description = "See https://peter.sh/experiments/chromium-command-line-switches/"
     )
@@ -87,7 +138,7 @@ class BrowserConfig(ContextualModel):
         default = None,
         description = "path to custom browser executable, if not specified will be looked up on PATH"
     )
-    extensions:List[str] = Field(
+    extensions:list[str] = Field(
         default_factory = list,
         description = "a list of .crx extension files to be loaded"
     )
@@ -175,7 +226,7 @@ GlobPattern = Annotated[str, AfterValidator(_validate_glob_pattern)]
 
 
 class Config(ContextualModel):
-    ad_files:List[GlobPattern] = Field(
+    ad_files:list[GlobPattern] = Field(
         default_factory = lambda: ["./**/ad_*.{json,yml,yaml}"],
         min_items = 1,
         description = """

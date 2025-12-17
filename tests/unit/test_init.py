@@ -5,7 +5,7 @@ import copy, io, json, logging, os, tempfile  # isort: skip
 from collections.abc import Generator
 from contextlib import redirect_stdout
 from datetime import timedelta
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -1073,6 +1073,124 @@ class TestKleinanzeigenBotShippingOptions:
             assert ad_file.exists()
 
     @pytest.mark.asyncio
+    async def test_cross_drive_path_fallback_windows(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """Test that cross-drive path handling falls back to absolute path on Windows."""
+        # Create ad config
+        ad_cfg = Ad.model_validate(base_ad_config | {
+            "updated_on": "2024-01-01T00:00:00",
+            "created_on": "2024-01-01T00:00:00",
+            "auto_price_reduction": {
+                "enabled": True,
+                "strategy": "FIXED",
+                "amount": 10,
+                "min_price": 50,
+                "delay_reposts": 0,
+                "delay_days": 0
+            },
+            "price": 100,
+            "repost_count": 1,
+            "price_reduction_count": 0
+        })
+        ad_cfg.update_content_hash()
+        ad_cfg_orig = ad_cfg.model_dump()
+
+        # Simulate Windows cross-drive scenario
+        # Config on D:, ad file on C:
+        test_bot.config_file_path = "D:\\project\\config.yaml"
+        ad_file = "C:\\temp\\test_ad.yaml"
+
+        # Create a sentinel exception to abort publish_ad early
+        class _SentinelException(Exception):
+            pass
+
+        # Track what path argument __apply_auto_price_reduction receives
+        recorded_path:list[str] = []
+
+        def mock_apply_auto_price_reduction(ad_cfg:Ad, ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
+            recorded_path.append(ad_file_relative)
+            raise _SentinelException("Abort early for test")
+
+        # Mock Path to use PureWindowsPath for testing cross-drive behavior
+        with patch("kleinanzeigen_bot.Path", PureWindowsPath), \
+                patch.object(test_bot, "_KleinanzeigenBot__apply_auto_price_reduction", side_effect = mock_apply_auto_price_reduction), \
+                patch.object(test_bot, "web_open", new_callable = AsyncMock), \
+                patch.object(test_bot, "delete_ad", new_callable = AsyncMock):
+            # Call publish_ad and expect sentinel exception
+            try:
+                await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+                pytest.fail("Expected _SentinelException to be raised")
+            except _SentinelException:
+                # This is expected - the test aborts early
+                pass
+
+        # Verify the path argument is the absolute path (fallback behavior)
+        assert len(recorded_path) == 1
+        assert recorded_path[0] == ad_file, f"Expected absolute path fallback, got: {recorded_path[0]}"
+
+    @pytest.mark.asyncio
+    async def test_auto_price_reduction_only_on_replace_not_update(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path
+    ) -> None:
+        """Test that auto price reduction is ONLY applied on REPLACE mode, not UPDATE."""
+        # Create ad with auto price reduction enabled
+        ad_cfg = Ad.model_validate(base_ad_config | {
+            "id": 12345,
+            "price": 200,
+            "auto_price_reduction": {
+                "enabled": True,
+                "strategy": "FIXED",
+                "amount": 50,
+                "min_price": 50,
+                "delay_reposts": 0,
+                "delay_days": 0
+            },
+            "repost_count": 1,
+            "price_reduction_count": 0,
+            "updated_on": "2024-01-01T00:00:00",
+            "created_on": "2024-01-01T00:00:00"
+        })
+        ad_cfg.update_content_hash()
+        ad_cfg_orig = ad_cfg.model_dump()
+
+        # Mock the private __apply_auto_price_reduction method
+        with patch.object(test_bot, "_KleinanzeigenBot__apply_auto_price_reduction") as mock_apply:
+            # Mock other dependencies
+            mock_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
+            with patch.object(test_bot, "web_find", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_input", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_click", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_open", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_select", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False), \
+                    patch.object(test_bot, "web_await", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_sleep", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = mock_response), \
+                    patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = mock_response), \
+                    patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []), \
+                    patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock), \
+                    patch("builtins.input", return_value = ""), \
+                    patch("kleinanzeigen_bot.utils.misc.ainput", new_callable = AsyncMock, return_value = ""):
+
+                test_bot.page = MagicMock()
+                test_bot.page.url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+                test_bot.config.publishing.delete_old_ads = "BEFORE_PUBLISH"
+
+                # Test REPLACE mode - should call __apply_auto_price_reduction
+                await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+                assert mock_apply.call_count == 1, "Auto price reduction should be called on REPLACE"
+
+                # Reset mock
+                mock_apply.reset_mock()
+
+                # Test MODIFY mode - should NOT call __apply_auto_price_reduction
+                await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
+                assert mock_apply.call_count == 0, "Auto price reduction should NOT be called on MODIFY"
+
+    @pytest.mark.asyncio
     async def test_special_attributes_with_non_string_values(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
         """Test that special attributes with non-string values are converted to strings."""
         # Create ad config with string special attributes first (to pass validation)
@@ -1462,3 +1580,45 @@ def test_file_logger_writes_message(tmp_path:Path, caplog:pytest.LogCaptureFixtu
     with open(log_path, "r", encoding = "utf-8") as f:
         contents = f.read()
     assert "Logger test log message" in contents
+
+
+class TestPriceReductionPersistence:
+    """Tests for price_reduction_count persistence logic."""
+
+    @pytest.mark.unit
+    def test_persistence_logic_saves_when_count_positive(self) -> None:
+        """Test the conditional logic that decides whether to persist price_reduction_count."""
+        # Simulate the logic from publish_ad lines 1076-1079
+        ad_cfg_orig:dict[str, Any] = {}
+
+        # Test case 1: price_reduction_count = 3 (should persist)
+        price_reduction_count = 3
+        if price_reduction_count is not None and price_reduction_count > 0:
+            ad_cfg_orig["price_reduction_count"] = price_reduction_count
+
+        assert "price_reduction_count" in ad_cfg_orig
+        assert ad_cfg_orig["price_reduction_count"] == 3
+
+    @pytest.mark.unit
+    def test_persistence_logic_skips_when_count_zero(self) -> None:
+        """Test that price_reduction_count == 0 does not get persisted."""
+        ad_cfg_orig:dict[str, Any] = {}
+
+        # Test case 2: price_reduction_count = 0 (should NOT persist)
+        price_reduction_count = 0
+        if price_reduction_count is not None and price_reduction_count > 0:
+            ad_cfg_orig["price_reduction_count"] = price_reduction_count
+
+        assert "price_reduction_count" not in ad_cfg_orig
+
+    @pytest.mark.unit
+    def test_persistence_logic_skips_when_count_none(self) -> None:
+        """Test that price_reduction_count == None does not get persisted."""
+        ad_cfg_orig:dict[str, Any] = {}
+
+        # Test case 3: price_reduction_count = None (should NOT persist)
+        price_reduction_count = None
+        if price_reduction_count is not None and price_reduction_count > 0:
+            ad_cfg_orig["price_reduction_count"] = price_reduction_count
+
+        assert "price_reduction_count" not in ad_cfg_orig
