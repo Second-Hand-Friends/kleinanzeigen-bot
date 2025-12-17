@@ -178,11 +178,16 @@ kleinanzeigen_bot/__init__.py:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "ad": "Anzeige"
 
+  finalize_installation_mode:
+    "Config file: %s": "Konfigurationsdatei: %s"
+    "First run detected, prompting user for installation mode": "Erster Start erkannt, frage Benutzer nach Installationsmodus"
+    "Installation mode: %s": "Installationsmodus: %s"
+
 #################################################
 kleinanzeigen_bot/extract.py:
 #################################################
   download_ad:
-    "Ensured ads directory exists at ./%s.": "Verzeichnis [%s] für Anzeige vorhanden."
+    "Using download directory: %s": "Verwende Download-Verzeichnis: %s"
 
   _download_and_save_image_sync:
     "Failed to download image %s: %s": "Fehler beim Herunterladen des Bildes %s: %s"
@@ -541,3 +546,20 @@ kleinanzeigen_bot/model/update_check_state.py:
     "Interval too short: %s. Minimum interval is 1d. Using default interval for this run.": "Intervall zu kurz: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
     "Invalid interval format or unsupported unit: %s. Using default interval for this run.": "Ungültiges Intervallformat oder nicht unterstützte Einheit: %s. Es wird das Standardintervall für diesen Durchlauf verwendet."
     "Negative interval: %s. Minimum interval is 1d. Using default interval for this run.": "Negatives Intervall: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
+
+#################################################
+kleinanzeigen_bot/utils/xdg_paths.py:
+#################################################
+  detect_installation_mode:
+    "Checking for portable config at: %s": "Prüfe auf portable Konfiguration unter: %s"
+    "Checking for XDG config at: %s": "Prüfe auf XDG-Konfiguration unter: %s"
+    "Detected installation mode: %s": "Erkannter Installationsmodus: %s"
+    "No existing installation found": "Keine existierende Installation gefunden"
+
+  prompt_installation_mode:
+    "Choose installation type:": "Installationstyp auswählen:"
+    "[1] Portable (current directory)": "[1] Portabel (aktuelles Verzeichnis)"
+    "[2] System-wide (XDG directories)": "[2] Systemweit (XDG-Verzeichnisse)"
+    "User selected installation mode: %s": "Benutzer wählte Installationsmodus: %s"
+    "Defaulting to portable installation mode": "Verwende standardmäßig portable Installation"
+    "Non-interactive mode detected, defaulting to portable installation": "Nicht-interaktiver Modus erkannt, verwende standardmäßig portable Installation"

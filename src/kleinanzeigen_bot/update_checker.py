@@ -6,11 +6,12 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import colorama
 import requests
+
+from kleinanzeigen_bot.utils import xdg_paths
 
 if TYPE_CHECKING:
     from kleinanzeigen_bot.model.config_model import Config
@@ -30,15 +31,19 @@ colorama.init()
 class UpdateChecker:
     """Checks for updates to the bot."""
 
-    def __init__(self, config:"Config") -> None:
+    def __init__(self, config:"Config", installation_mode:str | xdg_paths.InstallationMode = "portable") -> None:
         """Initialize the update checker.
 
         Args:
             config: The bot configuration.
+            installation_mode: Installation mode (portable or xdg). Defaults to "portable" for backward compatibility.
         """
         self.config = config
-        self.state_file = Path(".temp") / "update_check_state.json"
-        self.state_file.parent.mkdir(exist_ok = True)  # Ensure .temp directory exists
+
+        self.state_file = xdg_paths.get_update_check_state_path(installation_mode)
+        logger.debug("Update check state file: %s", self.state_file)
+        # Note: xdg_paths handles directory creation
+
         self.state = UpdateCheckState.load(self.state_file)
 
     def get_local_version(self) -> str | None:

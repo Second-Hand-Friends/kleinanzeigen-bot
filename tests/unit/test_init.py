@@ -568,6 +568,7 @@ class TestKleinanzeigenBotArgParsing:
     def test_parse_args_config_path(self, test_bot:KleinanzeigenBot) -> None:
         """Test parsing config path."""
         test_bot.parse_args(["script.py", "--config=test.yaml", "help"])
+        assert test_bot.config_file_path is not None
         assert test_bot.config_file_path.endswith("test.yaml")
 
     def test_parse_args_logfile(self, test_bot:KleinanzeigenBot) -> None:
@@ -595,6 +596,24 @@ class TestKleinanzeigenBotArgParsing:
         """Test parsing empty log file path."""
         test_bot.parse_args(["script.py", "--logfile=", "help"])
         assert test_bot.log_file_path is None
+
+    def test_logfile_explicit_flag_set(self, test_bot:KleinanzeigenBot) -> None:
+        """Test that log_file_explicitly_provided flag is set when --logfile is provided."""
+        test_bot.parse_args(["script.py", "--logfile=custom.log", "help"])
+        assert test_bot.log_file_explicitly_provided is True
+        assert test_bot.log_file_path is not None
+        assert "custom.log" in test_bot.log_file_path
+
+    def test_logfile_explicit_flag_set_even_when_empty(self, test_bot:KleinanzeigenBot) -> None:
+        """Test that log_file_explicitly_provided flag is set even when --logfile= is empty."""
+        test_bot.parse_args(["script.py", "--logfile=", "help"])
+        assert test_bot.log_file_explicitly_provided is True
+        assert test_bot.log_file_path is None
+
+    def test_logfile_explicit_flag_not_set_when_not_provided(self, test_bot:KleinanzeigenBot) -> None:
+        """Test that log_file_explicitly_provided flag is False when --logfile is not provided."""
+        test_bot.parse_args(["script.py", "help"])
+        assert test_bot.log_file_explicitly_provided is False
 
     def test_parse_args_lang_option(self, test_bot:KleinanzeigenBot) -> None:
         """Test parsing language option."""
@@ -1462,3 +1481,197 @@ def test_file_logger_writes_message(tmp_path:Path, caplog:pytest.LogCaptureFixtu
     with open(log_path, "r", encoding = "utf-8") as f:
         contents = f.read()
     assert "Logger test log message" in contents
+
+
+class TestFinalizeInstallationMode:
+    """Tests for finalize_installation_mode() logfile override behavior."""
+
+    def test_explicit_logfile_respected_in_xdg_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        """Test that explicit --logfile overrides XDG mode default."""
+        # Setup XDG mode by creating config in XDG location
+        xdg_config = tmp_path / "config" / "kleinanzeigen-bot"
+        xdg_config.mkdir(parents = True)
+        (xdg_config / "config.yaml").write_text("login:\n  username: test\n  password: test\n")
+
+        monkeypatch.setattr("platformdirs.user_config_dir", lambda app_name: str(tmp_path / "config" / app_name))
+        monkeypatch.setattr("platformdirs.user_state_dir", lambda app_name: str(tmp_path / "state" / app_name))
+
+        # Change to different directory
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        monkeypatch.chdir(cwd)
+
+        # Create bot and explicitly set logfile to portable default value
+        bot = KleinanzeigenBot()
+        explicit_logfile = str(cwd / "kleinanzeigen_bot.log")
+        bot.parse_args(["script.py", f"--logfile={explicit_logfile}", "help"])
+
+        # Verify flag is set
+        assert bot.log_file_explicitly_provided is True
+        assert bot.log_file_path == explicit_logfile
+
+        # This should NOT override the explicit logfile even though we're in XDG mode
+        bot.finalize_installation_mode()
+
+        # Verify logfile path was NOT changed to XDG state directory
+        assert bot.installation_mode == "xdg"
+        assert bot.log_file_path == explicit_logfile
+        assert bot.log_file_path is not None
+        assert not bot.log_file_path.startswith(str(tmp_path / "state"))
+
+    def test_default_logfile_uses_xdg_in_xdg_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        """Test that default logfile uses XDG state directory in XDG mode."""
+        # Setup XDG mode
+        xdg_config = tmp_path / "config" / "kleinanzeigen-bot"
+        xdg_config.mkdir(parents = True)
+        (xdg_config / "config.yaml").write_text("login:\n  username: test\n  password: test\n")
+
+        monkeypatch.setattr("platformdirs.user_config_dir", lambda app_name: str(tmp_path / "config" / app_name))
+        monkeypatch.setattr("platformdirs.user_state_dir", lambda app_name: str(tmp_path / "state" / app_name))
+
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        monkeypatch.chdir(cwd)
+
+        # Create bot without explicit logfile
+        bot = KleinanzeigenBot()
+        bot.parse_args(["script.py", "help"])
+
+        # Verify flag is NOT set
+        assert bot.log_file_explicitly_provided is False
+
+        # Finalize should use XDG state directory
+        bot.finalize_installation_mode()
+
+        assert bot.installation_mode == "xdg"
+        assert bot.log_file_path is not None
+        assert bot.log_file_path.startswith(str(tmp_path / "state" / "kleinanzeigen-bot"))
+        assert "kleinanzeigen_bot.log" in bot.log_file_path
+
+    def test_explicit_logfile_respected_in_portable_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        """Test that explicit --logfile is respected in portable mode."""
+        # Setup portable mode
+        (tmp_path / "config.yaml").write_text("login:\n  username: test\n  password: test\n")
+        monkeypatch.chdir(tmp_path)
+
+        # Create bot with custom logfile
+        bot = KleinanzeigenBot()
+        custom_logfile = str(tmp_path / "custom.log")
+        bot.parse_args(["script.py", f"--logfile={custom_logfile}", "help"])
+
+        assert bot.log_file_explicitly_provided is True
+
+        bot.finalize_installation_mode()
+
+        assert bot.installation_mode == "portable"
+        assert bot.log_file_path == custom_logfile
+
+
+class TestCreateConfigCommand:
+    """Tests for create-config CLI command with XDG support."""
+
+    @pytest.mark.asyncio
+    async def test_create_config_in_portable_mode(
+        self,
+        tmp_path:Path,
+        monkeypatch:pytest.MonkeyPatch
+    ) -> None:
+        """Test that create-config creates config.yaml in CWD (portable mode)."""
+        # Setup: clean directory, make it CWD
+        monkeypatch.chdir(tmp_path)
+
+        # Create bot and run create-config command
+        bot = KleinanzeigenBot()
+        await bot.run(["script.py", "create-config"])
+
+        # Verify config was created in CWD (portable mode)
+        config_file = tmp_path / "config.yaml"
+        assert config_file.exists()
+        assert bot.installation_mode == "portable"
+        assert bot.config_file_path == str(config_file)
+
+    @pytest.mark.asyncio
+    async def test_create_config_in_xdg_mode(
+        self,
+        tmp_path:Path,
+        monkeypatch:pytest.MonkeyPatch
+    ) -> None:
+        """Test that create-config prompts for XDG mode on first run."""
+        # Setup: clean directories for CWD and XDG
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        monkeypatch.chdir(cwd)
+
+        xdg_config = tmp_path / "config" / "kleinanzeigen-bot"
+        xdg_config.mkdir(parents = True)
+
+        # Mock platformdirs to return test XDG path
+        monkeypatch.setattr("platformdirs.user_config_dir",
+                           lambda app_name: str(tmp_path / "config" / app_name))
+
+        # Mock user selecting XDG mode (choice "2")
+        mock_stdin = io.StringIO()
+        mock_stdin.isatty = lambda: True  # type: ignore[method-assign]
+        monkeypatch.setattr("sys.stdin", mock_stdin)
+        monkeypatch.setattr("builtins.input", lambda _: "2")
+
+        # Create bot and run create-config command
+        bot = KleinanzeigenBot()
+        await bot.run(["script.py", "create-config"])
+
+        # Verify config was created in XDG directory
+        config_file = xdg_config / "config.yaml"
+        assert config_file.exists()
+        assert bot.installation_mode == "xdg"
+        assert bot.config_file_path == str(config_file)
+
+        # Verify CWD does NOT have config.yaml
+        assert not (cwd / "config.yaml").exists()
+
+    @pytest.mark.asyncio
+    async def test_create_config_respects_existing_config(
+        self,
+        tmp_path:Path,
+        monkeypatch:pytest.MonkeyPatch
+    ) -> None:
+        """Test that create-config doesn't overwrite existing config.yaml."""
+        # Setup: create existing config.yaml
+        monkeypatch.chdir(tmp_path)
+        existing_config = tmp_path / "config.yaml"
+        original_content = "login:\n  username: existing\n  password: existing\n"
+        existing_config.write_text(original_content)
+
+        # Create bot and run create-config command
+        bot = KleinanzeigenBot()
+        await bot.run(["script.py", "create-config"])
+
+        # Verify config was NOT overwritten
+        config_content = existing_config.read_text()
+        assert config_content == original_content
+        assert "existing" in config_content
+        assert "changeme" not in config_content
+
+    @pytest.mark.asyncio
+    async def test_create_config_with_explicit_path(
+        self,
+        tmp_path:Path,
+        monkeypatch:pytest.MonkeyPatch
+    ) -> None:
+        """Test that create-config respects --config flag."""
+        monkeypatch.chdir(tmp_path)
+
+        # Create custom config directory
+        custom_dir = tmp_path / "custom"
+        custom_dir.mkdir()
+        custom_config = custom_dir / "my-config.yaml"
+
+        # Create bot with --config flag
+        bot = KleinanzeigenBot()
+        await bot.run(["script.py", f"--config={custom_config}", "create-config"])
+
+        # Verify config was created at custom location
+        assert custom_config.exists()
+        assert bot.config_file_path == str(custom_config)
+
+        # Verify default location does NOT have config
+        assert not (tmp_path / "config.yaml").exists()

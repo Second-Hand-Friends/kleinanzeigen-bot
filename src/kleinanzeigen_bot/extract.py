@@ -15,7 +15,7 @@ from kleinanzeigen_bot.model.ad_model import ContactPartial
 
 from .model.ad_model import AdPartial
 from .model.config_model import Config
-from .utils import dicts, files, i18n, loggers, misc, reflect
+from .utils import dicts, files, i18n, loggers, misc, reflect, xdg_paths
 from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
 
 __all__ = [
@@ -33,10 +33,11 @@ class AdExtractor(WebScrapingMixin):
     Wrapper class for ad extraction that uses an active bot´s browser session to extract specific elements from an ad page.
     """
 
-    def __init__(self, browser:Browser, config:Config) -> None:
+    def __init__(self, browser:Browser, config:Config, installation_mode:str = "portable") -> None:
         super().__init__()
         self.browser = browser
         self.config:Config = config
+        self.installation_mode = installation_mode
 
     async def download_ad(self, ad_id:int) -> None:
         """
@@ -47,19 +48,22 @@ class AdExtractor(WebScrapingMixin):
         """
 
         # create sub-directory for ad(s) to download (if necessary):
-        relative_directory = Path("downloaded-ads")
-        # make sure configured base directory exists (using exist_ok=True to avoid TOCTOU race)
-        await asyncio.get_running_loop().run_in_executor(None, lambda: relative_directory.mkdir(exist_ok = True))  # noqa: ASYNC240
-        LOG.info("Ensured ads directory exists at ./%s.", relative_directory)
+        download_dir = xdg_paths.get_downloaded_ads_path(self.installation_mode)
+        LOG.info("Using download directory: %s", download_dir)
+        LOG.debug("Ensuring download directory exists...")
+        # Note: xdg_paths.get_downloaded_ads_path() already creates the directory
 
         # Extract ad info and determine final directory path
         ad_cfg, final_dir = await self._extract_ad_page_info_with_directory_handling(
-            relative_directory, ad_id
+            download_dir, ad_id
         )
 
         # Save the ad configuration file (offload to executor to avoid blocking the event loop)
         ad_file_path = str(Path(final_dir) / f"ad_{ad_id}.yaml")
-        header_string = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
+        header_string = (
+            "# yaml-language-server: "
+            "$schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
+        )
         await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(), header = header_string)

@@ -5,6 +5,7 @@ import atexit, enum, json, os, re, signal, sys, textwrap  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 from gettext import gettext as _
+from pathlib import Path
 from typing import Any, Final
 
 import certifi, colorama, nodriver  # isort: skip
@@ -16,7 +17,7 @@ from ._version import __version__
 from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial
 from .model.config_model import Config
 from .update_checker import UpdateChecker
-from .utils import dicts, error_handlers, loggers, misc
+from .utils import dicts, error_handlers, loggers, misc, xdg_paths
 from .utils.exceptions import CaptchaEncountered
 from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
@@ -49,13 +50,19 @@ class KleinanzeigenBot(WebScrapingMixin):
         self.root_url = "https://www.kleinanzeigen.de"
 
         self.config:Config
-        self.config_file_path = abspath("config.yaml")
+        # Config and mode will be finalized after parsing CLI args
+        # Set defaults for portable mode (backward compatibility with tests)
+        self.config_file_path:str | None = str(xdg_paths.get_config_file_path("portable"))
+        self.config_explicitly_provided = False
+        self.installation_mode:xdg_paths.InstallationMode | None = None
 
         self.categories:dict[str, str] = {}
 
         self.file_log:loggers.LogFileHandle | None = None
         log_file_basename = is_frozen() and os.path.splitext(os.path.basename(sys.executable))[0] or self.__module__
-        self.log_file_path:str | None = abspath(f"{log_file_basename}.log")
+        self.log_file_path:str | None = str(xdg_paths.get_log_file_path(log_file_basename, "portable"))
+        self.log_file_basename = log_file_basename
+        self.log_file_explicitly_provided = False
 
         self.command = "help"
         self.ads_selector = "due"
@@ -72,13 +79,21 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     async def run(self, args:list[str]) -> None:
         self.parse_args(args)
+
+        # Commands that don't require config or mode detection
+        match self.command:
+            case "help":
+                self.show_help()
+                return
+            case "version":
+                print(self.get_version())
+                return
+
+        # All other commands require installation mode to be finalized
+        self.finalize_installation_mode()
+
         try:
             match self.command:
-                case "help":
-                    self.show_help()
-                    return
-                case "version":
-                    print(self.get_version())
                 case "create-config":
                     self.create_default_config()
                     return
@@ -91,7 +106,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config)
+                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
                     checker.check_for_updates()
                     self.load_ads()
                     LOG.info("############################################")
@@ -100,13 +115,13 @@ class KleinanzeigenBot(WebScrapingMixin):
                 case "update-check":
                     self.configure_file_logging()
                     self.load_config()
-                    checker = UpdateChecker(self.config)
+                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
                     checker.check_for_updates(skip_interval_check = True)
                 case "update-content-hash":
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config)
+                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
                     checker.check_for_updates()
                     self.ads_selector = "all"
                     if ads := self.load_ads(exclude_ads_with_id = False):
@@ -119,7 +134,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config)
+                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
                     checker.check_for_updates()
 
                     if not (self.ads_selector in {"all", "new", "due", "changed"} or
@@ -159,7 +174,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config)
+                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
                     checker.check_for_updates()
                     if ads := self.load_ads():
                         await self.create_browser_session()
@@ -177,7 +192,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                         self.ads_selector = "new"
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config)
+                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
                     checker.check_for_updates()
                     await self.create_browser_session()
                     await self.login()
@@ -312,11 +327,13 @@ class KleinanzeigenBot(WebScrapingMixin):
                     sys.exit(0)
                 case "--config":
                     self.config_file_path = abspath(value)
+                    self.config_explicitly_provided = True
                 case "--logfile":
                     if value:
                         self.log_file_path = abspath(value)
                     else:
                         self.log_file_path = None
+                    self.log_file_explicitly_provided = True
                 case "--ads":
                     self.ads_selector = value.strip().lower()
                 case "--force":
@@ -338,6 +355,57 @@ class KleinanzeigenBot(WebScrapingMixin):
                 LOG.error("More than one command given: %s", arguments)
                 sys.exit(2)
 
+    def finalize_installation_mode(self) -> None:
+        """
+        Finalize installation mode detection after CLI args are parsed.
+        Must be called after parse_args() to respect --config overrides.
+        """
+        # Check if config_file_path was already customized (by --config or tests)
+        default_portable_config = str(xdg_paths.get_config_file_path("portable"))
+        config_was_customized = (self.config_explicitly_provided or
+                                 (self.config_file_path and self.config_file_path != default_portable_config))
+
+        if config_was_customized and self.config_file_path:
+            # Config path was explicitly set - detect mode based on it
+            LOG.debug("Detecting installation mode from explicit config path: %s", self.config_file_path)
+
+            config_path = Path(self.config_file_path)
+            if config_path == Path.cwd() / "config.yaml":
+                # Explicit path points to CWD config
+                self.installation_mode = "portable"
+                LOG.debug("Explicit config is in CWD, using portable mode")
+            elif config_path.is_relative_to(Path(xdg_paths.get_xdg_base_dir("config"))):
+                # Explicit path is within XDG config directory
+                self.installation_mode = "xdg"
+                LOG.debug("Explicit config is in XDG directory, using xdg mode")
+            else:
+                # Custom location - default to portable mode (all paths relative to config)
+                self.installation_mode = "portable"
+                LOG.debug("Explicit config is in custom location, defaulting to portable mode")
+        else:
+            # No explicit config - use auto-detection
+            LOG.debug("Detecting installation mode...")
+            self.installation_mode = xdg_paths.detect_installation_mode()
+
+            if self.installation_mode is None:
+                # First run - prompt user
+                LOG.info("First run detected, prompting user for installation mode")
+                self.installation_mode = xdg_paths.prompt_installation_mode()
+
+            # Set config path based on detected mode
+            self.config_file_path = str(xdg_paths.get_config_file_path(self.installation_mode))
+
+        # Set log file path based on mode (unless explicitly overridden via --logfile)
+        if not self.log_file_explicitly_provided and self.log_file_path == str(xdg_paths.get_log_file_path(self.log_file_basename, "portable")):
+            # Still using default portable path - update to match detected mode
+            self.log_file_path = str(xdg_paths.get_log_file_path(self.log_file_basename, self.installation_mode))
+            LOG.debug("Log file path: %s", self.log_file_path)
+
+        # Log installation mode and config location (INFO level for user visibility)
+        mode_display = "portable (current directory)" if self.installation_mode == "portable" else "system-wide (XDG directories)"
+        LOG.info("Installation mode: %s", mode_display)
+        LOG.info("Config file: %s", self.config_file_path)
+
     def configure_file_logging(self) -> None:
         if not self.log_file_path:
             return
@@ -355,19 +423,33 @@ class KleinanzeigenBot(WebScrapingMixin):
         Create a default config.yaml in the project root if it does not exist.
         If it exists, log an error and inform the user.
         """
+        if self.config_file_path is None:
+            raise RuntimeError("config_file_path must be set before creating default config")
         if os.path.exists(self.config_file_path):
             LOG.error("Config file %s already exists. Aborting creation.", self.config_file_path)
             return
+
+        # Ensure parent directory exists (critical for XDG mode on first run)
+        config_path = Path(self.config_file_path)
+        if not config_path.parent.exists():
+            LOG.debug("Creating config directory: %s", config_path.parent)
+            config_path.parent.mkdir(parents = True, exist_ok = True)
+
         default_config = Config.model_construct()
         default_config.login.username = "changeme"  # noqa: S105 placeholder for default config, not a real username
         default_config.login.password = "changeme"  # noqa: S105 placeholder for default config, not a real password
         dicts.save_dict(
             self.config_file_path,
             default_config.model_dump(exclude_none = True, exclude = {"ad_defaults": {"description"}}),
-            header = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/config.schema.json"
+            header = (
+                "# yaml-language-server: "
+                "$schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/config.schema.json"
+            )
         )
 
     def load_config(self) -> None:
+        if self.config_file_path is None:
+            raise RuntimeError("config_file_path must be set before loading config")
         # write default config.yaml if config file does not exist
         if not os.path.exists(self.config_file_path):
             self.create_default_config()
@@ -389,7 +471,11 @@ class KleinanzeigenBot(WebScrapingMixin):
         self.browser_config.extensions = [abspath(item, relative_to = self.config_file_path) for item in self.config.browser.extensions]
         self.browser_config.use_private_window = self.config.browser.use_private_window
         if self.config.browser.user_data_dir:
+            # Config override: use as-is relative to config file
             self.browser_config.user_data_dir = abspath(self.config.browser.user_data_dir, relative_to = self.config_file_path)
+        else:
+            # Use mode-aware XDG path
+            self.browser_config.user_data_dir = str(xdg_paths.get_browser_profile_path(self.installation_mode or "portable"))
         self.browser_config.profile_name = self.config.browser.profile_name
 
     def __check_ad_republication(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
@@ -466,12 +552,30 @@ class KleinanzeigenBot(WebScrapingMixin):
         """
         LOG.info("Searching for ad config files...")
 
+        # Check if config was explicitly provided (either via --config or by tests)
+        default_portable_config = str(xdg_paths.get_config_file_path("portable"))
+        default_xdg_config = str(xdg_paths.get_config_file_path("xdg"))
+        is_custom_config = (self.config_explicitly_provided or
+                           (self.config_file_path not in {default_portable_config, default_xdg_config}))
+
+        if is_custom_config:
+            # Custom config location - search relative to config file
+            ad_search_dir = str(Path(self.config_file_path).parent)  # type: ignore[arg-type]
+            LOG.debug("Using config file directory for ad search: %s", ad_search_dir)
+        else:
+            # Auto-detected config - use mode-appropriate directory
+            # Fallback to portable if mode not yet finalized (for tests)
+            mode = self.installation_mode or "portable"
+            ad_search_dir = str(xdg_paths.get_ad_files_search_dir(mode))
+            LOG.debug("Using mode-based directory for ad search: %s", ad_search_dir)
+
         ad_files:dict[str, str] = {}
-        data_root_dir = os.path.dirname(self.config_file_path)
         for file_pattern in self.config.ad_files:
-            for ad_file in glob.glob(file_pattern, root_dir = data_root_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
+            LOG.debug("Searching with pattern: %s", file_pattern)
+            for ad_file in glob.glob(file_pattern, root_dir = ad_search_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
                 if not str(ad_file).endswith("ad_fields.yaml"):
-                    ad_files[abspath(ad_file, relative_to = data_root_dir)] = ad_file
+                    LOG.debug("Found ad file: %s", ad_file)
+                    ad_files[abspath(ad_file, relative_to = ad_search_dir)] = ad_file
         LOG.info(" -> found %s", pluralize("ad config file", ad_files))
         if not ad_files:
             return []
@@ -1312,7 +1416,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         This downloads either all, only unsaved (new), or specific ads given by ID.
         """
 
-        ad_extractor = extract.AdExtractor(self.browser, self.config)
+        ad_extractor = extract.AdExtractor(self.browser, self.config, self.installation_mode or "portable")
 
         # use relevant download routine
         if self.ads_selector in {"all", "new"}:  # explore ads overview for these two modes

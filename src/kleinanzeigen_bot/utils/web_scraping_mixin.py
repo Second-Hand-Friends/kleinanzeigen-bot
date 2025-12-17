@@ -295,9 +295,16 @@ class WebScrapingMixin:
             LOG.info(" -> Browser profile name: %s", self.browser_config.profile_name)
             browser_args.append(f"--profile-directory={self.browser_config.profile_name}")
 
+        has_user_data_dir_arg = False
         for browser_arg in self.browser_config.arguments:
             LOG.info(" -> Custom Browser argument: %s", browser_arg)
             browser_args.append(browser_arg)
+            if browser_arg.startswith("--user-data-dir="):
+                has_user_data_dir_arg = True
+
+        # Ensure Chrome 136+ requirement is satisfied using the mode-aware path
+        if self.browser_config.user_data_dir and not has_user_data_dir_arg:
+            browser_args.append(f"--user-data-dir={self.browser_config.user_data_dir}")
 
         if not loggers.is_debug(LOG):
             browser_args.append("--log-level=3")  # INFO: 0, WARNING: 1, ERROR: 2, FATAL: 3
