@@ -43,6 +43,8 @@ def get_xdg_base_dir(category:PathCategory) -> Path:
             base_dir = Path(platformdirs.user_cache_dir(APP_NAME))
         case "state":
             base_dir = Path(platformdirs.user_state_dir(APP_NAME))
+        case _:
+            raise ValueError(f"Unsupported XDG category: {category}")
 
     LOG.debug("XDG %s directory: %s", category, base_dir)
     return base_dir
@@ -109,7 +111,7 @@ def prompt_installation_mode() -> InstallationMode:
             mode = "xdg"
             LOG.info(_("User selected installation mode: %s"), mode)
             return mode
-        print("Invalid choice. Please enter 1 or 2.")
+        print(_("Invalid choice. Please enter 1 or 2."))
 
 
 def get_config_file_path(mode:str | InstallationMode) -> Path:

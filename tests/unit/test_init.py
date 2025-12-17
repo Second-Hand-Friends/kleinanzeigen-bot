@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import copy, io, json, logging, os, tempfile  # isort: skip
+import copy, io, json, logging, os, sys, tempfile  # isort: skip
 from collections.abc import Generator
 from contextlib import redirect_stdout
 from datetime import timedelta
@@ -1610,9 +1610,7 @@ class TestCreateConfigCommand:
                            lambda app_name: str(tmp_path / "config" / app_name))
 
         # Mock user selecting XDG mode (choice "2")
-        mock_stdin = io.StringIO()
-        mock_stdin.isatty = lambda: True  # type: ignore[method-assign]
-        monkeypatch.setattr("sys.stdin", mock_stdin)
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr("builtins.input", lambda _: "2")
 
         # Create bot and run create-config command
