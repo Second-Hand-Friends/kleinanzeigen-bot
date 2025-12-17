@@ -560,6 +560,7 @@ kleinanzeigen_bot/utils/xdg_paths.py:
     "Choose installation type:": "Installationstyp auswählen:"
     "[1] Portable (current directory)": "[1] Portabel (aktuelles Verzeichnis)"
     "[2] System-wide (XDG directories)": "[2] Systemweit (XDG-Verzeichnisse)"
+    "Enter 1 or 2: ": "Bitte 1 oder 2 eingeben: "
     "Invalid choice. Please enter 1 or 2.": "Ungültige Eingabe. Bitte 1 oder 2 eingeben."
     "User selected installation mode: %s": "Benutzer wählte Installationsmodus: %s"
     "Defaulting to portable installation mode": "Verwende standardmäßig portable Installation"

@@ -91,7 +91,7 @@ def prompt_installation_mode() -> InstallationMode:
     """
     # Check if running in non-interactive mode (no stdin or not a TTY)
     if not sys.stdin or not sys.stdin.isatty():
-        LOG.info("Non-interactive mode detected, defaulting to portable installation")
+        LOG.info(_("Non-interactive mode detected, defaulting to portable installation"))
         return "portable"
 
     print(_("Choose installation type:"))
@@ -100,11 +100,11 @@ def prompt_installation_mode() -> InstallationMode:
 
     while True:
         try:
-            choice = input("Enter 1 or 2: ").strip()
+            choice = input(_("Enter 1 or 2: ")).strip()
         except (EOFError, KeyboardInterrupt):
             # Non-interactive or interrupted - default to portable
             print()  # newline after ^C or EOF
-            LOG.info("Defaulting to portable installation mode")
+            LOG.info(_("Defaulting to portable installation mode"))
             return "portable"
 
         if choice == "1":
