@@ -556,6 +556,9 @@ kleinanzeigen_bot/utils/xdg_paths.py:
     "Detected installation mode: %s": "Erkannter Installationsmodus: %s"
     "No existing installation found": "Keine existierende Installation gefunden"
 
+  get_xdg_base_dir:
+    "XDG %s directory: %s": "XDG-%s-Verzeichnis: %s"
+
   prompt_installation_mode:
     "Choose installation type:": "Installationstyp auswählen:"
     "[1] Portable (current directory)": "[1] Portabel (aktuelles Verzeichnis)"
@@ -565,3 +568,26 @@ kleinanzeigen_bot/utils/xdg_paths.py:
     "User selected installation mode: %s": "Benutzer wählte Installationsmodus: %s"
     "Defaulting to portable installation mode": "Verwende standardmäßig portable Installation"
     "Non-interactive mode detected, defaulting to portable installation": "Nicht-interaktiver Modus erkannt, verwende standardmäßig portable Installation"
+
+  get_config_file_path:
+    "Resolving config file path for mode '%s': %s": "Bestimme Konfigurationspfad für Modus „%s“: %s"
+
+  get_ad_files_search_dir:
+    "Resolving ad files search directory for mode '%s': %s": "Bestimme Suchverzeichnis für Anzeigen im Modus „%s“: %s"
+
+  get_downloaded_ads_path:
+    "Resolving downloaded ads path for mode '%s': %s": "Bestimme Download-Pfad für Anzeigen im Modus „%s“: %s"
+    "Creating directory: %s": "Erstelle Verzeichnis: %s"
+
+  get_browser_profile_path:
+    "Resolving browser profile path for mode '%s' (config override): %s": "Bestimme Browser-Profilpfad für Modus „%s“ (Konfig-Override): %s"
+    "Resolving browser profile path for mode '%s': %s": "Bestimme Browser-Profilpfad für Modus „%s“: %s"
+    "Creating directory: %s": "Erstelle Verzeichnis: %s"
+
+  get_log_file_path:
+    "Resolving log file path for mode '%s': %s": "Bestimme Logdateipfad für Modus „%s“: %s"
+    "Creating directory: %s": "Erstelle Verzeichnis: %s"
+
+  get_update_check_state_path:
+    "Resolving update check state path for mode '%s': %s": "Bestimme Pfad für Update-Prüfstatus im Modus „%s“: %s"
+    "Creating directory: %s": "Erstelle Verzeichnis: %s"

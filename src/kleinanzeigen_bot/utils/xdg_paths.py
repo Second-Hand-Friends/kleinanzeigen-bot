@@ -11,7 +11,6 @@ Supports two installation modes:
 
 from __future__ import annotations
 
-import logging
 import sys
 from gettext import gettext as _
 from pathlib import Path
@@ -19,7 +18,9 @@ from typing import Final, Literal
 
 import platformdirs
 
-LOG = logging.getLogger(__name__)
+from . import loggers
+
+LOG = loggers.get_logger(__name__)
 
 APP_NAME:Final[str] = "kleinanzeigen-bot"
 
@@ -50,7 +51,7 @@ def get_xdg_base_dir(category:PathCategory) -> Path:
     if base_dir is None:
         raise RuntimeError(f"Failed to resolve XDG base directory for category: {category}")
 
-    LOG.debug("XDG %s directory: %s", category, base_dir)
+    LOG.debug(_("XDG %s directory: %s"), category, base_dir)
     return base_dir
 
 
@@ -129,7 +130,7 @@ def get_config_file_path(mode:str | InstallationMode) -> Path:
     """
     config_path = Path.cwd() / "config.yaml" if mode == "portable" else get_xdg_base_dir("config") / "config.yaml"
 
-    LOG.debug("Resolving config file path for mode '%s': %s", mode, config_path)
+    LOG.debug(_("Resolving config file path for mode '%s': %s"), mode, config_path)
     return config_path
 
 
@@ -147,7 +148,7 @@ def get_ad_files_search_dir(mode:str | InstallationMode) -> Path:
     """
     search_dir = Path.cwd() if mode == "portable" else get_xdg_base_dir("config")
 
-    LOG.debug("Resolving ad files search directory for mode '%s': %s", mode, search_dir)
+    LOG.debug(_("Resolving ad files search directory for mode '%s': %s"), mode, search_dir)
     return search_dir
 
 
@@ -162,11 +163,11 @@ def get_downloaded_ads_path(mode:str | InstallationMode) -> Path:
     """
     ads_path = Path.cwd() / "downloaded-ads" if mode == "portable" else get_xdg_base_dir("config") / "downloaded-ads"
 
-    LOG.debug("Resolving downloaded ads path for mode '%s': %s", mode, ads_path)
+    LOG.debug(_("Resolving downloaded ads path for mode '%s': %s"), mode, ads_path)
 
     # Create directory if it doesn't exist
     if not ads_path.exists():
-        LOG.debug("Creating directory: %s", ads_path)
+        LOG.debug(_("Creating directory: %s"), ads_path)
         ads_path.mkdir(parents = True, exist_ok = True)
 
     return ads_path
@@ -184,17 +185,17 @@ def get_browser_profile_path(mode:str | InstallationMode, config_override:str | 
     """
     if config_override:
         profile_path = Path(config_override)
-        LOG.debug("Resolving browser profile path for mode '%s' (config override): %s", mode, profile_path)
+        LOG.debug(_("Resolving browser profile path for mode '%s' (config override): %s"), mode, profile_path)
     elif mode == "portable":
         profile_path = Path.cwd() / ".temp" / "browser-profile"
-        LOG.debug("Resolving browser profile path for mode '%s': %s", mode, profile_path)
+        LOG.debug(_("Resolving browser profile path for mode '%s': %s"), mode, profile_path)
     else:  # xdg
         profile_path = get_xdg_base_dir("cache") / "browser-profile"
-        LOG.debug("Resolving browser profile path for mode '%s': %s", mode, profile_path)
+        LOG.debug(_("Resolving browser profile path for mode '%s': %s"), mode, profile_path)
 
     # Create directory if it doesn't exist
     if not profile_path.exists():
-        LOG.debug("Creating directory: %s", profile_path)
+        LOG.debug(_("Creating directory: %s"), profile_path)
         profile_path.mkdir(parents = True, exist_ok = True)
 
     return profile_path
@@ -212,11 +213,11 @@ def get_log_file_path(basename:str, mode:str | InstallationMode) -> Path:
     """
     log_path = Path.cwd() / f"{basename}.log" if mode == "portable" else get_xdg_base_dir("state") / f"{basename}.log"
 
-    LOG.debug("Resolving log file path for mode '%s': %s", mode, log_path)
+    LOG.debug(_("Resolving log file path for mode '%s': %s"), mode, log_path)
 
     # Create parent directory if it doesn't exist
     if not log_path.parent.exists():
-        LOG.debug("Creating directory: %s", log_path.parent)
+        LOG.debug(_("Creating directory: %s"), log_path.parent)
         log_path.parent.mkdir(parents = True, exist_ok = True)
 
     return log_path
@@ -233,11 +234,11 @@ def get_update_check_state_path(mode:str | InstallationMode) -> Path:
     """
     state_path = Path.cwd() / ".temp" / "update_check_state.json" if mode == "portable" else get_xdg_base_dir("state") / "update_check_state.json"
 
-    LOG.debug("Resolving update check state path for mode '%s': %s", mode, state_path)
+    LOG.debug(_("Resolving update check state path for mode '%s': %s"), mode, state_path)
 
     # Create parent directory if it doesn't exist
     if not state_path.parent.exists():
-        LOG.debug("Creating directory: %s", state_path.parent)
+        LOG.debug(_("Creating directory: %s"), state_path.parent)
         state_path.parent.mkdir(parents = True, exist_ok = True)
 
     return state_path
