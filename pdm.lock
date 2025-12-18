@@ -1511,16 +1511,16 @@ files = [
 
 [[package]]
 name = "ruamel-yaml"
-version = "0.18.16"
-requires_python = ">=3.8"
+version = "0.18.17"
+requires_python = ">=3.9"
 summary = "ruamel.yaml is a YAML parser/emitter that supports roundtrip preservation of comments, seq/map flow style, and map key order"
 groups = ["default"]
 dependencies = [
-    "ruamel-yaml-clib>=0.2.7; platform_python_implementation == \"CPython\" and python_version < \"3.14\"",
+    "ruamel-yaml-clib>=0.2.15; platform_python_implementation == \"CPython\" and python_version < \"3.15\"",
 ]
 files = [
-    {file = "ruamel.yaml-0.18.16-py3-none-any.whl", hash = "sha256:048f26d64245bae57a4f9ef6feb5b552a386830ef7a826f235ffb804c59efbba"},
-    {file = "ruamel.yaml-0.18.16.tar.gz", hash = "sha256:a6e587512f3c998b2225d68aa1f35111c29fad14aed561a26e73fab729ec5e5a"},
+    {file = "ruamel_yaml-0.18.17-py3-none-any.whl", hash = "sha256:9c8ba9eb3e793efdf924b60d521820869d5bf0cb9c6f1b82d82de8295e290b9d"},
+    {file = "ruamel_yaml-0.18.17.tar.gz", hash = "sha256:9091cd6e2d93a3a4b157ddb8fabf348c3de7f1fb1381346d985b6b247dcd8d3c"},
 ]
 
 [[package]]
@@ -1529,7 +1529,7 @@ version = "0.2.15"
 requires_python = ">=3.9"
 summary = "C version of reader, parser and emitter for ruamel.yaml derived from libyaml"
 groups = ["default"]
-marker = "platform_python_implementation == \"CPython\" and python_version < \"3.14\""
+marker = "platform_python_implementation == \"CPython\" and python_version < \"3.15\""
 files = [
     {file = "ruamel_yaml_clib-0.2.15-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:88eea8baf72f0ccf232c22124d122a7f26e8a24110a0273d9bcddcb0f7e1fa03"},
     {file = "ruamel_yaml_clib-0.2.15-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:9b6f7d74d094d1f3a4e157278da97752f16ee230080ae331fcc219056ca54f77"},
@@ -1983,7 +1983,7 @@ files = [
 
 [[package]]
 name = "yamlfix"
-version = "1.19.0"
+version = "1.19.1"
 requires_python = ">=3.9.1"
 summary = "A simple opionated yaml formatter that keeps your comments!"
 groups = ["dev"]
@@ -1994,6 +1994,6 @@ dependencies = [
     "ruyaml>=0.91.0",
 ]
 files = [
-    {file = "yamlfix-1.19.0-py3-none-any.whl", hash = "sha256:9170a34bed093b8b45639e01fd05a1ded6886cb07dc43c174c061e15a6414bc8"},
-    {file = "yamlfix-1.19.0.tar.gz", hash = "sha256:22f95ed2a5b88f46f06cf7922c616b6706d3596f23a0553138796ab909e5fa96"},
+    {file = "yamlfix-1.19.1-py3-none-any.whl", hash = "sha256:b885fcf171a2eb59df83c219355bb17dd147675645e2756754372c0bd0b80ea5"},
+    {file = "yamlfix-1.19.1.tar.gz", hash = "sha256:05f6add13959637564f278e9237f6e201ff75e061a0a4cb9fc06fa95c3001a22"},
 ]
