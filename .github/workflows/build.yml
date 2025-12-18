@@ -449,9 +449,7 @@ jobs:
       if: steps.release.outputs.name && steps.release.outputs.name != ''
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
         RELEASE_NAME: ${{ steps.release.outputs.name }}
-        TARGET_COMMITISH: ${{ github.sha }}
         LEGAL_NOTICE: |
           ---
           #### ⚠️ Rechtlicher Hinweis
@@ -471,7 +469,7 @@ jobs:
 
         PREVIOUS_TAG=$(gh release view "$RELEASE_NAME" --json tagName --jq '.tagName' 2>/dev/null || true)
 
-        ARGS=(-X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" -f tag_name="$RELEASE_NAME" -f target_commitish="$TARGET_COMMITISH")
+        ARGS=(-X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" -f tag_name="$RELEASE_NAME" -f target_commitish="$GITHUB_SHA")
         if [[ -n "${PREVIOUS_TAG:-}" ]]; then
           ARGS+=(-f previous_tag_name="$PREVIOUS_TAG")
         fi
