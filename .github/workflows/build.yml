@@ -445,6 +445,42 @@ jobs:
         esac
 
 
+    - name: "Generate release notes"
+      if: steps.release.outputs.name && steps.release.outputs.name != ''
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        RELEASE_NAME: ${{ steps.release.outputs.name }}
+        TARGET_COMMITISH: ${{ github.sha }}
+        LEGAL_NOTICE: |
+          ---
+          #### ⚠️ Rechtlicher Hinweis
+          <p>Die Verwendung dieses Programms kann unter Umständen gegen die zum jeweiligen Zeitpunkt bei kleinanzeigen.de geltenden Nutzungsbedingungen verstoßen.
+          Es liegt in Ihrer Verantwortung, die rechtliche Zulässigkeit der Nutzung dieses Programms zu prüfen.
+          Die Entwickler übernehmen keinerlei Haftung für mögliche Schäden oder rechtliche Konsequenzen.
+          Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist untersagt.</p>
+
+          #### ⚠️ Legal notice
+          <p>The use of this program could violate the terms of service of kleinanzeigen.de valid at the time of use.
+          It is your responsibility to ensure the legal compliance of its use.
+          The developers assume no liability for any damages or legal consequences.
+          Use is at your own risk. Any unlawful use is strictly prohibited.</p>
+
+      run: |
+        set -eux
+
+        PREVIOUS_TAG=$(gh release view "$RELEASE_NAME" --json tagName --jq '.tagName' 2>/dev/null || true)
+
+        ARGS=(-X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" -f tag_name="$RELEASE_NAME" -f target_commitish="$TARGET_COMMITISH")
+        if [[ -n "${PREVIOUS_TAG:-}" ]]; then
+          ARGS+=(-f previous_tag_name="$PREVIOUS_TAG")
+        fi
+
+        gh api "${ARGS[@]}" --jq '.body' > release-notes.md
+
+        printf "\n%s\n" "$LEGAL_NOTICE" >> release-notes.md
+
+
     - name: "Delete previous '${{ steps.release.outputs.name }}' release"
       if: steps.release.outputs.name && steps.release.outputs.name != ''
       env:
@@ -460,19 +496,6 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         RELEASE_NAME: ${{ steps.release.outputs.name }}
-        LEGAL_NOTICE: |
-          ---
-          #### ⚠️ Rechtlicher Hinweis
-          <p>Die Verwendung dieses Programms kann unter Umständen gegen die zum jeweiligen Zeitpunkt bei kleinanzeigen.de geltenden Nutzungsbedingungen verstoßen.
-          Es liegt in Ihrer Verantwortung, die rechtliche Zulässigkeit der Nutzung dieses Programms zu prüfen.
-          Die Entwickler übernehmen keinerlei Haftung für mögliche Schäden oder rechtliche Konsequenzen.
-          Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist untersagt.</p>
-
-          #### ⚠️ Legal notice
-          <p>The use of this program could violate the terms of service of kleinanzeigen.de valid at the time of use.
-          It is your responsibility to ensure the legal compliance of its use.
-          The developers assume no liability for any damages or legal consequences.
-          Use is at your own risk. Any unlawful use is strictly prohibited.</p>
 
       # https://cli.github.com/manual/gh_release_create
       run: |
@@ -480,8 +503,7 @@ jobs:
           --title "$RELEASE_NAME" \
           ${{ steps.release.outputs.name == 'latest' && '--latest' || '' }} \
           ${{ steps.release.outputs.name == 'preview' && '--prerelease' || '' }} \
-          --generate-notes \
-          --notes "$LEGAL_NOTICE" \
+          --notes-file release-notes.md \
           --target "${{ github.sha }}" \
           kleinanzeigen-bot-darwin-amd64 \
           kleinanzeigen-bot-darwin-arm64 \
