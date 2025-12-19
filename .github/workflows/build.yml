@@ -445,17 +445,7 @@ jobs:
         esac
 
 
-    - name: "Delete previous '${{ steps.release.outputs.name }}' release"
-      if: steps.release.outputs.name && steps.release.outputs.name != ''
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        RELEASE_NAME: ${{ steps.release.outputs.name }}
-      # https://cli.github.com/manual/gh_release_delete
-      run: |
-        GH_DEBUG=1 gh release delete "$RELEASE_NAME" --yes --cleanup-tag || true
-
-
-    - name: "Create '${{ steps.release.outputs.name }}' Release"
+    - name: "Generate release notes"
       if: steps.release.outputs.name && steps.release.outputs.name != ''
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -474,14 +464,44 @@ jobs:
           The developers assume no liability for any damages or legal consequences.
           Use is at your own risk. Any unlawful use is strictly prohibited.</p>
 
+      run: |
+        set -eux
+
+        PREVIOUS_TAG=$(gh release view "$RELEASE_NAME" --json tagName --jq '.tagName' 2>/dev/null || true)
+
+        ARGS=(-X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" -f tag_name="$RELEASE_NAME" -f target_commitish="$GITHUB_SHA")
+        if [[ -n "${PREVIOUS_TAG:-}" ]]; then
+          ARGS+=(-f previous_tag_name="$PREVIOUS_TAG")
+        fi
+
+        gh api "${ARGS[@]}" --jq '.body' > release-notes.md
+
+        printf "\n%s\n" "$LEGAL_NOTICE" >> release-notes.md
+
+
+    - name: "Delete previous '${{ steps.release.outputs.name }}' release"
+      if: steps.release.outputs.name && steps.release.outputs.name != ''
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RELEASE_NAME: ${{ steps.release.outputs.name }}
+      # https://cli.github.com/manual/gh_release_delete
+      run: |
+        GH_DEBUG=1 gh release delete "$RELEASE_NAME" --yes --cleanup-tag || true
+
+
+    - name: "Create '${{ steps.release.outputs.name }}' Release"
+      if: steps.release.outputs.name && steps.release.outputs.name != ''
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RELEASE_NAME: ${{ steps.release.outputs.name }}
+
       # https://cli.github.com/manual/gh_release_create
       run: |
         GH_DEBUG=1 gh release create "$RELEASE_NAME" \
           --title "$RELEASE_NAME" \
           ${{ steps.release.outputs.name == 'latest' && '--latest' || '' }} \
           ${{ steps.release.outputs.name == 'preview' && '--prerelease' || '' }} \
-          --generate-notes \
-          --notes "$LEGAL_NOTICE" \
+          --notes-file release-notes.md \
           --target "${{ github.sha }}" \
           kleinanzeigen-bot-darwin-amd64 \
           kleinanzeigen-bot-darwin-arm64 \

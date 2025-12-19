@@ -10,7 +10,7 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
     - cron: '10 10 * * 1'  # Mondays 10:10 UTC
   push:
-    branches: ['**']  # build all branches
+    branches: ['main', 'release']  # run only on protected branches to avoid duplicate PR runs
     tags-ignore: ['**'] # don't build tags
     paths-ignore:
     - '**/*.md'
