@@ -473,7 +473,10 @@ jobs:
         # We reuse the "latest"/"preview" tag, therefore GitHub's generate-notes must be anchored
         # to a different tag name pointing at the previous channel release commit. Use a temporary
         # tag and delete it afterwards to avoid accumulating tags.
-        PREVIOUS_RELEASE_SHA=$(gh release view "$RELEASE_NAME" --json targetCommitish --jq '.targetCommitish')
+        if ! PREVIOUS_RELEASE_SHA=$(gh release view "$RELEASE_NAME" --json targetCommitish --jq '.targetCommitish' 2>/dev/null); then
+          echo "ERROR: Failed to query existing '$RELEASE_NAME' release; cannot generate release notes." >&2
+          exit 1
+        fi
         if [[ -z "${PREVIOUS_RELEASE_SHA:-}" ]]; then
           echo "ERROR: No existing '$RELEASE_NAME' release found; cannot generate release notes." >&2
           exit 1
@@ -505,7 +508,6 @@ jobs:
         fi
 
         printf "\n%s\n" "$LEGAL_NOTICE" >> release-notes.md
-        echo "temp_prev_tag=$TEMP_PREV_TAG" >>"$GITHUB_OUTPUT"
 
 
     - name: "Delete previous '${{ steps.release.outputs.name }}' release"
