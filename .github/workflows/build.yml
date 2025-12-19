@@ -448,7 +448,6 @@ jobs:
 
 
     - name: "Generate release notes"
-      id: release_notes
       if: steps.release.outputs.name && steps.release.outputs.name != ''
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -489,6 +488,8 @@ jobs:
         }
         trap cleanup EXIT
 
+        # Even with `fetch-depth: 0`, the previous channel release commit might not be part of the
+        # current branch's history (e.g. history rewrites / force-pushes). Fetch it explicitly if needed.
         if ! git cat-file -e "${PREVIOUS_RELEASE_SHA}^{commit}" 2>/dev/null; then
           git fetch --no-tags origin "${PREVIOUS_RELEASE_SHA}"
         fi
