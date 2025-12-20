@@ -506,6 +506,8 @@ jobs:
         git push --force origin "refs/tags/${TEMP_PREV_TAG}"
         git push --force origin "refs/tags/${TEMP_HEAD_TAG}"
 
+        echo "Using temp tags: prev=${TEMP_PREV_TAG} (${PREVIOUS_RELEASE_SHA}), head=${TEMP_HEAD_TAG} (${GITHUB_SHA})"
+
         # 1) Prefer GitHub's generate-notes API so we get PR links and @mentions
         gh api -X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
           -f tag_name="$TEMP_HEAD_TAG" \
