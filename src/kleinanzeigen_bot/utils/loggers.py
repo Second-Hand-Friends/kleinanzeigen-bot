@@ -30,7 +30,7 @@ INFO = logging.INFO
 WARNING = logging.WARNING
 Logger = logging.Logger
 
-LOG_ROOT:Final[logging.Logger] = logging.getLogger()
+LOG_ROOT:Final[Logger] = logging.getLogger()
 
 
 class _MaxLevelFilter(logging.Filter):
@@ -50,25 +50,25 @@ def configure_console_logging() -> None:
 
     class CustomFormatter(logging.Formatter):
         LEVEL_COLORS = {
-            logging.DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
-            logging.INFO: colorama.Fore.BLACK + colorama.Style.BRIGHT,
-            logging.WARNING: colorama.Fore.YELLOW,
-            logging.ERROR: colorama.Fore.RED,
-            logging.CRITICAL: colorama.Fore.RED,
+            DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
+            INFO: colorama.Fore.BLACK + colorama.Style.BRIGHT,
+            WARNING: colorama.Fore.YELLOW,
+            ERROR: colorama.Fore.RED,
+            CRITICAL: colorama.Fore.RED,
         }
         MESSAGE_COLORS = {
-            logging.DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
-            logging.INFO: colorama.Fore.RESET,
-            logging.WARNING: colorama.Fore.YELLOW,
-            logging.ERROR: colorama.Fore.RED,
-            logging.CRITICAL: colorama.Fore.RED + colorama.Style.BRIGHT,
+            DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
+            INFO: colorama.Fore.RESET,
+            WARNING: colorama.Fore.YELLOW,
+            ERROR: colorama.Fore.RED,
+            CRITICAL: colorama.Fore.RED + colorama.Style.BRIGHT,
         }
         VALUE_COLORS = {
-            logging.DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
-            logging.INFO: colorama.Fore.MAGENTA,
-            logging.WARNING: colorama.Fore.MAGENTA,
-            logging.ERROR: colorama.Fore.MAGENTA,
-            logging.CRITICAL: colorama.Fore.MAGENTA,
+            DEBUG: colorama.Fore.BLACK + colorama.Style.BRIGHT,
+            INFO: colorama.Fore.MAGENTA,
+            WARNING: colorama.Fore.MAGENTA,
+            ERROR: colorama.Fore.MAGENTA,
+            CRITICAL: colorama.Fore.MAGENTA,
         }
 
         def _relativize_paths_under_cwd(self, record:logging.LogRecord) -> None:
@@ -113,7 +113,7 @@ def configure_console_logging() -> None:
             value_color = self.VALUE_COLORS.get(record.levelno, "")
 
             # translate and colorize log level name
-            levelname = _(record.levelname) if record.levelno > logging.DEBUG else record.levelname
+            levelname = _(record.levelname) if record.levelno > DEBUG else record.levelname
             record.levelname = f"{level_color}[{levelname}]{colorama.Style.RESET_ALL}"
 
             # highlight message values enclosed by [...], "...", and '...'
@@ -131,13 +131,13 @@ def configure_console_logging() -> None:
     formatter = CustomFormatter("%(levelname)s %(message)s")
 
     stdout_log = logging.StreamHandler(sys.stderr)
-    stdout_log.setLevel(logging.DEBUG)
-    stdout_log.addFilter(_MaxLevelFilter(logging.INFO))
+    stdout_log.setLevel(DEBUG)
+    stdout_log.addFilter(_MaxLevelFilter(INFO))
     stdout_log.setFormatter(formatter)
     LOG_ROOT.addHandler(stdout_log)
 
     stderr_log = logging.StreamHandler(sys.stderr)
-    stderr_log.setLevel(logging.WARNING)
+    stderr_log.setLevel(WARNING)
     stderr_log.setFormatter(formatter)
     LOG_ROOT.addHandler(stderr_log)
 
@@ -145,7 +145,7 @@ def configure_console_logging() -> None:
 class LogFileHandle:
     """Encapsulates a log file handler with close and status methods."""
 
-    def __init__(self, file_path:str, handler:RotatingFileHandler, logger:logging.Logger) -> None:
+    def __init__(self, file_path:str, handler:RotatingFileHandler, logger:Logger) -> None:
         self.file_path = file_path
         self._handler:RotatingFileHandler | None = handler
         self._logger = logger
@@ -176,7 +176,7 @@ def configure_file_logging(log_file_path:str) -> LogFileHandle:
         backupCount = 10,
         encoding = "utf-8"
     )
-    fh.setLevel(logging.DEBUG)
+    fh.setLevel(DEBUG)
     fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
     LOG_ROOT.addHandler(fh)
     return LogFileHandle(log_file_path, fh, LOG_ROOT)
@@ -187,15 +187,15 @@ def flush_all_handlers() -> None:
         handler.flush()
 
 
-def get_logger(name:str | None = None) -> logging.Logger:
+def get_logger(name:str | None = None) -> Logger:
     """
     Returns a localized logger
     """
 
-    class TranslatingLogger(logging.Logger):
+    class TranslatingLogger(Logger):
 
         def _log(self, level:int, msg:object, *args:Any, **kwargs:Any) -> None:
-            if level != logging.DEBUG:  # debug messages should not be translated
+            if level != DEBUG:  # debug messages should not be translated
                 from . import i18n, reflect  # noqa: PLC0415  # avoid cyclic import at module load
                 msg = i18n.translate(msg, reflect.get_caller(2))
             super()._log(level, msg, *args, **kwargs)
@@ -204,5 +204,5 @@ def get_logger(name:str | None = None) -> logging.Logger:
     return logging.getLogger(name)
 
 
-def is_debug(logger:logging.Logger) -> bool:
-    return logger.isEnabledFor(logging.DEBUG)
+def is_debug(logger:Logger) -> bool:
+    return logger.isEnabledFor(DEBUG)
