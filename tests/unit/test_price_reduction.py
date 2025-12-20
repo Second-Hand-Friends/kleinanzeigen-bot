@@ -18,7 +18,7 @@ from kleinanzeigen_bot.utils.pydantics import ContextualValidationError
 @runtime_checkable
 class _ApplyAutoPriceReduction(Protocol):
     def __call__(self, ad_cfg:SimpleNamespace, ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
-        ...
+        pass
 
 
 @pytest.fixture
