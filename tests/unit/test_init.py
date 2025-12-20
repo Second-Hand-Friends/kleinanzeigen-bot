@@ -1583,6 +1583,7 @@ def test_file_logger_writes_message(tmp_path:Path, caplog:pytest.LogCaptureFixtu
 
 
 def _apply_price_reduction_persistence(count:int | None) -> dict[str, Any]:
+    """Return a dict with price_reduction_count only when count is positive (count -> dict[str, Any])."""
     ad_cfg_orig:dict[str, Any] = {}
     if count is not None and count > 0:
         ad_cfg_orig["price_reduction_count"] = count
