@@ -8,8 +8,6 @@ from typing import Any, Final  # @UnusedImport
 
 import colorama
 
-from . import i18n, reflect
-
 __all__ = [
     "Logger",
     "LogFileHandle",
@@ -198,6 +196,7 @@ def get_logger(name:str | None = None) -> logging.Logger:
 
         def _log(self, level:int, msg:object, *args:Any, **kwargs:Any) -> None:
             if level != logging.DEBUG:  # debug messages should not be translated
+                from . import i18n, reflect  # noqa: PLC0415  # avoid cyclic import at module load
                 msg = i18n.translate(msg, reflect.get_caller(2))
             super()._log(level, msg, *args, **kwargs)
 
