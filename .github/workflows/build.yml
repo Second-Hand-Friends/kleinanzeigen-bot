@@ -394,6 +394,8 @@ jobs:
       # only required by "gh release create" to prevent "fatal: Not a git repository"
       uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.0
       # https://github.com/actions/checkout
+      with:
+        fetch-depth: 0
 
 
     - name: Delete untagged docker image
@@ -465,16 +467,46 @@ jobs:
           Use is at your own risk. Any unlawful use is strictly prohibited.</p>
 
       run: |
-        set -eux
+        set -euo pipefail
 
-        PREVIOUS_TAG=$(gh release view "$RELEASE_NAME" --json tagName --jq '.tagName' 2>/dev/null || true)
-
-        ARGS=(-X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" -f tag_name="$RELEASE_NAME" -f target_commitish="$GITHUB_SHA")
-        if [[ -n "${PREVIOUS_TAG:-}" ]]; then
-          ARGS+=(-f previous_tag_name="$PREVIOUS_TAG")
+        # We reuse the "latest"/"preview" tag, therefore GitHub's generate-notes must be anchored
+        # to a different tag name pointing at the previous channel release commit. Use a temporary
+        # tag and delete it afterwards to avoid accumulating tags.
+        if ! PREVIOUS_RELEASE_SHA=$(gh release view "$RELEASE_NAME" --json targetCommitish --jq '.targetCommitish' 2>/dev/null); then
+          echo "ERROR: Failed to query existing '$RELEASE_NAME' release; cannot generate release notes." >&2
+          exit 1
+        fi
+        if [[ -z "${PREVIOUS_RELEASE_SHA:-}" ]]; then
+          echo "ERROR: No existing '$RELEASE_NAME' release found; cannot generate release notes." >&2
+          exit 1
         fi
 
+        TEMP_PREV_TAG="${RELEASE_NAME}-prev-${GITHUB_RUN_ID}"
+        cleanup() {
+          git push --delete origin "$TEMP_PREV_TAG" >/dev/null 2>&1 || true
+          git tag -d "$TEMP_PREV_TAG" >/dev/null 2>&1 || true
+        }
+        trap cleanup EXIT
+
+        # Even with `fetch-depth: 0`, the previous channel release commit might not be part of the
+        # current branch's history (e.g. history rewrites / force-pushes). Fetch it explicitly if needed.
+        if ! git cat-file -e "${PREVIOUS_RELEASE_SHA}^{commit}" 2>/dev/null; then
+          git fetch --no-tags origin "${PREVIOUS_RELEASE_SHA}"
+        fi
+
+        # Ensure the temporary tag exists for generate-notes diffing
+        git tag -f "$TEMP_PREV_TAG" "$PREVIOUS_RELEASE_SHA"
+        git push --force origin "refs/tags/${TEMP_PREV_TAG}"
+
+        # 1) Prefer GitHub's generate-notes API so we get PR links and @mentions
+        ARGS=(-X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" -f tag_name="$RELEASE_NAME" -f target_commitish="$GITHUB_SHA")
+        ARGS+=(-f previous_tag_name="$TEMP_PREV_TAG")
         gh api "${ARGS[@]}" --jq '.body' > release-notes.md
+
+        if ! grep -q '[^[:space:]]' release-notes.md; then
+          echo "ERROR: GitHub generate-notes returned an empty body." >&2
+          exit 1
+        fi
 
         printf "\n%s\n" "$LEGAL_NOTICE" >> release-notes.md
 
