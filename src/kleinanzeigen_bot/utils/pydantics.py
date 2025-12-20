@@ -202,4 +202,6 @@ def __get_message_template(error_code:str) -> str | None:
                 "Input should be a valid complex string following the rules at "
                 "https://docs.python.org/3/library/functions.html#complex"
             )
-        case _: return None
+        case _:
+            pass
+    return None
