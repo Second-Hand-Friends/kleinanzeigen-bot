@@ -1582,6 +1582,14 @@ def test_file_logger_writes_message(tmp_path:Path, caplog:pytest.LogCaptureFixtu
     assert "Logger test log message" in contents
 
 
+def _apply_price_reduction_persistence(count:int | None) -> dict[str, Any]:
+    """Return a dict with price_reduction_count only when count is positive (count -> dict[str, Any])."""
+    ad_cfg_orig:dict[str, Any] = {}
+    if count is not None and count > 0:
+        ad_cfg_orig["price_reduction_count"] = count
+    return ad_cfg_orig
+
+
 class TestPriceReductionPersistence:
     """Tests for price_reduction_count persistence logic."""
 
@@ -1589,12 +1597,8 @@ class TestPriceReductionPersistence:
     def test_persistence_logic_saves_when_count_positive(self) -> None:
         """Test the conditional logic that decides whether to persist price_reduction_count."""
         # Simulate the logic from publish_ad lines 1076-1079
-        ad_cfg_orig:dict[str, Any] = {}
-
         # Test case 1: price_reduction_count = 3 (should persist)
-        price_reduction_count = 3
-        if price_reduction_count is not None and price_reduction_count > 0:
-            ad_cfg_orig["price_reduction_count"] = price_reduction_count
+        ad_cfg_orig = _apply_price_reduction_persistence(3)
 
         assert "price_reduction_count" in ad_cfg_orig
         assert ad_cfg_orig["price_reduction_count"] == 3
@@ -1602,23 +1606,15 @@ class TestPriceReductionPersistence:
     @pytest.mark.unit
     def test_persistence_logic_skips_when_count_zero(self) -> None:
         """Test that price_reduction_count == 0 does not get persisted."""
-        ad_cfg_orig:dict[str, Any] = {}
-
         # Test case 2: price_reduction_count = 0 (should NOT persist)
-        price_reduction_count = 0
-        if price_reduction_count is not None and price_reduction_count > 0:
-            ad_cfg_orig["price_reduction_count"] = price_reduction_count
+        ad_cfg_orig = _apply_price_reduction_persistence(0)
 
         assert "price_reduction_count" not in ad_cfg_orig
 
     @pytest.mark.unit
     def test_persistence_logic_skips_when_count_none(self) -> None:
         """Test that price_reduction_count == None does not get persisted."""
-        ad_cfg_orig:dict[str, Any] = {}
-
         # Test case 3: price_reduction_count = None (should NOT persist)
-        price_reduction_count = None
-        if price_reduction_count is not None and price_reduction_count > 0:
-            ad_cfg_orig["price_reduction_count"] = price_reduction_count
+        ad_cfg_orig = _apply_price_reduction_persistence(None)
 
         assert "price_reduction_count" not in ad_cfg_orig

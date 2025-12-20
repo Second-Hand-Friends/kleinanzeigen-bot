@@ -746,6 +746,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
             await ainput(_("Press a key to continue..."))
         except TimeoutError:
+            # No captcha detected within timeout.
             pass
 
     async def login(self) -> None:
@@ -796,6 +797,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.warning("############################################")
             await ainput("Press ENTER when done...")
         except TimeoutError:
+            # No SMS verification prompt detected.
             pass
 
         try:
@@ -807,6 +809,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                                  "//div[@id='ConsentManagementPage']//*//button//*[contains(., 'Alle ablehnen und fortfahren')]",
                                  timeout = gdpr_timeout)
         except TimeoutError:
+            # GDPR banner not shown within timeout.
             pass
 
     async def is_logged_in(self) -> bool:
@@ -994,6 +997,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             try:
                 await self.web_select(By.CSS_SELECTOR, "select#price-type-react, select#micro-frontend-price-type, select#priceType", price_type)
             except TimeoutError:
+                # Price type selector not present on this page variant.
                 pass
             if ad_cfg.price:
                 if mode == AdUpdateStrategy.MODIFY:
@@ -1112,6 +1116,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             if not ad_cfg.images and await self.web_check(By.XPATH, image_hint_xpath, Is.DISPLAYED):
                 await self.web_click(By.XPATH, image_hint_xpath)
         except TimeoutError:
+            # Image hint not shown; continue publish flow.
             pass  # nosec
 
         #############################
@@ -1127,6 +1132,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             await self.web_scroll_page_down()
             await ainput(_("Press a key to continue..."))
         except TimeoutError:
+            # Payment form not present.
             pass
 
         confirmation_timeout = self._timeout("publishing_confirmation")
@@ -1234,6 +1240,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             if await self.web_text(By.ID, "postad-category-path"):
                 is_category_auto_selected = True
         except TimeoutError:
+            # Category auto-selection indicator not available within timeout.
             pass
 
         if category:
@@ -1267,6 +1274,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 if not await self.web_check(By.XPATH, select_container_xpath, Is.DISPLAYED):
                     await (await self.web_find(By.XPATH, select_container_xpath)).apply("elem => elem.singleNodeValue.style.display = 'block'")
             except TimeoutError:
+                # Skip visibility adjustment when container cannot be located in time.
                 pass  # nosec
 
             try:
@@ -1341,6 +1349,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                         await self.web_click(By.XPATH,
                                              '//dialog//button[contains(., "Andere Versandmethoden")]')
                     except TimeoutError:
+                        # Dialog option not present; already on the individual shipping page.
                         pass
 
                     try:
@@ -1350,6 +1359,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                                             '//input[contains(@placeholder, "Versandkosten (optional)")]',
                                             timeout = short_timeout)
                     except TimeoutError:
+                        # Input not visible yet; click the individual shipping option.
                         await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
 
                     if ad_cfg.shipping_costs is not None:
