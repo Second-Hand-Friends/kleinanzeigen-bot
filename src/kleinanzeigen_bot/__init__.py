@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import atexit, enum, json, os, re, signal, sys, textwrap  # isort: skip
+import atexit, copy, enum, json, os, re, signal, sys, textwrap  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 from gettext import gettext as _
@@ -15,7 +15,7 @@ from wcmatch import glob
 from . import extract, resources
 from ._version import __version__
 from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, calculate_auto_price
-from .model.config_model import Config
+from .model.config_model import TIMEOUT_PROFILE_DEFAULT, TIMEOUT_PROFILES, Config
 from .update_checker import UpdateChecker
 from .utils import dicts, error_handlers, loggers, misc
 from .utils.exceptions import CaptchaEncountered
@@ -516,7 +516,30 @@ class KleinanzeigenBot(WebScrapingMixin):
         if not os.path.exists(self.config_file_path):
             self.create_default_config()
 
-        config_yaml = dicts.load_dict_if_exists(self.config_file_path, _("config"))
+        config_yaml = dicts.load_dict_if_exists(self.config_file_path, _("config")) or {}
+        timeout_profile_env = os.getenv("KLEINANZEIGEN_TIMEOUT_PROFILE")
+        timeout_profile_value = timeout_profile_env or config_yaml.get("timeout_profile") or TIMEOUT_PROFILE_DEFAULT
+        timeout_profile_key = str(timeout_profile_value).strip().lower() if timeout_profile_value else TIMEOUT_PROFILE_DEFAULT
+        if timeout_profile_key not in TIMEOUT_PROFILES:
+            LOG.warning(
+                _("Unknown timeout profile [%s], falling back to '%s'."),
+                timeout_profile_value,
+                TIMEOUT_PROFILE_DEFAULT
+            )
+            timeout_profile_key = TIMEOUT_PROFILE_DEFAULT
+        if timeout_profile_env:
+            LOG.info(
+                _("Timeout profile overridden via KLEINANZEIGEN_TIMEOUT_PROFILE=%s"),
+                timeout_profile_key
+            )
+        LOG.info(_("Using timeout profile: %s"), timeout_profile_key)
+        config_yaml["timeout_profile"] = timeout_profile_key
+        timeouts_overrides = config_yaml.get("timeouts") or {}
+        if isinstance(timeouts_overrides, dict):
+            config_yaml["timeouts"] = dicts.apply_defaults(
+                target = copy.deepcopy(timeouts_overrides),
+                defaults = TIMEOUT_PROFILES[timeout_profile_key]
+            )
         self.config = Config.model_validate(config_yaml, strict = True, context = self.config_file_path)
 
         # load built-in category mappings

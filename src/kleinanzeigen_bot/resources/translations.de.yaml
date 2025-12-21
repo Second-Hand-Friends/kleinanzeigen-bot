@@ -50,6 +50,9 @@ kleinanzeigen_bot/__init__.py:
     "ad": "Anzeige"
 
   load_config:
+    "Timeout profile overridden via KLEINANZEIGEN_TIMEOUT_PROFILE=%s": "Timeout-Profil per KLEINANZEIGEN_TIMEOUT_PROFILE=%s überschrieben"
+    "Unknown timeout profile [%s], falling back to '%s'.": "Unbekanntes Timeout-Profil [%s], verwende '%s' als Standard."
+    "Using timeout profile: %s": "Verwende Timeout-Profil: %s"
     "config": "Konfiguration"
     " -> found %s": "-> %s gefunden"
     "category": "Kategorie"

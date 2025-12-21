@@ -446,12 +446,12 @@
         "default": {
           "type": "number",
           "minimum": 0.0,
-          "default": 5.0,
+          "default": 4.0,
           "description": "Baseline timeout for DOM interactions.",
           "title": "Default"
         },
         "page_load": {
-          "default": 15.0,
+          "default": 12.0,
           "description": "Page load timeout for web_open.",
           "minimum": 1.0,
           "title": "Page Load",
@@ -472,63 +472,63 @@
           "type": "number"
         },
         "gdpr_prompt": {
-          "default": 10.0,
+          "default": 8.0,
           "description": "Timeout for GDPR/consent dialogs.",
           "minimum": 1.0,
           "title": "Gdpr Prompt",
           "type": "number"
         },
         "login_detection": {
-          "default": 10.0,
+          "default": 6.0,
           "description": "Timeout for detecting existing login session via DOM elements.",
           "minimum": 1.0,
           "title": "Login Detection",
           "type": "number"
         },
         "publishing_result": {
-          "default": 300.0,
+          "default": 180.0,
           "description": "Timeout for publishing result checks.",
           "minimum": 10.0,
           "title": "Publishing Result",
           "type": "number"
         },
         "publishing_confirmation": {
-          "default": 20.0,
+          "default": 15.0,
           "description": "Timeout for publish confirmation redirect.",
           "minimum": 1.0,
           "title": "Publishing Confirmation",
           "type": "number"
         },
         "image_upload": {
-          "default": 30.0,
+          "default": 25.0,
           "description": "Timeout for image upload and server-side processing.",
           "minimum": 5.0,
           "title": "Image Upload",
           "type": "number"
         },
         "pagination_initial": {
-          "default": 10.0,
+          "default": 8.0,
           "description": "Timeout for initial pagination lookup.",
           "minimum": 1.0,
           "title": "Pagination Initial",
           "type": "number"
         },
         "pagination_follow_up": {
-          "default": 5.0,
+          "default": 4.0,
           "description": "Timeout for subsequent pagination navigation.",
           "minimum": 1.0,
           "title": "Pagination Follow Up",
           "type": "number"
         },
         "quick_dom": {
-          "default": 2.0,
+          "default": 1.5,
           "description": "Generic short timeout for transient UI.",
           "minimum": 0.1,
           "title": "Quick Dom",
           "type": "number"
         },
         "update_check": {
-          "default": 10.0,
+          "default": 8.0,
           "description": "Timeout for GitHub update checks.",
           "minimum": 1.0,
           "title": "Update Check",
@@ -542,14 +542,14 @@
           "type": "number"
         },
         "chrome_remote_debugging": {
-          "default": 5.0,
+          "default": 4.0,
           "description": "Timeout for remote debugging API calls.",
           "minimum": 1.0,
           "title": "Chrome Remote Debugging",
           "type": "number"
         },
         "chrome_binary_detection": {
-          "default": 10.0,
+          "default": 8.0,
           "description": "Timeout for chrome --version subprocesses.",
           "minimum": 1.0,
           "title": "Chrome Binary Detection",
@@ -573,6 +573,13 @@
           "description": "Exponential factor applied per retry attempt.",
           "minimum": 1.0,
           "title": "Retry Backoff Factor",
+          "type": "number"
+        },
+        "retry_max_backoff_factor": {
+          "default": 3.0,
+          "description": "Clamp for exponential backoff factor applied per retry attempt.",
+          "minimum": 1.0,
+          "title": "Retry Max Backoff Factor",
           "type": "number"
         }
       },
@@ -648,6 +655,12 @@
     "update_check": {
       "$ref": "#/$defs/UpdateCheckConfig",
       "description": "Update check configuration"
+    },
+    "timeout_profile": {
+      "default": "normal",
+      "description": "Timeout profile preset (fast, normal, slow, ci). Environment variable KLEINANZEIGEN_TIMEOUT_PROFILE overrides this value.",
+      "title": "Timeout Profile",
+      "type": "string"
     },
     "timeouts": {
       "$ref": "#/$defs/TimeoutConfig",

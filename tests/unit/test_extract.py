@@ -12,7 +12,7 @@ import pytest
 
 from kleinanzeigen_bot.extract import AdExtractor
 from kleinanzeigen_bot.model.ad_model import AdPartial, ContactPartial
-from kleinanzeigen_bot.model.config_model import Config, DownloadConfig
+from kleinanzeigen_bot.model.config_model import Config, DownloadConfig, TimeoutConfig
 from kleinanzeigen_bot.utils.web_scraping_mixin import Browser, By, Element
 
 
@@ -470,7 +470,7 @@ class TestAdExtractorNavigation:
             assert result is False
 
     @pytest.mark.asyncio
-    async def test_extract_own_ads_urls(self, test_extractor:AdExtractor) -> None:
+    async def test_extract_own_ads_urls(self, test_extractor:AdExtractor, default_timeouts:TimeoutConfig) -> None:
         """Test extraction of own ads URLs - basic test."""
         with patch.object(test_extractor, "web_open", new_callable = AsyncMock), \
                 patch.object(test_extractor, "web_sleep", new_callable = AsyncMock), \
@@ -522,7 +522,7 @@ class TestAdExtractorNavigation:
             # Optional: Verify calls were made as expected
             mock_web_find.assert_has_calls([
                 call(By.ID, "my-manageitems-adlist"),
-                call(By.CSS_SELECTOR, ".Pagination", timeout = 10),
+                call(By.CSS_SELECTOR, ".Pagination", timeout = default_timeouts.pagination_initial),
                 call(By.ID, "my-manageitems-adlist"),
                 call(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = cardbox_mock),
             ], any_order = False)  # Check order if important
