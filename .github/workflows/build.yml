@@ -10,7 +10,6 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
     - cron: '0 15 1 * *'
   push:
-    branches: [main, release]  # avoid duplicate runs for same-repo PR branches
     tags-ignore: ['**'] # don't build tags
     paths-ignore:
     - '**/*.md'
@@ -54,6 +53,8 @@ jobs:
   build:
   ###########################################################
 
+    # Skip push runs for non-main/release branches in the main repo; allow forks to run on feature branches.
+    if: github.event_name != 'push' || github.ref_name == 'main' || github.ref_name == 'release' || github.repository != 'Second-Hand-Friends/kleinanzeigen-bot'
     permissions:
       packages: write
 
