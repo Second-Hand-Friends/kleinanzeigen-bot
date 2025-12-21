@@ -470,49 +470,23 @@ jobs:
         set -euo pipefail
 
         # We reuse the moving "latest"/"preview" tags for releases. GitHub's generate-notes compares
-        # tag_name -> previous_tag_name, so using the moving tag as tag_name would compare old -> old
-        # (because the tag hasn't moved yet) and returns empty notes.
-        # To keep tags clean and avoid new permanent tags, we create two short-lived tags:
-        # - one on the previous release commit
-        # - one on the new release commit
-        # Then we diff temp-new -> temp-prev and delete both tags.
-        if ! PREVIOUS_RELEASE_SHA=$(gh release view "$RELEASE_NAME" --json targetCommitish --jq '.targetCommitish' 2>/dev/null); then
+        # tag_name -> previous_tag_name. If we pass the moving tag as tag_name before it moves, the
+        # comparison is old -> old (empty notes). We avoid this by using a fake tag_name (not created)
+        # and anchoring previous_tag_name to the current moving tag. This yields old -> new notes
+        # without creating or pushing any tags (important: pushes can be blocked for workflow files).
+        if ! gh release view "$RELEASE_NAME" --json tagName --jq '.tagName' >/dev/null 2>&1; then
           echo "ERROR: Failed to query existing '$RELEASE_NAME' release; cannot generate release notes." >&2
           exit 1
         fi
-        if [[ -z "${PREVIOUS_RELEASE_SHA:-}" ]]; then
-          echo "ERROR: No existing '$RELEASE_NAME' release found; cannot generate release notes." >&2
-          exit 1
-        fi
 
-        TEMP_PREV_TAG="${RELEASE_NAME}-prev-${GITHUB_RUN_ID}"
-        TEMP_HEAD_TAG="${RELEASE_NAME}-head-${GITHUB_RUN_ID}"
-        cleanup() {
-          # Best-effort cleanup; don't fail the job if cleanup fails.
-          git push --delete origin "$TEMP_PREV_TAG" "$TEMP_HEAD_TAG" >/dev/null 2>&1 || true
-          git tag -d "$TEMP_PREV_TAG" "$TEMP_HEAD_TAG" >/dev/null 2>&1 || true
-        }
-        trap cleanup EXIT
+        NOTES_TAG="${RELEASE_NAME}-notes-${GITHUB_RUN_ID}"
+        echo "Generating notes: tag_name=${NOTES_TAG}, previous_tag_name=${RELEASE_NAME}, target_commitish=${GITHUB_SHA}"
 
-        # Even with `fetch-depth: 0`, the previous channel release commit might not be part of the
-        # current branch's history (e.g. history rewrites / force-pushes). Fetch it explicitly if needed.
-        if ! git cat-file -e "${PREVIOUS_RELEASE_SHA}^{commit}" 2>/dev/null; then
-          git fetch --no-tags origin "${PREVIOUS_RELEASE_SHA}"
-        fi
-
-        # Ensure both temporary tags exist for generate-notes diffing.
-        git tag -f "$TEMP_PREV_TAG" "$PREVIOUS_RELEASE_SHA"
-        git tag -f "$TEMP_HEAD_TAG" "$GITHUB_SHA"
-        git push --force origin "refs/tags/${TEMP_PREV_TAG}"
-        git push --force origin "refs/tags/${TEMP_HEAD_TAG}"
-
-        echo "Using temp tags: prev=${TEMP_PREV_TAG} (${PREVIOUS_RELEASE_SHA}), head=${TEMP_HEAD_TAG} (${GITHUB_SHA})"
-
-        # 1) Prefer GitHub's generate-notes API so we get PR links and @mentions
+        # Prefer GitHub's generate-notes API so we get PR links and @mentions
         gh api -X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
-          -f tag_name="$TEMP_HEAD_TAG" \
+          -f tag_name="$NOTES_TAG" \
           -f target_commitish="$GITHUB_SHA" \
-          -f previous_tag_name="$TEMP_PREV_TAG" \
+          -f previous_tag_name="$RELEASE_NAME" \
           --jq '.body' > release-notes.md
 
         if ! grep -q '[^[:space:]]' release-notes.md; then
@@ -520,7 +494,7 @@ jobs:
           exit 1
         fi
 
-        # Remove the "Full Changelog" line to avoid broken links from temp tags.
+        # Remove the "Full Changelog" line to avoid broken links from the fake tag_name.
         sed -E -i.bak '/^\*\*Full Changelog\*\*:/d' release-notes.md
         rm -f release-notes.md.bak
 
