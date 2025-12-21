@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: © jens Bergmann and contributors
+# SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 
@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta, timezone, tzinfo
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, patch
 
 if TYPE_CHECKING:
@@ -121,6 +121,26 @@ class TestUpdateChecker:
         assert commit_hash == "abc"
         assert commit_date is None
 
+    def test_resolve_commitish_logs_warning_on_exception(
+        self,
+        config:Config,
+        caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test resolving a commit-ish logs a warning when the request fails."""
+        caplog.set_level("WARNING", logger = "kleinanzeigen_bot.update_checker")
+        checker = UpdateChecker(config)
+        with patch("requests.get", side_effect = Exception("boom")):
+            commit_hash, commit_date = checker._resolve_commitish("sha")
+
+        assert commit_hash is None
+        assert commit_date is None
+        assert any("Could not resolve commit 'sha': boom" in r.getMessage() for r in caplog.records)
+
+    def test_commits_match_short_hash(self, config:Config) -> None:
+        """Test that short commit hashes are treated as matching prefixes."""
+        checker = UpdateChecker(config)
+        assert checker._commits_match("abc1234", "abc1234def5678") is True
+
     def test_check_for_updates_disabled(self, config:Config) -> None:
         """Test that the update checker does not check for updates if disabled."""
         config.update_check.enabled = False
@@ -132,8 +152,23 @@ class TestUpdateChecker:
     def test_check_for_updates_no_local_version(self, config:Config) -> None:
         """Test that the update checker handles the case where the local version cannot be determined."""
         checker = UpdateChecker(config)
-        with patch.object(UpdateChecker, "get_local_version", return_value = None):
+        with patch.object(UpdateCheckState, "should_check", return_value = True), \
+                patch.object(UpdateChecker, "get_local_version", return_value = None):
             checker.check_for_updates()  # Should not raise exception
+
+    def test_check_for_updates_logs_missing_local_version(
+        self,
+        config:Config,
+        caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test that the update checker logs a warning when the local version is missing."""
+        caplog.set_level("WARNING", logger = "kleinanzeigen_bot.update_checker")
+        checker = UpdateChecker(config)
+        with patch.object(UpdateCheckState, "should_check", return_value = True), \
+                patch.object(UpdateChecker, "get_local_version", return_value = None):
+            checker.check_for_updates()
+
+        assert any("Could not determine local version." in r.getMessage() for r in caplog.records)
 
     def test_check_for_updates_no_commit_hash(self, config:Config) -> None:
         """Test that the update checker handles the case where the commit hash cannot be extracted."""
@@ -152,6 +187,29 @@ class TestUpdateChecker:
         checker = UpdateChecker(config)
         with patch("requests.get", side_effect = Exception("API Error")):
             checker.check_for_updates()  # Should not raise exception
+
+    def test_check_for_updates_latest_prerelease_warning(
+        self,
+        config:Config,
+        mocker:"MockerFixture",
+        caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test that the update checker warns when latest points to a prerelease."""
+        caplog.set_level("WARNING", logger = "kleinanzeigen_bot.update_checker")
+        mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
+        mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
+        mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
+        mocker.patch.object(
+            requests,
+            "get",
+            return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": True})
+        )
+
+        checker = UpdateChecker(config)
+        checker.check_for_updates()
+
+        expected = "Latest release from GitHub is a prerelease, but 'latest' channel expects a stable release."
+        assert any(expected in r.getMessage() for r in caplog.records)
 
     def test_check_for_updates_ahead(self, config:Config, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
         """Test that the update checker correctly identifies when the local version is ahead of the latest release."""
@@ -225,6 +283,29 @@ class TestUpdateChecker:
         )
         assert any(expected in r.getMessage() for r in caplog.records)
 
+    def test_check_for_updates_preview_missing_prerelease(
+        self,
+        config:Config,
+        mocker:"MockerFixture",
+        caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test that the update checker warns when no preview prerelease is available."""
+        caplog.set_level("WARNING", logger = "kleinanzeigen_bot.update_checker")
+        config.update_check.channel = "preview"
+        mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
+        mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
+        mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
+        mocker.patch.object(
+            requests,
+            "get",
+            return_value = mocker.Mock(json = lambda: [{"tag_name": "v1", "prerelease": False, "draft": False}])
+        )
+
+        checker = UpdateChecker(config)
+        checker.check_for_updates()
+
+        assert any("No prerelease found for 'preview' channel." in r.getMessage() for r in caplog.records)
+
     def test_check_for_updates_behind(self, config:Config, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
         """Test that the update checker correctly identifies when the local version is behind the latest release."""
         caplog.set_level("INFO", logger = "kleinanzeigen_bot.update_checker")
@@ -257,6 +338,38 @@ class TestUpdateChecker:
         expected = "A new version is available: e7a3d46 from 2025-05-18 00:00:00 UTC (current: 2025+fb00f11 from 2025-05-16 00:00:00 UTC, channel: latest)"
         assert any(expected in r.getMessage() for r in caplog.records)
 
+    def test_check_for_updates_logs_release_notes(
+        self,
+        config:Config,
+        mocker:"MockerFixture",
+        caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test that release notes are logged when present."""
+        caplog.set_level("INFO", logger = "kleinanzeigen_bot.update_checker")
+        mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
+        mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
+        mocker.patch.object(
+            UpdateChecker,
+            "_resolve_commitish",
+            side_effect = [
+                ("fb00f11", datetime(2025, 5, 16, tzinfo = timezone.utc)),
+                ("e7a3d46", datetime(2025, 5, 18, tzinfo = timezone.utc))
+            ]
+        )
+        mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
+        mocker.patch.object(
+            requests,
+            "get",
+            return_value = mocker.Mock(
+                json = lambda: {"tag_name": "latest", "prerelease": False, "body": "Release notes here"}
+            )
+        )
+
+        checker = UpdateChecker(config)
+        checker.check_for_updates()
+
+        assert any("Release notes:\nRelease notes here" in r.getMessage() for r in caplog.records)
+
     def test_check_for_updates_same(self, config:Config, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
         """Test that the update checker correctly identifies when the local version is the same as the latest release."""
         caplog.set_level("INFO", logger = "kleinanzeigen_bot.update_checker")
@@ -288,6 +401,26 @@ class TestUpdateChecker:
 
         expected = "You are on the latest version: 2025+fb00f11 (compared to fb00f11 in channel latest)"
         assert any(expected in r.getMessage() for r in caplog.records)
+
+    def test_check_for_updates_unknown_channel(
+        self,
+        config:Config,
+        mocker:"MockerFixture",
+        caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test that the update checker warns on unknown update channels."""
+        caplog.set_level("WARNING", logger = "kleinanzeigen_bot.update_checker")
+        cast(Any, config.update_check).channel = "unknown"
+        mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
+        mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
+        mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
+        mock_get = mocker.patch("requests.get")
+
+        checker = UpdateChecker(config)
+        checker.check_for_updates()
+
+        mock_get.assert_not_called()
+        assert any("Unknown update channel: unknown" in r.getMessage() for r in caplog.records)
 
     def test_check_for_updates_respects_interval_gate(
         self,

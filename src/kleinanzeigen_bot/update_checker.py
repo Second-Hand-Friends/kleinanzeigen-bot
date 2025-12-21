@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from gettext import gettext as _
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -87,10 +88,11 @@ class UpdateChecker:
             commit_date = None
             if "commit" in data and "author" in data["commit"] and "date" in data["commit"]["author"]:
                 commit_date = datetime.fromisoformat(data["commit"]["author"]["date"].replace("Z", "+00:00"))
-            commit_hash = str(data.get("sha")) if data.get("sha") else None
+            sha = data.get("sha")
+            commit_hash = str(sha) if sha else None
             return commit_hash, commit_date
         except Exception as e:
-            logger.warning("Could not resolve commit '%s': %s", commitish, e)
+            logger.warning(_("Could not resolve commit '%s': %s"), commitish, e)
             return None, None
 
     def _get_short_commit_hash(self, commit:str) -> str:
@@ -132,12 +134,12 @@ class UpdateChecker:
 
         local_version = self.get_local_version()
         if not local_version:
-            logger.warning("Could not determine local version.")
+            logger.warning(_("Could not determine local version."))
             return
 
         local_commitish = self._get_commit_hash(local_version)
         if not local_commitish:
-            logger.warning("Could not determine local commit hash.")
+            logger.warning(_("Could not determine local commit hash."))
             return
 
         # --- Fetch release info from GitHub using correct endpoint per channel ---
@@ -152,7 +154,9 @@ class UpdateChecker:
                 release = response.json()
                 # Defensive: ensure it's not a prerelease
                 if release.get("prerelease", False):
-                    logger.warning("Latest release from GitHub is a prerelease, but 'latest' channel expects a stable release.")
+                    logger.warning(
+                        _("Latest release from GitHub is a prerelease, but 'latest' channel expects a stable release.")
+                    )
                     return
             elif self.config.update_check.channel == "preview":
                 # Use /releases endpoint and select the most recent prerelease
@@ -165,13 +169,13 @@ class UpdateChecker:
                 # Find the most recent prerelease
                 release = next((r for r in releases if r.get("prerelease", False) and not r.get("draft", False)), None)
                 if not release:
-                    logger.warning("No prerelease found for 'preview' channel.")
+                    logger.warning(_("No prerelease found for 'preview' channel."))
                     return
             else:
-                logger.warning("Unknown update channel: %s", self.config.update_check.channel)
+                logger.warning(_("Unknown update channel: %s"), self.config.update_check.channel)
                 return
         except Exception as e:
-            logger.warning("Could not get releases: %s", e)
+            logger.warning(_("Could not get releases: %s"), e)
             return
 
         # Get release commit-ish (use tag name to avoid branch tip drift)
@@ -179,20 +183,20 @@ class UpdateChecker:
         if not release_commitish:
             release_commitish = release.get("target_commitish")
         if not release_commitish:
-            logger.warning("Could not determine release commit hash.")
+            logger.warning(_("Could not determine release commit hash."))
             return
 
         # Resolve commit hashes and dates for comparison
         local_commit, local_commit_date = self._resolve_commitish(local_commitish)
         release_commit, release_commit_date = self._resolve_commitish(str(release_commitish))
         if not local_commit or not release_commit or not local_commit_date or not release_commit_date:
-            logger.warning("Could not determine commit dates for comparison.")
+            logger.warning(_("Could not determine commit dates for comparison."))
             return
 
         if self._commits_match(local_commit, release_commit):
             # If the commit hashes are identical, we are on the latest version. Do not proceed to other checks.
             logger.info(
-                "You are on the latest version: %s (compared to %s in channel %s)",
+                _("You are on the latest version: %s (compared to %s in channel %s)"),
                 local_version,
                 self._get_short_commit_hash(release_commit),
                 self.config.update_check.channel
@@ -203,7 +207,7 @@ class UpdateChecker:
         # All commit dates are in UTC; append ' UTC' to timestamps in logs for clarity.
         if local_commit_date < release_commit_date:
             logger.warning(
-                "A new version is available: %s from %s UTC (current: %s from %s UTC, channel: %s)",
+                _("A new version is available: %s from %s UTC (current: %s from %s UTC, channel: %s)"),
                 self._get_short_commit_hash(release_commit),
                 release_commit_date.strftime("%Y-%m-%d %H:%M:%S"),
                 local_version,
@@ -211,11 +215,13 @@ class UpdateChecker:
                 self.config.update_check.channel
             )
             if release.get("body"):
-                logger.info("Release notes:\n%s", release["body"])
+                logger.info(_("Release notes:\n%s"), release["body"])
         else:
             logger.info(
-                "You are on a different commit than the release for channel '%s' (tag: %s). This may mean you are ahead, behind, or on a different branch. "
-                "Local commit: %s (%s UTC), Release commit: %s (%s UTC)",
+                _(
+                    "You are on a different commit than the release for channel '%s' (tag: %s). This may mean you are ahead, behind, or on a different branch. "
+                    "Local commit: %s (%s UTC), Release commit: %s (%s UTC)"
+                ),
                 self.config.update_check.channel,
                 release.get("tag_name", "unknown"),
                 self._get_short_commit_hash(local_commit),
