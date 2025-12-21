@@ -54,9 +54,6 @@ jobs:
   build:
   ###########################################################
 
-    # Run on push/pull_request; other triggers are handled by workflow_dispatch/schedule.
-    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-
     permissions:
       packages: write
 
