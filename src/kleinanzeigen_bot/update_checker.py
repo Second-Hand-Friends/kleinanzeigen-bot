@@ -66,51 +66,32 @@ class UpdateChecker:
             return version.split("+")[1]
         return None
 
-    def _get_release_commit(self, tag_name:str) -> str | None:
-        """Get the commit hash for a release tag.
+    def _resolve_commitish(self, commitish:str) -> tuple[str | None, datetime | None]:
+        """Resolve a commit-ish to a full commit hash and date.
 
         Args:
-            tag_name: The release tag name (e.g. 'latest').
+            commitish: The commit hash, tag, or branch.
 
         Returns:
-            The commit hash, or None if it cannot be determined.
+            Tuple of (full commit hash, commit date), or (None, None) if it cannot be determined.
         """
         try:
             response = requests.get(
-                f"https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases/tags/{tag_name}",
+                f"https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/commits/{commitish}",
                 timeout = self._request_timeout()
             )
             response.raise_for_status()
             data = response.json()
-            if isinstance(data, dict) and "target_commitish" in data:
-                return str(data["target_commitish"])
-            return None
+            if not isinstance(data, dict):
+                return None, None
+            commit_date = None
+            if "commit" in data and "author" in data["commit"] and "date" in data["commit"]["author"]:
+                commit_date = datetime.fromisoformat(data["commit"]["author"]["date"].replace("Z", "+00:00"))
+            commit_hash = str(data.get("sha")) if data.get("sha") else None
+            return commit_hash, commit_date
         except Exception as e:
-            logger.warning("Could not get release commit: %s", e)
-            return None
-
-    def _get_commit_date(self, commit:str) -> datetime | None:
-        """Get the commit date for a commit hash.
-
-        Args:
-            commit: The commit hash.
-
-        Returns:
-            The commit date, or None if it cannot be determined.
-        """
-        try:
-            response = requests.get(
-                f"https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/commits/{commit}",
-                timeout = self._request_timeout()
-            )
-            response.raise_for_status()
-            data = response.json()
-            if isinstance(data, dict) and "commit" in data and "author" in data["commit"] and "date" in data["commit"]["author"]:
-                return datetime.fromisoformat(data["commit"]["author"]["date"].replace("Z", "+00:00"))
-            return None
-        except Exception as e:
-            logger.warning("Could not get commit date: %s", e)
-            return None
+            logger.warning("Could not resolve commit '%s': %s", commitish, e)
+            return None, None
 
     def _get_short_commit_hash(self, commit:str) -> str:
         """Get the short version of a commit hash.
@@ -122,6 +103,19 @@ class UpdateChecker:
             The short commit hash (first 7 characters).
         """
         return commit[:7]
+
+    def _commits_match(self, local_commit:str, release_commit:str) -> bool:
+        """Determine whether two commits refer to the same hash.
+
+        This accounts for short vs. full hashes (e.g. 7 chars vs. 40 chars).
+        """
+        local_commit = local_commit.strip()
+        release_commit = release_commit.strip()
+        if local_commit == release_commit:
+            return True
+        if len(local_commit) < len(release_commit) and release_commit.startswith(local_commit):
+            return True
+        return len(release_commit) < len(local_commit) and local_commit.startswith(release_commit)
 
     def check_for_updates(self, *, skip_interval_check:bool = False) -> None:
         """Check for updates to the bot.
@@ -141,8 +135,8 @@ class UpdateChecker:
             logger.warning("Could not determine local version.")
             return
 
-        local_commit = self._get_commit_hash(local_version)
-        if not local_commit:
+        local_commitish = self._get_commit_hash(local_version)
+        if not local_commitish:
             logger.warning("Could not determine local commit hash.")
             return
 
@@ -169,7 +163,7 @@ class UpdateChecker:
                 response.raise_for_status()
                 releases = response.json()
                 # Find the most recent prerelease
-                release = next((r for r in releases if r.get("prerelease", False)), None)
+                release = next((r for r in releases if r.get("prerelease", False) and not r.get("draft", False)), None)
                 if not release:
                     logger.warning("No prerelease found for 'preview' channel.")
                     return
@@ -180,28 +174,22 @@ class UpdateChecker:
             logger.warning("Could not get releases: %s", e)
             return
 
-        # Get release commit
-        try:
-            release_commit = self._get_release_commit(release["tag_name"])
-        except Exception as e:
-            logger.warning("Failed to get release commit: %s", e)
-            return
-        if not release_commit:
+        # Get release commit-ish (use tag name to avoid branch tip drift)
+        release_commitish = release.get("tag_name")
+        if not release_commitish:
+            release_commitish = release.get("target_commitish")
+        if not release_commitish:
             logger.warning("Could not determine release commit hash.")
             return
 
-        # Get commit dates
-        try:
-            local_commit_date = self._get_commit_date(local_commit)
-            release_commit_date = self._get_commit_date(release_commit)
-        except Exception as e:
-            logger.warning("Failed to get commit dates: %s", e)
-            return
-        if not local_commit_date or not release_commit_date:
+        # Resolve commit hashes and dates for comparison
+        local_commit, local_commit_date = self._resolve_commitish(local_commitish)
+        release_commit, release_commit_date = self._resolve_commitish(str(release_commitish))
+        if not local_commit or not release_commit or not local_commit_date or not release_commit_date:
             logger.warning("Could not determine commit dates for comparison.")
             return
 
-        if local_commit == release_commit:
+        if self._commits_match(local_commit, release_commit):
             # If the commit hashes are identical, we are on the latest version. Do not proceed to other checks.
             logger.info(
                 "You are on the latest version: %s (compared to %s in channel %s)",
@@ -209,6 +197,8 @@ class UpdateChecker:
                 self._get_short_commit_hash(release_commit),
                 self.config.update_check.channel
             )
+            self.state.update_last_check()
+            self.state.save(self.state_file)
             return
         # All commit dates are in UTC; append ' UTC' to timestamps in logs for clarity.
         if local_commit_date < release_commit_date:

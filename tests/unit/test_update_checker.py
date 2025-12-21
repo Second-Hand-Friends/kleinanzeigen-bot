@@ -90,29 +90,36 @@ class TestUpdateChecker:
         assert checker._get_commit_hash("2025+fb00f11") == "fb00f11"
         assert checker._get_commit_hash("2025") is None
 
-    def test_get_release_commit(self, config:Config) -> None:
-        """Test that the release commit hash is correctly retrieved from the GitHub API."""
+    def test_resolve_commitish(self, config:Config) -> None:
+        """Test that a commit-ish is resolved to a full hash and date."""
         checker = UpdateChecker(config)
-        with patch("requests.get", return_value = MagicMock(json = lambda: {"target_commitish": "e7a3d46"})):
-            assert checker._get_release_commit("latest") == "e7a3d46"
+        with patch(
+            "requests.get",
+            return_value = MagicMock(json = lambda: {"sha": "e7a3d46", "commit": {"author": {"date": "2025-05-18T00:00:00Z"}}})
+        ):
+            commit_hash, commit_date = checker._resolve_commitish("latest")
+            assert commit_hash == "e7a3d46"
+            assert commit_date == datetime(2025, 5, 18, tzinfo = timezone.utc)
 
     def test_request_timeout_uses_config(self, config:Config, mocker:"MockerFixture") -> None:
         """Ensure HTTP calls honor the timeout configuration."""
         config.timeouts.multiplier = 1.5
         checker = UpdateChecker(config)
-        mock_response = MagicMock(json = lambda: {"target_commitish": "abc"})
+        mock_response = MagicMock(json = lambda: {"sha": "abc", "commit": {"author": {"date": "2025-05-18T00:00:00Z"}}})
         mock_get = mocker.patch("requests.get", return_value = mock_response)
 
-        checker._get_release_commit("latest")
+        checker._resolve_commitish("latest")
 
         expected_timeout = config.timeouts.effective("update_check")
         assert mock_get.call_args.kwargs["timeout"] == expected_timeout
 
-    def test_get_commit_date(self, config:Config) -> None:
-        """Test that the commit date is correctly retrieved from the GitHub API."""
+    def test_resolve_commitish_no_commit(self, config:Config, mocker:"MockerFixture") -> None:
+        """Test resolving a commit-ish when the API returns no commit data."""
         checker = UpdateChecker(config)
-        with patch("requests.get", return_value = MagicMock(json = lambda: {"commit": {"author": {"date": "2025-05-18T00:00:00Z"}}})):
-            assert checker._get_commit_date("e7a3d46") == datetime(2025, 5, 18, tzinfo = timezone.utc)
+        mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"sha": "abc"}))
+        commit_hash, commit_date = checker._resolve_commitish("sha")
+        assert commit_hash == "abc"
+        assert commit_date is None
 
     def test_check_for_updates_disabled(self, config:Config) -> None:
         """Test that the update checker does not check for updates if disabled."""
@@ -151,19 +158,20 @@ class TestUpdateChecker:
         caplog.set_level("INFO", logger = "kleinanzeigen_bot.update_checker")
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
         mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
-        mocker.patch.object(UpdateChecker, "_get_release_commit", return_value = "e7a3d46")
         mocker.patch.object(
             UpdateChecker,
-            "_get_commit_date",
+            "_resolve_commitish",
             side_effect = [
-                datetime(2025, 5, 18, tzinfo = timezone.utc),
-                datetime(2025, 5, 16, tzinfo = timezone.utc)
+                ("fb00f11", datetime(2025, 5, 18, tzinfo = timezone.utc)),
+                ("e7a3d46", datetime(2025, 5, 16, tzinfo = timezone.utc))
             ]
         )
         mocker.patch.object(
             requests,
             "get",
-            return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": False})
+            return_value = mocker.Mock(
+                json = lambda: {"tag_name": "latest", "prerelease": False}
+            )
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
 
@@ -186,19 +194,20 @@ class TestUpdateChecker:
         config.update_check.channel = "preview"
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
         mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
-        mocker.patch.object(UpdateChecker, "_get_release_commit", return_value = "e7a3d46")
         mocker.patch.object(
             UpdateChecker,
-            "_get_commit_date",
+            "_resolve_commitish",
             side_effect = [
-                datetime(2025, 5, 18, tzinfo = timezone.utc),
-                datetime(2025, 5, 16, tzinfo = timezone.utc)
+                ("fb00f11", datetime(2025, 5, 18, tzinfo = timezone.utc)),
+                ("e7a3d46", datetime(2025, 5, 16, tzinfo = timezone.utc))
             ]
         )
         mocker.patch.object(
             requests,
             "get",
-            return_value = mocker.Mock(json = lambda: [{"tag_name": "preview", "prerelease": True}])
+            return_value = mocker.Mock(
+                json = lambda: [{"tag_name": "preview", "prerelease": True, "draft": False}]
+            )
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
 
@@ -221,19 +230,20 @@ class TestUpdateChecker:
         caplog.set_level("INFO", logger = "kleinanzeigen_bot.update_checker")
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
         mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
-        mocker.patch.object(UpdateChecker, "_get_release_commit", return_value = "e7a3d46")
         mocker.patch.object(
             UpdateChecker,
-            "_get_commit_date",
+            "_resolve_commitish",
             side_effect = [
-                datetime(2025, 5, 16, tzinfo = timezone.utc),
-                datetime(2025, 5, 18, tzinfo = timezone.utc)
+                ("fb00f11", datetime(2025, 5, 16, tzinfo = timezone.utc)),
+                ("e7a3d46", datetime(2025, 5, 18, tzinfo = timezone.utc))
             ]
         )
         mocker.patch.object(
             requests,
             "get",
-            return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": False})
+            return_value = mocker.Mock(
+                json = lambda: {"tag_name": "latest", "prerelease": False}
+            )
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
 
@@ -252,16 +262,20 @@ class TestUpdateChecker:
         caplog.set_level("INFO", logger = "kleinanzeigen_bot.update_checker")
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
         mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
-        mocker.patch.object(UpdateChecker, "_get_release_commit", return_value = "fb00f11")
         mocker.patch.object(
             UpdateChecker,
-            "_get_commit_date",
-            return_value = datetime(2025, 5, 18, tzinfo = timezone.utc)
+            "_resolve_commitish",
+            side_effect = [
+                ("fb00f11", datetime(2025, 5, 18, tzinfo = timezone.utc)),
+                ("fb00f11", datetime(2025, 5, 18, tzinfo = timezone.utc))
+            ]
         )
         mocker.patch.object(
             requests,
             "get",
-            return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": False})
+            return_value = mocker.Mock(
+                json = lambda: {"tag_name": "latest", "prerelease": False}
+            )
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
 
@@ -457,59 +471,40 @@ class TestUpdateChecker:
         # Should not raise
         state.save(state_file)
 
-    def test_get_release_commit_no_sha(self, config:Config, mocker:"MockerFixture") -> None:
-        """Test _get_release_commit with API returning no sha key."""
+    def test_resolve_commitish_no_author(self, config:Config, mocker:"MockerFixture") -> None:
+        """Test resolving a commit-ish when the API returns no author key."""
         checker = UpdateChecker(config)
-        mocker.patch("requests.get", return_value = mocker.Mock(json = dict))
-        assert checker._get_release_commit("latest") is None
+        mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"sha": "abc", "commit": {}}))
+        commit_hash, commit_date = checker._resolve_commitish("sha")
+        assert commit_hash == "abc"
+        assert commit_date is None
 
-    def test_get_release_commit_list_instead_of_dict(self, config:Config, mocker:"MockerFixture") -> None:
-        """Test _get_release_commit with API returning a list instead of dict."""
+    def test_resolve_commitish_no_date(self, config:Config, mocker:"MockerFixture") -> None:
+        """Test resolving a commit-ish when the API returns no date key."""
         checker = UpdateChecker(config)
-        mocker.patch("requests.get", return_value = mocker.Mock(json = list))
-        assert checker._get_release_commit("latest") is None
+        mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"sha": "abc", "commit": {"author": {}}}))
+        commit_hash, commit_date = checker._resolve_commitish("sha")
+        assert commit_hash == "abc"
+        assert commit_date is None
 
-    def test_get_commit_date_no_commit(self, config:Config, mocker:"MockerFixture") -> None:
-        """Test _get_commit_date with API returning no commit key."""
-        checker = UpdateChecker(config)
-        mocker.patch("requests.get", return_value = mocker.Mock(json = dict))
-        assert checker._get_commit_date("sha") is None
-
-    def test_get_commit_date_no_author(self, config:Config, mocker:"MockerFixture") -> None:
-        """Test _get_commit_date with API returning no author key."""
-        checker = UpdateChecker(config)
-        mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"commit": {}}))
-        assert checker._get_commit_date("sha") is None
-
-    def test_get_commit_date_no_date(self, config:Config, mocker:"MockerFixture") -> None:
-        """Test _get_commit_date with API returning no date key."""
-        checker = UpdateChecker(config)
-        mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"commit": {"author": {}}}))
-        assert checker._get_commit_date("sha") is None
-
-    def test_get_commit_date_list_instead_of_dict(self, config:Config, mocker:"MockerFixture") -> None:
-        """Test _get_commit_date with API returning a list instead of dict."""
+    def test_resolve_commitish_list_instead_of_dict(self, config:Config, mocker:"MockerFixture") -> None:
+        """Test resolving a commit-ish when the API returns a list instead of dict."""
         checker = UpdateChecker(config)
         mocker.patch("requests.get", return_value = mocker.Mock(json = list))
-        assert checker._get_commit_date("sha") is None
+        commit_hash, commit_date = checker._resolve_commitish("sha")
+        assert commit_hash is None
+        assert commit_date is None
 
-    def test_check_for_updates_release_commit_exception(self, config:Config, mocker:"MockerFixture") -> None:
-        """Test check_for_updates handles exception in _get_release_commit."""
+    def test_check_for_updates_missing_release_commitish(self, config:Config, mocker:"MockerFixture") -> None:
+        """Test check_for_updates handles missing release commit-ish."""
         checker = UpdateChecker(config)
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
         mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
-        mocker.patch.object(UpdateChecker, "_get_release_commit", side_effect = Exception("fail"))
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
-        checker.check_for_updates()  # Should not raise
-
-    def test_check_for_updates_commit_date_exception(self, config:Config, mocker:"MockerFixture") -> None:
-        """Test check_for_updates handles exception in _get_commit_date."""
-        checker = UpdateChecker(config)
-        mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
-        mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
-        mocker.patch.object(UpdateChecker, "_get_release_commit", return_value = "e7a3d46")
-        mocker.patch.object(UpdateChecker, "_get_commit_date", side_effect = Exception("fail"))
-        mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
+        mocker.patch(
+            "requests.get",
+            return_value = mocker.Mock(json = lambda: {"prerelease": False})
+        )
         checker.check_for_updates()  # Should not raise
 
     def test_check_for_updates_no_releases_empty(self, config:Config, mocker:"MockerFixture") -> None:
@@ -531,11 +526,15 @@ class TestUpdateChecker:
         caplog.set_level("WARNING", logger = "kleinanzeigen_bot.update_checker")
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
         mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
-        mocker.patch.object(UpdateChecker, "_get_release_commit", return_value = "e7a3d46")
-        mocker.patch.object(UpdateChecker, "_get_commit_date", return_value = None)
+        mocker.patch.object(UpdateChecker, "_resolve_commitish", return_value = (None, None))
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
         # Patch requests.get to avoid any real HTTP requests
-        mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": False}))
+        mocker.patch(
+            "requests.get",
+            return_value = mocker.Mock(
+                json = lambda: {"tag_name": "latest", "prerelease": False}
+            )
+        )
         checker = UpdateChecker(config)
         checker.check_for_updates()
         assert any("Could not determine commit dates for comparison." in r.getMessage() for r in caplog.records)

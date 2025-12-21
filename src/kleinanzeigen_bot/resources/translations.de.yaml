@@ -520,10 +520,8 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
 #################################################
 kleinanzeigen_bot/update_checker.py:
 #################################################
-  _get_commit_date:
-    "Could not get commit date: %s": "Konnte Commit-Datum nicht ermitteln: %s"
-  _get_release_commit:
-    "Could not get release commit: %s": "Konnte Release-Commit nicht ermitteln: %s"
+  _resolve_commitish:
+    "Could not resolve commit '%s': %s": "Konnte Commit '%s' nicht aufloesen: %s"
   check_for_updates:
     "A new version is available: %s from %s UTC (current: %s from %s UTC, channel: %s)": "Eine neue Version ist verfügbar: %s vom %s UTC (aktuell: %s vom %s UTC, Kanal: %s)"
     "Could not determine commit dates for comparison.": "Konnte Commit-Daten für den Vergleich nicht ermitteln."
@@ -531,8 +529,6 @@ kleinanzeigen_bot/update_checker.py:
     "Could not determine local version.": "Konnte lokale Version nicht ermitteln."
     "Could not determine release commit hash.": "Konnte Release-Commit-Hash nicht ermitteln."
     "Could not get releases: %s": "Konnte Releases nicht abrufen: %s"
-    "Failed to get commit dates: %s": "Fehler beim Abrufen der Commit-Daten: %s"
-    "Failed to get release commit: %s": "Fehler beim Abrufen des Release-Commits: %s"
     ? "Release notes:\n%s"
     : "Release-Notizen:\n%s"
     "You are on the latest version: %s (compared to %s in channel %s)": "Sie verwenden die neueste Version: %s (verglichen mit %s im Kanal %s)"
