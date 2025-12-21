@@ -8,6 +8,8 @@ import urllib.error
 import urllib.request
 from typing import Any, Final
 
+from kleinanzeigen_bot.model.config_model import TimeoutConfig
+
 from . import loggers
 
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
@@ -89,7 +91,7 @@ def detect_chrome_version_from_binary(binary_path:str, *, timeout:float | None =
     Returns:
         ChromeVersionInfo if successful, None if detection fails
     """
-    effective_timeout = timeout if timeout is not None else 8.0
+    effective_timeout = timeout if timeout is not None else TimeoutConfig().chrome_binary_detection
     try:
         # Run browser with --version flag
         result = subprocess.run(  # noqa: S603
@@ -135,7 +137,7 @@ def detect_chrome_version_from_remote_debugging(host:str = "127.0.0.1", port:int
     Returns:
         ChromeVersionInfo if successful, None if detection fails
     """
-    effective_timeout = timeout if timeout is not None else 4.0
+    effective_timeout = timeout if timeout is not None else TimeoutConfig().chrome_remote_debugging
     try:
         # Query the remote debugging API
         url = f"http://{host}:{port}/json/version"

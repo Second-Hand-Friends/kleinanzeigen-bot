@@ -1,5 +1,7 @@
 # Browser Connection Troubleshooting Guide
 
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.1%20adopted-ff69b4.svg)](../CODE_OF_CONDUCT.md)
+
 This guide helps you resolve common browser connection issues with the kleinanzeigen-bot.
 
 ## ⚠️ Important: Chrome 136+ Security Changes (March 2025)

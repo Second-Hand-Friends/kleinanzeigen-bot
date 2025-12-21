@@ -1,5 +1,7 @@
 # Timeouts
 
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.1%20adopted-ff69b4.svg)](../CODE_OF_CONDUCT.md)
+
 Timeouts are primarily configured through **profiles** so most users never have to touch individual keys.
 If needed, you can still override specific values under `timeouts` in `config.yaml`.
 
