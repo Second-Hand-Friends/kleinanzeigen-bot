@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from kleinanzeigen_bot.model.config_model import TimeoutConfig
 from kleinanzeigen_bot.utils.chrome_version_detector import (
     ChromeVersionInfo,
     detect_chrome_version_from_binary,
@@ -93,7 +94,7 @@ class TestDetectChromeVersionFromBinary:
     """Test Chrome version detection from binary."""
 
     @patch("subprocess.run")
-    def test_detect_chrome_version_from_binary_success(self, mock_run:Mock) -> None:
+    def test_detect_chrome_version_from_binary_success(self, mock_run:Mock, default_timeouts:TimeoutConfig) -> None:
         """Test successful Chrome version detection from binary."""
         mock_result = Mock()
         mock_result.returncode = 0
@@ -111,7 +112,7 @@ class TestDetectChromeVersionFromBinary:
             check = False,
             capture_output = True,
             text = True,
-            timeout = 10
+            timeout = default_timeouts.chrome_binary_detection
         )
 
     @patch("subprocess.run")
@@ -154,9 +155,9 @@ class TestDetectChromeVersionFromBinary:
         assert version_info is None
 
     @patch("subprocess.run")
-    def test_detect_chrome_version_from_binary_timeout(self, mock_run:Mock) -> None:
+    def test_detect_chrome_version_from_binary_timeout(self, mock_run:Mock, default_timeouts:TimeoutConfig) -> None:
         """Test Chrome version detection timeout."""
-        mock_run.side_effect = subprocess.TimeoutExpired("chrome", 10)
+        mock_run.side_effect = subprocess.TimeoutExpired("chrome", default_timeouts.chrome_binary_detection)
 
         version_info = detect_chrome_version_from_binary("/path/to/chrome")
         assert version_info is None
@@ -177,7 +178,7 @@ class TestDetectChromeVersionFromRemoteDebugging:
     """Test Chrome version detection from remote debugging API."""
 
     @patch("urllib.request.urlopen")
-    def test_detect_chrome_version_from_remote_debugging_success(self, mock_urlopen:Mock) -> None:
+    def test_detect_chrome_version_from_remote_debugging_success(self, mock_urlopen:Mock, default_timeouts:TimeoutConfig) -> None:
         """Test successful Chrome version detection from remote debugging."""
         mock_response = Mock()
         mock_response.read.return_value = json.dumps({
@@ -192,7 +193,10 @@ class TestDetectChromeVersionFromRemoteDebugging:
         assert version_info.version_string == "136.0.6778.0"
         assert version_info.major_version == 136
         assert version_info.browser_name == "Chrome"
-        mock_urlopen.assert_called_once_with("http://127.0.0.1:9222/json/version", timeout = 5)
+        mock_urlopen.assert_called_once_with(
+            "http://127.0.0.1:9222/json/version",
+            timeout = default_timeouts.chrome_remote_debugging
+        )
 
     @patch("urllib.request.urlopen")
     def test_detect_chrome_version_from_remote_debugging_edge(self, mock_urlopen:Mock) -> None:

@@ -67,8 +67,8 @@ The bot will also provide specific instructions on how to fix your configuration
 - Requests to GitHub's API fail sporadically with timeout errors
 
 **Solutions:**
-1. Increase `timeouts.multiplier` in `config.yaml` (e.g. `2.0` doubles every timeout consistently).
-2. Override specific keys under `timeouts` (e.g. `pagination_initial: 20.0`) if only a single selector is problematic.
+1. Switch to the `slow` timeout profile (see `docs/TIMEOUTS.md`).
+2. If only a specific selector is problematic, override a single key under `timeouts`.
 3. Keep `retry_enabled` on so that DOM lookups are retried with exponential backoff.
 
 ### Issue: Bot fails to detect existing login session
@@ -80,7 +80,7 @@ The bot will also provide specific instructions on how to fix your configuration
 
 **What `login_detection` controls:**
 - Maximum time (seconds) to wait for user profile DOM elements when checking if already logged in
-- Default: `10.0` seconds (provides ~22.5s total with retry/backoff)
+- Default (normal profile): `6.0` seconds (additional retries depend on profile/backoff)
 - Used at startup before attempting login
 
 **When to increase `login_detection`:**
@@ -90,8 +90,7 @@ The bot will also provide specific instructions on how to fix your configuration
 
 **Example:**
 ```yaml
-timeouts:
-  login_detection: 15.0  # For slower networks or old sessions
+timeout_profile: slow
 ```
 
 ## Common Issues and Solutions

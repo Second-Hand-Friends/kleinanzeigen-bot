@@ -89,7 +89,7 @@ def detect_chrome_version_from_binary(binary_path:str, *, timeout:float | None =
     Returns:
         ChromeVersionInfo if successful, None if detection fails
     """
-    effective_timeout = timeout if timeout is not None else 10.0
+    effective_timeout = timeout if timeout is not None else 8.0
     try:
         # Run browser with --version flag
         result = subprocess.run(  # noqa: S603
@@ -135,7 +135,7 @@ def detect_chrome_version_from_remote_debugging(host:str = "127.0.0.1", port:int
     Returns:
         ChromeVersionInfo if successful, None if detection fails
     """
-    effective_timeout = timeout if timeout is not None else 5.0
+    effective_timeout = timeout if timeout is not None else 4.0
     try:
         # Query the remote debugging API
         url = f"http://{host}:{port}/json/version"

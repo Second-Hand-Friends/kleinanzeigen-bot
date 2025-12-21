@@ -85,7 +85,8 @@ def test_timeout_config_defaults_and_effective_values() -> None:
             "multiplier": 2.0,
             "pagination_initial": 12.0,
             "retry_max_attempts": 3,
-            "retry_backoff_factor": 2.0
+            "retry_backoff_factor": 2.0,
+            "retry_max_backoff_factor": 3.0
         }
     })
 
@@ -97,6 +98,16 @@ def test_timeout_config_defaults_and_effective_values() -> None:
     assert timeouts.effective("pagination_initial") == base * multiplier * (backoff ** 0)
     # attempt 1 should apply backoff factor once in addition to multiplier
     assert timeouts.effective("pagination_initial", attempt = 1) == base * multiplier * (backoff ** 1)
+
+
+def test_timeout_config_backoff_is_clamped() -> None:
+    timeouts = TimeoutConfig(
+        default = 2.0,
+        multiplier = 1.0,
+        retry_backoff_factor = 2.0,
+        retry_max_backoff_factor = 3.0
+    )
+    assert timeouts.effective("default", attempt = 2) == 6.0
 
 
 def test_validate_glob_pattern_rejects_blank_strings() -> None:

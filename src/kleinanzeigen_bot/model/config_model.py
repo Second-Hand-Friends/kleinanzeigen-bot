@@ -171,25 +171,30 @@ class TimeoutConfig(ContextualModel):
         ge = 0.1,
         description = "Global multiplier applied to all timeout values."
     )
-    default:float = Field(default = 5.0, ge = 0.0, description = "Baseline timeout for DOM interactions.")
-    page_load:float = Field(default = 15.0, ge = 1.0, description = "Page load timeout for web_open.")
+    default:float = Field(default = 4.0, ge = 0.0, description = "Baseline timeout for DOM interactions.")
+    page_load:float = Field(default = 12.0, ge = 1.0, description = "Page load timeout for web_open.")
     captcha_detection:float = Field(default = 2.0, ge = 0.1, description = "Timeout for captcha iframe detection.")
     sms_verification:float = Field(default = 4.0, ge = 0.1, description = "Timeout for SMS verification prompts.")
-    gdpr_prompt:float = Field(default = 10.0, ge = 1.0, description = "Timeout for GDPR/consent dialogs.")
-    login_detection:float = Field(default = 10.0, ge = 1.0, description = "Timeout for detecting existing login session via DOM elements.")
-    publishing_result:float = Field(default = 300.0, ge = 10.0, description = "Timeout for publishing result checks.")
-    publishing_confirmation:float = Field(default = 20.0, ge = 1.0, description = "Timeout for publish confirmation redirect.")
-    image_upload:float = Field(default = 30.0, ge = 5.0, description = "Timeout for image upload and server-side processing.")
-    pagination_initial:float = Field(default = 10.0, ge = 1.0, description = "Timeout for initial pagination lookup.")
-    pagination_follow_up:float = Field(default = 5.0, ge = 1.0, description = "Timeout for subsequent pagination navigation.")
-    quick_dom:float = Field(default = 2.0, ge = 0.1, description = "Generic short timeout for transient UI.")
-    update_check:float = Field(default = 10.0, ge = 1.0, description = "Timeout for GitHub update checks.")
+    gdpr_prompt:float = Field(default = 8.0, ge = 1.0, description = "Timeout for GDPR/consent dialogs.")
+    login_detection:float = Field(default = 6.0, ge = 1.0, description = "Timeout for detecting existing login session via DOM elements.")
+    publishing_result:float = Field(default = 180.0, ge = 10.0, description = "Timeout for publishing result checks.")
+    publishing_confirmation:float = Field(default = 15.0, ge = 1.0, description = "Timeout for publish confirmation redirect.")
+    image_upload:float = Field(default = 25.0, ge = 5.0, description = "Timeout for image upload and server-side processing.")
+    pagination_initial:float = Field(default = 8.0, ge = 1.0, description = "Timeout for initial pagination lookup.")
+    pagination_follow_up:float = Field(default = 4.0, ge = 1.0, description = "Timeout for subsequent pagination navigation.")
+    quick_dom:float = Field(default = 1.5, ge = 0.1, description = "Generic short timeout for transient UI.")
+    update_check:float = Field(default = 8.0, ge = 1.0, description = "Timeout for GitHub update checks.")
     chrome_remote_probe:float = Field(default = 2.0, ge = 0.1, description = "Timeout for local remote-debugging probes.")
-    chrome_remote_debugging:float = Field(default = 5.0, ge = 1.0, description = "Timeout for remote debugging API calls.")
-    chrome_binary_detection:float = Field(default = 10.0, ge = 1.0, description = "Timeout for chrome --version subprocesses.")
+    chrome_remote_debugging:float = Field(default = 4.0, ge = 1.0, description = "Timeout for remote debugging API calls.")
+    chrome_binary_detection:float = Field(default = 8.0, ge = 1.0, description = "Timeout for chrome --version subprocesses.")
     retry_enabled:bool = Field(default = True, description = "Enable built-in retry/backoff for DOM operations.")
     retry_max_attempts:int = Field(default = 2, ge = 1, description = "Max retry attempts when retry is enabled.")
     retry_backoff_factor:float = Field(default = 1.5, ge = 1.0, description = "Exponential factor applied per retry attempt.")
+    retry_max_backoff_factor:float = Field(
+        default = 3.0,
+        ge = 1.0,
+        description = "Clamp for exponential backoff factor applied per retry attempt."
+    )
 
     def resolve(self, key:str = "default", override:float | None = None) -> float:
         """
@@ -213,7 +218,84 @@ class TimeoutConfig(ContextualModel):
         """
         base = self.resolve(key, override)
         backoff = self.retry_backoff_factor ** attempt if attempt > 0 else 1.0
+        backoff = min(backoff, self.retry_max_backoff_factor)
         return base * self.multiplier * backoff
+
+
+TIMEOUT_PROFILE_DEFAULT:Final[str] = "normal"
+NORMAL_TIMEOUTS:Final[dict[str, Any]] = TimeoutConfig().model_dump()
+TIMEOUT_PROFILES:Final[dict[str, dict[str, Any]]] = {
+    "fast": {
+        "multiplier": 1.0,
+        "default": 3.0,
+        "page_load": 8.0,
+        "captcha_detection": 1.5,
+        "sms_verification": 3.0,
+        "gdpr_prompt": 6.0,
+        "login_detection": 4.0,
+        "publishing_result": 120.0,
+        "publishing_confirmation": 10.0,
+        "image_upload": 18.0,
+        "pagination_initial": 6.0,
+        "pagination_follow_up": 3.0,
+        "quick_dom": 1.0,
+        "update_check": 6.0,
+        "chrome_remote_probe": 1.5,
+        "chrome_remote_debugging": 3.0,
+        "chrome_binary_detection": 6.0,
+        "retry_enabled": True,
+        "retry_max_attempts": 1,
+        "retry_backoff_factor": 1.3,
+        "retry_max_backoff_factor": 2.0
+    },
+    "normal": copy.deepcopy(NORMAL_TIMEOUTS),
+    "slow": {
+        "multiplier": 1.0,
+        "default": 6.0,
+        "page_load": 20.0,
+        "captcha_detection": 3.0,
+        "sms_verification": 6.0,
+        "gdpr_prompt": 12.0,
+        "login_detection": 12.0,
+        "publishing_result": 300.0,
+        "publishing_confirmation": 25.0,
+        "image_upload": 40.0,
+        "pagination_initial": 12.0,
+        "pagination_follow_up": 6.0,
+        "quick_dom": 2.5,
+        "update_check": 12.0,
+        "chrome_remote_probe": 3.0,
+        "chrome_remote_debugging": 6.0,
+        "chrome_binary_detection": 12.0,
+        "retry_enabled": True,
+        "retry_max_attempts": 3,
+        "retry_backoff_factor": 1.6,
+        "retry_max_backoff_factor": 4.0
+    },
+    "ci": {
+        "multiplier": 1.0,
+        "default": 3.0,
+        "page_load": 10.0,
+        "captcha_detection": 1.5,
+        "sms_verification": 3.0,
+        "gdpr_prompt": 6.0,
+        "login_detection": 4.0,
+        "publishing_result": 120.0,
+        "publishing_confirmation": 12.0,
+        "image_upload": 20.0,
+        "pagination_initial": 6.0,
+        "pagination_follow_up": 3.0,
+        "quick_dom": 1.0,
+        "update_check": 6.0,
+        "chrome_remote_probe": 1.5,
+        "chrome_remote_debugging": 3.0,
+        "chrome_binary_detection": 6.0,
+        "retry_enabled": True,
+        "retry_max_attempts": 1,
+        "retry_backoff_factor": 1.3,
+        "retry_max_backoff_factor": 2.0
+    }
+}
 
 
 def _validate_glob_pattern(v:str) -> str:
@@ -256,6 +338,10 @@ Example:
     login:LoginConfig = Field(default_factory = LoginConfig.model_construct, description = "Login credentials")
     captcha:CaptchaConfig = Field(default_factory = CaptchaConfig)
     update_check:UpdateCheckConfig = Field(default_factory = UpdateCheckConfig, description = "Update check configuration")
+    timeout_profile:str = Field(
+        default = TIMEOUT_PROFILE_DEFAULT,
+        description = "Timeout profile preset (fast, normal, slow, ci). Environment variable KLEINANZEIGEN_TIMEOUT_PROFILE overrides this value."
+    )
     timeouts:TimeoutConfig = Field(default_factory = TimeoutConfig, description = "Centralized timeout configuration.")
 
     def with_values(self, values:dict[str, Any]) -> Config:

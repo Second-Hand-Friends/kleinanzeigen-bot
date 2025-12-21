@@ -283,6 +283,76 @@ login:
         assert "login.username" not in str(exc_info.value)
         assert "login.password" in str(exc_info.value)
 
+    def test_load_config_applies_timeout_profile_defaults(
+        self,
+        test_bot:KleinanzeigenBot,
+        test_data_dir:str
+    ) -> None:
+        """Verify timeout profiles set defaults while allowing per-key overrides."""
+        config_path = Path(test_data_dir) / "config.yaml"
+        config_content = """
+login:
+  username: dummy_user
+  password: dummy_pass
+timeout_profile: fast
+timeouts:
+  login_detection: 9.0
+"""
+        config_path.write_text(config_content, encoding = "utf-8")
+        test_bot.config_file_path = str(config_path)
+        test_bot.load_config()
+
+        assert test_bot.config.timeout_profile == "fast"
+        assert test_bot.config.timeouts.default == 3.0
+        assert test_bot.config.timeouts.login_detection == 9.0
+        assert test_bot.config.timeouts.retry_max_attempts == 1
+
+    def test_load_config_timeout_profile_env_override(
+        self,
+        test_bot:KleinanzeigenBot,
+        test_data_dir:str,
+        monkeypatch:pytest.MonkeyPatch
+    ) -> None:
+        """Verify environment timeout profile overrides config setting."""
+        config_path = Path(test_data_dir) / "config.yaml"
+        config_content = """
+login:
+  username: dummy_user
+  password: dummy_pass
+timeout_profile: slow
+"""
+        config_path.write_text(config_content, encoding = "utf-8")
+        test_bot.config_file_path = str(config_path)
+        monkeypatch.setenv("KLEINANZEIGEN_TIMEOUT_PROFILE", "ci")
+
+        test_bot.load_config()
+
+        assert test_bot.config.timeout_profile == "ci"
+        assert test_bot.config.timeouts.default == 3.0
+
+    def test_load_config_unknown_timeout_profile_falls_back_to_normal(
+        self,
+        test_bot:KleinanzeigenBot,
+        test_data_dir:str,
+        caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Verify unknown timeout profiles fall back with warning."""
+        caplog.set_level("WARNING")
+        config_path = Path(test_data_dir) / "config.yaml"
+        config_content = """
+login:
+  username: dummy_user
+  password: dummy_pass
+timeout_profile: mystery
+"""
+        config_path.write_text(config_content, encoding = "utf-8")
+        test_bot.config_file_path = str(config_path)
+
+        test_bot.load_config()
+
+        assert test_bot.config.timeout_profile == "normal"
+        assert "Unknown timeout profile" in caplog.text
+
 
 class TestKleinanzeigenBotAuthentication:
     """Tests for login and authentication functionality."""
