@@ -289,7 +289,7 @@ jobs:
     needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: (github.ref_name == 'main' || github.event_name == 'pull_request') && !github.event.act
+    if: (github.ref_name == 'main' || github.event_name == 'pull_request') && !env.ACT
 
     permissions:
       contents: read
@@ -368,7 +368,7 @@ jobs:
         always()
           && needs.build.result == 'success'
           && (needs.publish-coverage.result == 'success' || needs.publish-coverage.result == 'skipped')
-        && (github.ref_name == 'main' || github.ref_name == 'release') && !github.event.act
+        && (github.ref_name == 'main' || github.ref_name == 'release') && !env.ACT
 
     concurrency: publish-${{ github.ref_name }}-release # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idconcurrency
 
