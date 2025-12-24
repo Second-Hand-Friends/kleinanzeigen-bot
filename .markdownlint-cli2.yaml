@@ -1,0 +1,29 @@
+# markdownlint-cli2 configuration
+# See https://github.com/DavidAnson/markdownlint#rules
+
+# Disable certain rules or adjust them for developer-friendly markdown
+config:
+  # MD013 - Line length: Disable, as long lines are acceptable in markdown
+  MD013: false
+
+  # MD033 - Inline HTML: Allow, as some HTML is useful (anchors, etc.)
+  MD033: false
+
+  # MD041 - First line heading: Allow, as PR templates may start with H2
+  MD041: false
+
+  # MD025 - Multiple top-level headings: Allow, as TOC + main heading is common
+  MD025: false
+
+  # MD028 - Blank lines in blockquote: Allow, for better readability
+  MD028: false
+
+# Globs to ignore (in addition to .gitignore)
+ignores:
+  - "node_modules/**"
+  - ".venv/**"
+  - ".temp/**"
+  - "data/**"
+  - "dist/**"
+  - "build/**"
+  - "*.egg-info/**"
