@@ -57,13 +57,7 @@ def base_ad_config() -> dict[str, Any]:
         "active": True,
         "republication_interval": 7,
         "created_on": None,
-        "contact": {
-            "name": "Test User",
-            "zipcode": "12345",
-            "location": "Test City",
-            "street": "",
-            "phone": ""
-        }
+        "contact": {"name": "Test User", "zipcode": "12345", "location": "Test City", "street": "", "phone": ""},
     }
 
 
@@ -96,25 +90,19 @@ def remove_fields(config:dict[str, Any], *fields:str) -> dict[str, Any]:
 @pytest.fixture
 def minimal_ad_config(base_ad_config:dict[str, Any]) -> dict[str, Any]:
     """Provide a minimal ad configuration with only required fields."""
-    return remove_fields(
-        base_ad_config,
-        "id",
-        "created_on",
-        "shipping_options",
-        "special_attributes",
-        "contact.street",
-        "contact.phone"
-    )
+    return remove_fields(base_ad_config, "id", "created_on", "shipping_options", "special_attributes", "contact.street", "contact.phone")
 
 
 @pytest.fixture
 def mock_config_setup(test_bot:KleinanzeigenBot) -> Generator[None]:
     """Provide a centralized mock configuration setup for tests.
     This fixture mocks load_config and other essential configuration-related methods."""
-    with patch.object(test_bot, "load_config"), \
-            patch.object(test_bot, "create_browser_session", new_callable = AsyncMock), \
-            patch.object(test_bot, "login", new_callable = AsyncMock), \
-            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request:
+    with (
+        patch.object(test_bot, "load_config"),
+        patch.object(test_bot, "create_browser_session", new_callable = AsyncMock),
+        patch.object(test_bot, "login", new_callable = AsyncMock),
+        patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+    ):
         # Mock the web request for published ads
         mock_request.return_value = {"content": '{"ads": []}'}
         yield
@@ -142,11 +130,7 @@ class TestKleinanzeigenBotInitialization:
 class TestKleinanzeigenBotLogging:
     """Tests for logging functionality."""
 
-    def test_configure_file_logging_adds_and_removes_handlers(
-        self,
-        test_bot:KleinanzeigenBot,
-        tmp_path:Path
-    ) -> None:
+    def test_configure_file_logging_adds_and_removes_handlers(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
         """Ensure file logging registers a handler and cleans it up afterward."""
         log_path = tmp_path / "bot.log"
         test_bot.log_file_path = str(log_path)
@@ -178,26 +162,24 @@ class TestKleinanzeigenBotLogging:
 class TestKleinanzeigenBotCommandLine:
     """Tests for command line argument parsing."""
 
-    @pytest.mark.parametrize(("args", "expected_command", "expected_selector", "expected_keep_old"), [
-        (["publish", "--ads=all"], "publish", "all", False),
-        (["verify"], "verify", "due", False),
-        (["download", "--ads=12345"], "download", "12345", False),
-        (["publish", "--force"], "publish", "all", False),
-        (["publish", "--keep-old"], "publish", "due", True),
-        (["publish", "--ads=all", "--keep-old"], "publish", "all", True),
-        (["download", "--ads=new"], "download", "new", False),
-        (["publish", "--ads=changed"], "publish", "changed", False),
-        (["publish", "--ads=changed,due"], "publish", "changed,due", False),
-        (["publish", "--ads=changed,new"], "publish", "changed,new", False),
-        (["version"], "version", "due", False),
-    ])
+    @pytest.mark.parametrize(
+        ("args", "expected_command", "expected_selector", "expected_keep_old"),
+        [
+            (["publish", "--ads=all"], "publish", "all", False),
+            (["verify"], "verify", "due", False),
+            (["download", "--ads=12345"], "download", "12345", False),
+            (["publish", "--force"], "publish", "all", False),
+            (["publish", "--keep-old"], "publish", "due", True),
+            (["publish", "--ads=all", "--keep-old"], "publish", "all", True),
+            (["download", "--ads=new"], "download", "new", False),
+            (["publish", "--ads=changed"], "publish", "changed", False),
+            (["publish", "--ads=changed,due"], "publish", "changed,due", False),
+            (["publish", "--ads=changed,new"], "publish", "changed,new", False),
+            (["version"], "version", "due", False),
+        ],
+    )
     def test_parse_args_handles_valid_arguments(
-        self,
-        test_bot:KleinanzeigenBot,
-        args:list[str],
-        expected_command:str,
-        expected_selector:str,
-        expected_keep_old:bool
+        self, test_bot:KleinanzeigenBot, args:list[str], expected_command:str, expected_selector:str, expected_keep_old:bool
     ) -> None:
         """Verify that valid command line arguments are parsed correctly."""
         test_bot.parse_args(["dummy"] + args)  # Add dummy arg to simulate sys.argv[0]
@@ -226,18 +208,11 @@ class TestKleinanzeigenBotCommandLine:
         assert exc_info.value.code == 2
         assert any(
             record.levelno == logging.ERROR
-            and (
-                "--invalid-option not recognized" in record.getMessage()
-                or "Option --invalid-option unbekannt" in record.getMessage()
-            )
+            and ("--invalid-option not recognized" in record.getMessage() or "Option --invalid-option unbekannt" in record.getMessage())
             for record in caplog.records
         )
 
-        assert any(
-            ("--invalid-option not recognized" in m)
-            or ("Option --invalid-option unbekannt" in m)
-            for m in caplog.messages
-        )
+        assert any(("--invalid-option not recognized" in m) or ("Option --invalid-option unbekannt" in m) for m in caplog.messages)
 
     def test_parse_args_handles_verbose_flag(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that verbose flag sets correct log level."""
@@ -254,11 +229,7 @@ class TestKleinanzeigenBotCommandLine:
 class TestKleinanzeigenBotConfiguration:
     """Tests for configuration loading and validation."""
 
-    def test_load_config_handles_missing_file(
-        self,
-        test_bot:KleinanzeigenBot,
-        test_data_dir:str
-    ) -> None:
+    def test_load_config_handles_missing_file(self, test_bot:KleinanzeigenBot, test_data_dir:str) -> None:
         """Verify that loading a missing config file creates default config. No info log is expected anymore."""
         config_path = Path(test_data_dir) / "missing_config.yaml"
         config_path.unlink(missing_ok = True)
@@ -296,10 +267,14 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_is_logged_in_returns_true_with_alternative_element(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login check returns true when logged in with alternative element."""
-        with patch.object(test_bot, "web_text", side_effect = [
-            TimeoutError(),  # First try with mr-medium fails
-            "angemeldet als: dummy_user"  # Second try with user-email succeeds
-        ]):
+        with patch.object(
+            test_bot,
+            "web_text",
+            side_effect = [
+                TimeoutError(),  # First try with mr-medium fails
+                "angemeldet als: dummy_user",  # Second try with user-email succeeds
+            ],
+        ):
             assert await test_bot.is_logged_in() is True
 
     @pytest.mark.asyncio
@@ -311,12 +286,13 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_login_flow_completes_successfully(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that normal login flow completes successfully."""
-        with patch.object(test_bot, "web_open") as mock_open, \
-                patch.object(test_bot, "is_logged_in", side_effect = [False, True]) as mock_logged_in, \
-                patch.object(test_bot, "web_find", side_effect = TimeoutError), \
-                patch.object(test_bot, "web_input") as mock_input, \
-                patch.object(test_bot, "web_click") as mock_click:
-
+        with (
+            patch.object(test_bot, "web_open") as mock_open,
+            patch.object(test_bot, "is_logged_in", side_effect = [False, True]) as mock_logged_in,
+            patch.object(test_bot, "web_find", side_effect = TimeoutError),
+            patch.object(test_bot, "web_input") as mock_input,
+            patch.object(test_bot, "web_click") as mock_click,
+        ):
             await test_bot.login()
 
             mock_open.assert_called()
@@ -327,13 +303,14 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_login_flow_handles_captcha(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login flow handles captcha correctly."""
-        with patch.object(test_bot, "web_open"), \
-                patch.object(test_bot, "is_logged_in", side_effect = [False, False, True]), \
-                patch.object(test_bot, "web_find") as mock_find, \
-                patch.object(test_bot, "web_input") as mock_input, \
-                patch.object(test_bot, "web_click") as mock_click, \
-                patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput:
-
+        with (
+            patch.object(test_bot, "web_open"),
+            patch.object(test_bot, "is_logged_in", side_effect = [False, False, True]),
+            patch.object(test_bot, "web_find") as mock_find,
+            patch.object(test_bot, "web_input") as mock_input,
+            patch.object(test_bot, "web_click") as mock_click,
+            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
             # Mock the sequence of web_find calls:
             # First login attempt:
             # 1. Captcha iframe found (in check_and_wait_for_captcha)
@@ -366,9 +343,7 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_check_and_wait_for_captcha(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that captcha detection works correctly."""
-        with patch.object(test_bot, "web_find") as mock_find, \
-                patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput:
-
+        with patch.object(test_bot, "web_find") as mock_find, patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput:
             # Test case 1: Captcha found
             mock_find.return_value = AsyncMock()
             mock_ainput.return_value = ""
@@ -390,10 +365,11 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_fill_login_data_and_send(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login form filling works correctly."""
-        with patch.object(test_bot, "web_input") as mock_input, \
-                patch.object(test_bot, "web_click") as mock_click, \
-                patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock) as mock_captcha:
-
+        with (
+            patch.object(test_bot, "web_input") as mock_input,
+            patch.object(test_bot, "web_click") as mock_click,
+            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock) as mock_captcha,
+        ):
             # Mock successful login form interaction
             mock_input.return_value = AsyncMock()
             mock_click.return_value = AsyncMock()
@@ -407,10 +383,11 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_handle_after_login_logic(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that post-login handling works correctly."""
-        with patch.object(test_bot, "web_find") as mock_find, \
-                patch.object(test_bot, "web_click") as mock_click, \
-                patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput:
-
+        with (
+            patch.object(test_bot, "web_find") as mock_find,
+            patch.object(test_bot, "web_click") as mock_click,
+            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
             # Test case 1: No special handling needed
             mock_find.side_effect = [TimeoutError(), TimeoutError()]  # No phone verification, no GDPR
             mock_click.return_value = AsyncMock()
@@ -452,8 +429,7 @@ class TestKleinanzeigenBotLocalization:
 
     def test_show_help_displays_german_text(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that help text is displayed in German when language is German."""
-        with patch("kleinanzeigen_bot.get_current_locale") as mock_locale, \
-                patch("builtins.print") as mock_print:
+        with patch("kleinanzeigen_bot.get_current_locale") as mock_locale, patch("builtins.print") as mock_print:
             mock_locale.return_value.language = "de"
             test_bot.show_help()
             printed_text = "".join(str(call.args[0]) for call in mock_print.call_args_list)
@@ -462,8 +438,7 @@ class TestKleinanzeigenBotLocalization:
 
     def test_show_help_displays_english_text(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that help text is displayed in English when language is English."""
-        with patch("kleinanzeigen_bot.get_current_locale") as mock_locale, \
-                patch("builtins.print") as mock_print:
+        with patch("kleinanzeigen_bot.get_current_locale") as mock_locale, patch("builtins.print") as mock_print:
             mock_locale.return_value.language = "en"
             test_bot.show_help()
             printed_text = "".join(str(call.args[0]) for call in mock_print.call_args_list)
@@ -493,11 +468,12 @@ class TestKleinanzeigenBotBasics:
         payload:dict[str, list[Any]] = {"ads": []}
         ad_cfgs:list[tuple[str, Ad, dict[str, Any]]] = [("ad.yaml", Ad.model_validate(base_ad_config), {})]
 
-        with patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps(payload)}) as web_request_mock, \
-                patch.object(test_bot, "publish_ad", new_callable = AsyncMock) as publish_ad_mock, \
-                patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True) as web_await_mock, \
-                patch.object(test_bot, "delete_ad", new_callable = AsyncMock) as delete_ad_mock:
-
+        with (
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps(payload)}) as web_request_mock,
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock) as publish_ad_mock,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True) as web_await_mock,
+            patch.object(test_bot, "delete_ad", new_callable = AsyncMock) as delete_ad_mock,
+        ):
             await test_bot.publish_ads(ad_cfgs)
 
             web_request_mock.assert_awaited_once_with(f"{test_bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT")
@@ -641,11 +617,14 @@ class TestKleinanzeigenBotCommands:
     async def test_verify_command(self, test_bot:KleinanzeigenBot, tmp_path:Any) -> None:
         """Test verify command with minimal config."""
         config_path = Path(tmp_path) / "config.yaml"
-        config_path.write_text("""
+        config_path.write_text(
+            """
 login:
     username: test
     password: test
-""", encoding = "utf-8")
+""",
+            encoding = "utf-8",
+        )
         test_bot.config_file_path = str(config_path)
         await test_bot.run(["script.py", "verify"])
         assert test_bot.config.login.username == "test"
@@ -735,9 +714,7 @@ categories:
         ad_file = ad_dir / "test_ad.yaml"
 
         # Create a minimal config with empty title to trigger validation
-        ad_cfg = minimal_ad_config | {
-            "title": ""
-        }
+        ad_cfg = minimal_ad_config | {"title": ""}
         dicts.save_dict(ad_file, ad_cfg)
 
         # Set config file path to tmp_path and use relative path for ad_files
@@ -755,9 +732,7 @@ categories:
         ad_file = ad_dir / "test_ad.yaml"
 
         # Create config with invalid price type
-        ad_cfg = minimal_ad_config | {
-            "price_type": "INVALID_TYPE"
-        }
+        ad_cfg = minimal_ad_config | {"price_type": "INVALID_TYPE"}
         dicts.save_dict(ad_file, ad_cfg)
 
         # Set config file path to tmp_path and use relative path for ad_files
@@ -775,9 +750,7 @@ categories:
         ad_file = ad_dir / "test_ad.yaml"
 
         # Create config with invalid shipping type
-        ad_cfg = minimal_ad_config | {
-            "shipping_type": "INVALID_TYPE"
-        }
+        ad_cfg = minimal_ad_config | {"shipping_type": "INVALID_TYPE"}
         dicts.save_dict(ad_file, ad_cfg)
 
         # Set config file path to tmp_path and use relative path for ad_files
@@ -797,7 +770,7 @@ categories:
         # Create config with price for GIVE_AWAY type
         ad_cfg = minimal_ad_config | {
             "price_type": "GIVE_AWAY",
-            "price": 100  # Price should not be set for GIVE_AWAY
+            "price": 100,  # Price should not be set for GIVE_AWAY
         }
         dicts.save_dict(ad_file, ad_cfg)
 
@@ -818,7 +791,7 @@ categories:
         # Create config with FIXED price type but no price
         ad_cfg = minimal_ad_config | {
             "price_type": "FIXED",
-            "price": None  # Missing required price for FIXED type
+            "price": None,  # Missing required price for FIXED type
         }
         dicts.save_dict(ad_file, ad_cfg)
 
@@ -841,20 +814,22 @@ class TestKleinanzeigenBotAdDeletion:
         test_bot.page.sleep = AsyncMock()
 
         # Use minimal config since we only need title for deletion by title
-        ad_cfg = Ad.model_validate(minimal_ad_config | {
-            "title": "Test Title",
-            "id": None  # Explicitly set id to None for title-based deletion
-        })
+        ad_cfg = Ad.model_validate(
+            minimal_ad_config
+            | {
+                "title": "Test Title",
+                "id": None,  # Explicitly set id to None for title-based deletion
+            }
+        )
 
-        published_ads = [
-            {"title": "Test Title", "id": "67890"},
-            {"title": "Other Title", "id": "11111"}
-        ]
+        published_ads = [{"title": "Test Title", "id": "67890"}, {"title": "Other Title", "id": "11111"}]
 
-        with patch.object(test_bot, "web_open", new_callable = AsyncMock), \
-                patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find, \
-                patch.object(test_bot, "web_click", new_callable = AsyncMock), \
-                patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True):
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+        ):
             mock_find.return_value.attrs = {"content": "some-token"}
             result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = True)
             assert result is True
@@ -867,19 +842,21 @@ class TestKleinanzeigenBotAdDeletion:
         test_bot.page.sleep = AsyncMock()
 
         # Create config with ID for deletion by ID
-        ad_cfg = Ad.model_validate(minimal_ad_config | {
-            "id": "12345"  # Fixed: use proper dict key syntax
-        })
+        ad_cfg = Ad.model_validate(
+            minimal_ad_config
+            | {
+                "id": "12345"  # Fixed: use proper dict key syntax
+            }
+        )
 
-        published_ads = [
-            {"title": "Different Title", "id": "12345"},
-            {"title": "Other Title", "id": "11111"}
-        ]
+        published_ads = [{"title": "Different Title", "id": "12345"}, {"title": "Other Title", "id": "11111"}]
 
-        with patch.object(test_bot, "web_open", new_callable = AsyncMock), \
-                patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find, \
-                patch.object(test_bot, "web_click", new_callable = AsyncMock), \
-                patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True):
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+        ):
             mock_find.return_value.attrs = {"content": "some-token"}
             result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = False)
             assert result is True
@@ -892,20 +869,17 @@ class TestKleinanzeigenBotAdDeletion:
         test_bot.page.sleep = AsyncMock()
 
         # Create config with ID for deletion by ID
-        ad_cfg = Ad.model_validate(minimal_ad_config | {
-            "id": "12345"
-        })
+        ad_cfg = Ad.model_validate(minimal_ad_config | {"id": "12345"})
 
-        published_ads = [
-            {"title": "Different Title", "id": "12345"},
-            {"title": "Other Title", "id": "11111"}
-        ]
+        published_ads = [{"title": "Different Title", "id": "12345"}, {"title": "Other Title", "id": "11111"}]
 
-        with patch.object(test_bot, "web_open", new_callable = AsyncMock), \
-                patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find, \
-                patch.object(test_bot, "web_click", new_callable = AsyncMock), \
-                patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True), \
-                patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request:
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+        ):
             # Mock non-string CSRF token to test str() conversion
             mock_find.return_value.attrs = {"content": 12345}  # Non-string token
             result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = False)
@@ -923,20 +897,12 @@ class TestKleinanzeigenBotAdRepublication:
     def test_check_ad_republication_with_changes(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
         """Test that ads with changes are marked for republication."""
         # Mock the description config to prevent modification of the description
-        test_bot.config.ad_defaults = AdDefaults.model_validate({
-            "description": {
-                "prefix": "",
-                "suffix": ""
-            }
-        })
+        test_bot.config.ad_defaults = AdDefaults.model_validate({"description": {"prefix": "", "suffix": ""}})
 
         # Create ad config with all necessary fields for republication
-        ad_cfg = Ad.model_validate(base_ad_config | {
-            "id": "12345",
-            "updated_on": "2024-01-01T00:00:01",
-            "created_on": "2024-01-01T00:00:01",
-            "description": "Changed description"
-        })
+        ad_cfg = Ad.model_validate(
+            base_ad_config | {"id": "12345", "updated_on": "2024-01-01T00:00:01", "created_on": "2024-01-01T00:00:01", "description": "Changed description"}
+        )
 
         # Create a temporary directory and file
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -960,11 +926,7 @@ class TestKleinanzeigenBotAdRepublication:
         three_days_ago = (current_time - timedelta(days = 3)).isoformat()
 
         # Create ad config with timestamps for republication check
-        ad_cfg = Ad.model_validate(base_ad_config | {
-            "id": "12345",
-            "updated_on": three_days_ago,
-            "created_on": three_days_ago
-        })
+        ad_cfg = Ad.model_validate(base_ad_config | {"id": "12345", "updated_on": three_days_ago, "created_on": three_days_ago})
 
         # Calculate hash before making the copy to ensure they match
         ad_cfg_orig = ad_cfg.model_dump()
@@ -973,8 +935,10 @@ class TestKleinanzeigenBotAdRepublication:
 
         # Mock the config to prevent actual file operations
         test_bot.config.ad_files = ["test.yaml"]
-        with patch("kleinanzeigen_bot.utils.dicts.load_dict_if_exists", return_value = ad_cfg_orig), \
-                patch("kleinanzeigen_bot.utils.dicts.load_dict", return_value = {}):  # Mock ad_fields.yaml
+        with (
+            patch("kleinanzeigen_bot.utils.dicts.load_dict_if_exists", return_value = ad_cfg_orig),
+            patch("kleinanzeigen_bot.utils.dicts.load_dict", return_value = {}),
+        ):  # Mock ad_fields.yaml
             ads_to_publish = test_bot.load_ads()
             assert len(ads_to_publish) == 0  # No ads should be marked for republication
 
@@ -991,11 +955,14 @@ class TestKleinanzeigenBotShippingOptions:
         test_bot.page.evaluate = AsyncMock()
 
         # Create ad config with specific shipping options
-        ad_cfg = Ad.model_validate(base_ad_config | {
-            "shipping_options": ["DHL_2", "Hermes_Päckchen"],
-            "updated_on": "2024-01-01T00:00:00",  # Add created_on to prevent KeyError
-            "created_on": "2024-01-01T00:00:00"  # Add updated_on for consistency
-        })
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "shipping_options": ["DHL_2", "Hermes_Päckchen"],
+                "updated_on": "2024-01-01T00:00:00",  # Add created_on to prevent KeyError
+                "created_on": "2024-01-01T00:00:00",  # Add updated_on for consistency
+            }
+        )
 
         # Create the original ad config and published ads list
         ad_cfg.update_content_hash()  # Add content hash to prevent republication
@@ -1003,10 +970,7 @@ class TestKleinanzeigenBotShippingOptions:
         published_ads:list[dict[str, Any]] = []
 
         # Set up default config values needed for the test
-        test_bot.config.publishing = PublishingConfig.model_validate({
-            "delete_old_ads": "BEFORE_PUBLISH",
-            "delete_old_ads_by_title": False
-        })
+        test_bot.config.publishing = PublishingConfig.model_validate({"delete_old_ads": "BEFORE_PUBLISH", "delete_old_ads_by_title": False})
 
         # Create temporary file path
         ad_file = Path(tmp_path) / "test_ad.yaml"
@@ -1031,20 +995,21 @@ class TestKleinanzeigenBotShippingOptions:
         category_path_elem.apply = AsyncMock(return_value = "Test Category")
 
         # Mock the necessary web interaction methods
-        with patch.object(test_bot, "web_execute", side_effect = mock_web_execute), \
-                patch.object(test_bot, "web_click", new_callable = AsyncMock), \
-                patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find, \
-                patch.object(test_bot, "web_select", new_callable = AsyncMock), \
-                patch.object(test_bot, "web_input", new_callable = AsyncMock), \
-                patch.object(test_bot, "web_open", new_callable = AsyncMock), \
-                patch.object(test_bot, "web_sleep", new_callable = AsyncMock), \
-                patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True), \
-                patch.object(test_bot, "web_request", new_callable = AsyncMock), \
-                patch.object(test_bot, "web_find_all", new_callable = AsyncMock), \
-                patch.object(test_bot, "web_await", new_callable = AsyncMock), \
-                patch("builtins.input", return_value = ""), \
-                patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock):
-
+        with (
+            patch.object(test_bot, "web_execute", side_effect = mock_web_execute),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_select", new_callable = AsyncMock),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock),
+            patch("builtins.input", return_value = ""),
+            patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
+        ):
             # Mock web_find to simulate element detection
             async def mock_find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
                 if selector_value == "meta[name=_csrf]":
@@ -1076,21 +1041,17 @@ class TestKleinanzeigenBotShippingOptions:
     async def test_cross_drive_path_fallback_windows(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
         """Test that cross-drive path handling falls back to absolute path on Windows."""
         # Create ad config
-        ad_cfg = Ad.model_validate(base_ad_config | {
-            "updated_on": "2024-01-01T00:00:00",
-            "created_on": "2024-01-01T00:00:00",
-            "auto_price_reduction": {
-                "enabled": True,
-                "strategy": "FIXED",
-                "amount": 10,
-                "min_price": 50,
-                "delay_reposts": 0,
-                "delay_days": 0
-            },
-            "price": 100,
-            "repost_count": 1,
-            "price_reduction_count": 0
-        })
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+                "auto_price_reduction": {"enabled": True, "strategy": "FIXED", "amount": 10, "min_price": 50, "delay_reposts": 0, "delay_days": 0},
+                "price": 100,
+                "repost_count": 1,
+                "price_reduction_count": 0,
+            }
+        )
         ad_cfg.update_content_hash()
         ad_cfg_orig = ad_cfg.model_dump()
 
@@ -1111,10 +1072,12 @@ class TestKleinanzeigenBotShippingOptions:
             raise _SentinelException("Abort early for test")
 
         # Mock Path to use PureWindowsPath for testing cross-drive behavior
-        with patch("kleinanzeigen_bot.Path", PureWindowsPath), \
-                patch.object(test_bot, "_KleinanzeigenBot__apply_auto_price_reduction", side_effect = mock_apply_auto_price_reduction), \
-                patch.object(test_bot, "web_open", new_callable = AsyncMock), \
-                patch.object(test_bot, "delete_ad", new_callable = AsyncMock):
+        with (
+            patch("kleinanzeigen_bot.Path", PureWindowsPath),
+            patch("kleinanzeigen_bot.apply_auto_price_reduction", side_effect = mock_apply_auto_price_reduction),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "delete_ad", new_callable = AsyncMock),
+        ):
             # Call publish_ad and expect sentinel exception
             try:
                 await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
@@ -1128,65 +1091,57 @@ class TestKleinanzeigenBotShippingOptions:
         assert recorded_path[0] == ad_file, f"Expected absolute path fallback, got: {recorded_path[0]}"
 
     @pytest.mark.asyncio
-    async def test_auto_price_reduction_only_on_replace_not_update(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-        tmp_path:Path
-    ) -> None:
+    async def test_auto_price_reduction_only_on_replace_not_update(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], tmp_path:Path) -> None:
         """Test that auto price reduction is ONLY applied on REPLACE mode, not UPDATE."""
         # Create ad with auto price reduction enabled
-        ad_cfg = Ad.model_validate(base_ad_config | {
-            "id": 12345,
-            "price": 200,
-            "auto_price_reduction": {
-                "enabled": True,
-                "strategy": "FIXED",
-                "amount": 50,
-                "min_price": 50,
-                "delay_reposts": 0,
-                "delay_days": 0
-            },
-            "repost_count": 1,
-            "price_reduction_count": 0,
-            "updated_on": "2024-01-01T00:00:00",
-            "created_on": "2024-01-01T00:00:00"
-        })
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "id": 12345,
+                "price": 200,
+                "auto_price_reduction": {"enabled": True, "strategy": "FIXED", "amount": 50, "min_price": 50, "delay_reposts": 0, "delay_days": 0},
+                "repost_count": 1,
+                "price_reduction_count": 0,
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
         ad_cfg.update_content_hash()
         ad_cfg_orig = ad_cfg.model_dump()
 
-        # Mock the private __apply_auto_price_reduction method
-        with patch.object(test_bot, "_KleinanzeigenBot__apply_auto_price_reduction") as mock_apply:
+        # Mock the module-level apply_auto_price_reduction function
+        with patch("kleinanzeigen_bot.apply_auto_price_reduction") as mock_apply:
             # Mock other dependencies
             mock_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
-            with patch.object(test_bot, "web_find", new_callable = AsyncMock), \
-                    patch.object(test_bot, "web_input", new_callable = AsyncMock), \
-                    patch.object(test_bot, "web_click", new_callable = AsyncMock), \
-                    patch.object(test_bot, "web_open", new_callable = AsyncMock), \
-                    patch.object(test_bot, "web_select", new_callable = AsyncMock), \
-                    patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False), \
-                    patch.object(test_bot, "web_await", new_callable = AsyncMock), \
-                    patch.object(test_bot, "web_sleep", new_callable = AsyncMock), \
-                    patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = mock_response), \
-                    patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = mock_response), \
-                    patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock), \
-                    patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []), \
-                    patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock), \
-                    patch("builtins.input", return_value = ""), \
-                    patch("kleinanzeigen_bot.utils.misc.ainput", new_callable = AsyncMock, return_value = ""):
-
+            with (
+                patch.object(test_bot, "web_find", new_callable = AsyncMock),
+                patch.object(test_bot, "web_input", new_callable = AsyncMock),
+                patch.object(test_bot, "web_click", new_callable = AsyncMock),
+                patch.object(test_bot, "web_open", new_callable = AsyncMock),
+                patch.object(test_bot, "web_select", new_callable = AsyncMock),
+                patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
+                patch.object(test_bot, "web_await", new_callable = AsyncMock),
+                patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+                patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = mock_response),
+                patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = mock_response),
+                patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
+                patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
+                patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
+                patch("builtins.input", return_value = ""),
+                patch("kleinanzeigen_bot.utils.misc.ainput", new_callable = AsyncMock, return_value = ""),
+            ):
                 test_bot.page = MagicMock()
                 test_bot.page.url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
                 test_bot.config.publishing.delete_old_ads = "BEFORE_PUBLISH"
 
-                # Test REPLACE mode - should call __apply_auto_price_reduction
+                # Test REPLACE mode - should call apply_auto_price_reduction
                 await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
                 assert mock_apply.call_count == 1, "Auto price reduction should be called on REPLACE"
 
                 # Reset mock
                 mock_apply.reset_mock()
 
-                # Test MODIFY mode - should NOT call __apply_auto_price_reduction
+                # Test MODIFY mode - should NOT call apply_auto_price_reduction
                 await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
                 assert mock_apply.call_count == 0, "Auto price reduction should NOT be called on MODIFY"
 
@@ -1194,15 +1149,18 @@ class TestKleinanzeigenBotShippingOptions:
     async def test_special_attributes_with_non_string_values(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
         """Test that special attributes with non-string values are converted to strings."""
         # Create ad config with string special attributes first (to pass validation)
-        ad_cfg = Ad.model_validate(base_ad_config | {
-            "special_attributes": {
-                "art_s": "12345",  # String value initially
-                "condition_s": "67890",  # String value initially
-                "color_s": "red"  # String value
-            },
-            "updated_on": "2024-01-01T00:00:00",
-            "created_on": "2024-01-01T00:00:00"
-        })
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {
+                    "art_s": "12345",  # String value initially
+                    "condition_s": "67890",  # String value initially
+                    "color_s": "red",  # String value
+                },
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
 
         # Now modify the special attributes to non-string values to test str() conversion
         # This simulates the scenario where the values come from external sources as non-strings
@@ -1234,11 +1192,12 @@ class TestKleinanzeigenBotShippingOptions:
         color_s_elem.local_name = "select"
 
         # Mock the necessary web interaction methods
-        with patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find, \
-                patch.object(test_bot, "web_select", new_callable = AsyncMock) as mock_select, \
-                patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True), \
-                patch.object(test_bot, "_KleinanzeigenBot__set_condition", new_callable = AsyncMock) as mock_set_condition:
-
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_select", new_callable = AsyncMock) as mock_select,
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "_KleinanzeigenBot__set_condition", new_callable = AsyncMock) as mock_set_condition,
+        ):
             # Mock web_find to simulate element detection
             async def mock_find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
                 # Handle XPath queries for special attributes
@@ -1284,23 +1243,22 @@ class TestKleinanzeigenBotUrlConstruction:
 
 class TestKleinanzeigenBotPrefixSuffix:
     """Tests for description prefix and suffix functionality."""
+
     # pylint: disable=protected-access
 
-    def test_description_prefix_suffix_handling(
-        self,
-        test_bot_config:Config,
-        description_test_cases:list[tuple[dict[str, Any], str, str]]
-    ) -> None:
+    def test_description_prefix_suffix_handling(self, test_bot_config:Config, description_test_cases:list[tuple[dict[str, Any], str, str]]) -> None:
         """Test handling of description prefix/suffix in various configurations."""
         for config, raw_description, expected_description in description_test_cases:
             test_bot = KleinanzeigenBot()
             test_bot.config = test_bot_config.with_values(config)
-            ad_cfg = test_bot.load_ad({
-                "description": raw_description,
-                "active": True,
-                "title": "0123456789",
-                "category": "whatever",
-            })
+            ad_cfg = test_bot.load_ad(
+                {
+                    "description": raw_description,
+                    "active": True,
+                    "title": "0123456789",
+                    "category": "whatever",
+                }
+            )
 
             # Access private method using the correct name mangling
             description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
@@ -1309,18 +1267,15 @@ class TestKleinanzeigenBotPrefixSuffix:
     def test_description_length_validation(self, test_bot_config:Config) -> None:
         """Test that long descriptions with affixes raise appropriate error."""
         test_bot = KleinanzeigenBot()
-        test_bot.config = test_bot_config.with_values({
-            "ad_defaults": {
-                "description_prefix": "P" * 1000,
-                "description_suffix": "S" * 1000
+        test_bot.config = test_bot_config.with_values({"ad_defaults": {"description_prefix": "P" * 1000, "description_suffix": "S" * 1000}})
+        ad_cfg = test_bot.load_ad(
+            {
+                "description": "D" * 2001,  # This plus affixes will exceed 4000 chars
+                "active": True,
+                "title": "0123456789",
+                "category": "whatever",
             }
-        })
-        ad_cfg = test_bot.load_ad({
-            "description": "D" * 2001,  # This plus affixes will exceed 4000 chars
-            "active": True,
-            "title": "0123456789",
-            "category": "whatever",
-        })
+        )
 
         with pytest.raises(AssertionError) as exc_info:
             getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
@@ -1338,12 +1293,14 @@ class TestKleinanzeigenBotDescriptionHandling:
         test_bot.config = test_bot_config
 
         # Test with a simple ad config
-        ad_cfg = test_bot.load_ad({
-            "description": "Test Description",
-            "active": True,
-            "title": "0123456789",
-            "category": "whatever",
-        })
+        ad_cfg = test_bot.load_ad(
+            {
+                "description": "Test Description",
+                "active": True,
+                "title": "0123456789",
+                "category": "whatever",
+            }
+        )
 
         # The description should be returned as-is without any prefix/suffix
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
@@ -1352,19 +1309,16 @@ class TestKleinanzeigenBotDescriptionHandling:
     def test_description_with_only_new_format_affixes(self, test_bot_config:Config) -> None:
         """Test that description works with only new format affixes in config."""
         test_bot = KleinanzeigenBot()
-        test_bot.config = test_bot_config.with_values({
-            "ad_defaults": {
-                "description_prefix": "Prefix: ",
-                "description_suffix": " :Suffix"
-            }
-        })
+        test_bot.config = test_bot_config.with_values({"ad_defaults": {"description_prefix": "Prefix: ", "description_suffix": " :Suffix"}})
 
-        ad_cfg = test_bot.load_ad({
-            "description": "Test Description",
-            "active": True,
-            "title": "0123456789",
-            "category": "whatever",
-        })
+        ad_cfg = test_bot.load_ad(
+            {
+                "description": "Test Description",
+                "active": True,
+                "title": "0123456789",
+                "category": "whatever",
+            }
+        )
 
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Prefix: Test Description :Suffix"
@@ -1372,23 +1326,24 @@ class TestKleinanzeigenBotDescriptionHandling:
     def test_description_with_mixed_config_formats(self, test_bot_config:Config) -> None:
         """Test that description works with both old and new format affixes in config."""
         test_bot = KleinanzeigenBot()
-        test_bot.config = test_bot_config.with_values({
-            "ad_defaults": {
-                "description_prefix": "New Prefix: ",
-                "description_suffix": " :New Suffix",
-                "description": {
-                    "prefix": "Old Prefix: ",
-                    "suffix": " :Old Suffix"
+        test_bot.config = test_bot_config.with_values(
+            {
+                "ad_defaults": {
+                    "description_prefix": "New Prefix: ",
+                    "description_suffix": " :New Suffix",
+                    "description": {"prefix": "Old Prefix: ", "suffix": " :Old Suffix"},
                 }
             }
-        })
+        )
 
-        ad_cfg = test_bot.load_ad({
-            "description": "Test Description",
-            "active": True,
-            "title": "0123456789",
-            "category": "whatever",
-        })
+        ad_cfg = test_bot.load_ad(
+            {
+                "description": "Test Description",
+                "active": True,
+                "title": "0123456789",
+                "category": "whatever",
+            }
+        )
 
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "New Prefix: Test Description :New Suffix"
@@ -1396,21 +1351,18 @@ class TestKleinanzeigenBotDescriptionHandling:
     def test_description_with_ad_level_affixes(self, test_bot_config:Config) -> None:
         """Test that ad-level affixes take precedence over config affixes."""
         test_bot = KleinanzeigenBot()
-        test_bot.config = test_bot_config.with_values({
-            "ad_defaults": {
-                "description_prefix": "Config Prefix: ",
-                "description_suffix": " :Config Suffix"
-            }
-        })
+        test_bot.config = test_bot_config.with_values({"ad_defaults": {"description_prefix": "Config Prefix: ", "description_suffix": " :Config Suffix"}})
 
-        ad_cfg = test_bot.load_ad({
-            "description": "Test Description",
-            "description_prefix": "Ad Prefix: ",
-            "description_suffix": " :Ad Suffix",
-            "active": True,
-            "title": "0123456789",
-            "category": "whatever",
-        })
+        ad_cfg = test_bot.load_ad(
+            {
+                "description": "Test Description",
+                "description_prefix": "Ad Prefix: ",
+                "description_suffix": " :Ad Suffix",
+                "active": True,
+                "title": "0123456789",
+                "category": "whatever",
+            }
+        )
 
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Ad Prefix: Test Description :Ad Suffix"
@@ -1418,23 +1370,18 @@ class TestKleinanzeigenBotDescriptionHandling:
     def test_description_with_none_values(self, test_bot_config:Config) -> None:
         """Test that None values in affixes are handled correctly."""
         test_bot = KleinanzeigenBot()
-        test_bot.config = test_bot_config.with_values({
-            "ad_defaults": {
-                "description_prefix": None,
-                "description_suffix": None,
-                "description": {
-                    "prefix": None,
-                    "suffix": None
-                }
-            }
-        })
+        test_bot.config = test_bot_config.with_values(
+            {"ad_defaults": {"description_prefix": None, "description_suffix": None, "description": {"prefix": None, "suffix": None}}}
+        )
 
-        ad_cfg = test_bot.load_ad({
-            "description": "Test Description",
-            "active": True,
-            "title": "0123456789",
-            "category": "whatever",
-        })
+        ad_cfg = test_bot.load_ad(
+            {
+                "description": "Test Description",
+                "active": True,
+                "title": "0123456789",
+                "category": "whatever",
+            }
+        )
 
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Test Description"
@@ -1444,12 +1391,14 @@ class TestKleinanzeigenBotDescriptionHandling:
         test_bot = KleinanzeigenBot()
         test_bot.config = test_bot_config
 
-        ad_cfg = test_bot.load_ad({
-            "description": "Contact: test@example.com",
-            "active": True,
-            "title": "0123456789",
-            "category": "whatever",
-        })
+        ad_cfg = test_bot.load_ad(
+            {
+                "description": "Contact: test@example.com",
+                "active": True,
+                "title": "0123456789",
+                "category": "whatever",
+            }
+        )
 
         description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
         assert description == "Contact: test(at)example.com"
@@ -1463,23 +1412,12 @@ class TestKleinanzeigenBotChangedAds:
         # Set up the bot with the 'changed' selector
         test_bot = KleinanzeigenBot()
         test_bot.ads_selector = "changed"
-        test_bot.config = test_bot_config.with_values({
-            "ad_defaults": {
-                "description": {
-                    "prefix": "",
-                    "suffix": ""
-                }
-            }
-        })
+        test_bot.config = test_bot_config.with_values({"ad_defaults": {"description": {"prefix": "", "suffix": ""}}})
 
         # Create a changed ad
-        ad_cfg = Ad.model_validate(base_ad_config | {
-            "id": "12345",
-            "title": "Changed Ad",
-            "updated_on": "2024-01-01T00:00:00",
-            "created_on": "2024-01-01T00:00:00",
-            "active": True
-        })
+        ad_cfg = Ad.model_validate(
+            base_ad_config | {"id": "12345", "title": "Changed Ad", "updated_on": "2024-01-01T00:00:00", "created_on": "2024-01-01T00:00:00", "active": True}
+        )
 
         # Calculate hash for changed_ad and add it to the config
         # Then modify the ad to simulate a change
@@ -1503,10 +1441,13 @@ class TestKleinanzeigenBotChangedAds:
             test_bot.config.ad_files = ["ads/*.yaml"]
 
             # Mock the loading of the ad configuration
-            with patch("kleinanzeigen_bot.utils.dicts.load_dict", side_effect = [
-                changed_ad,  # First call returns the changed ad
-                {}  # Second call for ad_fields.yaml
-            ]):
+            with patch(
+                "kleinanzeigen_bot.utils.dicts.load_dict",
+                side_effect = [
+                    changed_ad,  # First call returns the changed ad
+                    {},  # Second call for ad_fields.yaml
+                ],
+            ):
                 ads_to_publish = test_bot.load_ads()
 
                 # The changed ad should be loaded
@@ -1522,14 +1463,17 @@ class TestKleinanzeigenBotChangedAds:
         current_time = misc.now()
         old_date = (current_time - timedelta(days = 10)).isoformat()  # Past republication interval
 
-        ad_cfg = Ad.model_validate(base_ad_config | {
-            "id": "12345",
-            "title": "Changed Ad",
-            "updated_on": old_date,
-            "created_on": old_date,
-            "republication_interval": 7,  # Due for republication after 7 days
-            "active": True
-        })
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "id": "12345",
+                "title": "Changed Ad",
+                "updated_on": old_date,
+                "created_on": old_date,
+                "republication_interval": 7,  # Due for republication after 7 days
+                "active": True,
+            }
+        )
         changed_ad = ad_cfg.model_dump()
 
         # Create temporary directory and file
@@ -1546,10 +1490,13 @@ class TestKleinanzeigenBotChangedAds:
             test_bot.config.ad_files = ["ads/*.yaml"]
 
             # Mock the loading of the ad configuration
-            with patch("kleinanzeigen_bot.utils.dicts.load_dict", side_effect = [
-                changed_ad,  # First call returns the changed ad
-                {}  # Second call for ad_fields.yaml
-            ]):
+            with patch(
+                "kleinanzeigen_bot.utils.dicts.load_dict",
+                side_effect = [
+                    changed_ad,  # First call returns the changed ad
+                    {},  # Second call for ad_fields.yaml
+                ],
+            ):
                 ads_to_publish = test_bot.load_ads()
 
                 # The changed ad should be loaded with 'due' selector because it's due for republication
