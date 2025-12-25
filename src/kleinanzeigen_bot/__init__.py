@@ -715,18 +715,6 @@ class KleinanzeigenBot(WebScrapingMixin):
     def load_ad(self, ad_cfg_orig:dict[str, Any]) -> Ad:
         return AdPartial.model_validate(ad_cfg_orig).to_ad(self.config.ad_defaults)
 
-    def __apply_auto_price_reduction(self, ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
-        """Delegate to the module-level function."""
-        apply_auto_price_reduction(ad_cfg, _ad_cfg_orig, ad_file_relative)
-
-    def __repost_cycle_ready(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
-        """Delegate to the module-level function."""
-        return _repost_cycle_ready(ad_cfg, ad_file_relative)
-
-    def __day_delay_elapsed(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
-        """Delegate to the module-level function."""
-        return _day_delay_elapsed(ad_cfg, ad_file_relative)
-
     async def check_and_wait_for_captcha(self, *, is_login_page:bool = True) -> None:
         try:
             captcha_timeout = self._timeout("captcha_detection")
@@ -941,7 +929,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             except ValueError:
                 # On Windows, relative_to fails when paths are on different drives
                 ad_file_relative = ad_file
-            self.__apply_auto_price_reduction(ad_cfg, ad_cfg_orig, ad_file_relative)
+            apply_auto_price_reduction(ad_cfg, ad_cfg_orig, ad_file_relative)
 
             LOG.info("Publishing ad '%s'...", ad_cfg.title)
             await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html")
