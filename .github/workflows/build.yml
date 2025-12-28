@@ -10,7 +10,6 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
     - cron: '0 15 1 * *'
   push:
-    branches: ['**']  # build all branches
     tags-ignore: ['**'] # don't build tags
     paths-ignore:
     - '**/*.md'
@@ -54,9 +53,8 @@ jobs:
   build:
   ###########################################################
 
-    # Run on push for all branches; on pull_request only for forked PRs to avoid duplicate builds for same-repo branches
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
-
+    # Skip push runs for non-main/release branches in the main repo; allow forks to run on feature branches.
+    if: github.event_name != 'push' || github.ref_name == 'main' || github.ref_name == 'release' || github.repository != 'Second-Hand-Friends/kleinanzeigen-bot'
     permissions:
       packages: write
 
@@ -371,7 +369,8 @@ jobs:
         always()
           && needs.build.result == 'success'
           && (needs.publish-coverage.result == 'success' || needs.publish-coverage.result == 'skipped')
-        && (github.ref_name == 'main' || github.ref_name == 'release') && !github.event.act
+        && (github.ref_name == 'main' || github.ref_name == 'release')
+        && !github.event.act
 
     concurrency: publish-${{ github.ref_name }}-release # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idconcurrency
 
