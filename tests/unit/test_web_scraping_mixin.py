@@ -399,6 +399,7 @@ class TestWebScrapingErrorHandling:
         web_scraper.config.timeouts.retry_enabled = True
         web_scraper.config.timeouts.retry_max_attempts = 2
         web_scraper.config.timeouts.retry_backoff_factor = 2.0
+        web_scraper.config.timeouts.retry_max_backoff_factor = 10.0
 
         recorded:list[tuple[float, bool]] = []
 

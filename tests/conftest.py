@@ -23,7 +23,7 @@ import pytest
 
 from kleinanzeigen_bot import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad
-from kleinanzeigen_bot.model.config_model import Config
+from kleinanzeigen_bot.model.config_model import Config, TimeoutConfig
 from kleinanzeigen_bot.utils import i18n, loggers
 from kleinanzeigen_bot.utils.web_scraping_mixin import Browser
 
@@ -83,6 +83,12 @@ def test_bot(test_bot_config:Config) -> KleinanzeigenBot:
     bot_instance = KleinanzeigenBot()
     bot_instance.config = test_bot_config
     return bot_instance
+
+
+@pytest.fixture
+def default_timeouts() -> TimeoutConfig:
+    """Provides the default timeout configuration."""
+    return TimeoutConfig()
 
 
 # ============================================================================

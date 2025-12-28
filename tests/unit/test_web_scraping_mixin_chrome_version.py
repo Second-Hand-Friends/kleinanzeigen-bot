@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from kleinanzeigen_bot.model.config_model import TimeoutConfig
 from kleinanzeigen_bot.utils.chrome_version_detector import ChromeVersionInfo
 from kleinanzeigen_bot.utils.web_scraping_mixin import WebScrapingMixin
 
@@ -21,7 +22,7 @@ class TestWebScrapingMixinChromeVersionValidation:
 
     @patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary")
     async def test_validate_chrome_version_configuration_chrome_136_plus_valid(
-        self, mock_detect:Mock, scraper:WebScrapingMixin
+        self, mock_detect:Mock, scraper:WebScrapingMixin, default_timeouts:TimeoutConfig
     ) -> None:
         """Test Chrome 136+ validation with valid configuration."""
         # Setup mocks
@@ -45,7 +46,7 @@ class TestWebScrapingMixinChromeVersionValidation:
             assert mock_detect.call_count == 1
             args, kwargs = mock_detect.call_args
             assert args[0] == "/path/to/chrome"
-            assert kwargs["timeout"] == pytest.approx(10.0)
+            assert kwargs["timeout"] == pytest.approx(default_timeouts.chrome_binary_detection)
 
             # Verify validation passed (no exception raised)
             # The validation is now done internally in _validate_chrome_136_configuration
@@ -56,7 +57,7 @@ class TestWebScrapingMixinChromeVersionValidation:
 
     @patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary")
     async def test_validate_chrome_version_configuration_chrome_136_plus_invalid(
-        self, mock_detect:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+        self, mock_detect:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture, default_timeouts:TimeoutConfig
     ) -> None:
         """Test Chrome 136+ validation with invalid configuration."""
         # Setup mocks
@@ -79,7 +80,7 @@ class TestWebScrapingMixinChromeVersionValidation:
             # Verify detection call and logged error
             assert mock_detect.call_count == 1
             _, kwargs = mock_detect.call_args
-            assert kwargs["timeout"] == pytest.approx(10.0)
+            assert kwargs["timeout"] == pytest.approx(default_timeouts.chrome_binary_detection)
             assert "Chrome 136+ configuration validation failed" in caplog.text
             assert "Chrome 136+ requires --user-data-dir" in caplog.text
         finally:
@@ -89,7 +90,7 @@ class TestWebScrapingMixinChromeVersionValidation:
 
     @patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary")
     async def test_validate_chrome_version_configuration_chrome_pre_136(
-        self, mock_detect:Mock, scraper:WebScrapingMixin
+        self, mock_detect:Mock, scraper:WebScrapingMixin, default_timeouts:TimeoutConfig
     ) -> None:
         """Test Chrome pre-136 validation (no special requirements)."""
         # Setup mocks
@@ -112,7 +113,7 @@ class TestWebScrapingMixinChromeVersionValidation:
             # Verify detection was called but no validation
             assert mock_detect.call_count == 1
             _, kwargs = mock_detect.call_args
-            assert kwargs["timeout"] == pytest.approx(10.0)
+            assert kwargs["timeout"] == pytest.approx(default_timeouts.chrome_binary_detection)
         finally:
             # Restore environment
             if original_env:
@@ -157,7 +158,7 @@ class TestWebScrapingMixinChromeVersionValidation:
 
     @patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary")
     async def test_validate_chrome_version_configuration_detection_fails(
-        self, mock_detect:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+        self, mock_detect:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture, default_timeouts:TimeoutConfig
     ) -> None:
         """Test Chrome version validation when detection fails."""
         # Setup mocks
@@ -178,7 +179,7 @@ class TestWebScrapingMixinChromeVersionValidation:
             # Verify detection was called
             assert mock_detect.call_count == 1
             _, kwargs = mock_detect.call_args
-            assert kwargs["timeout"] == pytest.approx(10.0)
+            assert kwargs["timeout"] == pytest.approx(default_timeouts.chrome_binary_detection)
 
             # Verify debug log message (line 824)
             assert "Could not detect browser version, skipping validation" in caplog.text
