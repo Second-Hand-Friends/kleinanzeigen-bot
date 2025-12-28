@@ -1112,7 +1112,7 @@ class TestKleinanzeigenBotShippingOptions:
 
         # Mock Path to use PureWindowsPath for testing cross-drive behavior
         with patch("kleinanzeigen_bot.Path", PureWindowsPath), \
-                patch.object(test_bot, "_KleinanzeigenBot__apply_auto_price_reduction", side_effect = mock_apply_auto_price_reduction), \
+                patch("kleinanzeigen_bot.apply_auto_price_reduction", side_effect = mock_apply_auto_price_reduction), \
                 patch.object(test_bot, "web_open", new_callable = AsyncMock), \
                 patch.object(test_bot, "delete_ad", new_callable = AsyncMock):
             # Call publish_ad and expect sentinel exception
@@ -1156,7 +1156,7 @@ class TestKleinanzeigenBotShippingOptions:
         ad_cfg_orig = ad_cfg.model_dump()
 
         # Mock the private __apply_auto_price_reduction method
-        with patch.object(test_bot, "_KleinanzeigenBot__apply_auto_price_reduction") as mock_apply:
+        with patch("kleinanzeigen_bot.apply_auto_price_reduction") as mock_apply:
             # Mock other dependencies
             mock_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
             with patch.object(test_bot, "web_find", new_callable = AsyncMock), \
