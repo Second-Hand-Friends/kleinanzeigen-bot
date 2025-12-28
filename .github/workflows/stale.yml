@@ -28,7 +28,7 @@ jobs:
         stale-issue-message: >
           This issue has been automatically marked as stale because it has not had
           recent activity. It will be closed in 14 days if no further activity occurs.
-          If the issue is still valid, please add a respective comment to prevent this 
+          If the issue is still valid, please add a respective comment to prevent this
           issue from being closed automatically. Thank you for your contributions.
         stale-issue-label: stale
         close-issue-label: wontfix
@@ -45,7 +45,7 @@ jobs:
         stale-issue-message: >
           This issue has been automatically marked as stale because it has not had
           recent activity. It will be closed in 14 days if no further activity occurs.
-          If the issue is still valid, please add a respective comment to prevent this 
+          If the issue is still valid, please add a respective comment to prevent this
           issue from being closed automatically. Thank you for your contributions.
         stale-issue-label: stale
         close-issue-label: wontfix
