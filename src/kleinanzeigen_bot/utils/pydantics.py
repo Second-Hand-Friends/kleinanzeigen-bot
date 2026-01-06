@@ -192,6 +192,16 @@ def __get_message_template(error_code:str) -> str | None:
         case "decimal_max_digits": return _("Decimal input should have no more than {max_digits} digit{expected_plural} in total")
         case "decimal_max_places": return _("Decimal input should have no more than {decimal_places} decimal place{expected_plural}")
         case "decimal_whole_digits": return _("Decimal input should have no more than {whole_digits} digit{expected_plural} before the decimal point")
-        case "complex_type": return _("Input should be a valid python complex object, a number, or a valid complex string following the rules at https://docs.python.org/3/library/functions.html#complex")
-        case "complex_str_parsing": return _("Input should be a valid complex string following the rules at https://docs.python.org/3/library/functions.html#complex")
-        case _: return None
+        case "complex_type":
+            return _(
+                "Input should be a valid python complex object, a number, or a valid complex string "
+                "following the rules at https://docs.python.org/3/library/functions.html#complex"
+            )
+        case "complex_str_parsing":
+            return _(
+                "Input should be a valid complex string following the rules at "
+                "https://docs.python.org/3/library/functions.html#complex"
+            )
+        case _:
+            pass
+    return None

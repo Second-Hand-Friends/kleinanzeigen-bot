@@ -59,7 +59,10 @@ class AdExtractor(WebScrapingMixin):
 
         # Save the ad configuration file (offload to executor to avoid blocking the event loop)
         ad_file_path = str(Path(final_dir) / f"ad_{ad_id}.yaml")
-        header_string = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
+        header_string = (
+            "# yaml-language-server: $schema="
+            "https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
+        )
         await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(), header = header_string)
@@ -141,9 +144,6 @@ class AdExtractor(WebScrapingMixin):
         :return: the ad ID, a (ten-digit) integer number
         """
 
-        num_part = url.rsplit("/", maxsplit = 1)[-1]  # suffix
-        id_part = num_part.split("-", maxsplit = 1)[0]
-
         try:
             path = url.split("?", maxsplit = 1)[0]  # Remove query string if present
             last_segment = path.rstrip("/").rsplit("/", maxsplit = 1)[-1]  # Get last path component
@@ -165,7 +165,7 @@ class AdExtractor(WebScrapingMixin):
 
         # Try to find the main ad list container first
         try:
-            ad_list_container = await self.web_find(By.ID, "my-manageitems-adlist")
+            _ = await self.web_find(By.ID, "my-manageitems-adlist")
         except TimeoutError:
             LOG.warning("Ad list container #my-manageitems-adlist not found. Maybe no ads present?")
             return []
@@ -290,6 +290,7 @@ class AdExtractor(WebScrapingMixin):
             await self.web_click(By.CLASS_NAME, "mfp-close")
             await self.web_sleep()
         except TimeoutError:
+            # Popup did not appear within timeout.
             pass
         return True
 

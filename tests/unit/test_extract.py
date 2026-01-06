@@ -1076,29 +1076,31 @@ class TestAdExtractorDownload:
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
         extractor.page = page_mock
 
-        with patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = [
+        with (
+            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = [
                 "Test Title",  # Title extraction
                 "Test Title",  # Second title call for full extraction
                 "Description text",  # Description
                 "03.02.2025"  # Creation date
-            ]), \
-                patch.object(extractor, "web_execute", new_callable = AsyncMock, return_value = {
-                    "universalAnalyticsOpts": {
-                        "dimensions": {
-                            "dimension92": "",
-                            "dimension108": ""
-                        }
+            ]),
+            patch.object(extractor, "web_execute", new_callable = AsyncMock, return_value = {
+                "universalAnalyticsOpts": {
+                    "dimensions": {
+                        "dimension92": "",
+                        "dimension108": ""
                     }
-                }), \
-                patch.object(extractor, "_extract_category_from_ad_page", new_callable = AsyncMock, return_value = "160"), \
-                patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable = AsyncMock, return_value = {}), \
-                patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable = AsyncMock, return_value = (None, "NOT_APPLICABLE")), \
-                patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)), \
-                patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False), \
-                patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []), \
-                patch.object(extractor, "_extract_contact_from_ad_page", new_callable = AsyncMock, return_value = ContactPartial(
-                    name = "Test", zipcode = "12345", location = "Berlin"
-                )):
+                }
+            }),
+            patch.object(extractor, "_extract_category_from_ad_page", new_callable = AsyncMock, return_value = "160"),
+            patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable = AsyncMock, return_value = {}),
+            patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable = AsyncMock, return_value = (None, "NOT_APPLICABLE")),
+            patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)),
+            patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False),
+            patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []),
+            patch.object(extractor, "_extract_contact_from_ad_page", new_callable = AsyncMock, return_value = ContactPartial(
+                name = "Test", zipcode = "12345", location = "Berlin"
+            )),
+        ):
 
             ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(
                 base_dir, 12345
@@ -1133,29 +1135,31 @@ class TestAdExtractorDownload:
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
         extractor.page = page_mock
 
-        with patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = [
+        with (
+            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = [
                 "Test Title",  # Title extraction
                 "Test Title",  # Second title call for full extraction
                 "Description text",  # Description
                 "03.02.2025"  # Creation date
-            ]), \
-                patch.object(extractor, "web_execute", new_callable = AsyncMock, return_value = {
-                    "universalAnalyticsOpts": {
-                        "dimensions": {
-                            "dimension92": "",
-                            "dimension108": ""
-                        }
+            ]),
+            patch.object(extractor, "web_execute", new_callable = AsyncMock, return_value = {
+                "universalAnalyticsOpts": {
+                    "dimensions": {
+                        "dimension92": "",
+                        "dimension108": ""
                     }
-                }), \
-                patch.object(extractor, "_extract_category_from_ad_page", new_callable = AsyncMock, return_value = "160"), \
-                patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable = AsyncMock, return_value = {}), \
-                patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable = AsyncMock, return_value = (None, "NOT_APPLICABLE")), \
-                patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)), \
-                patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False), \
-                patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []), \
-                patch.object(extractor, "_extract_contact_from_ad_page", new_callable = AsyncMock, return_value = ContactPartial(
-                    name = "Test", zipcode = "12345", location = "Berlin"
-                )):
+                }
+            }),
+            patch.object(extractor, "_extract_category_from_ad_page", new_callable = AsyncMock, return_value = "160"),
+            patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable = AsyncMock, return_value = {}),
+            patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable = AsyncMock, return_value = (None, "NOT_APPLICABLE")),
+            patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)),
+            patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False),
+            patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []),
+            patch.object(extractor, "_extract_contact_from_ad_page", new_callable = AsyncMock, return_value = ContactPartial(
+                name = "Test", zipcode = "12345", location = "Berlin"
+            )),
+        ):
 
             ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(
                 base_dir, 12345
@@ -1192,29 +1196,31 @@ class TestAdExtractorDownload:
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
         extractor.page = page_mock
 
-        with patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = [
+        with (
+            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = [
                 "Test Title",  # Title extraction
                 "Test Title",  # Second title call for full extraction
                 "Description text",  # Description
                 "03.02.2025"  # Creation date
-            ]), \
-                patch.object(extractor, "web_execute", new_callable = AsyncMock, return_value = {
-                    "universalAnalyticsOpts": {
-                        "dimensions": {
-                            "dimension92": "",
-                            "dimension108": ""
-                        }
+            ]),
+            patch.object(extractor, "web_execute", new_callable = AsyncMock, return_value = {
+                "universalAnalyticsOpts": {
+                    "dimensions": {
+                        "dimension92": "",
+                        "dimension108": ""
                     }
-                }), \
-                patch.object(extractor, "_extract_category_from_ad_page", new_callable = AsyncMock, return_value = "160"), \
-                patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable = AsyncMock, return_value = {}), \
-                patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable = AsyncMock, return_value = (None, "NOT_APPLICABLE")), \
-                patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)), \
-                patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False), \
-                patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []), \
-                patch.object(extractor, "_extract_contact_from_ad_page", new_callable = AsyncMock, return_value = ContactPartial(
-                    name = "Test", zipcode = "12345", location = "Berlin"
-                )):
+                }
+            }),
+            patch.object(extractor, "_extract_category_from_ad_page", new_callable = AsyncMock, return_value = "160"),
+            patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable = AsyncMock, return_value = {}),
+            patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable = AsyncMock, return_value = (None, "NOT_APPLICABLE")),
+            patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)),
+            patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False),
+            patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []),
+            patch.object(extractor, "_extract_contact_from_ad_page", new_callable = AsyncMock, return_value = ContactPartial(
+                name = "Test", zipcode = "12345", location = "Berlin"
+            )),
+        ):
 
             ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(
                 base_dir, 12345
@@ -1246,29 +1252,31 @@ class TestAdExtractorDownload:
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
 
-        with patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = [
+        with (
+            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = [
                 title_with_umlauts,  # Title extraction
                 title_with_umlauts,  # Second title call for full extraction
                 "Description text",  # Description
                 "03.02.2025"  # Creation date
-            ]), \
-                patch.object(extractor, "web_execute", new_callable = AsyncMock, return_value = {
-                    "universalAnalyticsOpts": {
-                        "dimensions": {
-                            "dimension92": "",
-                            "dimension108": ""
-                        }
+            ]),
+            patch.object(extractor, "web_execute", new_callable = AsyncMock, return_value = {
+                "universalAnalyticsOpts": {
+                    "dimensions": {
+                        "dimension92": "",
+                        "dimension108": ""
                     }
-                }), \
-                patch.object(extractor, "_extract_category_from_ad_page", new_callable = AsyncMock, return_value = "160"), \
-                patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable = AsyncMock, return_value = {}), \
-                patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable = AsyncMock, return_value = (None, "NOT_APPLICABLE")), \
-                patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)), \
-                patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False), \
-                patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []), \
-                patch.object(extractor, "_extract_contact_from_ad_page", new_callable = AsyncMock, return_value = ContactPartial(
-                    name = "Test", zipcode = "12345", location = "Berlin"
-                )):
+                }
+            }),
+            patch.object(extractor, "_extract_category_from_ad_page", new_callable = AsyncMock, return_value = "160"),
+            patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable = AsyncMock, return_value = {}),
+            patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable = AsyncMock, return_value = (None, "NOT_APPLICABLE")),
+            patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)),
+            patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False),
+            patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []),
+            patch.object(extractor, "_extract_contact_from_ad_page", new_callable = AsyncMock, return_value = ContactPartial(
+                name = "Test", zipcode = "12345", location = "Berlin"
+            )),
+        ):
 
             ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(
                 base_dir, 12345
@@ -1285,7 +1293,10 @@ class TestAdExtractorDownload:
 
             from kleinanzeigen_bot.utils import dicts  # noqa: PLC0415
 
-            header_string = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
+            header_string = (
+                "# yaml-language-server: $schema="
+                "https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
+            )
 
             # save_dict normalizes path to NFC, matching the NFC directory name
             dicts.save_dict(str(ad_file_path), ad_cfg.model_dump(), header = header_string)

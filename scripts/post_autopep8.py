@@ -18,7 +18,7 @@ class FormatterRule(Protocol):
     """
 
     def apply(self, tree:ast.AST, lines:List[str], path:Path) -> List[str]:
-        ...
+        raise NotImplementedError
 
 
 class NoSpaceAfterColonInTypeAnnotationRule(FormatterRule):

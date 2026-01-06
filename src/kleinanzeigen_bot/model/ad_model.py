@@ -4,18 +4,22 @@
 from __future__ import annotations
 
 import hashlib, json  # isort: skip
+from collections.abc import Mapping, Sequence
 from datetime import datetime  # noqa: TC003 Move import into a type-checking block
-from typing import Annotated, Any, Dict, Final, List, Literal, Mapping, Sequence
+from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
+from gettext import gettext as _
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import AfterValidator, Field, field_validator, model_validator
 from typing_extensions import Self
 
-from kleinanzeigen_bot.model.config_model import AdDefaults  # noqa: TC001 Move application import into a type-checking block
+from kleinanzeigen_bot.model.config_model import AdDefaults, AutoPriceReductionConfig  # noqa: TC001 Move application import into a type-checking block
 from kleinanzeigen_bot.utils import dicts
 from kleinanzeigen_bot.utils.misc import parse_datetime, parse_decimal
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
 
 MAX_DESCRIPTION_LENGTH:Final[int] = 4000
+EURO_PRECISION:Final[Decimal] = Decimal("1")
 
 
 def _OPTIONAL() -> Any:
@@ -61,6 +65,45 @@ def _validate_shipping_option_item(v:str) -> str:
 ShippingOption = Annotated[str, AfterValidator(_validate_shipping_option_item)]
 
 
+def _validate_auto_price_reduction_constraints(
+    price:int | None,
+    auto_price_reduction:AutoPriceReductionConfig | dict[str, Any] | None
+) -> None:
+    """
+    Validate auto_price_reduction configuration constraints.
+
+    Raises ValueError if:
+    - auto_price_reduction is enabled but price is None
+    - min_price exceeds price
+    """
+    if not auto_price_reduction:
+        return
+
+    # Handle both dict (from before validation) and AutoPriceReductionConfig (after validation)
+    if isinstance(auto_price_reduction, dict):
+        enabled = auto_price_reduction.get("enabled", False)
+        min_price = auto_price_reduction.get("min_price")
+    else:
+        enabled = auto_price_reduction.enabled
+        min_price = auto_price_reduction.min_price
+
+    if not enabled:
+        return
+
+    if price is None:
+        raise ValueError(_("price must be specified when auto_price_reduction is enabled"))
+
+    if min_price is not None:
+        try:
+            min_price_dec = Decimal(str(min_price))
+            price_dec = Decimal(str(price))
+        except Exception:
+            # Let Pydantic's type validation surface the underlying issue
+            return
+        if min_price_dec > price_dec:
+            raise ValueError(_("min_price must not exceed price"))
+
+
 class AdPartial(ContextualModel):
     active:bool | None = _OPTIONAL()
     type:Literal["OFFER", "WANTED"] | None = _OPTIONAL()
@@ -69,14 +112,28 @@ class AdPartial(ContextualModel):
     description_prefix:str | None = _OPTIONAL()
     description_suffix:str | None = _OPTIONAL()
     category:str
-    special_attributes:Dict[str, str] | None = _OPTIONAL()
+    special_attributes:dict[str, str] | None = _OPTIONAL()
     price:int | None = _OPTIONAL()
     price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] | None = _OPTIONAL()
+    auto_price_reduction:AutoPriceReductionConfig | None = Field(
+        default = None,
+        description = "automatic price reduction configuration"
+    )
+    repost_count:int = Field(
+        default = 0,
+        ge = 0,
+        description = "number of successful publications for this ad (persisted between runs)"
+    )
+    price_reduction_count:int = Field(
+        default = 0,
+        ge = 0,
+        description = "internal counter: number of automatic price reductions already applied"
+    )
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] | None = _OPTIONAL()
     shipping_costs:float | None = _OPTIONAL()
-    shipping_options:List[ShippingOption] | None = _OPTIONAL()
+    shipping_options:list[ShippingOption] | None = _OPTIONAL()
     sell_directly:bool | None = _OPTIONAL()
-    images:List[str] | None = _OPTIONAL()
+    images:list[str] | None = _OPTIONAL()
     contact:ContactPartial | None = _OPTIONAL()
     republication_interval:int | None = _OPTIONAL()
 
@@ -106,13 +163,19 @@ class AdPartial(ContextualModel):
 
     @model_validator(mode = "before")
     @classmethod
-    def _validate_price_and_price_type(cls, values:Dict[str, Any]) -> Dict[str, Any]:
+    def _validate_price_and_price_type(cls, values:dict[str, Any]) -> dict[str, Any]:
         price_type = values.get("price_type")
         price = values.get("price")
+        auto_price_reduction = values.get("auto_price_reduction")
+
         if price_type == "GIVE_AWAY" and price is not None:
             raise ValueError("price must not be specified when price_type is GIVE_AWAY")
         if price_type == "FIXED" and price is None:
             raise ValueError("price is required when price_type is FIXED")
+
+        # Validate auto_price_reduction configuration
+        _validate_auto_price_reduction_constraints(price, auto_price_reduction)
+
         return values
 
     def update_content_hash(self) -> Self:
@@ -120,7 +183,14 @@ class AdPartial(ContextualModel):
 
         # 1) Dump to a plain dict, excluding the metadata fields:
         raw = self.model_dump(
-            exclude = {"id", "created_on", "updated_on", "content_hash"},
+            exclude = {
+                "id",
+                "created_on",
+                "updated_on",
+                "content_hash",
+                "repost_count",
+                "price_reduction_count",
+            },
             exclude_none = True,
             exclude_unset = True,
         )
@@ -162,9 +232,68 @@ class AdPartial(ContextualModel):
             target = ad_cfg,
             defaults = ad_defaults.model_dump(),
             ignore = lambda k, _: k == "description",  # ignore legacy global description config
-            override = lambda _, v: not isinstance(v, list) and v in {None, ""}  # noqa: PLC1901 can be simplified
+            override = lambda _, v: (
+                not isinstance(v, list) and (v is None or (isinstance(v, str) and v == ""))  # noqa: PLC1901
+            )
         )
+        # Ensure internal counters are integers (not user-configurable)
+        if not isinstance(ad_cfg.get("price_reduction_count"), int):
+            ad_cfg["price_reduction_count"] = 0
+        if not isinstance(ad_cfg.get("repost_count"), int):
+            ad_cfg["repost_count"] = 0
         return Ad.model_validate(ad_cfg)
+
+
+def calculate_auto_price(
+    *,
+    base_price:int | float | None,
+    auto_price_reduction:AutoPriceReductionConfig | None,
+    target_reduction_cycle:int
+) -> int | None:
+    """
+    Calculate the effective price for the current run using commercial rounding.
+
+    Args:
+        base_price: original configured price used as the starting point.
+        auto_price_reduction: reduction configuration (enabled, strategy, amount, min_price, delays).
+        target_reduction_cycle: which reduction cycle to calculate the price for (0 = no reduction, 1 = first reduction, etc.).
+
+    Percentage reductions apply to the current price each cycle (compounded). Each reduction step is rounded
+    to full euros (commercial rounding with ROUND_HALF_UP) before the next reduction is applied.
+    Returns an int representing whole euros, or None when base_price is None.
+    """
+    if base_price is None:
+        return None
+
+    price = Decimal(str(base_price))
+
+    if not auto_price_reduction or not auto_price_reduction.enabled or target_reduction_cycle <= 0:
+        return int(price.quantize(EURO_PRECISION, rounding = ROUND_HALF_UP))
+
+    if auto_price_reduction.strategy is None or auto_price_reduction.amount is None:
+        return int(price.quantize(EURO_PRECISION, rounding = ROUND_HALF_UP))
+
+    if auto_price_reduction.min_price is None:
+        raise ValueError(_("min_price must be specified when auto_price_reduction is enabled"))
+
+    # Prices are published as whole euros; ensure the configured floor cannot be undercut by int() conversion.
+    price_floor = Decimal(str(auto_price_reduction.min_price)).quantize(EURO_PRECISION, rounding = ROUND_CEILING)
+    repost_cycles = target_reduction_cycle
+
+    for _cycle in range(repost_cycles):
+        reduction_value = (
+            price * Decimal(str(auto_price_reduction.amount)) / Decimal("100")
+            if auto_price_reduction.strategy == "PERCENTAGE"
+            else Decimal(str(auto_price_reduction.amount))
+        )
+        price -= reduction_value
+        # Commercial rounding: round to full euros after each reduction step
+        price = price.quantize(EURO_PRECISION, rounding = ROUND_HALF_UP)
+        if price <= price_floor:
+            price = price_floor
+            break
+
+    return int(price)
 
 
 # pyright: reportGeneralTypeIssues=false, reportIncompatibleVariableOverride=false
@@ -183,3 +312,12 @@ class Ad(AdPartial):
     sell_directly:bool
     contact:Contact
     republication_interval:int
+    auto_price_reduction:AutoPriceReductionConfig = Field(default_factory = AutoPriceReductionConfig)
+    price_reduction_count:int = 0
+
+    @model_validator(mode = "after")
+    def _validate_auto_price_config(self) -> "Ad":
+        # Validate the final Ad object after merging with defaults
+        # This ensures the merged configuration is valid even if raw YAML had None values
+        _validate_auto_price_reduction_constraints(self.price, self.auto_price_reduction)
+        return self

@@ -474,6 +474,7 @@ class WebScrapingMixin:
                     if is_relevant_browser:
                         browser_processes.append(proc.info)
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    # Process ended or is not accessible; skip it.
                     pass
         except (psutil.Error, PermissionError) as exc:
             LOG.warning("(warn) Unable to inspect browser processes: %s", exc)
@@ -518,6 +519,7 @@ class WebScrapingMixin:
         self.page = None  # pyright: ignore[reportAttributeAccessIssue]
 
     def get_compatible_browser(self) -> str:
+        browser_paths:list[str | None] = []
         match platform.system():
             case "Linux":
                 browser_paths = [
