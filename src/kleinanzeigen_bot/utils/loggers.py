@@ -3,13 +3,10 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import copy, logging, os, re, sys  # isort: skip
 from gettext import gettext as _
-from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING, Logger
 from logging.handlers import RotatingFileHandler
 from typing import Any, Final  # @UnusedImport
 
 import colorama
-
-from . import i18n, reflect
 
 __all__ = [
     "Logger",
@@ -26,7 +23,14 @@ __all__ = [
     "is_debug"
 ]
 
-LOG_ROOT:Final[logging.Logger] = logging.getLogger()
+CRITICAL = logging.CRITICAL
+DEBUG = logging.DEBUG
+ERROR = logging.ERROR
+INFO = logging.INFO
+WARNING = logging.WARNING
+Logger = logging.Logger
+
+LOG_ROOT:Final[Logger] = logging.getLogger()
 
 
 class _MaxLevelFilter(logging.Filter):
@@ -141,7 +145,7 @@ def configure_console_logging() -> None:
 class LogFileHandle:
     """Encapsulates a log file handler with close and status methods."""
 
-    def __init__(self, file_path:str, handler:RotatingFileHandler, logger:logging.Logger) -> None:
+    def __init__(self, file_path:str, handler:RotatingFileHandler, logger:Logger) -> None:
         self.file_path = file_path
         self._handler:RotatingFileHandler | None = handler
         self._logger = logger
@@ -183,15 +187,16 @@ def flush_all_handlers() -> None:
         handler.flush()
 
 
-def get_logger(name:str | None = None) -> logging.Logger:
+def get_logger(name:str | None = None) -> Logger:
     """
     Returns a localized logger
     """
 
-    class TranslatingLogger(logging.Logger):
+    class TranslatingLogger(Logger):
 
         def _log(self, level:int, msg:object, *args:Any, **kwargs:Any) -> None:
             if level != DEBUG:  # debug messages should not be translated
+                from . import i18n, reflect  # noqa: PLC0415  # avoid cyclic import at module load
                 msg = i18n.translate(msg, reflect.get_caller(2))
             super()._log(level, msg, *args, **kwargs)
 

@@ -292,6 +292,7 @@ timeouts:
   captcha_detection: 2.0              # Timeout for captcha iframe detection
   sms_verification: 4.0               # Timeout for SMS verification banners
   gdpr_prompt: 10.0                   # Timeout when handling GDPR dialogs
+  login_detection: 10.0               # Timeout for detecting existing login session via DOM elements
   publishing_result: 300.0            # Timeout for publishing status checks
   publishing_confirmation: 20.0       # Timeout for publish confirmation redirect
   image_upload: 30.0                  # Timeout for image upload and server-side processing
@@ -383,8 +384,16 @@ description_suffix: # optional suffix to be added to the description overriding 
 # or category ID (e.g. 161/278)
 category: # e.g. "Elektronik > Notebooks"
 
-price: # without decimals, e.g. 75
+price: # price in euros; decimals allowed but will be rounded to nearest whole euro on processing (prefer whole euros for predictability)
 price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY (default: NEGOTIABLE)
+auto_price_reduction:
+  enabled: # true or false to enable automatic price reduction on reposts (default: false)
+  strategy: # "PERCENTAGE" or "FIXED" (required when enabled is true)
+  amount: # reduction amount; interpreted as percent for PERCENTAGE or currency units for FIXED (prefer whole euros for predictability)
+  min_price: # required when enabled is true; minimum price floor (use 0 for no lower bound, prefer whole euros for predictability)
+  delay_reposts: # number of reposts to wait before first reduction (default: 0)
+  delay_days: # number of days to wait after publication before reductions (default: 0)
+  # NOTE: All prices are rounded to whole euros after each reduction step.
 
 special_attributes:
   # haus_mieten.zimmer_d: value # Zimmer
@@ -427,7 +436,60 @@ id: # the ID assigned by kleinanzeigen.de
 created_on: # ISO timestamp when the ad was first published
 updated_on: # ISO timestamp when the ad was last published
 content_hash: # hash of the ad content, used to detect changes
+repost_count: # how often the ad has been (re)published; used for automatic price reductions
 ```
+
+#### Automatic price reduction on reposts
+
+When `auto_price_reduction.enabled` is set to `true`, the bot lowers the configured `price` every time the ad is reposted. The starting point for the calculation is always the base price from your ad file (the value of `price`), ensuring the first publication uses the unchanged amount. For each repost the bot subtracts either a percentage of the previously published price (strategy: PERCENTAGE) or a fixed amount (strategy: FIXED) and clamps the result to `min_price`.
+
+**Important:** Price reductions only apply when using the `publish` command (which deletes the old ad and creates a new one). Using the `update` command to modify ad content does NOT trigger price reductions or increment `repost_count`.
+
+`repost_count` is tracked for every ad (and persisted inside the corresponding `ad_*.yaml`) so reductions continue across runs.
+
+`min_price` is required whenever `enabled` is `true` and must be less than or equal to `price`; this makes an explicit floor (including `0`) mandatory. If `min_price` equals the current price, the bot will log a warning and perform no reduction.
+
+**Note:** `repost_count` and price reduction counters are only incremented and persisted after a successful publish. Failed publish attempts do not advance the counters.
+
+**PERCENTAGE strategy example:**
+
+```yaml
+price: 150
+price_type: FIXED
+auto_price_reduction:
+  enabled: true
+  strategy: PERCENTAGE
+  amount: 10
+  min_price: 90
+  delay_reposts: 0
+  delay_days: 0
+```
+
+This posts the ad at 150 € the first time, then 135 € (−10%), 122 € (−10%), 110 € (−10%), 99 € (−10%), and stops decreasing at 90 €.
+
+**Note:** The bot applies commercial rounding (ROUND_HALF_UP) to full euros after each reduction step. For example, 121.5 rounds to 122, and 109.8 rounds to 110. This step-wise rounding affects the final price progression, especially for percentage-based reductions.
+
+**FIXED strategy example:**
+
+```yaml
+price: 150
+price_type: FIXED
+auto_price_reduction:
+  enabled: true
+  strategy: FIXED
+  amount: 15
+  min_price: 90
+  delay_reposts: 0
+  delay_days: 0
+```
+
+This posts the ad at 150 € the first time, then 135 € (−15 €), 120 € (−15 €), 105 € (−15 €), and stops decreasing at 90 €.
+
+**Note on `delay_days` behavior:** The `delay_days` parameter counts complete 24-hour periods (whole days) since the ad was published. For example, if `delay_days: 7` and the ad was published 6 days and 23 hours ago, the reduction will not yet apply. This ensures predictable behavior and avoids partial-day ambiguity.
+
+Set `auto_price_reduction.enabled: false` (or omit the entire `auto_price_reduction` section) to keep the existing behaviour—prices stay fixed and `repost_count` only acts as tracked metadata for future changes.
+
+You can configure `auto_price_reduction` once under `ad_defaults` in `config.yaml`. The `min_price` can be set there or overridden per ad file as needed.
 
 ### <a name="description-prefix-suffix"></a>3) Description Prefix and Suffix
 

@@ -36,7 +36,7 @@ class ConfigProtocol(Protocol):
     user_data_dir:str | None
 
     def add_extension(self, ext:str) -> None:
-        ...
+        pass
 
 
 def _nodriver_start_mock() -> Mock:

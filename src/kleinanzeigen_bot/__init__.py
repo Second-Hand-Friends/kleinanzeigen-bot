@@ -14,10 +14,10 @@ from wcmatch import glob
 
 from . import extract, resources
 from ._version import __version__
-from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial
+from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, calculate_auto_price
 from .model.config_model import Config
 from .update_checker import UpdateChecker
-from .utils import dicts, error_handlers, loggers, misc, xdg_paths
+from .utils import dicts, error_handlers, loggers, misc
 from .utils.exceptions import CaptchaEncountered
 from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
@@ -37,6 +37,145 @@ class AdUpdateStrategy(enum.Enum):
     MODIFY = enum.auto()
 
 
+def _repost_cycle_ready(ad_cfg:Ad, ad_file_relative:str) -> bool:
+    """
+    Check if the repost cycle delay has been satisfied.
+
+    :param ad_cfg: The ad configuration
+    :param ad_file_relative: Relative path to the ad file for logging
+    :return: True if ready to apply price reduction, False otherwise
+    """
+    total_reposts = ad_cfg.repost_count or 0
+    delay_reposts = ad_cfg.auto_price_reduction.delay_reposts
+    applied_cycles = ad_cfg.price_reduction_count or 0
+    eligible_cycles = max(total_reposts - delay_reposts, 0)
+
+    if total_reposts <= delay_reposts:
+        remaining = (delay_reposts + 1) - total_reposts
+        LOG.info(
+            _("Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)"),
+            ad_file_relative,
+            max(remaining, 1),  # Clamp to 1 to avoid showing "0 more reposts" when at threshold
+            total_reposts,
+            applied_cycles
+        )
+        return False
+
+    if eligible_cycles <= applied_cycles:
+        LOG.debug(
+            _("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts"),
+            ad_file_relative,
+            applied_cycles,
+            eligible_cycles
+        )
+        return False
+
+    return True
+
+
+def _day_delay_elapsed(ad_cfg:Ad, ad_file_relative:str) -> bool:
+    """
+    Check if the day delay has elapsed since the ad was last published.
+
+    :param ad_cfg: The ad configuration
+    :param ad_file_relative: Relative path to the ad file for logging
+    :return: True if the delay has elapsed, False otherwise
+    """
+    delay_days = ad_cfg.auto_price_reduction.delay_days
+    if delay_days == 0:
+        return True
+
+    reference = ad_cfg.updated_on or ad_cfg.created_on
+    if not reference:
+        LOG.info(
+            _("Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing"),
+            ad_file_relative,
+            delay_days
+        )
+        return False
+
+    # Note: .days truncates to whole days (e.g., 1.9 days -> 1 day)
+    # This is intentional: delays count complete 24-hour periods since publish
+    # Both misc.now() and stored timestamps use UTC (via misc.now()), ensuring consistent calculations
+    elapsed_days = (misc.now() - reference).days
+    if elapsed_days < delay_days:
+        LOG.info(
+            _("Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)"),
+            ad_file_relative,
+            delay_days,
+            elapsed_days
+        )
+        return False
+
+    return True
+
+
+def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
+    """
+    Apply automatic price reduction to an ad based on repost count and configuration.
+
+    This function modifies ad_cfg in-place, updating the price and price_reduction_count
+    fields when a reduction is applicable.
+
+    :param ad_cfg: The ad configuration to potentially modify
+    :param _ad_cfg_orig: The original ad configuration (unused, kept for compatibility)
+    :param ad_file_relative: Relative path to the ad file for logging
+    """
+    if not ad_cfg.auto_price_reduction.enabled:
+        return
+
+    base_price = ad_cfg.price
+    if base_price is None:
+        LOG.warning(_("Auto price reduction is enabled for [%s] but no price is configured."), ad_file_relative)
+        return
+
+    if ad_cfg.auto_price_reduction.min_price is not None and ad_cfg.auto_price_reduction.min_price == base_price:
+        LOG.warning(
+            _("Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur."),
+            ad_file_relative,
+            base_price
+        )
+        return
+
+    if not _repost_cycle_ready(ad_cfg, ad_file_relative):
+        return
+
+    if not _day_delay_elapsed(ad_cfg, ad_file_relative):
+        return
+
+    applied_cycles = ad_cfg.price_reduction_count or 0
+    next_cycle = applied_cycles + 1
+
+    effective_price = calculate_auto_price(
+        base_price = base_price,
+        auto_price_reduction = ad_cfg.auto_price_reduction,
+        target_reduction_cycle = next_cycle
+    )
+
+    if effective_price is None:
+        return
+
+    if effective_price == base_price:
+        # Still increment counter so small fractional reductions can accumulate over multiple cycles
+        ad_cfg.price_reduction_count = next_cycle
+        LOG.info(
+            _("Auto price reduction kept price %s after attempting %s reduction cycles"),
+            effective_price,
+            next_cycle
+        )
+        return
+
+    LOG.info(
+        _("Auto price reduction applied: %s -> %s after %s reduction cycles"),
+        base_price,
+        effective_price,
+        next_cycle
+    )
+    ad_cfg.price = effective_price
+    ad_cfg.price_reduction_count = next_cycle
+    # Note: price_reduction_count is persisted to ad_cfg_orig only after successful publish
+
+
 class KleinanzeigenBot(WebScrapingMixin):
 
     def __init__(self) -> None:
@@ -50,19 +189,13 @@ class KleinanzeigenBot(WebScrapingMixin):
         self.root_url = "https://www.kleinanzeigen.de"
 
         self.config:Config
-        # Config and mode will be finalized after parsing CLI args
-        # Set defaults for portable mode (backward compatibility with tests)
-        self.config_file_path:str | None = str(xdg_paths.get_config_file_path("portable"))
-        self.config_explicitly_provided = False
-        self.installation_mode:xdg_paths.InstallationMode | None = None
+        self.config_file_path = abspath("config.yaml")
 
         self.categories:dict[str, str] = {}
 
         self.file_log:loggers.LogFileHandle | None = None
         log_file_basename = is_frozen() and os.path.splitext(os.path.basename(sys.executable))[0] or self.__module__
-        self.log_file_path:str | None = str(xdg_paths.get_log_file_path(log_file_basename, "portable"))
-        self.log_file_basename = log_file_basename
-        self.log_file_explicitly_provided = False
+        self.log_file_path:str | None = abspath(f"{log_file_basename}.log")
 
         self.command = "help"
         self.ads_selector = "due"
@@ -79,21 +212,13 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     async def run(self, args:list[str]) -> None:
         self.parse_args(args)
-
-        # Commands that don't require config or mode detection
-        match self.command:
-            case "help":
-                self.show_help()
-                return
-            case "version":
-                print(self.get_version())
-                return
-
-        # All other commands require installation mode to be finalized
-        self.finalize_installation_mode()
-
         try:
             match self.command:
+                case "help":
+                    self.show_help()
+                    return
+                case "version":
+                    print(self.get_version())
                 case "create-config":
                     self.create_default_config()
                     return
@@ -106,7 +231,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
+                    checker = UpdateChecker(self.config)
                     checker.check_for_updates()
                     self.load_ads()
                     LOG.info("############################################")
@@ -115,13 +240,13 @@ class KleinanzeigenBot(WebScrapingMixin):
                 case "update-check":
                     self.configure_file_logging()
                     self.load_config()
-                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
+                    checker = UpdateChecker(self.config)
                     checker.check_for_updates(skip_interval_check = True)
                 case "update-content-hash":
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
+                    checker = UpdateChecker(self.config)
                     checker.check_for_updates()
                     self.ads_selector = "all"
                     if ads := self.load_ads(exclude_ads_with_id = False):
@@ -134,7 +259,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
+                    checker = UpdateChecker(self.config)
                     checker.check_for_updates()
 
                     if not (self.ads_selector in {"all", "new", "due", "changed"} or
@@ -174,7 +299,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
+                    checker = UpdateChecker(self.config)
                     checker.check_for_updates()
                     if ads := self.load_ads():
                         await self.create_browser_session()
@@ -192,7 +317,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                         self.ads_selector = "new"
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
+                    checker = UpdateChecker(self.config)
                     checker.check_for_updates()
                     await self.create_browser_session()
                     await self.login()
@@ -327,13 +452,11 @@ class KleinanzeigenBot(WebScrapingMixin):
                     sys.exit(0)
                 case "--config":
                     self.config_file_path = abspath(value)
-                    self.config_explicitly_provided = True
                 case "--logfile":
                     if value:
                         self.log_file_path = abspath(value)
                     else:
                         self.log_file_path = None
-                    self.log_file_explicitly_provided = True
                 case "--ads":
                     self.ads_selector = value.strip().lower()
                 case "--force":
@@ -355,57 +478,6 @@ class KleinanzeigenBot(WebScrapingMixin):
                 LOG.error("More than one command given: %s", arguments)
                 sys.exit(2)
 
-    def finalize_installation_mode(self) -> None:
-        """
-        Finalize installation mode detection after CLI args are parsed.
-        Must be called after parse_args() to respect --config overrides.
-        """
-        # Check if config_file_path was already customized (by --config or tests)
-        default_portable_config = str(xdg_paths.get_config_file_path("portable"))
-        config_was_customized = (self.config_explicitly_provided or
-                                 (self.config_file_path and self.config_file_path != default_portable_config))
-
-        if config_was_customized and self.config_file_path:
-            # Config path was explicitly set - detect mode based on it
-            LOG.debug("Detecting installation mode from explicit config path: %s", self.config_file_path)
-
-            config_path = Path(self.config_file_path)
-            if config_path == Path.cwd() / "config.yaml":
-                # Explicit path points to CWD config
-                self.installation_mode = "portable"
-                LOG.debug("Explicit config is in CWD, using portable mode")
-            elif config_path.is_relative_to(Path(xdg_paths.get_xdg_base_dir("config"))):
-                # Explicit path is within XDG config directory
-                self.installation_mode = "xdg"
-                LOG.debug("Explicit config is in XDG directory, using xdg mode")
-            else:
-                # Custom location - default to portable mode (all paths relative to config)
-                self.installation_mode = "portable"
-                LOG.debug("Explicit config is in custom location, defaulting to portable mode")
-        else:
-            # No explicit config - use auto-detection
-            LOG.debug("Detecting installation mode...")
-            self.installation_mode = xdg_paths.detect_installation_mode()
-
-            if self.installation_mode is None:
-                # First run - prompt user
-                LOG.info("First run detected, prompting user for installation mode")
-                self.installation_mode = xdg_paths.prompt_installation_mode()
-
-            # Set config path based on detected mode
-            self.config_file_path = str(xdg_paths.get_config_file_path(self.installation_mode))
-
-        # Set log file path based on mode (unless explicitly overridden via --logfile)
-        if not self.log_file_explicitly_provided and self.log_file_path == str(xdg_paths.get_log_file_path(self.log_file_basename, "portable")):
-            # Still using default portable path - update to match detected mode
-            self.log_file_path = str(xdg_paths.get_log_file_path(self.log_file_basename, self.installation_mode))
-            LOG.debug("Log file path: %s", self.log_file_path)
-
-        # Log installation mode and config location (INFO level for user visibility)
-        mode_display = "portable (current directory)" if self.installation_mode == "portable" else "system-wide (XDG directories)"
-        LOG.info("Installation mode: %s", mode_display)
-        LOG.info("Config file: %s", self.config_file_path)
-
     def configure_file_logging(self) -> None:
         if not self.log_file_path:
             return
@@ -423,18 +495,9 @@ class KleinanzeigenBot(WebScrapingMixin):
         Create a default config.yaml in the project root if it does not exist.
         If it exists, log an error and inform the user.
         """
-        if self.config_file_path is None:
-            raise RuntimeError("config_file_path must be set before creating default config")
         if os.path.exists(self.config_file_path):
             LOG.error("Config file %s already exists. Aborting creation.", self.config_file_path)
             return
-
-        # Ensure parent directory exists (critical for XDG mode on first run)
-        config_path = Path(self.config_file_path)
-        if not config_path.parent.exists():
-            LOG.debug("Creating config directory: %s", config_path.parent)
-            config_path.parent.mkdir(parents = True, exist_ok = True)
-
         default_config = Config.model_construct()
         default_config.login.username = "changeme"  # noqa: S105 placeholder for default config, not a real username
         default_config.login.password = "changeme"  # noqa: S105 placeholder for default config, not a real password
@@ -442,14 +505,13 @@ class KleinanzeigenBot(WebScrapingMixin):
             self.config_file_path,
             default_config.model_dump(exclude_none = True, exclude = {"ad_defaults": {"description"}}),
             header = (
-                "# yaml-language-server: "
-                "$schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/config.schema.json"
+                "# yaml-language-server: $schema="
+                "https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot"
+                "/refs/heads/main/schemas/config.schema.json"
             )
         )
 
     def load_config(self) -> None:
-        if self.config_file_path is None:
-            raise RuntimeError("config_file_path must be set before loading config")
         # write default config.yaml if config file does not exist
         if not os.path.exists(self.config_file_path):
             self.create_default_config()
@@ -471,11 +533,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         self.browser_config.extensions = [abspath(item, relative_to = self.config_file_path) for item in self.config.browser.extensions]
         self.browser_config.use_private_window = self.config.browser.use_private_window
         if self.config.browser.user_data_dir:
-            # Config override: use as-is relative to config file
             self.browser_config.user_data_dir = abspath(self.config.browser.user_data_dir, relative_to = self.config_file_path)
-        else:
-            # Use mode-aware XDG path
-            self.browser_config.user_data_dir = str(xdg_paths.get_browser_profile_path(self.installation_mode or "portable"))
         self.browser_config.profile_name = self.config.browser.profile_name
 
     def __check_ad_republication(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
@@ -552,30 +610,12 @@ class KleinanzeigenBot(WebScrapingMixin):
         """
         LOG.info("Searching for ad config files...")
 
-        # Check if config was explicitly provided (either via --config or by tests)
-        default_portable_config = str(xdg_paths.get_config_file_path("portable"))
-        default_xdg_config = str(xdg_paths.get_config_file_path("xdg"))
-        is_custom_config = (self.config_explicitly_provided or
-                           (self.config_file_path not in {default_portable_config, default_xdg_config}))
-
-        if is_custom_config:
-            # Custom config location - search relative to config file
-            ad_search_dir = str(Path(self.config_file_path).parent)  # type: ignore[arg-type]
-            LOG.debug("Using config file directory for ad search: %s", ad_search_dir)
-        else:
-            # Auto-detected config - use mode-appropriate directory
-            # Fallback to portable if mode not yet finalized (for tests)
-            mode = self.installation_mode or "portable"
-            ad_search_dir = str(xdg_paths.get_ad_files_search_dir(mode))
-            LOG.debug("Using mode-based directory for ad search: %s", ad_search_dir)
-
         ad_files:dict[str, str] = {}
+        data_root_dir = os.path.dirname(self.config_file_path)
         for file_pattern in self.config.ad_files:
-            LOG.debug("Searching with pattern: %s", file_pattern)
-            for ad_file in glob.glob(file_pattern, root_dir = ad_search_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
+            for ad_file in glob.glob(file_pattern, root_dir = data_root_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
                 if not str(ad_file).endswith("ad_fields.yaml"):
-                    LOG.debug("Found ad file: %s", ad_file)
-                    ad_files[abspath(ad_file, relative_to = ad_search_dir)] = ad_file
+                    ad_files[abspath(ad_file, relative_to = data_root_dir)] = ad_file
         LOG.info(" -> found %s", pluralize("ad config file", ad_files))
         if not ad_files:
             return []
@@ -694,11 +734,14 @@ class KleinanzeigenBot(WebScrapingMixin):
 
             await ainput(_("Press a key to continue..."))
         except TimeoutError:
+            # No captcha detected within timeout.
             pass
 
     async def login(self) -> None:
         LOG.info("Checking if already logged in...")
         await self.web_open(f"{self.root_url}")
+        if getattr(self, "page", None) is not None:
+            LOG.debug(_("Current page URL after opening homepage: %s"), self.page.url)
 
         if await self.is_logged_in():
             LOG.info("Already logged in as [%s]. Skipping login.", self.config.login.username)
@@ -712,8 +755,14 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         # Sometimes a second login is required
         if not await self.is_logged_in():
+            LOG.debug(_("First login attempt did not succeed, trying second login attempt"))
             await self.fill_login_data_and_send()
             await self.handle_after_login_logic()
+
+            if await self.is_logged_in():
+                LOG.debug(_("Second login attempt succeeded"))
+            else:
+                LOG.warning(_("Second login attempt also failed - login may not have succeeded"))
 
     async def fill_login_data_and_send(self) -> None:
         LOG.info("Logging in as [%s]...", self.config.login.username)
@@ -736,6 +785,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.warning("############################################")
             await ainput("Press ENTER when done...")
         except TimeoutError:
+            # No SMS verification prompt detected.
             pass
 
         try:
@@ -747,22 +797,38 @@ class KleinanzeigenBot(WebScrapingMixin):
                                  "//div[@id='ConsentManagementPage']//*//button//*[contains(., 'Alle ablehnen und fortfahren')]",
                                  timeout = gdpr_timeout)
         except TimeoutError:
+            # GDPR banner not shown within timeout.
             pass
 
     async def is_logged_in(self) -> bool:
+        # Use login_detection timeout (10s default) instead of default (5s)
+        # to allow sufficient time for client-side JavaScript rendering after page load.
+        # This is especially important for older sessions (20+ days) that require
+        # additional server-side validation time.
+        login_check_timeout = self._timeout("login_detection")
+        effective_timeout = self._effective_timeout("login_detection")
+        username = self.config.login.username.lower()
+        LOG.debug(_("Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)"), login_check_timeout, effective_timeout)
+
+        # Try to find the standard element first
         try:
-            # Try to find the standard element first
-            user_info = await self.web_text(By.CLASS_NAME, "mr-medium")
-            if self.config.login.username.lower() in user_info.lower():
+            user_info = await self.web_text(By.CLASS_NAME, "mr-medium", timeout = login_check_timeout)
+            if username in user_info.lower():
+                LOG.debug(_("Login detected via .mr-medium element"))
                 return True
         except TimeoutError:
-            try:
-                # If standard element not found, try the alternative
-                user_info = await self.web_text(By.ID, "user-email")
-                if self.config.login.username.lower() in user_info.lower():
-                    return True
-            except TimeoutError:
-                return False
+            LOG.debug(_("Timeout waiting for .mr-medium element after %.1fs"), effective_timeout)
+
+        # If standard element not found or didn't contain username, try the alternative
+        try:
+            user_info = await self.web_text(By.ID, "user-email", timeout = login_check_timeout)
+            if username in user_info.lower():
+                LOG.debug(_("Login detected via #user-email element"))
+                return True
+        except TimeoutError:
+            LOG.debug(_("Timeout waiting for #user-email element after %.1fs"), effective_timeout)
+
+        LOG.debug(_("No login detected - neither .mr-medium nor #user-email found with username"))
         return False
 
     async def delete_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
@@ -856,6 +922,15 @@ class KleinanzeigenBot(WebScrapingMixin):
             if self.config.publishing.delete_old_ads == "BEFORE_PUBLISH" and not self.keep_old_ads:
                 await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title)
 
+            # Apply auto price reduction only for REPLACE operations (actual reposts)
+            # This ensures price reductions only happen on republish, not on UPDATE
+            try:
+                ad_file_relative = str(Path(ad_file).relative_to(Path(self.config_file_path).parent))
+            except ValueError:
+                # On Windows, relative_to fails when paths are on different drives
+                ad_file_relative = ad_file
+            apply_auto_price_reduction(ad_cfg, ad_cfg_orig, ad_file_relative)
+
             LOG.info("Publishing ad '%s'...", ad_cfg.title)
             await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html")
         else:
@@ -910,6 +985,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             try:
                 await self.web_select(By.CSS_SELECTOR, "select#price-type-react, select#micro-frontend-price-type, select#priceType", price_type)
             except TimeoutError:
+                # Price type selector not present on this page variant.
                 pass
             if ad_cfg.price:
                 if mode == AdUpdateStrategy.MODIFY:
@@ -1028,6 +1104,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             if not ad_cfg.images and await self.web_check(By.XPATH, image_hint_xpath, Is.DISPLAYED):
                 await self.web_click(By.XPATH, image_hint_xpath)
         except TimeoutError:
+            # Image hint not shown; continue publish flow.
             pass  # nosec
 
         #############################
@@ -1043,6 +1120,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             await self.web_scroll_page_down()
             await ainput(_("Press a key to continue..."))
         except TimeoutError:
+            # Payment form not present.
             pass
 
         confirmation_timeout = self._timeout("publishing_confirmation")
@@ -1059,6 +1137,22 @@ class KleinanzeigenBot(WebScrapingMixin):
         ad_cfg_orig["updated_on"] = misc.now().isoformat(timespec = "seconds")
         if not ad_cfg.created_on and not ad_cfg.id:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
+
+        # Increment repost_count and persist price_reduction_count only for REPLACE operations (actual reposts)
+        # This ensures counters only advance on republish, not on UPDATE
+        if mode == AdUpdateStrategy.REPLACE:
+            # Increment repost_count after successful publish
+            # Note: This happens AFTER publish, so price reduction logic (which runs before publish)
+            # sees the count from the PREVIOUS run. This is intentional: the first publish uses
+            # repost_count=0 (no reduction), the second publish uses repost_count=1 (first reduction), etc.
+            current_reposts = int(ad_cfg_orig.get("repost_count", ad_cfg.repost_count or 0))
+            ad_cfg_orig["repost_count"] = current_reposts + 1
+            ad_cfg.repost_count = ad_cfg_orig["repost_count"]
+
+            # Persist price_reduction_count after successful publish
+            # This ensures failed publishes don't incorrectly increment the reduction counter
+            if ad_cfg.price_reduction_count is not None and ad_cfg.price_reduction_count > 0:
+                ad_cfg_orig["price_reduction_count"] = ad_cfg.price_reduction_count
 
         if mode == AdUpdateStrategy.REPLACE:
             LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
@@ -1134,6 +1228,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             if await self.web_text(By.ID, "postad-category-path"):
                 is_category_auto_selected = True
         except TimeoutError:
+            # Category auto-selection indicator not available within timeout.
             pass
 
         if category:
@@ -1167,6 +1262,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 if not await self.web_check(By.XPATH, select_container_xpath, Is.DISPLAYED):
                     await (await self.web_find(By.XPATH, select_container_xpath)).apply("elem => elem.singleNodeValue.style.display = 'block'")
             except TimeoutError:
+                # Skip visibility adjustment when container cannot be located in time.
                 pass  # nosec
 
             try:
@@ -1241,6 +1337,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                         await self.web_click(By.XPATH,
                                              '//dialog//button[contains(., "Andere Versandmethoden")]')
                     except TimeoutError:
+                        # Dialog option not present; already on the individual shipping page.
                         pass
 
                     try:
@@ -1250,6 +1347,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                                             '//input[contains(@placeholder, "Versandkosten (optional)")]',
                                             timeout = short_timeout)
                     except TimeoutError:
+                        # Input not visible yet; click the individual shipping option.
                         await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
 
                     if ad_cfg.shipping_costs is not None:
@@ -1416,7 +1514,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         This downloads either all, only unsaved (new), or specific ads given by ID.
         """
 
-        ad_extractor = extract.AdExtractor(self.browser, self.config, self.installation_mode or "portable")
+        ad_extractor = extract.AdExtractor(self.browser, self.config)
 
         # use relevant download routine
         if self.ads_selector in {"all", "new"}:  # explore ads overview for these two modes

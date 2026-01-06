@@ -1097,12 +1097,9 @@ class TestAdExtractorDownload:
             patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)),
             patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False),
             patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []),
-            patch.object(
-                extractor,
-                "_extract_contact_from_ad_page",
-                new_callable = AsyncMock,
-                return_value = ContactPartial(name = "Test", zipcode = "12345", location = "Berlin")
-            )
+            patch.object(extractor, "_extract_contact_from_ad_page", new_callable = AsyncMock, return_value = ContactPartial(
+                name = "Test", zipcode = "12345", location = "Berlin"
+            )),
         ):
 
             ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(
@@ -1159,12 +1156,9 @@ class TestAdExtractorDownload:
             patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)),
             patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False),
             patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []),
-            patch.object(
-                extractor,
-                "_extract_contact_from_ad_page",
-                new_callable = AsyncMock,
-                return_value = ContactPartial(name = "Test", zipcode = "12345", location = "Berlin")
-            )
+            patch.object(extractor, "_extract_contact_from_ad_page", new_callable = AsyncMock, return_value = ContactPartial(
+                name = "Test", zipcode = "12345", location = "Berlin"
+            )),
         ):
 
             ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(
@@ -1223,12 +1217,9 @@ class TestAdExtractorDownload:
             patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)),
             patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False),
             patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []),
-            patch.object(
-                extractor,
-                "_extract_contact_from_ad_page",
-                new_callable = AsyncMock,
-                return_value = ContactPartial(name = "Test", zipcode = "12345", location = "Berlin")
-            )
+            patch.object(extractor, "_extract_contact_from_ad_page", new_callable = AsyncMock, return_value = ContactPartial(
+                name = "Test", zipcode = "12345", location = "Berlin"
+            )),
         ):
 
             ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(
@@ -1282,12 +1273,9 @@ class TestAdExtractorDownload:
             patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)),
             patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False),
             patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []),
-            patch.object(
-                extractor,
-                "_extract_contact_from_ad_page",
-                new_callable = AsyncMock,
-                return_value = ContactPartial(name = "Test", zipcode = "12345", location = "Berlin")
-            )
+            patch.object(extractor, "_extract_contact_from_ad_page", new_callable = AsyncMock, return_value = ContactPartial(
+                name = "Test", zipcode = "12345", location = "Berlin"
+            )),
         ):
 
             ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(
@@ -1306,8 +1294,8 @@ class TestAdExtractorDownload:
             from kleinanzeigen_bot.utils import dicts  # noqa: PLC0415
 
             header_string = (
-                "# yaml-language-server: "
-                "$schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
+                "# yaml-language-server: $schema="
+                "https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
             )
 
             # save_dict normalizes path to NFC, matching the NFC directory name

@@ -71,6 +71,29 @@ The bot will also provide specific instructions on how to fix your configuration
 2. Override specific keys under `timeouts` (e.g. `pagination_initial: 20.0`) if only a single selector is problematic.
 3. Keep `retry_enabled` on so that DOM lookups are retried with exponential backoff.
 
+### Issue: Bot fails to detect existing login session
+
+**Symptoms:**
+- Bot re-logins despite being already authenticated
+- Intermittent (50/50) login detection behavior
+- More common with profiles unused for 20+ days
+
+**What `login_detection` controls:**
+- Maximum time (seconds) to wait for user profile DOM elements when checking if already logged in
+- Default: `10.0` seconds (provides ~22.5s total with retry/backoff)
+- Used at startup before attempting login
+
+**When to increase `login_detection`:**
+- Frequent unnecessary re-logins despite being authenticated
+- Slow or unstable network connection
+- Using browser profiles that haven't been active for weeks
+
+**Example:**
+```yaml
+timeouts:
+  login_detection: 15.0  # For slower networks or old sessions
+```
+
 ## Common Issues and Solutions
 
 ### Issue 1: "Failed to connect to browser" with "root" error

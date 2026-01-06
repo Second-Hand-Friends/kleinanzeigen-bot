@@ -15,7 +15,7 @@ from kleinanzeigen_bot.model.ad_model import ContactPartial
 
 from .model.ad_model import AdPartial
 from .model.config_model import Config
-from .utils import dicts, files, i18n, loggers, misc, reflect, xdg_paths
+from .utils import dicts, files, i18n, loggers, misc, reflect
 from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
 
 __all__ = [
@@ -33,11 +33,10 @@ class AdExtractor(WebScrapingMixin):
     Wrapper class for ad extraction that uses an active bot´s browser session to extract specific elements from an ad page.
     """
 
-    def __init__(self, browser:Browser, config:Config, installation_mode:str = "portable") -> None:
+    def __init__(self, browser:Browser, config:Config) -> None:
         super().__init__()
         self.browser = browser
         self.config:Config = config
-        self.installation_mode = installation_mode
 
     async def download_ad(self, ad_id:int) -> None:
         """
@@ -48,21 +47,21 @@ class AdExtractor(WebScrapingMixin):
         """
 
         # create sub-directory for ad(s) to download (if necessary):
-        download_dir = xdg_paths.get_downloaded_ads_path(self.installation_mode)
-        LOG.info("Using download directory: %s", download_dir)
-        LOG.debug("Ensuring download directory exists...")
-        # Note: xdg_paths.get_downloaded_ads_path() already creates the directory
+        relative_directory = Path("downloaded-ads")
+        # make sure configured base directory exists (using exist_ok=True to avoid TOCTOU race)
+        await asyncio.get_running_loop().run_in_executor(None, lambda: relative_directory.mkdir(exist_ok = True))  # noqa: ASYNC240
+        LOG.info("Ensured ads directory exists at ./%s.", relative_directory)
 
         # Extract ad info and determine final directory path
         ad_cfg, final_dir = await self._extract_ad_page_info_with_directory_handling(
-            download_dir, ad_id
+            relative_directory, ad_id
         )
 
         # Save the ad configuration file (offload to executor to avoid blocking the event loop)
         ad_file_path = str(Path(final_dir) / f"ad_{ad_id}.yaml")
         header_string = (
-            "# yaml-language-server: "
-            "$schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
+            "# yaml-language-server: $schema="
+            "https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
         )
         await asyncio.get_running_loop().run_in_executor(
             None,
@@ -145,9 +144,6 @@ class AdExtractor(WebScrapingMixin):
         :return: the ad ID, a (ten-digit) integer number
         """
 
-        num_part = url.rsplit("/", maxsplit = 1)[-1]  # suffix
-        id_part = num_part.split("-", maxsplit = 1)[0]
-
         try:
             path = url.split("?", maxsplit = 1)[0]  # Remove query string if present
             last_segment = path.rstrip("/").rsplit("/", maxsplit = 1)[-1]  # Get last path component
@@ -169,7 +165,7 @@ class AdExtractor(WebScrapingMixin):
 
         # Try to find the main ad list container first
         try:
-            ad_list_container = await self.web_find(By.ID, "my-manageitems-adlist")
+            _ = await self.web_find(By.ID, "my-manageitems-adlist")
         except TimeoutError:
             LOG.warning("Ad list container #my-manageitems-adlist not found. Maybe no ads present?")
             return []
@@ -294,6 +290,7 @@ class AdExtractor(WebScrapingMixin):
             await self.web_click(By.CLASS_NAME, "mfp-close")
             await self.web_sleep()
         except TimeoutError:
+            # Popup did not appear within timeout.
             pass
         return True
 

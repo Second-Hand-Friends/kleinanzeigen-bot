@@ -10,7 +10,6 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
     - cron: '0 15 1 * *'
   push:
-    branches: ['**']  # build all branches
     tags-ignore: ['**'] # don't build tags
     paths-ignore:
     - '**/*.md'
@@ -54,9 +53,8 @@ jobs:
   build:
   ###########################################################
 
-    # Run on push for all branches; on pull_request only for forked PRs to avoid duplicate builds for same-repo branches
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
-
+    # Skip push runs for non-main/release branches in the main repo; allow forks to run on feature branches.
+    if: github.event_name != 'push' || github.ref_name == 'main' || github.ref_name == 'release' || github.repository != 'Second-Hand-Friends/kleinanzeigen-bot'
     permissions:
       packages: write
 
@@ -371,7 +369,8 @@ jobs:
         always()
           && needs.build.result == 'success'
           && (needs.publish-coverage.result == 'success' || needs.publish-coverage.result == 'skipped')
-        && (github.ref_name == 'main' || github.ref_name == 'release') && !github.event.act
+        && (github.ref_name == 'main' || github.ref_name == 'release')
+        && !github.event.act
 
     concurrency: publish-${{ github.ref_name }}-release # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idconcurrency
 
@@ -394,6 +393,8 @@ jobs:
       # only required by "gh release create" to prevent "fatal: Not a git repository"
       uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.0
       # https://github.com/actions/checkout
+      with:
+        fetch-depth: 0
 
 
     - name: Delete untagged docker image
@@ -445,17 +446,7 @@ jobs:
         esac
 
 
-    - name: "Delete previous '${{ steps.release.outputs.name }}' release"
-      if: steps.release.outputs.name && steps.release.outputs.name != ''
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        RELEASE_NAME: ${{ steps.release.outputs.name }}
-      # https://cli.github.com/manual/gh_release_delete
-      run: |
-        GH_DEBUG=1 gh release delete "$RELEASE_NAME" --yes --cleanup-tag || true
-
-
-    - name: "Create '${{ steps.release.outputs.name }}' Release"
+    - name: "Generate release notes"
       if: steps.release.outputs.name && steps.release.outputs.name != ''
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -474,14 +465,64 @@ jobs:
           The developers assume no liability for any damages or legal consequences.
           Use is at your own risk. Any unlawful use is strictly prohibited.</p>
 
+      run: |
+        set -euo pipefail
+
+        # We reuse the moving "latest"/"preview" tags for releases. GitHub's generate-notes compares
+        # tag_name -> previous_tag_name. If we pass the moving tag as tag_name before it moves, the
+        # comparison is old -> old (empty notes). We avoid this by using a fake tag_name (not created)
+        # and anchoring previous_tag_name to the current moving tag. This yields old -> new notes
+        # without creating or pushing any tags (important: pushes can be blocked for workflow files).
+        if ! gh release view "$RELEASE_NAME" --json tagName --jq '.tagName' >/dev/null 2>&1; then
+          echo "ERROR: Failed to query existing '$RELEASE_NAME' release; cannot generate release notes." >&2
+          exit 1
+        fi
+
+        NOTES_TAG="${RELEASE_NAME}-notes-${GITHUB_RUN_ID}"
+        echo "Generating notes: tag_name=${NOTES_TAG}, previous_tag_name=${RELEASE_NAME}, target_commitish=${GITHUB_SHA}"
+
+        # Prefer GitHub's generate-notes API so we get PR links and @mentions
+        gh api -X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+          -f tag_name="$NOTES_TAG" \
+          -f target_commitish="$GITHUB_SHA" \
+          -f previous_tag_name="$RELEASE_NAME" \
+          --jq '.body' > release-notes.md
+
+        if ! grep -q '[^[:space:]]' release-notes.md; then
+          echo "ERROR: GitHub generate-notes returned an empty body." >&2
+          exit 1
+        fi
+
+        # Remove the "Full Changelog" line to avoid broken links from the fake tag_name.
+        sed -E -i.bak '/^\*\*Full Changelog\*\*:/d' release-notes.md
+        rm -f release-notes.md.bak
+
+        printf "\n%s\n" "$LEGAL_NOTICE" >> release-notes.md
+
+
+    - name: "Delete previous '${{ steps.release.outputs.name }}' release"
+      if: steps.release.outputs.name && steps.release.outputs.name != ''
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RELEASE_NAME: ${{ steps.release.outputs.name }}
+      # https://cli.github.com/manual/gh_release_delete
+      run: |
+        GH_DEBUG=1 gh release delete "$RELEASE_NAME" --yes --cleanup-tag || true
+
+
+    - name: "Create '${{ steps.release.outputs.name }}' Release"
+      if: steps.release.outputs.name && steps.release.outputs.name != ''
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RELEASE_NAME: ${{ steps.release.outputs.name }}
+
       # https://cli.github.com/manual/gh_release_create
       run: |
         GH_DEBUG=1 gh release create "$RELEASE_NAME" \
           --title "$RELEASE_NAME" \
           ${{ steps.release.outputs.name == 'latest' && '--latest' || '' }} \
           ${{ steps.release.outputs.name == 'preview' && '--prerelease' || '' }} \
-          --generate-notes \
-          --notes "$LEGAL_NOTICE" \
+          --notes-file release-notes.md \
           --target "${{ github.sha }}" \
           kleinanzeigen-bot-darwin-amd64 \
           kleinanzeigen-bot-darwin-arm64 \

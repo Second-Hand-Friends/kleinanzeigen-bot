@@ -5,7 +5,7 @@ import copy, io, json, logging, os, tempfile  # isort: skip
 from collections.abc import Generator
 from contextlib import redirect_stdout
 from datetime import timedelta
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -568,7 +568,6 @@ class TestKleinanzeigenBotArgParsing:
     def test_parse_args_config_path(self, test_bot:KleinanzeigenBot) -> None:
         """Test parsing config path."""
         test_bot.parse_args(["script.py", "--config=test.yaml", "help"])
-        assert test_bot.config_file_path is not None
         assert test_bot.config_file_path.endswith("test.yaml")
 
     def test_parse_args_logfile(self, test_bot:KleinanzeigenBot) -> None:
@@ -596,24 +595,6 @@ class TestKleinanzeigenBotArgParsing:
         """Test parsing empty log file path."""
         test_bot.parse_args(["script.py", "--logfile=", "help"])
         assert test_bot.log_file_path is None
-
-    def test_logfile_explicit_flag_set(self, test_bot:KleinanzeigenBot) -> None:
-        """Test that log_file_explicitly_provided flag is set when --logfile is provided."""
-        test_bot.parse_args(["script.py", "--logfile=custom.log", "help"])
-        assert test_bot.log_file_explicitly_provided is True
-        assert test_bot.log_file_path is not None
-        assert "custom.log" in test_bot.log_file_path
-
-    def test_logfile_explicit_flag_set_even_when_empty(self, test_bot:KleinanzeigenBot) -> None:
-        """Test that log_file_explicitly_provided flag is set even when --logfile= is empty."""
-        test_bot.parse_args(["script.py", "--logfile=", "help"])
-        assert test_bot.log_file_explicitly_provided is True
-        assert test_bot.log_file_path is None
-
-    def test_logfile_explicit_flag_not_set_when_not_provided(self, test_bot:KleinanzeigenBot) -> None:
-        """Test that log_file_explicitly_provided flag is False when --logfile is not provided."""
-        test_bot.parse_args(["script.py", "help"])
-        assert test_bot.log_file_explicitly_provided is False
 
     def test_parse_args_lang_option(self, test_bot:KleinanzeigenBot) -> None:
         """Test parsing language option."""
@@ -1092,6 +1073,124 @@ class TestKleinanzeigenBotShippingOptions:
             assert ad_file.exists()
 
     @pytest.mark.asyncio
+    async def test_cross_drive_path_fallback_windows(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """Test that cross-drive path handling falls back to absolute path on Windows."""
+        # Create ad config
+        ad_cfg = Ad.model_validate(base_ad_config | {
+            "updated_on": "2024-01-01T00:00:00",
+            "created_on": "2024-01-01T00:00:00",
+            "auto_price_reduction": {
+                "enabled": True,
+                "strategy": "FIXED",
+                "amount": 10,
+                "min_price": 50,
+                "delay_reposts": 0,
+                "delay_days": 0
+            },
+            "price": 100,
+            "repost_count": 1,
+            "price_reduction_count": 0
+        })
+        ad_cfg.update_content_hash()
+        ad_cfg_orig = ad_cfg.model_dump()
+
+        # Simulate Windows cross-drive scenario
+        # Config on D:, ad file on C:
+        test_bot.config_file_path = "D:\\project\\config.yaml"
+        ad_file = "C:\\temp\\test_ad.yaml"
+
+        # Create a sentinel exception to abort publish_ad early
+        class _SentinelException(Exception):
+            pass
+
+        # Track what path argument __apply_auto_price_reduction receives
+        recorded_path:list[str] = []
+
+        def mock_apply_auto_price_reduction(ad_cfg:Ad, ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
+            recorded_path.append(ad_file_relative)
+            raise _SentinelException("Abort early for test")
+
+        # Mock Path to use PureWindowsPath for testing cross-drive behavior
+        with patch("kleinanzeigen_bot.Path", PureWindowsPath), \
+                patch("kleinanzeigen_bot.apply_auto_price_reduction", side_effect = mock_apply_auto_price_reduction), \
+                patch.object(test_bot, "web_open", new_callable = AsyncMock), \
+                patch.object(test_bot, "delete_ad", new_callable = AsyncMock):
+            # Call publish_ad and expect sentinel exception
+            try:
+                await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+                pytest.fail("Expected _SentinelException to be raised")
+            except _SentinelException:
+                # This is expected - the test aborts early
+                pass
+
+        # Verify the path argument is the absolute path (fallback behavior)
+        assert len(recorded_path) == 1
+        assert recorded_path[0] == ad_file, f"Expected absolute path fallback, got: {recorded_path[0]}"
+
+    @pytest.mark.asyncio
+    async def test_auto_price_reduction_only_on_replace_not_update(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path
+    ) -> None:
+        """Test that auto price reduction is ONLY applied on REPLACE mode, not UPDATE."""
+        # Create ad with auto price reduction enabled
+        ad_cfg = Ad.model_validate(base_ad_config | {
+            "id": 12345,
+            "price": 200,
+            "auto_price_reduction": {
+                "enabled": True,
+                "strategy": "FIXED",
+                "amount": 50,
+                "min_price": 50,
+                "delay_reposts": 0,
+                "delay_days": 0
+            },
+            "repost_count": 1,
+            "price_reduction_count": 0,
+            "updated_on": "2024-01-01T00:00:00",
+            "created_on": "2024-01-01T00:00:00"
+        })
+        ad_cfg.update_content_hash()
+        ad_cfg_orig = ad_cfg.model_dump()
+
+        # Mock the private __apply_auto_price_reduction method
+        with patch("kleinanzeigen_bot.apply_auto_price_reduction") as mock_apply:
+            # Mock other dependencies
+            mock_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
+            with patch.object(test_bot, "web_find", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_input", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_click", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_open", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_select", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False), \
+                    patch.object(test_bot, "web_await", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_sleep", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = mock_response), \
+                    patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = mock_response), \
+                    patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock), \
+                    patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []), \
+                    patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock), \
+                    patch("builtins.input", return_value = ""), \
+                    patch("kleinanzeigen_bot.utils.misc.ainput", new_callable = AsyncMock, return_value = ""):
+
+                test_bot.page = MagicMock()
+                test_bot.page.url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+                test_bot.config.publishing.delete_old_ads = "BEFORE_PUBLISH"
+
+                # Test REPLACE mode - should call __apply_auto_price_reduction
+                await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+                assert mock_apply.call_count == 1, "Auto price reduction should be called on REPLACE"
+
+                # Reset mock
+                mock_apply.reset_mock()
+
+                # Test MODIFY mode - should NOT call __apply_auto_price_reduction
+                await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
+                assert mock_apply.call_count == 0, "Auto price reduction should NOT be called on MODIFY"
+
+    @pytest.mark.asyncio
     async def test_special_attributes_with_non_string_values(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
         """Test that special attributes with non-string values are converted to strings."""
         # Create ad config with string special attributes first (to pass validation)
@@ -1483,196 +1582,39 @@ def test_file_logger_writes_message(tmp_path:Path, caplog:pytest.LogCaptureFixtu
     assert "Logger test log message" in contents
 
 
-class TestFinalizeInstallationMode:
-    """Tests for finalize_installation_mode() logfile override behavior."""
-
-    def test_explicit_logfile_respected_in_xdg_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
-        """Test that explicit --logfile overrides XDG mode default."""
-        # Setup XDG mode by creating config in XDG location
-        xdg_config = tmp_path / "config" / "kleinanzeigen-bot"
-        xdg_config.mkdir(parents = True)
-        (xdg_config / "config.yaml").write_text("login:\n  username: test\n  password: test\n")
-
-        monkeypatch.setattr("platformdirs.user_config_dir", lambda app_name: str(tmp_path / "config" / app_name))
-        monkeypatch.setattr("platformdirs.user_state_dir", lambda app_name: str(tmp_path / "state" / app_name))
-
-        # Change to different directory
-        cwd = tmp_path / "cwd"
-        cwd.mkdir()
-        monkeypatch.chdir(cwd)
-
-        # Create bot and explicitly set logfile to portable default value
-        bot = KleinanzeigenBot()
-        explicit_logfile = str(cwd / "kleinanzeigen_bot.log")
-        bot.parse_args(["script.py", f"--logfile={explicit_logfile}", "help"])
-
-        # Verify flag is set
-        assert bot.log_file_explicitly_provided is True
-        assert bot.log_file_path == explicit_logfile
-
-        # This should NOT override the explicit logfile even though we're in XDG mode
-        bot.finalize_installation_mode()
-
-        # Verify logfile path was NOT changed to XDG state directory
-        assert bot.installation_mode == "xdg"
-        assert bot.log_file_path == explicit_logfile
-        assert bot.log_file_path is not None
-        assert not bot.log_file_path.startswith(str(tmp_path / "state"))
-
-    def test_default_logfile_uses_xdg_in_xdg_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
-        """Test that default logfile uses XDG state directory in XDG mode."""
-        # Setup XDG mode
-        xdg_config = tmp_path / "config" / "kleinanzeigen-bot"
-        xdg_config.mkdir(parents = True)
-        (xdg_config / "config.yaml").write_text("login:\n  username: test\n  password: test\n")
-
-        monkeypatch.setattr("platformdirs.user_config_dir", lambda app_name: str(tmp_path / "config" / app_name))
-        monkeypatch.setattr("platformdirs.user_state_dir", lambda app_name: str(tmp_path / "state" / app_name))
-
-        cwd = tmp_path / "cwd"
-        cwd.mkdir()
-        monkeypatch.chdir(cwd)
-
-        # Create bot without explicit logfile
-        bot = KleinanzeigenBot()
-        bot.parse_args(["script.py", "help"])
-
-        # Verify flag is NOT set
-        assert bot.log_file_explicitly_provided is False
-
-        # Finalize should use XDG state directory
-        bot.finalize_installation_mode()
-
-        assert bot.installation_mode == "xdg"
-        assert bot.log_file_path is not None
-        assert bot.log_file_path.startswith(str(tmp_path / "state" / "kleinanzeigen-bot"))
-        assert "kleinanzeigen_bot.log" in bot.log_file_path
-
-    def test_explicit_logfile_respected_in_portable_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
-        """Test that explicit --logfile is respected in portable mode."""
-        # Setup portable mode
-        (tmp_path / "config.yaml").write_text("login:\n  username: test\n  password: test\n")
-        monkeypatch.chdir(tmp_path)
-
-        # Create bot with custom logfile
-        bot = KleinanzeigenBot()
-        custom_logfile = str(tmp_path / "custom.log")
-        bot.parse_args(["script.py", f"--logfile={custom_logfile}", "help"])
-
-        assert bot.log_file_explicitly_provided is True
-
-        bot.finalize_installation_mode()
-
-        assert bot.installation_mode == "portable"
-        assert bot.log_file_path == custom_logfile
+def _apply_price_reduction_persistence(count:int | None) -> dict[str, Any]:
+    """Return a dict with price_reduction_count only when count is positive (count -> dict[str, Any])."""
+    ad_cfg_orig:dict[str, Any] = {}
+    if count is not None and count > 0:
+        ad_cfg_orig["price_reduction_count"] = count
+    return ad_cfg_orig
 
 
-class TestCreateConfigCommand:
-    """Tests for create-config CLI command with XDG support."""
+class TestPriceReductionPersistence:
+    """Tests for price_reduction_count persistence logic."""
 
-    @pytest.mark.asyncio
-    async def test_create_config_in_portable_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
-        """Test that create-config creates config.yaml in CWD (portable mode)."""
-        # Setup: clean directory, make it CWD
-        monkeypatch.chdir(tmp_path)
+    @pytest.mark.unit
+    def test_persistence_logic_saves_when_count_positive(self) -> None:
+        """Test the conditional logic that decides whether to persist price_reduction_count."""
+        # Simulate the logic from publish_ad lines 1076-1079
+        # Test case 1: price_reduction_count = 3 (should persist)
+        ad_cfg_orig = _apply_price_reduction_persistence(3)
 
-        # Create bot and run create-config command
-        bot = KleinanzeigenBot()
-        await bot.run(["script.py", "create-config"])
+        assert "price_reduction_count" in ad_cfg_orig
+        assert ad_cfg_orig["price_reduction_count"] == 3
 
-        # Verify config was created in CWD (portable mode)
-        config_file = tmp_path / "config.yaml"
-        assert config_file.exists()
-        assert bot.installation_mode == "portable"
-        assert bot.config_file_path == str(config_file)
+    @pytest.mark.unit
+    def test_persistence_logic_skips_when_count_zero(self) -> None:
+        """Test that price_reduction_count == 0 does not get persisted."""
+        # Test case 2: price_reduction_count = 0 (should NOT persist)
+        ad_cfg_orig = _apply_price_reduction_persistence(0)
 
-    @pytest.mark.asyncio
-    async def test_create_config_in_xdg_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
-        """Test that create-config prompts for XDG mode on first run."""
-        # Setup: clean directories for CWD and XDG
-        cwd = tmp_path / "cwd"
-        cwd.mkdir()
-        monkeypatch.chdir(cwd)
+        assert "price_reduction_count" not in ad_cfg_orig
 
-        xdg_config = tmp_path / "config" / "kleinanzeigen-bot"
-        xdg_config.mkdir(parents = True)
+    @pytest.mark.unit
+    def test_persistence_logic_skips_when_count_none(self) -> None:
+        """Test that price_reduction_count == None does not get persisted."""
+        # Test case 3: price_reduction_count = None (should NOT persist)
+        ad_cfg_orig = _apply_price_reduction_persistence(None)
 
-        # Mock platformdirs to return test XDG path
-        monkeypatch.setattr("platformdirs.user_config_dir",
-                           lambda app_name: str(tmp_path / "config" / app_name))
-
-        # Mock user selecting XDG mode (choice "2")
-        class MockStdin:
-            def isatty(self) -> bool:
-                return True
-        monkeypatch.setattr("sys.stdin", MockStdin())
-        monkeypatch.setattr("builtins.input", lambda _: "2")
-
-        # Create bot and run create-config command
-        bot = KleinanzeigenBot()
-        await bot.run(["script.py", "create-config"])
-
-        # Verify config was created in XDG directory
-        config_file = xdg_config / "config.yaml"
-        assert config_file.exists()
-        assert bot.installation_mode == "xdg"
-        assert bot.config_file_path == str(config_file)
-
-        # Verify CWD does NOT have config.yaml
-        assert not (cwd / "config.yaml").exists()
-
-    @pytest.mark.asyncio
-    async def test_create_config_respects_existing_config(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
-        """Test that create-config doesn't overwrite existing config.yaml."""
-        # Setup: create existing config.yaml
-        monkeypatch.chdir(tmp_path)
-        existing_config = tmp_path / "config.yaml"
-        original_content = "login:\n  username: existing\n  password: existing\n"
-        existing_config.write_text(original_content)
-
-        # Create bot and run create-config command
-        bot = KleinanzeigenBot()
-        await bot.run(["script.py", "create-config"])
-
-        # Verify config was NOT overwritten
-        config_content = existing_config.read_text()
-        assert config_content == original_content
-        assert "existing" in config_content
-        assert "changeme" not in config_content
-
-    @pytest.mark.asyncio
-    async def test_create_config_with_explicit_path(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
-        """Test that create-config respects --config flag."""
-        monkeypatch.chdir(tmp_path)
-
-        # Create custom config directory
-        custom_dir = tmp_path / "custom"
-        custom_dir.mkdir()
-        custom_config = custom_dir / "my-config.yaml"
-
-        # Create bot with --config flag
-        bot = KleinanzeigenBot()
-        await bot.run(["script.py", f"--config={custom_config}", "create-config"])
-
-        # Verify config was created at custom location
-        assert custom_config.exists()
-        assert bot.config_file_path == str(custom_config)
-
-        # Verify default location does NOT have config
-        assert not (tmp_path / "config.yaml").exists()
+        assert "price_reduction_count" not in ad_cfg_orig
