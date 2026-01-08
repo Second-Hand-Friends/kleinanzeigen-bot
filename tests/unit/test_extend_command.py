@@ -416,7 +416,7 @@ class TestExtendAdMethod:
         base_ad_config_with_id:dict[str, Any],
         tmp_path:Path
     ) -> None:
-        """Test extend_ad handles unexpected exceptions."""
+        """Test extend_ad propagates unexpected exceptions."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
         # Create temporary YAML file
@@ -427,9 +427,8 @@ class TestExtendAdMethod:
             # Simulate unexpected exception
             mock_open.side_effect = Exception("Unexpected error")
 
-            result = await test_bot.extend_ad(str(ad_file), ad_cfg, base_ad_config_with_id)
-
-            assert result is False
+            with pytest.raises(Exception, match = "Unexpected error"):
+                await test_bot.extend_ad(str(ad_file), ad_cfg, base_ad_config_with_id)
 
     @pytest.mark.asyncio
     async def test_extend_ad_updates_yaml_file(

@@ -319,7 +319,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
                     # Default to all ads if no selector provided
                     if not re.compile(r"\d+[,\d+]*").search(self.ads_selector):
-                        LOG.info("Extending all ads within 8-day window...")
+                        LOG.info(_("Extending all ads within 8-day window..."))
                         self.ads_selector = "all"
 
                     if ads := self.load_ads():
@@ -979,7 +979,7 @@ class KleinanzeigenBot(WebScrapingMixin):
             await self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
 
             # Find and click "Verlängern" (extend) button for this ad
-            extend_button_xpath = f'//article[@data-adid="{ad_cfg.id}"]//button[contains(., "Verlängern")]'
+            extend_button_xpath = f'//li[@data-adid="{ad_cfg.id}"]//button[contains(., "Verlängern")]'
 
             try:
                 await self.web_click(By.XPATH, extend_button_xpath)
@@ -1008,8 +1008,11 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.info(_(" -> SUCCESS: ad extended with ID %s"), ad_cfg.id)
             return True
 
-        except Exception as ex:
-            LOG.error(_(" -> FAILED: Could not extend ad '%s': %s"), ad_cfg.title, ex)
+        except TimeoutError as ex:
+            LOG.error(_(" -> FAILED: Timeout while extending ad '%s': %s"), ad_cfg.title, ex)
+            return False
+        except OSError as ex:
+            LOG.error(_(" -> FAILED: Could not persist extension for ad '%s': %s"), ad_cfg.title, ex)
             return False
 
     async def __check_publishing_result(self) -> bool:
