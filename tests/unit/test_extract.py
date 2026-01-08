@@ -17,7 +17,7 @@ from kleinanzeigen_bot.utils.web_scraping_mixin import Browser, By, Element
 
 
 class _DimensionsDict(TypedDict):
-    dimension108:str
+    ad_attributes:str
 
 
 class _UniversalAnalyticsOptsDict(TypedDict):
@@ -622,8 +622,8 @@ class TestAdExtractorContent:
                 web_execute = AsyncMock(return_value = {
                     "universalAnalyticsOpts": {
                         "dimensions": {
-                            "dimension92": "",
-                            "dimension108": ""
+                            "l3_category_id": "",
+                            "ad_attributes": ""
                         }
                     }
                 }),
@@ -658,8 +658,8 @@ class TestAdExtractorContent:
             web_execute = AsyncMock(return_value = {
                 "universalAnalyticsOpts": {
                     "dimensions": {
-                        "dimension92": "",
-                        "dimension108": ""
+                        "l3_category_id": "",
+                        "ad_attributes": ""
                     }
                 }
             }),
@@ -699,8 +699,8 @@ class TestAdExtractorContent:
             web_execute = AsyncMock(return_value = {
                 "universalAnalyticsOpts": {
                     "dimensions": {
-                        "dimension92": "",
-                        "dimension108": ""
+                        "l3_category_id": "",
+                        "ad_attributes": ""
                     }
                 }
             }),
@@ -841,7 +841,7 @@ class TestAdExtractorCategory:
             mock_web_execute.return_value = {
                 "universalAnalyticsOpts": {
                     "dimensions": {
-                        "dimension108": ""
+                        "ad_attributes": ""
                     }
                 }
             }
@@ -856,7 +856,7 @@ class TestAdExtractorCategory:
         special_atts = {
             "universalAnalyticsOpts": {
                 "dimensions": {
-                    "dimension108": "versand_s:t|color_s:creme|groesse_s:68|condition_s:alright|type_s:accessoires|art_s:maedchen"
+                    "ad_attributes": "versand_s:t|color_s:creme|groesse_s:68|condition_s:alright|type_s:accessoires|art_s:maedchen"
                 }
             }
         }
@@ -876,12 +876,12 @@ class TestAdExtractorCategory:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_special_attributes_missing_dimension108(self, extractor:AdExtractor) -> None:
-        """Test extraction of special attributes when dimension108 key is missing."""
+    async def test_extract_special_attributes_missing_ad_attributes(self, extractor:AdExtractor) -> None:
+        """Test extraction of special attributes when ad_attributes key is missing."""
         belen_conf:dict[str, Any] = {
             "universalAnalyticsOpts": {
                 "dimensions": {
-                    # dimension108 key is completely missing
+                    # ad_attributes key is completely missing
                 }
             }
         }
@@ -1086,8 +1086,8 @@ class TestAdExtractorDownload:
             patch.object(extractor, "web_execute", new_callable = AsyncMock, return_value = {
                 "universalAnalyticsOpts": {
                     "dimensions": {
-                        "dimension92": "",
-                        "dimension108": ""
+                        "l3_category_id": "",
+                        "ad_attributes": ""
                     }
                 }
             }),
@@ -1145,8 +1145,8 @@ class TestAdExtractorDownload:
             patch.object(extractor, "web_execute", new_callable = AsyncMock, return_value = {
                 "universalAnalyticsOpts": {
                     "dimensions": {
-                        "dimension92": "",
-                        "dimension108": ""
+                        "l3_category_id": "",
+                        "ad_attributes": ""
                     }
                 }
             }),
@@ -1206,8 +1206,8 @@ class TestAdExtractorDownload:
             patch.object(extractor, "web_execute", new_callable = AsyncMock, return_value = {
                 "universalAnalyticsOpts": {
                     "dimensions": {
-                        "dimension92": "",
-                        "dimension108": ""
+                        "l3_category_id": "",
+                        "ad_attributes": ""
                     }
                 }
             }),
@@ -1262,8 +1262,8 @@ class TestAdExtractorDownload:
             patch.object(extractor, "web_execute", new_callable = AsyncMock, return_value = {
                 "universalAnalyticsOpts": {
                     "dimensions": {
-                        "dimension92": "",
-                        "dimension108": ""
+                        "l3_category_id": "",
+                        "ad_attributes": ""
                     }
                 }
             }),
