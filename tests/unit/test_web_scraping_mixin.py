@@ -1010,7 +1010,8 @@ class TestWebScrapingBrowserConfiguration:
         monkeypatch.setattr(os.path, "exists", lambda p: p == "/usr/bin/chrome")
 
         async def mock_exists_async(path:str | Path) -> bool:
-            return str(path) in {"/usr/bin/chrome", "/explicit/path/Default/Preferences"}
+            normalized = str(path).replace("\\", "/")
+            return normalized in {"/usr/bin/chrome", "/explicit/path/Default/Preferences"}
         monkeypatch.setattr(files, "exists", mock_exists_async)
         monkeypatch.setattr(loggers, "is_debug", lambda _logger: False)
         monkeypatch.setattr(os, "makedirs", lambda *_args, **_kwargs: None)
@@ -1029,6 +1030,7 @@ class TestWebScrapingBrowserConfiguration:
         assert any(arg.startswith("--user-data-dir=") and arg.endswith("/explicit/path") for arg in config.browser_args)
         assert not any(arg.startswith("--user-data-dir=") and str(tmp_path) in arg for arg in config.browser_args)
         assert any(arg.startswith("--log-level=") for arg in config.browser_args)
+        assert config.user_data_dir == "/explicit/path"
 
     @pytest.mark.asyncio
     async def test_browser_arguments_auto_append_user_data_dir(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
@@ -1071,6 +1073,7 @@ class TestWebScrapingBrowserConfiguration:
         config = _nodriver_start_mock().call_args[0][0]
         assert any(arg.startswith("--user-data-dir=") and str(tmp_path) in arg for arg in config.browser_args)
         assert any(arg.startswith("--log-level=") for arg in config.browser_args)
+        assert config.user_data_dir == str(tmp_path)
 
     @pytest.mark.asyncio
     async def test_browser_extension_loading(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:

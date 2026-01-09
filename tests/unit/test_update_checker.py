@@ -95,11 +95,12 @@ class TestUpdateChecker:
 
         with patch.object(builtins, "__import__", side_effect = fake_import):
             sys.modules.pop("kleinanzeigen_bot._version", None)
-            reloaded = importlib.reload(update_checker)
-            assert reloaded.__version__ == "unknown"
-
-        # Restore module state for the rest of the test session.
-        importlib.reload(update_checker)
+            try:
+                reloaded = importlib.reload(update_checker)
+                assert reloaded.__version__ == "unknown"
+            finally:
+                # Restore module state for the rest of the test session.
+                importlib.reload(update_checker)
 
     def test_get_local_version(self, config:Config) -> None:
         """Test that the local version is correctly retrieved."""

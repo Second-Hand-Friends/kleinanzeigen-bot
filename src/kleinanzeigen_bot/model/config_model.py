@@ -144,8 +144,8 @@ class BrowserConfig(ContextualModel):
     )
     use_private_window:bool = True
     user_data_dir:str | None = Field(
-        default = ".temp/browser-profile",
-        description = "See https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md"
+        default = None,
+        description = "Browser profile directory. If not specified, uses XDG cache directory or legacy .temp/browser-profile. See https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md"
     )
     profile_name:str | None = None
 
