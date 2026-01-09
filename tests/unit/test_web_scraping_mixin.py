@@ -1010,9 +1010,10 @@ class TestWebScrapingBrowserConfiguration:
         monkeypatch.setattr(os.path, "exists", lambda p: p == "/usr/bin/chrome")
 
         async def mock_exists_async(path:str | Path) -> bool:
-            return str(path) == "/usr/bin/chrome"
+            return str(path) in {"/usr/bin/chrome", "/explicit/path/Default/Preferences"}
         monkeypatch.setattr(files, "exists", mock_exists_async)
         monkeypatch.setattr(loggers, "is_debug", lambda _logger: False)
+        monkeypatch.setattr(os, "makedirs", lambda *_args, **_kwargs: None)
 
         profile_dir = tmp_path / "Default"
         profile_dir.mkdir(parents = True, exist_ok = True)
