@@ -310,10 +310,10 @@ class AdExtractor(WebScrapingMixin):
         info["category"] = await self._extract_category_from_ad_page()
 
         # append subcategory and change e.g. category "161/172" to "161/172/lautsprecher_kopfhoerer"
-        # take subcategory from dimension92 as key 'art_s' sometimes is a special attribute (e.g. gender for clothes)
+        # take subcategory from third_category_name as key 'art_s' sometimes is a special attribute (e.g. gender for clothes)
         # the subcategory isn't really necessary, but when set, the appropriate special attribute gets preselected
-        if dimension92 := belen_conf["universalAnalyticsOpts"]["dimensions"].get("dimension92"):
-            info["category"] += f"/{dimension92}"
+        if third_category_id := belen_conf["universalAnalyticsOpts"]["dimensions"].get("l3_category_id"):
+            info["category"] += f"/{third_category_id}"
 
         info["title"] = title
 
@@ -473,7 +473,7 @@ class AdExtractor(WebScrapingMixin):
         """
 
         # e.g. "art_s:lautsprecher_kopfhoerer|condition_s:like_new|versand_s:t"
-        special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"].get("dimension108")
+        special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"].get("ad_attributes")
         if not special_attributes_str:
             return {}
         special_attributes = dict(item.split(":") for item in special_attributes_str.split("|") if ":" in item)
