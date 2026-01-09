@@ -251,6 +251,63 @@ class TestKleinanzeigenBotCommandLine:
         assert test_bot.config_file_path == str(config_path.absolute())
 
 
+class TestKleinanzeigenBotRun:
+    """Tests for KleinanzeigenBot run behavior."""
+
+    def test_finalize_installation_mode_skips_help(self, test_bot:KleinanzeigenBot) -> None:
+        """Ensure finalize_installation_mode returns early for help."""
+        test_bot.command = "help"
+        test_bot.installation_mode = None
+        test_bot.finalize_installation_mode()
+        assert test_bot.installation_mode is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("command", ["verify", "update-check", "update-content-hash", "publish", "delete", "download"])
+    async def test_run_uses_installation_mode_for_update_checker(self, test_bot:KleinanzeigenBot, command:str) -> None:
+        """Ensure UpdateChecker is initialized with the detected installation mode."""
+        update_checker_calls:list[tuple[Config, str | None]] = []
+
+        class DummyUpdateChecker:
+            def __init__(self, config:Config, installation_mode:str | None) -> None:
+                update_checker_calls.append((config, installation_mode))
+
+            def check_for_updates(self, *_args:Any, **_kwargs:Any) -> None:
+                return None
+
+        def set_installation_mode() -> None:
+            test_bot.installation_mode = "xdg"
+
+        with (
+            patch.object(test_bot, "configure_file_logging"),
+            patch.object(test_bot, "load_config"),
+            patch.object(test_bot, "load_ads", return_value = []),
+            patch.object(test_bot, "create_browser_session", new_callable = AsyncMock),
+            patch.object(test_bot, "login", new_callable = AsyncMock),
+            patch.object(test_bot, "download_ads", new_callable = AsyncMock),
+            patch.object(test_bot, "close_browser_session"),
+            patch.object(test_bot, "finalize_installation_mode", side_effect = set_installation_mode),
+            patch("kleinanzeigen_bot.UpdateChecker", DummyUpdateChecker),
+        ):
+            await test_bot.run(["app", command])
+
+        assert update_checker_calls == [(test_bot.config, "xdg")]
+
+    @pytest.mark.asyncio
+    async def test_download_ads_passes_installation_mode(self, test_bot:KleinanzeigenBot) -> None:
+        """Ensure download_ads wires installation mode into AdExtractor."""
+        test_bot.installation_mode = "xdg"
+        test_bot.ads_selector = "all"
+        test_bot.browser = MagicMock()
+
+        extractor_mock = MagicMock()
+        extractor_mock.extract_own_ads_urls = AsyncMock(return_value = [])
+
+        with patch("kleinanzeigen_bot.__init__.extract.AdExtractor", return_value = extractor_mock) as mock_extractor:
+            await test_bot.download_ads()
+
+        mock_extractor.assert_called_once_with(test_bot.browser, test_bot.config, "xdg")
+
+
 class TestKleinanzeigenBotConfiguration:
     """Tests for configuration loading and validation."""
 

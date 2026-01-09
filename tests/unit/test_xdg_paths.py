@@ -12,6 +12,31 @@ import pytest
 from kleinanzeigen_bot.utils import xdg_paths
 
 
+class TestGetXdgBaseDir:
+    """Tests for get_xdg_base_dir function."""
+
+    def test_returns_state_dir(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        """Test resolving XDG state directory."""
+        state_dir = tmp_path / "state"
+        monkeypatch.setattr("platformdirs.user_state_dir", lambda app_name: str(state_dir / app_name))
+
+        resolved = xdg_paths.get_xdg_base_dir("state")
+
+        assert resolved == state_dir / "kleinanzeigen-bot"
+
+    def test_raises_for_unknown_category(self) -> None:
+        """Test invalid category handling."""
+        with pytest.raises(ValueError, match = "Unsupported XDG category"):
+            xdg_paths.get_xdg_base_dir("invalid")  # type: ignore[arg-type]
+
+    def test_raises_when_base_dir_is_none(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        """Test runtime error when platformdirs returns None."""
+        monkeypatch.setattr("platformdirs.user_state_dir", lambda _app_name: None)
+
+        with pytest.raises(RuntimeError, match = "Failed to resolve XDG base directory"):
+            xdg_paths.get_xdg_base_dir("state")
+
+
 class TestDetectInstallationMode:
     """Tests for detect_installation_mode function."""
 

@@ -58,6 +58,11 @@ class TestAdExtractorBasics:
         assert extractor.browser == browser_mock
         assert extractor.config == test_bot_config
 
+    def test_constructor_rejects_invalid_installation_mode(self, browser_mock:MagicMock, test_bot_config:Config) -> None:
+        """Ensure invalid installation modes are rejected."""
+        with pytest.raises(ValueError, match = "Unsupported installation mode"):
+            AdExtractor(browser_mock, test_bot_config, installation_mode = "invalid")  # type: ignore[arg-type]
+
     @pytest.mark.parametrize(("url", "expected_id"), [
         ("https://www.kleinanzeigen.de/s-anzeige/test-title/12345678", 12345678),
         ("https://www.kleinanzeigen.de/s-anzeige/another-test/98765432", 98765432),
@@ -533,6 +538,39 @@ class TestAdExtractorNavigation:
             ], any_order = False)
 
     @pytest.mark.asyncio
+    async def test_extract_own_ads_urls_multiple_items(self, test_extractor:AdExtractor) -> None:
+        """Ensure each list item is processed when extracting refs."""
+        with patch.object(test_extractor, "web_open", new_callable = AsyncMock), \
+                patch.object(test_extractor, "web_sleep", new_callable = AsyncMock), \
+                patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock), \
+                patch.object(test_extractor, "web_find_all", new_callable = AsyncMock) as mock_web_find_all, \
+                patch.object(test_extractor, "web_find", new_callable = AsyncMock) as mock_web_find:
+
+            ad_list_container_mock = MagicMock()
+            pagination_section_mock = MagicMock()
+            cardbox_one = MagicMock()
+            cardbox_two = MagicMock()
+            link_one = MagicMock(attrs = {"href": "/s-anzeige/one/111"})
+            link_two = MagicMock(attrs = {"href": "/s-anzeige/two/222"})
+
+            mock_web_find.side_effect = [
+                ad_list_container_mock,
+                pagination_section_mock,
+                ad_list_container_mock,
+                link_one,
+                link_two
+            ]
+            mock_web_find_all.side_effect = [
+                [],
+                [cardbox_one, cardbox_two]
+            ]
+
+            refs = await test_extractor.extract_own_ads_urls()
+
+        assert refs == ["/s-anzeige/one/111", "/s-anzeige/two/222"]
+        assert mock_web_find.call_count == 5
+
+    @pytest.mark.asyncio
     async def test_extract_own_ads_urls_paginates_with_enabled_next_button(self, test_extractor:AdExtractor) -> None:
         """Ensure the paginator clicks the first enabled next button and advances."""
         ad_list_container_mock = MagicMock()
@@ -637,6 +675,55 @@ class TestAdExtractorContent:
             ):
                 info = await test_extractor._extract_ad_page_info("/some/dir", 12345)
                 assert info.description == raw_description
+
+    @pytest.mark.asyncio
+    async def test_extract_description_trims_affixes_and_sets_contact(
+        self,
+        test_extractor:AdExtractor,
+        test_bot_config:Config
+    ) -> None:
+        """Ensure description affixes are trimmed and contact/id are set."""
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+        test_extractor.page = page_mock
+
+        test_extractor.config = test_bot_config.with_values({
+            "ad_defaults": {
+                "description_prefix": "PRE",
+                "description_suffix": "SUF",
+            }
+        })
+
+        with patch.multiple(test_extractor,
+            web_text = AsyncMock(side_effect = [
+                "Test Title",
+                "PRE description SUF",
+                "03.02.2025"
+            ]),
+            web_execute = AsyncMock(return_value = {
+                "universalAnalyticsOpts": {
+                    "dimensions": {
+                        "l3_category_id": "",
+                        "ad_attributes": ""
+                    }
+                }
+            }),
+            _extract_category_from_ad_page = AsyncMock(return_value = "160"),
+            _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
+            _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
+            _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
+            _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
+            _download_images_from_ad_page = AsyncMock(return_value = []),
+            _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial(
+                name = "Test", zipcode = "12345", location = "Berlin"
+            ))
+        ):
+            info = await test_extractor._extract_ad_page_info("/some/dir", 12345)
+
+        assert info.description == "description"
+        assert info.id == 12345
+        assert info.contact is not None
+        assert info.contact.name == "Test"
 
     @pytest.mark.asyncio
     async def test_extract_description_with_affixes_timeout(
@@ -1055,6 +1142,25 @@ class TestAdExtractorDownload:
             # Should only download the one valid image (skip the None)
             assert len(image_paths) == 1
             assert image_paths[0] == "ad_12345__img1.jpg"
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_download_images_uses_executor(self, extractor:AdExtractor) -> None:
+        """Ensure image downloads use the executor for sync IO."""
+        image_box_mock = MagicMock()
+        img_with_url = MagicMock()
+        img_with_url.attrs = {"src": "http://example.com/valid_image.jpg"}
+
+        loop_mock = MagicMock()
+        loop_mock.run_in_executor = AsyncMock(return_value = "/some/dir/ad_12345__img1.jpg")
+
+        with patch.object(extractor, "web_find", new_callable = AsyncMock, return_value = image_box_mock), \
+                patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [img_with_url]), \
+                patch("asyncio.get_running_loop", return_value = loop_mock):
+            image_paths = await extractor._download_images_from_ad_page("/some/dir", 12345)
+
+        loop_mock.run_in_executor.assert_awaited()
+        assert image_paths == ["ad_12345__img1.jpg"]
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access

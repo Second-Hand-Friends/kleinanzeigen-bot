@@ -25,6 +25,7 @@ __all__ = [
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 _BREADCRUMB_MIN_DEPTH:Final[int] = 2
+PAGE_LINK_SELECTOR:Final[str] = "div h3 a.text-onSurface"
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
 
 
@@ -33,11 +34,13 @@ class AdExtractor(WebScrapingMixin):
     Wrapper class for ad extraction that uses an active bot´s browser session to extract specific elements from an ad page.
     """
 
-    def __init__(self, browser:Browser, config:Config, installation_mode:str = "portable") -> None:
+    def __init__(self, browser:Browser, config:Config, installation_mode:xdg_paths.InstallationMode = "portable") -> None:
         super().__init__()
         self.browser = browser
         self.config:Config = config
-        self.installation_mode = installation_mode
+        if installation_mode not in {"portable", "xdg"}:
+            raise ValueError(f"Unsupported installation mode: {installation_mode}")
+        self.installation_mode:xdg_paths.InstallationMode = installation_mode
 
     async def download_ad(self, ad_id:int) -> None:
         """
@@ -49,8 +52,7 @@ class AdExtractor(WebScrapingMixin):
 
         # create sub-directory for ad(s) to download (if necessary):
         download_dir = xdg_paths.get_downloaded_ads_path(self.installation_mode)
-        LOG.info("Using download directory: %s", download_dir)
-        LOG.debug("Ensuring download directory exists...")
+        LOG.info(_("Using download directory: %s"), download_dir)
         # Note: xdg_paths.get_downloaded_ads_path() already creates the directory
 
         # Extract ad info and determine final directory path
@@ -205,12 +207,15 @@ class AdExtractor(WebScrapingMixin):
 
             # Extract references using the CORRECTED selector
             try:
-                page_refs:list[str] = [str((await self.web_find(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = li)).attrs["href"]) for li in list_items]
+                page_refs:list[str] = []
+                for li in list_items:
+                    link = await self.web_find(By.CSS_SELECTOR, PAGE_LINK_SELECTOR, parent = li)
+                    page_refs.append(str(link.attrs["href"]))
                 refs.extend(page_refs)
                 LOG.info("Successfully extracted %s refs from page %s.", len(page_refs), current_page)
             except Exception as e:
                 # Log the error if extraction fails for some items, but try to continue
-                LOG.exception("Error extracting refs on page %s: %s", current_page, e)
+                LOG.exception(_("Error extracting refs on page %s using selector %s: %s"), current_page, PAGE_LINK_SELECTOR, e)
 
             if not multi_page:  # only one iteration for single-page overview
                 break
@@ -397,7 +402,7 @@ class AdExtractor(WebScrapingMixin):
         if await files.exists(temp_dir):
             if self.config.download.rename_existing_folders:
                 # Rename the old folder to the new name with title
-                LOG.info("Renaming folder from %s to %s for ad %s...", temp_dir.name, final_dir.name, ad_id)
+                LOG.info(_("Renaming folder from %s to %s for ad %s..."), temp_dir.name, final_dir.name, ad_id)
                 LOG.debug("Renaming: %s -> %s", temp_dir, final_dir)
                 await loop.run_in_executor(None, temp_dir.rename, final_dir)
             else:
@@ -452,7 +457,7 @@ class AdExtractor(WebScrapingMixin):
             category_first_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
             category_second_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(3)", parent = category_line)
         except TimeoutError as exc:
-            LOG.error("Legacy breadcrumb selectors not found within %.1f seconds (collected ids: %s)", fallback_timeout, category_ids)
+            LOG.error(_("Legacy breadcrumb selectors not found within %.1f seconds (collected ids: %s)"), fallback_timeout, category_ids)
             raise TimeoutError(_("Unable to locate breadcrumb fallback selectors within %(seconds).1f seconds.") % {"seconds": fallback_timeout}) from exc
         href_first:str = str(category_first_part.attrs["href"])
         href_second:str = str(category_second_part.attrs["href"])

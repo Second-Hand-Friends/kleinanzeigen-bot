@@ -4,8 +4,11 @@
 
 from __future__ import annotations
 
+import builtins
+import importlib
 import json
 import logging
+import sys
 from datetime import datetime, timedelta, timezone, tzinfo
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, patch
@@ -19,6 +22,7 @@ import requests
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
+from kleinanzeigen_bot import update_checker
 from kleinanzeigen_bot.model import update_check_state as update_check_state_module
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.model.update_check_state import UpdateCheckState
@@ -78,6 +82,21 @@ def state_file(tmp_path:Path) -> Path:
 
 class TestUpdateChecker:
     """Tests for the update checker functionality."""
+
+    def test_version_falls_back_when_version_module_missing(self) -> None:
+        """Ensure __version__ falls back to 'unknown' when _version import fails."""
+        original_import = builtins.__import__
+
+        def fake_import(name:str, globals_:dict[str, Any] | None = None, locals_:dict[str, Any] | None = None,
+                        fromlist:tuple[str, ...] | list[str] = (), level:int = 0) -> Any:
+            if name == "kleinanzeigen_bot._version":
+                raise ImportError("forced for test")
+            return original_import(name, globals_, locals_, fromlist, level)
+
+        with patch.object(builtins, "__import__", side_effect = fake_import):
+            sys.modules.pop("kleinanzeigen_bot._version", None)
+            reloaded = importlib.reload(update_checker)
+            assert reloaded.__version__ == "unknown"
 
     def test_get_local_version(self, config:Config) -> None:
         """Test that the local version is correctly retrieved."""

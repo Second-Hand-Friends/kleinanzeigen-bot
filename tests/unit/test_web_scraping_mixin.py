@@ -984,6 +984,91 @@ class TestWebScrapingBrowserConfiguration:
         assert os.environ.get("MSEDGEDRIVER_TELEMETRY_OPTOUT") == "1"
 
     @pytest.mark.asyncio
+    async def test_browser_arguments_respect_user_data_dir_arg(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        """Ensure explicit --user-data-dir argument prevents auto-append."""
+        class DummyConfig:
+            def __init__(self, **kwargs:object) -> None:
+                self.browser_args:list[str] = []
+                self.user_data_dir:str | None = None
+                self.extensions:list[str] = []
+                self.browser_executable_path:str | None = None
+                self.host:str | None = None
+                self.port:int | None = None
+                self.headless:bool = False
+
+            def add_extension(self, ext:str) -> None:
+                self.extensions.append(ext)
+
+        mock_browser = AsyncMock()
+        mock_browser.websocket_url = "ws://localhost:9222"
+        monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
+        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
+
+        monkeypatch.setattr(os.path, "exists", lambda p: p == "/usr/bin/chrome")
+
+        async def mock_exists_async(path:str | Path) -> bool:
+            return str(path) == "/usr/bin/chrome"
+        monkeypatch.setattr(files, "exists", mock_exists_async)
+        monkeypatch.setattr(loggers, "is_debug", lambda _logger: False)
+
+        profile_dir = tmp_path / "Default"
+        profile_dir.mkdir(parents = True, exist_ok = True)
+        (profile_dir / "Preferences").write_text("{}", encoding = "utf-8")
+
+        scraper = WebScrapingMixin()
+        scraper.browser_config.binary_location = "/usr/bin/chrome"
+        scraper.browser_config.user_data_dir = str(tmp_path)
+        scraper.browser_config.arguments = ["--user-data-dir=/explicit/path"]
+        await scraper.create_browser_session()
+
+        config = _nodriver_start_mock().call_args[0][0]
+        assert "--user-data-dir=/explicit/path" in config.browser_args
+        assert f"--user-data-dir={tmp_path}" not in config.browser_args
+        assert "--log-level=3" in config.browser_args
+
+    @pytest.mark.asyncio
+    async def test_browser_arguments_auto_append_user_data_dir(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        """Ensure user_data_dir is appended when no explicit argument is provided."""
+        class DummyConfig:
+            def __init__(self, **kwargs:object) -> None:
+                self.browser_args:list[str] = []
+                self.user_data_dir:str | None = None
+                self.extensions:list[str] = []
+                self.browser_executable_path:str | None = None
+                self.host:str | None = None
+                self.port:int | None = None
+                self.headless:bool = False
+
+            def add_extension(self, ext:str) -> None:
+                self.extensions.append(ext)
+
+        mock_browser = AsyncMock()
+        mock_browser.websocket_url = "ws://localhost:9222"
+        monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
+        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
+
+        monkeypatch.setattr(os.path, "exists", lambda p: p == "/usr/bin/chrome")
+
+        async def mock_exists_async(path:str | Path) -> bool:
+            return str(path) == "/usr/bin/chrome"
+        monkeypatch.setattr(files, "exists", mock_exists_async)
+        monkeypatch.setattr(loggers, "is_debug", lambda _logger: False)
+
+        profile_dir = tmp_path / "Default"
+        profile_dir.mkdir(parents = True, exist_ok = True)
+        (profile_dir / "Preferences").write_text("{}", encoding = "utf-8")
+
+        scraper = WebScrapingMixin()
+        scraper.browser_config.binary_location = "/usr/bin/chrome"
+        scraper.browser_config.user_data_dir = str(tmp_path)
+        scraper.browser_config.arguments = []
+        await scraper.create_browser_session()
+
+        config = _nodriver_start_mock().call_args[0][0]
+        assert f"--user-data-dir={tmp_path}" in config.browser_args
+        assert "--log-level=3" in config.browser_args
+
+    @pytest.mark.asyncio
     async def test_browser_extension_loading(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test browser extension loading."""
         class DummyConfig:
@@ -1265,8 +1350,9 @@ class TestWebScrapingBrowserConfiguration:
 
         with patch("psutil.Process") as mock_proc:
             mock_proc.side_effect = psutil.NoSuchProcess(12345)
-            with pytest.raises(psutil.NoSuchProcess):
-                scraper.close_browser_session()
+            scraper.close_browser_session()
+            mock_browser.stop.assert_called_once()
+            assert scraper.browser is None
 
         # Create a new mock browser for the second session
         mock_browser2 = make_mock_browser()
@@ -1281,7 +1367,7 @@ class TestWebScrapingBrowserConfiguration:
             self.page = mock_page2  # type: ignore[unused-ignore,reportAttributeAccessIssue]  # Assigning mock page for test
 
         monkeypatch.setattr(WebScrapingMixin, "create_browser_session", mock_create_session2)
-        await scraper.create_browser_session()
+        await mock_create_session2(scraper)
         print("[DEBUG] scraper.page after session creation:", scraper.page)
         assert scraper.browser is not None
         assert scraper.page is not None

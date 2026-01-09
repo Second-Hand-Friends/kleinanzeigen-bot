@@ -40,16 +40,18 @@ def get_xdg_base_dir(category:PathCategory) -> Path:
     base_dir:Path | None = None
     match category:
         case "config":
-            base_dir = Path(platformdirs.user_config_dir(APP_NAME))
+            resolved = platformdirs.user_config_dir(APP_NAME)
         case "cache":
-            base_dir = Path(platformdirs.user_cache_dir(APP_NAME))
+            resolved = platformdirs.user_cache_dir(APP_NAME)
         case "state":
-            base_dir = Path(platformdirs.user_state_dir(APP_NAME))
+            resolved = platformdirs.user_state_dir(APP_NAME)
         case _:
             raise ValueError(f"Unsupported XDG category: {category}")
 
-    if base_dir is None:
+    if resolved is None:
         raise RuntimeError(f"Failed to resolve XDG base directory for category: {category}")
+
+    base_dir = Path(resolved)
 
     LOG.debug(_("XDG %s directory: %s"), category, base_dir)
     return base_dir

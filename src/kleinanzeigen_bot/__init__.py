@@ -185,6 +185,7 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     async def run(self, args:list[str]) -> None:
         self.parse_args(args)
+        self.finalize_installation_mode()
         try:
             match self.command:
                 case "help":
@@ -204,7 +205,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config)
+                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
                     checker.check_for_updates()
                     self.load_ads()
                     LOG.info("############################################")
@@ -213,13 +214,13 @@ class KleinanzeigenBot(WebScrapingMixin):
                 case "update-check":
                     self.configure_file_logging()
                     self.load_config()
-                    checker = UpdateChecker(self.config)
+                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
                     checker.check_for_updates(skip_interval_check = True)
                 case "update-content-hash":
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config)
+                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
                     checker.check_for_updates()
                     self.ads_selector = "all"
                     if ads := self.load_ads(exclude_ads_with_id = False):
@@ -232,7 +233,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config)
+                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
                     checker.check_for_updates()
 
                     if not (
@@ -275,7 +276,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config)
+                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
                     checker.check_for_updates()
                     if ads := self.load_ads():
                         await self.create_browser_session()
@@ -293,7 +294,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                         self.ads_selector = "new"
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config)
+                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
                     checker.check_for_updates()
                     await self.create_browser_session()
                     await self.login()
@@ -503,12 +504,25 @@ class KleinanzeigenBot(WebScrapingMixin):
         if self.config.categories:
             self.categories.update(self.config.categories)
         LOG.info(" -> found %s", pluralize("category", self.categories))
+        self._configure_browser_from_config()
+
+    def _configure_browser_from_config(self) -> None:
+        # populate browser_config object used by WebScrapingMixin
+        self.browser_config.arguments = self.config.browser.arguments
+        self.browser_config.binary_location = self.config.browser.binary_location
+        self.browser_config.extensions = [abspath(item, relative_to = self.config_file_path) for item in self.config.browser.extensions]
+        self.browser_config.use_private_window = self.config.browser.use_private_window
+        if self.config.browser.user_data_dir:
+            self.browser_config.user_data_dir = abspath(self.config.browser.user_data_dir, relative_to = self.config_file_path)
+        self.browser_config.profile_name = self.config.browser.profile_name
 
     def finalize_installation_mode(self) -> None:
         """
         Finalize installation mode detection after CLI args are parsed.
         Must be called after parse_args() to respect --config overrides.
         """
+        if self.command in {"help", "version"}:
+            return
         # Check if config_file_path was already customized (by --config or tests)
         default_portable_config = str(xdg_paths.get_config_file_path("portable"))
         config_was_customized = self.config_explicitly_provided or (self.config_file_path and self.config_file_path != default_portable_config)
@@ -553,15 +567,8 @@ class KleinanzeigenBot(WebScrapingMixin):
         mode_display = "portable (current directory)" if self.installation_mode == "portable" else "system-wide (XDG directories)"
         LOG.info("Installation mode: %s", mode_display)
         LOG.info("Config file: %s", self.config_file_path)
-
-        # populate browser_config object used by WebScrapingMixin
-        self.browser_config.arguments = self.config.browser.arguments
-        self.browser_config.binary_location = self.config.browser.binary_location
-        self.browser_config.extensions = [abspath(item, relative_to = self.config_file_path) for item in self.config.browser.extensions]
-        self.browser_config.use_private_window = self.config.browser.use_private_window
-        if self.config.browser.user_data_dir:
-            self.browser_config.user_data_dir = abspath(self.config.browser.user_data_dir, relative_to = self.config_file_path)
-        self.browser_config.profile_name = self.config.browser.profile_name
+        if hasattr(self, "config") and self.config is not None:
+            self._configure_browser_from_config()
 
     def __check_ad_republication(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
         """
@@ -1507,7 +1514,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         This downloads either all, only unsaved (new), or specific ads given by ID.
         """
 
-        ad_extractor = extract.AdExtractor(self.browser, self.config)
+        ad_extractor = extract.AdExtractor(self.browser, self.config, self.installation_mode or "portable")
 
         # use relevant download routine
         if self.ads_selector in {"all", "new"}:  # explore ads overview for these two modes
