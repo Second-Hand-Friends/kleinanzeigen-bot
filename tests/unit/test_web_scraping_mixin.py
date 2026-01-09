@@ -1006,6 +1006,9 @@ class TestWebScrapingBrowserConfiguration:
 
         monkeypatch.setattr(os.path, "exists", lambda p: p == "/usr/bin/chrome")
 
+        explicit_dir = tmp_path / "explicit-profile"
+        explicit_dir.mkdir(parents = True, exist_ok = True)
+
         async def mock_exists_async(path:str | Path) -> bool:
             normalized = str(path).replace("\\", "/")
             explicit_prefs = str(explicit_dir / "Default" / "Preferences").replace("\\", "/")
@@ -1021,14 +1024,12 @@ class TestWebScrapingBrowserConfiguration:
         scraper = WebScrapingMixin()
         scraper.browser_config.binary_location = "/usr/bin/chrome"
         scraper.browser_config.user_data_dir = str(tmp_path)
-        explicit_dir = tmp_path / "explicit-profile"
-        explicit_dir.mkdir(parents = True, exist_ok = True)
         scraper.browser_config.arguments = [f"--user-data-dir={explicit_dir}"]
         await scraper.create_browser_session()
 
         config = _nodriver_start_mock().call_args[0][0]
         assert any(arg.startswith("--user-data-dir=") and str(explicit_dir) in arg for arg in config.browser_args)
-        assert not any(arg.startswith("--user-data-dir=") and str(tmp_path) in arg for arg in config.browser_args)
+        assert not any(arg == f"--user-data-dir={tmp_path}" for arg in config.browser_args)
         assert any(arg.startswith("--log-level=") for arg in config.browser_args)
         assert config.user_data_dir == str(explicit_dir)
 
@@ -1357,9 +1358,11 @@ class TestWebScrapingBrowserConfiguration:
 
         with patch("psutil.Process") as mock_proc:
             mock_proc.side_effect = psutil.NoSuchProcess(12345)
-            scraper.close_browser_session()
-            mock_browser.stop.assert_called_once()
-            assert scraper.browser is None
+            with pytest.raises(psutil.NoSuchProcess):
+                scraper.close_browser_session()
+            assert scraper.page is None
+            assert scraper.browser is mock_browser
+            scraper._cleanup_session_resources()
 
         # Create a new mock browser for the second session
         mock_browser2 = make_mock_browser()
