@@ -524,49 +524,53 @@ class KleinanzeigenBot(WebScrapingMixin):
         if self.command in {"help", "version"}:
             return
         # Check if config_file_path was already customized (by --config or tests)
-        default_portable_config = str(xdg_paths.get_config_file_path("portable"))
-        config_was_customized = self.config_explicitly_provided or (self.config_file_path and self.config_file_path != default_portable_config)
+        default_portable_config = xdg_paths.get_config_file_path("portable").resolve()
+        config_path = Path(self.config_file_path).resolve() if self.config_file_path else None
+        config_was_customized = self.config_explicitly_provided or (config_path is not None and config_path != default_portable_config)
 
         if config_was_customized and self.config_file_path:
             # Config path was explicitly set - detect mode based on it
-            LOG.debug("Detecting installation mode from explicit config path: %s", self.config_file_path)
+            LOG.debug(_("Detecting installation mode from explicit config path: %s"), self.config_file_path)
 
-            config_path = Path(self.config_file_path)
-            if config_path == Path.cwd() / "config.yaml":
+            if config_path is not None and config_path == (Path.cwd() / "config.yaml").resolve():
                 # Explicit path points to CWD config
                 self.installation_mode = "portable"
-                LOG.debug("Explicit config is in CWD, using portable mode")
-            elif config_path.is_relative_to(Path(xdg_paths.get_xdg_base_dir("config"))):
+                LOG.debug(_("Explicit config is in CWD, using portable mode"))
+            elif config_path is not None and config_path.is_relative_to(xdg_paths.get_xdg_base_dir("config").resolve()):
                 # Explicit path is within XDG config directory
                 self.installation_mode = "xdg"
-                LOG.debug("Explicit config is in XDG directory, using xdg mode")
+                LOG.debug(_("Explicit config is in XDG directory, using xdg mode"))
             else:
                 # Custom location - default to portable mode (all paths relative to config)
                 self.installation_mode = "portable"
-                LOG.debug("Explicit config is in custom location, defaulting to portable mode")
+                LOG.debug(_("Explicit config is in custom location, defaulting to portable mode"))
         else:
             # No explicit config - use auto-detection
-            LOG.debug("Detecting installation mode...")
+            LOG.debug(_("Detecting installation mode..."))
             self.installation_mode = xdg_paths.detect_installation_mode()
 
             if self.installation_mode is None:
                 # First run - prompt user
-                LOG.info("First run detected, prompting user for installation mode")
+                LOG.info(_("First run detected, prompting user for installation mode"))
                 self.installation_mode = xdg_paths.prompt_installation_mode()
 
             # Set config path based on detected mode
             self.config_file_path = str(xdg_paths.get_config_file_path(self.installation_mode))
 
         # Set log file path based on mode (unless explicitly overridden via --logfile)
-        if not self.log_file_explicitly_provided and self.log_file_path == str(xdg_paths.get_log_file_path(self.log_file_basename, "portable")):
+        if (
+            not self.log_file_explicitly_provided
+            and self.log_file_path is not None
+            and Path(self.log_file_path).resolve() == xdg_paths.get_log_file_path(self.log_file_basename, "portable").resolve()
+        ):
             # Still using default portable path - update to match detected mode
             self.log_file_path = str(xdg_paths.get_log_file_path(self.log_file_basename, self.installation_mode))
-            LOG.debug("Log file path: %s", self.log_file_path)
+            LOG.debug(_("Log file path: %s"), self.log_file_path)
 
         # Log installation mode and config location (INFO level for user visibility)
         mode_display = "portable (current directory)" if self.installation_mode == "portable" else "system-wide (XDG directories)"
-        LOG.info("Installation mode: %s", mode_display)
-        LOG.info("Config file: %s", self.config_file_path)
+        LOG.info(_("Installation mode: %s"), mode_display)
+        LOG.info(_("Config file: %s"), self.config_file_path)
         if hasattr(self, "config") and self.config is not None:
             self._configure_browser_from_config()
 

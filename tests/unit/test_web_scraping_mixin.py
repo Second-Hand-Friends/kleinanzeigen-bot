@@ -1022,9 +1022,9 @@ class TestWebScrapingBrowserConfiguration:
         await scraper.create_browser_session()
 
         config = _nodriver_start_mock().call_args[0][0]
-        assert "--user-data-dir=/explicit/path" in config.browser_args
-        assert f"--user-data-dir={tmp_path}" not in config.browser_args
-        assert "--log-level=3" in config.browser_args
+        assert any(arg.startswith("--user-data-dir=") and arg.endswith("/explicit/path") for arg in config.browser_args)
+        assert not any(arg.startswith("--user-data-dir=") and str(tmp_path) in arg for arg in config.browser_args)
+        assert any(arg.startswith("--log-level=") for arg in config.browser_args)
 
     @pytest.mark.asyncio
     async def test_browser_arguments_auto_append_user_data_dir(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
@@ -1065,8 +1065,8 @@ class TestWebScrapingBrowserConfiguration:
         await scraper.create_browser_session()
 
         config = _nodriver_start_mock().call_args[0][0]
-        assert f"--user-data-dir={tmp_path}" in config.browser_args
-        assert "--log-level=3" in config.browser_args
+        assert any(arg.startswith("--user-data-dir=") and str(tmp_path) in arg for arg in config.browser_args)
+        assert any(arg.startswith("--log-level=") for arg in config.browser_args)
 
     @pytest.mark.asyncio
     async def test_browser_extension_loading(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:

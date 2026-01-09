@@ -119,7 +119,10 @@ class TestGetConfigFilePath:
     ) -> None:
         """Test that XDG mode returns XDG config path."""
         xdg_config = tmp_path / "config"
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_config))
+        monkeypatch.setattr(
+            "platformdirs.user_config_dir",
+            lambda app_name: str(xdg_config / app_name),
+        )
 
         path = xdg_paths.get_config_file_path("xdg")
 
@@ -149,7 +152,10 @@ class TestGetAdFilesSearchDir:
     ) -> None:
         """Test that XDG mode searches in XDG config directory (same as config file)."""
         xdg_config = tmp_path / "config"
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_config))
+        monkeypatch.setattr(
+            "platformdirs.user_config_dir",
+            lambda app_name: str(xdg_config / app_name),
+        )
 
         search_dir = xdg_paths.get_ad_files_search_dir("xdg")
 
@@ -193,7 +199,10 @@ class TestGetDownloadedAdsPath:
     ) -> None:
         """Test that XDG mode uses XDG config/downloaded-ads/."""
         xdg_config = tmp_path / "config"
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_config))
+        monkeypatch.setattr(
+            "platformdirs.user_config_dir",
+            lambda app_name: str(xdg_config / app_name),
+        )
 
         ads_path = xdg_paths.get_downloaded_ads_path("xdg")
 

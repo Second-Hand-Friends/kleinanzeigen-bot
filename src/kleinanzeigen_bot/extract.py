@@ -155,7 +155,7 @@ class AdExtractor(WebScrapingMixin):
 
         # Try to find the main ad list container first
         try:
-            _ = await self.web_find(By.ID, "my-manageitems-adlist")
+            await self.web_find(By.ID, "my-manageitems-adlist")
         except TimeoutError:
             LOG.warning("Ad list container #my-manageitems-adlist not found. Maybe no ads present?")
             return []
@@ -206,16 +206,20 @@ class AdExtractor(WebScrapingMixin):
                 break  # Stop if ads disappear
 
             # Extract references using the CORRECTED selector
-            try:
-                page_refs:list[str] = []
-                for li in list_items:
+            page_refs:list[str] = []
+            for li in list_items:
+                try:
                     link = await self.web_find(By.CSS_SELECTOR, PAGE_LINK_SELECTOR, parent = li)
-                    page_refs.append(str(link.attrs["href"]))
-                refs.extend(page_refs)
-                LOG.info("Successfully extracted %s refs from page %s.", len(page_refs), current_page)
-            except Exception as e:
-                # Log the error if extraction fails for some items, but try to continue
-                LOG.exception(_("Error extracting refs on page %s using selector %s: %s"), current_page, PAGE_LINK_SELECTOR, e)
+                    href = link.attrs["href"]
+                    if href is None:
+                        continue
+                    page_refs.append(str(href))
+                except (TimeoutError, KeyError, AttributeError, Exception) as e:
+                    # Log the error if extraction fails for some items, but try to continue
+                    LOG.exception(_("Error extracting refs on page %s using selector %s: %s"), current_page, PAGE_LINK_SELECTOR, e)
+                    continue
+            refs.extend(page_refs)
+            LOG.info(_("Successfully extracted %s refs from page %s."), len(page_refs), current_page)
 
             if not multi_page:  # only one iteration for single-page overview
                 break

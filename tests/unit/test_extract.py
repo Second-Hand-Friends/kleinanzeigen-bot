@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import asyncio
+
 import json  # isort: skip
 from gettext import gettext as _
 from pathlib import Path
@@ -543,6 +545,7 @@ class TestAdExtractorNavigation:
         with patch.object(test_extractor, "web_open", new_callable = AsyncMock), \
                 patch.object(test_extractor, "web_sleep", new_callable = AsyncMock), \
                 patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock), \
+                patch.object(test_extractor, "web_execute", new_callable = AsyncMock), \
                 patch.object(test_extractor, "web_find_all", new_callable = AsyncMock) as mock_web_find_all, \
                 patch.object(test_extractor, "web_find", new_callable = AsyncMock) as mock_web_find:
 
@@ -1151,15 +1154,18 @@ class TestAdExtractorDownload:
         img_with_url = MagicMock()
         img_with_url.attrs = {"src": "http://example.com/valid_image.jpg"}
 
+        future:asyncio.Future[str] = asyncio.Future()
+        future.set_result("/some/dir/ad_12345__img1.jpg")
+
         loop_mock = MagicMock()
-        loop_mock.run_in_executor = AsyncMock(return_value = "/some/dir/ad_12345__img1.jpg")
+        loop_mock.run_in_executor = MagicMock(return_value = future)
 
         with patch.object(extractor, "web_find", new_callable = AsyncMock, return_value = image_box_mock), \
                 patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [img_with_url]), \
                 patch("asyncio.get_running_loop", return_value = loop_mock):
             image_paths = await extractor._download_images_from_ad_page("/some/dir", 12345)
 
-        loop_mock.run_in_executor.assert_awaited()
+        loop_mock.run_in_executor.assert_called()
         assert image_paths == ["ad_12345__img1.jpg"]
 
     @pytest.mark.asyncio

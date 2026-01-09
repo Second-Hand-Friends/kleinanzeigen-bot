@@ -202,9 +202,15 @@ kleinanzeigen_bot/__init__.py:
     "ad": "Anzeige"
 
   finalize_installation_mode:
+    "Detecting installation mode from explicit config path: %s": "Ermittle Installationsmodus anhand des expliziten Konfigurationspfads: %s"
+    "Explicit config is in CWD, using portable mode": "Explizite Konfiguration liegt im Arbeitsverzeichnis, verwende portablen Modus"
+    "Explicit config is in XDG directory, using xdg mode": "Explizite Konfiguration liegt im XDG-Verzeichnis, verwende XDG-Modus"
+    "Explicit config is in custom location, defaulting to portable mode": "Explizite Konfiguration liegt an benutzerdefiniertem Ort, Standard ist portabler Modus"
+    "Detecting installation mode...": "Ermittle Installationsmodus..."
     "Config file: %s": "Konfigurationsdatei: %s"
     "First run detected, prompting user for installation mode": "Erster Start erkannt, frage Benutzer nach Installationsmodus"
     "Installation mode: %s": "Installationsmodus: %s"
+    "Log file path: %s": "Logdateipfad: %s"
 
 #################################################
 kleinanzeigen_bot/extract.py:

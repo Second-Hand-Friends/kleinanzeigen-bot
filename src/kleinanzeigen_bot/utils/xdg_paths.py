@@ -18,7 +18,7 @@ from typing import Final, Literal
 
 import platformdirs
 
-from . import loggers
+from kleinanzeigen_bot.utils import loggers
 
 LOG = loggers.get_logger(__name__)
 
@@ -38,6 +38,7 @@ def get_xdg_base_dir(category:PathCategory) -> Path:
         Path to the XDG base directory for this app
     """
     base_dir:Path | None = None
+    resolved:str | None = None
     match category:
         case "config":
             resolved = platformdirs.user_config_dir(APP_NAME)

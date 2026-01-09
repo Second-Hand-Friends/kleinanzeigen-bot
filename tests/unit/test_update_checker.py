@@ -98,6 +98,9 @@ class TestUpdateChecker:
             reloaded = importlib.reload(update_checker)
             assert reloaded.__version__ == "unknown"
 
+        # Restore module state for the rest of the test session.
+        importlib.reload(update_checker)
+
     def test_get_local_version(self, config:Config) -> None:
         """Test that the local version is correctly retrieved."""
         checker = UpdateChecker(config)

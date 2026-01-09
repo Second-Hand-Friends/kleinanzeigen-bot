@@ -243,7 +243,7 @@ All configuration files can be in YAML or JSON format.
 
 ### Installation modes (portable vs. system-wide)
 
-On first run, the app may ask which installation mode to use. You can switch by pointing `--config` and `--logfile` to the desired paths.
+On first run, the app may ask which installation mode to use. In non-interactive environments (CI/headless), it defaults to portable mode and will not prompt; use `--config` and `--logfile` to force the desired mode.
 
 1. **Portable mode (recommended for most users, especially on Windows):**
    - Stores config, logs, downloads, and state in the current directory
@@ -251,7 +251,7 @@ On first run, the app may ask which installation mode to use. You can switch by 
    - Easy backup/migration; works from USB drives
 
 2. **System-wide mode (advanced users / multi-user setups):**
-   - Stores files in OS‑standard locations
+   - Stores files in OS-standard locations
    - Cleaner directory structure; better separation from working directory
    - Requires proper permissions for user data directories
 

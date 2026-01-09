@@ -511,13 +511,12 @@ class WebScrapingMixin:
         if not self.browser:
             return
         LOG.debug("Closing Browser session...")
-        self.page = None  # pyright: ignore[reportAttributeAccessIssue]
         browser_children:list[psutil.Process] = []
         pid = getattr(self.browser, "_process_pid", None)
         if isinstance(pid, int) and pid >= 0:
             try:
                 browser_process = psutil.Process(pid)  # noqa: SLF001 Private member accessed
-                browser_children = browser_process.children()
+                browser_children = browser_process.children(recursive = True)
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
                 # Process may have exited, be inaccessible, or have an invalid PID; continue cleanup best-effort.
                 browser_children = []
@@ -526,8 +525,21 @@ class WebScrapingMixin:
         except Exception as exc:
             LOG.warning(_("Failed to stop browser cleanly: %s"), exc)
         for p in browser_children:
-            if p.is_running():
-                p.kill()  # terminate orphaned browser processes
+            # Best-effort cleanup: processes may have exited or be inaccessible at this point.
+            try:
+                if not p.is_running():
+                    continue
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
+                continue
+            try:
+                p.terminate()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
+                pass
+            try:
+                p.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
+                pass
+        self.page = None  # pyright: ignore[reportAttributeAccessIssue]
         self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
 
     def _cleanup_session_resources(self) -> None:
