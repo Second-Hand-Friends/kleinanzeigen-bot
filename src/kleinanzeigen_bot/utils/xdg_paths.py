@@ -31,7 +31,7 @@ PathCategory = Literal["config", "cache", "state"]
 def _normalize_mode(mode:str | InstallationMode) -> InstallationMode:
     """Validate and normalize installation mode input."""
     if mode in {"portable", "xdg"}:
-        return mode
+        return mode  # type: ignore[return-value]
     raise ValueError(f"Unsupported installation mode: {mode}")
 
 

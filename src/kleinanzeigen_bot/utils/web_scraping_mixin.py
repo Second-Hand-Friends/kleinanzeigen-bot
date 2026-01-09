@@ -517,51 +517,15 @@ class WebScrapingMixin:
         LOG.info("=== End Diagnostics ===")
 
     def close_browser_session(self) -> None:
-        if not self.browser:
-            return
-        LOG.debug(_("Closing Browser session..."))
-        browser_children:list[psutil.Process] = []
-        pid = getattr(self.browser, "_process_pid", None)
-        if isinstance(pid, int) and pid >= 0:
-            try:
-                browser_process = psutil.Process(pid)  # noqa: SLF001 Private member accessed
-                browser_children = browser_process.children(recursive = True)
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
-                # Process may have exited, be inaccessible, or have an invalid PID; continue cleanup best-effort.
-                browser_children = []
-        try:
-            self.browser.stop()
-        except Exception as exc:
-            LOG.warning(_("Failed to stop browser cleanly: %s"), exc)
-        try:
-            for p in browser_children:
-                # Best-effort cleanup: processes may have exited or be inaccessible at this point.
-                try:
-                    if not p.is_running():
-                        continue
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
-                    continue
-                try:
-                    p.terminate()
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError) as exc:
-                    LOG.debug(_("Failed to terminate browser child process %s: %s"), p, exc)
-                    # Ignore processes that are gone or inaccessible; cleanup remains best-effort.
-                try:
-                    p.wait(timeout = 1.0)
-                except psutil.TimeoutExpired:
-                    try:
-                        if p.is_running():
-                            try:
-                                p.kill()
-                            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError) as exc:
-                                LOG.debug(_("Failed to kill browser child process %s: %s"), p, exc)
-                                # Ignore failures to kill already-exited or protected processes.
-                    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
-                        continue
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
-                    continue
-        finally:
+        if self.browser:
+            LOG.debug("Closing Browser session...")
             self.page = None  # pyright: ignore[reportAttributeAccessIssue]
+            browser_process = psutil.Process(self.browser._process_pid)  # noqa: SLF001 Private member accessed
+            browser_children:list[psutil.Process] = browser_process.children()
+            self.browser.stop()
+            for p in browser_children:
+                if p.is_running():
+                    p.kill()  # terminate orphaned browser processes
             self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
 
     def _cleanup_session_resources(self) -> None:

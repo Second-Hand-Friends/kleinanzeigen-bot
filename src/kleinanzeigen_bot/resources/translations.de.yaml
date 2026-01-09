@@ -460,9 +460,6 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
 
   close_browser_session:
     "Closing Browser session...": "Schließe Browser-Sitzung..."
-    "Failed to stop browser cleanly: %s": "Browser konnte nicht sauber gestoppt werden: %s"
-    "Failed to terminate browser child process %s: %s": "Browser-Kindprozess %s konnte nicht beendet werden: %s"
-    "Failed to kill browser child process %s: %s": "Browser-Kindprozess %s konnte nicht beendet (kill) werden: %s"
 
   get_compatible_browser:
     "Installed browser could not be detected": "Installierter Browser konnte nicht erkannt werden"
