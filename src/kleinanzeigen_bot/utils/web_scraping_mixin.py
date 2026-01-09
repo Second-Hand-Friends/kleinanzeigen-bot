@@ -533,34 +533,36 @@ class WebScrapingMixin:
             self.browser.stop()
         except Exception as exc:
             LOG.warning(_("Failed to stop browser cleanly: %s"), exc)
-        for p in browser_children:
-            # Best-effort cleanup: processes may have exited or be inaccessible at this point.
-            try:
-                if not p.is_running():
-                    continue
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
-                continue
-            try:
-                p.terminate()
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError) as exc:
-                LOG.debug("Failed to terminate browser child process %s: %s", p, exc)
-                # Ignore processes that are gone or inaccessible; cleanup remains best-effort.
-            try:
-                p.wait(timeout = 1.0)
-            except psutil.TimeoutExpired:
+        try:
+            for p in browser_children:
+                # Best-effort cleanup: processes may have exited or be inaccessible at this point.
                 try:
-                    if p.is_running():
-                        try:
-                            p.kill()
-                        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError) as exc:
-                            LOG.debug("Failed to kill browser child process %s: %s", p, exc)
-                            # Ignore failures to kill already-exited or protected processes.
+                    if not p.is_running():
+                        continue
                 except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
                     continue
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
-                continue
-        self.page = None  # pyright: ignore[reportAttributeAccessIssue]
-        self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
+                try:
+                    p.terminate()
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError) as exc:
+                    LOG.debug(_("Failed to terminate browser child process %s: %s"), p, exc)
+                    # Ignore processes that are gone or inaccessible; cleanup remains best-effort.
+                try:
+                    p.wait(timeout = 1.0)
+                except psutil.TimeoutExpired:
+                    try:
+                        if p.is_running():
+                            try:
+                                p.kill()
+                            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError) as exc:
+                                LOG.debug(_("Failed to kill browser child process %s: %s"), p, exc)
+                                # Ignore failures to kill already-exited or protected processes.
+                    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
+                        continue
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
+                    continue
+        finally:
+            self.page = None  # pyright: ignore[reportAttributeAccessIssue]
+            self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
 
     def _cleanup_session_resources(self) -> None:
         """Clean up any resources that were created during session setup."""

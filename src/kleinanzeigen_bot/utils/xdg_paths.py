@@ -20,12 +20,19 @@ import platformdirs
 
 from kleinanzeigen_bot.utils import loggers
 
-LOG = loggers.get_logger(__name__)
+LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 APP_NAME:Final[str] = "kleinanzeigen-bot"
 
 InstallationMode = Literal["portable", "xdg"]
 PathCategory = Literal["config", "cache", "state"]
+
+
+def _normalize_mode(mode:str | InstallationMode) -> InstallationMode:
+    """Validate and normalize installation mode input."""
+    if mode in {"portable", "xdg"}:
+        return mode
+    raise ValueError(f"Unsupported installation mode: {mode}")
 
 
 def get_xdg_base_dir(category:PathCategory) -> Path:
@@ -37,7 +44,6 @@ def get_xdg_base_dir(category:PathCategory) -> Path:
     Returns:
         Path to the XDG base directory for this app
     """
-    base_dir:Path | None = None
     resolved:str | None = None
     match category:
         case "config":
@@ -131,6 +137,7 @@ def get_config_file_path(mode:str | InstallationMode) -> Path:
     Returns:
         Path to config.yaml
     """
+    mode = _normalize_mode(mode)
     config_path = Path.cwd() / "config.yaml" if mode == "portable" else get_xdg_base_dir("config") / "config.yaml"
 
     LOG.debug("Resolving config file path for mode '%s': %s", mode, config_path)
@@ -149,6 +156,7 @@ def get_ad_files_search_dir(mode:str | InstallationMode) -> Path:
     Returns:
         Path to ad files search directory (same as config file directory)
     """
+    mode = _normalize_mode(mode)
     search_dir = Path.cwd() if mode == "portable" else get_xdg_base_dir("config")
 
     LOG.debug("Resolving ad files search directory for mode '%s': %s", mode, search_dir)
@@ -164,18 +172,20 @@ def get_downloaded_ads_path(mode:str | InstallationMode) -> Path:
     Returns:
         Path to downloaded ads directory
     """
+    mode = _normalize_mode(mode)
     ads_path = Path.cwd() / "downloaded-ads" if mode == "portable" else get_xdg_base_dir("config") / "downloaded-ads"
 
     LOG.debug("Resolving downloaded ads path for mode '%s': %s", mode, ads_path)
 
     # Create directory if it doesn't exist
-    if not ads_path.exists():
-        LOG.debug("Creating directory: %s", ads_path)
-        try:
-            ads_path.mkdir(parents = True, exist_ok = True)
-        except OSError as exc:
-            LOG.error("Failed to create downloaded ads directory %s: %s", ads_path, exc)
-            raise
+    LOG.debug("Creating directory: %s", ads_path)
+    try:
+        ads_path.mkdir(parents = True, exist_ok = True)
+    except OSError as exc:
+        LOG.error("Failed to create downloaded ads directory %s: %s", ads_path, exc)
+        raise
+    if not ads_path.is_dir():
+        raise NotADirectoryError(str(ads_path))
 
     return ads_path
 
@@ -193,7 +203,7 @@ def get_browser_profile_path(mode:str | InstallationMode, config_override:str | 
     if config_override:
         profile_path = Path(config_override)
         LOG.debug("Resolving browser profile path for mode '%s' (config override): %s", mode, profile_path)
-    elif mode == "portable":
+    elif _normalize_mode(mode) == "portable":
         profile_path = Path.cwd() / ".temp" / "browser-profile"
         LOG.debug("Resolving browser profile path for mode '%s': %s", mode, profile_path)
     else:  # xdg
@@ -201,13 +211,14 @@ def get_browser_profile_path(mode:str | InstallationMode, config_override:str | 
         LOG.debug("Resolving browser profile path for mode '%s': %s", mode, profile_path)
 
     # Create directory if it doesn't exist
-    if not profile_path.exists():
-        LOG.debug("Creating directory: %s", profile_path)
-        try:
-            profile_path.mkdir(parents = True, exist_ok = True)
-        except OSError as exc:
-            LOG.error("Failed to create browser profile directory %s: %s", profile_path, exc)
-            raise
+    LOG.debug("Creating directory: %s", profile_path)
+    try:
+        profile_path.mkdir(parents = True, exist_ok = True)
+    except OSError as exc:
+        LOG.error("Failed to create browser profile directory %s: %s", profile_path, exc)
+        raise
+    if not profile_path.is_dir():
+        raise NotADirectoryError(str(profile_path))
 
     return profile_path
 
@@ -222,18 +233,20 @@ def get_log_file_path(basename:str, mode:str | InstallationMode) -> Path:
     Returns:
         Path to log file
     """
+    mode = _normalize_mode(mode)
     log_path = Path.cwd() / f"{basename}.log" if mode == "portable" else get_xdg_base_dir("state") / f"{basename}.log"
 
     LOG.debug("Resolving log file path for mode '%s': %s", mode, log_path)
 
     # Create parent directory if it doesn't exist
-    if not log_path.parent.exists():
-        LOG.debug("Creating directory: %s", log_path.parent)
-        try:
-            log_path.parent.mkdir(parents = True, exist_ok = True)
-        except OSError as exc:
-            LOG.error("Failed to create log directory %s: %s", log_path.parent, exc)
-            raise
+    LOG.debug("Creating directory: %s", log_path.parent)
+    try:
+        log_path.parent.mkdir(parents = True, exist_ok = True)
+    except OSError as exc:
+        LOG.error("Failed to create log directory %s: %s", log_path.parent, exc)
+        raise
+    if not log_path.parent.is_dir():
+        raise NotADirectoryError(str(log_path.parent))
 
     return log_path
 
@@ -247,17 +260,19 @@ def get_update_check_state_path(mode:str | InstallationMode) -> Path:
     Returns:
         Path to update check state file
     """
+    mode = _normalize_mode(mode)
     state_path = Path.cwd() / ".temp" / "update_check_state.json" if mode == "portable" else get_xdg_base_dir("state") / "update_check_state.json"
 
     LOG.debug("Resolving update check state path for mode '%s': %s", mode, state_path)
 
     # Create parent directory if it doesn't exist
-    if not state_path.parent.exists():
-        LOG.debug("Creating directory: %s", state_path.parent)
-        try:
-            state_path.parent.mkdir(parents = True, exist_ok = True)
-        except OSError as exc:
-            LOG.error("Failed to create update check state directory %s: %s", state_path.parent, exc)
-            raise
+    LOG.debug("Creating directory: %s", state_path.parent)
+    try:
+        state_path.parent.mkdir(parents = True, exist_ok = True)
+    except OSError as exc:
+        LOG.error("Failed to create update check state directory %s: %s", state_path.parent, exc)
+        raise
+    if not state_path.parent.is_dir():
+        raise NotADirectoryError(str(state_path.parent))
 
     return state_path

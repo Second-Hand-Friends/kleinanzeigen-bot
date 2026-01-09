@@ -1011,7 +1011,8 @@ class TestWebScrapingBrowserConfiguration:
 
         async def mock_exists_async(path:str | Path) -> bool:
             normalized = str(path).replace("\\", "/")
-            return normalized in {"/usr/bin/chrome", "/explicit/path/Default/Preferences"}
+            explicit_prefs = str(explicit_dir / "Default" / "Preferences").replace("\\", "/")
+            return normalized in {"/usr/bin/chrome", explicit_prefs}
         monkeypatch.setattr(files, "exists", mock_exists_async)
         monkeypatch.setattr(loggers, "is_debug", lambda _logger: False)
         monkeypatch.setattr(os, "makedirs", lambda *_args, **_kwargs: None)
@@ -1023,14 +1024,16 @@ class TestWebScrapingBrowserConfiguration:
         scraper = WebScrapingMixin()
         scraper.browser_config.binary_location = "/usr/bin/chrome"
         scraper.browser_config.user_data_dir = str(tmp_path)
-        scraper.browser_config.arguments = ["--user-data-dir=/explicit/path"]
+        explicit_dir = tmp_path / "explicit-profile"
+        explicit_dir.mkdir(parents = True, exist_ok = True)
+        scraper.browser_config.arguments = [f"--user-data-dir={explicit_dir}"]
         await scraper.create_browser_session()
 
         config = _nodriver_start_mock().call_args[0][0]
-        assert any(arg.startswith("--user-data-dir=") and arg.endswith("/explicit/path") for arg in config.browser_args)
+        assert any(arg.startswith("--user-data-dir=") and str(explicit_dir) in arg for arg in config.browser_args)
         assert not any(arg.startswith("--user-data-dir=") and str(tmp_path) in arg for arg in config.browser_args)
         assert any(arg.startswith("--log-level=") for arg in config.browser_args)
-        assert config.user_data_dir == "/explicit/path"
+        assert config.user_data_dir == str(explicit_dir)
 
     @pytest.mark.asyncio
     async def test_browser_arguments_auto_append_user_data_dir(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
