@@ -12,17 +12,17 @@ import certifi, colorama, nodriver  # isort: skip
 from ruamel.yaml import YAML
 from wcmatch import glob
 
-from . import extract, resources
-from ._version import __version__
-from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, calculate_auto_price
-from .model.config_model import Config
-from .update_checker import UpdateChecker
-from .utils import dicts, error_handlers, loggers, misc, xdg_paths
-from .utils.exceptions import CaptchaEncountered
-from .utils.files import abspath
-from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
-from .utils.misc import ainput, ensure, is_frozen
-from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
+from kleinanzeigen_bot import extract, resources
+from kleinanzeigen_bot._version import __version__
+from kleinanzeigen_bot.model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, calculate_auto_price
+from kleinanzeigen_bot.model.config_model import Config
+from kleinanzeigen_bot.update_checker import UpdateChecker
+from kleinanzeigen_bot.utils import dicts, error_handlers, loggers, misc, xdg_paths
+from kleinanzeigen_bot.utils.exceptions import CaptchaEncountered
+from kleinanzeigen_bot.utils.files import abspath
+from kleinanzeigen_bot.utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
+from kleinanzeigen_bot.utils.misc import ainput, ensure, is_frozen
+from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
@@ -1622,7 +1622,10 @@ class KleinanzeigenBot(WebScrapingMixin):
         # Validate length
         ensure(
             len(final_description) <= MAX_DESCRIPTION_LENGTH,
-            f"Length of ad description including prefix and suffix exceeds {MAX_DESCRIPTION_LENGTH} chars. Description length: {len(final_description)} chars.",
+            _("Length of ad description including prefix and suffix exceeds %(max)s chars. Description length: %(len)s chars.") % {
+                "max": MAX_DESCRIPTION_LENGTH,
+                "len": len(final_description),
+            },
         )
 
         return final_description

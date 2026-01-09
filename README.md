@@ -7,6 +7,7 @@
 <!--[![Maintainability](https://qlty.sh/badges/69ff94b8-90e1-4096-91ed-3bcecf0b0597/maintainability.svg)](https://qlty.sh/gh/Second-Hand-Friends/projects/kleinanzeigen-bot)-->
 
 **Feedback and high-quality pull requests are highly welcome!**
+Code of Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 
 1. [About](#about)
 1. [Installation](#installation)
@@ -243,7 +244,7 @@ All configuration files can be in YAML or JSON format.
 
 ### Installation modes (portable vs. system-wide)
 
-On first run, the app may ask which installation mode to use. In non-interactive environments (CI/headless), it defaults to portable mode and will not prompt; use `--config` and `--logfile` to force the desired mode.
+On first run, the app may ask which installation mode to use. In non-interactive environments (CI/headless), it defaults to portable mode and will not prompt; `--config` and `--logfile` override only their specific paths, and do not change other mode-dependent paths or the chosen installation mode behavior.
 
 1. **Portable mode (recommended for most users, especially on Windows):**
    - Stores config, logs, downloads, and state in the current directory

@@ -171,7 +171,11 @@ def get_downloaded_ads_path(mode:str | InstallationMode) -> Path:
     # Create directory if it doesn't exist
     if not ads_path.exists():
         LOG.debug(_("Creating directory: %s"), ads_path)
-        ads_path.mkdir(parents = True, exist_ok = True)
+        try:
+            ads_path.mkdir(parents = True, exist_ok = True)
+        except OSError as exc:
+            LOG.error(_("Failed to create downloaded ads directory %s: %s"), ads_path, exc)
+            raise
 
     return ads_path
 
@@ -199,7 +203,11 @@ def get_browser_profile_path(mode:str | InstallationMode, config_override:str | 
     # Create directory if it doesn't exist
     if not profile_path.exists():
         LOG.debug(_("Creating directory: %s"), profile_path)
-        profile_path.mkdir(parents = True, exist_ok = True)
+        try:
+            profile_path.mkdir(parents = True, exist_ok = True)
+        except OSError as exc:
+            LOG.error(_("Failed to create browser profile directory %s: %s"), profile_path, exc)
+            raise
 
     return profile_path
 
@@ -221,7 +229,11 @@ def get_log_file_path(basename:str, mode:str | InstallationMode) -> Path:
     # Create parent directory if it doesn't exist
     if not log_path.parent.exists():
         LOG.debug(_("Creating directory: %s"), log_path.parent)
-        log_path.parent.mkdir(parents = True, exist_ok = True)
+        try:
+            log_path.parent.mkdir(parents = True, exist_ok = True)
+        except OSError as exc:
+            LOG.error(_("Failed to create log directory %s: %s"), log_path.parent, exc)
+            raise
 
     return log_path
 
@@ -242,6 +254,10 @@ def get_update_check_state_path(mode:str | InstallationMode) -> Path:
     # Create parent directory if it doesn't exist
     if not state_path.parent.exists():
         LOG.debug(_("Creating directory: %s"), state_path.parent)
-        state_path.parent.mkdir(parents = True, exist_ok = True)
+        try:
+            state_path.parent.mkdir(parents = True, exist_ok = True)
+        except OSError as exc:
+            LOG.error(_("Failed to create update check state directory %s: %s"), state_path.parent, exc)
+            raise
 
     return state_path

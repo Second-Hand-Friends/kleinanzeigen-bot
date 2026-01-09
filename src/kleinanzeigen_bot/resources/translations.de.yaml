@@ -212,6 +212,9 @@ kleinanzeigen_bot/__init__.py:
     "Installation mode: %s": "Installationsmodus: %s"
     "Log file path: %s": "Logdateipfad: %s"
 
+  __get_description:
+    "Length of ad description including prefix and suffix exceeds %(max)s chars. Description length: %(len)s chars.": "Die Länge der Anzeigenbeschreibung einschließlich Präfix und Suffix überschreitet %(max)s Zeichen. Beschreibungslänge: %(len)s Zeichen."
+
 #################################################
 kleinanzeigen_bot/extract.py:
 #################################################
@@ -425,6 +428,7 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     " -> Browser profile name: %s": " -> Browser-Profilname: %s"
     " -> Browser user data dir: %s": " -> Browser-Benutzerdatenverzeichnis: %s"
     " -> Custom Browser argument: %s": " -> Benutzerdefiniertes Browser-Argument: %s"
+    "Configured browser.user_data_dir (%s) does not match --user-data-dir argument (%s); using the argument value.": "Konfiguriertes browser.user_data_dir (%s) entspricht nicht dem --user-data-dir-Argument (%s); verwende den Argumentwert."
     " -> Setting chrome prefs [%s]...": " -> Setze Chrome-Einstellungen [%s]..."
     " -> Adding Browser extension: [%s]": " -> Füge Browser-Erweiterung hinzu: [%s]"
     "Failed to connect to browser. This error often occurs when:": "Fehler beim Verbinden mit dem Browser. Dieser Fehler tritt häufig auf, wenn:"
@@ -622,16 +626,20 @@ kleinanzeigen_bot/utils/xdg_paths.py:
   get_downloaded_ads_path:
     "Resolving downloaded ads path for mode '%s': %s": "Bestimme Download-Pfad für Anzeigen im Modus „%s“: %s"
     "Creating directory: %s": "Erstelle Verzeichnis: %s"
+    "Failed to create downloaded ads directory %s: %s": "Download-Verzeichnis %s konnte nicht erstellt werden: %s"
 
   get_browser_profile_path:
     "Resolving browser profile path for mode '%s' (config override): %s": "Bestimme Browser-Profilpfad für Modus „%s“ (Konfig-Override): %s"
     "Resolving browser profile path for mode '%s': %s": "Bestimme Browser-Profilpfad für Modus „%s“: %s"
     "Creating directory: %s": "Erstelle Verzeichnis: %s"
+    "Failed to create browser profile directory %s: %s": "Browser-Profilverzeichnis %s konnte nicht erstellt werden: %s"
 
   get_log_file_path:
     "Resolving log file path for mode '%s': %s": "Bestimme Logdateipfad für Modus „%s“: %s"
     "Creating directory: %s": "Erstelle Verzeichnis: %s"
+    "Failed to create log directory %s: %s": "Logverzeichnis %s konnte nicht erstellt werden: %s"
 
   get_update_check_state_path:
     "Resolving update check state path for mode '%s': %s": "Bestimme Pfad für Update-Prüfstatus im Modus „%s“: %s"
     "Creating directory: %s": "Erstelle Verzeichnis: %s"
+    "Failed to create update check state directory %s: %s": "Update-Prüfstatusverzeichnis %s konnte nicht erstellt werden: %s"

@@ -11,6 +11,8 @@ import pytest
 
 from kleinanzeigen_bot.utils import xdg_paths
 
+pytestmark = pytest.mark.unit
+
 
 class TestGetXdgBaseDir:
     """Tests for get_xdg_base_dir function."""
@@ -18,7 +20,7 @@ class TestGetXdgBaseDir:
     def test_returns_state_dir(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test resolving XDG state directory."""
         state_dir = tmp_path / "state"
-        monkeypatch.setattr("platformdirs.user_state_dir", lambda app_name: str(state_dir / app_name))
+        monkeypatch.setattr("platformdirs.user_state_dir", lambda app_name, *args, **kwargs: str(state_dir / app_name))
 
         resolved = xdg_paths.get_xdg_base_dir("state")
 
@@ -31,7 +33,7 @@ class TestGetXdgBaseDir:
 
     def test_raises_when_base_dir_is_none(self, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test runtime error when platformdirs returns None."""
-        monkeypatch.setattr("platformdirs.user_state_dir", lambda _app_name: None)
+        monkeypatch.setattr("platformdirs.user_state_dir", lambda _app_name, *args, **kwargs: None)
 
         with pytest.raises(RuntimeError, match = "Failed to resolve XDG base directory"):
             xdg_paths.get_xdg_base_dir("state")
@@ -68,7 +70,7 @@ class TestDetectInstallationMode:
         (xdg_config / "config.yaml").touch()
 
         # Mock platformdirs to return our test directory
-        monkeypatch.setattr("platformdirs.user_config_dir", lambda app_name: str(tmp_path / "config" / app_name))
+        monkeypatch.setattr("platformdirs.user_config_dir", lambda app_name, *args, **kwargs: str(tmp_path / "config" / app_name))
 
         # Change to a different directory (no local config)
         cwd = tmp_path / "cwd"
@@ -121,7 +123,7 @@ class TestGetConfigFilePath:
         xdg_config = tmp_path / "config"
         monkeypatch.setattr(
             "platformdirs.user_config_dir",
-            lambda app_name: str(xdg_config / app_name),
+            lambda app_name, *args, **kwargs: str(xdg_config / app_name),
         )
 
         path = xdg_paths.get_config_file_path("xdg")
@@ -154,7 +156,7 @@ class TestGetAdFilesSearchDir:
         xdg_config = tmp_path / "config"
         monkeypatch.setattr(
             "platformdirs.user_config_dir",
-            lambda app_name: str(xdg_config / app_name),
+            lambda app_name, *args, **kwargs: str(xdg_config / app_name),
         )
 
         search_dir = xdg_paths.get_ad_files_search_dir("xdg")
@@ -201,7 +203,7 @@ class TestGetDownloadedAdsPath:
         xdg_config = tmp_path / "config"
         monkeypatch.setattr(
             "platformdirs.user_config_dir",
-            lambda app_name: str(xdg_config / app_name),
+            lambda app_name, *args, **kwargs: str(xdg_config / app_name),
         )
 
         ads_path = xdg_paths.get_downloaded_ads_path("xdg")
@@ -315,6 +317,11 @@ class TestGetUpdateCheckStatePath:
 
 class TestPromptInstallationMode:
     """Tests for prompt_installation_mode function."""
+
+    @pytest.fixture(autouse = True)
+    def _force_identity_translation(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        """Ensure prompt strings are stable regardless of locale."""
+        monkeypatch.setattr(xdg_paths, "_", lambda message: message)
 
     def test_returns_portable_for_non_interactive_mode_no_stdin(
         self,
@@ -539,8 +546,10 @@ class TestUnicodeHandling:
         xdg_base = tmp_path / "Users" / "Müller" / ".config"
         xdg_base.mkdir(parents = True)
 
-        monkeypatch.setattr("platformdirs.user_config_dir",
-                           lambda app_name: str(xdg_base / app_name))
+        monkeypatch.setattr(
+            "platformdirs.user_config_dir",
+            lambda app_name, *args, **kwargs: str(xdg_base / app_name),
+        )
 
         # Get config path
         config_path = xdg_paths.get_config_file_path("xdg")
@@ -559,8 +568,10 @@ class TestUnicodeHandling:
         xdg_config = tmp_path / "config" / "Müller"
         xdg_config.mkdir(parents = True)
 
-        monkeypatch.setattr("platformdirs.user_config_dir",
-                           lambda app_name: str(xdg_config / app_name))
+        monkeypatch.setattr(
+            "platformdirs.user_config_dir",
+            lambda app_name, *args, **kwargs: str(xdg_config / app_name),
+        )
 
         # Get downloaded ads path - this will create the directory
         ads_path = xdg_paths.get_downloaded_ads_path("xdg")

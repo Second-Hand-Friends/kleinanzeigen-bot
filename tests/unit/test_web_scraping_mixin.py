@@ -579,12 +579,15 @@ class TestWebScrapingSessionManagement:
         with patch("psutil.Process") as mock_proc:
             mock_child = MagicMock()
             mock_child.is_running.return_value = True
+            mock_child.wait.side_effect = psutil.TimeoutExpired(1.0, 42)
             mock_proc.return_value.children.return_value = [mock_child]
 
             scraper.close_browser_session()
 
         mock_proc.assert_called_once_with(42)
         stop_mock.assert_called_once()
+        mock_child.terminate.assert_called_once()
+        mock_child.wait.assert_called_once_with(timeout = 1.0)
         mock_child.kill.assert_called_once()
         assert scraper.browser is None
         assert scraper.page is None

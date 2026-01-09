@@ -295,16 +295,25 @@ class WebScrapingMixin:
             LOG.info(" -> Browser profile name: %s", self.browser_config.profile_name)
             browser_args.append(f"--profile-directory={self.browser_config.profile_name}")
 
-        has_user_data_dir_arg = False
+        user_data_dir_from_args:str | None = None
         for browser_arg in self.browser_config.arguments:
             LOG.info(" -> Custom Browser argument: %s", browser_arg)
             browser_args.append(browser_arg)
             if browser_arg.startswith("--user-data-dir="):
-                has_user_data_dir_arg = True
+                user_data_dir_from_args = browser_arg.split("=", maxsplit = 1)[1] or None
 
-        # Ensure Chrome 136+ requirement is satisfied using the mode-aware path
-        if self.browser_config.user_data_dir and not has_user_data_dir_arg:
-            browser_args.append(f"--user-data-dir={self.browser_config.user_data_dir}")
+        effective_user_data_dir = user_data_dir_from_args or self.browser_config.user_data_dir
+        if user_data_dir_from_args and self.browser_config.user_data_dir and user_data_dir_from_args != self.browser_config.user_data_dir:
+            LOG.warning(
+                _("Configured browser.user_data_dir (%s) does not match --user-data-dir argument (%s); using the argument value."),
+                self.browser_config.user_data_dir,
+                user_data_dir_from_args,
+            )
+        self.browser_config.user_data_dir = effective_user_data_dir
+
+        # Ensure Chrome 136+ requirement is satisfied
+        if effective_user_data_dir and not user_data_dir_from_args:
+            browser_args.append(f"--user-data-dir={effective_user_data_dir}")
 
         if not loggers.is_debug(LOG):
             browser_args.append("--log-level=3")  # INFO: 0, WARNING: 1, ERROR: 2, FATAL: 3
@@ -510,7 +519,7 @@ class WebScrapingMixin:
     def close_browser_session(self) -> None:
         if not self.browser:
             return
-        LOG.debug("Closing Browser session...")
+        LOG.debug(_("Closing Browser session..."))
         browser_children:list[psutil.Process] = []
         pid = getattr(self.browser, "_process_pid", None)
         if isinstance(pid, int) and pid >= 0:
@@ -533,12 +542,23 @@ class WebScrapingMixin:
                 continue
             try:
                 p.terminate()
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
-                pass
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError) as exc:
+                LOG.debug("Failed to terminate browser child process %s: %s", p, exc)
+                # Ignore processes that are gone or inaccessible; cleanup remains best-effort.
             try:
-                p.kill()
+                p.wait(timeout = 1.0)
+            except psutil.TimeoutExpired:
+                try:
+                    if p.is_running():
+                        try:
+                            p.kill()
+                        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError) as exc:
+                            LOG.debug("Failed to kill browser child process %s: %s", p, exc)
+                            # Ignore failures to kill already-exited or protected processes.
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
+                    continue
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
-                pass
+                continue
         self.page = None  # pyright: ignore[reportAttributeAccessIssue]
         self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
 

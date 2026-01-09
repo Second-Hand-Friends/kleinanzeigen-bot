@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import asyncio
+import functools
 from gettext import gettext as _
 
 import json, mimetypes, re, shutil  # isort: skip
@@ -11,12 +12,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Final
 
-from kleinanzeigen_bot.model.ad_model import ContactPartial
-
-from .model.ad_model import AdPartial
-from .model.config_model import Config
-from .utils import dicts, files, i18n, loggers, misc, reflect, xdg_paths
-from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
+from kleinanzeigen_bot.model.ad_model import AdPartial, ContactPartial
+from kleinanzeigen_bot.model.config_model import Config
+from kleinanzeigen_bot.utils import dicts, files, i18n, loggers, misc, reflect, xdg_paths
+from kleinanzeigen_bot.utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
 
 __all__ = [
     "AdExtractor",
@@ -63,7 +62,8 @@ class AdExtractor(WebScrapingMixin):
         header_string = (
             "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
         )
-        await asyncio.get_running_loop().run_in_executor(None, lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(), header = header_string))
+        save_ad = functools.partial(dicts.save_dict, ad_file_path, ad_cfg.model_dump(), header = header_string)
+        await asyncio.get_running_loop().run_in_executor(None, save_ad)
 
     @staticmethod
     def _download_and_save_image_sync(url:str, directory:str, filename_prefix:str, img_nr:int) -> str | None:
@@ -78,7 +78,7 @@ class AdExtractor(WebScrapingMixin):
                 return str(img_path)
         except (urllib_error.URLError, urllib_error.HTTPError, OSError, shutil.Error) as e:
             # Narrow exception handling to expected network/filesystem errors
-            LOG.warning("Failed to download image %s: %s", url, e)
+            LOG.warning(_("Failed to download image %s: %s"), url, e)
             return None
 
     async def _download_images_from_ad_page(self, directory:str, ad_id:int) -> list[str]:
@@ -122,7 +122,7 @@ class AdExtractor(WebScrapingMixin):
             LOG.info("Downloaded %s.", i18n.pluralize("image", dl_counter))
 
         except TimeoutError:  # some ads do not require images
-            LOG.warning("No image area found. Continuing without downloading images.")
+            LOG.warning(_("No image area found. Continuing without downloading images."))
 
         return img_paths
 

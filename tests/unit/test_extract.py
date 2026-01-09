@@ -571,7 +571,13 @@ class TestAdExtractorNavigation:
             refs = await test_extractor.extract_own_ads_urls()
 
         assert refs == ["/s-anzeige/one/111", "/s-anzeige/two/222"]
-        assert mock_web_find.call_count == 5
+        mock_web_find.assert_has_calls([
+            call(By.ID, "my-manageitems-adlist"),
+            call(By.CSS_SELECTOR, ".Pagination", timeout = 10),
+            call(By.ID, "my-manageitems-adlist"),
+            call(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = cardbox_one),
+            call(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = cardbox_two),
+        ], any_order = False)
 
     @pytest.mark.asyncio
     async def test_extract_own_ads_urls_paginates_with_enabled_next_button(self, test_extractor:AdExtractor) -> None:
@@ -1165,7 +1171,11 @@ class TestAdExtractorDownload:
                 patch("asyncio.get_running_loop", return_value = loop_mock):
             image_paths = await extractor._download_images_from_ad_page("/some/dir", 12345)
 
-        loop_mock.run_in_executor.assert_called()
+        call_args = loop_mock.run_in_executor.call_args
+        assert call_args is not None
+        assert call_args.args[0] is None
+        assert call_args.args[1] is extractor._download_and_save_image_sync
+        assert call_args.args[2:] == ("http://example.com/valid_image.jpg", "/some/dir", "ad_12345__img", 1)
         assert image_paths == ["ad_12345__img1.jpg"]
 
     @pytest.mark.asyncio
