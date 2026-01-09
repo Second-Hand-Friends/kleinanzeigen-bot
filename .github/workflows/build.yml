@@ -10,6 +10,7 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
     - cron: '0 15 1 * *'
   push:
+    branches: ['**']  # build all branches
     tags-ignore: ['**'] # don't build tags
     paths-ignore:
     - '**/*.md'
