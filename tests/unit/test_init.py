@@ -302,7 +302,7 @@ class TestKleinanzeigenBotRun:
         extractor_mock = MagicMock()
         extractor_mock.extract_own_ads_urls = AsyncMock(return_value = [])
 
-        with patch("kleinanzeigen_bot.__init__.extract.AdExtractor", return_value = extractor_mock) as mock_extractor:
+        with patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock) as mock_extractor:
             await test_bot.download_ads()
 
         mock_extractor.assert_called_once_with(test_bot.browser, test_bot.config, "xdg")
