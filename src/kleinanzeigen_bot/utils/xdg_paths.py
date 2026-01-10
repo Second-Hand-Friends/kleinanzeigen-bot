@@ -14,7 +14,7 @@ from __future__ import annotations
 import sys
 from gettext import gettext as _
 from pathlib import Path
-from typing import Final, Literal
+from typing import Final, Literal, cast
 
 import platformdirs
 
@@ -31,7 +31,7 @@ PathCategory = Literal["config", "cache", "state"]
 def _normalize_mode(mode:str | InstallationMode) -> InstallationMode:
     """Validate and normalize installation mode input."""
     if mode in {"portable", "xdg"}:
-        return mode  # type: ignore[return-value]
+        return cast(InstallationMode, mode)
     raise ValueError(f"Unsupported installation mode: {mode}")
 
 

@@ -429,6 +429,7 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     " -> Browser user data dir: %s": " -> Browser-Benutzerdatenverzeichnis: %s"
     " -> Custom Browser argument: %s": " -> Benutzerdefiniertes Browser-Argument: %s"
     "Configured browser.user_data_dir (%s) does not match --user-data-dir argument (%s); using the argument value.": "Konfiguriertes browser.user_data_dir (%s) entspricht nicht dem --user-data-dir-Argument (%s); verwende den Argumentwert."
+    "Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir.": "Leeres --user-data-dir=-Argument ignoriert; verwende konfiguriertes user_data_dir."
     " -> Setting chrome prefs [%s]...": " -> Setze Chrome-Einstellungen [%s]..."
     " -> Adding Browser extension: [%s]": " -> Füge Browser-Erweiterung hinzu: [%s]"
     "Failed to connect to browser. This error often occurs when:": "Fehler beim Verbinden mit dem Browser. Dieser Fehler tritt häufig auf, wenn:"

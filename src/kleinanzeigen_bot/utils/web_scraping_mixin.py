@@ -298,9 +298,13 @@ class WebScrapingMixin:
         user_data_dir_from_args:str | None = None
         for browser_arg in self.browser_config.arguments:
             LOG.info(" -> Custom Browser argument: %s", browser_arg)
-            browser_args.append(browser_arg)
             if browser_arg.startswith("--user-data-dir="):
-                user_data_dir_from_args = browser_arg.split("=", maxsplit = 1)[1] or None
+                raw = browser_arg.split("=", maxsplit = 1)[1]
+                if not raw:
+                    LOG.warning(_("Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir."))
+                    continue
+                user_data_dir_from_args = raw
+            browser_args.append(browser_arg)
 
         effective_user_data_dir = user_data_dir_from_args or self.browser_config.user_data_dir
         if user_data_dir_from_args and self.browser_config.user_data_dir and user_data_dir_from_args != self.browser_config.user_data_dir:

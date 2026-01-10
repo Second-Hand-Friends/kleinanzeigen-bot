@@ -1082,10 +1082,11 @@ class TestAdExtractorDownload:
         return AdExtractor(browser_mock, config)
 
     @pytest.mark.asyncio
-    async def test_download_ad(self, extractor:AdExtractor) -> None:
+    async def test_download_ad(self, extractor:AdExtractor, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test downloading an ad - directory creation and saving ad data."""
-        with patch("pathlib.Path.mkdir"), \
-                patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict, \
+        monkeypatch.chdir(tmp_path)
+
+        with patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict, \
                 patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
 
             # Use Path for OS-agnostic path handling
