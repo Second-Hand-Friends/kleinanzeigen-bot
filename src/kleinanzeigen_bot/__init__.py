@@ -180,6 +180,10 @@ class KleinanzeigenBot(WebScrapingMixin):
             self.file_log = None
         self.close_browser_session()
 
+    @property
+    def installation_mode_or_portable(self) -> xdg_paths.InstallationMode:
+        return self.installation_mode or "portable"
+
     def get_version(self) -> str:
         return __version__
 
@@ -205,7 +209,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
+                    checker = UpdateChecker(self.config, self.installation_mode_or_portable)
                     checker.check_for_updates()
                     self.load_ads()
                     LOG.info("############################################")
@@ -214,13 +218,13 @@ class KleinanzeigenBot(WebScrapingMixin):
                 case "update-check":
                     self.configure_file_logging()
                     self.load_config()
-                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
+                    checker = UpdateChecker(self.config, self.installation_mode_or_portable)
                     checker.check_for_updates(skip_interval_check = True)
                 case "update-content-hash":
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
+                    checker = UpdateChecker(self.config, self.installation_mode_or_portable)
                     checker.check_for_updates()
                     self.ads_selector = "all"
                     if ads := self.load_ads(exclude_ads_with_id = False):
@@ -233,7 +237,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
+                    checker = UpdateChecker(self.config, self.installation_mode_or_portable)
                     checker.check_for_updates()
 
                     if not (
@@ -276,7 +280,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
+                    checker = UpdateChecker(self.config, self.installation_mode_or_portable)
                     checker.check_for_updates()
                     if ads := self.load_ads():
                         await self.create_browser_session()
@@ -294,7 +298,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                         self.ads_selector = "new"
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode or "portable")
+                    checker = UpdateChecker(self.config, self.installation_mode_or_portable)
                     checker.check_for_updates()
                     await self.create_browser_session()
                     await self.login()
@@ -1518,7 +1522,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         This downloads either all, only unsaved (new), or specific ads given by ID.
         """
 
-        ad_extractor = extract.AdExtractor(self.browser, self.config, self.installation_mode or "portable")
+        ad_extractor = extract.AdExtractor(self.browser, self.config, self.installation_mode_or_portable)
 
         # use relevant download routine
         if self.ads_selector in {"all", "new"}:  # explore ads overview for these two modes

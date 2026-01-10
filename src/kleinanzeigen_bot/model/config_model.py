@@ -131,7 +131,7 @@ class DownloadConfig(ContextualModel):
 
 class BrowserConfig(ContextualModel):
     arguments:list[str] = Field(
-        default_factory = lambda: ["--user-data-dir=.temp/browser-profile"],
+        default_factory = list,
         description = "See https://peter.sh/experiments/chromium-command-line-switches/"
     )
     binary_location:str | None = Field(

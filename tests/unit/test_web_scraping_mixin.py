@@ -1655,7 +1655,8 @@ class TestWebScrapingDiagnostics:
         """Test diagnostic shows macOS-specific remote debugging instructions."""
         with patch("platform.system", return_value = "Darwin"), \
                 patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = False), \
-                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"):
+                patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.psutil.process_iter", return_value = []):
             scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
             scraper_with_config.diagnose_browser_issues()
 

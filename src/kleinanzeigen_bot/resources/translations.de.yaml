@@ -246,7 +246,7 @@ kleinanzeigen_bot/extract.py:
     "Could not find ad list container or items on page %s.": "Anzeigenlistencontainer oder Elemente auf Seite %s nicht gefunden."
     "Error during pagination detection: %s": "Fehler bei der Paginierungserkennung: %s"
     "Error during pagination navigation: %s": "Fehler bei der Paginierungsnavigation: %s"
-    "Error extracting refs on page %s using selector %s: %s": "Fehler beim Extrahieren der Referenzen auf Seite %s mit Selektor %s: %s"
+    "Failed to extract ad ref on page %s using selector %s for item %s: %s": "Fehler beim Extrahieren der Anzeigenreferenz auf Seite %s mit Selektor %s für Element %s: %s"
     "Extracting ads from page %s...": "Extrahiere Anzeigen von Seite %s..."
     "Found %s ad items on page %s.": "%s Anzeigen-Elemente auf Seite %s gefunden."
     "Successfully extracted %s refs from page %s.": "%s Referenzen von Seite %s erfolgreich extrahiert."

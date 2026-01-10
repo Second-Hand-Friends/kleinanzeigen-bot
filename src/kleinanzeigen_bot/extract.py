@@ -214,9 +214,15 @@ class AdExtractor(WebScrapingMixin):
                     if href is None:
                         continue
                     page_refs.append(str(href))
-                except (TimeoutError, KeyError, AttributeError, Exception) as e:
+                except (TimeoutError, KeyError, AttributeError) as exc:
                     # Log the error if extraction fails for some items, but try to continue
-                    LOG.exception(_("Error extracting refs on page %s using selector %s: %s"), current_page, PAGE_LINK_SELECTOR, e)
+                    LOG.warning(
+                        _("Failed to extract ad ref on page %s using selector %s for item %s: %s"),
+                        current_page,
+                        PAGE_LINK_SELECTOR,
+                        li,
+                        exc,
+                    )
                     continue
             refs.extend(page_refs)
             LOG.info(_("Successfully extracted %s refs from page %s."), len(page_refs), current_page)
@@ -387,7 +393,7 @@ class AdExtractor(WebScrapingMixin):
         # extract basic info
         info["type"] = "OFFER" if "s-anzeige" in self.page.url else "WANTED"
         title = await self._extract_title_from_ad_page()
-        LOG.info('Extracting title from ad %s: "%s"', ad_id, title)
+        LOG.info(_('Extracting title from ad %s: "%s"'), ad_id, title)
 
         # Determine the final directory path
         sanitized_title = misc.sanitize_folder_name(title, self.config.download.folder_name_max_length)
@@ -416,7 +422,8 @@ class AdExtractor(WebScrapingMixin):
         else:
             # Create new directory with title
             LOG.debug("Creating new directory: %s", final_dir)
-            await loop.run_in_executor(None, final_dir.mkdir)
+            mkdir_call = functools.partial(final_dir.mkdir, parents = True, exist_ok = True)
+            await loop.run_in_executor(None, mkdir_call)
             LOG.info("New directory for ad created at %s.", final_dir)
 
         # Now extract complete ad info (including images) to the final directory
