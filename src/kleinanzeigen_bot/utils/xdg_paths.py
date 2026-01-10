@@ -35,6 +35,18 @@ def _normalize_mode(mode:str | InstallationMode) -> InstallationMode:
     raise ValueError(f"Unsupported installation mode: {mode}")
 
 
+def _ensure_directory(path:Path, description:str) -> None:
+    """Create directory and verify it exists."""
+    LOG.debug("Creating directory: %s", path)
+    try:
+        path.mkdir(parents = True, exist_ok = True)
+    except OSError as exc:
+        LOG.error(_("Failed to create %s %s: %s"), description, path, exc)
+        raise
+    if not path.is_dir():
+        raise NotADirectoryError(str(path))
+
+
 def get_xdg_base_dir(category:PathCategory) -> Path:
     """Get XDG base directory for the given category.
 
@@ -60,7 +72,7 @@ def get_xdg_base_dir(category:PathCategory) -> Path:
 
     base_dir = Path(resolved)
 
-    LOG.debug("XDG %s directory: %s", category, base_dir)
+    LOG.debug(_("XDG %s directory: %s"), category, base_dir)
     return base_dir
 
 
@@ -77,7 +89,7 @@ def detect_installation_mode() -> InstallationMode | None:
     LOG.debug("Checking for portable config at: %s", portable_config)
 
     if portable_config.exists():
-        LOG.info("Detected installation mode: %s", "portable")
+        LOG.info(_("Detected installation mode: %s"), "portable")
         return "portable"
 
     # Check for XDG installation
@@ -85,11 +97,11 @@ def detect_installation_mode() -> InstallationMode | None:
     LOG.debug("Checking for XDG config at: %s", xdg_config)
 
     if xdg_config.exists():
-        LOG.info("Detected installation mode: %s", "xdg")
+        LOG.info(_("Detected installation mode: %s"), "xdg")
         return "xdg"
 
     # Neither exists - first run
-    LOG.info("No existing installation found")
+    LOG.info(_("No existing installation found"))
     return None
 
 
@@ -101,7 +113,7 @@ def prompt_installation_mode() -> InstallationMode:
     """
     # Check if running in non-interactive mode (no stdin or not a TTY)
     if not sys.stdin or not sys.stdin.isatty():
-        LOG.info("Non-interactive mode detected, defaulting to portable installation")
+        LOG.info(_("Non-interactive mode detected, defaulting to portable installation"))
         return "portable"
 
     print(_("Choose installation type:"))
@@ -114,16 +126,16 @@ def prompt_installation_mode() -> InstallationMode:
         except (EOFError, KeyboardInterrupt):
             # Non-interactive or interrupted - default to portable
             print()  # newline after ^C or EOF
-            LOG.info("Defaulting to portable installation mode")
+            LOG.info(_("Defaulting to portable installation mode"))
             return "portable"
 
         if choice == "1":
             mode:InstallationMode = "portable"
-            LOG.info("User selected installation mode: %s", mode)
+            LOG.info(_("User selected installation mode: %s"), mode)
             return mode
         if choice == "2":
             mode = "xdg"
-            LOG.info("User selected installation mode: %s", mode)
+            LOG.info(_("User selected installation mode: %s"), mode)
             return mode
         print(_("Invalid choice. Please enter 1 or 2."))
 
@@ -178,14 +190,7 @@ def get_downloaded_ads_path(mode:str | InstallationMode) -> Path:
     LOG.debug("Resolving downloaded ads path for mode '%s': %s", mode, ads_path)
 
     # Create directory if it doesn't exist
-    LOG.debug("Creating directory: %s", ads_path)
-    try:
-        ads_path.mkdir(parents = True, exist_ok = True)
-    except OSError as exc:
-        LOG.error("Failed to create downloaded ads directory %s: %s", ads_path, exc)
-        raise
-    if not ads_path.is_dir():
-        raise NotADirectoryError(str(ads_path))
+    _ensure_directory(ads_path, _("downloaded ads directory"))
 
     return ads_path
 
@@ -211,14 +216,7 @@ def get_browser_profile_path(mode:str | InstallationMode, config_override:str | 
         LOG.debug("Resolving browser profile path for mode '%s': %s", mode, profile_path)
 
     # Create directory if it doesn't exist
-    LOG.debug("Creating directory: %s", profile_path)
-    try:
-        profile_path.mkdir(parents = True, exist_ok = True)
-    except OSError as exc:
-        LOG.error("Failed to create browser profile directory %s: %s", profile_path, exc)
-        raise
-    if not profile_path.is_dir():
-        raise NotADirectoryError(str(profile_path))
+    _ensure_directory(profile_path, _("browser profile directory"))
 
     return profile_path
 
@@ -239,14 +237,7 @@ def get_log_file_path(basename:str, mode:str | InstallationMode) -> Path:
     LOG.debug("Resolving log file path for mode '%s': %s", mode, log_path)
 
     # Create parent directory if it doesn't exist
-    LOG.debug("Creating directory: %s", log_path.parent)
-    try:
-        log_path.parent.mkdir(parents = True, exist_ok = True)
-    except OSError as exc:
-        LOG.error("Failed to create log directory %s: %s", log_path.parent, exc)
-        raise
-    if not log_path.parent.is_dir():
-        raise NotADirectoryError(str(log_path.parent))
+    _ensure_directory(log_path.parent, _("log directory"))
 
     return log_path
 
@@ -266,13 +257,6 @@ def get_update_check_state_path(mode:str | InstallationMode) -> Path:
     LOG.debug("Resolving update check state path for mode '%s': %s", mode, state_path)
 
     # Create parent directory if it doesn't exist
-    LOG.debug("Creating directory: %s", state_path.parent)
-    try:
-        state_path.parent.mkdir(parents = True, exist_ok = True)
-    except OSError as exc:
-        LOG.error("Failed to create update check state directory %s: %s", state_path.parent, exc)
-        raise
-    if not state_path.parent.is_dir():
-        raise NotADirectoryError(str(state_path.parent))
+    _ensure_directory(state_path.parent, _("update check state directory"))
 
     return state_path

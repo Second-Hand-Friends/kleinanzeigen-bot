@@ -21,16 +21,15 @@ from nodriver.core.tab import Tab as Page
 
 from kleinanzeigen_bot.model.config_model import Config as BotConfig
 from kleinanzeigen_bot.model.config_model import TimeoutConfig
-
-from . import files, loggers, net
-from .chrome_version_detector import (
+from kleinanzeigen_bot.utils import files, loggers, net, xdg_paths
+from kleinanzeigen_bot.utils.chrome_version_detector import (
     ChromeVersionInfo,
     detect_chrome_version_from_binary,
     detect_chrome_version_from_remote_debugging,
     get_chrome_version_diagnostic_info,
     validate_chrome_136_configuration,
 )
-from .misc import T, ensure
+from kleinanzeigen_bot.utils.misc import T, ensure
 
 if TYPE_CHECKING:
     from nodriver.cdp.runtime import RemoteObject
@@ -210,6 +209,13 @@ class WebScrapingMixin:
             self.browser_config.binary_location = self.get_compatible_browser()
         LOG.info(" -> Browser binary location: %s", self.browser_config.binary_location)
 
+        if not self.browser_config.user_data_dir and not any(
+            arg.startswith("--user-data-dir=") and arg.split("=", maxsplit = 1)[1]
+            for arg in self.browser_config.arguments
+        ):
+            mode = getattr(self, "installation_mode_or_portable", "portable")
+            self.browser_config.user_data_dir = str(xdg_paths.get_browser_profile_path(mode))
+
         # Chrome version detection and validation
         await self._validate_chrome_version_configuration()
 
@@ -304,6 +310,7 @@ class WebScrapingMixin:
                     LOG.warning(_("Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir."))
                     continue
                 user_data_dir_from_args = raw
+                continue
             browser_args.append(browser_arg)
 
         effective_user_data_dir = user_data_dir_from_args or self.browser_config.user_data_dir
@@ -313,11 +320,10 @@ class WebScrapingMixin:
                 self.browser_config.user_data_dir,
                 user_data_dir_from_args,
             )
+        if not effective_user_data_dir:
+            mode = getattr(self, "installation_mode_or_portable", "portable")
+            effective_user_data_dir = str(xdg_paths.get_browser_profile_path(mode))
         self.browser_config.user_data_dir = effective_user_data_dir
-
-        # Ensure Chrome 136+ requirement is satisfied
-        if effective_user_data_dir and not user_data_dir_from_args:
-            browser_args.append(f"--user-data-dir={effective_user_data_dir}")
 
         if not loggers.is_debug(LOG):
             browser_args.append("--log-level=3")  # INFO: 0, WARNING: 1, ERROR: 2, FATAL: 3

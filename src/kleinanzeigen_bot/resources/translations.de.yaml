@@ -607,6 +607,9 @@ kleinanzeigen_bot/utils/xdg_paths.py:
   get_xdg_base_dir:
     "XDG %s directory: %s": "XDG-%s-Verzeichnis: %s"
 
+  _ensure_directory:
+    "Failed to create %s %s: %s": "Konnte %s %s nicht erstellen: %s"
+
   prompt_installation_mode:
     "Choose installation type:": "Installationstyp auswählen:"
     "[1] Portable (current directory)": "[1] Portabel (aktuelles Verzeichnis)"
@@ -625,21 +628,17 @@ kleinanzeigen_bot/utils/xdg_paths.py:
 
   get_downloaded_ads_path:
     "Resolving downloaded ads path for mode '%s': %s": "Bestimme Download-Pfad für Anzeigen im Modus „%s“: %s"
-    "Creating directory: %s": "Erstelle Verzeichnis: %s"
-    "Failed to create downloaded ads directory %s: %s": "Download-Verzeichnis %s konnte nicht erstellt werden: %s"
+    "downloaded ads directory": "Download-Verzeichnis"
 
   get_browser_profile_path:
     "Resolving browser profile path for mode '%s' (config override): %s": "Bestimme Browser-Profilpfad für Modus „%s“ (Konfig-Override): %s"
     "Resolving browser profile path for mode '%s': %s": "Bestimme Browser-Profilpfad für Modus „%s“: %s"
-    "Creating directory: %s": "Erstelle Verzeichnis: %s"
-    "Failed to create browser profile directory %s: %s": "Browser-Profilverzeichnis %s konnte nicht erstellt werden: %s"
+    "browser profile directory": "Browser-Profilverzeichnis"
 
   get_log_file_path:
     "Resolving log file path for mode '%s': %s": "Bestimme Logdateipfad für Modus „%s“: %s"
-    "Creating directory: %s": "Erstelle Verzeichnis: %s"
-    "Failed to create log directory %s: %s": "Logverzeichnis %s konnte nicht erstellt werden: %s"
+    "log directory": "Logverzeichnis"
 
   get_update_check_state_path:
     "Resolving update check state path for mode '%s': %s": "Bestimme Pfad für Update-Prüfstatus im Modus „%s“: %s"
-    "Creating directory: %s": "Erstelle Verzeichnis: %s"
-    "Failed to create update check state directory %s: %s": "Update-Prüfstatusverzeichnis %s konnte nicht erstellt werden: %s"
+    "update check state directory": "Update-Prüfstatusverzeichnis"

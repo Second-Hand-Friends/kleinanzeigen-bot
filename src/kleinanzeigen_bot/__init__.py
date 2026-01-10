@@ -575,8 +575,6 @@ class KleinanzeigenBot(WebScrapingMixin):
         mode_display = "portable (current directory)" if self.installation_mode == "portable" else "system-wide (XDG directories)"
         LOG.info(_("Installation mode: %s"), mode_display)
         LOG.info(_("Config file: %s"), self.config_file_path)
-        if hasattr(self, "config") and self.config is not None:
-            self._configure_browser_from_config()
 
     def __check_ad_republication(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
         """
