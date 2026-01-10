@@ -4,6 +4,7 @@
 import asyncio, enum, inspect, json, os, platform, secrets, shutil, subprocess, urllib.request  # isort: skip # noqa: S404
 from collections.abc import Awaitable, Callable, Coroutine, Iterable
 from gettext import gettext as _
+from pathlib import Path
 from typing import Any, Final, Optional, cast
 
 try:
@@ -209,15 +210,22 @@ class WebScrapingMixin:
             self.browser_config.binary_location = self.get_compatible_browser()
         LOG.info(" -> Browser binary location: %s", self.browser_config.binary_location)
 
+        auto_user_data_dir = False
+        has_remote_debugging = any(
+            arg.startswith("--remote-debugging-port=")
+            for arg in self.browser_config.arguments
+        )
         if not self.browser_config.user_data_dir and not any(
             arg.startswith("--user-data-dir=") and arg.split("=", maxsplit = 1)[1]
             for arg in self.browser_config.arguments
-        ):
+        ) and not has_remote_debugging:
             mode = getattr(self, "installation_mode_or_portable", "portable")
             self.browser_config.user_data_dir = str(xdg_paths.get_browser_profile_path(mode))
+            auto_user_data_dir = True
 
         # Chrome version detection and validation
-        await self._validate_chrome_version_configuration()
+        if not has_remote_debugging:
+            await self._validate_chrome_version_configuration()
 
         ########################################################
         # check if an existing browser instance shall be used...
@@ -305,7 +313,7 @@ class WebScrapingMixin:
         for browser_arg in self.browser_config.arguments:
             LOG.info(" -> Custom Browser argument: %s", browser_arg)
             if browser_arg.startswith("--user-data-dir="):
-                raw = browser_arg.split("=", maxsplit = 1)[1]
+                raw = browser_arg.split("=", maxsplit = 1)[1].strip().strip('"').strip("'")
                 if not raw:
                     LOG.warning(_("Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir."))
                     continue
@@ -362,6 +370,9 @@ class WebScrapingMixin:
         except Exception as e:
             # Clean up any resources that were created during setup
             self._cleanup_session_resources()
+
+            if auto_user_data_dir and self.browser_config.user_data_dir:
+                self._terminate_processes_using_user_data_dir(Path(self.browser_config.user_data_dir))
 
             error_msg = str(e)
             if "root" in error_msg.lower():
@@ -543,6 +554,22 @@ class WebScrapingMixin:
         # Reset browser and page references
         self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
         self.page = None  # pyright: ignore[reportAttributeAccessIssue]
+
+    def _terminate_processes_using_user_data_dir(self, user_data_dir:Path) -> None:
+        """Terminate running browser processes that already use the given profile dir."""
+        target_dir = user_data_dir.expanduser().resolve()
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                cmdline = proc.info.get("cmdline") or []
+                for arg in cmdline:
+                    if not arg.startswith("--user-data-dir="):
+                        continue
+                    raw = arg.split("=", maxsplit = 1)[1].strip().strip('"').strip("'")
+                    if Path(raw).expanduser().resolve() == target_dir:
+                        proc.kill()
+                        break
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
 
     def get_compatible_browser(self) -> str:
         browser_paths:list[str | None] = []

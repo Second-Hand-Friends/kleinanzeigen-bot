@@ -534,23 +534,23 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         if config_was_customized and self.config_file_path:
             # Config path was explicitly set - detect mode based on it
-            LOG.debug(_("Detecting installation mode from explicit config path: %s"), self.config_file_path)
+            LOG.debug("Detecting installation mode from explicit config path: %s", self.config_file_path)
 
             if config_path is not None and config_path == (Path.cwd() / "config.yaml").resolve():
                 # Explicit path points to CWD config
                 self.installation_mode = "portable"
-                LOG.debug(_("Explicit config is in CWD, using portable mode"))
+                LOG.debug("Explicit config is in CWD, using portable mode")
             elif config_path is not None and config_path.is_relative_to(xdg_paths.get_xdg_base_dir("config").resolve()):
                 # Explicit path is within XDG config directory
                 self.installation_mode = "xdg"
-                LOG.debug(_("Explicit config is in XDG directory, using xdg mode"))
+                LOG.debug("Explicit config is in XDG directory, using xdg mode")
             else:
                 # Custom location - default to portable mode (all paths relative to config)
                 self.installation_mode = "portable"
-                LOG.debug(_("Explicit config is in custom location, defaulting to portable mode"))
+                LOG.debug("Explicit config is in custom location, defaulting to portable mode")
         else:
             # No explicit config - use auto-detection
-            LOG.debug(_("Detecting installation mode..."))
+            LOG.debug("Detecting installation mode...")
             self.installation_mode = xdg_paths.detect_installation_mode()
 
             if self.installation_mode is None:
@@ -562,14 +562,14 @@ class KleinanzeigenBot(WebScrapingMixin):
             self.config_file_path = str(xdg_paths.get_config_file_path(self.installation_mode))
 
         # Set log file path based on mode (unless explicitly overridden via --logfile)
-        if (
-            not self.log_file_explicitly_provided
-            and self.log_file_path is not None
+        using_default_portable_log = (
+            self.log_file_path is not None
             and Path(self.log_file_path).resolve() == xdg_paths.get_log_file_path(self.log_file_basename, "portable").resolve()
-        ):
+        )
+        if not self.log_file_explicitly_provided and using_default_portable_log:
             # Still using default portable path - update to match detected mode
             self.log_file_path = str(xdg_paths.get_log_file_path(self.log_file_basename, self.installation_mode))
-            LOG.debug(_("Log file path: %s"), self.log_file_path)
+            LOG.debug("Log file path: %s", self.log_file_path)
 
         # Log installation mode and config location (INFO level for user visibility)
         mode_display = "portable (current directory)" if self.installation_mode == "portable" else "system-wide (XDG directories)"
@@ -774,7 +774,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         LOG.info("Checking if already logged in...")
         await self.web_open(f"{self.root_url}")
         if getattr(self, "page", None) is not None:
-            LOG.debug(_("Current page URL after opening homepage: %s"), self.page.url)
+            LOG.debug("Current page URL after opening homepage: %s", self.page.url)
 
         if await self.is_logged_in():
             LOG.info("Already logged in as [%s]. Skipping login.", self.config.login.username)
@@ -788,12 +788,12 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         # Sometimes a second login is required
         if not await self.is_logged_in():
-            LOG.debug(_("First login attempt did not succeed, trying second login attempt"))
+            LOG.debug("First login attempt did not succeed, trying second login attempt")
             await self.fill_login_data_and_send()
             await self.handle_after_login_logic()
 
             if await self.is_logged_in():
-                LOG.debug(_("Second login attempt succeeded"))
+                LOG.debug("Second login attempt succeeded")
             else:
                 LOG.warning(_("Second login attempt also failed - login may not have succeeded"))
 
@@ -841,27 +841,27 @@ class KleinanzeigenBot(WebScrapingMixin):
         login_check_timeout = self._timeout("login_detection")
         effective_timeout = self._effective_timeout("login_detection")
         username = self.config.login.username.lower()
-        LOG.debug(_("Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)"), login_check_timeout, effective_timeout)
+        LOG.debug("Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)", login_check_timeout, effective_timeout)
 
         # Try to find the standard element first
         try:
             user_info = await self.web_text(By.CLASS_NAME, "mr-medium", timeout = login_check_timeout)
             if username in user_info.lower():
-                LOG.debug(_("Login detected via .mr-medium element"))
+                LOG.debug("Login detected via .mr-medium element")
                 return True
         except TimeoutError:
-            LOG.debug(_("Timeout waiting for .mr-medium element after %.1fs"), effective_timeout)
+            LOG.debug("Timeout waiting for .mr-medium element after %.1fs", effective_timeout)
 
         # If standard element not found or didn't contain username, try the alternative
         try:
             user_info = await self.web_text(By.ID, "user-email", timeout = login_check_timeout)
             if username in user_info.lower():
-                LOG.debug(_("Login detected via #user-email element"))
+                LOG.debug("Login detected via #user-email element")
                 return True
         except TimeoutError:
-            LOG.debug(_("Timeout waiting for #user-email element after %.1fs"), effective_timeout)
+            LOG.debug("Timeout waiting for #user-email element after %.1fs", effective_timeout)
 
-        LOG.debug(_("No login detected - neither .mr-medium nor #user-email found with username"))
+        LOG.debug("No login detected - neither .mr-medium nor #user-email found with username")
         return False
 
     async def delete_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
@@ -1300,25 +1300,25 @@ class KleinanzeigenBot(WebScrapingMixin):
                 try:
                     special_attr_elem = await self.web_find(By.ID, special_attribute_key)
                 except TimeoutError as ex:
-                    LOG.debug(_("Attribute field '%s' could not be found."), special_attribute_key)
+                    LOG.debug("Attribute field '%s' could not be found.", special_attribute_key)
                     raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
 
             try:
                 elem_id:str = str(special_attr_elem.attrs.id)
                 if special_attr_elem.local_name == "select":
-                    LOG.debug(_("Attribute field '%s' seems to be a select..."), special_attribute_key)
+                    LOG.debug("Attribute field '%s' seems to be a select...", special_attribute_key)
                     await self.web_select(By.ID, elem_id, special_attribute_value_str)
                 elif special_attr_elem.attrs.type == "checkbox":
-                    LOG.debug(_("Attribute field '%s' seems to be a checkbox..."), special_attribute_key)
+                    LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
                     await self.web_click(By.ID, elem_id)
                 elif special_attr_elem.attrs.type == "text" and special_attr_elem.attrs.get("role") == "combobox":
-                    LOG.debug(_("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)..."), special_attribute_key)
+                    LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
                     await self.web_select_combobox(By.ID, elem_id, special_attribute_value_str)
                 else:
-                    LOG.debug(_("Attribute field '%s' seems to be a text input..."), special_attribute_key)
+                    LOG.debug("Attribute field '%s' seems to be a text input...", special_attribute_key)
                     await self.web_input(By.ID, elem_id, special_attribute_value_str)
             except TimeoutError as ex:
-                LOG.debug(_("Failed to set attribute field '%s' via known input types."), special_attribute_key)
+                LOG.debug("Failed to set attribute field '%s' via known input types.", special_attribute_key)
                 raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
             LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
 
@@ -1489,7 +1489,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                 )
                 current_count = len(thumbnails)
                 if current_count < expected_count:
-                    LOG.debug(_(" -> %d of %d images processed"), current_count, expected_count)
+                    LOG.debug(" -> %d of %d images processed", current_count, expected_count)
                 return current_count == expected_count
             except TimeoutError:
                 # No thumbnails found yet, continue polling

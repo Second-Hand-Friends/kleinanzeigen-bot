@@ -441,7 +441,7 @@ class AdExtractor(WebScrapingMixin):
         try:
             category_line = await self.web_find(By.ID, "vap-brdcrmb")
         except TimeoutError as exc:
-            LOG.warning("Breadcrumb container 'vap-brdcrmb' not found; cannot extract ad category: %s", exc)
+            LOG.warning(_("Breadcrumb container 'vap-brdcrmb' not found; cannot extract ad category: %s"), exc)
             raise
         try:
             breadcrumb_links = await self.web_find_all(By.CSS_SELECTOR, "a", parent = category_line)
@@ -462,7 +462,7 @@ class AdExtractor(WebScrapingMixin):
             return f"{category_ids[0]}/{category_ids[0]}"
 
         # Fallback to legacy selectors in case the breadcrumb structure is unexpected.
-        LOG.debug(_("Falling back to legacy breadcrumb selectors; collected ids: %s"), category_ids)
+        LOG.debug("Falling back to legacy breadcrumb selectors; collected ids: %s", category_ids)
         fallback_timeout = self._effective_timeout()
         try:
             category_first_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)

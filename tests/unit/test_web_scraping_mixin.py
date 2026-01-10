@@ -39,6 +39,20 @@ class ConfigProtocol(Protocol):
         pass
 
 
+class DummyNodriverConfig:
+    def __init__(self, **kwargs:object) -> None:
+        self.browser_args:list[str] = []
+        self.user_data_dir:str | None = None
+        self.extensions:list[str] = []
+        self.browser_executable_path:str | None = None
+        self.host:str | None = None
+        self.port:int | None = None
+        self.headless:bool = False
+
+    def add_extension(self, ext:str) -> None:
+        self.extensions.append(ext)
+
+
 def _nodriver_start_mock() -> Mock:
     """Return the nodriver.start mock with proper typing."""
     return cast(Mock, cast(Any, nodriver).start)
@@ -986,23 +1000,10 @@ class TestWebScrapingBrowserConfiguration:
     @pytest.mark.asyncio
     async def test_browser_arguments_respect_user_data_dir_arg(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Ensure explicit --user-data-dir argument is not duplicated in browser_args."""
-        class DummyConfig:
-            def __init__(self, **kwargs:object) -> None:
-                self.browser_args:list[str] = []
-                self.user_data_dir:str | None = None
-                self.extensions:list[str] = []
-                self.browser_executable_path:str | None = None
-                self.host:str | None = None
-                self.port:int | None = None
-                self.headless:bool = False
-
-            def add_extension(self, ext:str) -> None:
-                self.extensions.append(ext)
-
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
-        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
+        monkeypatch.setattr(nodriver.core.config, "Config", DummyNodriverConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
 
         monkeypatch.setattr(os.path, "exists", lambda p: p == "/usr/bin/chrome")
 
@@ -1033,25 +1034,12 @@ class TestWebScrapingBrowserConfiguration:
         assert config.user_data_dir == str(explicit_dir)
 
     @pytest.mark.asyncio
-    async def test_browser_arguments_auto_append_user_data_dir(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
-        """Ensure user_data_dir is not appended when no explicit argument is provided."""
-        class DummyConfig:
-            def __init__(self, **kwargs:object) -> None:
-                self.browser_args:list[str] = []
-                self.user_data_dir:str | None = None
-                self.extensions:list[str] = []
-                self.browser_executable_path:str | None = None
-                self.host:str | None = None
-                self.port:int | None = None
-                self.headless:bool = False
-
-            def add_extension(self, ext:str) -> None:
-                self.extensions.append(ext)
-
+    async def test_browser_arguments_do_not_duplicate_user_data_dir(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        """Ensure user_data_dir is not duplicated in browser_args when configured."""
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
-        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
+        monkeypatch.setattr(nodriver.core.config, "Config", DummyNodriverConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
 
         monkeypatch.setattr(os.path, "exists", lambda p: p == "/usr/bin/chrome")
 
@@ -1078,23 +1066,10 @@ class TestWebScrapingBrowserConfiguration:
     @pytest.mark.asyncio
     async def test_browser_user_data_dir_defaults_to_profile_path(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Ensure user_data_dir defaults to the installation-mode profile path."""
-        class DummyConfig:
-            def __init__(self, **kwargs:object) -> None:
-                self.browser_args:list[str] = []
-                self.user_data_dir:str | None = None
-                self.extensions:list[str] = []
-                self.browser_executable_path:str | None = None
-                self.host:str | None = None
-                self.port:int | None = None
-                self.headless:bool = False
-
-            def add_extension(self, ext:str) -> None:
-                self.extensions.append(ext)
-
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
-        monkeypatch.setattr(nodriver.core.config, "Config", DummyConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
+        monkeypatch.setattr(nodriver.core.config, "Config", DummyNodriverConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
         monkeypatch.setattr(os.path, "exists", lambda p: p == "/usr/bin/chrome")
 
         default_dir = tmp_path / "default-profile"

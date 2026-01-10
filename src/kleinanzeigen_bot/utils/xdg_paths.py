@@ -72,7 +72,7 @@ def get_xdg_base_dir(category:PathCategory) -> Path:
 
     base_dir = Path(resolved)
 
-    LOG.debug(_("XDG %s directory: %s"), category, base_dir)
+    LOG.debug("XDG %s directory: %s", category, base_dir)
     return base_dir
 
 
@@ -205,10 +205,11 @@ def get_browser_profile_path(mode:str | InstallationMode, config_override:str | 
     Returns:
         Path to browser profile directory
     """
+    mode = _normalize_mode(mode)
     if config_override:
         profile_path = Path(config_override)
         LOG.debug("Resolving browser profile path for mode '%s' (config override): %s", mode, profile_path)
-    elif _normalize_mode(mode) == "portable":
+    elif mode == "portable":
         profile_path = Path.cwd() / ".temp" / "browser-profile"
         LOG.debug("Resolving browser profile path for mode '%s': %s", mode, profile_path)
     else:  # xdg

@@ -61,20 +61,9 @@ kleinanzeigen_bot/__init__.py:
 
   login:
     "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
-    "Current page URL after opening homepage: %s": "Aktuelle Seiten-URL nach dem Öffnen der Startseite: %s"
     "Already logged in as [%s]. Skipping login.": "Bereits eingeloggt als [%s]. Überspringe Anmeldung."
     "Opening login page...": "Öffne Anmeldeseite..."
-    "First login attempt did not succeed, trying second login attempt": "Erster Anmeldeversuch war nicht erfolgreich, versuche zweiten Anmeldeversuch"
-    "Second login attempt succeeded": "Zweiter Anmeldeversuch erfolgreich"
     "Second login attempt also failed - login may not have succeeded": "Zweiter Anmeldeversuch ebenfalls fehlgeschlagen - Anmeldung möglicherweise nicht erfolgreich"
-
-  is_logged_in:
-    "Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)": "Starte Login-Erkennung (Timeout: %.1fs Basis, %.1fs effektiv mit Multiplikator/Backoff)"
-    "Login detected via .mr-medium element": "Login erkannt über .mr-medium Element"
-    "Timeout waiting for .mr-medium element after %.1fs": "Timeout beim Warten auf .mr-medium Element nach %.1fs"
-    "Login detected via #user-email element": "Login erkannt über #user-email Element"
-    "Timeout waiting for #user-email element after %.1fs": "Timeout beim Warten auf #user-email Element nach %.1fs"
-    "No login detected - neither .mr-medium nor #user-email found with username": "Kein Login erkannt - weder .mr-medium noch #user-email mit Benutzername gefunden"
 
   handle_after_login_logic:
     "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
@@ -140,23 +129,11 @@ kleinanzeigen_bot/__init__.py:
     "Image upload timeout exceeded": "Zeitüberschreitung beim Hochladen der Bilder"
     "Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d thumbnails.": "Nicht alle Bilder wurden innerhalb der Zeitüberschreitung hochgeladen. Erwartet: %(expected)d, gefunden: %(found)d Miniaturansichten."
 
-  check_thumbnails_uploaded:
-    " -> %d of %d images processed": " -> %d von %d Bildern verarbeitet"
-
   __check_ad_republication:
     " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days": " -> ÜBERSPRUNGEN: Anzeige [%s] wurde zuletzt vor %d Tagen veröffentlicht. Erneute Veröffentlichung ist erst nach %s Tagen erforderlich"
 
   __set_special_attributes:
-    "Found %i special attributes": "%i spezielle Attribute gefunden"
-    "Setting special attribute [%s] to [%s]...": "Setze spezielles Attribut [%s] auf [%s]..."
-    "Successfully set attribute field [%s] to [%s]...": "Attributfeld [%s] erfolgreich auf [%s] gesetzt..."
-    "Attribute field '%s' could not be found.": "Attributfeld '%s' konnte nicht gefunden werden."
     "Failed to set attribute '%s'": "Fehler beim Setzen des Attributs '%s'"
-    "Attribute field '%s' seems to be a select...": "Attributfeld '%s' scheint ein Auswahlfeld zu sein..."
-    "Failed to set attribute field '%s' via known input types.": "Fehler beim Setzen des Attributfelds '%s' über bekannte Eingabetypen."
-    "Attribute field '%s' seems to be a checkbox...": "Attributfeld '%s' scheint eine Checkbox zu sein..."
-    "Attribute field '%s' seems to be a text input...": "Attributfeld '%s' scheint ein Texteingabefeld zu sein..."
-    "Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...": "Attributfeld '%s' scheint eine Combobox zu sein (d.h. Texteingabefeld mit Dropdown-Filter)..."
 
   download_ads:
     "Scanning your ad overview...": "Scanne Anzeigenübersicht..."
@@ -202,15 +179,9 @@ kleinanzeigen_bot/__init__.py:
     "ad": "Anzeige"
 
   finalize_installation_mode:
-    "Detecting installation mode from explicit config path: %s": "Ermittle Installationsmodus anhand des expliziten Konfigurationspfads: %s"
-    "Explicit config is in CWD, using portable mode": "Explizite Konfiguration liegt im Arbeitsverzeichnis, verwende portablen Modus"
-    "Explicit config is in XDG directory, using xdg mode": "Explizite Konfiguration liegt im XDG-Verzeichnis, verwende XDG-Modus"
-    "Explicit config is in custom location, defaulting to portable mode": "Explizite Konfiguration liegt an benutzerdefiniertem Ort, Standard ist portabler Modus"
-    "Detecting installation mode...": "Ermittle Installationsmodus..."
     "Config file: %s": "Konfigurationsdatei: %s"
     "First run detected, prompting user for installation mode": "Erster Start erkannt, frage Benutzer nach Installationsmodus"
     "Installation mode: %s": "Installationsmodus: %s"
-    "Log file path: %s": "Logdateipfad: %s"
 
   __get_description:
     "Length of ad description including prefix and suffix exceeds %(max)s chars. Description length: %(len)s chars.": "Die Länge der Anzeigenbeschreibung einschließlich Präfix und Suffix überschreitet %(max)s Zeichen. Beschreibungslänge: %(len)s Zeichen."
@@ -267,7 +238,6 @@ kleinanzeigen_bot/extract.py:
 
   _extract_category_from_ad_page:
     "Breadcrumb container 'vap-brdcrmb' not found; cannot extract ad category: %s": "Breadcrumb-Container 'vap-brdcrmb' nicht gefunden; kann Anzeigenkategorie nicht extrahieren: %s"
-    "Falling back to legacy breadcrumb selectors; collected ids: %s": "Weiche auf ältere Breadcrumb-Selektoren aus; gesammelte IDs: %s"
     "Legacy breadcrumb selectors not found within %.1f seconds (collected ids: %s)": "Ältere Breadcrumb-Selektoren nicht innerhalb von %.1f Sekunden gefunden (gesammelte IDs: %s)"
     "Unable to locate breadcrumb fallback selectors within %(seconds).1f seconds.": "Ältere Breadcrumb-Selektoren konnten nicht innerhalb von %(seconds).1f Sekunden gefunden werden."
 
@@ -603,9 +573,6 @@ kleinanzeigen_bot/utils/xdg_paths.py:
     "Checking for XDG config at: %s": "Prüfe auf XDG-Konfiguration unter: %s"
     "Detected installation mode: %s": "Erkannter Installationsmodus: %s"
     "No existing installation found": "Keine existierende Installation gefunden"
-
-  get_xdg_base_dir:
-    "XDG %s directory: %s": "XDG-%s-Verzeichnis: %s"
 
   _ensure_directory:
     "Failed to create %s %s: %s": "Konnte %s %s nicht erstellen: %s"
