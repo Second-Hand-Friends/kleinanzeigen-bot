@@ -432,6 +432,9 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
   close_browser_session:
     "Closing Browser session...": "Schließe Browser-Sitzung..."
 
+  _terminate_processes_using_user_data_dir:
+    "Killing process using auto profile dir: pid=%s name=%s": "Beende Prozess mit Auto-Profilverzeichnis: pid=%s name=%s"
+
   get_compatible_browser:
     "Installed browser could not be detected": "Installierter Browser konnte nicht erkannt werden"
     "Installed browser for OS %s could not be detected": "Installierter Browser für Betriebssystem %s konnte nicht erkannt werden"

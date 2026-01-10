@@ -41,13 +41,13 @@ class ConfigProtocol(Protocol):
 
 class DummyNodriverConfig:
     def __init__(self, **kwargs:object) -> None:
-        self.browser_args:list[str] = []
-        self.user_data_dir:str | None = None
+        self.browser_args:list[str] = list(cast(list[str], kwargs.get("browser_args", [])))
+        self.user_data_dir:str | None = cast(str | None, kwargs.get("user_data_dir"))
         self.extensions:list[str] = []
-        self.browser_executable_path:str | None = None
+        self.browser_executable_path:str | None = cast(str | None, kwargs.get("browser_executable_path"))
         self.host:str | None = None
         self.port:int | None = None
-        self.headless:bool = False
+        self.headless:bool = bool(kwargs.get("headless", False))
 
     def add_extension(self, ext:str) -> None:
         self.extensions.append(ext)
@@ -1003,7 +1003,7 @@ class TestWebScrapingBrowserConfiguration:
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
-        monkeypatch.setattr(nodriver.core.config, "Config", DummyNodriverConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
+        monkeypatch.setattr("kleinanzeigen_bot.utils.web_scraping_mixin.NodriverConfig", DummyNodriverConfig)
 
         monkeypatch.setattr(os.path, "exists", lambda p: p == "/usr/bin/chrome")
 
@@ -1039,7 +1039,7 @@ class TestWebScrapingBrowserConfiguration:
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
-        monkeypatch.setattr(nodriver.core.config, "Config", DummyNodriverConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
+        monkeypatch.setattr("kleinanzeigen_bot.utils.web_scraping_mixin.NodriverConfig", DummyNodriverConfig)
 
         monkeypatch.setattr(os.path, "exists", lambda p: p == "/usr/bin/chrome")
 
@@ -1069,7 +1069,7 @@ class TestWebScrapingBrowserConfiguration:
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
-        monkeypatch.setattr(nodriver.core.config, "Config", DummyNodriverConfig)  # type: ignore[unused-ignore,reportAttributeAccessIssue,attr-defined]
+        monkeypatch.setattr("kleinanzeigen_bot.utils.web_scraping_mixin.NodriverConfig", DummyNodriverConfig)
         monkeypatch.setattr(os.path, "exists", lambda p: p == "/usr/bin/chrome")
 
         default_dir = tmp_path / "default-profile"
@@ -1406,7 +1406,7 @@ class TestWebScrapingBrowserConfiguration:
             self.page = mock_page2  # type: ignore[unused-ignore,reportAttributeAccessIssue]  # Assigning mock page for test
 
         monkeypatch.setattr(WebScrapingMixin, "create_browser_session", mock_create_session2)
-        await mock_create_session2(scraper)
+        await cast(Any, scraper).create_browser_session()
         print("[DEBUG] scraper.page after session creation:", scraper.page)
         assert scraper.browser is not None
         assert scraper.page is not None

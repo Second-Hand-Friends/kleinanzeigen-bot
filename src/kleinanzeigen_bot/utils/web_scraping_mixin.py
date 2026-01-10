@@ -560,12 +560,16 @@ class WebScrapingMixin:
         target_dir = user_data_dir.expanduser().resolve()
         for proc in psutil.process_iter(["pid", "name", "cmdline"]):
             try:
+                name = (proc.info.get("name") or "").lower()
+                if not any(token in name for token in ("chrome", "chromium", "edge")):
+                    continue
                 cmdline = proc.info.get("cmdline") or []
                 for arg in cmdline:
                     if not arg.startswith("--user-data-dir="):
                         continue
                     raw = arg.split("=", maxsplit = 1)[1].strip().strip('"').strip("'")
                     if Path(raw).expanduser().resolve() == target_dir:
+                        LOG.warning(_("Killing process using auto profile dir: pid=%s name=%s"), proc.info.get("pid"), proc.info.get("name"))
                         proc.kill()
                         break
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
