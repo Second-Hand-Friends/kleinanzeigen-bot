@@ -41,12 +41,14 @@ _KEY_VALUE_PAIR_SIZE = 2
 
 
 def _resolve_user_data_dir_paths(arg_value:str, config_value:str) -> tuple[Path | None, Path | None]:
+    """Resolve the argument and config user_data_dir paths for comparison."""
     try:
         return (
             Path(arg_value).expanduser().resolve(),
             Path(config_value).expanduser().resolve(),
         )
-    except OSError:
+    except OSError as exc:
+        LOG.debug("Failed to resolve user_data_dir paths for comparison: %s", exc)
         return None, None
 
 
@@ -594,7 +596,11 @@ class WebScrapingMixin:
 
     def _terminate_processes_using_user_data_dir(self, user_data_dir:Path) -> None:
         """Terminate running browser processes that already use the given profile dir."""
-        target_dir = user_data_dir.expanduser().resolve()
+        try:
+            target_dir = user_data_dir.expanduser().resolve()
+        except OSError as exc:
+            LOG.warning(_("Unable to resolve user_data_dir '%s'; skipping process termination: %s"), user_data_dir, exc)
+            return
         unsafe_targets = {
             Path("/").resolve(),
             Path.cwd().resolve(),
@@ -609,19 +615,10 @@ class WebScrapingMixin:
                 if not any(token in name for token in ("chrome", "chromium", "edge")):
                     continue
                 cmdline = proc.info.get("cmdline") or []
-                i = 0
-                while i < len(cmdline):
-                    arg = cmdline[i]
-                    raw:str | None = None
-                    if arg.startswith("--user-data-dir="):
-                        raw = arg.split("=", maxsplit = 1)[1]
-                    elif arg == "--user-data-dir" and i + 1 < len(cmdline):
-                        raw = cmdline[i + 1]
-                        i += 1
-                    i += 1
-                    if raw is None:
+                for arg in cmdline:
+                    if not arg.startswith("--user-data-dir="):
                         continue
-                    raw = raw.strip().strip('"').strip("'")
+                    raw = arg.split("=", maxsplit = 1)[1].strip().strip('"').strip("'")
                     if raw and Path(raw).expanduser().resolve() == target_dir:
                         LOG.warning(
                             _("Terminating process using auto profile dir: pid=%s name=%s"),

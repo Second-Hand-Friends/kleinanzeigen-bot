@@ -434,6 +434,7 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "Closing Browser session...": "Schließe Browser-Sitzung..."
 
   _terminate_processes_using_user_data_dir:
+    "Unable to resolve user_data_dir '%s'; skipping process termination: %s": "Konnte user_data_dir '%s' nicht auflösen; Prozessbeendigung wird übersprungen: %s"
     "Refusing to terminate processes for unsafe user_data_dir: %s": "Beende keine Prozesse für unsicheres user_data_dir: %s"
     "Terminating process using auto profile dir: pid=%s name=%s": "Beende Prozess mit Auto-Profilverzeichnis: pid=%s name=%s"
 
