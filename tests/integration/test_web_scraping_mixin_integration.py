@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import os
 import platform
 from typing import cast
 
@@ -23,12 +24,23 @@ async def atest_init() -> None:
         # required for Ubuntu 24.04 or newer
         cast(list[str], web_scraping_mixin.browser_config.arguments).append("--no-sandbox")
 
+    force_browser_itest = bool(os.environ.get("RUN_BROWSER_ITESTS"))
+
     browser_path = web_scraping_mixin.get_compatible_browser()
-    ensure(browser_path is not None, "Browser not auto-detected")
+    try:
+        ensure(browser_path is not None, "Browser not auto-detected")
+    except Exception as exc:
+        if not force_browser_itest:
+            pytest.skip(f"Browser auto-detection failed: {exc}")
+        raise
 
     web_scraping_mixin.close_browser_session()
     try:
         await web_scraping_mixin.create_browser_session()
+    except Exception as exc:
+        if not force_browser_itest:
+            pytest.skip(f"Browser session could not be started: {exc}")
+        raise
     finally:
         web_scraping_mixin.close_browser_session()
 
