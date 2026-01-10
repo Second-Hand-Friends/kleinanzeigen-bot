@@ -945,14 +945,14 @@ class KleinanzeigenBot(WebScrapingMixin):
             await self.web_click(By.ID, "adType2")
 
         #############################
+        # set category (before title to avoid form reset clearing title)
+        #############################
+        await self.__set_category(ad_cfg.category, ad_file)
+
+        #############################
         # set title
         #############################
         await self.web_input(By.ID, "postad-title", ad_cfg.title)
-
-        #############################
-        # set category
-        #############################
-        await self.__set_category(ad_cfg.category, ad_file)
 
         #############################
         # set special attributes
