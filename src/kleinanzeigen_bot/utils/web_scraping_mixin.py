@@ -38,9 +38,10 @@ if TYPE_CHECKING:
 
 # Constants for RemoteObject conversion
 _KEY_VALUE_PAIR_SIZE = 2
+_PROCESS_TERMINATE_TIMEOUT_SECONDS: Final[float] = 1.0
 
 
-def _is_remote_object(obj:Any) -> TypeGuard["RemoteObject"]:
+def _is_remote_object(obj: Any) -> TypeGuard["RemoteObject"]:
     """Type guard to check if an object is a RemoteObject."""
     return hasattr(obj, "__class__") and "RemoteObject" in str(type(obj))
 
@@ -55,10 +56,10 @@ __all__ = [
     "WebScrapingMixin",
 ]
 
-LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
+LOG: Final[loggers.Logger] = loggers.get_logger(__name__)
 
 # see https://api.jquery.com/category/selectors/
-METACHAR_ESCAPER:Final[dict[int, str]] = str.maketrans({ch: f"\\{ch}" for ch in '!"#$%&\'()*+,./:;<=>?@[\\]^`{|}~'})
+METACHAR_ESCAPER: Final[dict[int, str]] = str.maketrans({ch: f"\\{ch}" for ch in "!\"#$%&'()*+,./:;<=>?@[\\]^`{|}~"})
 
 
 def _is_admin() -> bool:
@@ -90,59 +91,48 @@ class Is(enum.Enum):
 
 
 class BrowserConfig:
-
     def __init__(self) -> None:
-        self.arguments:Iterable[str] = []
-        self.binary_location:str | None = None
-        self.extensions:Iterable[str] = []
-        self.use_private_window:bool = True
-        self.user_data_dir:str | None = None
-        self.profile_name:str | None = None
+        self.arguments: Iterable[str] = []
+        self.binary_location: str | None = None
+        self.extensions: Iterable[str] = []
+        self.use_private_window: bool = True
+        self.user_data_dir: str | None = None
+        self.profile_name: str | None = None
 
 
-def _write_initial_prefs(prefs_file:str) -> None:
-    with open(prefs_file, "w", encoding = "UTF-8") as fd:
-        json.dump({
-            "credentials_enable_service": False,
-            "enable_do_not_track": True,
-            "google": {
-                "services": {
-                    "consented_to_sync": False
-                }
-            },
-            "profile": {
-                "default_content_setting_values": {
-                    "popups": 0,
-                    "notifications": 2  # 1 = allow, 2 = block browser notifications
+def _write_initial_prefs(prefs_file: str) -> None:
+    with open(prefs_file, "w", encoding="UTF-8") as fd:
+        json.dump(
+            {
+                "credentials_enable_service": False,
+                "enable_do_not_track": True,
+                "google": {"services": {"consented_to_sync": False}},
+                "profile": {
+                    "default_content_setting_values": {
+                        "popups": 0,
+                        "notifications": 2,  # 1 = allow, 2 = block browser notifications
+                    },
+                    "password_manager_enabled": False,
                 },
-                "password_manager_enabled": False
+                "signin": {"allowed": False},
+                "translate_site_blacklist": ["www.kleinanzeigen.de"],
+                "devtools": {"preferences": {"currentDockState": '"bottom"'}},
             },
-            "signin": {
-                "allowed": False
-            },
-            "translate_site_blacklist": [
-                "www.kleinanzeigen.de"
-            ],
-            "devtools": {
-                "preferences": {
-                    "currentDockState": '"bottom"'
-                }
-            }
-        }, fd)
+            fd,
+        )
 
 
 class WebScrapingMixin:
-
     def __init__(self) -> None:
-        self.browser_config:Final[BrowserConfig] = BrowserConfig()
-        self.browser:Browser = None  # pyright: ignore[reportAttributeAccessIssue]
-        self.page:Page = None  # pyright: ignore[reportAttributeAccessIssue]
-        self._default_timeout_config:TimeoutConfig | None = None
-        self.config:BotConfig = cast(BotConfig, None)
+        self.browser_config: Final[BrowserConfig] = BrowserConfig()
+        self.browser: Browser = None  # pyright: ignore[reportAttributeAccessIssue]
+        self.page: Page = None  # pyright: ignore[reportAttributeAccessIssue]
+        self._default_timeout_config: TimeoutConfig | None = None
+        self.config: BotConfig = cast(BotConfig, None)
 
     def _get_timeout_config(self) -> TimeoutConfig:
         config = getattr(self, "config", None)
-        timeouts:TimeoutConfig | None = None
+        timeouts: TimeoutConfig | None = None
         if config is not None:
             timeouts = cast(Optional[TimeoutConfig], getattr(config, "timeouts", None))
             if timeouts is not None:
@@ -152,17 +142,17 @@ class WebScrapingMixin:
             self._default_timeout_config = TimeoutConfig()
         return self._default_timeout_config
 
-    def _timeout(self, key:str = "default", override:float | None = None) -> float:
+    def _timeout(self, key: str = "default", override: float | None = None) -> float:
         """
         Return the base timeout (seconds) for a given key without applying multipliers.
         """
         return self._get_timeout_config().resolve(key, override)
 
-    def _effective_timeout(self, key:str = "default", override:float | None = None, *, attempt:int = 0) -> float:
+    def _effective_timeout(self, key: str = "default", override: float | None = None, *, attempt: int = 0) -> float:
         """
         Return the effective timeout (seconds) with multiplier/backoff applied.
         """
-        return self._get_timeout_config().effective(key, override, attempt = attempt)
+        return self._get_timeout_config().effective(key, override, attempt=attempt)
 
     def _timeout_attempts(self) -> int:
         cfg = self._get_timeout_config()
@@ -172,12 +162,7 @@ class WebScrapingMixin:
         return 1 + cfg.retry_max_attempts
 
     async def _run_with_timeout_retries(
-        self,
-        operation:Callable[[float], Awaitable[T]],
-        *,
-        description:str,
-        key:str = "default",
-        override:float | None = None
+        self, operation: Callable[[float], Awaitable[T]], *, description: str, key: str = "default", override: float | None = None
     ) -> T:
         """
         Execute an async callable with retry/backoff handling for TimeoutError.
@@ -185,19 +170,13 @@ class WebScrapingMixin:
         attempts = self._timeout_attempts()
 
         for attempt in range(attempts):
-            effective_timeout = self._effective_timeout(key, override, attempt = attempt)
+            effective_timeout = self._effective_timeout(key, override, attempt=attempt)
             try:
                 return await operation(effective_timeout)
             except TimeoutError:
                 if attempt >= attempts - 1:
                     raise
-                LOG.debug(
-                    "Retrying %s after TimeoutError (attempt %d/%d, timeout %.1fs)",
-                    description,
-                    attempt + 1,
-                    attempts,
-                    effective_timeout
-                )
+                LOG.debug("Retrying %s after TimeoutError (attempt %d/%d, timeout %.1fs)", description, attempt + 1, attempts, effective_timeout)
 
         raise TimeoutError(f"{description} failed without executing operation")
 
@@ -220,23 +199,25 @@ class WebScrapingMixin:
         remote_port = 0
         for arg in self.browser_config.arguments:
             if arg.startswith("--remote-debugging-host="):
-                remote_host = arg.split("=", maxsplit = 1)[1]
+                remote_host = arg.split("=", maxsplit=1)[1]
             if arg.startswith("--remote-debugging-port="):
-                remote_port = int(arg.split("=", maxsplit = 1)[1])
+                remote_port = int(arg.split("=", maxsplit=1)[1])
 
         if remote_port > 0:
             LOG.info("Using existing browser process at %s:%s", remote_host, remote_port)
 
             # Enhanced port checking with retry logic
             port_available = await self._check_port_with_retry(remote_host, remote_port)
-            ensure(port_available,
+            ensure(
+                port_available,
                 f"Browser process not reachable at {remote_host}:{remote_port}. "
                 f"Start the browser with --remote-debugging-port={remote_port} or remove this port from your config.yaml. "
-                f"Make sure the browser is running and the port is not blocked by firewall.")
+                f"Make sure the browser is running and the port is not blocked by firewall.",
+            )
 
             try:
                 cfg = NodriverConfig(
-                    browser_executable_path = self.browser_config.binary_location  # actually not necessary but nodriver fails without
+                    browser_executable_path=self.browser_config.binary_location  # actually not necessary but nodriver fails without
                 )
                 cfg.host = remote_host
                 cfg.port = remote_port
@@ -255,8 +236,7 @@ class WebScrapingMixin:
                     LOG.error("Troubleshooting steps:")
                     LOG.error("1. Close all browser instances and try again")
                     LOG.error("2. Remove the user_data_dir configuration temporarily")
-                    LOG.error("3. Start browser manually with: %s --remote-debugging-port=%d",
-                             self.browser_config.binary_location, remote_port)
+                    LOG.error("3. Start browser manually with: %s --remote-debugging-port=%d", self.browser_config.binary_location, remote_port)
                     LOG.error("4. Check if any antivirus or security software is blocking the connection")
                 raise
 
@@ -274,13 +254,11 @@ class WebScrapingMixin:
             "--disable-sync",
             "--no-experiments",
             "--disable-search-engine-choice-screen",
-
             "--disable-features=MediaRouter",
             "--use-mock-keychain",
-
             "--test-type",  # https://stackoverflow.com/a/36746675/5116073
             # https://chromium.googlesource.com/chromium/src/+/master/net/dns/README.md#request-remapping
-            '--host-resolver-rules="MAP connect.facebook.net 127.0.0.1, MAP securepubads.g.doubleclick.net 127.0.0.1, MAP www.googletagmanager.com 127.0.0.1"'
+            '--host-resolver-rules="MAP connect.facebook.net 127.0.0.1, MAP securepubads.g.doubleclick.net 127.0.0.1, MAP www.googletagmanager.com 127.0.0.1"',
         ]
 
         is_edge = "edge" in self.browser_config.binary_location.lower()
@@ -306,10 +284,10 @@ class WebScrapingMixin:
             LOG.info(" -> Browser user data dir: %s", self.browser_config.user_data_dir)
 
         cfg = NodriverConfig(
-            headless = False,
-            browser_executable_path = self.browser_config.binary_location,
-            browser_args = browser_args,
-            user_data_dir = self.browser_config.user_data_dir
+            headless=False,
+            browser_executable_path=self.browser_config.binary_location,
+            browser_args=browser_args,
+            user_data_dir=self.browser_config.user_data_dir,
         )
 
         # already logged by nodriver:
@@ -318,7 +296,7 @@ class WebScrapingMixin:
         # Enhanced profile directory handling
         if cfg.user_data_dir:
             profile_dir = os.path.join(cfg.user_data_dir, self.browser_config.profile_name or "Default")
-            os.makedirs(profile_dir, exist_ok = True)
+            os.makedirs(profile_dir, exist_ok=True)
             prefs_file = os.path.join(profile_dir, "Preferences")
             if not await files.exists(prefs_file):
                 LOG.info(" -> Setting chrome prefs [%s]...", prefs_file)
@@ -353,7 +331,7 @@ class WebScrapingMixin:
                 LOG.error("5. Check if any antivirus or security software is blocking the browser")
             raise
 
-    async def _check_port_with_retry(self, host:str, port:int, max_retries:int = 3, retry_delay:float = 1.0) -> bool:
+    async def _check_port_with_retry(self, host: str, port: int, max_retries: int = 3, retry_delay: float = 1.0) -> bool:
         """
         Check if a port is open with retry logic.
 
@@ -371,8 +349,7 @@ class WebScrapingMixin:
                 return True
 
             if attempt < max_retries - 1:
-                LOG.debug("Port %s:%s not available, retrying in %.1f seconds (attempt %d/%d)",
-                         host, port, retry_delay, attempt + 1, max_retries)
+                LOG.debug("Port %s:%s not available, retrying in %.1f seconds (attempt %d/%d)", host, port, retry_delay, attempt + 1, max_retries)
                 await asyncio.sleep(retry_delay)
 
         return False
@@ -417,7 +394,7 @@ class WebScrapingMixin:
         remote_port = 0
         for arg in self.browser_config.arguments:
             if arg.startswith("--remote-debugging-port="):
-                remote_port = int(arg.split("=", maxsplit = 1)[1])
+                remote_port = int(arg.split("=", maxsplit=1)[1])
                 break
 
         if remote_port > 0:
@@ -427,7 +404,7 @@ class WebScrapingMixin:
                 # Try to get more information about the debugging endpoint
                 try:
                     probe_timeout = self._effective_timeout("chrome_remote_probe")
-                    response = urllib.request.urlopen(f"http://127.0.0.1:{remote_port}/json/version", timeout = probe_timeout)
+                    response = urllib.request.urlopen(f"http://127.0.0.1:{remote_port}/json/version", timeout=probe_timeout)
                     version_info = json.loads(response.read().decode())
                     LOG.info("(ok) Remote debugging API accessible - Browser: %s", version_info.get("Browser", "Unknown"))
                 except Exception as e:
@@ -473,7 +450,7 @@ class WebScrapingMixin:
 
                     if is_relevant_browser:
                         browser_processes.append(proc.info)
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
                     # Process ended or is not accessible; skip it.
                     pass
         except (psutil.Error, PermissionError) as exc:
@@ -502,14 +479,48 @@ class WebScrapingMixin:
 
     def close_browser_session(self) -> None:
         if self.browser:
-            LOG.debug("Closing Browser session...")
+            LOG.debug(_("Closing Browser session..."))
             self.page = None  # pyright: ignore[reportAttributeAccessIssue]
-            browser_process = psutil.Process(self.browser._process_pid)  # noqa: SLF001 Private member accessed
-            browser_children:list[psutil.Process] = browser_process.children()
-            self.browser.stop()
+            browser_children: list[psutil.Process] = []
+            try:
+                browser_process = psutil.Process(self.browser._process_pid)  # noqa: SLF001 Private member accessed
+                browser_children = browser_process.children(recursive=True)
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError, OSError):
+                browser_children = []
+
+            try:
+                self.browser.stop()
+            except Exception as exc:
+                LOG.warning(_("Failed to stop browser cleanly: %s"), exc)
+
+            def _is_running(proc: psutil.Process) -> bool:
+                try:
+                    return bool(proc.is_running())
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError, OSError):
+                    return False
+
+            def _terminate_process(proc: psutil.Process) -> None:
+                if not _is_running(proc):
+                    return
+                try:
+                    proc.terminate()
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError, OSError) as exc:
+                    LOG.warning(_("Failed to terminate browser child process %s: %s"), proc, exc)
+                    return
+                try:
+                    proc.wait(timeout=_PROCESS_TERMINATE_TIMEOUT_SECONDS)
+                except psutil.TimeoutExpired:
+                    if _is_running(proc):
+                        try:
+                            proc.kill()
+                        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError, OSError) as exc:
+                            LOG.warning(_("Failed to kill browser child process %s: %s"), proc, exc)
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError, OSError):
+                    return
+
             for p in browser_children:
-                if p.is_running():
-                    p.kill()  # terminate orphaned browser processes
+                # Best-effort cleanup: processes may have exited or be inaccessible at this point.
+                _terminate_process(p)
             self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
 
     def _cleanup_session_resources(self) -> None:
@@ -519,15 +530,10 @@ class WebScrapingMixin:
         self.page = None  # pyright: ignore[reportAttributeAccessIssue]
 
     def get_compatible_browser(self) -> str:
-        browser_paths:list[str | None] = []
+        browser_paths: list[str | None] = []
         match platform.system():
             case "Linux":
-                browser_paths = [
-                    shutil.which("chromium"),
-                    shutil.which("chromium-browser"),
-                    shutil.which("google-chrome"),
-                    shutil.which("microsoft-edge")
-                ]
+                browser_paths = [shutil.which("chromium"), shutil.which("chromium-browser"), shutil.which("google-chrome"), shutil.which("microsoft-edge")]
 
             case "Darwin":
                 browser_paths = [
@@ -540,18 +546,15 @@ class WebScrapingMixin:
                 browser_paths = [
                     os.environ.get("PROGRAMFILES", "C:\\Program Files") + r"\Microsoft\Edge\Application\msedge.exe",
                     os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)") + r"\Microsoft\Edge\Application\msedge.exe",
-
                     os.environ["PROGRAMFILES"] + r"\Chromium\Application\chrome.exe",
                     os.environ["PROGRAMFILES(X86)"] + r"\Chromium\Application\chrome.exe",
                     os.environ["LOCALAPPDATA"] + r"\Chromium\Application\chrome.exe",
-
                     os.environ["PROGRAMFILES"] + r"\Chrome\Application\chrome.exe",
                     os.environ["PROGRAMFILES(X86)"] + r"\Chrome\Application\chrome.exe",
                     os.environ["LOCALAPPDATA"] + r"\Chrome\Application\chrome.exe",
-
                     shutil.which("msedge.exe"),
                     shutil.which("chromium.exe"),
-                    shutil.which("chrome.exe")
+                    shutil.which("chrome.exe"),
                 ]
 
             case _ as os_name:
@@ -563,8 +566,14 @@ class WebScrapingMixin:
 
         raise AssertionError(_("Installed browser could not be detected"))
 
-    async def web_await(self, condition:Callable[[], T | Never | Coroutine[Any, Any, T | Never]], *,
-            timeout:int | float | None = None, timeout_error_message:str = "", apply_multiplier:bool = True) -> T:
+    async def web_await(
+        self,
+        condition: Callable[[], T | Never | Coroutine[Any, Any, T | Never]],
+        *,
+        timeout: int | float | None = None,
+        timeout_error_message: str = "",
+        apply_multiplier: bool = True,
+    ) -> T:
         """
         Blocks/waits until the given condition is met.
 
@@ -574,14 +583,14 @@ class WebScrapingMixin:
         loop = asyncio.get_running_loop()
         start_at = loop.time()
         base_timeout = timeout if timeout is not None else self._timeout()
-        effective_timeout = self._effective_timeout(override = base_timeout) if apply_multiplier else base_timeout
+        effective_timeout = self._effective_timeout(override=base_timeout) if apply_multiplier else base_timeout
 
         while True:
             await self.page
-            ex:Exception | None = None
+            ex: Exception | None = None
             try:
                 result_raw = condition()
-                result:T = cast(T, await result_raw if inspect.isawaitable(result_raw) else result_raw)
+                result: T = cast(T, await result_raw if inspect.isawaitable(result_raw) else result_raw)
                 if result:
                     return result
             except Exception as ex1:
@@ -592,7 +601,7 @@ class WebScrapingMixin:
                 raise TimeoutError(timeout_error_message or f"Condition not met within {effective_timeout} seconds")
             await self.page.sleep(0.5)
 
-    async def web_check(self, selector_type:By, selector_value:str, attr:Is, *, timeout:int | float | None = None) -> bool:
+    async def web_check(self, selector_type: By, selector_value: str, attr: Is, *, timeout: int | float | None = None) -> bool:
         """
         Locates an HTML element and returns a state.
 
@@ -600,11 +609,13 @@ class WebScrapingMixin:
         :raises TimeoutError: if element could not be found within time
         """
 
-        def is_disabled(elem:Element) -> bool:
+        def is_disabled(elem: Element) -> bool:
             return elem.attrs.get("disabled") is not None
 
-        async def is_displayed(elem:Element) -> bool:
-            return cast(bool, await elem.apply("""
+        async def is_displayed(elem: Element) -> bool:
+            return cast(
+                bool,
+                await elem.apply("""
                 function (element) {
                     var style = window.getComputedStyle(element);
                     return style.display !== 'none'
@@ -613,9 +624,10 @@ class WebScrapingMixin:
                         && element.offsetWidth > 0
                         && element.offsetHeight > 0
                 }
-            """))
+            """),
+            )
 
-        elem:Element = await self.web_find(selector_type, selector_value, timeout = timeout)
+        elem: Element = await self.web_find(selector_type, selector_value, timeout=timeout)
 
         match attr:
             case Is.CLICKABLE:
@@ -627,7 +639,9 @@ class WebScrapingMixin:
             case Is.READONLY:
                 return elem.attrs.get("readonly") is not None
             case Is.SELECTED:
-                return cast(bool, await elem.apply("""
+                return cast(
+                    bool,
+                    await elem.apply("""
                     function (element) {
                         if (element.tagName.toLowerCase() === 'input') {
                             if (element.type === 'checkbox' || element.type === 'radio') {
@@ -636,22 +650,23 @@ class WebScrapingMixin:
                         }
                         return false
                     }
-                """))
+                """),
+                )
         raise AssertionError(_("Unsupported attribute: %s") % attr)
 
-    async def web_click(self, selector_type:By, selector_value:str, *, timeout:int | float | None = None) -> Element:
+    async def web_click(self, selector_type: By, selector_value: str, *, timeout: int | float | None = None) -> Element:
         """
         Locates an HTML element by ID.
 
         :param timeout: timeout in seconds
         :raises TimeoutError: if element could not be found within time
         """
-        elem = await self.web_find(selector_type, selector_value, timeout = timeout)
+        elem = await self.web_find(selector_type, selector_value, timeout=timeout)
         await elem.click()
         await self.web_sleep()
         return elem
 
-    async def web_execute(self, jscode:str) -> Any:
+    async def web_execute(self, jscode: str) -> Any:
         """
         Executes the given JavaScript code in the context of the current page.
 
@@ -662,13 +677,13 @@ class WebScrapingMixin:
         :return: The javascript's return value as a regular Python object
         """
         # Try to get the result with return_by_value=True first
-        result = await self.page.evaluate(jscode, await_promise = True, return_by_value = True)
+        result = await self.page.evaluate(jscode, await_promise=True, return_by_value=True)
 
         # If we got a RemoteObject, use the proper API to get properties
         if _is_remote_object(result):
             try:
                 # Type cast to RemoteObject for type checker
-                remote_obj:"RemoteObject" = result
+                remote_obj: "RemoteObject" = result
 
                 # Use the proper RemoteObject API - try to get the value directly first
                 if hasattr(remote_obj, "value") and remote_obj.value is not None:
@@ -687,14 +702,14 @@ class WebScrapingMixin:
                 return result
 
         # debug log the jscode but avoid excessive debug logging of window.scrollTo calls
-        _prev_jscode:str = getattr(self.__class__.web_execute, "_prev_jscode", "")
+        _prev_jscode: str = getattr(self.__class__.web_execute, "_prev_jscode", "")
         if not (jscode == _prev_jscode or (jscode.startswith("window.scrollTo") and _prev_jscode.startswith("window.scrollTo"))):
             LOG.debug("web_execute(`%s`) = `%s`", jscode, result)
         self.__class__.web_execute._prev_jscode = jscode  # type: ignore[attr-defined]  # noqa: SLF001 Private member accessed
 
         return result
 
-    def _convert_remote_object_value(self, data:Any) -> Any:
+    def _convert_remote_object_value(self, data: Any) -> Any:
         """
         Recursively converts RemoteObject values to regular Python objects.
 
@@ -732,7 +747,7 @@ class WebScrapingMixin:
         # Return primitive values as-is
         return data
 
-    async def web_find(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element:
+    async def web_find(self, selector_type: By, selector_value: str, *, parent: Element | None = None, timeout: int | float | None = None) -> Element:
         """
         Locates an HTML element by the given selector type and value.
 
@@ -740,17 +755,12 @@ class WebScrapingMixin:
         :raises TimeoutError: if element could not be found within time
         """
 
-        async def attempt(effective_timeout:float) -> Element:
-            return await self._web_find_once(selector_type, selector_value, effective_timeout, parent = parent)
+        async def attempt(effective_timeout: float) -> Element:
+            return await self._web_find_once(selector_type, selector_value, effective_timeout, parent=parent)
 
-        return await self._run_with_timeout_retries(
-            attempt,
-            description = f"web_find({selector_type.name}, {selector_value})",
-            key = "default",
-            override = timeout
-        )
+        return await self._run_with_timeout_retries(attempt, description=f"web_find({selector_type.name}, {selector_value})", key="default", override=timeout)
 
-    async def web_find_all(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> list[Element]:
+    async def web_find_all(self, selector_type: By, selector_value: str, *, parent: Element | None = None, timeout: int | float | None = None) -> list[Element]:
         """
         Locates multiple HTML elements by the given selector type and value.
 
@@ -758,17 +768,14 @@ class WebScrapingMixin:
         :raises TimeoutError: if element could not be found within time
         """
 
-        async def attempt(effective_timeout:float) -> list[Element]:
-            return await self._web_find_all_once(selector_type, selector_value, effective_timeout, parent = parent)
+        async def attempt(effective_timeout: float) -> list[Element]:
+            return await self._web_find_all_once(selector_type, selector_value, effective_timeout, parent=parent)
 
         return await self._run_with_timeout_retries(
-            attempt,
-            description = f"web_find_all({selector_type.name}, {selector_value})",
-            key = "default",
-            override = timeout
+            attempt, description=f"web_find_all({selector_type.name}, {selector_value})", key="default", override=timeout
         )
 
-    async def _web_find_once(self, selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None) -> Element:
+    async def _web_find_once(self, selector_type: By, selector_value: str, timeout: float, *, parent: Element | None = None) -> Element:
         timeout_suffix = f" within {timeout} seconds."
 
         match selector_type:
@@ -776,46 +783,52 @@ class WebScrapingMixin:
                 escaped_id = selector_value.translate(METACHAR_ESCAPER)
                 return await self.web_await(
                     lambda: self.page.query_selector(f"#{escaped_id}", parent),
-                    timeout = timeout,
-                    timeout_error_message = f"No HTML element found with ID '{selector_value}'{timeout_suffix}",
-                    apply_multiplier = False)
+                    timeout=timeout,
+                    timeout_error_message=f"No HTML element found with ID '{selector_value}'{timeout_suffix}",
+                    apply_multiplier=False,
+                )
             case By.CLASS_NAME:
                 escaped_classname = selector_value.translate(METACHAR_ESCAPER)
                 return await self.web_await(
                     lambda: self.page.query_selector(f".{escaped_classname}", parent),
-                    timeout = timeout,
-                    timeout_error_message = f"No HTML element found with CSS class '{selector_value}'{timeout_suffix}",
-                    apply_multiplier = False)
+                    timeout=timeout,
+                    timeout_error_message=f"No HTML element found with CSS class '{selector_value}'{timeout_suffix}",
+                    apply_multiplier=False,
+                )
             case By.TAG_NAME:
                 return await self.web_await(
                     lambda: self.page.query_selector(selector_value, parent),
-                    timeout = timeout,
-                    timeout_error_message = f"No HTML element found of tag <{selector_value}>{timeout_suffix}",
-                    apply_multiplier = False)
+                    timeout=timeout,
+                    timeout_error_message=f"No HTML element found of tag <{selector_value}>{timeout_suffix}",
+                    apply_multiplier=False,
+                )
             case By.CSS_SELECTOR:
                 return await self.web_await(
                     lambda: self.page.query_selector(selector_value, parent),
-                    timeout = timeout,
-                    timeout_error_message = f"No HTML element found using CSS selector '{selector_value}'{timeout_suffix}",
-                    apply_multiplier = False)
+                    timeout=timeout,
+                    timeout_error_message=f"No HTML element found using CSS selector '{selector_value}'{timeout_suffix}",
+                    apply_multiplier=False,
+                )
             case By.TEXT:
                 ensure(not parent, f"Specifying a parent element currently not supported with selector type: {selector_type}")
                 return await self.web_await(
-                    lambda: self.page.find_element_by_text(selector_value, best_match = True),
-                    timeout = timeout,
-                    timeout_error_message = f"No HTML element found containing text '{selector_value}'{timeout_suffix}",
-                    apply_multiplier = False)
+                    lambda: self.page.find_element_by_text(selector_value, best_match=True),
+                    timeout=timeout,
+                    timeout_error_message=f"No HTML element found containing text '{selector_value}'{timeout_suffix}",
+                    apply_multiplier=False,
+                )
             case By.XPATH:
                 ensure(not parent, f"Specifying a parent element currently not supported with selector type: {selector_type}")
                 return await self.web_await(
-                    lambda: self.page.find_element_by_text(selector_value, best_match = True),
-                    timeout = timeout,
-                    timeout_error_message = f"No HTML element found using XPath '{selector_value}'{timeout_suffix}",
-                    apply_multiplier = False)
+                    lambda: self.page.find_element_by_text(selector_value, best_match=True),
+                    timeout=timeout,
+                    timeout_error_message=f"No HTML element found using XPath '{selector_value}'{timeout_suffix}",
+                    apply_multiplier=False,
+                )
 
         raise AssertionError(_("Unsupported selector type: %s") % selector_type)
 
-    async def _web_find_all_once(self, selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None) -> list[Element]:
+    async def _web_find_all_once(self, selector_type: By, selector_value: str, timeout: float, *, parent: Element | None = None) -> list[Element]:
         timeout_suffix = f" within {timeout} seconds."
 
         match selector_type:
@@ -823,52 +836,57 @@ class WebScrapingMixin:
                 escaped_classname = selector_value.translate(METACHAR_ESCAPER)
                 return await self.web_await(
                     lambda: self.page.query_selector_all(f".{escaped_classname}", parent),
-                    timeout = timeout,
-                    timeout_error_message = f"No HTML elements found with CSS class '{selector_value}'{timeout_suffix}",
-                    apply_multiplier = False)
+                    timeout=timeout,
+                    timeout_error_message=f"No HTML elements found with CSS class '{selector_value}'{timeout_suffix}",
+                    apply_multiplier=False,
+                )
             case By.CSS_SELECTOR:
                 return await self.web_await(
                     lambda: self.page.query_selector_all(selector_value, parent),
-                    timeout = timeout,
-                    timeout_error_message = f"No HTML elements found using CSS selector '{selector_value}'{timeout_suffix}",
-                    apply_multiplier = False)
+                    timeout=timeout,
+                    timeout_error_message=f"No HTML elements found using CSS selector '{selector_value}'{timeout_suffix}",
+                    apply_multiplier=False,
+                )
             case By.TAG_NAME:
                 return await self.web_await(
                     lambda: self.page.query_selector_all(selector_value, parent),
-                    timeout = timeout,
-                    timeout_error_message = f"No HTML elements found of tag <{selector_value}>{timeout_suffix}",
-                    apply_multiplier = False)
+                    timeout=timeout,
+                    timeout_error_message=f"No HTML elements found of tag <{selector_value}>{timeout_suffix}",
+                    apply_multiplier=False,
+                )
             case By.TEXT:
                 ensure(not parent, f"Specifying a parent element currently not supported with selector type: {selector_type}")
                 return await self.web_await(
                     lambda: self.page.find_elements_by_text(selector_value),
-                    timeout = timeout,
-                    timeout_error_message = f"No HTML elements found containing text '{selector_value}'{timeout_suffix}",
-                    apply_multiplier = False)
+                    timeout=timeout,
+                    timeout_error_message=f"No HTML elements found containing text '{selector_value}'{timeout_suffix}",
+                    apply_multiplier=False,
+                )
             case By.XPATH:
                 ensure(not parent, f"Specifying a parent element currently not supported with selector type: {selector_type}")
                 return await self.web_await(
                     lambda: self.page.find_elements_by_text(selector_value),
-                    timeout = timeout,
-                    timeout_error_message = f"No HTML elements found using XPath '{selector_value}'{timeout_suffix}",
-                    apply_multiplier = False)
+                    timeout=timeout,
+                    timeout_error_message=f"No HTML elements found using XPath '{selector_value}'{timeout_suffix}",
+                    apply_multiplier=False,
+                )
 
         raise AssertionError(_("Unsupported selector type: %s") % selector_type)
 
-    async def web_input(self, selector_type:By, selector_value:str, text:str | int, *, timeout:int | float | None = None) -> Element:
+    async def web_input(self, selector_type: By, selector_value: str, text: str | int, *, timeout: int | float | None = None) -> Element:
         """
         Enters text into an HTML input field.
 
         :param timeout: timeout in seconds
         :raises TimeoutError: if element could not be found within time
         """
-        input_field = await self.web_find(selector_type, selector_value, timeout = timeout)
+        input_field = await self.web_find(selector_type, selector_value, timeout=timeout)
         await input_field.clear_input()
         await input_field.send_keys(str(text))
         await self.web_sleep()
         return input_field
 
-    async def web_open(self, url:str, *, timeout:int | float | None = None, reload_if_already_open:bool = False) -> None:
+    async def web_open(self, url: str, *, timeout: int | float | None = None, reload_if_already_open: bool = False) -> None:
         """
         :param url: url to open in browser
         :param timeout: timespan in seconds within the page needs to be loaded (base value)
@@ -879,17 +897,18 @@ class WebScrapingMixin:
         if not reload_if_already_open and self.page and url == self.page.url:
             LOG.debug("  => skipping, [%s] is already open", url)
             return
-        self.page = await self.browser.get(url = url, new_tab = False, new_window = False)
+        self.page = await self.browser.get(url=url, new_tab=False, new_window=False)
         page_timeout = self._effective_timeout("page_load", timeout)
         await self.web_await(
             lambda: self.web_execute("document.readyState == 'complete'"),
-            timeout = page_timeout,
-            timeout_error_message = f"Page did not finish loading within {page_timeout} seconds.",
-            apply_multiplier = False
+            timeout=page_timeout,
+            timeout_error_message=f"Page did not finish loading within {page_timeout} seconds.",
+            apply_multiplier=False,
         )
 
-    async def web_text(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> str:
-        return str(await (await self.web_find(selector_type, selector_value, parent = parent, timeout = timeout)).apply("""
+    async def web_text(self, selector_type: By, selector_value: str, *, parent: Element | None = None, timeout: int | float | None = None) -> str:
+        return str(
+            await (await self.web_find(selector_type, selector_value, parent=parent, timeout=timeout)).apply("""
             function (elem) {
                 let sel = window.getSelection()
                 sel.removeAllRanges()
@@ -900,16 +919,19 @@ class WebScrapingMixin:
                 sel.removeAllRanges()
                 return visibleText
             }
-        """))
+        """)
+        )
 
-    async def web_sleep(self, min_ms:int = 1_000, max_ms:int = 2_500) -> None:
+    async def web_sleep(self, min_ms: int = 1_000, max_ms: int = 2_500) -> None:
         duration = max_ms <= min_ms and min_ms or secrets.randbelow(max_ms - min_ms) + min_ms
-        LOG.log(loggers.INFO if duration > 1_500 else loggers.DEBUG,  # noqa: PLR2004 Magic value used in comparison
-                " ... pausing for %d ms ...", duration)
+        LOG.log(
+            loggers.INFO if duration > 1_500 else loggers.DEBUG,  # noqa: PLR2004 Magic value used in comparison
+            " ... pausing for %d ms ...",
+            duration,
+        )
         await self.page.sleep(duration / 1_000)
 
-    async def web_request(self, url:str, method:str = "GET", valid_response_codes:int | Iterable[int] = 200,
-            headers:dict[str, str] | None = None) -> Any:
+    async def web_request(self, url: str, method: str = "GET", valid_response_codes: int | Iterable[int] = 200, headers: dict[str, str] | None = None) -> Any:
         method = method.upper()
         LOG.debug(" -> HTTP %s [%s]...", method, url)
         response = await self.web_execute(f"""
@@ -933,12 +955,13 @@ class WebScrapingMixin:
             valid_response_codes = [valid_response_codes]
         ensure(
             response["statusCode"] in valid_response_codes,
-            f'Invalid response "{response["statusCode"]} response["statusMessage"]" received for HTTP {method} to {url}'
+            f'Invalid response "{response["statusCode"]} response["statusMessage"]" received for HTTP {method} to {url}',
         )
         return response
+
     # pylint: enable=dangerous-default-value
 
-    async def web_scroll_page_down(self, scroll_length:int = 10, scroll_speed:int = 10_000, *, scroll_back_top:bool = False) -> None:
+    async def web_scroll_page_down(self, scroll_length: int = 10, scroll_speed: int = 10_000, *, scroll_back_top: bool = False) -> None:
         """
         Smoothly scrolls the current web page down.
 
@@ -947,7 +970,7 @@ class WebScrapingMixin:
         :param scroll_back_top: whether to scroll the page back to the top after scrolling to the bottom
         """
         current_y_pos = 0
-        bottom_y_pos:int = await self.web_execute("document.body.scrollHeight")  # get bottom position
+        bottom_y_pos: int = await self.web_execute("document.body.scrollHeight")  # get bottom position
         while current_y_pos < bottom_y_pos:  # scroll in steps until bottom reached
             current_y_pos += scroll_length
             await self.web_execute(f"window.scrollTo(0, {current_y_pos})")  # scroll one step
@@ -959,7 +982,7 @@ class WebScrapingMixin:
                 await self.web_execute(f"window.scrollTo(0, {current_y_pos})")
                 await asyncio.sleep(scroll_length / scroll_speed / 2)  # double speed
 
-    async def web_select(self, selector_type:By, selector_value:str, selected_value:Any, timeout:int | float | None = None) -> Element:
+    async def web_select(self, selector_type: By, selector_value: str, selected_value: Any, timeout: int | float | None = None) -> Element:
         """
         Selects an <option/> of a <select/> HTML element.
 
@@ -968,10 +991,11 @@ class WebScrapingMixin:
         :raises UnexpectedTagNameException: if element is not a <select> element
         """
         await self.web_await(
-            lambda: self.web_check(selector_type, selector_value, Is.CLICKABLE), timeout = timeout,
-            timeout_error_message = f"No clickable HTML element with selector: {selector_type}='{selector_value}' found"
+            lambda: self.web_check(selector_type, selector_value, Is.CLICKABLE),
+            timeout=timeout,
+            timeout_error_message=f"No clickable HTML element with selector: {selector_type}='{selector_value}' found",
         )
-        elem = await self.web_find(selector_type, selector_value, timeout = timeout)
+        elem = await self.web_find(selector_type, selector_value, timeout=timeout)
 
         js_value = json.dumps(selected_value)  # safe escaping for JS
         try:
@@ -1009,7 +1033,7 @@ class WebScrapingMixin:
         await self.web_sleep()
         return elem
 
-    async def web_select_combobox(self, selector_type:By, selector_value:str, selected_value:str | int, timeout:int | float | None = None) -> Element:
+    async def web_select_combobox(self, selector_type: By, selector_value: str, selected_value: str | int, timeout: int | float | None = None) -> Element:
         """
         Selects an option from a text-input combobox by typing the given value to
         filter the dropdown and clicking the first <li> whose visible text matches.
@@ -1021,7 +1045,7 @@ class WebScrapingMixin:
         if timeout is None:
             timeout = self._timeout("default")
 
-        input_field = await self.web_find(selector_type, selector_value, timeout = timeout)
+        input_field = await self.web_find(selector_type, selector_value, timeout=timeout)
         await input_field.clear_input()
         await input_field.send_keys(str(selected_value))
         await self.web_sleep()
@@ -1032,7 +1056,7 @@ class WebScrapingMixin:
             LOG.error(_("Combobox input field does not have 'aria-controls' attribute."))
             raise TimeoutError(_("Combobox missing aria-controls attribute"))
 
-        dropdown_elem = await self.web_find(By.ID, dropdown_id, timeout = timeout)
+        dropdown_elem = await self.web_find(By.ID, dropdown_id, timeout=timeout)
         js_value = json.dumps(selected_value)  # safe escaping for JS
 
         # This selects the correct <li> by visible text inside the dropdown. It includes normalization, i.e. trimming
@@ -1093,9 +1117,9 @@ class WebScrapingMixin:
             remote_port = 0
             for arg in self.browser_config.arguments:
                 if arg.startswith("--remote-debugging-host="):
-                    remote_host = arg.split("=", maxsplit = 1)[1]
+                    remote_host = arg.split("=", maxsplit=1)[1]
                 if arg.startswith("--remote-debugging-port="):
-                    remote_port = int(arg.split("=", maxsplit = 1)[1])
+                    remote_port = int(arg.split("=", maxsplit=1)[1])
 
             version_info = None
 
@@ -1107,9 +1131,7 @@ class WebScrapingMixin:
                 if port_available:
                     try:
                         version_info = detect_chrome_version_from_remote_debugging(
-                            remote_host,
-                            remote_port,
-                            timeout = self._effective_timeout("chrome_remote_debugging")
+                            remote_host, remote_port, timeout=self._effective_timeout("chrome_remote_debugging")
                         )
                         if version_info:
                             LOG.debug(" -> Detected version from existing browser: %s", version_info)
@@ -1125,10 +1147,7 @@ class WebScrapingMixin:
                 binary_path = self.browser_config.binary_location
                 if binary_path:
                     LOG.debug(" -> No remote browser detected, trying binary detection")
-                    version_info = detect_chrome_version_from_binary(
-                        binary_path,
-                        timeout = self._effective_timeout("chrome_binary_detection")
-                    )
+                    version_info = detect_chrome_version_from_binary(binary_path, timeout=self._effective_timeout("chrome_binary_detection"))
 
             # Validate if Chrome 136+ detected
             if version_info and version_info.is_chrome_136_plus:
@@ -1145,7 +1164,7 @@ class WebScrapingMixin:
             LOG.warning(" -> Unexpected error during browser version validation, skipping: %s", e)
             # Continue without validation rather than failing
 
-    async def _validate_chrome_136_configuration(self, version_info:ChromeVersionInfo) -> None:
+    async def _validate_chrome_136_configuration(self, version_info: ChromeVersionInfo) -> None:
         """
         Validate Chrome 136+ configuration.
 
@@ -1158,14 +1177,8 @@ class WebScrapingMixin:
             AssertionError: If configuration is invalid
         """
         # Check if user-data-dir is specified in arguments or configuration
-        has_user_data_dir_arg = any(
-            arg.startswith("--user-data-dir=")
-            for arg in self.browser_config.arguments
-        )
-        has_user_data_dir_config = (
-            self.browser_config.user_data_dir is not None and
-            self.browser_config.user_data_dir.strip()
-        )
+        has_user_data_dir_arg = any(arg.startswith("--user-data-dir=") for arg in self.browser_config.arguments)
+        has_user_data_dir_config = self.browser_config.user_data_dir is not None and self.browser_config.user_data_dir.strip()
 
         if not has_user_data_dir_arg and not has_user_data_dir_config:
             error_message = (
@@ -1178,7 +1191,7 @@ class WebScrapingMixin:
 
         LOG.info(" -> %s 136+ configuration validation passed", version_info.browser_name)
 
-    def _diagnose_chrome_version_issues(self, remote_port:int) -> None:
+    def _diagnose_chrome_version_issues(self, remote_port: int) -> None:
         """
         Diagnose Chrome version issues and provide specific recommendations.
 
@@ -1194,18 +1207,23 @@ class WebScrapingMixin:
             # Get diagnostic information
             binary_path = self.browser_config.binary_location
             diagnostic_info = get_chrome_version_diagnostic_info(
-                binary_path = binary_path,
-                remote_host = "127.0.0.1",
-                remote_port = remote_port if remote_port > 0 else None,
-                remote_timeout = self._effective_timeout("chrome_remote_debugging"),
-                binary_timeout = self._effective_timeout("chrome_binary_detection")
+                binary_path=binary_path,
+                remote_host="127.0.0.1",
+                remote_port=remote_port if remote_port > 0 else None,
+                remote_timeout=self._effective_timeout("chrome_remote_debugging"),
+                binary_timeout=self._effective_timeout("chrome_binary_detection"),
             )
 
             # Report binary detection results
             if diagnostic_info["binary_detection"]:
                 binary_info = diagnostic_info["binary_detection"]
-                LOG.info("(info) %s version from binary: %s %s (major: %d)",
-                        binary_info["browser_name"], binary_info["browser_name"], binary_info["version_string"], binary_info["major_version"])
+                LOG.info(
+                    "(info) %s version from binary: %s %s (major: %d)",
+                    binary_info["browser_name"],
+                    binary_info["browser_name"],
+                    binary_info["version_string"],
+                    binary_info["major_version"],
+                )
 
                 if binary_info["is_chrome_136_plus"]:
                     LOG.info("(info) %s 136+ detected - security validation required", binary_info["browser_name"])
@@ -1215,17 +1233,19 @@ class WebScrapingMixin:
             # Report remote detection results
             if diagnostic_info["remote_detection"]:
                 remote_info = diagnostic_info["remote_detection"]
-                LOG.info("(info) %s version from remote debugging: %s %s (major: %d)",
-                        remote_info["browser_name"], remote_info["browser_name"], remote_info["version_string"], remote_info["major_version"])
+                LOG.info(
+                    "(info) %s version from remote debugging: %s %s (major: %d)",
+                    remote_info["browser_name"],
+                    remote_info["browser_name"],
+                    remote_info["version_string"],
+                    remote_info["major_version"],
+                )
 
                 if remote_info["is_chrome_136_plus"]:
                     LOG.info("(info) Remote %s 136+ detected - validating configuration", remote_info["browser_name"])
 
                     # Validate configuration for Chrome/Edge 136+
-                    is_valid, error_message = validate_chrome_136_configuration(
-                        list(self.browser_config.arguments),
-                        self.browser_config.user_data_dir
-                    )
+                    is_valid, error_message = validate_chrome_136_configuration(list(self.browser_config.arguments), self.browser_config.user_data_dir)
 
                     if not is_valid:
                         LOG.error("(fail) %s 136+ configuration validation failed: %s", remote_info["browser_name"], error_message)

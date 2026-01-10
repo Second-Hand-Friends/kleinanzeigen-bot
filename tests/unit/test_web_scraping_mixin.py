@@ -579,12 +579,14 @@ class TestWebScrapingSessionManagement:
         with patch("psutil.Process") as mock_proc:
             mock_child = MagicMock()
             mock_child.is_running.return_value = True
+            mock_child.wait.side_effect = psutil.TimeoutExpired(1.0)
             mock_proc.return_value.children.return_value = [mock_child]
 
             scraper.close_browser_session()
 
         mock_proc.assert_called_once_with(42)
         stop_mock.assert_called_once()
+        mock_child.terminate.assert_called_once()
         mock_child.kill.assert_called_once()
         assert scraper.browser is None
         assert scraper.page is None
@@ -632,6 +634,88 @@ class TestWebScrapingSessionManagement:
 
         mock_proc.assert_called_once()
         stop_mock.assert_called_once()
+
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            psutil.NoSuchProcess(321),
+            psutil.AccessDenied(pid = 321, name = "chrome"),
+            psutil.ZombieProcess(pid = 321, name = "chrome"),
+            ValueError("bad pid"),
+            OSError("os error"),
+        ],
+    )
+    def test_close_browser_session_handles_process_lookup_errors(self, exc:Exception) -> None:
+        """Process lookup errors should not stop cleanup."""
+        scraper = WebScrapingMixin()
+        scraper.browser = MagicMock()
+        scraper.browser._process_pid = 321
+        stop_mock = scraper.browser.stop = MagicMock()
+        scraper.page = MagicMock(spec = Page)
+
+        with patch("psutil.Process", side_effect = exc):
+            scraper.close_browser_session()
+
+        stop_mock.assert_called_once()
+        assert scraper.browser is None
+        assert scraper.page is None
+
+    def test_close_browser_session_handles_terminate_errors(self) -> None:
+        """Terminate failures should be swallowed for best-effort cleanup."""
+        scraper = WebScrapingMixin()
+        scraper.browser = MagicMock()
+        scraper.browser._process_pid = 456
+        stop_mock = scraper.browser.stop = MagicMock()
+        scraper.page = MagicMock(spec = Page)
+
+        with patch("psutil.Process") as mock_proc:
+            mock_child = MagicMock()
+            mock_child.is_running.return_value = True
+            mock_child.terminate.side_effect = psutil.AccessDenied(pid = 456, name = "chrome")
+            mock_proc.return_value.children.return_value = [mock_child]
+
+            scraper.close_browser_session()
+
+        stop_mock.assert_called_once()
+        mock_child.kill.assert_not_called()
+
+    def test_close_browser_session_skips_dead_children(self) -> None:
+        """Children that error on is_running should be skipped."""
+        scraper = WebScrapingMixin()
+        scraper.browser = MagicMock()
+        scraper.browser._process_pid = 654
+        stop_mock = scraper.browser.stop = MagicMock()
+        scraper.page = MagicMock(spec = Page)
+
+        with patch("psutil.Process") as mock_proc:
+            mock_child = MagicMock()
+            mock_child.is_running.side_effect = psutil.ZombieProcess(pid = 654, name = "chrome")
+            mock_proc.return_value.children.return_value = [mock_child]
+
+            scraper.close_browser_session()
+
+        stop_mock.assert_called_once()
+        mock_child.terminate.assert_not_called()
+
+    def test_close_browser_session_handles_kill_errors(self) -> None:
+        """Kill failures should be swallowed for best-effort cleanup."""
+        scraper = WebScrapingMixin()
+        scraper.browser = MagicMock()
+        scraper.browser._process_pid = 789
+        stop_mock = scraper.browser.stop = MagicMock()
+        scraper.page = MagicMock(spec = Page)
+
+        with patch("psutil.Process") as mock_proc:
+            mock_child = MagicMock()
+            mock_child.is_running.return_value = True
+            mock_child.wait.side_effect = psutil.TimeoutExpired(1.0)
+            mock_child.kill.side_effect = psutil.AccessDenied(pid = 789, name = "chrome")
+            mock_proc.return_value.children.return_value = [mock_child]
+
+            scraper.close_browser_session()
+
+        stop_mock.assert_called_once()
+        mock_child.kill.assert_called_once()
 
     def test_get_compatible_browser_raises_on_unknown_os(self) -> None:
         """Test get_compatible_browser raises AssertionError on unknown OS."""
@@ -1265,8 +1349,10 @@ class TestWebScrapingBrowserConfiguration:
 
         with patch("psutil.Process") as mock_proc:
             mock_proc.side_effect = psutil.NoSuchProcess(12345)
-            with pytest.raises(psutil.NoSuchProcess):
-                scraper.close_browser_session()
+            scraper.close_browser_session()
+            mock_browser.stop.assert_called_once()
+            assert scraper.browser is None
+            assert scraper.page is None
 
         # Create a new mock browser for the second session
         mock_browser2 = make_mock_browser()
@@ -1281,7 +1367,7 @@ class TestWebScrapingBrowserConfiguration:
             self.page = mock_page2  # type: ignore[unused-ignore,reportAttributeAccessIssue]  # Assigning mock page for test
 
         monkeypatch.setattr(WebScrapingMixin, "create_browser_session", mock_create_session2)
-        await scraper.create_browser_session()
+        await mock_create_session2(scraper)
         print("[DEBUG] scraper.page after session creation:", scraper.page)
         assert scraper.browser is not None
         assert scraper.page is not None
