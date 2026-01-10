@@ -40,6 +40,16 @@ if TYPE_CHECKING:
 _KEY_VALUE_PAIR_SIZE = 2
 
 
+def _resolve_user_data_dir_paths(arg_value:str, config_value:str) -> tuple[Path | None, Path | None]:
+    try:
+        return (
+            Path(arg_value).expanduser().resolve(),
+            Path(config_value).expanduser().resolve(),
+        )
+    except OSError:
+        return None, None
+
+
 def _is_remote_object(obj:Any) -> TypeGuard["RemoteObject"]:
     """Type guard to check if an object is a RemoteObject."""
     return hasattr(obj, "__class__") and "RemoteObject" in str(type(obj))
@@ -215,16 +225,32 @@ class WebScrapingMixin:
             arg.startswith("--remote-debugging-port=")
             for arg in self.browser_config.arguments
         )
-        if not self.browser_config.user_data_dir and not any(
-            arg.startswith("--user-data-dir=") and arg.split("=", maxsplit = 1)[1]
-            for arg in self.browser_config.arguments
-        ) and not has_remote_debugging:
+
+        def _has_non_empty_user_data_dir_arg(args:Iterable[str]) -> bool:
+            for arg in args:
+                if not arg.startswith("--user-data-dir="):
+                    continue
+                raw = arg.split("=", maxsplit = 1)[1].strip().strip('"').strip("'")
+                if raw:
+                    return True
+            return False
+
+        if (
+            not (self.browser_config.user_data_dir and self.browser_config.user_data_dir.strip())
+            and not _has_non_empty_user_data_dir_arg(self.browser_config.arguments)
+            and not has_remote_debugging
+        ):
             mode = getattr(self, "installation_mode_or_portable", "portable")
             self.browser_config.user_data_dir = str(xdg_paths.get_browser_profile_path(mode))
             auto_user_data_dir = True
 
         # Chrome version detection and validation
-        if not has_remote_debugging:
+        if has_remote_debugging:
+            try:
+                await self._validate_chrome_version_configuration()
+            except AssertionError as exc:
+                LOG.warning(_("Remote debugging detected, but browser configuration looks invalid: %s"), exc)
+        else:
             await self._validate_chrome_version_configuration()
 
         ########################################################
@@ -246,7 +272,8 @@ class WebScrapingMixin:
             ensure(port_available,
                 f"Browser process not reachable at {remote_host}:{remote_port}. "
                 f"Start the browser with --remote-debugging-port={remote_port} or remove this port from your config.yaml. "
-                f"Make sure the browser is running and the port is not blocked by firewall.")
+                "Make sure the browser is running and the port is not blocked by firewall. "
+                "Chrome/Edge 136+ requires --user-data-dir when using remote debugging.")
 
             try:
                 cfg = NodriverConfig(
@@ -322,12 +349,19 @@ class WebScrapingMixin:
             browser_args.append(browser_arg)
 
         effective_user_data_dir = user_data_dir_from_args or self.browser_config.user_data_dir
-        if user_data_dir_from_args and self.browser_config.user_data_dir and user_data_dir_from_args != self.browser_config.user_data_dir:
-            LOG.warning(
-                _("Configured browser.user_data_dir (%s) does not match --user-data-dir argument (%s); using the argument value."),
-                self.browser_config.user_data_dir,
+        if user_data_dir_from_args and self.browser_config.user_data_dir:
+            arg_path, cfg_path = await asyncio.get_running_loop().run_in_executor(
+                None,
+                _resolve_user_data_dir_paths,
                 user_data_dir_from_args,
+                self.browser_config.user_data_dir,
             )
+            if arg_path is None or cfg_path is None or arg_path != cfg_path:
+                LOG.warning(
+                    _("Configured browser.user_data_dir (%s) does not match --user-data-dir argument (%s); using the argument value."),
+                    self.browser_config.user_data_dir,
+                    user_data_dir_from_args,
+                )
         if not effective_user_data_dir:
             mode = getattr(self, "installation_mode_or_portable", "portable")
             effective_user_data_dir = str(xdg_paths.get_browser_profile_path(mode))
@@ -371,10 +405,13 @@ class WebScrapingMixin:
             # Clean up any resources that were created during setup
             self._cleanup_session_resources()
 
-            if auto_user_data_dir and self.browser_config.user_data_dir:
-                self._terminate_processes_using_user_data_dir(Path(self.browser_config.user_data_dir))
-
             error_msg = str(e)
+            if (
+                auto_user_data_dir
+                and self.browser_config.user_data_dir
+                and any(token in error_msg.lower() for token in ("profile", "user data", "in use", "lock", "locked"))
+            ):
+                self._terminate_processes_using_user_data_dir(Path(self.browser_config.user_data_dir))
             if "root" in error_msg.lower():
                 LOG.error("Failed to start browser. This error often occurs when:")
                 LOG.error("1. Running as root user (try running as regular user)")
@@ -558,19 +595,44 @@ class WebScrapingMixin:
     def _terminate_processes_using_user_data_dir(self, user_data_dir:Path) -> None:
         """Terminate running browser processes that already use the given profile dir."""
         target_dir = user_data_dir.expanduser().resolve()
+        unsafe_targets = {
+            Path("/").resolve(),
+            Path.cwd().resolve(),
+            Path.home().resolve(),
+        }
+        if target_dir in unsafe_targets:
+            LOG.warning(_("Refusing to terminate processes for unsafe user_data_dir: %s"), target_dir)
+            return
         for proc in psutil.process_iter(["pid", "name", "cmdline"]):
             try:
                 name = (proc.info.get("name") or "").lower()
                 if not any(token in name for token in ("chrome", "chromium", "edge")):
                     continue
                 cmdline = proc.info.get("cmdline") or []
-                for arg in cmdline:
-                    if not arg.startswith("--user-data-dir="):
+                i = 0
+                while i < len(cmdline):
+                    arg = cmdline[i]
+                    raw:str | None = None
+                    if arg.startswith("--user-data-dir="):
+                        raw = arg.split("=", maxsplit = 1)[1]
+                    elif arg == "--user-data-dir" and i + 1 < len(cmdline):
+                        raw = cmdline[i + 1]
+                        i += 1
+                    i += 1
+                    if raw is None:
                         continue
-                    raw = arg.split("=", maxsplit = 1)[1].strip().strip('"').strip("'")
-                    if Path(raw).expanduser().resolve() == target_dir:
-                        LOG.warning(_("Killing process using auto profile dir: pid=%s name=%s"), proc.info.get("pid"), proc.info.get("name"))
-                        proc.kill()
+                    raw = raw.strip().strip('"').strip("'")
+                    if raw and Path(raw).expanduser().resolve() == target_dir:
+                        LOG.warning(
+                            _("Terminating process using auto profile dir: pid=%s name=%s"),
+                            proc.info.get("pid"),
+                            proc.info.get("name"),
+                        )
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout = 2)
+                        except psutil.TimeoutExpired:
+                            proc.kill()
                         break
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue

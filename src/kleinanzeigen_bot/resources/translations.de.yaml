@@ -400,6 +400,7 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     " -> Custom Browser argument: %s": " -> Benutzerdefiniertes Browser-Argument: %s"
     "Configured browser.user_data_dir (%s) does not match --user-data-dir argument (%s); using the argument value.": "Konfiguriertes browser.user_data_dir (%s) entspricht nicht dem --user-data-dir-Argument (%s); verwende den Argumentwert."
     "Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir.": "Leeres --user-data-dir=-Argument ignoriert; verwende konfiguriertes user_data_dir."
+    "Remote debugging detected, but browser configuration looks invalid: %s": "Remote-Debugging erkannt, aber die Browser-Konfiguration scheint ungültig zu sein: %s"
     " -> Setting chrome prefs [%s]...": " -> Setze Chrome-Einstellungen [%s]..."
     " -> Adding Browser extension: [%s]": " -> Füge Browser-Erweiterung hinzu: [%s]"
     "Failed to connect to browser. This error often occurs when:": "Fehler beim Verbinden mit dem Browser. Dieser Fehler tritt häufig auf, wenn:"
@@ -433,7 +434,8 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "Closing Browser session...": "Schließe Browser-Sitzung..."
 
   _terminate_processes_using_user_data_dir:
-    "Killing process using auto profile dir: pid=%s name=%s": "Beende Prozess mit Auto-Profilverzeichnis: pid=%s name=%s"
+    "Refusing to terminate processes for unsafe user_data_dir: %s": "Beende keine Prozesse für unsicheres user_data_dir: %s"
+    "Terminating process using auto profile dir: pid=%s name=%s": "Beende Prozess mit Auto-Profilverzeichnis: pid=%s name=%s"
 
   get_compatible_browser:
     "Installed browser could not be detected": "Installierter Browser konnte nicht erkannt werden"
