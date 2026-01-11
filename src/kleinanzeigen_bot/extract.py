@@ -613,15 +613,15 @@ class AdExtractor(WebScrapingMixin):
         :return: bool | None - True if buyNowEligible, False if not eligible, None if unknown
         """
         try:
-            # Fetch the management JSON data using web_request
-            response = await self.web_request("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json")
-            json_data = json.loads(response["content"])
-
-            # Extract current ad ID from the page URL
+            # Extract current ad ID from the page URL first
             current_ad_id = self.extract_ad_id_from_ad_url(self.page.url)
             if current_ad_id == -1:
                 LOG.warning("Could not extract ad ID from URL: %s", self.page.url)
                 return None
+
+            # Fetch the management JSON data using web_request
+            response = await self.web_request("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json")
+            json_data = json.loads(response["content"])
 
             # Find the current ad in the ads list
             if isinstance(json_data, dict) and "ads" in json_data:
@@ -631,7 +631,7 @@ class AdExtractor(WebScrapingMixin):
                     current_ad = next((ad for ad in ads_list if ad.get("id") == current_ad_id), None)
                     if current_ad and "buyNowEligible" in current_ad:
                         buy_now_eligible = current_ad["buyNowEligible"]
-                        return bool(buy_now_eligible) if isinstance(buy_now_eligible, bool) else None
+                        return buy_now_eligible if isinstance(buy_now_eligible, bool) else None
 
             # If the key doesn't exist or ad not found, return None (unknown)
             return None
