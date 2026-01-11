@@ -617,12 +617,23 @@ class AdExtractor(WebScrapingMixin):
             response = await self.web_request("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json")
             json_data = json.loads(response["content"])
 
-            # Check the exact key we found in the data
-            if isinstance(json_data, dict) and "ad_data" in json_data and "buyNowEligible" in json_data["ad_data"]:
-                buy_now_eligible = json_data["ad_data"]["buyNowEligible"]
-                return bool(buy_now_eligible) if isinstance(buy_now_eligible, bool) else None
+            # Extract current ad ID from the page URL
+            current_ad_id = self.extract_ad_id_from_ad_url(self.page.url)
+            if current_ad_id == -1:
+                LOG.warning("Could not extract ad ID from URL: %s", self.page.url)
+                return None
 
-            # If the key doesn't exist, return None (unknown)
+            # Find the current ad in the ads list
+            if isinstance(json_data, dict) and "ads" in json_data:
+                ads_list = json_data["ads"]
+                if isinstance(ads_list, list):
+                    # Filter ads to find the current ad by ID
+                    current_ad = next((ad for ad in ads_list if ad.get("id") == current_ad_id), None)
+                    if current_ad and "buyNowEligible" in current_ad:
+                        buy_now_eligible = current_ad["buyNowEligible"]
+                        return bool(buy_now_eligible) if isinstance(buy_now_eligible, bool) else None
+
+            # If the key doesn't exist or ad not found, return None (unknown)
             return None
 
         except (TimeoutError, json.JSONDecodeError, KeyError, TypeError) as e:
