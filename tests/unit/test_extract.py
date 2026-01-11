@@ -718,17 +718,36 @@ class TestAdExtractorContent:
     @pytest.mark.asyncio
     async def test_extract_sell_directly(self, test_extractor:AdExtractor) -> None:
         """Test extraction of sell directly option."""
-        test_cases = [
-            ("Direkt kaufen", True),
-            ("Other text", False),
-        ]
+        # Test successful extraction with buyNowEligible = true
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = {
+            "content": '{"ad_data": {"buyNowEligible": true}}'
+        }):
+            result = await test_extractor._extract_sell_directly_from_ad_page()
+            assert result is True
 
-        for text, expected in test_cases:
-            with patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = text):
-                result = await test_extractor._extract_sell_directly_from_ad_page()
-                assert result is expected
+        # Test successful extraction with buyNowEligible = false
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = {
+            "content": '{"ad_data": {"buyNowEligible": false}}'
+        }):
+            result = await test_extractor._extract_sell_directly_from_ad_page()
+            assert result is False
 
-        with patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError):
+        # Test when buyNowEligible is missing
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = {
+            "content": '{"ad_data": {}}'
+        }):
+            result = await test_extractor._extract_sell_directly_from_ad_page()
+            assert result is None
+
+        # Test timeout error
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock, side_effect = TimeoutError):
+            result = await test_extractor._extract_sell_directly_from_ad_page()
+            assert result is None
+
+        # Test JSON decode error
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = {
+            "content": "invalid json"
+        }):
             result = await test_extractor._extract_sell_directly_from_ad_page()
             assert result is None
 

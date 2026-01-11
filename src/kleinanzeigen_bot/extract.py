@@ -608,14 +608,25 @@ class AdExtractor(WebScrapingMixin):
 
     async def _extract_sell_directly_from_ad_page(self) -> bool | None:
         """
-        Extracts the sell directly option from an ad page.
+        Extracts the sell directly option from an ad page using the JSON API.
 
-        :return: a boolean indicating whether the sell directly option is active (optional)
+        :return: bool | None - True if buyNowEligible, False if not eligible, None if unknown
         """
         try:
-            buy_now_is_active:bool = "Direkt kaufen" in (await self.web_text(By.ID, "payment-buttons-sidebar"))
-            return buy_now_is_active
-        except TimeoutError:
+            # Fetch the management JSON data using web_request
+            response = await self.web_request("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json")
+            json_data = json.loads(response["content"])
+
+            # Check the exact key we found in the data
+            if isinstance(json_data, dict) and "ad_data" in json_data and "buyNowEligible" in json_data["ad_data"]:
+                buy_now_eligible = json_data["ad_data"]["buyNowEligible"]
+                return bool(buy_now_eligible) if isinstance(buy_now_eligible, bool) else None
+
+            # If the key doesn't exist, return None (unknown)
+            return None
+
+        except (TimeoutError, json.JSONDecodeError, KeyError, TypeError) as e:
+            LOG.debug("Could not determine sell_directly status: %s", e)
             return None
 
     async def _extract_contact_from_ad_page(self) -> ContactPartial:
