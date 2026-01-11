@@ -721,7 +721,7 @@ class TestAdExtractorContent:
         # Mock the page URL to extract the ad ID
         test_extractor.page = MagicMock()
         test_extractor.page.url = "https://www.kleinanzeigen.de/s-anzeige/test-ad/123456789"
-        
+
         # Test successful extraction with buyNowEligible = true
         with patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request:
             mock_web_request.return_value = {
@@ -732,10 +732,10 @@ class TestAdExtractorContent:
                     ]
                 })
             }
-            
+
             result = await test_extractor._extract_sell_directly_from_ad_page()
             assert result is True
-            
+
             # Verify web_request was called with the correct URL
             mock_web_request.assert_awaited_once_with("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json")
 
@@ -749,10 +749,10 @@ class TestAdExtractorContent:
                     ]
                 })
             }
-            
+
             result = await test_extractor._extract_sell_directly_from_ad_page()
             assert result is False
-            
+
             # Verify web_request was called with the correct URL
             mock_web_request.assert_awaited_once_with("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json")
 
@@ -766,10 +766,10 @@ class TestAdExtractorContent:
                     ]
                 })
             }
-            
+
             result = await test_extractor._extract_sell_directly_from_ad_page()
             assert result is None
-            
+
             # Verify web_request was called with the correct URL
             mock_web_request.assert_awaited_once_with("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json")
 
@@ -782,10 +782,10 @@ class TestAdExtractorContent:
                     ]
                 })
             }
-            
+
             result = await test_extractor._extract_sell_directly_from_ad_page()
             assert result is None
-            
+
             # Verify web_request was called with the correct URL
             mock_web_request.assert_awaited_once_with("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json")
 
@@ -793,7 +793,7 @@ class TestAdExtractorContent:
         with patch.object(test_extractor, "web_request", new_callable = AsyncMock, side_effect = TimeoutError) as mock_web_request:
             result = await test_extractor._extract_sell_directly_from_ad_page()
             assert result is None
-            
+
             # Verify web_request was called with the correct URL
             mock_web_request.assert_awaited_once_with("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json")
 
@@ -802,10 +802,10 @@ class TestAdExtractorContent:
             mock_web_request.return_value = {
                 "content": "invalid json"
             }
-            
+
             result = await test_extractor._extract_sell_directly_from_ad_page()
             assert result is None
-            
+
             # Verify web_request was called with the correct URL
             mock_web_request.assert_awaited_once_with("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json")
 
@@ -814,10 +814,10 @@ class TestAdExtractorContent:
             mock_web_request.return_value = {
                 "content": json.dumps({"ads": []})
             }
-            
+
             result = await test_extractor._extract_sell_directly_from_ad_page()
             assert result is None
-            
+
             # Verify web_request was called with the correct URL
             mock_web_request.assert_awaited_once_with("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json")
 
