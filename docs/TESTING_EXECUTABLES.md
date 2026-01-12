@@ -1,6 +1,6 @@
 # Testing Executables from Pull Requests
 
-[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.1%20adopted-ff69b4.svg)](CODE_OF_CONDUCT.md)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.1%20adopted-ff69b4.svg)](../CODE_OF_CONDUCT.md)
 
 This guide explains how to build and test executables from feature branches and pull requests.
 
