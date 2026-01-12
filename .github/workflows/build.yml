@@ -248,8 +248,8 @@ jobs:
     - name: Upload self-contained executable
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
       if: |
-        ((github.ref_name == 'main' || github.ref_name == 'release') && matrix.PUBLISH_RELEASE && !env.ACT) ||
-        (github.event_name == 'workflow_dispatch' && matrix.PUBLISH_RELEASE && !env.ACT)
+        (matrix.PUBLISH_RELEASE && !env.ACT) &&
+        ((github.ref_name == 'main' || github.ref_name == 'release') || github.event_name == 'workflow_dispatch')
       with:
         name: artifacts-${{ matrix.os }}${{ 
           (github.event_name == 'workflow_dispatch' && github.ref_name != 'main' && github.ref_name != 'release') 
