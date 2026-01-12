@@ -68,8 +68,6 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
        kleinanzeigen-bot --help
        ```
 
-**Testing from Pull Requests**: If you want to test changes from a specific pull request or feature branch, see [TESTING_EXECUTABLES.md](docs/TESTING_EXECUTABLES.md) for instructions on building and testing executables from any branch.
-
    1. On Linux:
        ```shell
        curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-linux-amd64 -o kleinanzeigen-bot
@@ -87,6 +85,10 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 
        ./kleinanzeigen-bot --help
        ```
+
+### Testing Pre-release Versions
+
+If you want to test changes from a specific pull request or feature branch, see [TESTING_EXECUTABLES.md](docs/TESTING_EXECUTABLES.md) for instructions on building and testing executables from any branch.
 
 ### Installation using Docker
 
