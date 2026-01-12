@@ -251,12 +251,11 @@ jobs:
         ((github.ref_name == 'main' || github.ref_name == 'release') && matrix.PUBLISH_RELEASE && !env.ACT) ||
         (github.event_name == 'workflow_dispatch' && !env.ACT)
       with:
-        name: |
-          artifacts-${{ matrix.os }}${
-            (github.event_name == 'workflow_dispatch' && github.ref_name != 'main' && github.ref_name != 'release')
-            && format('-{0}', github.ref_name)
-            || ''
-          }
+        name: artifacts-${{ matrix.os }}${{ 
+          (github.event_name == 'workflow_dispatch' && github.ref_name != 'main' && github.ref_name != 'release') 
+          && format('-{0}', replace(github.ref_name, '/', '-')) 
+          || ''
+        }}
         path: dist/kleinanzeigen-bot*
 
 
