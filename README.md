@@ -31,6 +31,7 @@ For details on the new smoke test strategy and contributor guidance, see [TESTIN
 - **Smart Republishing**: Automatically republish listings at configurable intervals to keep them at the top of search results
 - **Bulk Management**: Update or delete multiple listings at once
 - **Download Listings**: Download existing listings from your profile to local configuration files
+- **Extend Listings**: Extend ads close to expiry to keep watchers/savers and preserve the monthly ad quota
 - **Browser Automation**: Uses Chromium-based browsers (Chrome, Edge, Chromium) for reliable automation
 - **Flexible Configuration**: Configure defaults once, override per listing as needed
 
@@ -198,6 +199,7 @@ Commands:
   delete   - deletes ads
   update   - updates published ads
   download - downloads one or multiple ads
+  extend   - extends active ads that expire soon (keeps watchers/savers and does not count towards the monthly ad quota)
   update-check - checks for available updates
   update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;
                       use this after changing config.yaml/ad_defaults to avoid every ad being marked "changed" and republished
@@ -221,6 +223,11 @@ Options:
         * all: downloads all ads from your profile
         * new: downloads ads from your profile that are not locally saved yet
         * <id(s)>: provide one or several ads by ID to download, like e.g. "--ads=1,2,3"
+  --ads=all|<id(s)> (extend) - specifies which ads to extend (DEFAULT: all)
+        Possible values:
+        * all: extend all eligible ads in your profile
+        * <id(s)>: provide one or several ads by ID to extend, like e.g. "--ads=1,2,3"
+        * Note: kleinanzeigen.de only allows extending ads within 8 days of expiry; ads outside this window are skipped.
   --ads=changed|<id(s)> (update) - specifies which ads to update (DEFAULT: changed)
         Possible values:
         * changed: only update ads that have been modified since last publication
