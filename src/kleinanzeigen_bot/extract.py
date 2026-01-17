@@ -608,14 +608,36 @@ class AdExtractor(WebScrapingMixin):
 
     async def _extract_sell_directly_from_ad_page(self) -> bool | None:
         """
-        Extracts the sell directly option from an ad page.
+        Extracts the sell directly option from an ad page using the JSON API.
 
-        :return: a boolean indicating whether the sell directly option is active (optional)
+        :return: bool | None - True if buyNowEligible, False if not eligible, None if unknown
         """
         try:
-            buy_now_is_active:bool = "Direkt kaufen" in (await self.web_text(By.ID, "payment-buttons-sidebar"))
-            return buy_now_is_active
-        except TimeoutError:
+            # Extract current ad ID from the page URL first
+            current_ad_id = self.extract_ad_id_from_ad_url(self.page.url)
+            if current_ad_id == -1:
+                LOG.warning("Could not extract ad ID from URL: %s", self.page.url)
+                return None
+
+            # Fetch the management JSON data using web_request
+            response = await self.web_request("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json")
+            json_data = json.loads(response["content"])
+
+            # Find the current ad in the ads list
+            if isinstance(json_data, dict) and "ads" in json_data:
+                ads_list = json_data["ads"]
+                if isinstance(ads_list, list):
+                    # Filter ads to find the current ad by ID
+                    current_ad = next((ad for ad in ads_list if ad.get("id") == current_ad_id), None)
+                    if current_ad and "buyNowEligible" in current_ad:
+                        buy_now_eligible = current_ad["buyNowEligible"]
+                        return buy_now_eligible if isinstance(buy_now_eligible, bool) else None
+
+            # If the key doesn't exist or ad not found, return None (unknown)
+            return None
+
+        except (TimeoutError, json.JSONDecodeError, KeyError, TypeError) as e:
+            LOG.debug("Could not determine sell_directly status: %s", e)
             return None
 
     async def _extract_contact_from_ad_page(self) -> ContactPartial:
