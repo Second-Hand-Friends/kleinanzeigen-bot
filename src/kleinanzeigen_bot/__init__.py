@@ -1117,20 +1117,24 @@ class KleinanzeigenBot(WebScrapingMixin):
         # set contact zipcode
         #############################
         if contact.zipcode:
+            quick_dom_timeout = self._timeout("quick_dom")
+            zipcode_set = True
             try:
-                zip_field = await self.web_find(By.ID, "pstad-zip")
+                zip_field = await self.web_find(By.ID, "pstad-zip", timeout = quick_dom_timeout)
                 if zip_field is not None:
                     await zip_field.clear_input()
             except TimeoutError:
                 # fall back to standard input below
                 pass
-            await self.web_input(By.ID, "pstad-zip", contact.zipcode)
+            try:
+                await self.web_input(By.ID, "pstad-zip", contact.zipcode, timeout = quick_dom_timeout)
+            except TimeoutError:
+                LOG.warning(_("Could not set contact zipcode: %s"), contact.zipcode)
+                zipcode_set = False
             # Set city if location is specified
-            if contact.location:
+            if contact.location and zipcode_set:
                 try:
-                    quick_dom_ms = int(self._timeout("quick_dom") * 1_000)
-                    await self.web_sleep(quick_dom_ms, quick_dom_ms)  # Wait for city dropdown to populate
-                    options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
+                    options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option", timeout = quick_dom_timeout)
 
                     for option in options:
                         opt_text = option.text.strip()
@@ -1142,7 +1146,7 @@ class KleinanzeigenBot(WebScrapingMixin):
                             await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
                             break
                 except TimeoutError:
-                    LOG.debug("Could not set city from location")
+                    LOG.warning(_("Could not set contact location: %s"), contact.location)
 
         #############################
         # set contact street

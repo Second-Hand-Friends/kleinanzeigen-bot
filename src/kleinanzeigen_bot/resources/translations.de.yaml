@@ -131,9 +131,10 @@ kleinanzeigen_bot/__init__.py:
     "Unable to select condition [%s]": "Zustand [%s] konnte nicht ausgewählt werden"
 
   __set_contact_fields:
-    "Could not set city from location": "Stadt konnte nicht aus dem Standort gesetzt werden"
     "Could not set contact street.": "Kontaktstraße konnte nicht gesetzt werden."
     "Could not set contact name.": "Kontaktname konnte nicht gesetzt werden."
+    "Could not set contact location: %s": "Kontaktort konnte nicht gesetzt werden: %s"
+    "Could not set contact zipcode: %s": "Kontakt-PLZ konnte nicht gesetzt werden: %s"
     ? "Phone number field not present on page. This is expected for many private accounts; commercial accounts may still support phone numbers."
     : "Telefonnummernfeld auf der Seite nicht vorhanden. Dies ist bei vielen privaten Konten zu erwarten; gewerbliche Konten unterstützen Telefonnummern möglicherweise weiterhin."
 
