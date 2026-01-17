@@ -1128,7 +1128,8 @@ class KleinanzeigenBot(WebScrapingMixin):
             # Set city if location is specified
             if contact.location:
                 try:
-                    await self.web_sleep(1)  # Wait for city dropdown to populate
+                    quick_dom_ms = int(self._timeout("quick_dom") * 1_000)
+                    await self.web_sleep(quick_dom_ms, quick_dom_ms)  # Wait for city dropdown to populate
                     options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
 
                     for option in options:
@@ -1151,16 +1152,19 @@ class KleinanzeigenBot(WebScrapingMixin):
                 if await self.web_check(By.ID, "pstad-street", Is.DISABLED):
                     await self.web_click(By.ID, "addressVisibility")
                     await self.web_sleep()
+                await self.web_input(By.ID, "pstad-street", contact.street)
             except TimeoutError:
-                # ignore
-                pass
-            await self.web_input(By.ID, "pstad-street", contact.street)
+                LOG.warning(_("Could not set contact street."))
 
         #############################
         # set contact name
         #############################
-        if contact.name and not await self.web_check(By.ID, "postad-contactname", Is.READONLY):
-            await self.web_input(By.ID, "postad-contactname", contact.name)
+        if contact.name:
+            try:
+                if not await self.web_check(By.ID, "postad-contactname", Is.READONLY):
+                    await self.web_input(By.ID, "postad-contactname", contact.name)
+            except TimeoutError:
+                LOG.warning(_("Could not set contact name."))
 
         #############################
         # set contact phone

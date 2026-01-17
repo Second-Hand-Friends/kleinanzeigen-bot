@@ -66,7 +66,11 @@ class ContactDefaults(ContextualModel):
     name:str | None = None
     street:str | None = None
     zipcode:int | str | None = None
-    location:str | None = None
+    location:str | None = Field(
+        default = None,
+        description = "city or locality of the listing (can include multiple districts)",
+        examples = ["Sample Town - District One"]
+    )
     phone:str | None = None
 
 
