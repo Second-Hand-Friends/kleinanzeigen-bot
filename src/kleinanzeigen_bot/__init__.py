@@ -1117,24 +1117,23 @@ class KleinanzeigenBot(WebScrapingMixin):
         # set contact zipcode
         #############################
         if contact.zipcode:
-            quick_dom_timeout = self._timeout("quick_dom")
             zipcode_set = True
             try:
-                zip_field = await self.web_find(By.ID, "pstad-zip", timeout = quick_dom_timeout)
+                zip_field = await self.web_find(By.ID, "pstad-zip")
                 if zip_field is not None:
                     await zip_field.clear_input()
             except TimeoutError:
                 # fall back to standard input below
                 pass
             try:
-                await self.web_input(By.ID, "pstad-zip", contact.zipcode, timeout = quick_dom_timeout)
+                await self.web_input(By.ID, "pstad-zip", contact.zipcode)
             except TimeoutError:
                 LOG.warning(_("Could not set contact zipcode: %s"), contact.zipcode)
                 zipcode_set = False
             # Set city if location is specified
             if contact.location and zipcode_set:
                 try:
-                    options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option", timeout = quick_dom_timeout)
+                    options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
 
                     for option in options:
                         opt_text = option.text.strip()
