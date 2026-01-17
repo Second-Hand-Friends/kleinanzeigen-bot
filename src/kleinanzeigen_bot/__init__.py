@@ -1177,7 +1177,10 @@ class KleinanzeigenBot(WebScrapingMixin):
                         pass
                     await self.web_input(By.ID, "postad-phonenumber", contact.phone)
             except TimeoutError:
-                LOG.debug("Phone number field not present on page.")
+                LOG.warning(
+                    _("Phone number field not present on page. This is expected for many private accounts; "
+                      "commercial accounts may still support phone numbers.")
+                )
 
     async def update_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         """
