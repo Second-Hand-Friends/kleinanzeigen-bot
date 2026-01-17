@@ -1120,8 +1120,9 @@ class KleinanzeigenBot(WebScrapingMixin):
             zipcode_set = True
             try:
                 zip_field = await self.web_find(By.ID, "pstad-zip")
-                if zip_field is not None:
-                    await zip_field.clear_input()
+                if zip_field is None:
+                    raise TimeoutError("ZIP input not found")
+                await zip_field.clear_input()
             except TimeoutError:
                 # fall back to standard input below
                 pass
@@ -1135,15 +1136,20 @@ class KleinanzeigenBot(WebScrapingMixin):
                 try:
                     options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
 
+                    found = False
                     for option in options:
                         opt_text = option.text.strip()
                         target = contact.location.strip()
                         if opt_text == target:
                             await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
+                            found = True
                             break
                         if " - " in opt_text and opt_text.split(" - ", 1)[1] == target:
                             await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
+                            found = True
                             break
+                    if not found:
+                        LOG.warning(_("No city dropdown option matched location: %s"), contact.location)
                 except TimeoutError:
                     LOG.warning(_("Could not set contact location: %s"), contact.location)
 
@@ -1569,7 +1575,10 @@ class KleinanzeigenBot(WebScrapingMixin):
                 for ad in ads:
                     saved_ad_id = ad[1].id
                     if saved_ad_id is None:
-                        LOG.debug("Skipping saved ad without id: %s", ad[0])
+                        LOG.debug(
+                            "Skipping saved ad without id (likely unpublished or manually created): %s",
+                            ad[0]
+                        )
                         continue
                     saved_ad_ids.append(int(saved_ad_id))
 
