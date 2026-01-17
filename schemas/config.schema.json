@@ -304,6 +304,22 @@
           "default": null,
           "title": "Zipcode"
         },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "city or locality of the listing (can include multiple districts)",
+          "examples": [
+            "Sample Town - District One"
+          ],
+          "title": "Location"
+        },
         "phone": {
           "anyOf": [
             {
