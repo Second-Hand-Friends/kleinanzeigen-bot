@@ -66,6 +66,7 @@ class ContactDefaults(ContextualModel):
     name:str | None = None
     street:str | None = None
     zipcode:int | str | None = None
+    location:str | None = None
     phone:str | None = None
 
 

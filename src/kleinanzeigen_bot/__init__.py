@@ -14,7 +14,7 @@ from wcmatch import glob
 
 from . import extract, resources
 from ._version import __version__
-from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, calculate_auto_price
+from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, Contact, calculate_auto_price
 from .model.config_model import Config
 from .update_checker import UpdateChecker
 from .utils import dicts, error_handlers, loggers, misc
@@ -1017,56 +1017,7 @@ class KleinanzeigenBot(WebScrapingMixin):
         description = self.__get_description(ad_cfg, with_affixes = True)
         await self.web_execute("document.querySelector('#pstad-descrptn').value = `" + description.replace("`", "'") + "`")
 
-        #############################
-        # set contact zipcode
-        #############################
-        if ad_cfg.contact.zipcode:
-            await self.web_input(By.ID, "pstad-zip", ad_cfg.contact.zipcode)
-            # Set city if location is specified
-            if ad_cfg.contact.location:
-                try:
-                    await self.web_sleep(1)  # Wait for city dropdown to populate
-                    options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
-
-                    for option in options:
-                        if option.text == ad_cfg.contact.location:
-                            await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
-                            break
-                except TimeoutError:
-                    LOG.debug("Could not set city from location")
-
-        #############################
-        # set contact street
-        #############################
-        if ad_cfg.contact.street:
-            try:
-                if await self.web_check(By.ID, "pstad-street", Is.DISABLED):
-                    await self.web_click(By.ID, "addressVisibility")
-                    await self.web_sleep()
-            except TimeoutError:
-                # ignore
-                pass
-            await self.web_input(By.ID, "pstad-street", ad_cfg.contact.street)
-
-        #############################
-        # set contact name
-        #############################
-        if ad_cfg.contact.name and not await self.web_check(By.ID, "postad-contactname", Is.READONLY):
-            await self.web_input(By.ID, "postad-contactname", ad_cfg.contact.name)
-
-        #############################
-        # set contact phone
-        #############################
-        if ad_cfg.contact.phone:
-            if await self.web_check(By.ID, "postad-phonenumber", Is.DISPLAYED):
-                try:
-                    if await self.web_check(By.ID, "postad-phonenumber", Is.DISABLED):
-                        await self.web_click(By.ID, "phoneNumberVisibility")
-                        await self.web_sleep()
-                except TimeoutError:
-                    # ignore
-                    pass
-                await self.web_input(By.ID, "postad-phonenumber", ad_cfg.contact.phone)
+        await self.__set_contact_fields(ad_cfg.contact)
 
         if mode == AdUpdateStrategy.MODIFY:
             #############################
@@ -1160,6 +1111,73 @@ class KleinanzeigenBot(WebScrapingMixin):
             LOG.info(" -> SUCCESS: ad updated with ID %s", ad_id)
 
         dicts.save_dict(ad_file, ad_cfg_orig)
+
+    async def __set_contact_fields(self, contact:Contact) -> None:
+        #############################
+        # set contact zipcode
+        #############################
+        if contact.zipcode:
+            try:
+                zip_field = await self.web_find(By.ID, "pstad-zip")
+                if zip_field is not None:
+                    await zip_field.clear_input()
+            except TimeoutError:
+                # fall back to standard input below
+                pass
+            await self.web_input(By.ID, "pstad-zip", contact.zipcode)
+            # Set city if location is specified
+            if contact.location:
+                try:
+                    await self.web_sleep(1)  # Wait for city dropdown to populate
+                    options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
+
+                    for option in options:
+                        opt_text = option.text.strip()
+                        target = contact.location.strip()
+                        if opt_text == target:
+                            await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
+                            break
+                        if " - " in opt_text and opt_text.split(" - ", 1)[1] == target:
+                            await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
+                            break
+                except TimeoutError:
+                    LOG.debug("Could not set city from location")
+
+        #############################
+        # set contact street
+        #############################
+        if contact.street:
+            try:
+                if await self.web_check(By.ID, "pstad-street", Is.DISABLED):
+                    await self.web_click(By.ID, "addressVisibility")
+                    await self.web_sleep()
+            except TimeoutError:
+                # ignore
+                pass
+            await self.web_input(By.ID, "pstad-street", contact.street)
+
+        #############################
+        # set contact name
+        #############################
+        if contact.name and not await self.web_check(By.ID, "postad-contactname", Is.READONLY):
+            await self.web_input(By.ID, "postad-contactname", contact.name)
+
+        #############################
+        # set contact phone
+        #############################
+        if contact.phone:
+            try:
+                if await self.web_check(By.ID, "postad-phonenumber", Is.DISPLAYED):
+                    try:
+                        if await self.web_check(By.ID, "postad-phonenumber", Is.DISABLED):
+                            await self.web_click(By.ID, "phoneNumberVisibility")
+                            await self.web_sleep()
+                    except TimeoutError:
+                        # ignore
+                        pass
+                    await self.web_input(By.ID, "postad-phonenumber", contact.phone)
+            except TimeoutError:
+                LOG.debug("Phone number field not present on page.")
 
     async def update_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         """
@@ -1539,8 +1557,11 @@ class KleinanzeigenBot(WebScrapingMixin):
                 saved_ad_ids = []
                 ads = self.load_ads(ignore_inactive = False, exclude_ads_with_id = False)  # do not skip because of existing IDs
                 for ad in ads:
-                    ad_id = int(ad[2]["id"])
-                    saved_ad_ids.append(ad_id)
+                    saved_ad_id = ad[1].id
+                    if saved_ad_id is None:
+                        LOG.debug("Skipping saved ad without id: %s", ad[0])
+                        continue
+                    saved_ad_ids.append(int(saved_ad_id))
 
                 # determine ad IDs from links
                 ad_id_by_url = {url:ad_extractor.extract_ad_id_from_ad_url(url) for url in own_ad_urls}

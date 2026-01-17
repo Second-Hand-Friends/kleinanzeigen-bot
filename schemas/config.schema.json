@@ -304,6 +304,18 @@
           "default": null,
           "title": "Zipcode"
         },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location"
+        },
         "phone": {
           "anyOf": [
             {
