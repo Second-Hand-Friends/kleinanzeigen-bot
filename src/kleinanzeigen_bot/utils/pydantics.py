@@ -37,6 +37,7 @@ class ContextualModel(BaseModel):
         is accepted for backward-compatibility but ignored.
         """
         try:
+            _ = extra  # kept for backward-compatibility; intentionally ignored
             return super().model_validate(
                 obj,
                 strict = strict,
