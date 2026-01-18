@@ -32,12 +32,15 @@ class ContextualModel(BaseModel):
         """
         Proxy to BaseModel.model_validate, but on error re‐raise as
         ContextualValidationError including the passed context.
+
+        Note: Pydantic v2 does not support call-time `extra=...`; this argument
+        is accepted for backward-compatibility but ignored.
         """
         try:
+            _ = extra  # kept for backward-compatibility; intentionally ignored
             return super().model_validate(
                 obj,
                 strict = strict,
-                extra = extra,
                 from_attributes = from_attributes,
                 context = context,
                 by_alias = by_alias,
