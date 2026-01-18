@@ -39,7 +39,7 @@ dependencies = [
   "colorama",
   "jaraco.text", # required by pkg_resources during runtime
   "nodriver==0.47.*", # Pin to 0.47 until upstream fixes UTF-8 decoding issues introduced in 0.48
-  "pydantic>=2.0.0",
+  "pydantic>=2.11.0",
   "ruamel.yaml",
   "psutil",
   "wcmatch",
