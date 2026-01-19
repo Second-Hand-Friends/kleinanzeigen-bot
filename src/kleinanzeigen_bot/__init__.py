@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import atexit, enum, json, os, re, signal, sys, textwrap  # isort: skip
+import atexit, asyncio, enum, json, os, re, signal, sys, textwrap  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 from datetime import datetime
@@ -1044,12 +1044,20 @@ class KleinanzeigenBot(WebScrapingMixin):
                     await self.web_await(self.__check_publishing_result, timeout = publish_timeout)
                     success = True
                     break  # Success, exit retry loop
-                except Exception as ex:
+                except asyncio.CancelledError:
+                    raise  # Respect task cancellation
+                except TimeoutError as ex:
                     if attempt < max_retries:
-                        LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
+                        # Re-fetch published ads to check if ad was actually created despite timeout
+                        published_ads = await self.web_execute(self.__get_published_ads)
+                        if any(ad["title"] == ad_cfg.title for ad in published_ads):
+                            LOG.info(_(" -> Ad '%s' was published despite timeout, skipping retry"), ad_cfg.title)
+                            success = True
+                            break
+                        LOG.warning(_("Attempt %s/%s failed for '%s': %s. Retrying..."), attempt, max_retries, ad_cfg.title, ex)
                         await self.web_sleep(2)  # Wait before retry
                     else:
-                        LOG.error("All %s attempts failed for '%s': %s. Skipping ad.", max_retries, ad_cfg.title, ex)
+                        LOG.error(_("All %s attempts failed for '%s': %s. Skipping ad."), max_retries, ad_cfg.title, ex)
                         failed_count += 1
                         break  # Skip this ad and continue with next
 
@@ -1058,9 +1066,9 @@ class KleinanzeigenBot(WebScrapingMixin):
 
         LOG.info("############################################")
         if failed_count > 0:
-            LOG.info("DONE: (Re-)published %s (%s failed after retries)", pluralize("ad", count - failed_count), failed_count)
+            LOG.info(_("DONE: (Re-)published %s (%s failed after retries)"), pluralize("ad", count - failed_count), failed_count)
         else:
-            LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
+            LOG.info(_("DONE: (Re-)published %s"), pluralize("ad", count))
         LOG.info("############################################")
 
     async def publish_ad(self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[dict[str, Any]],
