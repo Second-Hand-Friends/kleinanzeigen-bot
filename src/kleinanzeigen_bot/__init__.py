@@ -1021,6 +1021,8 @@ class KleinanzeigenBot(WebScrapingMixin):
 
     async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
+        failed_count = 0
+        max_retries = 3
 
         published_ads = json.loads(
             (await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
@@ -1033,16 +1035,32 @@ class KleinanzeigenBot(WebScrapingMixin):
                 continue
 
             count += 1
+            success = False
 
-            await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.REPLACE)
-            publish_timeout = self._timeout("publishing_result")
-            await self.web_await(self.__check_publishing_result, timeout = publish_timeout)
+            for attempt in range(1, max_retries + 1):
+                try:
+                    await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.REPLACE)
+                    publish_timeout = self._timeout("publishing_result")
+                    await self.web_await(self.__check_publishing_result, timeout = publish_timeout)
+                    success = True
+                    break  # Success, exit retry loop
+                except Exception as ex:
+                    if attempt < max_retries:
+                        LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
+                        await self.web_sleep(2)  # Wait before retry
+                    else:
+                        LOG.error("All %s attempts failed for '%s': %s. Skipping ad.", max_retries, ad_cfg.title, ex)
+                        failed_count += 1
+                        break  # Skip this ad and continue with next
 
-            if self.config.publishing.delete_old_ads == "AFTER_PUBLISH" and not self.keep_old_ads:
+            if success and self.config.publishing.delete_old_ads == "AFTER_PUBLISH" and not self.keep_old_ads:
                 await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = False)
 
         LOG.info("############################################")
-        LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
+        if failed_count > 0:
+            LOG.info("DONE: (Re-)published %s (%s failed after retries)", pluralize("ad", count - failed_count), failed_count)
+        else:
+            LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
         LOG.info("############################################")
 
     async def publish_ad(self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[dict[str, Any]],
