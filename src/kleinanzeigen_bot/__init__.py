@@ -1037,29 +1037,29 @@ class KleinanzeigenBot(WebScrapingMixin):
             count += 1
             success = False
 
+            # Retry loop only for publish_ad (before submission completes)
             for attempt in range(1, max_retries + 1):
                 try:
                     await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.REPLACE)
-                    publish_timeout = self._timeout("publishing_result")
-                    await self.web_await(self.__check_publishing_result, timeout = publish_timeout)
                     success = True
-                    break  # Success, exit retry loop
+                    break  # Publish succeeded, exit retry loop
                 except asyncio.CancelledError:
                     raise  # Respect task cancellation
                 except TimeoutError as ex:
                     if attempt < max_retries:
-                        # Re-fetch published ads to check if ad was actually created despite timeout
-                        published_ads = await self.web_execute(self.__get_published_ads)
-                        if any(ad["title"] == ad_cfg.title for ad in published_ads):
-                            LOG.info(_(" -> Ad '%s' was published despite timeout, skipping retry"), ad_cfg.title)
-                            success = True
-                            break
                         LOG.warning(_("Attempt %s/%s failed for '%s': %s. Retrying..."), attempt, max_retries, ad_cfg.title, ex)
                         await self.web_sleep(2)  # Wait before retry
                     else:
                         LOG.error(_("All %s attempts failed for '%s': %s. Skipping ad."), max_retries, ad_cfg.title, ex)
                         failed_count += 1
-                        break  # Skip this ad and continue with next
+
+            # Check publishing result separately (no retry - ad is already submitted)
+            if success:
+                try:
+                    publish_timeout = self._timeout("publishing_result")
+                    await self.web_await(self.__check_publishing_result, timeout = publish_timeout)
+                except TimeoutError:
+                    LOG.warning(_(" -> Could not confirm publishing for '%s', but ad may be online"), ad_cfg.title)
 
             if success and self.config.publishing.delete_old_ads == "AFTER_PUBLISH" and not self.keep_old_ads:
                 await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = False)
