@@ -276,7 +276,7 @@ ad_defaults:
   price_type: NEGOTIABLE # one of: FIXED, NEGOTIABLE, GIVE_AWAY, NOT_APPLICABLE
   shipping_type: SHIPPING # one of: PICKUP, SHIPPING, NOT_APPLICABLE
   # NOTE: shipping_costs and shipping_options must be configured per-ad, not as defaults
-  sell_directly: false # requires shipping_options to take effect
+  sell_directly: false # requires shipping_type SHIPPING to take effect
   contact:
     name: ""
     street: ""
@@ -406,7 +406,7 @@ special_attributes:
   # haus_mieten.zimmer_d: value # Zimmer
 
 shipping_type: # one of: PICKUP, SHIPPING, NOT_APPLICABLE (default: SHIPPING)
-shipping_costs: # e.g. 2.95
+shipping_costs: # e.g. 2.95 (for individual postage, keep shipping_type SHIPPING and leave shipping_options empty)
 
 # specify shipping options / packages
 # it is possible to select multiple packages, but only from one size (S, M, L)!
@@ -423,7 +423,7 @@ shipping_costs: # e.g. 2.95
 # - DHL_31,5
 # - Hermes_L
 shipping_options: []
-sell_directly: # true or false, requires shipping_options to take effect (default: false)
+sell_directly: # true or false, requires shipping_type SHIPPING to take effect (default: false)
 
 # list of wildcard patterns to select images
 # if relative paths are specified, then they are relative to this ad configuration file

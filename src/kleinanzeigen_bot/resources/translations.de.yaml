@@ -138,7 +138,6 @@ kleinanzeigen_bot/__init__.py:
     " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
     " -> SUCCESS: ad updated with ID %s": " -> ERFOLG: Anzeige mit ID %s aktualisiert"
     " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
-    "Could not set city from location": "Stadt konnte nicht aus dem Standort gesetzt werden"
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
 
   update_ads:
@@ -151,6 +150,15 @@ kleinanzeigen_bot/__init__.py:
     "Unable to close condition dialog!": "Kann den Dialog für Artikelzustand nicht schließen!"
     "Unable to open condition dialog and select condition [%s]": "Zustandsdialog konnte nicht geöffnet und Zustand [%s] nicht ausgewählt werden"
     "Unable to select condition [%s]": "Zustand [%s] konnte nicht ausgewählt werden"
+
+  __set_contact_fields:
+    "Could not set contact street.": "Kontaktstraße konnte nicht gesetzt werden."
+    "Could not set contact name.": "Kontaktname konnte nicht gesetzt werden."
+    "Could not set contact location: %s": "Kontaktort konnte nicht gesetzt werden: %s"
+    "Could not set contact zipcode: %s": "Kontakt-PLZ konnte nicht gesetzt werden: %s"
+    "No city dropdown option matched location: %s": "Kein Eintrag im Orts-Dropdown passte zum Ort: %s"
+    ? "Phone number field not present on page. This is expected for many private accounts; commercial accounts may still support phone numbers."
+    : "Telefonnummernfeld auf der Seite nicht vorhanden. Dies ist bei vielen privaten Konten zu erwarten; gewerbliche Konten unterstützen Telefonnummern möglicherweise weiterhin."
 
   __upload_images:
     " -> found %s": "-> %s gefunden"
