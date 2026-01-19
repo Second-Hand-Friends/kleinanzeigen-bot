@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import certifi, colorama, nodriver  # isort: skip
+from nodriver.core.connection import ProtocolException
 from ruamel.yaml import YAML
 from wcmatch import glob
 
@@ -1045,12 +1046,13 @@ class KleinanzeigenBot(WebScrapingMixin):
                     break  # Publish succeeded, exit retry loop
                 except asyncio.CancelledError:
                     raise  # Respect task cancellation
-                except TimeoutError as ex:
+                except (TimeoutError, ProtocolException) as ex:
                     if attempt < max_retries:
                         LOG.warning(_("Attempt %s/%s failed for '%s': %s. Retrying..."), attempt, max_retries, ad_cfg.title, ex)
                         await self.web_sleep(2)  # Wait before retry
                     else:
                         LOG.error(_("All %s attempts failed for '%s': %s. Skipping ad."), max_retries, ad_cfg.title, ex)
+                        failed_count += 1
                         failed_count += 1
 
             # Check publishing result separately (no retry - ad is already submitted)
