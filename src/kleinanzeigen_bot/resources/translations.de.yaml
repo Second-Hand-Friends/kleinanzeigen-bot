@@ -115,6 +115,10 @@ kleinanzeigen_bot/__init__.py:
   publish_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
+    " -> Could not confirm publishing for '%s', but ad may be online": " -> Veröffentlichung für '%s' konnte nicht bestätigt werden, aber Anzeige ist möglicherweise online"
+    "Attempt %s/%s failed for '%s': %s. Retrying...": "Versuch %s/%s fehlgeschlagen für '%s': %s. Erneuter Versuch..."
+    "All %s attempts failed for '%s': %s. Skipping ad.": "Alle %s Versuche fehlgeschlagen für '%s': %s. Überspringe Anzeige."
+    "DONE: (Re-)published %s (%s failed after retries)": "FERTIG: %s (erneut) veröffentlicht (%s fehlgeschlagen nach Wiederholungen)"
     "DONE: (Re-)published %s": "FERTIG: %s (erneut) veröffentlicht"
     "ad": "Anzeige"
   apply_auto_price_reduction:
