@@ -1053,7 +1053,6 @@ class KleinanzeigenBot(WebScrapingMixin):
                     else:
                         LOG.error(_("All %s attempts failed for '%s': %s. Skipping ad."), max_retries, ad_cfg.title, ex)
                         failed_count += 1
-                        failed_count += 1
 
             # Check publishing result separately (no retry - ad is already submitted)
             if success:
