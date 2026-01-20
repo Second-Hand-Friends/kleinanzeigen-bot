@@ -597,22 +597,48 @@ kleinanzeigen_bot/model/ad_model.py:
 #################################################
 kleinanzeigen_bot/model/update_check_state.py:
 #################################################
-  _parse_timestamp:
-    "Invalid timestamp format in state file: %s": "Ungültiges Zeitstempel-Format in der Statusdatei: %s"
+   _parse_timestamp:
+     "Invalid timestamp format in state file: %s": "Ungültiges Zeitstempel-Format in der Statusdatei: %s"
 
-  load:
-    "Failed to load update check state: %s": "Fehler beim Laden des Update-Prüfstatus: %s"
-    "Migrating update check state from version %d to %d": "Migriere Update-Prüfstatus von Version %d zu %d"
+   load:
+     "Failed to load update check state: %s": "Fehler beim Laden des Update-Prüfstatus: %s"
+     "Migrating update check state from version %d to %d": "Migriere Update-Prüfstatus von Version %d zu %d"
 
-  save:
-    "Failed to save update check state: %s": "Fehler beim Speichern des Update-Prüfstatus: %s"
-    "Permission denied when saving update check state to %s": "Keine Berechtigung zum Speichern des Update-Prüfstatus in %s"
+   save:
+     "Failed to save update check state: %s": "Fehler beim Speichern des Update-Prüfstatus: %s"
+     "Permission denied when saving update check state to %s": "Keine Berechtigung zum Speichern des Update-Prüfstatus in %s"
 
-  should_check:
-    "Falling back to default interval: 1d (preview channel). Please fix your config to avoid this warning.": "Falle auf das Standardintervall zurück: 1 Tag (Vorschaukanal). Bitte korrigieren Sie Ihre Konfiguration, um diese Warnung zu vermeiden."
-    "Falling back to default interval: 7d (latest channel). Please fix your config to avoid this warning.": "Falle auf das Standardintervall zurück: 7 Tage (Stabiler Kanal). Bitte korrigieren Sie Ihre Konfiguration, um diese Warnung zu vermeiden."
-    "Interval is zero: %s. Minimum interval is 1d. Using default interval for this run.": "Intervall ist null: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
-    "Interval too long: %s. Maximum interval is 30d. Using default interval for this run.": "Intervall zu lang: %s. Das maximale Intervall beträgt 30 Tage. Es wird das Standardintervall für diesen Durchlauf verwendet."
-    "Interval too short: %s. Minimum interval is 1d. Using default interval for this run.": "Intervall zu kurz: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
-    "Invalid interval format or unsupported unit: %s. Using default interval for this run.": "Ungültiges Intervallformat oder nicht unterstützte Einheit: %s. Es wird das Standardintervall für diesen Durchlauf verwendet."
-    "Negative interval: %s. Minimum interval is 1d. Using default interval for this run.": "Negatives Intervall: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
+   should_check:
+     "Falling back to default interval: 1d (preview channel). Please fix your config to avoid this warning.": "Falle auf das Standardintervall zurück: 1 Tag (Vorschaukanal). Bitte korrigieren Sie Ihre Konfiguration, um diese Warnung zu vermeiden."
+     "Falling back to default interval: 7d (latest channel). Please fix your config to avoid this warning.": "Falle auf das Standardintervall zurück: 7 Tage (Stabiler Kanal). Bitte korrigieren Sie Ihre Konfiguration, um diese Warnung zu vermeiden."
+     "Interval is zero: %s. Minimum interval is 1d. Using default interval for this run.": "Intervall ist null: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
+     "Interval too long: %s. Maximum interval is 30d. Using default interval for this run.": "Intervall zu lang: %s. Das maximale Intervall beträgt 30 Tage. Es wird das Standardintervall für diesen Durchlauf verwendet."
+     "Interval too short: %s. Minimum interval is 1d. Using default interval for this run.": "Intervall zu kurz: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
+     "Invalid interval format or unsupported unit: %s. Using default interval for this run.": "Ungültiges Intervallformat oder nicht unterstützte Einheit: %s. Es wird das Standardintervall für diesen Durchlauf verwendet."
+     "Negative interval: %s. Minimum interval is 1d. Using default interval for this run.": "Negatives Intervall: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
+
+#################################################
+kleinanzeigen_bot/utils/xdg_paths.py:
+#################################################
+   _ensure_directory:
+     "Failed to create %s %s: %s": "Fehler beim Erstellen von %s %s: %s"
+   detect_installation_mode:
+     "Detected installation mode: %s": "Erkannter Installationsmodus: %s"
+     "No existing installation found": "Keine bestehende Installation gefunden"
+   prompt_installation_mode:
+     "Non-interactive mode detected, defaulting to portable installation": "Nicht-interaktiver Modus erkannt, Standard-Installation: portabel"
+     "Choose installation type:": "Installationstyp wählen:"
+     "[1] Portable (current directory)": "[1] Portabel (aktuelles Verzeichnis)"
+     "[2] System-wide (XDG directories)": "[2] Systemweit (XDG-Verzeichnisse)"
+     "Enter 1 or 2: ": "1 oder 2 eingeben: "
+     "Defaulting to portable installation mode": "Standard-Installationsmodus: portabel"
+     "User selected installation mode: %s": "Benutzer hat Installationsmodus gewählt: %s"
+     "Invalid choice. Please enter 1 or 2.": "Ungültige Auswahl. Bitte 1 oder 2 eingeben."
+   get_downloaded_ads_path:
+     "downloaded ads directory": "Verzeichnis für heruntergeladene Anzeigen"
+   get_browser_profile_path:
+     "browser profile directory": "Browser-Profil-Verzeichnis"
+   get_log_file_path:
+     "log directory": "Log-Verzeichnis"
+   get_update_check_state_path:
+     "update check state directory": "Update-Prüfungs-Statusverzeichnis"
