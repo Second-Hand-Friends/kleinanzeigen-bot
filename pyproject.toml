@@ -39,6 +39,7 @@ dependencies = [
   "colorama",
   "jaraco.text", # required by pkg_resources during runtime
   "nodriver==0.47.*", # Pin to 0.47 until upstream fixes UTF-8 decoding issues introduced in 0.48
+  "platformdirs",
   "pydantic>=2.11.0",
   "ruamel.yaml",
   "psutil",
@@ -60,7 +61,6 @@ dev = [
     "autopep8",
     "yamlfix",
     "pyinstaller",
-    "platformdirs",
     "types-requests>=2.32.0.20250515",
     "pytest-mock>=3.14.0",
 ]

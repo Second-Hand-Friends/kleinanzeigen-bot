@@ -183,6 +183,9 @@ def get_downloaded_ads_path(mode:str | InstallationMode) -> Path:
 
     Returns:
         Path to downloaded ads directory
+
+    Note:
+        Creates the directory if it doesn't exist.
     """
     mode = _normalize_mode(mode)
     ads_path = Path.cwd() / "downloaded-ads" if mode == "portable" else get_xdg_base_dir("config") / "downloaded-ads"
@@ -204,6 +207,9 @@ def get_browser_profile_path(mode:str | InstallationMode, config_override:str | 
 
     Returns:
         Path to browser profile directory
+
+    Note:
+        Creates the directory if it doesn't exist.
     """
     mode = _normalize_mode(mode)
     if config_override:

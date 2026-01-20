@@ -42,11 +42,7 @@ class TestGetXdgBaseDir:
 class TestDetectInstallationMode:
     """Tests for detect_installation_mode function."""
 
-    def test_detects_portable_mode_when_config_exists_in_cwd(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_detects_portable_mode_when_config_exists_in_cwd(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that portable mode is detected when config.yaml exists in CWD."""
         # Setup: Create config.yaml in CWD
         monkeypatch.chdir(tmp_path)
@@ -58,11 +54,7 @@ class TestDetectInstallationMode:
         # Verify
         assert mode == "portable"
 
-    def test_detects_xdg_mode_when_config_exists_in_xdg_location(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_detects_xdg_mode_when_config_exists_in_xdg_location(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that XDG mode is detected when config exists in XDG location."""
         # Setup: Create config in mock XDG directory
         xdg_config = tmp_path / "config" / "kleinanzeigen-bot"
@@ -83,14 +75,15 @@ class TestDetectInstallationMode:
         # Verify
         assert mode == "xdg"
 
-    def test_returns_none_when_no_config_found(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_none_when_no_config_found(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that None is returned when no config exists anywhere."""
         # Setup: Empty directories
         monkeypatch.chdir(tmp_path)
+        # Mock XDG to return a non-existent path
+        monkeypatch.setattr(
+            "platformdirs.user_config_dir",
+            lambda app_name, *args, **kwargs: str(tmp_path / "nonexistent-xdg" / app_name),
+        )
 
         # Execute
         mode = xdg_paths.detect_installation_mode()
@@ -102,11 +95,7 @@ class TestDetectInstallationMode:
 class TestGetConfigFilePath:
     """Tests for get_config_file_path function."""
 
-    def test_returns_cwd_path_in_portable_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_cwd_path_in_portable_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that portable mode returns ./config.yaml."""
         monkeypatch.chdir(tmp_path)
 
@@ -114,11 +103,7 @@ class TestGetConfigFilePath:
 
         assert path == tmp_path / "config.yaml"
 
-    def test_returns_xdg_path_in_xdg_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_xdg_path_in_xdg_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that XDG mode returns XDG config path."""
         xdg_config = tmp_path / "config"
         monkeypatch.setattr(
@@ -135,11 +120,7 @@ class TestGetConfigFilePath:
 class TestGetAdFilesSearchDir:
     """Tests for get_ad_files_search_dir function."""
 
-    def test_returns_cwd_in_portable_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_cwd_in_portable_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that portable mode searches in CWD."""
         monkeypatch.chdir(tmp_path)
 
@@ -147,11 +128,7 @@ class TestGetAdFilesSearchDir:
 
         assert search_dir == tmp_path
 
-    def test_returns_xdg_config_dir_in_xdg_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_xdg_config_dir_in_xdg_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that XDG mode searches in XDG config directory (same as config file)."""
         xdg_config = tmp_path / "config"
         monkeypatch.setattr(
@@ -169,11 +146,7 @@ class TestGetAdFilesSearchDir:
 class TestGetDownloadedAdsPath:
     """Tests for get_downloaded_ads_path function."""
 
-    def test_returns_cwd_downloaded_ads_in_portable_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_cwd_downloaded_ads_in_portable_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that portable mode uses ./downloaded-ads/."""
         monkeypatch.chdir(tmp_path)
 
@@ -181,11 +154,7 @@ class TestGetDownloadedAdsPath:
 
         assert ads_path == tmp_path / "downloaded-ads"
 
-    def test_creates_directory_if_not_exists(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_creates_directory_if_not_exists(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that directory is created if it doesn't exist."""
         monkeypatch.chdir(tmp_path)
 
@@ -194,11 +163,7 @@ class TestGetDownloadedAdsPath:
         assert ads_path.exists()
         assert ads_path.is_dir()
 
-    def test_returns_xdg_downloaded_ads_in_xdg_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_xdg_downloaded_ads_in_xdg_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that XDG mode uses XDG config/downloaded-ads/."""
         xdg_config = tmp_path / "config"
         monkeypatch.setattr(
@@ -215,11 +180,7 @@ class TestGetDownloadedAdsPath:
 class TestGetBrowserProfilePath:
     """Tests for get_browser_profile_path function."""
 
-    def test_returns_cwd_temp_in_portable_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_cwd_temp_in_portable_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that portable mode uses ./.temp/browser-profile."""
         monkeypatch.chdir(tmp_path)
 
@@ -227,11 +188,7 @@ class TestGetBrowserProfilePath:
 
         assert profile_path == tmp_path / ".temp" / "browser-profile"
 
-    def test_returns_xdg_cache_in_xdg_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_xdg_cache_in_xdg_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that XDG mode uses XDG cache directory."""
         xdg_cache = tmp_path / "cache"
         monkeypatch.setenv("XDG_CACHE_HOME", str(xdg_cache))
@@ -241,11 +198,7 @@ class TestGetBrowserProfilePath:
         assert "kleinanzeigen-bot" in str(profile_path)
         assert profile_path.name == "browser-profile"
 
-    def test_creates_directory_if_not_exists(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_creates_directory_if_not_exists(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that browser profile directory is created."""
         monkeypatch.chdir(tmp_path)
 
@@ -258,11 +211,7 @@ class TestGetBrowserProfilePath:
 class TestGetLogFilePath:
     """Tests for get_log_file_path function."""
 
-    def test_returns_cwd_log_in_portable_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_cwd_log_in_portable_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that portable mode uses ./{basename}.log."""
         monkeypatch.chdir(tmp_path)
 
@@ -270,11 +219,7 @@ class TestGetLogFilePath:
 
         assert log_path == tmp_path / "test.log"
 
-    def test_returns_xdg_state_log_in_xdg_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_xdg_state_log_in_xdg_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that XDG mode uses XDG state directory."""
         xdg_state = tmp_path / "state"
         monkeypatch.setenv("XDG_STATE_HOME", str(xdg_state))
@@ -288,11 +233,7 @@ class TestGetLogFilePath:
 class TestGetUpdateCheckStatePath:
     """Tests for get_update_check_state_path function."""
 
-    def test_returns_cwd_temp_in_portable_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_cwd_temp_in_portable_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that portable mode uses ./.temp/update_check_state.json."""
         monkeypatch.chdir(tmp_path)
 
@@ -300,11 +241,7 @@ class TestGetUpdateCheckStatePath:
 
         assert state_path == tmp_path / ".temp" / "update_check_state.json"
 
-    def test_returns_xdg_state_in_xdg_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_xdg_state_in_xdg_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that XDG mode uses XDG state directory."""
         xdg_state = tmp_path / "state"
         monkeypatch.setenv("XDG_STATE_HOME", str(xdg_state))
@@ -323,10 +260,7 @@ class TestPromptInstallationMode:
         """Ensure prompt strings are stable regardless of locale."""
         monkeypatch.setattr(xdg_paths, "_", lambda message: message)
 
-    def test_returns_portable_for_non_interactive_mode_no_stdin(
-        self,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_portable_for_non_interactive_mode_no_stdin(self, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that non-interactive mode (no stdin) defaults to portable."""
         # Mock sys.stdin to be None (simulates non-interactive environment)
         monkeypatch.setattr("sys.stdin", None)
@@ -335,10 +269,7 @@ class TestPromptInstallationMode:
 
         assert mode == "portable"
 
-    def test_returns_portable_for_non_interactive_mode_not_tty(
-        self,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_portable_for_non_interactive_mode_not_tty(self, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that non-interactive mode (not a TTY) defaults to portable."""
         # Mock sys.stdin.isatty() to return False (simulates piped input or file redirect)
         mock_stdin = io.StringIO()
@@ -349,11 +280,7 @@ class TestPromptInstallationMode:
 
         assert mode == "portable"
 
-    def test_returns_portable_when_user_enters_1(
-        self,
-        monkeypatch:pytest.MonkeyPatch,
-        capsys:pytest.CaptureFixture[str]
-    ) -> None:
+    def test_returns_portable_when_user_enters_1(self, monkeypatch:pytest.MonkeyPatch, capsys:pytest.CaptureFixture[str]) -> None:
         """Test that user entering '1' selects portable mode."""
         # Mock sys.stdin to simulate interactive terminal
         mock_stdin = io.StringIO()
@@ -371,11 +298,7 @@ class TestPromptInstallationMode:
         assert "Choose installation type:" in captured.out
         assert "[1] Portable" in captured.out
 
-    def test_returns_xdg_when_user_enters_2(
-        self,
-        monkeypatch:pytest.MonkeyPatch,
-        capsys:pytest.CaptureFixture[str]
-    ) -> None:
+    def test_returns_xdg_when_user_enters_2(self, monkeypatch:pytest.MonkeyPatch, capsys:pytest.CaptureFixture[str]) -> None:
         """Test that user entering '2' selects XDG mode."""
         # Mock sys.stdin to simulate interactive terminal
         mock_stdin = io.StringIO()
@@ -393,11 +316,7 @@ class TestPromptInstallationMode:
         assert "Choose installation type:" in captured.out
         assert "[2] System-wide" in captured.out
 
-    def test_reprompts_on_invalid_input_then_accepts_valid(
-        self,
-        monkeypatch:pytest.MonkeyPatch,
-        capsys:pytest.CaptureFixture[str]
-    ) -> None:
+    def test_reprompts_on_invalid_input_then_accepts_valid(self, monkeypatch:pytest.MonkeyPatch, capsys:pytest.CaptureFixture[str]) -> None:
         """Test that invalid input causes re-prompt, then valid input is accepted."""
         # Mock sys.stdin to simulate interactive terminal
         mock_stdin = io.StringIO()
@@ -415,11 +334,7 @@ class TestPromptInstallationMode:
         captured = capsys.readouterr()
         assert "Invalid choice" in captured.out
 
-    def test_returns_portable_on_eof_error(
-        self,
-        monkeypatch:pytest.MonkeyPatch,
-        capsys:pytest.CaptureFixture[str]
-    ) -> None:
+    def test_returns_portable_on_eof_error(self, monkeypatch:pytest.MonkeyPatch, capsys:pytest.CaptureFixture[str]) -> None:
         """Test that EOFError (Ctrl+D) defaults to portable mode."""
         # Mock sys.stdin to simulate interactive terminal
         mock_stdin = io.StringIO()
@@ -439,11 +354,7 @@ class TestPromptInstallationMode:
         captured = capsys.readouterr()
         assert captured.out.endswith("\n")
 
-    def test_returns_portable_on_keyboard_interrupt(
-        self,
-        monkeypatch:pytest.MonkeyPatch,
-        capsys:pytest.CaptureFixture[str]
-    ) -> None:
+    def test_returns_portable_on_keyboard_interrupt(self, monkeypatch:pytest.MonkeyPatch, capsys:pytest.CaptureFixture[str]) -> None:
         """Test that KeyboardInterrupt (Ctrl+C) defaults to portable mode."""
         # Mock sys.stdin to simulate interactive terminal
         mock_stdin = io.StringIO()
@@ -467,11 +378,7 @@ class TestPromptInstallationMode:
 class TestGetBrowserProfilePathWithOverride:
     """Tests for get_browser_profile_path config_override parameter."""
 
-    def test_respects_config_override_in_portable_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_respects_config_override_in_portable_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that config_override takes precedence in portable mode."""
         monkeypatch.chdir(tmp_path)
 
@@ -482,11 +389,7 @@ class TestGetBrowserProfilePathWithOverride:
         assert profile_path.exists()  # Verify directory was created
         assert profile_path.is_dir()
 
-    def test_respects_config_override_in_xdg_mode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_respects_config_override_in_xdg_mode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that config_override takes precedence in XDG mode."""
         xdg_cache = tmp_path / "cache"
         monkeypatch.setenv("XDG_CACHE_HOME", str(xdg_cache))
@@ -504,11 +407,7 @@ class TestGetBrowserProfilePathWithOverride:
 class TestUnicodeHandling:
     """Tests for Unicode path handling (NFD vs NFC normalization)."""
 
-    def test_portable_mode_handles_unicode_in_cwd(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_portable_mode_handles_unicode_in_cwd(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that portable mode works with Unicode characters in CWD path.
 
         This tests the edge case where the current directory contains Unicode
@@ -531,11 +430,7 @@ class TestUnicodeHandling:
         assert config_path.name == "config.yaml"
         assert log_path.name == "test.log"
 
-    def test_xdg_mode_handles_unicode_in_paths(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_xdg_mode_handles_unicode_in_paths(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that XDG mode handles Unicode in XDG directory paths.
 
         This tests the edge case where XDG directories contain Unicode
@@ -558,11 +453,7 @@ class TestUnicodeHandling:
         assert "Müller" in str(config_path) or "Mu\u0308ller" in str(config_path)
         assert config_path.name == "config.yaml"
 
-    def test_downloaded_ads_path_handles_unicode(
-        self,
-        tmp_path:Path,
-        monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    def test_downloaded_ads_path_handles_unicode(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that downloaded ads directory creation works with Unicode paths."""
         # Create XDG config directory with umlaut
         xdg_config = tmp_path / "config" / "Müller"
