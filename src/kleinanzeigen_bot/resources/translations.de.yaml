@@ -112,6 +112,11 @@ kleinanzeigen_bot/__init__.py:
     " -> FAILED: Timeout while extending ad '%s': %s": " -> FEHLER: Zeitüberschreitung beim Verlängern der Anzeige '%s': %s"
     " -> FAILED: Could not persist extension for ad '%s': %s": " -> FEHLER: Verlängerung der Anzeige '%s' konnte nicht gespeichert werden: %s"
 
+  finalize_installation_mode:
+    "Config file: %s": "Konfigurationsdatei: %s"
+    "First run detected, prompting user for installation mode": "Erster Start erkannt, frage Benutzer nach Installationsmodus"
+    "Installation mode: %s": "Installationsmodus: %s"
+
   publish_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
@@ -240,7 +245,7 @@ kleinanzeigen_bot/__init__.py:
 kleinanzeigen_bot/extract.py:
 #################################################
   download_ad:
-    "Ensured ads directory exists at ./%s.": "Verzeichnis [%s] für Anzeige vorhanden."
+    "Using download directory: %s": "Verwende Download-Verzeichnis: %s"
 
   _download_and_save_image_sync:
     "Failed to download image %s: %s": "Fehler beim Herunterladen des Bildes %s: %s"

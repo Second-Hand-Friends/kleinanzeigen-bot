@@ -15,7 +15,7 @@ from kleinanzeigen_bot.model.ad_model import ContactPartial
 
 from .model.ad_model import AdPartial
 from .model.config_model import Config
-from .utils import dicts, files, i18n, loggers, misc, reflect
+from .utils import dicts, files, i18n, loggers, misc, reflect, xdg_paths
 from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
 
 __all__ = [
@@ -33,10 +33,13 @@ class AdExtractor(WebScrapingMixin):
     Wrapper class for ad extraction that uses an active bot´s browser session to extract specific elements from an ad page.
     """
 
-    def __init__(self, browser:Browser, config:Config) -> None:
+    def __init__(self, browser:Browser, config:Config, installation_mode:xdg_paths.InstallationMode = "portable") -> None:
         super().__init__()
         self.browser = browser
         self.config:Config = config
+        if installation_mode not in {"portable", "xdg"}:
+            raise ValueError(f"Unsupported installation mode: {installation_mode}")
+        self.installation_mode:xdg_paths.InstallationMode = installation_mode
 
     async def download_ad(self, ad_id:int) -> None:
         """
@@ -47,26 +50,19 @@ class AdExtractor(WebScrapingMixin):
         """
 
         # create sub-directory for ad(s) to download (if necessary):
-        relative_directory = Path("downloaded-ads")
-        # make sure configured base directory exists (using exist_ok=True to avoid TOCTOU race)
-        await asyncio.get_running_loop().run_in_executor(None, lambda: relative_directory.mkdir(exist_ok = True))  # noqa: ASYNC240
-        LOG.info("Ensured ads directory exists at ./%s.", relative_directory)
+        download_dir = xdg_paths.get_downloaded_ads_path(self.installation_mode)
+        LOG.info(_("Using download directory: %s"), download_dir)
+        # Note: xdg_paths.get_downloaded_ads_path() already creates the directory
 
         # Extract ad info and determine final directory path
-        ad_cfg, final_dir = await self._extract_ad_page_info_with_directory_handling(
-            relative_directory, ad_id
-        )
+        ad_cfg, final_dir = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id)
 
         # Save the ad configuration file (offload to executor to avoid blocking the event loop)
         ad_file_path = str(Path(final_dir) / f"ad_{ad_id}.yaml")
         header_string = (
-            "# yaml-language-server: $schema="
-            "https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
+            "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
         )
-        await asyncio.get_running_loop().run_in_executor(
-            None,
-            lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(), header = header_string)
-        )
+        await asyncio.get_running_loop().run_in_executor(None, lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(), header = header_string))
 
     @staticmethod
     def _download_and_save_image_sync(url:str, directory:str, filename_prefix:str, img_nr:int) -> str | None:
@@ -114,14 +110,7 @@ class AdExtractor(WebScrapingMixin):
                 if current_img_url is None:
                     continue
 
-                img_path = await loop.run_in_executor(
-                    None,
-                    self._download_and_save_image_sync,
-                    str(current_img_url),
-                    directory,
-                    img_fn_prefix,
-                    img_nr
-                )
+                img_path = await loop.run_in_executor(None, self._download_and_save_image_sync, str(current_img_url), directory, img_fn_prefix, img_nr)
 
                 if img_path:
                     dl_counter += 1
@@ -217,10 +206,7 @@ class AdExtractor(WebScrapingMixin):
 
             # Extract references using the CORRECTED selector
             try:
-                page_refs:list[str] = [
-                    str((await self.web_find(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = li)).attrs["href"])
-                    for li in list_items
-                ]
+                page_refs:list[str] = [str((await self.web_find(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = li)).attrs["href"]) for li in list_items]
                 refs.extend(page_refs)
                 LOG.info("Successfully extracted %s refs from page %s.", len(page_refs), current_page)
             except Exception as e:
@@ -344,7 +330,7 @@ class AdExtractor(WebScrapingMixin):
         if prefix and description_text.startswith(prefix.strip()):
             description_text = description_text[len(prefix.strip()):]
         if suffix and description_text.endswith(suffix.strip()):
-            description_text = description_text[:-len(suffix.strip())]
+            description_text = description_text[: -len(suffix.strip())]
 
         info["description"] = description_text.strip()
 
@@ -361,8 +347,7 @@ class AdExtractor(WebScrapingMixin):
         info["id"] = ad_id
 
         try:  # try different locations known for creation date element
-            creation_date = await self.web_text(By.XPATH,
-                "/html/body/div[1]/div[2]/div/section[2]/section/section/article/div[3]/div[2]/div[2]/div[1]/span")
+            creation_date = await self.web_text(By.XPATH, "/html/body/div[1]/div[2]/div/section[2]/section/section/article/div[3]/div[2]/div[2]/div[1]/span")
         except TimeoutError:
             creation_date = await self.web_text(By.CSS_SELECTOR, "#viewad-extra-info > div:nth-child(1) > span:nth-child(2)")
 
@@ -380,9 +365,7 @@ class AdExtractor(WebScrapingMixin):
 
         return ad_cfg
 
-    async def _extract_ad_page_info_with_directory_handling(
-        self, relative_directory:Path, ad_id:int
-    ) -> tuple[AdPartial, Path]:
+    async def _extract_ad_page_info_with_directory_handling(self, relative_directory:Path, ad_id:int) -> tuple[AdPartial, Path]:
         """
         Extracts ad information and handles directory creation/renaming.
 
@@ -415,8 +398,7 @@ class AdExtractor(WebScrapingMixin):
         if await files.exists(temp_dir):
             if self.config.download.rename_existing_folders:
                 # Rename the old folder to the new name with title
-                LOG.info("Renaming folder from %s to %s for ad %s...",
-                        temp_dir.name, final_dir.name, ad_id)
+                LOG.info("Renaming folder from %s to %s for ad %s...", temp_dir.name, final_dir.name, ad_id)
                 LOG.debug("Renaming: %s -> %s", temp_dir, final_dir)
                 await loop.run_in_executor(None, temp_dir.rename, final_dir)
             else:
@@ -471,14 +453,8 @@ class AdExtractor(WebScrapingMixin):
             category_first_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
             category_second_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(3)", parent = category_line)
         except TimeoutError as exc:
-            LOG.error(
-                "Legacy breadcrumb selectors not found within %.1f seconds (collected ids: %s)",
-                fallback_timeout,
-                category_ids
-            )
-            raise TimeoutError(
-                _("Unable to locate breadcrumb fallback selectors within %(seconds).1f seconds.") % {"seconds": fallback_timeout}
-            ) from exc
+            LOG.error("Legacy breadcrumb selectors not found within %.1f seconds (collected ids: %s)", fallback_timeout, category_ids)
+            raise TimeoutError(_("Unable to locate breadcrumb fallback selectors within %(seconds).1f seconds.") % {"seconds": fallback_timeout}) from exc
         href_first:str = str(category_first_part.attrs["href"])
         href_second:str = str(category_second_part.attrs["href"])
         cat_num_first_raw = href_first.rsplit("/", maxsplit = 1)[-1]
@@ -553,8 +529,8 @@ class AdExtractor(WebScrapingMixin):
                 # reading shipping option from kleinanzeigen
                 # and find the right one by price
                 shipping_costs = json.loads(
-                    (await self.web_request("https://gateway.kleinanzeigen.de/postad/api/v1/shipping-options?posterType=PRIVATE"))
-                    ["content"])["data"]["shippingOptionsResponse"]["options"]
+                    (await self.web_request("https://gateway.kleinanzeigen.de/postad/api/v1/shipping-options?posterType=PRIVATE"))["content"]
+                )["data"]["shippingOptionsResponse"]["options"]
 
                 # map to internal shipping identifiers used by kleinanzeigen-bot
                 shipping_option_mapping = {
@@ -566,7 +542,7 @@ class AdExtractor(WebScrapingMixin):
                     "HERMES_001": "Hermes_Päckchen",
                     "HERMES_002": "Hermes_S",
                     "HERMES_003": "Hermes_M",
-                    "HERMES_004": "Hermes_L"
+                    "HERMES_004": "Hermes_L",
                 }
 
                 # Convert Euro to cents and round to nearest integer
