@@ -20,34 +20,34 @@ import platformdirs
 
 from kleinanzeigen_bot.utils import loggers
 
-LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
+LOG: Final[loggers.Logger] = loggers.get_logger(__name__)
 
-APP_NAME:Final[str] = "kleinanzeigen-bot"
+APP_NAME: Final[str] = "kleinanzeigen-bot"
 
 InstallationMode = Literal["portable", "xdg"]
 PathCategory = Literal["config", "cache", "state"]
 
 
-def _normalize_mode(mode:str | InstallationMode) -> InstallationMode:
+def _normalize_mode(mode: str | InstallationMode) -> InstallationMode:
     """Validate and normalize installation mode input."""
     if mode in {"portable", "xdg"}:
         return cast(InstallationMode, mode)
     raise ValueError(f"Unsupported installation mode: {mode}")
 
 
-def _ensure_directory(path:Path, description:str) -> None:
+def _ensure_directory(path: Path, description: str) -> None:
     """Create directory and verify it exists."""
     LOG.debug("Creating directory: %s", path)
     try:
-        path.mkdir(parents = True, exist_ok = True)
+        path.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        LOG.error(_("Failed to create %s %s: %s"), description, path, exc)
+        LOG.error("Failed to create %s %s: %s", description, path, exc)
         raise
     if not path.is_dir():
         raise NotADirectoryError(str(path))
 
 
-def get_xdg_base_dir(category:PathCategory) -> Path:
+def get_xdg_base_dir(category: PathCategory) -> Path:
     """Get XDG base directory for the given category.
 
     Args:
@@ -56,7 +56,7 @@ def get_xdg_base_dir(category:PathCategory) -> Path:
     Returns:
         Path to the XDG base directory for this app
     """
-    resolved:str | None = None
+    resolved: str | None = None
     match category:
         case "config":
             resolved = platformdirs.user_config_dir(APP_NAME)
@@ -89,7 +89,7 @@ def detect_installation_mode() -> InstallationMode | None:
     LOG.debug("Checking for portable config at: %s", portable_config)
 
     if portable_config.exists():
-        LOG.info(_("Detected installation mode: %s"), "portable")
+        LOG.info("Detected installation mode: %s", "portable")
         return "portable"
 
     # Check for XDG installation
@@ -97,11 +97,11 @@ def detect_installation_mode() -> InstallationMode | None:
     LOG.debug("Checking for XDG config at: %s", xdg_config)
 
     if xdg_config.exists():
-        LOG.info(_("Detected installation mode: %s"), "xdg")
+        LOG.info("Detected installation mode: %s", "xdg")
         return "xdg"
 
     # Neither exists - first run
-    LOG.info(_("No existing installation found"))
+    LOG.info("No existing installation found")
     return None
 
 
@@ -113,7 +113,7 @@ def prompt_installation_mode() -> InstallationMode:
     """
     # Check if running in non-interactive mode (no stdin or not a TTY)
     if not sys.stdin or not sys.stdin.isatty():
-        LOG.info(_("Non-interactive mode detected, defaulting to portable installation"))
+        LOG.info("Non-interactive mode detected, defaulting to portable installation")
         return "portable"
 
     print(_("Choose installation type:"))
@@ -126,21 +126,21 @@ def prompt_installation_mode() -> InstallationMode:
         except (EOFError, KeyboardInterrupt):
             # Non-interactive or interrupted - default to portable
             print()  # newline after ^C or EOF
-            LOG.info(_("Defaulting to portable installation mode"))
+            LOG.info("Defaulting to portable installation mode")
             return "portable"
 
         if choice == "1":
-            mode:InstallationMode = "portable"
-            LOG.info(_("User selected installation mode: %s"), mode)
+            mode: InstallationMode = "portable"
+            LOG.info("User selected installation mode: %s", mode)
             return mode
         if choice == "2":
             mode = "xdg"
-            LOG.info(_("User selected installation mode: %s"), mode)
+            LOG.info("User selected installation mode: %s", mode)
             return mode
         print(_("Invalid choice. Please enter 1 or 2."))
 
 
-def get_config_file_path(mode:str | InstallationMode) -> Path:
+def get_config_file_path(mode: str | InstallationMode) -> Path:
     """Get config.yaml file path for the given mode.
 
     Args:
@@ -156,7 +156,7 @@ def get_config_file_path(mode:str | InstallationMode) -> Path:
     return config_path
 
 
-def get_ad_files_search_dir(mode:str | InstallationMode) -> Path:
+def get_ad_files_search_dir(mode: str | InstallationMode) -> Path:
     """Get directory to search for ad files.
 
     Ad files are searched relative to the config file directory,
@@ -175,7 +175,7 @@ def get_ad_files_search_dir(mode:str | InstallationMode) -> Path:
     return search_dir
 
 
-def get_downloaded_ads_path(mode:str | InstallationMode) -> Path:
+def get_downloaded_ads_path(mode: str | InstallationMode) -> Path:
     """Get downloaded ads directory path.
 
     Args:
@@ -193,12 +193,12 @@ def get_downloaded_ads_path(mode:str | InstallationMode) -> Path:
     LOG.debug("Resolving downloaded ads path for mode '%s': %s", mode, ads_path)
 
     # Create directory if it doesn't exist
-    _ensure_directory(ads_path, _("downloaded ads directory"))
+    _ensure_directory(ads_path, "downloaded ads directory")
 
     return ads_path
 
 
-def get_browser_profile_path(mode:str | InstallationMode, config_override:str | None = None) -> Path:
+def get_browser_profile_path(mode: str | InstallationMode, config_override: str | None = None) -> Path:
     """Get browser profile directory path.
 
     Args:
@@ -223,12 +223,12 @@ def get_browser_profile_path(mode:str | InstallationMode, config_override:str | 
         LOG.debug("Resolving browser profile path for mode '%s': %s", mode, profile_path)
 
     # Create directory if it doesn't exist
-    _ensure_directory(profile_path, _("browser profile directory"))
+    _ensure_directory(profile_path, "browser profile directory")
 
     return profile_path
 
 
-def get_log_file_path(basename:str, mode:str | InstallationMode) -> Path:
+def get_log_file_path(basename: str, mode: str | InstallationMode) -> Path:
     """Get log file path.
 
     Args:
@@ -244,12 +244,12 @@ def get_log_file_path(basename:str, mode:str | InstallationMode) -> Path:
     LOG.debug("Resolving log file path for mode '%s': %s", mode, log_path)
 
     # Create parent directory if it doesn't exist
-    _ensure_directory(log_path.parent, _("log directory"))
+    _ensure_directory(log_path.parent, "log directory")
 
     return log_path
 
 
-def get_update_check_state_path(mode:str | InstallationMode) -> Path:
+def get_update_check_state_path(mode: str | InstallationMode) -> Path:
     """Get update check state file path.
 
     Args:
@@ -264,6 +264,6 @@ def get_update_check_state_path(mode:str | InstallationMode) -> Path:
     LOG.debug("Resolving update check state path for mode '%s': %s", mode, state_path)
 
     # Create parent directory if it doesn't exist
-    _ensure_directory(state_path.parent, _("update check state directory"))
+    _ensure_directory(state_path.parent, "update check state directory")
 
     return state_path
