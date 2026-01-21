@@ -634,11 +634,3 @@ kleinanzeigen_bot/utils/xdg_paths.py:
     "Defaulting to portable installation mode": "Standard-Installationsmodus: portabel"
     "User selected installation mode: %s": "Benutzer hat Installationsmodus gewählt: %s"
     "Invalid choice. Please enter 1 or 2.": "Ungültige Auswahl. Bitte 1 oder 2 eingeben."
-  get_downloaded_ads_path:
-    "downloaded ads directory": "Verzeichnis für heruntergeladene Anzeigen"
-  get_browser_profile_path:
-    "browser profile directory": "Browser-Profil-Verzeichnis"
-  get_log_file_path:
-    "log directory": "Log-Verzeichnis"
-  get_update_check_state_path:
-    "update check state directory": "Update-Prüfungs-Statusverzeichnis"
