@@ -213,7 +213,7 @@ def get_browser_profile_path(mode:str | InstallationMode, config_override:str | 
     """
     mode = _normalize_mode(mode)
     if config_override:
-        profile_path = Path(config_override).resolve()
+        profile_path = Path(config_override).expanduser().resolve()
         LOG.debug("Resolving browser profile path for mode '%s' (config override): %s", mode, profile_path)
     elif mode == "portable":
         profile_path = (Path.cwd() / ".temp" / "browser-profile").resolve()
