@@ -788,7 +788,9 @@ class WebScrapingMixin:
         async def attempt(effective_timeout:float) -> Element:
             return await self._web_find_once(selector_type, selector_value, effective_timeout, parent = parent)
 
-        return await self._run_with_timeout_retries(attempt, description = f"web_find({selector_type.name}, {selector_value})", key = "default", override = timeout)
+        return await self._run_with_timeout_retries(  # noqa: E501
+            attempt, description = f"web_find({selector_type.name}, {selector_value})", key = "default", override = timeout
+        )
 
     async def web_find_all(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> list[Element]:
         """
