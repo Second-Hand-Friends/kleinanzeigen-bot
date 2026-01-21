@@ -190,7 +190,7 @@ jobs:
                 browser_path=$(which chromium || which chromium-browser || which google-chrome || true)
                 if [[ -n "$browser_path" && -x "$browser_path" ]]; then
                   echo "Warming up browser: $browser_path"
-                  "$browser_path" --headless --disable-gpu --dump-dom about:blank 2>/dev/null || true
+                  "$browser_path" --headless --disable-gpu --no-sandbox --dump-dom about:blank 2>/dev/null || true
                 fi
                 pdm run itest:cov -vv
               '
