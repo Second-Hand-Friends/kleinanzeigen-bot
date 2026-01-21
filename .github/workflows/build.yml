@@ -168,14 +168,10 @@ jobs:
 
 
     - name: "Warm up browser"
-      if: startsWith(matrix.os, 'macos') || startsWith(matrix.os, 'ubuntu')
+      if: startsWith(matrix.os, 'macos')
       run: |
         # Launch browser briefly to warm up OS security subsystems and reduce first-launch latency
-        if [[ "${{ matrix.os }}" == ubuntu-* ]]; then
-          browser_path="/usr/bin/google-chrome"
-        else
-          browser_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        fi
+        browser_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
         if [[ -x "$browser_path" ]]; then
           "$browser_path" --headless --disable-gpu --dump-dom about:blank 2>/dev/null || true
         fi
@@ -188,7 +184,16 @@ jobs:
         case "${{ matrix.os }}" in
            ubuntu-*)
               sudo apt-get install --no-install-recommends -y xvfb
-              xvfb-run pdm run itest:cov -vv
+              # Warm up browser INSIDE xvfb context with correct detection order
+              # Browser detection mirrors get_compatible_browser() in src/kleinanzeigen_bot/utils/web_scraping_mixin.py:566-571
+              xvfb-run bash -c '
+                browser_path=$(which chromium || which chromium-browser || which google-chrome || true)
+                if [[ -n "$browser_path" && -x "$browser_path" ]]; then
+                  echo "Warming up browser: $browser_path"
+                  "$browser_path" --headless --disable-gpu --dump-dom about:blank 2>/dev/null || true
+                fi
+                pdm run itest:cov -vv
+              '
               ;;
            *) pdm run itest:cov -vv
               ;;
