@@ -20,26 +20,26 @@ import platformdirs
 
 from kleinanzeigen_bot.utils import loggers
 
-LOG: Final[loggers.Logger] = loggers.get_logger(__name__)
+LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
-APP_NAME: Final[str] = "kleinanzeigen-bot"
+APP_NAME:Final[str] = "kleinanzeigen-bot"
 
 InstallationMode = Literal["portable", "xdg"]
 PathCategory = Literal["config", "cache", "state"]
 
 
-def _normalize_mode(mode: str | InstallationMode) -> InstallationMode:
+def _normalize_mode(mode:str | InstallationMode) -> InstallationMode:
     """Validate and normalize installation mode input."""
     if mode in {"portable", "xdg"}:
         return cast(InstallationMode, mode)
     raise ValueError(f"Unsupported installation mode: {mode}")
 
 
-def _ensure_directory(path: Path, description: str) -> None:
+def _ensure_directory(path:Path, description:str) -> None:
     """Create directory and verify it exists."""
     LOG.debug("Creating directory: %s", path)
     try:
-        path.mkdir(parents=True, exist_ok=True)
+        path.mkdir(parents = True, exist_ok = True)
     except OSError as exc:
         LOG.error("Failed to create %s %s: %s", description, path, exc)
         raise
@@ -47,7 +47,7 @@ def _ensure_directory(path: Path, description: str) -> None:
         raise NotADirectoryError(str(path))
 
 
-def get_xdg_base_dir(category: PathCategory) -> Path:
+def get_xdg_base_dir(category:PathCategory) -> Path:
     """Get XDG base directory for the given category.
 
     Args:
@@ -56,7 +56,7 @@ def get_xdg_base_dir(category: PathCategory) -> Path:
     Returns:
         Path to the XDG base directory for this app
     """
-    resolved: str | None = None
+    resolved:str | None = None
     match category:
         case "config":
             resolved = platformdirs.user_config_dir(APP_NAME)
@@ -130,7 +130,7 @@ def prompt_installation_mode() -> InstallationMode:
             return "portable"
 
         if choice == "1":
-            mode: InstallationMode = "portable"
+            mode:InstallationMode = "portable"
             LOG.info("User selected installation mode: %s", mode)
             return mode
         if choice == "2":
@@ -140,7 +140,7 @@ def prompt_installation_mode() -> InstallationMode:
         print(_("Invalid choice. Please enter 1 or 2."))
 
 
-def get_config_file_path(mode: str | InstallationMode) -> Path:
+def get_config_file_path(mode:str | InstallationMode) -> Path:
     """Get config.yaml file path for the given mode.
 
     Args:
@@ -156,7 +156,7 @@ def get_config_file_path(mode: str | InstallationMode) -> Path:
     return config_path
 
 
-def get_ad_files_search_dir(mode: str | InstallationMode) -> Path:
+def get_ad_files_search_dir(mode:str | InstallationMode) -> Path:
     """Get directory to search for ad files.
 
     Ad files are searched relative to the config file directory,
@@ -175,7 +175,7 @@ def get_ad_files_search_dir(mode: str | InstallationMode) -> Path:
     return search_dir
 
 
-def get_downloaded_ads_path(mode: str | InstallationMode) -> Path:
+def get_downloaded_ads_path(mode:str | InstallationMode) -> Path:
     """Get downloaded ads directory path.
 
     Args:
@@ -198,7 +198,7 @@ def get_downloaded_ads_path(mode: str | InstallationMode) -> Path:
     return ads_path
 
 
-def get_browser_profile_path(mode: str | InstallationMode, config_override: str | None = None) -> Path:
+def get_browser_profile_path(mode:str | InstallationMode, config_override:str | None = None) -> Path:
     """Get browser profile directory path.
 
     Args:
@@ -228,7 +228,7 @@ def get_browser_profile_path(mode: str | InstallationMode, config_override: str 
     return profile_path
 
 
-def get_log_file_path(basename: str, mode: str | InstallationMode) -> Path:
+def get_log_file_path(basename:str, mode:str | InstallationMode) -> Path:
     """Get log file path.
 
     Args:
@@ -249,7 +249,7 @@ def get_log_file_path(basename: str, mode: str | InstallationMode) -> Path:
     return log_path
 
 
-def get_update_check_state_path(mode: str | InstallationMode) -> Path:
+def get_update_check_state_path(mode:str | InstallationMode) -> Path:
     """Get update check state file path.
 
     Args:

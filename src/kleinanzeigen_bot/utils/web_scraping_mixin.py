@@ -53,6 +53,16 @@ def _resolve_user_data_dir_paths(arg_value:str, config_value:str) -> tuple[Any, 
         return None, None
 
 
+def _has_non_empty_user_data_dir_arg(args:Iterable[str]) -> bool:
+    for arg in args:
+        if not arg.startswith("--user-data-dir="):
+            continue
+        raw = arg.split("=", maxsplit = 1)[1].strip().strip('"').strip("'")
+        if raw:
+            return True
+    return False
+
+
 def _is_remote_object(obj:Any) -> TypeGuard["RemoteObject"]:
     """Type guard to check if an object is a RemoteObject."""
     return hasattr(obj, "__class__") and "RemoteObject" in str(type(obj))
@@ -142,6 +152,11 @@ class WebScrapingMixin:
         self._default_timeout_config:TimeoutConfig | None = None
         self.config:BotConfig = cast(BotConfig, None)
 
+    @property
+    def _installation_mode(self) -> str:
+        """Get installation mode with fallback to portable."""
+        return getattr(self, "installation_mode_or_portable", "portable")
+
     def _get_timeout_config(self) -> TimeoutConfig:
         config = getattr(self, "config", None)
         timeouts:TimeoutConfig | None = None
@@ -203,22 +218,12 @@ class WebScrapingMixin:
 
         has_remote_debugging = any(arg.startswith("--remote-debugging-port=") for arg in self.browser_config.arguments)
 
-        def _has_non_empty_user_data_dir_arg(args:Iterable[str]) -> bool:
-            for arg in args:
-                if not arg.startswith("--user-data-dir="):
-                    continue
-                raw = arg.split("=", maxsplit = 1)[1].strip().strip('"').strip("'")
-                if raw:
-                    return True
-            return False
-
         if (
             not (self.browser_config.user_data_dir and self.browser_config.user_data_dir.strip())
             and not _has_non_empty_user_data_dir_arg(self.browser_config.arguments)
             and not has_remote_debugging
         ):
-            mode = getattr(self, "installation_mode_or_portable", "portable")
-            self.browser_config.user_data_dir = str(xdg_paths.get_browser_profile_path(mode))
+            self.browser_config.user_data_dir = str(xdg_paths.get_browser_profile_path(self._installation_mode))
 
         # Chrome version detection and validation
         if has_remote_debugging:
@@ -337,8 +342,7 @@ class WebScrapingMixin:
                     user_data_dir_from_args,
                 )
         if not effective_user_data_dir:
-            mode = getattr(self, "installation_mode_or_portable", "portable")
-            effective_user_data_dir = str(xdg_paths.get_browser_profile_path(mode))
+            effective_user_data_dir = str(xdg_paths.get_browser_profile_path(self._installation_mode))
         self.browser_config.user_data_dir = effective_user_data_dir
 
         if not loggers.is_debug(LOG):
@@ -1250,8 +1254,7 @@ class WebScrapingMixin:
             if diagnostic_info["binary_detection"]:
                 binary_info = diagnostic_info["binary_detection"]
                 LOG.info(
-                    "(info) %s version from binary: %s %s (major: %d)",
-                    binary_info["browser_name"],
+                    "(info) %s version from binary: %s (major: %d)",
                     binary_info["browser_name"],
                     binary_info["version_string"],
                     binary_info["major_version"],

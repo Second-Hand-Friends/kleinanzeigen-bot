@@ -20,9 +20,7 @@ class TestWebScrapingMixinChromeVersionValidation:
         return WebScrapingMixin()
 
     @patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary")
-    async def test_validate_chrome_version_configuration_chrome_136_plus_valid(
-        self, mock_detect:Mock, scraper:WebScrapingMixin
-    ) -> None:
+    async def test_validate_chrome_version_configuration_chrome_136_plus_valid(self, mock_detect:Mock, scraper:WebScrapingMixin) -> None:
         """Test Chrome 136+ validation with valid configuration."""
         # Setup mocks
         mock_detect.return_value = ChromeVersionInfo("136.0.6778.0", 136, "Chrome")
@@ -88,9 +86,7 @@ class TestWebScrapingMixinChromeVersionValidation:
                 os.environ["PYTEST_CURRENT_TEST"] = original_env
 
     @patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary")
-    async def test_validate_chrome_version_configuration_chrome_pre_136(
-        self, mock_detect:Mock, scraper:WebScrapingMixin
-    ) -> None:
+    async def test_validate_chrome_version_configuration_chrome_pre_136(self, mock_detect:Mock, scraper:WebScrapingMixin) -> None:
         """Test Chrome pre-136 validation (no special requirements)."""
         # Setup mocks
         mock_detect.return_value = ChromeVersionInfo("120.0.6099.109", 120, "Chrome")
@@ -121,11 +117,7 @@ class TestWebScrapingMixinChromeVersionValidation:
     @patch("kleinanzeigen_bot.utils.chrome_version_detector.detect_chrome_version_from_binary")
     @patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_remote_debugging")
     async def test_validate_chrome_version_logs_remote_detection(
-        self,
-        mock_remote:Mock,
-        mock_binary:Mock,
-        scraper:WebScrapingMixin,
-        caplog:pytest.LogCaptureFixture
+        self, mock_remote:Mock, mock_binary:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture
     ) -> None:
         """When a remote browser responds, the detected version should be logged."""
         mock_remote.return_value = ChromeVersionInfo("136.0.6778.0", 136, "Chrome")
@@ -134,17 +126,14 @@ class TestWebScrapingMixinChromeVersionValidation:
         scraper.browser_config.binary_location = "/path/to/chrome"
         caplog.set_level("DEBUG")
 
-        with patch.dict(os.environ, {}, clear = True), \
-                patch.object(scraper, "_check_port_with_retry", return_value = True):
+        with patch.dict(os.environ, {}, clear = True), patch.object(scraper, "_check_port_with_retry", return_value = True):
             await scraper._validate_chrome_version_configuration()
 
         assert "Detected version from existing browser" in caplog.text
         mock_remote.assert_called_once()
 
     @patch("kleinanzeigen_bot.utils.chrome_version_detector.detect_chrome_version_from_binary")
-    async def test_validate_chrome_version_configuration_no_binary_location(
-        self, mock_detect:Mock, scraper:WebScrapingMixin
-    ) -> None:
+    async def test_validate_chrome_version_configuration_no_binary_location(self, mock_detect:Mock, scraper:WebScrapingMixin) -> None:
         """Test Chrome version validation when no binary location is set."""
         # Configure scraper without binary location
         scraper.browser_config.binary_location = None
@@ -204,15 +193,10 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
         """Test Chrome version diagnostics with binary detection."""
         # Setup mocks
         mock_get_diagnostic.return_value = {
-            "binary_detection": {
-                "version_string": "136.0.6778.0",
-                "major_version": 136,
-                "browser_name": "Chrome",
-                "is_chrome_136_plus": True
-            },
+            "binary_detection": {"version_string": "136.0.6778.0", "major_version": 136, "browser_name": "Chrome", "is_chrome_136_plus": True},
             "remote_detection": None,
             "chrome_136_plus_detected": True,
-            "recommendations": []
+            "recommendations": [],
         }
         mock_validate.return_value = (True, "")
 
@@ -230,7 +214,7 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
             scraper._diagnose_chrome_version_issues(9222)
 
             # Verify logs
-            assert "Chrome version from binary: Chrome 136.0.6778.0 (major: 136)" in caplog.text
+            assert "Chrome version from binary: 136.0.6778.0 (major: 136)" in caplog.text
             assert "Chrome 136+ detected - security validation required" in caplog.text
 
             # Verify mocks were called
@@ -255,14 +239,9 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
         # Setup mocks
         mock_get_diagnostic.return_value = {
             "binary_detection": None,
-            "remote_detection": {
-                "version_string": "136.0.6778.0",
-                "major_version": 136,
-                "browser_name": "Chrome",
-                "is_chrome_136_plus": True
-            },
+            "remote_detection": {"version_string": "136.0.6778.0", "major_version": 136, "browser_name": "Chrome", "is_chrome_136_plus": True},
             "chrome_136_plus_detected": True,
-            "recommendations": []
+            "recommendations": [],
         }
         mock_validate.return_value = (False, "Chrome 136+ requires --user-data-dir")
 
@@ -285,27 +264,17 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
             assert "Chrome 136+ configuration validation failed" in caplog.text
 
             # Verify validation was called
-            mock_validate.assert_called_once_with(
-                ["--remote-debugging-port=9222"],
-                None
-            )
+            mock_validate.assert_called_once_with(["--remote-debugging-port=9222"], None)
         finally:
             # Restore environment
             if original_env:
                 os.environ["PYTEST_CURRENT_TEST"] = original_env
 
     @patch("kleinanzeigen_bot.utils.web_scraping_mixin.get_chrome_version_diagnostic_info")
-    def test_diagnose_chrome_version_issues_no_detection(
-        self, mock_get_diagnostic:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture
-    ) -> None:
+    def test_diagnose_chrome_version_issues_no_detection(self, mock_get_diagnostic:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
         """Test Chrome version diagnostics with no detection."""
         # Setup mocks
-        mock_get_diagnostic.return_value = {
-            "binary_detection": None,
-            "remote_detection": None,
-            "chrome_136_plus_detected": False,
-            "recommendations": []
-        }
+        mock_get_diagnostic.return_value = {"binary_detection": None, "remote_detection": None, "chrome_136_plus_detected": False, "recommendations": []}
 
         # Configure scraper
         scraper.browser_config.binary_location = "/path/to/chrome"
@@ -334,15 +303,10 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
         """Test Chrome version diagnostics with Chrome 136+ recommendations."""
         # Setup mocks
         mock_get_diagnostic.return_value = {
-            "binary_detection": {
-                "version_string": "136.0.6778.0",
-                "major_version": 136,
-                "browser_name": "Chrome",
-                "is_chrome_136_plus": True
-            },
+            "binary_detection": {"version_string": "136.0.6778.0", "major_version": 136, "browser_name": "Chrome", "is_chrome_136_plus": True},
             "remote_detection": None,
             "chrome_136_plus_detected": True,
-            "recommendations": []
+            "recommendations": [],
         }
 
         # Configure scraper
@@ -377,11 +341,11 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
                 "version_string": "120.0.6099.109",
                 "major_version": 120,
                 "browser_name": "Chrome",
-                "is_chrome_136_plus": False  # This triggers the else branch (lines 832-849)
+                "is_chrome_136_plus": False,  # This triggers the else branch (lines 832-849)
             },
             "remote_detection": None,  # Ensure this is None to avoid other branches
             "chrome_136_plus_detected": False,  # Ensure this is False to avoid recommendations
-            "recommendations": []
+            "recommendations": [],
         }
 
         # Configure scraper
@@ -420,14 +384,9 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
         # Setup mocks
         mock_get_diagnostic.return_value = {
             "binary_detection": None,
-            "remote_detection": {
-                "version_string": "136.0.6778.0",
-                "major_version": 136,
-                "browser_name": "Chrome",
-                "is_chrome_136_plus": True
-            },
+            "remote_detection": {"version_string": "136.0.6778.0", "major_version": 136, "browser_name": "Chrome", "is_chrome_136_plus": True},
             "chrome_136_plus_detected": True,
-            "recommendations": []
+            "recommendations": [],
         }
         mock_validate.return_value = (True, "")  # This triggers the else branch (line 846)
 
@@ -451,7 +410,7 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
             # Verify validation was called with correct arguments
             mock_validate.assert_called_once_with(
                 ["--remote-debugging-port=9222", "--user-data-dir=/tmp/chrome-debug"],  # noqa: S108
-                "/tmp/chrome-debug"  # noqa: S108
+                "/tmp/chrome-debug",  # noqa: S108
             )
         finally:
             # Restore environment
@@ -469,9 +428,7 @@ class TestWebScrapingMixinIntegration:
 
     @patch.object(WebScrapingMixin, "_validate_chrome_version_configuration")
     @patch.object(WebScrapingMixin, "get_compatible_browser")
-    async def test_create_browser_session_calls_chrome_validation(
-        self, mock_get_browser:Mock, mock_validate:Mock, scraper:WebScrapingMixin
-    ) -> None:
+    async def test_create_browser_session_calls_chrome_validation(self, mock_get_browser:Mock, mock_validate:Mock, scraper:WebScrapingMixin) -> None:
         """Test that create_browser_session calls Chrome version validation."""
         # Setup mocks
         mock_get_browser.return_value = "/path/to/chrome"
@@ -493,9 +450,7 @@ class TestWebScrapingMixinIntegration:
 
     @patch.object(WebScrapingMixin, "_diagnose_chrome_version_issues")
     @patch.object(WebScrapingMixin, "get_compatible_browser")
-    def test_diagnose_browser_issues_calls_chrome_diagnostics(
-        self, mock_get_browser:Mock, mock_diagnose:Mock, scraper:WebScrapingMixin
-    ) -> None:
+    def test_diagnose_browser_issues_calls_chrome_diagnostics(self, mock_get_browser:Mock, mock_diagnose:Mock, scraper:WebScrapingMixin) -> None:
         """Test that diagnose_browser_issues calls Chrome version diagnostics."""
         # Setup mocks
         mock_get_browser.return_value = "/path/to/chrome"
@@ -521,9 +476,7 @@ class TestWebScrapingMixinIntegration:
 
         # Mock Chrome version detection to return pre-136 version
         with patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary") as mock_detect:
-            mock_detect.return_value = ChromeVersionInfo(
-                "120.0.6099.109", 120, "Chrome"
-            )
+            mock_detect.return_value = ChromeVersionInfo("120.0.6099.109", 120, "Chrome")
 
             # Temporarily unset PYTEST_CURRENT_TEST to allow validation to run
             original_env = os.environ.get("PYTEST_CURRENT_TEST")

@@ -294,7 +294,7 @@ max-branches   = 45     # max. number of branch for function / method body (R091
 max-locals     = 30     # max. number of local vars for function / method body (R0914)
 max-returns    = 15     # max. number of return / yield for function / method body (R0911)
 max-statements = 150    # max. number of statements in function / method body (R0915)
-max-public-methods = 27 # max. number of public methods for a class (R0904)
+max-public-methods = 25 # max. number of public methods for a class (R0904)
 # max-positional-arguments = 5  # max. number of positional args for function / method (R0917)
 
 

@@ -549,7 +549,7 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     " -> Unexpected error during browser version validation, skipping: %s": " -> Unerwarteter Fehler bei Browser-Versionsvalidierung, wird übersprungen: %s"
 
   _diagnose_chrome_version_issues:
-    "(info) %s version from binary: %s %s (major: %d)": "(Info) %s-Version von Binärdatei: %s %s (Hauptversion: %d)"
+    "(info) %s version from binary: %s (major: %d)": "(Info) %s-Version von Binärdatei: %s (Hauptversion: %d)"
     "(info) %s version from remote debugging: %s %s (major: %d)": "(Info) %s-Version von Remote-Debugging: %s %s (Hauptversion: %d)"
     "(info) %s 136+ detected - security validation required": "(Info) %s 136+ erkannt - Sicherheitsvalidierung erforderlich"
     "(info) %s pre-136 detected - no special security requirements": "(Info) %s vor 136 erkannt - keine besonderen Sicherheitsanforderungen"
