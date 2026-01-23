@@ -1091,7 +1091,7 @@ class WebScrapingMixin:
         # From the Inputfield, get the attribute "aria-controls" which POINTS to the Dropdown ul #id:
         dropdown_id = input_field.attrs.get("aria-controls")
         if not dropdown_id:
-            LOG.error(_("Combobox input field does not have 'aria-controls' attribute."))
+            LOG.error("Combobox input field does not have 'aria-controls' attribute.")
             raise TimeoutError(_("Combobox missing aria-controls attribute"))
 
         dropdown_elem = await self.web_find(By.ID, dropdown_id, timeout = timeout)
@@ -1131,7 +1131,7 @@ class WebScrapingMixin:
         }}
         """)
         if not ok:
-            LOG.error(_("No matching option found in combobox: '%s'"), selected_value)
+            LOG.error("No matching option found in combobox: '%s'", selected_value)
             raise TimeoutError(_("No matching option found in combobox: '%s'") % selected_value)
 
         await self.web_sleep()
