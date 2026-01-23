@@ -616,3 +616,21 @@ kleinanzeigen_bot/model/update_check_state.py:
     "Interval too short: %s. Minimum interval is 1d. Using default interval for this run.": "Intervall zu kurz: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
     "Invalid interval format or unsupported unit: %s. Using default interval for this run.": "Ungültiges Intervallformat oder nicht unterstützte Einheit: %s. Es wird das Standardintervall für diesen Durchlauf verwendet."
     "Negative interval: %s. Minimum interval is 1d. Using default interval for this run.": "Negatives Intervall: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
+
+#################################################
+kleinanzeigen_bot/utils/xdg_paths.py:
+#################################################
+  _ensure_directory:
+    "Failed to create %s %s: %s": "Fehler beim Erstellen von %s %s: %s"
+  detect_installation_mode:
+    "Detected installation mode: %s": "Erkannter Installationsmodus: %s"
+    "No existing installation found": "Keine bestehende Installation gefunden"
+  prompt_installation_mode:
+    "Non-interactive mode detected, defaulting to portable installation": "Nicht-interaktiver Modus erkannt, Standard-Installation: portabel"
+    "Choose installation type:": "Installationstyp wählen:"
+    "[1] Portable (current directory)": "[1] Portabel (aktuelles Verzeichnis)"
+    "[2] System-wide (XDG directories)": "[2] Systemweit (XDG-Verzeichnisse)"
+    "Enter 1 or 2: ": "1 oder 2 eingeben: "
+    "Defaulting to portable installation mode": "Standard-Installationsmodus: portabel"
+    "User selected installation mode: %s": "Benutzer hat Installationsmodus gewählt: %s"
+    "Invalid choice. Please enter 1 or 2.": "Ungültige Auswahl. Bitte 1 oder 2 eingeben."
