@@ -65,7 +65,7 @@ class AdDefaults(ContextualModel):
     type:Literal["OFFER", "WANTED"] = "OFFER"
     description:DescriptionAffixes | None = None
     description_prefix:str | None = Field(default = None, description = "prefix for the ad description")
-    description_suffix:str | None = Field(default = None, description = " suffix for the ad description")
+    description_suffix:str | None = Field(default = None, description = "suffix for the ad description")
     price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] = "NEGOTIABLE"
     auto_price_reduction:AutoPriceReductionConfig = Field(default_factory = AutoPriceReductionConfig, description = "automatic price reduction configuration")
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] = "SHIPPING"
