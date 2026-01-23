@@ -641,6 +641,31 @@ class TestKleinanzeigenBotArgParsing:
             test_bot.parse_args(["script.py", "help", "version"])
         assert exc_info.value.code == 2
 
+    def test_parse_args_explicit_flags(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Test that explicit flags are set when --config and --logfile options are provided."""
+        config_path = tmp_path / "custom_config.yaml"
+        log_path = tmp_path / "custom.log"
+
+        # Test --config flag sets config_explicitly_provided
+        test_bot.parse_args(["script.py", "--config", str(config_path), "help"])
+        assert test_bot.config_explicitly_provided is True
+        assert str(config_path.absolute()) == test_bot.config_file_path
+
+        # Reset for next test
+        test_bot.config_explicitly_provided = False
+
+        # Test --logfile flag sets log_file_explicitly_provided
+        test_bot.parse_args(["script.py", "--logfile", str(log_path), "help"])
+        assert test_bot.log_file_explicitly_provided is True
+        assert str(log_path.absolute()) == test_bot.log_file_path
+
+        # Test both flags together
+        test_bot.config_explicitly_provided = False
+        test_bot.log_file_explicitly_provided = False
+        test_bot.parse_args(["script.py", "--config", str(config_path), "--logfile", str(log_path), "help"])
+        assert test_bot.config_explicitly_provided is True
+        assert test_bot.log_file_explicitly_provided is True
+
 
 class TestKleinanzeigenBotCommands:
     """Tests for command execution."""
