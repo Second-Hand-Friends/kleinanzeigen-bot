@@ -993,7 +993,7 @@ class WebScrapingMixin:
             valid_response_codes = [valid_response_codes]
         ensure(
             response["statusCode"] in valid_response_codes,
-            f'Invalid response "{response["statusCode"]} response["statusMessage"]" received for HTTP {method} to {url}',
+            f'Invalid response "{response["statusCode"]} {response["statusMessage"]}" received for HTTP {method} to {url}',
         )
         return response
 
