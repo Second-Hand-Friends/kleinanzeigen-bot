@@ -457,6 +457,9 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     " -> Browser profile name: %s": " -> Browser-Profilname: %s"
     " -> Browser user data dir: %s": " -> Browser-Benutzerdatenverzeichnis: %s"
     " -> Custom Browser argument: %s": " -> Benutzerdefiniertes Browser-Argument: %s"
+    "Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir.": "Ignoriere leeres --user-data-dir= Argument; verwende konfiguriertes user_data_dir."
+    "Configured browser.user_data_dir (%s) does not match --user-data-dir argument (%s); using the argument value.": "Konfiguriertes browser.user_data_dir (%s) stimmt nicht mit --user-data-dir Argument (%s) überein; verwende Argument-Wert."
+    "Remote debugging detected, but browser configuration looks invalid: %s": "Remote-Debugging erkannt, aber Browser-Konfiguration scheint ungültig: %s"
     " -> Setting chrome prefs [%s]...": " -> Setze Chrome-Einstellungen [%s]..."
     " -> Adding Browser extension: [%s]": " -> Füge Browser-Erweiterung hinzu: [%s]"
     "Failed to connect to browser. This error often occurs when:": "Fehler beim Verbinden mit dem Browser. Dieser Fehler tritt häufig auf, wenn:"
@@ -546,8 +549,8 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     " -> Unexpected error during browser version validation, skipping: %s": " -> Unerwarteter Fehler bei Browser-Versionsvalidierung, wird übersprungen: %s"
 
   _diagnose_chrome_version_issues:
-    "(info) %s version from binary: %s %s (major: %d)": "(Info) %s-Version von Binärdatei: %s %s (Hauptversion: %d)"
-    "(info) %s version from remote debugging: %s %s (major: %d)": "(Info) %s-Version von Remote-Debugging: %s %s (Hauptversion: %d)"
+    "(info) %s version from binary: %s (major: %d)": "(Info) %s-Version von Binärdatei: %s (Hauptversion: %d)"
+    "(info) %s version from remote debugging: %s (major: %d)": "(Info) %s-Version von Remote-Debugging: %s (Hauptversion: %d)"
     "(info) %s 136+ detected - security validation required": "(Info) %s 136+ erkannt - Sicherheitsvalidierung erforderlich"
     "(info) %s pre-136 detected - no special security requirements": "(Info) %s vor 136 erkannt - keine besonderen Sicherheitsanforderungen"
     "(info) Remote %s 136+ detected - validating configuration": "(Info) Remote %s 136+ erkannt - validiere Konfiguration"

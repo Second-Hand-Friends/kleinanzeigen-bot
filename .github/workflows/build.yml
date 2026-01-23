@@ -172,10 +172,11 @@ jobs:
         set -eux
 
         case "${{ matrix.os }}" in
-           ubuntu-*)
-              sudo apt-get install --no-install-recommends -y xvfb
-              xvfb-run pdm run itest:cov -vv
-              ;;
+            ubuntu-*)
+               sudo apt-get install --no-install-recommends -y xvfb
+               # Run tests INSIDE xvfb context
+               xvfb-run bash -c 'pdm run itest:cov -vv'
+               ;;
            *) pdm run itest:cov -vv
               ;;
         esac
