@@ -184,24 +184,18 @@ jobs:
         case "${{ matrix.os }}" in
            ubuntu-*)
               sudo apt-get install --no-install-recommends -y xvfb
-              # Warm up browser INSIDE xvfb context with correct detection order
+              # Warm up browser OUTSIDE xvfb context to avoid process conflicts
               # Browser detection mirrors get_compatible_browser() in src/kleinanzeigen_bot/utils/web_scraping_mixin.py:566-571
-               xvfb-run bash -c '
-                browser_path=$(which chromium || which chromium-browser || which google-chrome || true)
-                if [[ -n "$browser_path" && -x "$browser_path" ]]; then
-                  echo "Warming up browser: $browser_path"
-                  "$browser_path" --headless --disable-gpu --no-sandbox --dump-dom about:blank 2>/dev/null || true
-                  sleep 2
-                  echo "[DIAGNOSTIC] Cleaning up warm-up processes..."
-                  pkill -9 chromium || true
-                  pkill -9 chrome || true
-                  rm -rf .temp/browser-profile/SingletonLock 2>/dev/null || true
-                  rm -rf .temp/browser-profile/lockfile 2>/dev/null || true
-                  sleep 1
-                  echo "[DIAGNOSTIC] Cleanup complete, starting tests..."
-                fi
-                pdm run itest:cov -vv
-              '
+              browser_path=$(which chromium || which chromium-browser || which google-chrome || true)
+              if [[ -n "$browser_path" && -x "$browser_path" ]]; then
+                echo "Warming up browser: $browser_path"
+                "$browser_path" --headless --disable-gpu --no-sandbox --dump-dom about:blank 2>/dev/null || true
+                sleep 2
+                pkill -9 chromium || true
+                sleep 1
+              fi
+              # Run tests INSIDE xvfb context
+              xvfb-run bash -c 'pdm run itest:cov -vv'
               ;;
            *) pdm run itest:cov -vv
               ;;
