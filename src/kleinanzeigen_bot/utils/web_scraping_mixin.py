@@ -343,7 +343,7 @@ class WebScrapingMixin:
                     self.browser_config.user_data_dir,
                     user_data_dir_from_args,
                 )
-        if not effective_user_data_dir:
+        if not effective_user_data_dir and not is_test_environment:
             effective_user_data_dir = str(xdg_paths.get_browser_profile_path(self._installation_mode))
         self.browser_config.user_data_dir = effective_user_data_dir
 
