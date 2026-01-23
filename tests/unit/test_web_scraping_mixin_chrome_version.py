@@ -259,7 +259,7 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
             scraper._diagnose_chrome_version_issues(9222)
 
             # Verify logs
-            assert "Chrome version from remote debugging: Chrome 136.0.6778.0 (major: 136)" in caplog.text
+            assert "(info) Chrome version from remote debugging: 136.0.6778.0 (major: 136)" in caplog.text
             assert "Remote Chrome 136+ detected - validating configuration" in caplog.text
             assert "Chrome 136+ configuration validation failed" in caplog.text
 

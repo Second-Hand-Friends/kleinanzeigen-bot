@@ -888,7 +888,7 @@ class TestKleinanzeigenBotAdDeletion:
     async def test_delete_ad_by_title(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
         """Test deleting an ad by title."""
         test_bot.page = MagicMock()
-        test_bot.page.evaluate = AsyncMock(return_value = {"statusCode": 200, "content": "{}"})
+        test_bot.page.evaluate = AsyncMock(return_value = {"statusCode": 200, "statusMessage": "OK", "content": "{}"})
         test_bot.page.sleep = AsyncMock()
 
         # Use minimal config since we only need title for deletion by title
@@ -916,7 +916,7 @@ class TestKleinanzeigenBotAdDeletion:
     async def test_delete_ad_by_id(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
         """Test deleting an ad by ID."""
         test_bot.page = MagicMock()
-        test_bot.page.evaluate = AsyncMock(return_value = {"statusCode": 200, "content": "{}"})
+        test_bot.page.evaluate = AsyncMock(return_value = {"statusCode": 200, "statusMessage": "OK", "content": "{}"})
         test_bot.page.sleep = AsyncMock()
 
         # Create config with ID for deletion by ID
@@ -943,7 +943,7 @@ class TestKleinanzeigenBotAdDeletion:
     async def test_delete_ad_by_id_with_non_string_csrf_token(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
         """Test deleting an ad by ID with non-string CSRF token to cover str() conversion."""
         test_bot.page = MagicMock()
-        test_bot.page.evaluate = AsyncMock(return_value = {"statusCode": 200, "content": "{}"})
+        test_bot.page.evaluate = AsyncMock(return_value = {"statusCode": 200, "statusMessage": "OK", "content": "{}"})
         test_bot.page.sleep = AsyncMock()
 
         # Create config with ID for deletion by ID
