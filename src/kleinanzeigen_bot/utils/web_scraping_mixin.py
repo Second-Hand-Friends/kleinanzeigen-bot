@@ -217,11 +217,13 @@ class WebScrapingMixin:
         LOG.info(" -> Browser binary location: %s", self.browser_config.binary_location)
 
         has_remote_debugging = any(arg.startswith("--remote-debugging-port=") for arg in self.browser_config.arguments)
+        is_test_environment = bool(os.environ.get("PYTEST_CURRENT_TEST"))
 
         if (
             not (self.browser_config.user_data_dir and self.browser_config.user_data_dir.strip())
             and not _has_non_empty_user_data_dir_arg(self.browser_config.arguments)
             and not has_remote_debugging
+            and not is_test_environment
         ):
             self.browser_config.user_data_dir = str(xdg_paths.get_browser_profile_path(self._installation_mode))
 
