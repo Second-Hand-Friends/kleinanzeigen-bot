@@ -65,7 +65,7 @@ class AdDefaults(ContextualModel):
     type:Literal["OFFER", "WANTED"] = "OFFER"
     description:DescriptionAffixes | None = None
     description_prefix:str | None = Field(default = None, description = "prefix for the ad description")
-    description_suffix:str | None = Field(default = None, description = " suffix for the ad description")
+    description_suffix:str | None = Field(default = None, description = "suffix for the ad description")
     price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] = "NEGOTIABLE"
     auto_price_reduction:AutoPriceReductionConfig = Field(default_factory = AutoPriceReductionConfig, description = "automatic price reduction configuration")
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] = "SHIPPING"
@@ -91,8 +91,10 @@ class AdDefaults(ContextualModel):
 
 
 class DownloadConfig(ContextualModel):
-    include_all_matching_shipping_options:bool = Field(default = False,
-     description = "if true, all shipping options matching the package size will be included")
+    include_all_matching_shipping_options:bool = Field(
+        default = False,
+        description = "if true, all shipping options matching the package size will be included",
+    )
     excluded_shipping_options:list[str] = Field(default_factory = list, description = "list of shipping options to exclude, e.g. ['DHL_2', 'DHL_5']")
     folder_name_max_length:int = Field(default = 100, ge = 10, le = 255, description = "maximum length for folder names when downloading ads (default: 100)")
     rename_existing_folders:bool = Field(default = False, description = "if true, rename existing folders without titles to include titles (default: false)")

@@ -1271,8 +1271,7 @@ class WebScrapingMixin:
             if diagnostic_info["remote_detection"]:
                 remote_info = diagnostic_info["remote_detection"]
                 LOG.info(
-                    "(info) %s version from remote debugging: %s %s (major: %d)",
-                    remote_info["browser_name"],
+                    "(info) %s version from remote debugging: %s (major: %d)",
                     remote_info["browser_name"],
                     remote_info["version_string"],
                     remote_info["major_version"],
