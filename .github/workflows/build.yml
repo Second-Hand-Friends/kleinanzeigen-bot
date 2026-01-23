@@ -167,16 +167,6 @@ jobs:
       run: pdm run utest:cov -vv
 
 
-    - name: "Warm up browser"
-      if: startsWith(matrix.os, 'macos')
-      run: |
-        # Launch browser briefly to warm up OS security subsystems and reduce first-launch latency
-        browser_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        if [[ -x "$browser_path" ]]; then
-          "$browser_path" --headless --disable-gpu --dump-dom about:blank 2>/dev/null || true
-        fi
-
-
     - name: Run integration tests
       run: |
         set -eux
