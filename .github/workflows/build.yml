@@ -184,19 +184,6 @@ jobs:
         case "${{ matrix.os }}" in
             ubuntu-*)
                sudo apt-get install --no-install-recommends -y xvfb
-               # Warm up browser OUTSIDE xvfb context using a temporary profile
-               # Browser detection mirrors get_compatible_browser() in src/kleinanzeigen_bot/utils/web_scraping_mixin.py:566-571
-               browser_path=$(which chromium || which chromium-browser || which google-chrome || true)
-               if [[ -n "$browser_path" && -x "$browser_path" ]]; then
-                 echo "Warming up browser: $browser_path"
-                 # Use a separate temp profile for warm-up to avoid conflicts with test profile
-                 "$browser_path" --headless --disable-gpu --no-sandbox --user-data-dir=/tmp/warmup-profile --dump-dom about:blank 2>/dev/null || true
-                 sleep 2
-                 pkill -9 chromium || true
-                 sleep 1
-                 # Clean up the temporary warm-up profile
-                 rm -rf /tmp/warmup-profile || true
-               fi
                # Run tests INSIDE xvfb context
                xvfb-run bash -c 'pdm run itest:cov -vv'
                ;;
