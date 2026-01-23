@@ -1189,7 +1189,11 @@ class TestAdExtractorDownload:
                 extractor,
                 "_extract_contact_from_ad_page",
                 new_callable = AsyncMock,
-                return_value = ContactPartial(name = "Test", zipcode = "12345", location = "Berlin"),
+                return_value = ContactPartial(
+                    name = "Test",
+                    zipcode = "12345",
+                    location = "Berlin",
+                ),
             ),
         ):
             ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
@@ -1249,7 +1253,11 @@ class TestAdExtractorDownload:
                 extractor,
                 "_extract_contact_from_ad_page",
                 new_callable = AsyncMock,
-                return_value = ContactPartial(name = "Test", zipcode = "12345", location = "Berlin"),
+                return_value = ContactPartial(
+                    name = "Test",
+                    zipcode = "12345",
+                    location = "Berlin",
+                ),
             ),
         ):
             ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
@@ -1311,7 +1319,11 @@ class TestAdExtractorDownload:
                 extractor,
                 "_extract_contact_from_ad_page",
                 new_callable = AsyncMock,
-                return_value = ContactPartial(name = "Test", zipcode = "12345", location = "Berlin"),
+                return_value = ContactPartial(
+                    name = "Test",
+                    zipcode = "12345",
+                    location = "Berlin",
+                ),
             ),
         ):
             ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
@@ -1370,7 +1382,11 @@ class TestAdExtractorDownload:
                 extractor,
                 "_extract_contact_from_ad_page",
                 new_callable = AsyncMock,
-                return_value = ContactPartial(name = "Test", zipcode = "12345", location = "Berlin"),
+                return_value = ContactPartial(
+                    name = "Test",
+                    zipcode = "12345",
+                    location = "Berlin",
+                ),
             ),
         ):
             ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
