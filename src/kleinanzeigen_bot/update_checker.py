@@ -31,7 +31,7 @@ colorama.init()
 class UpdateChecker:
     """Checks for updates to the bot."""
 
-    def __init__(self, config: "Config", installation_mode: str | xdg_paths.InstallationMode = "portable") -> None:
+    def __init__(self, config:"Config", installation_mode:str | xdg_paths.InstallationMode = "portable") -> None:
         """Initialize the update checker.
 
         Args:
@@ -55,7 +55,7 @@ class UpdateChecker:
         """Return the effective timeout for HTTP calls."""
         return self.config.timeouts.effective("update_check")
 
-    def _get_commit_hash(self, version: str) -> str | None:
+    def _get_commit_hash(self, version:str) -> str | None:
         """Extract the commit hash from a version string.
 
         Args:
@@ -68,7 +68,7 @@ class UpdateChecker:
             return version.split("+")[1]
         return None
 
-    def _resolve_commitish(self, commitish: str) -> tuple[str | None, datetime | None]:
+    def _resolve_commitish(self, commitish:str) -> tuple[str | None, datetime | None]:
         """Resolve a commit-ish to a full commit hash and date.
 
         Args:
@@ -80,7 +80,7 @@ class UpdateChecker:
         try:
             response = requests.get(
                 f"https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/commits/{commitish}",
-                timeout=self._request_timeout(),
+                timeout = self._request_timeout(),
             )
             response.raise_for_status()
             data = response.json()
@@ -96,7 +96,7 @@ class UpdateChecker:
             logger.warning(_("Could not resolve commit '%s': %s"), commitish, e)
             return None, None
 
-    def _get_short_commit_hash(self, commit: str) -> str:
+    def _get_short_commit_hash(self, commit:str) -> str:
         """Get the short version of a commit hash.
 
         Args:
@@ -107,7 +107,7 @@ class UpdateChecker:
         """
         return commit[:7]
 
-    def _commits_match(self, local_commit: str, release_commit: str) -> bool:
+    def _commits_match(self, local_commit:str, release_commit:str) -> bool:
         """Determine whether two commits refer to the same hash.
 
         This accounts for short vs. full hashes (e.g. 7 chars vs. 40 chars).
@@ -120,7 +120,7 @@ class UpdateChecker:
             return True
         return len(release_commit) < len(local_commit) and local_commit.startswith(release_commit)
 
-    def check_for_updates(self, *, skip_interval_check: bool = False) -> None:
+    def check_for_updates(self, *, skip_interval_check:bool = False) -> None:
         """Check for updates to the bot.
 
         Args:
@@ -147,7 +147,7 @@ class UpdateChecker:
         try:
             if self.config.update_check.channel == "latest":
                 # Use /releases/latest endpoint for stable releases
-                response = requests.get("https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases/latest", timeout=self._request_timeout())
+                response = requests.get("https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases/latest", timeout = self._request_timeout())
                 response.raise_for_status()
                 release = response.json()
                 # Defensive: ensure it's not a prerelease
@@ -156,7 +156,7 @@ class UpdateChecker:
                     return
             elif self.config.update_check.channel == "preview":
                 # Use /releases endpoint and select the most recent prerelease
-                response = requests.get("https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases", timeout=self._request_timeout())
+                response = requests.get("https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases", timeout = self._request_timeout())
                 response.raise_for_status()
                 releases = response.json()
                 # Find the most recent prerelease
