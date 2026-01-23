@@ -487,6 +487,13 @@
           "title": "Sms Verification",
           "type": "number"
         },
+        "email_verification": {
+          "default": 4.0,
+          "description": "Timeout for eMail verification prompts.",
+          "minimum": 0.1,
+          "title": "Email Verification",
+          "type": "number"
+        },
         "gdpr_prompt": {
           "default": 10.0,
           "description": "Timeout for GDPR/consent dialogs.",
