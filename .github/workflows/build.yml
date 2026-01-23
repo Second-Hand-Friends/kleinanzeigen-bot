@@ -182,21 +182,23 @@ jobs:
         set -eux
 
         case "${{ matrix.os }}" in
-           ubuntu-*)
-              sudo apt-get install --no-install-recommends -y xvfb
-              # Warm up browser OUTSIDE xvfb context to avoid process conflicts
-              # Browser detection mirrors get_compatible_browser() in src/kleinanzeigen_bot/utils/web_scraping_mixin.py:566-571
-              browser_path=$(which chromium || which chromium-browser || which google-chrome || true)
-              if [[ -n "$browser_path" && -x "$browser_path" ]]; then
-                echo "Warming up browser: $browser_path"
-                "$browser_path" --headless --disable-gpu --no-sandbox --dump-dom about:blank 2>/dev/null || true
-                sleep 2
-                pkill -9 chromium || true
-                sleep 1
-              fi
-              # Run tests INSIDE xvfb context
-              xvfb-run bash -c 'pdm run itest:cov -vv'
-              ;;
+            ubuntu-*)
+               sudo apt-get install --no-install-recommends -y xvfb
+               # Warm up browser OUTSIDE xvfb context to avoid process conflicts
+               # Browser detection mirrors get_compatible_browser() in src/kleinanzeigen_bot/utils/web_scraping_mixin.py:566-571
+               browser_path=$(which chromium || which chromium-browser || which google-chrome || true)
+               if [[ -n "$browser_path" && -x "$browser_path" ]]; then
+                 echo "Warming up browser: $browser_path"
+                 "$browser_path" --headless --disable-gpu --no-sandbox --dump-dom about:blank 2>/dev/null || true
+                 sleep 2
+                 pkill -9 chromium || true
+                 sleep 1
+                 # Clean up any lock files from warm-up to prevent conflicts
+                 rm -rf .temp/browser-profile/SingletonLock .temp/browser-profile/SingletonSocket .temp/browser-profile/SingletonCookie || true
+               fi
+               # Run tests INSIDE xvfb context
+               xvfb-run bash -c 'pdm run itest:cov -vv'
+               ;;
            *) pdm run itest:cov -vv
               ;;
         esac
