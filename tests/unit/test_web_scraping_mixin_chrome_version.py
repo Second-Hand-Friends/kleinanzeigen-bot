@@ -494,3 +494,68 @@ class TestWebScrapingMixinIntegration:
                 # Restore environment
                 if original_env:
                     os.environ["PYTEST_CURRENT_TEST"] = original_env
+
+    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary")
+    async def test_validate_chrome_136_configuration_with_whitespace_user_data_dir(
+        self, mock_detect:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test Chrome 136+ validation correctly handles whitespace-only user_data_dir."""
+        # Setup mocks
+        mock_detect.return_value = ChromeVersionInfo("136.0.6778.0", 136, "Chrome")
+
+        # Configure scraper with whitespace-only user_data_dir
+        scraper.browser_config.binary_location = "/path/to/chrome"
+        scraper.browser_config.arguments = ["--remote-debugging-port=9222"]
+        scraper.browser_config.user_data_dir = "   "  # Only whitespace
+
+        # Temporarily unset PYTEST_CURRENT_TEST to allow validation to run
+        original_env = os.environ.get("PYTEST_CURRENT_TEST")
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            del os.environ["PYTEST_CURRENT_TEST"]
+
+        try:
+            # Test validation should fail because whitespace-only is treated as empty
+            await scraper._validate_chrome_version_configuration()
+
+            # Verify detection was called
+            assert mock_detect.call_count == 1
+
+            # Verify error was logged
+            assert "Chrome 136+ configuration validation failed" in caplog.text
+            assert "Chrome 136+ requires --user-data-dir" in caplog.text
+        finally:
+            # Restore environment
+            if original_env:
+                os.environ["PYTEST_CURRENT_TEST"] = original_env
+
+    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.detect_chrome_version_from_binary")
+    async def test_validate_chrome_136_configuration_with_valid_user_data_dir(
+        self, mock_detect:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test Chrome 136+ validation passes with valid user_data_dir."""
+        # Setup mocks
+        mock_detect.return_value = ChromeVersionInfo("136.0.6778.0", 136, "Chrome")
+
+        # Configure scraper with valid user_data_dir
+        scraper.browser_config.binary_location = "/path/to/chrome"
+        scraper.browser_config.arguments = ["--remote-debugging-port=9222"]
+        scraper.browser_config.user_data_dir = "/tmp/valid-profile"  # noqa: S108
+
+        # Temporarily unset PYTEST_CURRENT_TEST to allow validation to run
+        original_env = os.environ.get("PYTEST_CURRENT_TEST")
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            del os.environ["PYTEST_CURRENT_TEST"]
+
+        try:
+            # Test validation should pass
+            await scraper._validate_chrome_version_configuration()
+
+            # Verify detection was called
+            assert mock_detect.call_count == 1
+
+            # Verify success was logged
+            assert "Chrome 136+ configuration validation passed" in caplog.text
+        finally:
+            # Restore environment
+            if original_env:
+                os.environ["PYTEST_CURRENT_TEST"] = original_env

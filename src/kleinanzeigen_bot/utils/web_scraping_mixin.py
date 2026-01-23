@@ -1216,7 +1216,7 @@ class WebScrapingMixin:
         """
         # Check if user-data-dir is specified in arguments or configuration
         has_user_data_dir_arg = any(arg.startswith("--user-data-dir=") for arg in self.browser_config.arguments)
-        has_user_data_dir_config = self.browser_config.user_data_dir is not None and self.browser_config.user_data_dir.strip()
+        has_user_data_dir_config = self.browser_config.user_data_dir is not None and bool(self.browser_config.user_data_dir.strip())
 
         if not has_user_data_dir_arg and not has_user_data_dir_config:
             error_message = (
