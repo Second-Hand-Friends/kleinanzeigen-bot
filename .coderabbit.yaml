@@ -87,7 +87,6 @@ reviews:
         13. Use type hints for all function parameters and return values
         14. Use structured logging with context and appropriate log levels.
         15. Log message strings should be plain English without `_()` (TranslatingLogger handles translation); wrap non-log user-facing strings with `_()` and add translations
-        15. Log message strings should be plain English without `_()` (TranslatingLogger handles translation); wrap non-log user-facing strings with `_()` and add translations
     - path: "tests/**/*.py"
       instructions: |
         TESTING RULES:
