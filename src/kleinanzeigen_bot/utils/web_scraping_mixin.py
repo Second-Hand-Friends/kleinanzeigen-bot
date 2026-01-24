@@ -232,7 +232,7 @@ class WebScrapingMixin:
             try:
                 await self._validate_chrome_version_configuration()
             except AssertionError as exc:
-                LOG.warning(_("Remote debugging detected, but browser configuration looks invalid: %s"), exc)
+                LOG.warning("Remote debugging detected, but browser configuration looks invalid: %s", exc)
         else:
             await self._validate_chrome_version_configuration()
 
@@ -323,7 +323,7 @@ class WebScrapingMixin:
             if browser_arg.startswith("--user-data-dir="):
                 raw = browser_arg.split("=", maxsplit = 1)[1].strip().strip('"').strip("'")
                 if not raw:
-                    LOG.warning(_("Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir."))
+                    LOG.warning("Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir.")
                     continue
                 user_data_dir_from_args = raw
                 continue
@@ -339,7 +339,7 @@ class WebScrapingMixin:
             )
             if arg_path is None or cfg_path is None or arg_path != cfg_path:
                 LOG.warning(
-                    _("Configured browser.user_data_dir (%s) does not match --user-data-dir argument (%s); using the argument value."),
+                    "Configured browser.user_data_dir (%s) does not match --user-data-dir argument (%s); using the argument value.",
                     self.browser_config.user_data_dir,
                     user_data_dir_from_args,
                 )
