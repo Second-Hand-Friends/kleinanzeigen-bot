@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 # CodeRabbit Configuration for Kleinanzeigen Bot
 # Maintains project-specific rules for English code and translation system
 
@@ -147,8 +148,10 @@ reviews:
       enabled: true
 
   finishing_touches:
-    docstrings: false
-    unit_tests: false
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
 
 # =============================================================================
 # KNOWLEDGE BASE
