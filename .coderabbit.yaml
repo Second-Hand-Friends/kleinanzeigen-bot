@@ -7,7 +7,7 @@
 # =============================================================================
 
 language: "en"
-tone_instructions: "Be strict about English-only code and translation system usage. Non-code and comments may be in german. Focus on simple, maintainable solutions. Avoid unnecessary complexity and abstractions."
+tone_instructions: "Be strict about English-only code and translation system usage. Non-code may be in german. Focus on simple, maintainable solutions. Avoid unnecessary complexity and abstractions."
 enable_free_tier: true
 
 # =============================================================================
