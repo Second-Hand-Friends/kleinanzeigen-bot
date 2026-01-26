@@ -59,11 +59,17 @@ kleinanzeigen_bot/__init__.py:
     "Captcha recognized - auto-restart enabled, abort run...": "Captcha erkannt - Auto-Neustart aktiviert, Durchlauf wird beendet..."
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
 
+  _capture_login_detection_diagnostics_if_enabled:
+    "# Login detection returned UNKNOWN. Browser is paused for manual inspection.": "# Login-Erkennung ergab UNKNOWN. Browser ist zur manuellen Prüfung angehalten."
+    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
+
   login:
     "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
     "Current page URL after opening homepage: %s": "Aktuelle Seiten-URL nach dem Öffnen der Startseite: %s"
     "Already logged in as [%s]. Skipping login.": "Bereits eingeloggt als [%s]. Überspringe Anmeldung."
     "Opening login page...": "Öffne Anmeldeseite..."
+    "Login state is UNKNOWN - cannot determine if already logged in. Skipping login attempt.": "Login-Status ist UNKNOWN - kann nicht bestimmt werden, ob bereits eingeloggt ist. Überspringe Anmeldeversuch."
+    "Login state is UNKNOWN after first login attempt - cannot determine login status. Aborting login process.": "Login-Status ist UNKNOWN nach dem ersten Anmeldeversuch - kann Login-Status nicht bestimmen. Breche Anmeldeprozess ab."
     "First login attempt did not succeed, trying second login attempt": "Erster Anmeldeversuch war nicht erfolgreich, versuche zweiten Anmeldeversuch"
     "Second login attempt succeeded": "Zweiter Anmeldeversuch erfolgreich"
     "Second login attempt also failed - login may not have succeeded": "Zweiter Anmeldeversuch ebenfalls fehlgeschlagen - Anmeldung möglicherweise nicht erfolgreich"
@@ -75,6 +81,7 @@ kleinanzeigen_bot/__init__.py:
     "Login detected via #user-email element": "Login erkannt über #user-email Element"
     "Timeout waiting for #user-email element after %.1fs": "Timeout beim Warten auf #user-email Element nach %.1fs"
     "No login detected - neither .mr-medium nor #user-email found with username": "Kein Login erkannt - weder .mr-medium noch #user-email mit Benutzername gefunden"
+    "No login detected - DOM elements not found and server probe returned %s": "Kein Login erkannt - DOM-Elemente nicht gefunden und Server-Probe ergab %s"
 
   handle_after_login_logic:
     "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
@@ -592,6 +599,8 @@ kleinanzeigen_bot/model/config_model.py:
     "amount must be specified when auto_price_reduction is enabled": "amount muss angegeben werden, wenn auto_price_reduction aktiviert ist"
     "min_price must be specified when auto_price_reduction is enabled": "min_price muss angegeben werden, wenn auto_price_reduction aktiviert ist"
     "Percentage reduction amount must not exceed %s": "Prozentuale Reduktionsmenge darf %s nicht überschreiten"
+  _validate_pause_requires_capture:
+    "pause_on_login_detection_failure requires login_detection_capture to be enabled": "pause_on_login_detection_failure erfordert, dass login_detection_capture aktiviert ist"
 
 #################################################
 kleinanzeigen_bot/model/ad_model.py:

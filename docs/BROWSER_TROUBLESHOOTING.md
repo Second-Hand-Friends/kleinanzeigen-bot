@@ -78,20 +78,48 @@ The bot will also provide specific instructions on how to fix your configuration
 - Intermittent (50/50) login detection behavior
 - More common with profiles unused for 20+ days
 
+**How login detection works:**
+The bot checks your login status using a fast server request first, with a fallback to checking page elements if needed.
+
+The bot uses a **server-side auth probe** as the primary method to detect login state:
+
+1. **Auth probe (preferred)**: Sends a GET request to `{root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT`
+   - Returns `LOGGED_IN` if the response is HTTP 200 with valid JSON containing `"ads"` key
+   - Returns `LOGGED_OUT` if response is HTTP 401/403 or HTML contains login markers
+   - Returns `UNKNOWN` on timeouts, assertion failures, or unexpected response bodies
+
+2. **DOM fallback**: Only used when the auth probe returns `UNKNOWN`
+   - Looks for `.mr-medium` element containing username
+   - Falls back to `#user-email` ID
+   - Uses the `login_detection` timeout (default: 10.0 seconds with effective timeout with retry/backoff)
+
+3. **Diagnostics capture**: If the state remains `UNKNOWN` and `diagnostics.login_detection_capture` is enabled
+     - Captures a screenshot and HTML dump for troubleshooting
+     - Pauses for manual inspection if `diagnostics.pause_on_login_detection_failure` is enabled and running in an interactive terminal
+
 **What `login_detection` controls:**
 - Maximum time (seconds) to wait for user profile DOM elements when checking if already logged in
-- Default: `10.0` seconds (provides ~22.5s total with retry/backoff)
+- Default: `10.0` seconds (effective timeout with retry/backoff)
 - Used at startup before attempting login
+- Note: With the new auth probe, this timeout only applies to the DOM fallback path
 
 **When to increase `login_detection`:**
 - Frequent unnecessary re-logins despite being authenticated
 - Slow or unstable network connection
 - Using browser profiles that haven't been active for weeks
 
+> **⚠️ PII Warning:** HTML dumps captured by diagnostics may contain your account email or other personally identifiable information. Review files in the diagnostics output directory before sharing them publicly.
+
 **Example:**
 ```yaml
 timeouts:
   login_detection: 15.0  # For slower networks or old sessions
+
+# Enable diagnostics when troubleshooting login detection issues
+diagnostics:
+  login_detection_capture: true  # Capture artifacts on UNKNOWN state
+  pause_on_login_detection_failure: true  # Pause for inspection (interactive only)
+  output_dir: "./diagnostics"  # Custom output directory (optional)
 ```
 
 ## Common Issues and Solutions

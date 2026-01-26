@@ -50,7 +50,7 @@
             }
           ],
           "default": null,
-          "description": " suffix for the ad description",
+          "description": "suffix for the ad description",
           "title": "Description Suffix"
         },
         "price_type": {
@@ -367,6 +367,37 @@
       "title": "DescriptionAffixes",
       "type": "object"
     },
+    "DiagnosticsConfig": {
+      "properties": {
+        "login_detection_capture": {
+          "default": false,
+          "description": "If true, capture diagnostics artifacts (screenshot + HTML) when login detection returns UNKNOWN.",
+          "title": "Login Detection Capture",
+          "type": "boolean"
+        },
+        "pause_on_login_detection_failure": {
+          "default": false,
+          "description": "If true, pause (interactive runs only) after capturing login detection diagnostics so the user can inspect the browser.",
+          "title": "Pause On Login Detection Failure",
+          "type": "boolean"
+        },
+        "output_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional output directory for diagnostics artifacts. If omitted, a safe default is used based on installation mode.",
+          "title": "Output Dir"
+        }
+      },
+      "title": "DiagnosticsConfig",
+      "type": "object"
+    },
     "DownloadConfig": {
       "properties": {
         "include_all_matching_shipping_options": {
@@ -624,6 +655,9 @@
   },
   "properties": {
     "ad_files": {
+      "default": [
+        "./**/ad_*.{json,yml,yaml}"
+      ],
       "description": "\nglob (wildcard) patterns to select ad configuration files\nif relative paths are specified, then they are relative to this configuration file\n",
       "items": {
         "type": "string"
@@ -668,6 +702,18 @@
     "timeouts": {
       "$ref": "#/$defs/TimeoutConfig",
       "description": "Centralized timeout configuration."
+    },
+    "diagnostics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DiagnosticsConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional failure-only diagnostics capture."
     }
   },
   "title": "Config",

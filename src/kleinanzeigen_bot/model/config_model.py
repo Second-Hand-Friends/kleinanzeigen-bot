@@ -183,6 +183,27 @@ class TimeoutConfig(ContextualModel):
         return base * self.multiplier * backoff
 
 
+class DiagnosticsConfig(ContextualModel):
+    login_detection_capture:bool = Field(
+        default = False,
+        description = "If true, capture diagnostics artifacts (screenshot + HTML) when login detection returns UNKNOWN.",
+    )
+    pause_on_login_detection_failure:bool = Field(
+        default = False,
+        description = "If true, pause (interactive runs only) after capturing login detection diagnostics so the user can inspect the browser.",
+    )
+    output_dir:str | None = Field(
+        default = None,
+        description = "Optional output directory for diagnostics artifacts. If omitted, a safe default is used based on installation mode.",
+    )
+
+    @model_validator(mode = "after")
+    def _validate_pause_requires_capture(self) -> "DiagnosticsConfig":
+        if self.pause_on_login_detection_failure and not self.login_detection_capture:
+            raise ValueError(_("pause_on_login_detection_failure requires login_detection_capture to be enabled"))
+        return self
+
+
 def _validate_glob_pattern(v:str) -> str:
     if not v.strip():
         raise ValueError("must be a non-empty, non-blank glob pattern")
@@ -194,13 +215,13 @@ GlobPattern = Annotated[str, AfterValidator(_validate_glob_pattern)]
 
 class Config(ContextualModel):
     ad_files:list[GlobPattern] = Field(
-        default_factory = lambda: ["./**/ad_*.{json,yml,yaml}"],
-        min_items = 1,
+        default = ["./**/ad_*.{json,yml,yaml}"],
+        min_length = 1,
         description = """
 glob (wildcard) patterns to select ad configuration files
 if relative paths are specified, then they are relative to this configuration file
 """,
-    )  # type: ignore[call-overload]
+    )
 
     ad_defaults:AdDefaults = Field(default_factory = AdDefaults, description = "Default values for ads, can be overwritten in each ad configuration file")
 
@@ -224,6 +245,7 @@ Example:
     captcha:CaptchaConfig = Field(default_factory = CaptchaConfig)
     update_check:UpdateCheckConfig = Field(default_factory = UpdateCheckConfig, description = "Update check configuration")
     timeouts:TimeoutConfig = Field(default_factory = TimeoutConfig, description = "Centralized timeout configuration.")
+    diagnostics:DiagnosticsConfig | None = Field(default = None, description = "Optional failure-only diagnostics capture.")
 
     def with_values(self, values:dict[str, Any]) -> Config:
         return Config.model_validate(dicts.apply_defaults(copy.deepcopy(values), defaults = self.model_dump()))
