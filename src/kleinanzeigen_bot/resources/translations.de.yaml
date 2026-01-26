@@ -335,7 +335,6 @@ kleinanzeigen_bot/utils/dicts.py:
 #################################################
   load_dict_if_exists:
     "Loading %s[%s]...": "Lade %s[%s]..."
-    " from ": " von "
     "Unsupported file type. The filename \"%s\" must end with *.json, *.yaml, or *.yml": "Nicht unterstützter Dateityp. Der Dateiname \"%s\" muss mit *.json, *.yaml oder *.yml enden"
   save_dict:
     "Saving [%s]...": "Speichere [%s]..."

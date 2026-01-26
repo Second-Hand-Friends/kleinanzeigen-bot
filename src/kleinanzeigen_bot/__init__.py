@@ -810,7 +810,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.info("Checking if already logged in...")
         await self.web_open(f"{self.root_url}")
         if getattr(self, "page", None) is not None:
-            LOG.debug(_("Current page URL after opening homepage: %s"), self.page.url)
+            LOG.debug("Current page URL after opening homepage: %s", self.page.url)
 
         state = await self.get_login_state()
         if state == LoginState.LOGGED_IN:
@@ -834,13 +834,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return
 
         if state == LoginState.LOGGED_OUT:
-            LOG.debug(_("First login attempt did not succeed, trying second login attempt"))
+            LOG.debug("First login attempt did not succeed, trying second login attempt")
             await self.fill_login_data_and_send()
             await self.handle_after_login_logic()
 
             state = await self.get_login_state()
             if state == LoginState.LOGGED_IN:
-                LOG.debug(_("Second login attempt succeeded"))
+                LOG.debug("Second login attempt succeeded")
             else:
                 LOG.warning(_("Second login attempt also failed - login may not have succeeded"))
 
@@ -1001,7 +1001,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         effective_timeout = self._effective_timeout("login_detection")
         username = self.config.login.username.lower()
         LOG.debug(
-            _("Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)"),
+            "Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)",
             login_check_timeout,
             effective_timeout,
         )
@@ -1010,29 +1010,29 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         try:
             user_info = await self.web_text(By.CLASS_NAME, "mr-medium", timeout = login_check_timeout)
             if username in user_info.lower():
-                LOG.debug(_("Login detected via .mr-medium element"))
+                LOG.debug("Login detected via .mr-medium element")
                 return True
         except TimeoutError:
-            LOG.debug(_("Timeout waiting for .mr-medium element after %.1fs"), effective_timeout)
+            LOG.debug("Timeout waiting for .mr-medium element after %.1fs", effective_timeout)
 
         # If standard element not found or didn't contain username, try the alternative
         try:
             user_info = await self.web_text(By.ID, "user-email", timeout = login_check_timeout)
             if username in user_info.lower():
-                LOG.debug(_("Login detected via #user-email element"))
+                LOG.debug("Login detected via #user-email element")
                 return True
         except TimeoutError:
-            LOG.debug(_("Timeout waiting for #user-email element after %.1fs"), effective_timeout)
+            LOG.debug("Timeout waiting for #user-email element after %.1fs", effective_timeout)
 
         if not include_probe:
-            LOG.debug(_("No login detected - neither .mr-medium nor #user-email found with username"))
+            LOG.debug("No login detected - neither .mr-medium nor #user-email found with username")
             return False
 
         state = await self._auth_probe_login_state()
         if state == LoginState.LOGGED_IN:
             return True
 
-        LOG.debug(_("No login detected - DOM elements not found and server probe returned %s"), state.name)
+        LOG.debug("No login detected - DOM elements not found and server probe returned %s", state.name)
         return False
 
     async def delete_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:

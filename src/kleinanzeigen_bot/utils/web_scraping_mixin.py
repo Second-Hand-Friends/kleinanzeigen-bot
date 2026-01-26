@@ -232,7 +232,7 @@ class WebScrapingMixin:
             try:
                 await self._validate_chrome_version_configuration()
             except AssertionError as exc:
-                LOG.warning(_("Remote debugging detected, but browser configuration looks invalid: %s"), exc)
+                LOG.warning("Remote debugging detected, but browser configuration looks invalid: %s", exc)
         else:
             await self._validate_chrome_version_configuration()
 
@@ -323,7 +323,7 @@ class WebScrapingMixin:
             if browser_arg.startswith("--user-data-dir="):
                 raw = browser_arg.split("=", maxsplit = 1)[1].strip().strip('"').strip("'")
                 if not raw:
-                    LOG.warning(_("Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir."))
+                    LOG.warning("Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir.")
                     continue
                 user_data_dir_from_args = raw
                 continue
@@ -339,7 +339,7 @@ class WebScrapingMixin:
             )
             if arg_path is None or cfg_path is None or arg_path != cfg_path:
                 LOG.warning(
-                    _("Configured browser.user_data_dir (%s) does not match --user-data-dir argument (%s); using the argument value."),
+                    "Configured browser.user_data_dir (%s) does not match --user-data-dir argument (%s); using the argument value.",
                     self.browser_config.user_data_dir,
                     user_data_dir_from_args,
                 )
@@ -1091,7 +1091,7 @@ class WebScrapingMixin:
         # From the Inputfield, get the attribute "aria-controls" which POINTS to the Dropdown ul #id:
         dropdown_id = input_field.attrs.get("aria-controls")
         if not dropdown_id:
-            LOG.error(_("Combobox input field does not have 'aria-controls' attribute."))
+            LOG.error("Combobox input field does not have 'aria-controls' attribute.")
             raise TimeoutError(_("Combobox missing aria-controls attribute"))
 
         dropdown_elem = await self.web_find(By.ID, dropdown_id, timeout = timeout)
@@ -1131,7 +1131,7 @@ class WebScrapingMixin:
         }}
         """)
         if not ok:
-            LOG.error(_("No matching option found in combobox: '%s'"), selected_value)
+            LOG.error("No matching option found in combobox: '%s'", selected_value)
             raise TimeoutError(_("No matching option found in combobox: '%s'") % selected_value)
 
         await self.web_sleep()

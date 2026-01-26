@@ -306,6 +306,38 @@ class TestAdExtractorShipping:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
+    async def test_extract_shipping_info_with_all_matching_options_no_match(self, test_extractor:AdExtractor) -> None:
+        """Test shipping extraction when include-all is enabled but no option matches the price."""
+        shipping_response = {
+            "content": json.dumps(
+                {
+                    "data": {
+                        "shippingOptionsResponse": {
+                            "options": [
+                                {"id": "DHL_001", "priceInEuroCent": 500, "packageSize": "SMALL"},
+                                {"id": "HERMES_001", "priceInEuroCent": 600, "packageSize": "SMALL"},
+                            ]
+                        }
+                    }
+                }
+            )
+        }
+
+        test_extractor.config.download = DownloadConfig.model_validate({"include_all_matching_shipping_options": True})
+
+        with (
+            patch.object(test_extractor, "page", MagicMock()),
+            patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"),
+            patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
+        ):
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
+
+            assert shipping_type == "SHIPPING"
+            assert costs == 4.89
+            assert options is None
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
     async def test_extract_shipping_info_with_excluded_options(self, test_extractor:AdExtractor) -> None:
         """Test shipping info extraction with excluded options."""
         shipping_response = {
@@ -370,8 +402,52 @@ class TestAdExtractorShipping:
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
 
-            assert shipping_type == "NOT_APPLICABLE"
+            assert shipping_type == "SHIPPING"
             assert costs == 4.89
+            assert options is None
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_shipping_info_with_no_matching_option(self, test_extractor:AdExtractor) -> None:
+        """Test shipping info extraction when price exists but NO matching option in API response."""
+        shipping_response = {
+            "content": json.dumps(
+                {
+                    "data": {
+                        "shippingOptionsResponse": {
+                            "options": [
+                                {"id": "DHL_001", "priceInEuroCent": 500, "packageSize": "SMALL"},
+                                {"id": "HERMES_001", "priceInEuroCent": 600, "packageSize": "SMALL"},
+                            ]
+                        }
+                    }
+                }
+            )
+        }
+
+        with (
+            patch.object(test_extractor, "page", MagicMock()),
+            patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 7,00 €"),
+            patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
+        ):
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
+
+            assert shipping_type == "SHIPPING"
+            assert costs == 7.0
+            assert options is None
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_shipping_info_timeout(self, test_extractor:AdExtractor) -> None:
+        """Test shipping info extraction when shipping element is missing (TimeoutError)."""
+        with (
+            patch.object(test_extractor, "page", MagicMock()),
+            patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
+        ):
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
+
+            assert shipping_type == "NOT_APPLICABLE"
+            assert costs is None
             assert options is None
 
 
