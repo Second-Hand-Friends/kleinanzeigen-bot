@@ -201,7 +201,9 @@ class DiagnosticsConfig(ContextualModel):
     )
     pause_on_login_detection_failure:bool = Field(
         default = False,
-        description = "If true, pause (interactive runs only) after capturing login detection diagnostics so the user can inspect the browser.",
+        description = "If true, pause (interactive runs only) after capturing login detection diagnostics "
+        "so that user can inspect the browser. Only takes effect when login_detection_capture is true. "
+        "The model validator _validate_pause_requires_capture raises if this precondition is not met.",
     )
     output_dir:str | None = Field(
         default = None,
@@ -227,6 +229,7 @@ GlobPattern = Annotated[str, AfterValidator(_validate_glob_pattern)]
 class Config(ContextualModel):
     ad_files:list[GlobPattern] = Field(
         default_factory = lambda: ["./**/ad_*.{json,yml,yaml}"],
+        json_schema_extra = {"default": ["./**/ad_*.{json,yml,yaml}"]},
         min_length = 1,
         description = """
 glob (wildcard) patterns to select ad configuration files

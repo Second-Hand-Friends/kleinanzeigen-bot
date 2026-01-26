@@ -883,8 +883,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def _auth_probe_login_state(self) -> LoginState:
         """Probe an auth-required endpoint to classify login state.
 
-        The probe is non-mutating (GET request). It is used as a fallback when DOM
-        signals are inconclusive.
+        The probe is non-mutating (GET request). It is used as a primary method by
+        get_login_state() to classify login state, falling back to DOM checks only when
+        the probe returns UNKNOWN.
         """
 
         url = f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"
