@@ -412,6 +412,7 @@ The bot uses a **server-side auth probe** to detect login state more reliably:
 This approach reduces unnecessary re-login attempts because the server-side probe is not affected by client-side rendering delays (SPA hydration) or A/B test variations, though it may return UNKNOWN and fall back to DOM-based checks.
 
 **Optional diagnostics** help troubleshoot login detection issues:
+
 - Enable `login_detection_capture` to capture screenshots and HTML dumps when state is `UNKNOWN`
 - Enable `pause_on_login_detection_failure` to pause the bot for manual inspection (interactive sessions only)
 - Use custom `output_dir` to specify where artifacts are saved
@@ -419,6 +420,7 @@ This approach reduces unnecessary re-login attempts because the server-side prob
 **⚠️ PII Warning:** HTML dumps may contain your account email or other personally identifiable information. Review files in the diagnostics output directory before sharing them publicly.
 
 **Output locations (default):**
+
 - **Portable mode**: `./.temp/diagnostics/`
 - **System-wide mode (XDG)**: `~/.cache/kleinanzeigen-bot/diagnostics/` (Linux) or `~/Library/Caches/kleinanzeigen-bot/diagnostics/` (macOS)
 - **Custom**: Path resolved relative to your `config.yaml` if `output_dir` is specified

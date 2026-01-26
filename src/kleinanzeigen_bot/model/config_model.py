@@ -226,7 +226,7 @@ GlobPattern = Annotated[str, AfterValidator(_validate_glob_pattern)]
 
 class Config(ContextualModel):
     ad_files:list[GlobPattern] = Field(
-        default = ["./**/ad_*.{json,yml,yaml}"],
+        default_factory = lambda: ["./**/ad_*.{json,yml,yaml}"],
         min_length = 1,
         description = """
 glob (wildcard) patterns to select ad configuration files
