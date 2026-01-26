@@ -411,13 +411,13 @@ The bot uses a **server-side auth probe** to detect login state more reliably:
 
 This approach reduces unnecessary re-login attempts because the server-side probe is not affected by client-side rendering delays (SPA hydration) or A/B test variations, though it may return UNKNOWN and fall back to DOM-based checks.
 
+**⚠️ PII Warning:** HTML dumps may contain your account email or other personally identifiable information. Review files in the diagnostics output directory before sharing them publicly.
+
 **Optional diagnostics** help troubleshoot login detection issues:
 
 - Enable `login_detection_capture` to capture screenshots and HTML dumps when state is `UNKNOWN`
 - Enable `pause_on_login_detection_failure` to pause the bot for manual inspection (interactive sessions only)
 - Use custom `output_dir` to specify where artifacts are saved
-
-**⚠️ PII Warning:** HTML dumps may contain your account email or other personally identifiable information. Review files in the diagnostics output directory before sharing them publicly.
 
 **Output locations (default):**
 

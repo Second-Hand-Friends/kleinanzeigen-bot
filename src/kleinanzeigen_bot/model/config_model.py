@@ -202,8 +202,7 @@ class DiagnosticsConfig(ContextualModel):
     pause_on_login_detection_failure:bool = Field(
         default = False,
         description = "If true, pause (interactive runs only) after capturing login detection diagnostics "
-        "so that user can inspect the browser. Only takes effect when login_detection_capture is true. "
-        "The model validator _validate_pause_requires_capture raises if this precondition is not met.",
+        "so that user can inspect the browser. Requires login_detection_capture to be enabled.",
     )
     output_dir:str | None = Field(
         default = None,
