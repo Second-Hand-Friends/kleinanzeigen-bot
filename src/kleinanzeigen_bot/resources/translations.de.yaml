@@ -112,6 +112,9 @@ kleinanzeigen_bot/__init__.py:
     " -> FAILED: Timeout while extending ad '%s': %s": " -> FEHLER: Zeitüberschreitung beim Verlängern der Anzeige '%s': %s"
     " -> FAILED: Could not persist extension for ad '%s': %s": " -> FEHLER: Verlängerung der Anzeige '%s' konnte nicht gespeichert werden: %s"
 
+  find_and_click_extend_button:
+    "Found extend button on page %s": "'Verlängern'-Button auf Seite %s gefunden"
+
   finalize_installation_mode:
     "Config file: %s": "Konfigurationsdatei: %s"
     "First run detected, prompting user for installation mode": "Erster Start erkannt, frage Benutzer nach Installationsmodus"
@@ -259,21 +262,11 @@ kleinanzeigen_bot/extract.py:
     "Failed to extract ad ID from URL '%s': %s": "Fehler beim Extrahieren der Anzeigen-ID aus der URL '%s': %s"
 
   extract_own_ads_urls:
-    "Ad list container #my-manageitems-adlist not found. Maybe no ads present?": "Anzeigenlistencontainer #my-manageitems-adlist nicht gefunden. Vielleicht sind keine Anzeigen vorhanden?"
-    "Multiple ad pages detected.": "Mehrere Anzeigenseiten erkannt."
-    "Next button found but is disabled. Assuming single effective page.": "Weiter-Button gefunden, aber deaktiviert. Es wird von einer einzelnen effektiven Seite ausgegangen."
-    "No \"Naechste\" button found within pagination. Assuming single page.": "Kein \"Nächste\"-Button in der Paginierung gefunden. Es wird von einer einzelnen Seite ausgegangen."
-    "No pagination controls found. Assuming single page.": "Keine Paginierungssteuerung gefunden. Es wird von einer einzelnen Seite ausgegangen."
-    "Assuming single page due to error during pagination check.": "Es wird von einer einzelnen Seite ausgegangen wegen eines Fehlers bei der Paginierungsprüfung."
-    "Navigating to next page...": "Navigiere zur nächsten Seite..."
-    "Last ad overview page explored (no enabled \"Naechste\" button found).": "Letzte Anzeigenübersichtsseite erkundet (kein aktivierter \"Nächste\"-Button gefunden)."
-    "No pagination controls found after scrolling/waiting. Assuming last page.": "Keine Paginierungssteuerung nach dem Scrollen/Warten gefunden. Es wird von der letzten Seite ausgegangen."
     "No ad URLs were extracted.": "Es wurden keine Anzeigen-URLs extrahiert."
+
+  extract_page_refs:
     "Could not find ad list container or items on page %s.": "Anzeigenlistencontainer oder Elemente auf Seite %s nicht gefunden."
-    "Error during pagination detection: %s": "Fehler bei der Paginierungserkennung: %s"
-    "Error during pagination navigation: %s": "Fehler bei der Paginierungsnavigation: %s"
     "Error extracting refs on page %s: %s": "Fehler beim Extrahieren der Referenzen auf Seite %s: %s"
-    "Extracting ads from page %s...": "Extrahiere Anzeigen von Seite %s..."
     "Found %s ad items on page %s.": "%s Anzeigen-Elemente auf Seite %s gefunden."
     "Successfully extracted %s refs from page %s.": "%s Referenzen von Seite %s erfolgreich extrahiert."
 
@@ -487,6 +480,15 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "Combobox input field does not have 'aria-controls' attribute.": "Das Eingabefeld der Combobox hat kein 'aria-controls'-Attribut."
     "Combobox missing aria-controls attribute": "Combobox fehlt aria-controls Attribut"
     "No matching option found in combobox: '%s'": "Keine passende Option in Combobox gefunden: '%s'"
+
+  _navigate_paginated_ad_overview:
+    "Ad list container not found. Maybe no ads present?": "Anzeigenlistencontainer nicht gefunden. Vielleicht sind keine Anzeigen vorhanden?"
+    "Multiple ad pages detected.": "Mehrere Anzeigenseiten erkannt."
+    "No pagination controls found. Assuming single page.": "Keine Paginierungssteuerung gefunden. Es wird von einer einzelnen Seite ausgegangen."
+    "Processing page %s...": "Verarbeite Seite %s..."
+    "Navigating to page %s...": "Navigiere zu Seite %s..."
+    "Last page reached (no enabled 'Nächste' button found).": "Letzte Seite erreicht (kein aktivierter 'Nächste'-Button gefunden)."
+    "No pagination controls found. Assuming last page.": "Keine Paginierungssteuerung gefunden. Es wird von der letzten Seite ausgegangen."
 
   close_browser_session:
     "Closing Browser session...": "Schließe Browser-Sitzung..."

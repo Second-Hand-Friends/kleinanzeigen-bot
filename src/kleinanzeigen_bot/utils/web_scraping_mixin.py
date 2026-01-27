@@ -969,6 +969,95 @@ class WebScrapingMixin:
         )
         await self.page.sleep(duration / 1_000)
 
+    async def _navigate_paginated_ad_overview(
+        self,
+        page_action:Callable[[int], Awaitable[bool]],
+        page_url:str = "https://www.kleinanzeigen.de/m-meine-anzeigen.html",
+        *,
+        max_pages:int = 10,
+    ) -> bool:
+        """
+        Navigate through paginated ad overview page, calling page_action on each page.
+
+        Args:
+            page_action: Async callable that receives current_page number and returns True if action succeeded/should stop
+            page_url: URL of the paginated overview page (default: kleinanzeigen ad management page)
+            max_pages: Maximum number of pages to navigate (safety limit)
+
+        Returns:
+            True if page_action returned True on any page, False otherwise
+
+        Example:
+            async def find_ad_callback(page_num: int) -> bool:
+                element = await self.web_find(By.XPATH, "//div[@id='my-ad']")
+                if element:
+                    await element.click()
+                    return True
+                return False
+
+            success = await self._navigate_paginated_ad_overview(find_ad_callback)
+        """
+        await self.web_open(page_url)
+        await self.web_sleep(2000, 3000)
+
+        # Check if ad list container exists
+        try:
+            _ = await self.web_find(By.ID, "my-manageitems-adlist")
+        except TimeoutError:
+            LOG.warning("Ad list container not found. Maybe no ads present?")
+            return False
+
+        # Check for pagination controls
+        multi_page = False
+        pagination_timeout = self._timeout("pagination_initial")
+        try:
+            pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout = pagination_timeout)
+            next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section)
+            if next_buttons:
+                enabled_next_buttons = [btn for btn in next_buttons if not btn.attrs.get("disabled")]
+                if enabled_next_buttons:
+                    multi_page = True
+                    LOG.info("Multiple ad pages detected.")
+        except TimeoutError:
+            LOG.info("No pagination controls found. Assuming single page.")
+
+        current_page = 1
+        while current_page <= max_pages:
+            LOG.info("Processing page %s...", current_page)
+
+            await self.web_scroll_page_down()
+            await self.web_sleep(2000, 3000)
+
+            if await page_action(current_page):
+                return True
+
+            if not multi_page:
+                break
+
+            follow_up_timeout = self._timeout("pagination_follow_up")
+            try:
+                pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout = follow_up_timeout)
+                next_button_element = None
+                possible_next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section)
+                for btn in possible_next_buttons:
+                    if not btn.attrs.get("disabled"):
+                        next_button_element = btn
+                        break
+
+                if next_button_element:
+                    LOG.info("Navigating to page %s...", current_page + 1)
+                    await next_button_element.click()
+                    await self.web_sleep(3000, 4000)
+                    current_page += 1
+                else:
+                    LOG.info("Last page reached (no enabled 'Nächste' button found).")
+                    break
+            except TimeoutError:
+                LOG.info("No pagination controls found. Assuming last page.")
+                break
+
+        return False
+
     async def web_request(self, url:str, method:str = "GET", valid_response_codes:int | Iterable[int] = 200, headers:dict[str, str] | None = None) -> Any:
         method = method.upper()
         LOG.debug(" -> HTTP %s [%s]...", method, url)

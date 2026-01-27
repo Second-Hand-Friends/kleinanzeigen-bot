@@ -999,15 +999,23 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.info("Extending ad '%s' (ID: %s)...", ad_cfg.title, ad_cfg.id)
 
         try:
-            # Navigate to ad management page
-            await self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
-
-            # Find and click "Verlängern" (extend) button for this ad
+            # Navigate to ad management page and find extend button across all pages
             extend_button_xpath = f'//li[@data-adid="{ad_cfg.id}"]//button[contains(., "Verlängern")]'
 
-            try:
-                await self.web_click(By.XPATH, extend_button_xpath)
-            except TimeoutError:
+            async def find_and_click_extend_button(page_num:int) -> bool:
+                """Try to find and click extend button on current page."""
+                try:
+                    extend_button = await self.web_find(By.XPATH, extend_button_xpath, timeout = self._timeout("quick_dom"))
+                    LOG.info("Found extend button on page %s", page_num)
+                    await extend_button.click()
+                    return True  # Success - stop pagination
+                except TimeoutError:
+                    LOG.debug("Extend button not found on page %s", page_num)
+                    return False  # Continue to next page
+
+            success = await self._navigate_paginated_ad_overview(find_and_click_extend_button, page_url = f"{self.root_url}/m-meine-anzeigen.html")
+
+            if not success:
                 LOG.error(" -> FAILED: Could not find extend button for ad ID %s", ad_cfg.id)
                 return False
 
