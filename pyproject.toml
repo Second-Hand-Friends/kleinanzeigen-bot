@@ -111,7 +111,8 @@ lint = { composite = ["lint:ruff", "lint:mypy", "lint:pyright"] }
 # Run unit tests only (exclude smoke and itest)
 utest = "python -m pytest --capture=tee-sys -m \"not itest and not smoke\""
 # Run integration tests only (exclude smoke)
-itest = "python -m pytest --capture=tee-sys -m \"itest and not smoke\""
+# Uses -n 0 to disable xdist parallelization - browser tests are flaky with parallel workers
+itest = "python -m pytest --capture=tee-sys -m \"itest and not smoke\" -n 0"
 # Run smoke tests only
 smoke = "python -m pytest --capture=tee-sys -m smoke"
 # Run all tests in order: unit, integration, smoke
@@ -126,7 +127,7 @@ test = { composite = ["utest", "itest", "smoke"] }
 "coverage:prepare" = { shell = "python scripts/coverage_helper.py prepare" }
 "test:cov"  = { composite = ["coverage:prepare", "utest:cov", "itest:cov", "smoke:cov", "coverage:combine"] }
 "utest:cov" = { shell = "python scripts/coverage_helper.py run .temp/.coverage-unit.sqlite .temp/coverage-unit.xml \"not itest and not smoke\"" }
-"itest:cov" = { shell = "python scripts/coverage_helper.py run .temp/.coverage-itest.sqlite .temp/coverage-integration.xml \"itest and not smoke\"" }
+"itest:cov" = { shell = "python scripts/coverage_helper.py run .temp/.coverage-itest.sqlite .temp/coverage-integration.xml \"itest and not smoke\" -n 0" }
 "smoke:cov" = { shell = "python scripts/coverage_helper.py run .temp/.coverage-smoke.sqlite .temp/coverage-smoke.xml smoke" }
 "coverage:combine" = { shell = "python scripts/coverage_helper.py combine .temp/.coverage-unit.sqlite .temp/.coverage-itest.sqlite .temp/.coverage-smoke.sqlite" }
 # Run all tests with coverage in a single invocation

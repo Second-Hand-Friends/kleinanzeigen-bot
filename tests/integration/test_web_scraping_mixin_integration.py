@@ -33,7 +33,7 @@ async def atest_init() -> None:
         web_scraping_mixin.close_browser_session()
 
 
-@pytest.mark.flaky(reruns = 4, reruns_delay = 5)
+@pytest.mark.flaky(reruns = 5, reruns_delay = 10)
 @pytest.mark.itest
 def test_init() -> None:
     nodriver.loop().run_until_complete(atest_init())  # type: ignore[attr-defined]

@@ -185,7 +185,7 @@
     "BrowserConfig": {
       "properties": {
         "arguments": {
-          "description": "See https://peter.sh/experiments/chromium-command-line-switches/",
+          "description": "See https://peter.sh/experiments/chromium-command-line-switches/. Browser profile path is auto-configured based on installation mode (portable/XDG).",
           "items": {
             "type": "string"
           },
@@ -227,8 +227,8 @@
               "type": "null"
             }
           ],
-          "default": ".temp/browser-profile",
-          "description": "See https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md",
+          "default": null,
+          "description": "See https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md. If not specified, defaults to XDG cache directory in XDG mode or .temp/browser-profile in portable mode.",
           "title": "User Data Dir"
         },
         "profile_name": {

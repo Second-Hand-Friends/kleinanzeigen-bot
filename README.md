@@ -248,6 +248,25 @@ Limitation of `download`: It's only possible to extract the cheapest given shipp
 
 All configuration files can be in YAML or JSON format.
 
+### Installation modes (portable vs. system-wide)
+
+On first run, the app may ask which installation mode to use. In non-interactive environments (CI/headless), it defaults to portable mode and will not prompt; `--config` and `--logfile` override only their specific paths, and do not change other mode-dependent paths or the chosen installation mode behavior.
+
+1. **Portable mode (recommended for most users, especially on Windows):**
+   - Stores config, logs, downloads, and state in the current directory
+   - No admin permissions required
+   - Easy backup/migration; works from USB drives
+
+2. **System-wide mode (advanced users / multi-user setups):**
+   - Stores files in OS-standard locations
+   - Cleaner directory structure; better separation from working directory
+   - Requires proper permissions for user data directories
+
+**OS notes (brief):**
+- **Windows:** System-wide uses AppData (Roaming/Local); portable keeps everything beside the `.exe`.
+- **Linux:** System-wide follows XDG Base Directory spec; portable stays in the current working directory.
+- **macOS:** System-wide uses `~/Library/Application Support/kleinanzeigen-bot` (and related dirs); portable stays in the current directory.
+
 ### <a name="main-config"></a>1) Main configuration
 
 When executing the app it by default looks for a `config.yaml` file in the current directory. If it does not exist it will be created automatically.

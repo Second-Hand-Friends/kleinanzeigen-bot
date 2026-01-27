@@ -107,7 +107,7 @@ jobs:
 
 
     - name: Git Checkout
-      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.0
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
       # https://github.com/actions/checkout
 
 
@@ -172,10 +172,11 @@ jobs:
         set -eux
 
         case "${{ matrix.os }}" in
-           ubuntu-*)
-              sudo apt-get install --no-install-recommends -y xvfb
-              xvfb-run pdm run itest:cov -vv
-              ;;
+            ubuntu-*)
+               sudo apt-get install --no-install-recommends -y xvfb
+               # Run tests INSIDE xvfb context
+               xvfb-run bash -c 'pdm run itest:cov -vv'
+               ;;
            *) pdm run itest:cov -vv
               ;;
         esac
@@ -298,7 +299,7 @@ jobs:
 
     steps:
     - name: Git Checkout # required to avoid https://docs.codecov.com/docs/error-reference#unusable-reports
-      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.0
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
       # https://github.com/actions/checkout
 
 
@@ -392,7 +393,7 @@ jobs:
 
     - name: Git Checkout
       # only required by "gh release create" to prevent "fatal: Not a git repository"
-      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.0
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
       # https://github.com/actions/checkout
       with:
         fetch-depth: 0

@@ -54,7 +54,7 @@ jobs:
 
 
     - name: Git Checkout
-      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.0
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
       # https://github.com/actions/checkout
       with:
         token: ${{ steps.generate_token.outputs.token }}
@@ -107,7 +107,7 @@ jobs:
 
 
     - name: Create PR
-      uses: peter-evans/create-pull-request@98357b18bf14b5342f975ff684046ec3b2a07725 # v7.0.5
+      uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v7.0.5
       # https://github.com/peter-evans/create-pull-request
       if: "${{ steps.update_deps.outputs.updates != '' }}"
       with:
