@@ -405,16 +405,16 @@ class TestExtendAdMethod:
         async def mock_web_find(selector_type:By, selector_value:str, **kwargs:Any) -> Element:
             find_call_count["count"] += 1
             # Ad list container (called by pagination helper)
-            if selector_type.name == "ID" and selector_value == "my-manageitems-adlist":
+            if selector_type == By.ID and selector_value == "my-manageitems-adlist":
                 return MagicMock()
             # Pagination section (called by pagination helper)
-            if selector_type.name == "CSS_SELECTOR" and selector_value == ".Pagination":
+            if selector_type == By.CSS_SELECTOR and selector_value == ".Pagination":
                 # Raise TimeoutError on first call (pagination detection) to indicate single page
                 if find_call_count["count"] == 2:
                     raise TimeoutError("No pagination")
                 return pagination_section
             # Extend button (called by find_and_click_extend_button callback)
-            if selector_type.name == "XPATH" and "Verlängern" in selector_value:
+            if selector_type == By.XPATH and "Verlängern" in selector_value:
                 return extend_button_mock
             raise TimeoutError(f"Unexpected find: {selector_type} {selector_value}")
 
