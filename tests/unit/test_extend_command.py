@@ -43,21 +43,21 @@ class TestExtendCommand:
     """Tests for the extend command functionality."""
 
     @pytest.mark.asyncio
-    async def test_run_extend_command_no_ads(self, test_bot: KleinanzeigenBot) -> None:
+    async def test_run_extend_command_no_ads(self, test_bot:KleinanzeigenBot) -> None:
         """Test running extend command with no ads."""
-        with patch.object(test_bot, "load_config"), patch.object(test_bot, "load_ads", return_value=[]), patch("kleinanzeigen_bot.UpdateChecker"):
+        with patch.object(test_bot, "load_config"), patch.object(test_bot, "load_ads", return_value = []), patch("kleinanzeigen_bot.UpdateChecker"):
             await test_bot.run(["script.py", "extend"])
             assert test_bot.command == "extend"
             assert test_bot.ads_selector == "all"
 
     @pytest.mark.asyncio
-    async def test_run_extend_command_with_specific_ids(self, test_bot: KleinanzeigenBot) -> None:
+    async def test_run_extend_command_with_specific_ids(self, test_bot:KleinanzeigenBot) -> None:
         """Test running extend command with specific ad IDs."""
         with (
             patch.object(test_bot, "load_config"),
-            patch.object(test_bot, "load_ads", return_value=[]),
-            patch.object(test_bot, "create_browser_session", new_callable=AsyncMock),
-            patch.object(test_bot, "login", new_callable=AsyncMock),
+            patch.object(test_bot, "load_ads", return_value = []),
+            patch.object(test_bot, "create_browser_session", new_callable = AsyncMock),
+            patch.object(test_bot, "login", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.UpdateChecker"),
         ):
             await test_bot.run(["script.py", "extend", "--ads=12345,67890"])
@@ -69,14 +69,14 @@ class TestExtendAdsMethod:
     """Tests for the extend_ads() method."""
 
     @pytest.mark.asyncio
-    async def test_extend_ads_skips_unpublished_ad(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any]) -> None:
+    async def test_extend_ads_skips_unpublished_ad(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]) -> None:
         """Test that extend_ads skips ads without an ID (unpublished)."""
         # Create ad without ID
         ad_config = base_ad_config_with_id.copy()
         ad_config["id"] = None
         ad_cfg = Ad.model_validate(ad_config)
 
-        with patch.object(test_bot, "web_request", new_callable=AsyncMock) as mock_request, patch.object(test_bot, "web_sleep", new_callable=AsyncMock):
+        with patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request, patch.object(test_bot, "web_sleep", new_callable = AsyncMock):
             mock_request.return_value = {"content": '{"ads": []}'}
 
             await test_bot.extend_ads([("test.yaml", ad_cfg, ad_config)])
@@ -85,11 +85,11 @@ class TestExtendAdsMethod:
             mock_request.assert_called_once()  # Only the API call to get published ads
 
     @pytest.mark.asyncio
-    async def test_extend_ads_skips_ad_not_in_published_list(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any]) -> None:
+    async def test_extend_ads_skips_ad_not_in_published_list(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]) -> None:
         """Test that extend_ads skips ads not found in the published ads API response."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
-        with patch.object(test_bot, "web_request", new_callable=AsyncMock) as mock_request, patch.object(test_bot, "web_sleep", new_callable=AsyncMock):
+        with patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request, patch.object(test_bot, "web_sleep", new_callable = AsyncMock):
             # Return empty published ads list
             mock_request.return_value = {"content": '{"ads": []}'}
 
@@ -99,7 +99,7 @@ class TestExtendAdsMethod:
             mock_request.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_extend_ads_skips_inactive_ad(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any]) -> None:
+    async def test_extend_ads_skips_inactive_ad(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]) -> None:
         """Test that extend_ads skips ads with state != 'active'."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
@@ -115,9 +115,9 @@ class TestExtendAdsMethod:
         }
 
         with (
-            patch.object(test_bot, "web_request", new_callable=AsyncMock) as mock_request,
-            patch.object(test_bot, "web_sleep", new_callable=AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable=AsyncMock) as mock_extend_ad,
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
         ):
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
 
@@ -127,7 +127,7 @@ class TestExtendAdsMethod:
             mock_extend_ad.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_extend_ads_skips_ad_without_enddate(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any]) -> None:
+    async def test_extend_ads_skips_ad_without_enddate(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]) -> None:
         """Test that extend_ads skips ads without endDate in API response."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
@@ -143,9 +143,9 @@ class TestExtendAdsMethod:
         }
 
         with (
-            patch.object(test_bot, "web_request", new_callable=AsyncMock) as mock_request,
-            patch.object(test_bot, "web_sleep", new_callable=AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable=AsyncMock) as mock_extend_ad,
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
         ):
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
 
@@ -155,20 +155,20 @@ class TestExtendAdsMethod:
             mock_extend_ad.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_extend_ads_skips_ad_outside_window(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any]) -> None:
+    async def test_extend_ads_skips_ad_outside_window(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]) -> None:
         """Test that extend_ads skips ads expiring more than 8 days in the future."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
         # Set end date to 30 days from now (outside 8-day window)
-        future_date = misc.now() + timedelta(days=30)
+        future_date = misc.now() + timedelta(days = 30)
         end_date_str = future_date.strftime("%d.%m.%Y")
 
         published_ads_json = {"ads": [{"id": 12345, "title": "Test Ad Title", "state": "active", "endDate": end_date_str}]}
 
         with (
-            patch.object(test_bot, "web_request", new_callable=AsyncMock) as mock_request,
-            patch.object(test_bot, "web_sleep", new_callable=AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable=AsyncMock) as mock_extend_ad,
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
         ):
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
 
@@ -178,20 +178,20 @@ class TestExtendAdsMethod:
             mock_extend_ad.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_extend_ads_extends_ad_within_window(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any]) -> None:
+    async def test_extend_ads_extends_ad_within_window(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]) -> None:
         """Test that extend_ads extends ads within the 8-day window."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
         # Set end date to 5 days from now (within 8-day window)
-        future_date = misc.now() + timedelta(days=5)
+        future_date = misc.now() + timedelta(days = 5)
         end_date_str = future_date.strftime("%d.%m.%Y")
 
         published_ads_json = {"ads": [{"id": 12345, "title": "Test Ad Title", "state": "active", "endDate": end_date_str}]}
 
         with (
-            patch.object(test_bot, "web_request", new_callable=AsyncMock) as mock_request,
-            patch.object(test_bot, "web_sleep", new_callable=AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable=AsyncMock) as mock_extend_ad,
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
         ):
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
             mock_extend_ad.return_value = True
@@ -202,20 +202,20 @@ class TestExtendAdsMethod:
             mock_extend_ad.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_extend_ads_no_eligible_ads(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any]) -> None:
+    async def test_extend_ads_no_eligible_ads(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]) -> None:
         """Test extend_ads when no ads are eligible for extension."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
         # Set end date to 30 days from now (outside window)
-        future_date = misc.now() + timedelta(days=30)
+        future_date = misc.now() + timedelta(days = 30)
         end_date_str = future_date.strftime("%d.%m.%Y")
 
         published_ads_json = {"ads": [{"id": 12345, "title": "Test Ad Title", "state": "active", "endDate": end_date_str}]}
 
         with (
-            patch.object(test_bot, "web_request", new_callable=AsyncMock) as mock_request,
-            patch.object(test_bot, "web_sleep", new_callable=AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable=AsyncMock) as mock_extend_ad,
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
         ):
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
 
@@ -225,7 +225,7 @@ class TestExtendAdsMethod:
             mock_extend_ad.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_extend_ads_handles_multiple_ads(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any]) -> None:
+    async def test_extend_ads_handles_multiple_ads(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]) -> None:
         """Test that extend_ads processes multiple ads correctly."""
         ad_cfg1 = Ad.model_validate(base_ad_config_with_id)
 
@@ -236,8 +236,8 @@ class TestExtendAdsMethod:
         ad_cfg2 = Ad.model_validate(ad_config2)
 
         # Set end dates - one within window, one outside
-        within_window = misc.now() + timedelta(days=5)
-        outside_window = misc.now() + timedelta(days=30)
+        within_window = misc.now() + timedelta(days = 5)
+        outside_window = misc.now() + timedelta(days = 30)
 
         published_ads_json = {
             "ads": [
@@ -247,9 +247,9 @@ class TestExtendAdsMethod:
         }
 
         with (
-            patch.object(test_bot, "web_request", new_callable=AsyncMock) as mock_request,
-            patch.object(test_bot, "web_sleep", new_callable=AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable=AsyncMock) as mock_extend_ad,
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
         ):
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
             mock_extend_ad.return_value = True
@@ -270,7 +270,7 @@ class TestExtendAdMethod:
     """
 
     @pytest.mark.asyncio
-    async def test_extend_ad_success(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any], tmp_path: Path) -> None:
+    async def test_extend_ad_success(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path) -> None:
         """Test successful ad extension."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
@@ -279,8 +279,8 @@ class TestExtendAdMethod:
         dicts.save_dict(str(ad_file), base_ad_config_with_id)
 
         with (
-            patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable=AsyncMock) as mock_paginate,
-            patch.object(test_bot, "web_click", new_callable=AsyncMock),
+            patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.misc.now") as mock_now,
         ):
             # Test mock datetime - timezone not relevant for timestamp formatting test
@@ -298,7 +298,7 @@ class TestExtendAdMethod:
             assert updated_config["updated_on"] == "2025-01-28T14:30:00"
 
     @pytest.mark.asyncio
-    async def test_extend_ad_button_not_found(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any], tmp_path: Path) -> None:
+    async def test_extend_ad_button_not_found(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path) -> None:
         """Test extend_ad when the Verlängern button is not found."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
@@ -306,7 +306,7 @@ class TestExtendAdMethod:
         ad_file = tmp_path / "test_ad.yaml"
         dicts.save_dict(str(ad_file), base_ad_config_with_id)
 
-        with patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable=AsyncMock) as mock_paginate:
+        with patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate:
             # Simulate button not found by having pagination return False (not found on any page)
             mock_paginate.return_value = False
 
@@ -316,7 +316,7 @@ class TestExtendAdMethod:
             assert mock_paginate.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_extend_ad_dialog_timeout(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any], tmp_path: Path) -> None:
+    async def test_extend_ad_dialog_timeout(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path) -> None:
         """Test extend_ad when the confirmation dialog times out (no dialog appears)."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
@@ -325,8 +325,8 @@ class TestExtendAdMethod:
         dicts.save_dict(str(ad_file), base_ad_config_with_id)
 
         with (
-            patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable=AsyncMock) as mock_paginate,
-            patch.object(test_bot, "web_click", new_callable=AsyncMock) as mock_click,
+            patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch("kleinanzeigen_bot.misc.now") as mock_now,
         ):
             # Test mock datetime - timezone not relevant for timestamp formatting test
@@ -343,7 +343,7 @@ class TestExtendAdMethod:
             assert result is True
 
     @pytest.mark.asyncio
-    async def test_extend_ad_exception_handling(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any], tmp_path: Path) -> None:
+    async def test_extend_ad_exception_handling(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path) -> None:
         """Test extend_ad propagates unexpected exceptions."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
@@ -351,15 +351,15 @@ class TestExtendAdMethod:
         ad_file = tmp_path / "test_ad.yaml"
         dicts.save_dict(str(ad_file), base_ad_config_with_id)
 
-        with patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable=AsyncMock) as mock_paginate:
+        with patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate:
             # Simulate unexpected exception during pagination
             mock_paginate.side_effect = Exception("Unexpected error")
 
-            with pytest.raises(Exception, match="Unexpected error"):
+            with pytest.raises(Exception, match = "Unexpected error"):
                 await test_bot.extend_ad(str(ad_file), ad_cfg, base_ad_config_with_id)
 
     @pytest.mark.asyncio
-    async def test_extend_ad_updates_yaml_file(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any], tmp_path: Path) -> None:
+    async def test_extend_ad_updates_yaml_file(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path) -> None:
         """Test that extend_ad correctly updates the YAML file with new timestamp."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
@@ -369,8 +369,8 @@ class TestExtendAdMethod:
         dicts.save_dict(str(ad_file), base_ad_config_with_id)
 
         with (
-            patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable=AsyncMock) as mock_paginate,
-            patch.object(test_bot, "web_click", new_callable=AsyncMock),
+            patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.misc.now") as mock_now,
         ):
             # Test mock datetime - timezone not relevant for timestamp formatting test
@@ -387,7 +387,7 @@ class TestExtendAdMethod:
             assert updated_config["updated_on"] == "2025-01-28T14:30:00"
 
     @pytest.mark.asyncio
-    async def test_extend_ad_with_web_mocks(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any], tmp_path: Path) -> None:
+    async def test_extend_ad_with_web_mocks(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path) -> None:
         """Test extend_ad with web-level mocks to exercise the find_and_click_extend_button callback."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
@@ -402,7 +402,7 @@ class TestExtendAdMethod:
 
         find_call_count = {"count": 0}
 
-        async def mock_web_find(selector_type: By, selector_value: str, **kwargs: Any) -> Element:
+        async def mock_web_find(selector_type:By, selector_value:str, **kwargs:Any) -> Element:
             find_call_count["count"] += 1
             # Ad list container (called by pagination helper)
             if selector_type.name == "ID" and selector_value == "my-manageitems-adlist":
@@ -419,13 +419,13 @@ class TestExtendAdMethod:
             raise TimeoutError(f"Unexpected find: {selector_type} {selector_value}")
 
         with (
-            patch.object(test_bot, "web_open", new_callable=AsyncMock),
-            patch.object(test_bot, "web_sleep", new_callable=AsyncMock),
-            patch.object(test_bot, "web_find", new_callable=AsyncMock, side_effect=mock_web_find),
-            patch.object(test_bot, "web_find_all", new_callable=AsyncMock, return_value=[]),
-            patch.object(test_bot, "web_scroll_page_down", new_callable=AsyncMock),
-            patch.object(test_bot, "web_click", new_callable=AsyncMock),
-            patch.object(test_bot, "_timeout", return_value=10),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = mock_web_find),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "_timeout", return_value = 10),
             patch("kleinanzeigen_bot.misc.now") as mock_now,
         ):
             # Test mock datetime - timezone not relevant for timestamp formatting test
@@ -446,20 +446,20 @@ class TestExtendEdgeCases:
     """Tests for edge cases and boundary conditions."""
 
     @pytest.mark.asyncio
-    async def test_extend_ads_exactly_8_days(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any]) -> None:
+    async def test_extend_ads_exactly_8_days(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]) -> None:
         """Test that ads expiring exactly in 8 days are eligible for extension."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
         # Set end date to exactly 8 days from now (boundary case)
-        future_date = misc.now() + timedelta(days=8)
+        future_date = misc.now() + timedelta(days = 8)
         end_date_str = future_date.strftime("%d.%m.%Y")
 
         published_ads_json = {"ads": [{"id": 12345, "title": "Test Ad Title", "state": "active", "endDate": end_date_str}]}
 
         with (
-            patch.object(test_bot, "web_request", new_callable=AsyncMock) as mock_request,
-            patch.object(test_bot, "web_sleep", new_callable=AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable=AsyncMock) as mock_extend_ad,
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
         ):
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
             mock_extend_ad.return_value = True
@@ -470,20 +470,20 @@ class TestExtendEdgeCases:
             mock_extend_ad.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_extend_ads_exactly_9_days(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any]) -> None:
+    async def test_extend_ads_exactly_9_days(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]) -> None:
         """Test that ads expiring in exactly 9 days are not eligible for extension."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
         # Set end date to exactly 9 days from now (just outside window)
-        future_date = misc.now() + timedelta(days=9)
+        future_date = misc.now() + timedelta(days = 9)
         end_date_str = future_date.strftime("%d.%m.%Y")
 
         published_ads_json = {"ads": [{"id": 12345, "title": "Test Ad Title", "state": "active", "endDate": end_date_str}]}
 
         with (
-            patch.object(test_bot, "web_request", new_callable=AsyncMock) as mock_request,
-            patch.object(test_bot, "web_sleep", new_callable=AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable=AsyncMock) as mock_extend_ad,
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
         ):
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
 
@@ -493,7 +493,7 @@ class TestExtendEdgeCases:
             mock_extend_ad.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_extend_ads_date_parsing_german_format(self, test_bot: KleinanzeigenBot, base_ad_config_with_id: dict[str, Any]) -> None:
+    async def test_extend_ads_date_parsing_german_format(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]) -> None:
         """Test that extend_ads correctly parses German date format (DD.MM.YYYY)."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
@@ -510,9 +510,9 @@ class TestExtendEdgeCases:
         }
 
         with (
-            patch.object(test_bot, "web_request", new_callable=AsyncMock) as mock_request,
-            patch.object(test_bot, "web_sleep", new_callable=AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable=AsyncMock) as mock_extend_ad,
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
             patch("kleinanzeigen_bot.misc.now") as mock_now,
         ):
             # Mock now() to return a date where 05.02.2026 would be within 8 days
