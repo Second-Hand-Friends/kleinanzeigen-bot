@@ -1050,7 +1050,7 @@ class WebScrapingMixin:
                     await self.web_sleep(3000, 4000)
                     current_page += 1
                 else:
-                    LOG.info("Last page reached (no enabled 'Nächste' button found).")
+                    LOG.info("Last page reached (no enabled 'Naechste' button found).")
                     break
             except TimeoutError:
                 LOG.info("No pagination controls found. Assuming last page.")

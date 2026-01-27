@@ -487,7 +487,7 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "No pagination controls found. Assuming single page.": "Keine Paginierungssteuerung gefunden. Es wird von einer einzelnen Seite ausgegangen."
     "Processing page %s...": "Verarbeite Seite %s..."
     "Navigating to page %s...": "Navigiere zu Seite %s..."
-    "Last page reached (no enabled 'Nächste' button found).": "Letzte Seite erreicht (kein aktivierter 'Nächste'-Button gefunden)."
+    "Last page reached (no enabled 'Naechste' button found).": "Letzte Seite erreicht (kein aktivierter 'Naechste'-Button gefunden)."
     "No pagination controls found. Assuming last page.": "Keine Paginierungssteuerung gefunden. Es wird von der letzten Seite ausgegangen."
 
   close_browser_session:
