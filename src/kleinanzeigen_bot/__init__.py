@@ -842,7 +842,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.warning("############################################")
             LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
             LOG.warning("############################################")
-            await ainput("Press ENTER when done...")
+            await ainput(_("Press ENTER when done..."))
         except TimeoutError:
             # No SMS verification prompt detected.
             pass
@@ -853,7 +853,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.warning("############################################")
             LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
             LOG.warning("############################################")
-            await ainput("Press ENTER when done...")
+            await ainput(_("Press ENTER when done..."))
         except TimeoutError:
             # No email verification prompt detected.
             pass
@@ -996,7 +996,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Process extensions
         success_count = 0
         for idx, (ad_file, ad_cfg, ad_cfg_orig, _published_ad) in enumerate(ads_to_extend, start = 1):
-            LOG.info(_("Processing %s/%s: '%s' from [%s]..."), idx, len(ads_to_extend), ad_cfg.title, ad_file)
+            LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ads_to_extend), ad_cfg.title, ad_file)
             if await self.extend_ad(ad_file, ad_cfg, ad_cfg_orig):
                 success_count += 1
             await self.web_sleep()
