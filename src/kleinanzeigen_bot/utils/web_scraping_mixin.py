@@ -979,6 +979,9 @@ class WebScrapingMixin:
         """
         Navigate through paginated ad overview page, calling page_action on each page.
 
+        This helper guarantees to return a boolean result and never propagates TimeoutError.
+        All timeout conditions are handled internally and logged appropriately.
+
         Args:
             page_action: Async callable that receives current_page number and returns True if action succeeded/should stop
             page_url: URL of the paginated overview page (default: kleinanzeigen ad management page)
@@ -997,7 +1000,12 @@ class WebScrapingMixin:
 
             success = await self._navigate_paginated_ad_overview(find_ad_callback)
         """
-        await self.web_open(page_url)
+        try:
+            await self.web_open(page_url)
+        except TimeoutError:
+            LOG.warning("Failed to open ad overview page at %s: timeout", page_url)
+            return False
+
         await self.web_sleep(2000, 3000)
 
         # Check if ad list container exists
@@ -1025,11 +1033,19 @@ class WebScrapingMixin:
         while current_page <= max_pages:
             LOG.info("Processing page %s...", current_page)
 
-            await self.web_scroll_page_down()
+            try:
+                await self.web_scroll_page_down()
+            except TimeoutError:
+                LOG.debug("Scroll timeout on page %s (non-critical, continuing)", current_page)
+
             await self.web_sleep(2000, 3000)
 
-            if await page_action(current_page):
-                return True
+            try:
+                if await page_action(current_page):
+                    return True
+            except TimeoutError:
+                LOG.warning("Page action timed out on page %s", current_page)
+                return False
 
             if not multi_page:
                 break

@@ -482,6 +482,9 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "No matching option found in combobox: '%s'": "Keine passende Option in Combobox gefunden: '%s'"
 
   _navigate_paginated_ad_overview:
+    "Failed to open ad overview page at %s: timeout": "Fehler beim Öffnen der Anzeigenübersichtsseite unter %s: Zeitüberschreitung"
+    "Scroll timeout on page %s (non-critical, continuing)": "Zeitüberschreitung beim Scrollen auf Seite %s (nicht kritisch, wird fortgesetzt)"
+    "Page action timed out on page %s": "Seitenaktion hat auf Seite %s eine Zeitüberschreitung erreicht"
     "Ad list container not found. Maybe no ads present?": "Anzeigenlistencontainer nicht gefunden. Vielleicht sind keine Anzeigen vorhanden?"
     "Multiple ad pages detected.": "Mehrere Anzeigenseiten erkannt."
     "No pagination controls found. Assuming single page.": "Keine Paginierungssteuerung gefunden. Es wird von einer einzelnen Seite ausgegangen."
