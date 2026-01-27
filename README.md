@@ -416,7 +416,7 @@ This approach reduces unnecessary re-login attempts because the server-side prob
 **Optional diagnostics** help troubleshoot login detection issues:
 
 - Enable `login_detection_capture` to capture screenshots and HTML dumps when state is `UNKNOWN`
-- Enable `pause_on_login_detection_failure` to pause the bot for manual inspection (interactive sessions only)
+- Enable `pause_on_login_detection_failure` to pause the bot for manual inspection (interactive sessions only; requires `login_detection_capture=true`)
 - Use custom `output_dir` to specify where artifacts are saved
 
 **Output locations (default):**
