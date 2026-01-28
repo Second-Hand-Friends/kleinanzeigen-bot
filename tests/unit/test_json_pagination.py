@@ -49,15 +49,31 @@ class TestJSONPagination:
 
     def test_coerce_page_number_with_none(self, bot:KleinanzeigenBot) -> None:
         """Test that None returns None."""
-        assert bot._coerce_page_number(None) is None
+        result = bot._coerce_page_number(None)
+        if result is not None:
+            pytest.fail(f"_coerce_page_number(None) expected None, got {result}")
 
     def test_coerce_page_number_with_invalid_types(self, bot:KleinanzeigenBot) -> None:
         """Test that invalid types return None."""
-        assert bot._coerce_page_number("invalid") is None
-        assert bot._coerce_page_number("") is None
-        assert bot._coerce_page_number([]) is None
-        assert bot._coerce_page_number({}) is None
-        assert bot._coerce_page_number(3.14) is None
+        result = bot._coerce_page_number("invalid")
+        if result is not None:
+            pytest.fail(f'_coerce_page_number("invalid") expected None, got {result}')
+
+        result = bot._coerce_page_number("")
+        if result is not None:
+            pytest.fail(f'_coerce_page_number("") expected None, got {result}')
+
+        result = bot._coerce_page_number([])
+        if result is not None:
+            pytest.fail(f"_coerce_page_number([]) expected None, got {result}")
+
+        result = bot._coerce_page_number({})
+        if result is not None:
+            pytest.fail(f"_coerce_page_number({{}}) expected None, got {result}")
+
+        result = bot._coerce_page_number(3.14)
+        if result is not None:
+            pytest.fail(f"_coerce_page_number(3.14) expected None, got {result}")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_single_page_no_paging(self, bot:KleinanzeigenBot) -> None:
@@ -150,9 +166,9 @@ class TestJSONPagination:
             # Should request page 1 first, then page 2
             assert mock_request.call_count == 2
             # Verify page parameters: first call should have page=1
-            mock_request.assert_any_call(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=1")
+            mock_request.assert_any_await(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=1")
             # Second call should have page=2
-            mock_request.assert_any_call(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=2")
+            mock_request.assert_any_await(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=2")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_mixed_field_names(self, bot:KleinanzeigenBot) -> None:

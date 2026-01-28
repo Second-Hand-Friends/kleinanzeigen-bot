@@ -525,12 +525,27 @@ class AdExtractor(WebScrapingMixin):
                 LOG.warning("Could not extract ad ID from URL: %s", self.page.url)
                 return None
 
+            # Helper function to safely coerce values to int or None
+            def _coerce_page_number(value:Any) -> int | None:
+                if value is None:
+                    return None
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    return None
+
             # Fetch the management JSON data using web_request with pagination support
             page = 1
+            MAX_PAGE_LIMIT = 100
 
             while True:
                 response = await self.web_request(f"https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page={page}")
-                json_data = json.loads(response["content"])
+
+                try:
+                    json_data = json.loads(response["content"])
+                except json.JSONDecodeError as ex:
+                    LOG.debug("Failed to parse JSON response on page %s: %s", page, ex)
+                    break
 
                 # Find the current ad in the ads list
                 if isinstance(json_data, dict) and "ads" in json_data:
@@ -547,15 +562,12 @@ class AdExtractor(WebScrapingMixin):
                 if not isinstance(paging, dict):
                     break
 
-                # Parse pagination info with explicit None checks (not truthy checks) to handle 0-based indexing
-                def _coerce_page_number(value:Any) -> int | None:
-                    if value is None:
-                        return None
-                    try:
-                        return int(value)
-                    except (TypeError, ValueError):
-                        return None
+                # Safety check: don't paginate beyond reasonable limit
+                if page > MAX_PAGE_LIMIT:
+                    LOG.warning("Stopping pagination after %s pages to avoid infinite loop", MAX_PAGE_LIMIT)
+                    break
 
+                # Parse pagination info with explicit None checks (not truthy checks) to handle 0-based indexing
                 # Support multiple field name variations
                 if paging.get("pageNum") is not None:
                     current_page_num = _coerce_page_number(paging.get("pageNum"))

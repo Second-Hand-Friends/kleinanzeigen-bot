@@ -1070,7 +1070,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         while True:
             response = await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page={page}")
-            json_data = json.loads(response["content"])
+
+            try:
+                json_data = json.loads(response["content"])
+            except json.JSONDecodeError as ex:
+                LOG.debug("Failed to parse JSON response on page %s: %s", page, ex)
+                break
 
             page_ads = json_data.get("ads", [])
             if isinstance(page_ads, list):
