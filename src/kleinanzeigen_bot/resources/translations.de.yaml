@@ -267,6 +267,7 @@ kleinanzeigen_bot/extract.py:
 
   extract_ad_id_from_ad_url:
     "Failed to extract ad ID from URL '%s': %s": "Fehler beim Extrahieren der Anzeigen-ID aus der URL '%s': %s"
+    "Stopping pagination after %s pages to avoid infinite loop": "Stoppe die Seitenaufschaltung nach %s Seiten, um eine Endlosschleife zu vermeiden"
 
   extract_own_ads_urls:
     "No ad URLs were extracted.": "Es wurden keine Anzeigen-URLs extrahiert."
