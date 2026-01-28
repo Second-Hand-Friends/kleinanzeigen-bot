@@ -674,7 +674,8 @@ class TestKleinanzeigenBotBasics:
         ):
             await test_bot.publish_ads(ad_cfgs)
 
-            web_request_mock.assert_awaited_once_with(f"{test_bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT")
+            # With pagination, the URL now includes page parameter
+            web_request_mock.assert_awaited_once_with(f"{test_bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=1")
             publish_ad_mock.assert_awaited_once_with("ad.yaml", ad_cfgs[0][1], {}, [], AdUpdateStrategy.REPLACE)
             web_await_mock.assert_awaited_once()
             delete_ad_mock.assert_awaited_once_with(ad_cfgs[0][1], [], delete_old_ads_by_title = False)

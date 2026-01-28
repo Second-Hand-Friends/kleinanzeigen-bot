@@ -525,19 +525,83 @@ class AdExtractor(WebScrapingMixin):
                 LOG.warning("Could not extract ad ID from URL: %s", self.page.url)
                 return None
 
-            # Fetch the management JSON data using web_request
-            response = await self.web_request("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json")
-            json_data = json.loads(response["content"])
+            # Helper function to safely coerce values to int or None
+            def _coerce_page_number(value:Any) -> int | None:
+                if value is None:
+                    return None
+                if isinstance(value, float):
+                    if value.is_integer():
+                        return int(value)
+                    return None
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    return None
 
-            # Find the current ad in the ads list
-            if isinstance(json_data, dict) and "ads" in json_data:
-                ads_list = json_data["ads"]
-                if isinstance(ads_list, list):
-                    # Filter ads to find the current ad by ID
-                    current_ad = next((ad for ad in ads_list if ad.get("id") == current_ad_id), None)
-                    if current_ad and "buyNowEligible" in current_ad:
-                        buy_now_eligible = current_ad["buyNowEligible"]
-                        return buy_now_eligible if isinstance(buy_now_eligible, bool) else None
+            def _get_paging_value(paging:dict[str, Any], keys:list[str]) -> Any:
+                for key in keys:
+                    value = paging.get(key)
+                    if value is not None:
+                        return value
+                return None
+
+            # Fetch the management JSON data using web_request with pagination support
+            page = 1
+            MAX_PAGE_LIMIT:Final[int] = 100
+
+            while True:
+                # Safety check: don't paginate beyond reasonable limit
+                if page > MAX_PAGE_LIMIT:
+                    LOG.warning("Stopping pagination after %s pages to avoid infinite loop", MAX_PAGE_LIMIT)
+                    break
+
+                response = await self.web_request(f"https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page={page}")
+
+                try:
+                    json_data = json.loads(response["content"])
+                except json.JSONDecodeError as ex:
+                    LOG.debug("Failed to parse JSON response on page %s: %s", page, ex)
+                    break
+
+                # Find the current ad in the ads list
+                if isinstance(json_data, dict) and "ads" in json_data:
+                    ads_list = json_data["ads"]
+                    if isinstance(ads_list, list):
+                        # Filter ads to find the current ad by ID
+                        current_ad = next((ad for ad in ads_list if ad.get("id") == current_ad_id), None)
+                        if current_ad and "buyNowEligible" in current_ad:
+                            buy_now_eligible = current_ad["buyNowEligible"]
+                            return buy_now_eligible if isinstance(buy_now_eligible, bool) else None
+
+                # Check if we need to fetch more pages
+                paging = json_data.get("paging") if isinstance(json_data, dict) else None
+                if not isinstance(paging, dict):
+                    break
+
+                # Parse pagination info with explicit None checks (not truthy checks) to handle 0-based indexing
+                # Support multiple field name variations
+                current_page_num = _coerce_page_number(_get_paging_value(paging, ["pageNum", "page", "currentPage"]))
+                if current_page_num is None:
+                    current_page_num = page
+
+                total_pages = _coerce_page_number(_get_paging_value(paging, ["last", "pages", "totalPages", "pageCount", "maxPages"]))
+
+                # Stop if we've reached the last page or there's no pagination info
+                if current_page_num is not None:
+                    if current_page_num == page:
+                        current_page_indexed = current_page_num
+                    elif current_page_num == page - 1:
+                        current_page_indexed = current_page_num + 1
+                    else:
+                        current_page_indexed = page
+                else:
+                    current_page_indexed = page
+
+                if total_pages is None or current_page_indexed >= total_pages:
+                    break
+
+                # Always increment page counter to avoid infinite loops
+                page += 1
 
             # If the key doesn't exist or ad not found, return None (unknown)
             return None

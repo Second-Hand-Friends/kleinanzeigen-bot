@@ -1047,10 +1047,105 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.debug("No login detected - DOM elements not found and server probe returned %s", state.name)
         return False
 
+    @staticmethod
+    def _coerce_page_number(value:Any) -> int | None:
+        """Safely coerce a value to int or return None if conversion fails.
+
+        Whole-number floats are accepted; non-integer floats are rejected.
+        """
+        if value is None:
+            return None
+        if isinstance(value, float):
+            if value.is_integer():
+                return int(value)
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    async def _fetch_published_ads(self) -> list[dict[str, Any]]:
+        """Fetch all published ads, handling API pagination.
+
+        Returns:
+            List of all published ads across all pages.
+        """
+        ads:list[dict[str, Any]] = []
+        page = 1
+        MAX_PAGE_LIMIT:Final[int] = 100
+        SNIPPET_LIMIT:Final[int] = 200
+
+        while True:
+            # Safety check: don't paginate beyond reasonable limit
+            if page > MAX_PAGE_LIMIT:
+                LOG.warning("Stopping pagination after %s pages to avoid infinite loop", MAX_PAGE_LIMIT)
+                break
+
+            response = await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page={page}")
+
+            try:
+                json_data = json.loads(response["content"])
+            except json.JSONDecodeError as ex:
+                content = response.get("content", "")
+                snippet = content[:SNIPPET_LIMIT] + ("..." if len(content) > SNIPPET_LIMIT else "")
+                LOG.warning("Failed to parse JSON response on page %s: %s (content: %s)", page, ex, snippet)
+                break
+
+            page_ads = json_data.get("ads", [])
+            if isinstance(page_ads, list):
+                ads.extend(page_ads)
+
+            paging = json_data.get("paging")
+            if not isinstance(paging, dict):
+                break
+
+            current_page = None
+            total_pages = None
+
+            # Use explicit None checks, NOT truthy checks (0 is a valid page number)
+            # Support multiple field name variations for robustness
+            if paging.get("pageNum") is not None:
+                current_page = self._coerce_page_number(paging.get("pageNum"))
+            elif paging.get("page") is not None:
+                current_page = self._coerce_page_number(paging.get("page"))
+            elif paging.get("currentPage") is not None:
+                current_page = self._coerce_page_number(paging.get("currentPage"))
+
+            if paging.get("last") is not None:
+                total_pages = self._coerce_page_number(paging.get("last"))
+            elif paging.get("pages") is not None:
+                total_pages = self._coerce_page_number(paging.get("pages"))
+            elif paging.get("totalPages") is not None:
+                total_pages = self._coerce_page_number(paging.get("totalPages"))
+            elif paging.get("pageCount") is not None:
+                total_pages = self._coerce_page_number(paging.get("pageCount"))
+            elif paging.get("maxPages") is not None:
+                total_pages = self._coerce_page_number(paging.get("maxPages"))
+
+            # Determine if we've reached the last page
+            # Normalize: page counter is always 1-indexed; detect 0- vs 1-indexed API
+            if current_page is not None:
+                if current_page == page:
+                    current_page_indexed = current_page
+                elif current_page == page - 1:
+                    current_page_indexed = current_page + 1
+                else:
+                    current_page_indexed = page
+            else:
+                current_page_indexed = page
+
+            if total_pages is None or current_page_indexed >= total_pages:
+                break
+
+            # Calculate next page to request (1-indexed)
+            page += 1
+
+        return ads
+
     async def delete_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
 
-        published_ads = json.loads((await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
+        published_ads = await self._fetch_published_ads()
 
         for ad_file, ad_cfg, _ad_cfg_orig in ad_cfgs:
             count += 1
@@ -1094,7 +1189,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def extend_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         """Extends ads that are close to expiry."""
         # Fetch currently published ads from API
-        published_ads = json.loads((await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
+        published_ads = await self._fetch_published_ads()
 
         # Filter ads that need extension
         ads_to_extend = []
@@ -1213,7 +1308,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         failed_count = 0
         max_retries = 3
 
-        published_ads = json.loads((await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
+        published_ads = await self._fetch_published_ads()
 
         for ad_file, ad_cfg, ad_cfg_orig in ad_cfgs:
             LOG.info("Processing %s/%s: '%s' from [%s]...", count + 1, len(ad_cfgs), ad_cfg.title, ad_file)
@@ -1561,12 +1656,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         """
         count = 0
 
-        published_ads = json.loads((await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
+        published_ads = await self._fetch_published_ads()
 
         for ad_file, ad_cfg, ad_cfg_orig in ad_cfgs:
             ad = next((ad for ad in published_ads if ad["id"] == ad_cfg.id), None)
 
             if not ad:
+                LOG.warning(" -> SKIPPED: ad '%s' (ID: %s) not found in published ads", ad_cfg.title, ad_cfg.id)
                 continue
 
             LOG.info("Processing %s/%s: '%s' from [%s]...", count + 1, len(ad_cfgs), ad_cfg.title, ad_file)
