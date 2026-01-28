@@ -583,7 +583,8 @@ class AdExtractor(WebScrapingMixin):
                 if total_pages is None or (current_page_num is not None and current_page_num >= total_pages):
                     break
 
-                page = (current_page_num if current_page_num is not None else page) + 1
+                # Always increment page counter to avoid infinite loops
+                page += 1
 
             # If the key doesn't exist or ad not found, return None (unknown)
             return None

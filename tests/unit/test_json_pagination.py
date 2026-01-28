@@ -11,6 +11,7 @@ import pytest
 from kleinanzeigen_bot import KleinanzeigenBot
 
 
+@pytest.mark.unit
 class TestJSONPagination:
     """Tests for _coerce_page_number and _fetch_published_ads methods."""
 
@@ -20,15 +21,31 @@ class TestJSONPagination:
 
     def test_coerce_page_number_with_valid_int(self, bot:KleinanzeigenBot) -> None:
         """Test that valid integers are returned as-is."""
-        assert bot._coerce_page_number(1) == 1
-        assert bot._coerce_page_number(0) == 0
-        assert bot._coerce_page_number(42) == 42
+        result = bot._coerce_page_number(1)
+        if result != 1:
+            pytest.fail(f"_coerce_page_number(1) expected 1, got {result}")
+
+        result = bot._coerce_page_number(0)
+        if result != 0:
+            pytest.fail(f"_coerce_page_number(0) expected 0, got {result}")
+
+        result = bot._coerce_page_number(42)
+        if result != 42:
+            pytest.fail(f"_coerce_page_number(42) expected 42, got {result}")
 
     def test_coerce_page_number_with_string_int(self, bot:KleinanzeigenBot) -> None:
         """Test that string integers are converted to int."""
-        assert bot._coerce_page_number("1") == 1
-        assert bot._coerce_page_number("0") == 0
-        assert bot._coerce_page_number("42") == 42
+        result = bot._coerce_page_number("1")
+        if result != 1:
+            pytest.fail(f"_coerce_page_number('1') expected 1, got {result}")
+
+        result = bot._coerce_page_number("0")
+        if result != 0:
+            pytest.fail(f"_coerce_page_number('0') expected 0, got {result}")
+
+        result = bot._coerce_page_number("42")
+        if result != 42:
+            pytest.fail(f"_coerce_page_number('42') expected 42, got {result}")
 
     def test_coerce_page_number_with_none(self, bot:KleinanzeigenBot) -> None:
         """Test that None returns None."""
@@ -132,6 +149,10 @@ class TestJSONPagination:
             assert [ad["id"] for ad in result] == [1, 2]
             # Should request page 1 first, then page 2
             assert mock_request.call_count == 2
+            # Verify page parameters: first call should have page=1
+            mock_request.assert_any_call(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=1")
+            # Second call should have page=2
+            mock_request.assert_any_call(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=2")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_mixed_field_names(self, bot:KleinanzeigenBot) -> None:
