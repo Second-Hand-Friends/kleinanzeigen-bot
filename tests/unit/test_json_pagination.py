@@ -94,7 +94,7 @@ class TestJSONPagination:
     @pytest.mark.asyncio
     async def test_fetch_published_ads_single_page_with_paging(self, bot:KleinanzeigenBot) -> None:
         """Test fetching ads from single page with paging info showing 1/1."""
-        response_data = {"ads": [{"id": 1, "title": "Ad 1"}], "paging": {"pageNum": 1, "last": 1}}
+        response_data = {"ads": [{"id": 1, "title": "Ad 1"}], "paging": {"pageNum": 0, "last": 0}}
 
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": json.dumps(response_data)}
@@ -108,9 +108,9 @@ class TestJSONPagination:
     @pytest.mark.asyncio
     async def test_fetch_published_ads_multi_page(self, bot:KleinanzeigenBot) -> None:
         """Test fetching ads from multiple pages (3 pages, 2 ads each)."""
-        page1_data = {"ads": [{"id": 1}, {"id": 2}], "paging": {"pageNum": 1, "last": 3}}
-        page2_data = {"ads": [{"id": 3}, {"id": 4}], "paging": {"pageNum": 2, "last": 3}}
-        page3_data = {"ads": [{"id": 5}, {"id": 6}], "paging": {"pageNum": 3, "last": 3}}
+        page1_data = {"ads": [{"id": 1}, {"id": 2}], "paging": {"pageNum": 0, "last": 3}}
+        page2_data = {"ads": [{"id": 3}, {"id": 4}], "paging": {"pageNum": 1, "last": 3}}
+        page3_data = {"ads": [{"id": 5}, {"id": 6}], "paging": {"pageNum": 2, "last": 3}}
 
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.side_effect = [

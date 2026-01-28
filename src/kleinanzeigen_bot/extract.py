@@ -529,6 +529,10 @@ class AdExtractor(WebScrapingMixin):
             def _coerce_page_number(value:Any) -> int | None:
                 if value is None:
                     return None
+                if isinstance(value, float):
+                    if value.is_integer():
+                        return int(value)
+                    return None
                 try:
                     return int(value)
                 except (TypeError, ValueError):
@@ -543,7 +547,7 @@ class AdExtractor(WebScrapingMixin):
 
             # Fetch the management JSON data using web_request with pagination support
             page = 1
-            MAX_PAGE_LIMIT = 100
+            MAX_PAGE_LIMIT:Final[int] = 100
 
             while True:
                 # Safety check: don't paginate beyond reasonable limit
@@ -583,7 +587,16 @@ class AdExtractor(WebScrapingMixin):
                 total_pages = _coerce_page_number(_get_paging_value(paging, ["last", "pages", "totalPages", "pageCount", "maxPages"]))
 
                 # Stop if we've reached the last page or there's no pagination info
-                current_page_indexed = current_page_num + 1 if current_page_num is not None else page
+                if current_page_num is not None:
+                    if current_page_num == page:
+                        current_page_indexed = current_page_num
+                    elif current_page_num == page - 1:
+                        current_page_indexed = current_page_num + 1
+                    else:
+                        current_page_indexed = page
+                else:
+                    current_page_indexed = page
+
                 if total_pages is None or current_page_indexed >= total_pages:
                     break
 

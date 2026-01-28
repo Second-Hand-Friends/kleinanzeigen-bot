@@ -1072,8 +1072,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         """
         ads:list[dict[str, Any]] = []
         page = 1
-        MAX_PAGE_LIMIT = 100
-        SNIPPET_LIMIT = 200
+        MAX_PAGE_LIMIT:Final[int] = 100
+        SNIPPET_LIMIT:Final[int] = 200
 
         while True:
             # Safety check: don't paginate beyond reasonable limit
