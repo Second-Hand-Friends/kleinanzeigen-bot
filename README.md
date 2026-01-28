@@ -318,7 +318,7 @@ timeouts:
   captcha_detection: 2.0              # Timeout for captcha iframe detection
   sms_verification: 4.0               # Timeout for SMS verification banners
   gdpr_prompt: 10.0                   # Timeout when handling GDPR dialogs
-  login_detection: 10.0               # Timeout for detecting existing login session via DOM elements
+  login_detection: 10.0               # Timeout for DOM-based login detection fallback (auth probe is tried first)
   publishing_result: 300.0            # Timeout for publishing status checks
   publishing_confirmation: 20.0       # Timeout for publish confirmation redirect
   image_upload: 30.0                  # Timeout for image upload and server-side processing
@@ -383,9 +383,47 @@ update_check:
 login:
   username: ""
   password: ""
+
+# diagnostics (optional) - see "Login Detection Behavior" section below for usage details
+diagnostics:
+  login_detection_capture: false       # Capture screenshot + HTML when login state is UNKNOWN
+  pause_on_login_detection_failure: false  # Pause for manual inspection (interactive only)
+  output_dir: ""                    # Custom output directory (default: portable .temp/diagnostics, xdg cache/diagnostics)
 ```
 
-Slow networks or sluggish remote browsers often just need a higher `timeouts.multiplier`, while truly problematic selectors can get explicit values directly under `timeouts`. Remember to regenerate the schemas after changing the configuration model so editors stay in sync.
+Slow networks or sluggish remote browsers often just need a higher `timeouts.multiplier`, while truly problematic selectors can get explicit values directly under `timeouts`.
+
+> **Developer Note:** Remember to regenerate the schemas after changing the configuration model so editors stay in sync.
+
+### Login Detection Behavior
+
+The bot uses a **server-side auth probe** to detect login state more reliably:
+
+1. **Auth probe (primary method)**: Sends a GET request to `{root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT`
+   - Returns `LOGGED_IN` if response is HTTP 200 with valid JSON containing `"ads"` key
+   - Returns `LOGGED_OUT` if response is HTTP 401/403 or HTML contains login markers
+   - Returns `UNKNOWN` on timeouts, assertion failures, or unexpected response bodies
+
+2. **DOM fallback**: Only consulted when auth probe returns `UNKNOWN`
+   - Looks for `.mr-medium` element containing username
+   - Falls back to `#user-email` ID
+   - Uses `login_detection` timeout (default: 10.0 seconds)
+
+This approach reduces unnecessary re-login attempts because the server-side probe is not affected by client-side rendering delays (SPA hydration) or A/B test variations, though it may return UNKNOWN and fall back to DOM-based checks.
+
+**⚠️ PII Warning:** HTML dumps may contain your account email or other personally identifiable information. Review files in the diagnostics output directory before sharing them publicly.
+
+**Optional diagnostics** help troubleshoot login detection issues:
+
+- Enable `login_detection_capture` to capture screenshots and HTML dumps when state is `UNKNOWN`
+- Enable `pause_on_login_detection_failure` to pause the bot for manual inspection (interactive sessions only; requires `login_detection_capture=true`)
+- Use custom `output_dir` to specify where artifacts are saved
+
+**Output locations (default):**
+
+- **Portable mode**: `./.temp/diagnostics/`
+- **System-wide mode (XDG)**: `~/.cache/kleinanzeigen-bot/diagnostics/` (Linux) or `~/Library/Caches/kleinanzeigen-bot/diagnostics/` (macOS)
+- **Custom**: Path resolved relative to your `config.yaml` if `output_dir` is specified
 
 ### <a name="ad-config"></a>2) Ad configuration
 

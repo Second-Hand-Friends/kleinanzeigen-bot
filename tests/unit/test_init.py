@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from kleinanzeigen_bot import LOG, AdUpdateStrategy, KleinanzeigenBot, misc
+from kleinanzeigen_bot import LOG, AdUpdateStrategy, KleinanzeigenBot, LoginState, misc
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad
-from kleinanzeigen_bot.model.config_model import AdDefaults, Config, PublishingConfig
+from kleinanzeigen_bot.model.config_model import AdDefaults, Config, DiagnosticsConfig, PublishingConfig
 from kleinanzeigen_bot.utils import dicts, loggers
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
@@ -333,15 +333,151 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_is_logged_in_returns_false_when_not_logged_in(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login check returns false when not logged in."""
-        with patch.object(test_bot, "web_text", side_effect = TimeoutError):
+        with (
+            patch.object(test_bot, "web_text", side_effect = TimeoutError),
+            patch.object(
+                test_bot,
+                "web_request",
+                new_callable = AsyncMock,
+                return_value = {"statusCode": 200, "content": "<html><a href='/m-einloggen.html'>login</a></html>"},
+            ),
+        ):
             assert await test_bot.is_logged_in() is False
+
+    @pytest.mark.asyncio
+    async def test_get_login_state_prefers_auth_probe_over_dom(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.LOGGED_IN) as probe,
+            patch.object(test_bot, "web_text", side_effect = AssertionError("DOM check must not run when probe is deterministic")) as web_text,
+        ):
+            assert await test_bot.get_login_state() == LoginState.LOGGED_IN
+            probe.assert_awaited_once()
+            web_text.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_login_state_falls_back_to_dom_when_probe_unknown(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN) as probe,
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, return_value = "Welcome dummy_user") as web_text,
+        ):
+            assert await test_bot.get_login_state() == LoginState.LOGGED_IN
+            probe.assert_awaited_once()
+            web_text.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_get_login_state_prefers_logged_out_from_probe_over_dom(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.LOGGED_OUT) as probe,
+            patch.object(test_bot, "web_text", side_effect = AssertionError("DOM check must not run when probe is deterministic")) as web_text,
+        ):
+            assert await test_bot.get_login_state() == LoginState.LOGGED_OUT
+            probe.assert_awaited_once()
+            web_text.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_login_state_returns_unknown_when_probe_unknown_and_dom_inconclusive(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN) as probe,
+            patch.object(test_bot, "web_text", side_effect = TimeoutError) as web_text,
+        ):
+            assert await test_bot.get_login_state() == LoginState.UNKNOWN
+            probe.assert_awaited_once()
+            assert web_text.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_get_login_state_unknown_captures_diagnostics_when_enabled(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate({"login_detection_capture": True, "output_dir": str(tmp_path)})
+
+        page = MagicMock()
+        page.save_screenshot = AsyncMock()
+        page.get_content = AsyncMock(return_value = "<html></html>")
+        test_bot.page = page
+
+        with (
+            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN),
+            patch.object(test_bot, "web_text", side_effect = TimeoutError),
+        ):
+            assert await test_bot.get_login_state() == LoginState.UNKNOWN
+
+        page.save_screenshot.assert_awaited_once()
+        page.get_content.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_get_login_state_unknown_does_not_capture_diagnostics_when_disabled(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate({"login_detection_capture": False, "output_dir": str(tmp_path)})
+
+        page = MagicMock()
+        page.save_screenshot = AsyncMock()
+        page.get_content = AsyncMock(return_value = "<html></html>")
+        test_bot.page = page
+
+        with (
+            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN),
+            patch.object(test_bot, "web_text", side_effect = TimeoutError),
+        ):
+            assert await test_bot.get_login_state() == LoginState.UNKNOWN
+
+        page.save_screenshot.assert_not_called()
+        page.get_content.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_login_state_unknown_pauses_for_inspection_when_enabled_and_interactive(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate(
+            {"login_detection_capture": True, "pause_on_login_detection_failure": True, "output_dir": str(tmp_path)}
+        )
+
+        page = MagicMock()
+        page.save_screenshot = AsyncMock()
+        page.get_content = AsyncMock(return_value = "<html></html>")
+        test_bot.page = page
+
+        stdin_mock = MagicMock()
+        stdin_mock.isatty.return_value = True
+
+        with (
+            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN),
+            patch.object(test_bot, "web_text", side_effect = TimeoutError),
+            patch("kleinanzeigen_bot.sys.stdin", stdin_mock),
+            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
+            assert await test_bot.get_login_state() == LoginState.UNKNOWN
+            # Call twice to ensure the capture/pause guard triggers only once per process.
+            assert await test_bot.get_login_state() == LoginState.UNKNOWN
+
+        page.save_screenshot.assert_awaited_once()
+        page.get_content.assert_awaited_once()
+        mock_ainput.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_get_login_state_unknown_does_not_pause_when_non_interactive(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate(
+            {"login_detection_capture": True, "pause_on_login_detection_failure": True, "output_dir": str(tmp_path)}
+        )
+
+        page = MagicMock()
+        page.save_screenshot = AsyncMock()
+        page.get_content = AsyncMock(return_value = "<html></html>")
+        test_bot.page = page
+
+        stdin_mock = MagicMock()
+        stdin_mock.isatty.return_value = False
+
+        with (
+            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN),
+            patch.object(test_bot, "web_text", side_effect = TimeoutError),
+            patch("kleinanzeigen_bot.sys.stdin", stdin_mock),
+            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
+            assert await test_bot.get_login_state() == LoginState.UNKNOWN
+
+        mock_ainput.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_login_flow_completes_successfully(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that normal login flow completes successfully."""
         with (
             patch.object(test_bot, "web_open") as mock_open,
-            patch.object(test_bot, "is_logged_in", side_effect = [False, True]) as mock_logged_in,
+            patch.object(test_bot, "get_login_state", new_callable = AsyncMock, side_effect = [LoginState.LOGGED_OUT, LoginState.LOGGED_IN]) as mock_logged_in,
             patch.object(test_bot, "web_find", side_effect = TimeoutError),
             patch.object(test_bot, "web_input") as mock_input,
             patch.object(test_bot, "web_click") as mock_click,
@@ -358,7 +494,12 @@ class TestKleinanzeigenBotAuthentication:
         """Verify that login flow handles captcha correctly."""
         with (
             patch.object(test_bot, "web_open"),
-            patch.object(test_bot, "is_logged_in", side_effect = [False, False, True]),
+            patch.object(
+                test_bot,
+                "get_login_state",
+                new_callable = AsyncMock,
+                side_effect = [LoginState.LOGGED_OUT, LoginState.LOGGED_OUT, LoginState.LOGGED_IN],
+            ),
             patch.object(test_bot, "web_find") as mock_find,
             patch.object(test_bot, "web_input") as mock_input,
             patch.object(test_bot, "web_click") as mock_click,
