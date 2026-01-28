@@ -534,11 +534,23 @@ class AdExtractor(WebScrapingMixin):
                 except (TypeError, ValueError):
                     return None
 
+            def _get_paging_value(paging:dict[str, Any], keys:list[str]) -> Any:
+                for key in keys:
+                    value = paging.get(key)
+                    if value is not None:
+                        return value
+                return None
+
             # Fetch the management JSON data using web_request with pagination support
             page = 1
             MAX_PAGE_LIMIT = 100
 
             while True:
+                # Safety check: don't paginate beyond reasonable limit
+                if page > MAX_PAGE_LIMIT:
+                    LOG.warning("Stopping pagination after %s pages to avoid infinite loop", MAX_PAGE_LIMIT)
+                    break
+
                 response = await self.web_request(f"https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page={page}")
 
                 try:
@@ -562,37 +574,17 @@ class AdExtractor(WebScrapingMixin):
                 if not isinstance(paging, dict):
                     break
 
-                # Safety check: don't paginate beyond reasonable limit
-                if page > MAX_PAGE_LIMIT:
-                    LOG.warning("Stopping pagination after %s pages to avoid infinite loop", MAX_PAGE_LIMIT)
-                    break
-
                 # Parse pagination info with explicit None checks (not truthy checks) to handle 0-based indexing
                 # Support multiple field name variations
-                if paging.get("pageNum") is not None:
-                    current_page_num = _coerce_page_number(paging.get("pageNum"))
-                elif paging.get("page") is not None:
-                    current_page_num = _coerce_page_number(paging.get("page"))
-                elif paging.get("currentPage") is not None:
-                    current_page_num = _coerce_page_number(paging.get("currentPage"))
-                else:
+                current_page_num = _coerce_page_number(_get_paging_value(paging, ["pageNum", "page", "currentPage"]))
+                if current_page_num is None:
                     current_page_num = page
 
-                if paging.get("last") is not None:
-                    total_pages = _coerce_page_number(paging.get("last"))
-                elif paging.get("pages") is not None:
-                    total_pages = _coerce_page_number(paging.get("pages"))
-                elif paging.get("totalPages") is not None:
-                    total_pages = _coerce_page_number(paging.get("totalPages"))
-                elif paging.get("pageCount") is not None:
-                    total_pages = _coerce_page_number(paging.get("pageCount"))
-                elif paging.get("maxPages") is not None:
-                    total_pages = _coerce_page_number(paging.get("maxPages"))
-                else:
-                    total_pages = None
+                total_pages = _coerce_page_number(_get_paging_value(paging, ["last", "pages", "totalPages", "pageCount", "maxPages"]))
 
                 # Stop if we've reached the last page or there's no pagination info
-                if total_pages is None or (current_page_num is not None and current_page_num >= total_pages):
+                current_page_indexed = current_page_num + 1 if current_page_num is not None else page
+                if total_pages is None or current_page_indexed >= total_pages:
                     break
 
                 # Always increment page counter to avoid infinite loops

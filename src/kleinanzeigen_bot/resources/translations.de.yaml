@@ -31,6 +31,10 @@ kleinanzeigen_bot/__init__.py:
     "App version: %s": "App Version: %s"
     "Python version: %s": "Python Version: %s"
 
+  _fetch_published_ads:
+    "Failed to parse JSON response on page %s: %s (content: %s)": "Fehler beim Parsen der JSON-Antwort auf Seite %s: %s (Inhalt: %s)"
+    "Stopping pagination after %s pages to avoid infinite loop": "Stoppe die Seitenaufschaltung nach %s Seiten, um eine Endlosschleife zu vermeiden"
+
   __check_ad_changed:
     "Hash comparison for [%s]:": "Hash-Vergleich für [%s]:"
     "    Stored hash: %s": "    Gespeicherter Hash: %s"
@@ -162,6 +166,7 @@ kleinanzeigen_bot/__init__.py:
   update_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
+    " -> SKIPPED: ad '%s' (ID: %s) not found in published ads": " -> ÜBERSPRUNGEN: Anzeige '%s' (ID: %s) nicht in veröffentlichten Anzeigen gefunden"
     "DONE: updated %s": "FERTIG: %s aktualisiert"
     "ad": "Anzeige"
 
@@ -267,7 +272,6 @@ kleinanzeigen_bot/extract.py:
 
   extract_ad_id_from_ad_url:
     "Failed to extract ad ID from URL '%s': %s": "Fehler beim Extrahieren der Anzeigen-ID aus der URL '%s': %s"
-    "Stopping pagination after %s pages to avoid infinite loop": "Stoppe die Seitenaufschaltung nach %s Seiten, um eine Endlosschleife zu vermeiden"
 
   extract_own_ads_urls:
     "No ad URLs were extracted.": "Es wurden keine Anzeigen-URLs extrahiert."
@@ -300,6 +304,7 @@ kleinanzeigen_bot/extract.py:
 
   _extract_sell_directly_from_ad_page:
     "Could not extract ad ID from URL: %s": "Konnte Anzeigen-ID nicht aus der URL extrahieren: %s"
+    "Stopping pagination after %s pages to avoid infinite loop": "Stoppe die Seitenaufschaltung nach %s Seiten, um eine Endlosschleife zu vermeiden"
 
 #################################################
 kleinanzeigen_bot/utils/i18n.py:
