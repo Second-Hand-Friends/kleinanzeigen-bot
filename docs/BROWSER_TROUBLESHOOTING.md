@@ -76,6 +76,7 @@ The bot will also provide specific instructions on how to fix your configuration
 
 1. Increase `timeouts.multiplier` in `config.yaml` (e.g., `2.0` doubles every timeout consistently).
 1. Override specific keys under `timeouts` (e.g., `pagination_initial: 20.0`) if only a single selector is problematic.
+1. For slow email verification prompts, raise `timeouts.email_verification`.
 1. Keep `retry_enabled` on so that DOM lookups are retried with exponential backoff.
 
 ### Issue: Bot fails to detect existing login session

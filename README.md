@@ -56,7 +56,7 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 1. The following components need to be installed:
 
    1. [Chromium](https://www.chromium.org/getting-involved/download-chromium), [Google Chrome](https://www.google.com/chrome/),
-      or Chromium based [Microsoft Edge](https://www.microsoft.com/edge) browser
+      or Chromium-based [Microsoft Edge](https://www.microsoft.com/edge) browser
 
 1. Open a command/terminal window
 
@@ -122,7 +122,7 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 1. The following components need to be installed:
 
    1. [Chromium](https://www.chromium.org/getting-involved/download-chromium), [Google Chrome](https://www.google.com/chrome/),
-      or Chromium based [Microsoft Edge](https://www.microsoft.com/edge) browser
+      or Chromium-based [Microsoft Edge](https://www.microsoft.com/edge) browser
    1. [Python](https://www.python.org/) **3.10** or newer
    1. [pip](https://pypi.org/project/pip/)
    1. [git client](https://git-scm.com/downloads)

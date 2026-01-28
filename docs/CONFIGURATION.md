@@ -90,13 +90,14 @@ categories:
 Timeout tuning for various browser operations. Adjust these if you experience slow page loads or recurring timeouts.
 
 ```yaml
-timeouts:
-  multiplier: 1.0                     # Scale all timeouts (e.g. 2.0 for slower networks)
-  default: 5.0                        # Base timeout for web_find/web_click/etc.
-  page_load: 15.0                     # Timeout for web_open page loads
-  captcha_detection: 2.0              # Timeout for captcha iframe detection
-  sms_verification: 4.0               # Timeout for SMS verification banners
-  gdpr_prompt: 10.0                   # Timeout when handling GDPR dialogs
+  timeouts:
+    multiplier: 1.0                     # Scale all timeouts (e.g. 2.0 for slower networks)
+    default: 5.0                        # Base timeout for web_find/web_click/etc.
+    page_load: 15.0                     # Timeout for web_open page loads
+    captcha_detection: 2.0              # Timeout for captcha iframe detection
+    sms_verification: 4.0               # Timeout for SMS verification banners
+    email_verification: 4.0             # Timeout for email verification prompts
+    gdpr_prompt: 10.0                   # Timeout when handling GDPR dialogs
   login_detection: 10.0               # Timeout for DOM-based login detection fallback (auth probe is tried first)
   publishing_result: 300.0            # Timeout for publishing status checks
   publishing_confirmation: 20.0         # Timeout for publish confirmation redirect

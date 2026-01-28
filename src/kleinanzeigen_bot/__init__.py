@@ -863,9 +863,20 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.warning("############################################")
             LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
             LOG.warning("############################################")
-            await ainput("Press ENTER when done...")
+            await ainput(_("Press ENTER when done..."))
         except TimeoutError:
             # No SMS verification prompt detected.
+            pass
+
+        try:
+            email_timeout = self._timeout("email_verification")
+            await self.web_find(By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout = email_timeout)
+            LOG.warning("############################################")
+            LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
+            LOG.warning("############################################")
+            await ainput(_("Press ENTER when done..."))
+        except TimeoutError:
+            # No email verification prompt detected.
             pass
 
         try:
