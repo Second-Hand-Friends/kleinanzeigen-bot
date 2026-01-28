@@ -39,14 +39,15 @@ This project uses a layered testing approach, with a focus on reliability and fa
 - All smoke tests **must** be marked with `@pytest.mark.smoke`.
 - Place smoke tests in `tests/smoke/` for discoverability.
 - Example:
-  ```python
-  import pytest
 
-  @pytest.mark.smoke
-  @pytest.mark.asyncio
-  async def test_bot_starts(smoke_bot):
-      ...
-  ```
+```python
+import pytest
+
+@pytest.mark.smoke
+@pytest.mark.asyncio
+async def test_bot_starts(smoke_bot):
+    ...
+```
 
 ### Running Smoke, Unit, and Integration Tests
 

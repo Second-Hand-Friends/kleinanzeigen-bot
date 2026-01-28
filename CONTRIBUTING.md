@@ -1,4 +1,12 @@
-# Table of Contents
+# Contributing
+
+Thanks for your interest in contributing to this project! Whether it's a bug report, new feature, correction, or additional documentation, we greatly value feedback and contributions from our community.
+
+We want to make contributing as easy and transparent as possible. Contributions via [pull requests](#pull-request-requirements) are much appreciated.
+
+Please read through this document before submitting any contributions to ensure your contribution goes to the correct code repository and we have all the necessary information to effectively respond to your request.
+
+## Table of Contents
 
 - [Development Setup](#development-setup)
 - [Development Notes](#development-notes)
@@ -13,29 +21,23 @@
 - [Licensing](#licensing)
 - [Internationalization (i18n) and Translations](#internationalization-i18n-and-translations)
 
-# Contributing
-
-Thanks for your interest in contributing to this project! Whether it's a bug report, new feature, correction, or additional documentation, we greatly value feedback and contributions from our community.
-
-We want to make contributing as easy and transparent as possible. Contributions via [pull requests](#pull-request-requirements) are much appreciated.
-
-Please read through this document before submitting any contributions to ensure your contribution goes to the correct code repository and we have all the necessary information to effectively respond to your request.
-
 ## Development Setup
 
 ### Prerequisites
+
 - Python 3.10 or higher
 - PDM for dependency management
 - Git
 
 ### Local Setup
+
 1. Fork and clone the repository
-2. Install dependencies: `pdm install`
-3. Run tests to verify setup: `pdm run test:cov`
+1. Install dependencies: `pdm install`
+1. Run tests to verify setup: `pdm run test:cov`
 
 ## Development Notes
 
-This section provides quick reference commands for common development tasks. See ‘Testing Requirements’ below for more details on running and organizing tests.
+This section provides quick reference commands for common development tasks. See 'Testing Requirements' below for more details on running and organizing tests.
 
 - Format source code: `pdm run format`
 - Run tests: `pdm run test` (see 'Testing Requirements' below for more details)
@@ -44,47 +46,58 @@ This section provides quick reference commands for common development tasks. See
 - Derive JSON schema files from Pydantic data model: `pdm run generate-schemas`
 - Create platform-specific executable: `pdm run compile`
 - Application bootstrap works like this:
-  ```python
+
+```python
   pdm run app
-  |-> executes 'python -m kleinanzeigen_bot'
-      |-> executes 'kleinanzeigen_bot/__main__.py'
-          |-> executes main() function of 'kleinanzeigen_bot/__init__.py'
-              |-> executes KleinanzeigenBot().run()
+   |-> executes 'python -m kleinanzeigen_bot'
+       |-> executes 'kleinanzeigen_bot/__main__.py'
+           |-> executes main() function of 'kleinanzeigen_bot/__init__.py'
+               |-> executes KleinanzeigenBot().run()
   ```
 
 ## Development Workflow
 
 ### Before Submitting
+
 1. **Format your code**: Ensure your code is auto-formatted
+
    ```bash
    pdm run format
    ```
-2. **Lint your code**: Check for linting errors and warnings
+
+1. **Lint your code**: Check for linting errors and warnings
+
    ```bash
    pdm run lint
    ```
-3. **Run tests**: Ensure all tests pass locally
+
+1. **Run tests**: Ensure all tests pass locally
+
    ```bash
    pdm run test
    ```
-4. **Check code quality**: Verify your code follows project standards
-   - Type hints are complete
-   - Docstrings are present
-   - SPDX headers are included
-   - Imports are properly organized
-5. **Test your changes**: Add appropriate tests for new functionality
-   - Add smoke tests for critical paths
-   - Add unit tests for new components
-   - Add integration tests for external dependencies
+
+1. **Check code quality**: Verify your code follows project standards
+    - Type hints are complete
+    - Docstrings are present
+    - SPDX headers are included
+    - Imports are properly organized
+1. **Test your changes**: Add appropriate tests for new functionality
+    - Add smoke tests for critical paths
+    - Add unit tests for new components
+    - Add integration tests for external dependencies
 
 ### Commit Messages
+
 Use clear, descriptive commit messages that explain:
+
 - What was changed
 - Why it was changed
 - Any breaking changes or important notes
 
 Example:
-```
+
+```shell
 feat: add smoke test for bot startup
 
 - Add test_bot_starts_without_crashing to verify core workflow
@@ -97,11 +110,13 @@ feat: add smoke test for bot startup
 This project uses a comprehensive testing strategy with three test types:
 
 ### Test Types
+
 - **Unit tests** (`tests/unit/`): Isolated component tests with mocks. Run first.
 - **Integration tests** (`tests/integration/`): Tests with real external dependencies. Run after unit tests.
 - **Smoke tests** (`tests/smoke/`): Minimal, post-deployment health checks that verify the most essential workflows (e.g., app starts, config loads, login page reachable). Run after integration tests. Smoke tests are not end-to-end (E2E) tests and should not cover full user workflows.
 
 ### Running Tests
+
 ```bash
 # Run all tests in order (unit → integration → smoke)
 pdm run test:cov
@@ -118,31 +133,37 @@ pdm run smoke:cov  # Smoke tests with coverage
 ```
 
 ### Adding New Tests
+
 1. **Determine test type** based on what you're testing:
+
    - **Smoke tests**: Minimal, critical health checks (not full user workflows)
    - **Unit tests**: Individual components, isolated functionality
    - **Integration tests**: External dependencies, real network calls
 
-2. **Place in correct directory**:
+1. **Place in correct directory**:
+
    - `tests/smoke/` for smoke tests
    - `tests/unit/` for unit tests
    - `tests/integration/` for integration tests
 
-3. **Add proper markers**:
+1. **Add proper markers**:
+
    ```python
    @pytest.mark.smoke      # For smoke tests
    @pytest.mark.itest      # For integration tests
    @pytest.mark.asyncio    # For async tests
    ```
 
-4. **Use existing fixtures** when possible (see `tests/conftest.py`)
+1. **Use existing fixtures** when possible (see `tests/conftest.py`)
 
 For detailed testing guidelines, see [docs/TESTING.md](docs/TESTING.md).
 
 ## Code Quality Standards
 
 ### File Headers
+
 All Python files must start with SPDX license headers:
+
 ```python
 # SPDX-FileCopyrightText: © <your name> and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
@@ -150,11 +171,13 @@ All Python files must start with SPDX license headers:
 ```
 
 ### Import Organization
+
 - Use absolute imports for project modules: `from kleinanzeigen_bot import KleinanzeigenBot`
 - Use relative imports for test utilities: `from tests.conftest import SmokeKleinanzeigenBot`
 - Group imports: standard library, third-party, local (with blank lines between groups)
 
 ### Type Hints
+
 - Always use type hints for function parameters and return values
 - Use `Any` from `typing` for complex types
 - Use `Final` for constants
@@ -163,39 +186,46 @@ All Python files must start with SPDX license headers:
 ### Documentation
 
 #### Docstrings
+
 - Use docstrings for **complex functions and classes that need explanation**
 - Include examples in docstrings for complex functions (see `utils/misc.py` for examples)
 
 #### Comments
+
 - **Use comments to explain your code logic and reasoning**
 - Comment on complex algorithms, business logic, and non-obvious decisions
 - Explain "why" not just "what" - the reasoning behind implementation choices
 - Use comments for edge cases, workarounds, and platform-specific code
 
 #### Module Documentation
+
 - Add module docstrings for packages and complex modules
 - Document the purpose and contents of each module
 
 #### Model Documentation
+
 - Use `Field(description="...")` for Pydantic model fields to document their purpose
 - Include examples in field descriptions for complex configurations
 - Document validation rules and constraints
 
 #### Logging
+
 - Use structured logging with `loggers.get_logger()`
 - Include context in log messages to help with debugging
 - Use appropriate log levels (DEBUG, INFO, WARNING, ERROR)
 - Log important state changes and decision points
 
 #### Timeout configuration
+
 - The default timeout (`timeouts.default`) already wraps all standard DOM helpers (`web_find`, `web_click`, etc.) via `WebScrapingMixin._timeout/_effective_timeout`. Use it unless a workflow clearly needs a different SLA.
 - Reserve `timeouts.quick_dom` for transient overlays (shipping dialogs, payment prompts, toast banners) that should render almost instantly; call `self._timeout("quick_dom")` in those spots to keep the UI responsive.
 - For single selectors that occasionally need more headroom, pass an inline override instead of creating a new config key, e.g. `custom = self._timeout(override = 12.5); await self.web_find(..., timeout = custom)`.
 - Use `_timeout()` when you just need the raw configured value (with optional override); use `_effective_timeout()` when you rely on the global multiplier and retry backoff for a given attempt (e.g. inside `_run_with_timeout_retries`).
-- Add a new timeout key only when a recurring workflow has its own timing profile (pagination, captcha detection, publishing confirmations, Chrome probes, etc.). Whenever you add one, extend `TimeoutConfig`, document it in the sample `timeouts:` block in `README.md`, and explain it in `docs/BROWSER_TROUBLESHOOTING.md`.
+- Add a new timeout key only when a recurring workflow has its own timing profile (pagination, captcha detection, publishing confirmations, Chrome probes, etc.). Whenever you add one, extend `TimeoutConfig`, document it in the sample `timeouts:` block in `docs/CONFIGURATION.md`, and explain it in `docs/BROWSER_TROUBLESHOOTING.md`.
 - Encourage users to raise `timeouts.multiplier` when everything is slow, and override existing keys in `config.yaml` before introducing new ones. This keeps the configuration surface minimal.
 
 #### Examples
+
 ```python
 def parse_duration(text: str) -> timedelta:
     """
@@ -225,7 +255,9 @@ def parse_duration(text: str) -> timedelta:
         # ... handle other units
     return timedelta(**kwargs)
 ```
+
 ### Error Handling
+
 - Use specific exception types when possible
 - Include meaningful error messages
 - Use `pytest.fail()` with descriptive messages in tests
@@ -236,7 +268,9 @@ def parse_duration(text: str) -> timedelta:
 We use GitHub issues to track bugs and feature requests. Please ensure your description is clear and has sufficient instructions to be able to reproduce the issue.
 
 ### Bug Reports
+
 When reporting a bug, please ensure you:
+
 - Confirm the issue is reproducible on the latest release
 - Clearly describe the expected and actual behavior
 - Provide detailed steps to reproduce the issue
@@ -247,7 +281,9 @@ When reporting a bug, please ensure you:
 This helps maintainers quickly triage and address issues.
 
 ### Feature Requests
+
 Include:
+
 - Clear description of the desired feature
 - Use case or problem it solves
 - Any implementation ideas or considerations
@@ -257,22 +293,23 @@ Include:
 Before submitting a pull request, please ensure you:
 
 1. **Work from the latest source on the main branch**
-2. **Create a feature branch** for your changes: `git checkout -b feature/your-feature-name`
-3. **Format your code**: `pdm run format`
-4. **Lint your code**: `pdm run lint`
-5. **Run all tests**: `pdm run test`
-6. **Check code quality**: Type hints, docstrings, SPDX headers, import organization
-7. **Add appropriate tests** for new functionality (smoke/unit/integration as needed)
-8. **Write clear, descriptive commit messages**
-9. **Provide a concise summary and motivation for the change in the PR**
-10. **List all key changes and dependencies**
-11. **Select the correct type(s) of change** (bug fix, feature, breaking change)
-12. **Complete the checklist in the PR template**
-13. **Confirm your contribution can be used under the project license**
+1. **Create a feature branch** for your changes: `git checkout -b feature/your-feature-name`
+1. **Format your code**: `pdm run format`
+1. **Lint your code**: `pdm run lint`
+1. **Run all tests**: `pdm run test`
+1. **Check code quality**: Type hints, docstrings, SPDX headers, import organization
+1. **Add appropriate tests** for new functionality (smoke/unit/integration as needed)
+1. **Write clear, descriptive commit messages**
+1. **Provide a concise summary and motivation for the change in the PR**
+1. **List all key changes and dependencies**
+1. **Select the correct type(s) of change** (bug fix, feature, breaking change)
+1. **Complete the checklist in the PR template**
+1. **Confirm your contribution can be used under the project license**
 
 See the [Pull Request template](.github/PULL_REQUEST_TEMPLATE.md) for the full checklist and required fields.
 
 To submit a pull request:
+
 - Fork our repository
 - Push your feature branch to your fork
 - Open a pull request on GitHub, answering any default questions in the interface
