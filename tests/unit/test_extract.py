@@ -662,6 +662,80 @@ class TestAdExtractorNavigation:
         assert refs == ["/s-anzeige/page-one/111", "/s-anzeige/page-two/222"]
         next_button_enabled.click.assert_awaited()  # triggered once during navigation
 
+    @pytest.mark.asyncio
+    async def test_extract_own_ads_urls_timeout_in_callback(self, test_extractor:AdExtractor) -> None:
+        """Test that TimeoutError in extract_page_refs callback stops pagination."""
+        with (
+            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
+            patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_execute", new_callable = AsyncMock),
+        ):
+            # Setup: ad list container exists, but web_find_all for cardbox raises TimeoutError
+            ad_list_container_mock = MagicMock()
+
+            call_count = {"count": 0}
+
+            def mock_find_side_effect(*args:Any, **kwargs:Any) -> Element:
+                call_count["count"] += 1
+                if call_count["count"] == 1:
+                    # First call: ad list container (before pagination loop)
+                    return ad_list_container_mock
+                # Second call: ad list container (inside callback)
+                return ad_list_container_mock
+
+            mock_web_find.side_effect = mock_find_side_effect
+
+            # Make web_find_all for cardbox raise TimeoutError (simulating missing ad items)
+            async def mock_find_all_side_effect(*args:Any, **kwargs:Any) -> list[Element]:
+                raise TimeoutError("Ad items not found")
+
+            with patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, side_effect = mock_find_all_side_effect):
+                refs = await test_extractor.extract_own_ads_urls()
+
+            # Pagination should stop (TimeoutError in callback returns True)
+            assert refs == []
+
+    @pytest.mark.asyncio
+    async def test_extract_own_ads_urls_generic_exception_in_callback(self, test_extractor:AdExtractor) -> None:
+        """Test that generic Exception in extract_page_refs callback continues pagination."""
+        with (
+            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
+            patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
+        ):
+            # Setup: ad list container exists, but web_find_all raises generic Exception
+            ad_list_container_mock = MagicMock()
+
+            call_count = {"count": 0}
+
+            def mock_find_side_effect(*args:Any, **kwargs:Any) -> Element:
+                call_count["count"] += 1
+                if call_count["count"] == 1:
+                    # First call: ad list container (before pagination loop)
+                    return ad_list_container_mock
+                # Second call: pagination check - raise TimeoutError to indicate no pagination
+                if call_count["count"] == 2:
+                    raise TimeoutError("No pagination")
+                # Third call: ad list container (inside callback)
+                return ad_list_container_mock
+
+            mock_web_find.side_effect = mock_find_side_effect
+
+            # Make web_find_all raise a generic exception
+            async def mock_find_all_side_effect(*args:Any, **kwargs:Any) -> list[Element]:
+                raise AttributeError("Unexpected error")
+
+            with patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, side_effect = mock_find_all_side_effect):
+                refs = await test_extractor.extract_own_ads_urls()
+
+            # Pagination should continue despite exception (callback returns False)
+            # Since it's a single page (no pagination), refs should be empty
+            assert refs == []
+
 
 class TestAdExtractorContent:
     """Tests for content extraction functionality."""

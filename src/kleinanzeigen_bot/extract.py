@@ -148,104 +148,34 @@ class AdExtractor(WebScrapingMixin):
 
         :return: the links to your ad pages
         """
-        # navigate to "your ads" page
-        await self.web_open("https://www.kleinanzeigen.de/m-meine-anzeigen.html")
-        await self.web_sleep(2000, 3000)  # Consider replacing with explicit waits later
-
-        # Try to find the main ad list container first
-        try:
-            _ = await self.web_find(By.ID, "my-manageitems-adlist")
-        except TimeoutError:
-            LOG.warning("Ad list container #my-manageitems-adlist not found. Maybe no ads present?")
-            return []
-
-        # --- Pagination handling ---
-        multi_page = False
-        pagination_timeout = self._timeout("pagination_initial")
-        try:
-            # Correct selector: Use uppercase '.Pagination'
-            pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout = pagination_timeout)  # Increased timeout slightly
-            # Correct selector: Use 'aria-label'
-            # Also check if the button is actually present AND potentially enabled (though enabled check isn't strictly necessary here, only for clicking later)
-            next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section)
-            if next_buttons:
-                # Check if at least one 'Nächste' button is not disabled (optional but good practice)
-                enabled_next_buttons = [btn for btn in next_buttons if not btn.attrs.get("disabled")]
-                if enabled_next_buttons:
-                    multi_page = True
-                    LOG.info("Multiple ad pages detected.")
-                else:
-                    LOG.info("Next button found but is disabled. Assuming single effective page.")
-
-            else:
-                LOG.info('No "Naechste" button found within pagination. Assuming single page.')
-        except TimeoutError:
-            # This will now correctly trigger only if the '.Pagination' div itself is not found
-            LOG.info("No pagination controls found. Assuming single page.")
-        except Exception as e:
-            LOG.exception("Error during pagination detection: %s", e)
-            LOG.info("Assuming single page due to error during pagination check.")
-        # --- End Pagination Handling ---
-
         refs:list[str] = []
-        current_page = 1
-        while True:  # Loop reference extraction
-            LOG.info("Extracting ads from page %s...", current_page)
-            # scroll down to load dynamically if necessary
-            await self.web_scroll_page_down()
-            await self.web_sleep(2000, 3000)  # Consider replacing with explicit waits
 
-            # Re-find the ad list container on the current page/state
+        async def extract_page_refs(page_num:int) -> bool:
+            """Extract ad reference URLs from the current page.
+
+            :param page_num: The current page number being processed
+            :return: True to stop pagination (e.g. ads container disappeared), False to continue to next page
+            """
             try:
                 ad_list_container = await self.web_find(By.ID, "my-manageitems-adlist")
                 list_items = await self.web_find_all(By.CLASS_NAME, "cardbox", parent = ad_list_container)
-                LOG.info("Found %s ad items on page %s.", len(list_items), current_page)
-            except TimeoutError:
-                LOG.warning("Could not find ad list container or items on page %s.", current_page)
-                break  # Stop if ads disappear
+                LOG.info("Found %s ad items on page %s.", len(list_items), page_num)
 
-            # Extract references using the CORRECTED selector
-            try:
                 page_refs:list[str] = [str((await self.web_find(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = li)).attrs["href"]) for li in list_items]
                 refs.extend(page_refs)
-                LOG.info("Successfully extracted %s refs from page %s.", len(page_refs), current_page)
-            except Exception as e:
-                # Log the error if extraction fails for some items, but try to continue
-                LOG.exception("Error extracting refs on page %s: %s", current_page, e)
+                LOG.info("Successfully extracted %s refs from page %s.", len(page_refs), page_num)
+                return False  # Continue to next page
 
-            if not multi_page:  # only one iteration for single-page overview
-                break
-
-            # --- Navigate to next page ---
-            follow_up_timeout = self._timeout("pagination_follow_up")
-            try:
-                # Find the pagination section again (scope might have changed after scroll/wait)
-                pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout = follow_up_timeout)
-                # Find the "Next" button using the correct aria-label selector and ensure it's not disabled
-                next_button_element = None
-                possible_next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section)
-                for btn in possible_next_buttons:
-                    if not btn.attrs.get("disabled"):  # Check if the button is enabled
-                        next_button_element = btn
-                        break  # Found an enabled next button
-
-                if next_button_element:
-                    LOG.info("Navigating to next page...")
-                    await next_button_element.click()
-                    current_page += 1
-                    # Wait for page load - consider waiting for a specific element on the new page instead of fixed sleep
-                    await self.web_sleep(3000, 4000)
-                else:
-                    LOG.info('Last ad overview page explored (no enabled "Naechste" button found).')
-                    break
             except TimeoutError:
-                # This might happen if pagination disappears on the last page after loading
-                LOG.info("No pagination controls found after scrolling/waiting. Assuming last page.")
-                break
+                LOG.warning("Could not find ad list container or items on page %s.", page_num)
+                return True  # Stop pagination (ads disappeared)
             except Exception as e:
-                LOG.exception("Error during pagination navigation: %s", e)
-                break
-            # --- End Navigation ---
+                # Continue despite error for resilience against transient web scraping issues
+                # (e.g., DOM structure changes, network glitches). LOG.exception ensures visibility.
+                LOG.exception("Error extracting refs on page %s: %s", page_num, e)
+                return False  # Continue to next page
+
+        await self._navigate_paginated_ad_overview(extract_page_refs)
 
         if not refs:
             LOG.warning("No ad URLs were extracted.")
