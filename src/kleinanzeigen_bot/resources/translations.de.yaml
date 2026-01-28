@@ -603,6 +603,8 @@ kleinanzeigen_bot/model/config_model.py:
     "amount must be specified when auto_price_reduction is enabled": "amount muss angegeben werden, wenn auto_price_reduction aktiviert ist"
     "min_price must be specified when auto_price_reduction is enabled": "min_price muss angegeben werden, wenn auto_price_reduction aktiviert ist"
     "Percentage reduction amount must not exceed %s": "Prozentuale Reduktionsmenge darf %s nicht überschreiten"
+  _validate_glob_pattern:
+    "must be a non-empty, non-blank glob pattern": "muss ein nicht-leeres Glob-Muster sein"
   _validate_pause_requires_capture:
     "pause_on_login_detection_failure requires login_detection_capture to be enabled": "pause_on_login_detection_failure erfordert, dass login_detection_capture aktiviert ist"
 

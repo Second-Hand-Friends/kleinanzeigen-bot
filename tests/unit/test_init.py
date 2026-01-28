@@ -509,17 +509,21 @@ class TestKleinanzeigenBotAuthentication:
             # First login attempt:
             # 1. Captcha iframe found (in check_and_wait_for_captcha)
             # 2. Phone verification not found (in handle_after_login_logic)
-            # 3. GDPR banner not found (in handle_after_login_logic)
+            # 3. Email verification not found (in handle_after_login_logic)
+            # 4. GDPR banner not found (in handle_after_login_logic)
             # Second login attempt:
-            # 4. Captcha iframe found (in check_and_wait_for_captcha)
-            # 5. Phone verification not found (in handle_after_login_logic)
-            # 6. GDPR banner not found (in handle_after_login_logic)
+            # 5. Captcha iframe found (in check_and_wait_for_captcha)
+            # 6. Phone verification not found (in handle_after_login_logic)
+            # 7. Email verification not found (in handle_after_login_logic)
+            # 8. GDPR banner not found (in handle_after_login_logic)
             mock_find.side_effect = [
                 AsyncMock(),  # Captcha iframe (first login)
                 TimeoutError(),  # Phone verification (first login)
+                TimeoutError(),  # Email verification (first login)
                 TimeoutError(),  # GDPR banner (first login)
                 AsyncMock(),  # Captcha iframe (second login)
                 TimeoutError(),  # Phone verification (second login)
+                TimeoutError(),  # Email verification (second login)
                 TimeoutError(),  # GDPR banner (second login)
             ]
             mock_ainput.return_value = ""
@@ -529,7 +533,7 @@ class TestKleinanzeigenBotAuthentication:
             await test_bot.login()
 
             # Verify the complete flow
-            assert mock_find.call_count == 6  # Exactly 6 web_find calls
+            assert mock_find.call_count == 8  # Exactly 8 web_find calls
             assert mock_ainput.call_count == 2  # Two captcha prompts
             assert mock_input.call_count == 6  # Two login attempts with username, clear password, and set password
             assert mock_click.call_count == 2  # Two submit button clicks
@@ -583,13 +587,13 @@ class TestKleinanzeigenBotAuthentication:
             patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
             # Test case 1: No special handling needed
-            mock_find.side_effect = [TimeoutError(), TimeoutError()]  # No phone verification, no GDPR
+            mock_find.side_effect = [TimeoutError(), TimeoutError(), TimeoutError()]  # No phone verification, no email verification, no GDPR
             mock_click.return_value = AsyncMock()
             mock_ainput.return_value = ""
 
             await test_bot.handle_after_login_logic()
 
-            assert mock_find.call_count == 2
+            assert mock_find.call_count == 3
             assert mock_click.call_count == 0
             assert mock_ainput.call_count == 0
 
@@ -597,11 +601,11 @@ class TestKleinanzeigenBotAuthentication:
             mock_find.reset_mock()
             mock_click.reset_mock()
             mock_ainput.reset_mock()
-            mock_find.side_effect = [AsyncMock(), TimeoutError()]  # Phone verification found, no GDPR
+            mock_find.side_effect = [AsyncMock(), TimeoutError(), TimeoutError()]  # Phone verification found, no email verification, no GDPR
 
             await test_bot.handle_after_login_logic()
 
-            assert mock_find.call_count == 2
+            assert mock_find.call_count == 3
             assert mock_click.call_count == 0  # No click needed, just wait for user
             assert mock_ainput.call_count == 1  # Wait for user to complete verification
 
@@ -609,11 +613,11 @@ class TestKleinanzeigenBotAuthentication:
             mock_find.reset_mock()
             mock_click.reset_mock()
             mock_ainput.reset_mock()
-            mock_find.side_effect = [TimeoutError(), AsyncMock()]  # No phone verification, GDPR found
+            mock_find.side_effect = [TimeoutError(), TimeoutError(), AsyncMock()]  # No phone verification, no email verification, GDPR found
 
             await test_bot.handle_after_login_logic()
 
-            assert mock_find.call_count == 2
+            assert mock_find.call_count == 3
             assert mock_click.call_count == 2  # Click to accept GDPR and continue
             assert mock_ainput.call_count == 0
 
