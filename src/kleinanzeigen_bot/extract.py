@@ -525,19 +525,65 @@ class AdExtractor(WebScrapingMixin):
                 LOG.warning("Could not extract ad ID from URL: %s", self.page.url)
                 return None
 
-            # Fetch the management JSON data using web_request
-            response = await self.web_request("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json")
-            json_data = json.loads(response["content"])
+            # Fetch the management JSON data using web_request with pagination support
+            page = 1
 
-            # Find the current ad in the ads list
-            if isinstance(json_data, dict) and "ads" in json_data:
-                ads_list = json_data["ads"]
-                if isinstance(ads_list, list):
-                    # Filter ads to find the current ad by ID
-                    current_ad = next((ad for ad in ads_list if ad.get("id") == current_ad_id), None)
-                    if current_ad and "buyNowEligible" in current_ad:
-                        buy_now_eligible = current_ad["buyNowEligible"]
-                        return buy_now_eligible if isinstance(buy_now_eligible, bool) else None
+            while True:
+                response = await self.web_request(f"https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page={page}")
+                json_data = json.loads(response["content"])
+
+                # Find the current ad in the ads list
+                if isinstance(json_data, dict) and "ads" in json_data:
+                    ads_list = json_data["ads"]
+                    if isinstance(ads_list, list):
+                        # Filter ads to find the current ad by ID
+                        current_ad = next((ad for ad in ads_list if ad.get("id") == current_ad_id), None)
+                        if current_ad and "buyNowEligible" in current_ad:
+                            buy_now_eligible = current_ad["buyNowEligible"]
+                            return buy_now_eligible if isinstance(buy_now_eligible, bool) else None
+
+                # Check if we need to fetch more pages
+                paging = json_data.get("paging") if isinstance(json_data, dict) else None
+                if not isinstance(paging, dict):
+                    break
+
+                # Parse pagination info with explicit None checks (not truthy checks) to handle 0-based indexing
+                def _coerce_page_number(value:Any) -> int | None:
+                    if value is None:
+                        return None
+                    try:
+                        return int(value)
+                    except (TypeError, ValueError):
+                        return None
+
+                # Support multiple field name variations
+                if paging.get("pageNum") is not None:
+                    current_page_num = _coerce_page_number(paging.get("pageNum"))
+                elif paging.get("page") is not None:
+                    current_page_num = _coerce_page_number(paging.get("page"))
+                elif paging.get("currentPage") is not None:
+                    current_page_num = _coerce_page_number(paging.get("currentPage"))
+                else:
+                    current_page_num = page
+
+                if paging.get("last") is not None:
+                    total_pages = _coerce_page_number(paging.get("last"))
+                elif paging.get("pages") is not None:
+                    total_pages = _coerce_page_number(paging.get("pages"))
+                elif paging.get("totalPages") is not None:
+                    total_pages = _coerce_page_number(paging.get("totalPages"))
+                elif paging.get("pageCount") is not None:
+                    total_pages = _coerce_page_number(paging.get("pageCount"))
+                elif paging.get("maxPages") is not None:
+                    total_pages = _coerce_page_number(paging.get("maxPages"))
+                else:
+                    total_pages = None
+
+                # Stop if we've reached the last page or there's no pagination info
+                if total_pages is None or (current_page_num is not None and current_page_num >= total_pages):
+                    break
+
+                page = (current_page_num if current_page_num is not None else page) + 1
 
             # If the key doesn't exist or ad not found, return None (unknown)
             return None
