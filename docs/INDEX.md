@@ -24,13 +24,13 @@ Contributor documentation is located in the main repository:
 
 New users should start with the [README](../README.md), then refer to these documents for detailed configuration and troubleshooting information.
 
-Quick Start (3 steps):
+### Quick Start (3 steps)
 
 1. Install and run the app from the [README](../README.md).
 2. Generate `config.yaml` with `kleinanzeigen-bot create-config` and review defaults in [Configuration](./CONFIGURATION.md).
 3. Verify your setup with `kleinanzeigen-bot verify`, then publish with `kleinanzeigen-bot publish`.
 
-Common Troubleshooting Tips:
+### Common Troubleshooting Tips
 
 - Browser connection issues: confirm remote debugging settings and Chrome 136+ requirements in [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md).
 - Update checks not running: verify `update_check.enabled` and `update_check.interval` in [Update Check Feature](./UPDATE_CHECK.md).

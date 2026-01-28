@@ -265,7 +265,9 @@ All configuration files can be in YAML or JSON format.
 
 ### Installation modes (portable vs. system-wide)
 
-On first run, the app may ask which installation mode to use. In non-interactive environments (CI/headless), it defaults to portable mode and will not prompt. The `--config` and `--logfile` flags override only their specific paths and do not change other mode-dependent paths or the chosen installation mode behavior.
+On first run, the app may ask which installation mode to use. In non-interactive environments (CI/headless), it defaults to portable mode and will not prompt.
+
+The `--config` and `--logfile` flags override only their specific paths. They do not change the chosen installation mode or other mode-dependent paths (downloads, state files, etc.).
 
 1. **Portable mode (recommended for most users, especially on Windows):**
 

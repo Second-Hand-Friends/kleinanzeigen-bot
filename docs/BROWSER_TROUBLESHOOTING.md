@@ -8,14 +8,14 @@ This guide helps you resolve common browser connection issues with the kleinanze
 
 Google implemented security changes in Chrome 136 that require `--user-data-dir` to be specified when using `--remote-debugging-port`. This prevents attackers from accessing the default Chrome profile and stealing cookies/credentials.
 
-**Quick Fix:**
+### Quick Fix
 
 ```bash
 # Start Chrome with custom user data directory
 chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug-profile
 ```
 
-**In your config.yaml:**
+### In your config.yaml
 
 ```yaml
 browser:
@@ -269,7 +269,9 @@ pdm run app publish        # For source users
 
 If you're on macOS and Chrome is started with remote debugging but the bot still can't connect:
 
-#### ⚠️ IMPORTANT: This is a Chrome/macOS security issue that requires a dedicated user data directory
+#### ⚠️ IMPORTANT: macOS Security Requirement
+
+This is a Chrome/macOS security issue that requires a dedicated user data directory.
 
 ```bash
 # Method 1: Use the full path to Chrome with dedicated user data directory
