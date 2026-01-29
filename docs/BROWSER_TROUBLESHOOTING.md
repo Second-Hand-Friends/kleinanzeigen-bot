@@ -88,23 +88,25 @@ The bot will also provide specific instructions on how to fix your configuration
 - More common with profiles unused for 20+ days
 
 **How login detection works:**
-The bot checks your login status using a fast server request first, with a fallback to checking page elements if needed.
+The bot checks your login status using page elements first (to minimize bot-like behavior), with a fallback to a server-side request if needed.
 
-The bot uses a **server-side auth probe** as the primary method to detect login state:
+The bot uses a **DOM-based check** as the primary method to detect login state:
 
-1. **Auth probe (preferred)**: Sends a GET request to `{root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT`
-
-   - Returns `LOGGED_IN` if the response is HTTP 200 with valid JSON containing `"ads"` key
-   - Returns `LOGGED_OUT` if response is HTTP 401/403 or HTML contains login markers
-   - Returns `UNKNOWN` on timeouts, assertion failures, or unexpected response bodies
-
-1. **DOM fallback**: Only used when the auth probe returns `UNKNOWN`
+1. **DOM check (preferred - stealthy)**: Checks for user profile elements in the page
 
    - Looks for `.mr-medium` element containing username
    - Falls back to `#user-email` ID
    - Uses the `login_detection` timeout (default: 10.0 seconds with effective timeout with retry/backoff)
+   - Minimizes bot detection by avoiding JSON API requests that normal users wouldn't trigger
 
-1. **Diagnostics capture**: If the state remains `UNKNOWN` and `diagnostics.login_detection_capture` is enabled
+2. **Auth probe fallback (more reliable)**: Sends a GET request to `{root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT`
+
+   - Returns `LOGGED_IN` if the response is HTTP 200 with valid JSON containing `"ads"` key
+   - Returns `LOGGED_OUT` if response is HTTP 401/403 or HTML contains login markers
+   - Returns `UNKNOWN` on timeouts, assertion failures, or unexpected response bodies
+   - Only used when DOM check is inconclusive (UNKNOWN or timed out)
+
+3. **Diagnostics capture**: If the state remains `UNKNOWN` and `diagnostics.login_detection_capture` is enabled
 
    - Captures a screenshot and HTML dump for troubleshooting
    - Pauses for manual inspection if `diagnostics.pause_on_login_detection_failure` is enabled and running in an interactive terminal
@@ -114,7 +116,7 @@ The bot uses a **server-side auth probe** as the primary method to detect login 
 - Maximum time (seconds) to wait for user profile DOM elements when checking if already logged in
 - Default: `10.0` seconds (effective timeout with retry/backoff)
 - Used at startup before attempting login
-- Note: With the new auth probe, this timeout only applies to the DOM fallback path
+- Note: With DOM-first order, this timeout applies to the primary DOM check path
 
 **When to increase `login_detection`:**
 

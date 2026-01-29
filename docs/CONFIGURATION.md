@@ -98,7 +98,7 @@ Timeout tuning for various browser operations. Adjust these if you experience sl
     sms_verification: 4.0               # Timeout for SMS verification banners
     email_verification: 4.0             # Timeout for email verification prompts
     gdpr_prompt: 10.0                   # Timeout when handling GDPR dialogs
-  login_detection: 10.0               # Timeout for DOM-based login detection fallback (auth probe is tried first)
+  login_detection: 10.0               # Timeout for DOM-based login detection (primary method)
   publishing_result: 300.0            # Timeout for publishing status checks
   publishing_confirmation: 20.0         # Timeout for publish confirmation redirect
   image_upload: 30.0                  # Timeout for image upload and server-side processing
@@ -233,19 +233,21 @@ diagnostics:
 
 **Login Detection Behavior:**
 
-The bot uses a server-side auth probe to detect login state more reliably:
+The bot uses a layered approach to detect login state, prioritizing stealth over reliability:
 
-1. **Auth probe (primary method)**: Sends a GET request to `{root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT`
-
-   - Returns `LOGGED_IN` if response is HTTP 200 with valid JSON containing `"ads"` key
-   - Returns `LOGGED_OUT` if response is HTTP 401/403 or HTML contains login markers
-   - Returns `UNKNOWN` on timeouts, assertion failures, or unexpected response bodies
-
-2. **DOM fallback**: Only consulted when auth probe returns `UNKNOWN`
+1. **DOM check (primary method - preferred for stealth)**: Checks for user profile elements
 
    - Looks for `.mr-medium` element containing username
    - Falls back to `#user-email` ID
    - Uses `login_detection` timeout (default: 10.0 seconds)
+   - Minimizes bot-like behavior by avoiding JSON API requests
+
+2. **Auth probe fallback (more reliable)**: Sends a GET request to `{root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT`
+
+   - Returns `LOGGED_IN` if response is HTTP 200 with valid JSON containing `"ads"` key
+   - Returns `LOGGED_OUT` if response is HTTP 401/403 or HTML contains login markers
+   - Returns `UNKNOWN` on timeouts, assertion failures, or unexpected response bodies
+   - Only used when DOM check is inconclusive (UNKNOWN or timed out)
 
 **Optional diagnostics:**
 
