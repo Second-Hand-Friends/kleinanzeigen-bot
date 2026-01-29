@@ -25,6 +25,7 @@ __all__ = [
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 _BREADCRUMB_MIN_DEPTH:Final[int] = 2
+_SELL_DIRECTLY_MAX_PAGE_LIMIT:Final[int] = 100
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
 
 
@@ -547,12 +548,11 @@ class AdExtractor(WebScrapingMixin):
 
             # Fetch the management JSON data using web_request with pagination support
             page = 1
-            MAX_PAGE_LIMIT:Final[int] = 100
 
             while True:
                 # Safety check: don't paginate beyond reasonable limit
-                if page > MAX_PAGE_LIMIT:
-                    LOG.warning("Stopping pagination after %s pages to avoid infinite loop", MAX_PAGE_LIMIT)
+                if page > _SELL_DIRECTLY_MAX_PAGE_LIMIT:
+                    LOG.warning("Stopping pagination after %s pages to avoid infinite loop", _SELL_DIRECTLY_MAX_PAGE_LIMIT)
                     break
 
                 response = await self.web_request(f"https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page={page}")
@@ -581,10 +581,9 @@ class AdExtractor(WebScrapingMixin):
                 # Parse pagination info with explicit None checks (not truthy checks) to handle 0-based indexing
                 # Support multiple field name variations
                 current_page_num = _coerce_page_number(_get_paging_value(paging, ["pageNum", "page", "currentPage"]))
-                if current_page_num is None:
-                    current_page_num = page
-
                 total_pages = _coerce_page_number(_get_paging_value(paging, ["last", "pages", "totalPages", "pageCount", "maxPages"]))
+                if current_page_num is None and total_pages is not None:
+                    current_page_num = page
 
                 # Stop if we've reached the last page or there's no pagination info
                 if current_page_num is not None:

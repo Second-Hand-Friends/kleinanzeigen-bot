@@ -10,6 +10,7 @@ from urllib.error import URLError
 
 import pytest
 
+import kleinanzeigen_bot.extract as extract_module
 from kleinanzeigen_bot.extract import AdExtractor
 from kleinanzeigen_bot.model.ad_model import AdPartial, ContactPartial
 from kleinanzeigen_bot.model.config_model import Config, DownloadConfig
@@ -1025,6 +1026,115 @@ class TestAdExtractorContent:
 
             # Verify web_request was called with the correct URL (now includes pagination)
             mock_web_request.assert_awaited_once_with("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=1")
+
+    @pytest.mark.asyncio
+    async def test_extract_sell_directly_page_limit_zero(self, test_extractor:AdExtractor, monkeypatch:pytest.MonkeyPatch) -> None:
+        test_extractor.page = MagicMock()
+        test_extractor.page.url = "https://www.kleinanzeigen.de/s-anzeige/test-ad/123456789"
+        monkeypatch.setattr(extract_module, "_SELL_DIRECTLY_MAX_PAGE_LIMIT", 0)
+
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request:
+            result = await test_extractor._extract_sell_directly_from_ad_page()
+            assert result is None
+            mock_web_request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_extract_sell_directly_paging_key_resolution(self, test_extractor:AdExtractor) -> None:
+        test_extractor.page = MagicMock()
+        test_extractor.page.url = "https://www.kleinanzeigen.de/s-anzeige/test-ad/123456789"
+
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request:
+            mock_web_request.return_value = {
+                "content": json.dumps(
+                    {
+                        "ads": [{"id": 987654321, "buyNowEligible": True}],
+                        "paging": {"pageNum": None, "page": "1", "currentPage": None, "last": 1},
+                    }
+                )
+            }
+
+            result = await test_extractor._extract_sell_directly_from_ad_page()
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_extract_sell_directly_current_page_minus_one(self, test_extractor:AdExtractor) -> None:
+        test_extractor.page = MagicMock()
+        test_extractor.page.url = "https://www.kleinanzeigen.de/s-anzeige/test-ad/123456789"
+
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request:
+            mock_web_request.side_effect = [
+                {"content": json.dumps({"ads": [{"id": 987654321}], "paging": {"pageNum": 0, "last": 2}})},
+                {"content": json.dumps({"ads": []})},
+            ]
+
+            result = await test_extractor._extract_sell_directly_from_ad_page()
+            assert result is None
+            mock_web_request.assert_any_await("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=1")
+            mock_web_request.assert_any_await("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=2")
+
+    @pytest.mark.asyncio
+    async def test_extract_sell_directly_invalid_page_number_type(self, test_extractor:AdExtractor) -> None:
+        test_extractor.page = MagicMock()
+        test_extractor.page.url = "https://www.kleinanzeigen.de/s-anzeige/test-ad/123456789"
+
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request:
+            mock_web_request.return_value = {"content": json.dumps({"ads": [{"id": 987654321}], "paging": {"pageNum": [1], "last": "invalid"}})}
+
+            result = await test_extractor._extract_sell_directly_from_ad_page()
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_extract_sell_directly_float_page_numbers(self, test_extractor:AdExtractor) -> None:
+        test_extractor.page = MagicMock()
+        test_extractor.page.url = "https://www.kleinanzeigen.de/s-anzeige/test-ad/123456789"
+
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request:
+            mock_web_request.return_value = {"content": json.dumps({"ads": [{"id": 987654321}], "paging": {"pageNum": 1.5, "last": 1}})}
+
+            result = await test_extractor._extract_sell_directly_from_ad_page()
+            assert result is None
+
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request:
+            mock_web_request.return_value = {"content": json.dumps({"ads": [{"id": 987654321}], "paging": {"pageNum": 2.0, "last": 1}})}
+
+            result = await test_extractor._extract_sell_directly_from_ad_page()
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_extract_sell_directly_page_limit(self, test_extractor:AdExtractor, monkeypatch:pytest.MonkeyPatch) -> None:
+        test_extractor.page = MagicMock()
+        test_extractor.page.url = "https://www.kleinanzeigen.de/s-anzeige/test-ad/123456789"
+        monkeypatch.setattr(extract_module, "_SELL_DIRECTLY_MAX_PAGE_LIMIT", 1)
+
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request:
+            mock_web_request.return_value = {"content": json.dumps({"ads": [{"id": 987654321}], "paging": {"pageNum": 0, "last": 2}})}
+
+            result = await test_extractor._extract_sell_directly_from_ad_page()
+            assert result is None
+            mock_web_request.assert_awaited_once_with("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=1")
+
+    @pytest.mark.asyncio
+    async def test_extract_sell_directly_paging_helper_edge_cases(self, test_extractor:AdExtractor) -> None:
+        test_extractor.page = MagicMock()
+        test_extractor.page.url = "https://www.kleinanzeigen.de/s-anzeige/test-ad/123456789"
+
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request:
+            mock_web_request.return_value = {"content": json.dumps({"ads": [{"id": 987654321}], "paging": {"pageNum": 1.5, "last": 1}})}
+
+            result = await test_extractor._extract_sell_directly_from_ad_page()
+            assert result is None
+
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request:
+            mock_web_request.return_value = {"content": json.dumps({"ads": [{"id": 987654321}], "paging": {"pageNum": [1], "last": "invalid"}})}
+
+            result = await test_extractor._extract_sell_directly_from_ad_page()
+            assert result is None
+
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request:
+            mock_web_request.return_value = {"content": json.dumps({"ads": [{"id": 987654321}], "paging": {}})}
+
+            result = await test_extractor._extract_sell_directly_from_ad_page()
+            assert result is None
 
 
 class TestAdExtractorCategory:
