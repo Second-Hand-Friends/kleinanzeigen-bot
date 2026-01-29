@@ -1082,6 +1082,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.warning("Failed to parse JSON response on page %s: %s (content: %s)", page, ex, snippet)
                 break
 
+            if not isinstance(json_data, dict):
+                content = response.get("content", "")
+                snippet = content[:SNIPPET_LIMIT] + ("..." if len(content) > SNIPPET_LIMIT else "")
+                LOG.warning("Unexpected JSON payload on page %s (content: %s)", page, snippet)
+                break
+
             page_ads = json_data.get("ads", [])
             if isinstance(page_ads, list):
                 ads.extend(page_ads)
