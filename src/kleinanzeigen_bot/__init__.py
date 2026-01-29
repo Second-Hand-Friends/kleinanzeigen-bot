@@ -1053,16 +1053,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         Whole-number floats are accepted; non-integer floats are rejected.
         """
-        if value is None:
-            return None
-        if isinstance(value, float):
-            if value.is_integer():
-                return int(value)
-            return None
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return None
+        return misc.coerce_page_number(value)
 
     async def _fetch_published_ads(self) -> list[dict[str, Any]]:
         """Fetch all published ads, handling API pagination.

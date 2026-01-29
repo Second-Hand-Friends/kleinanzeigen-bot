@@ -526,19 +526,6 @@ class AdExtractor(WebScrapingMixin):
                 LOG.warning("Could not extract ad ID from URL: %s", self.page.url)
                 return None
 
-            # Helper function to safely coerce values to int or None
-            def _coerce_page_number(value:Any) -> int | None:
-                if value is None:
-                    return None
-                if isinstance(value, float):
-                    if value.is_integer():
-                        return int(value)
-                    return None
-                try:
-                    return int(value)
-                except (TypeError, ValueError):
-                    return None
-
             def _get_paging_value(paging:dict[str, Any], keys:list[str]) -> Any:
                 for key in keys:
                     value = paging.get(key)
@@ -580,21 +567,13 @@ class AdExtractor(WebScrapingMixin):
 
                 # Parse pagination info with explicit None checks (not truthy checks) to handle 0-based indexing
                 # Support multiple field name variations
-                current_page_num = _coerce_page_number(_get_paging_value(paging, ["pageNum", "page", "currentPage"]))
-                total_pages = _coerce_page_number(_get_paging_value(paging, ["last", "pages", "totalPages", "pageCount", "maxPages"]))
+                current_page_num = misc.coerce_page_number(_get_paging_value(paging, ["pageNum", "page", "currentPage"]))
+                total_pages = misc.coerce_page_number(_get_paging_value(paging, ["last", "pages", "totalPages", "pageCount", "maxPages"]))
                 if current_page_num is None and total_pages is not None:
                     current_page_num = page
 
                 # Stop if we've reached the last page or there's no pagination info
-                if current_page_num is not None:
-                    if current_page_num == page:
-                        current_page_indexed = current_page_num
-                    elif current_page_num == page - 1:
-                        current_page_indexed = current_page_num + 1
-                    else:
-                        current_page_indexed = page
-                else:
-                    current_page_indexed = page
+                current_page_indexed = (current_page_num - 1) if current_page_num is not None else page
 
                 if total_pages is None or current_page_indexed >= total_pages:
                     break
