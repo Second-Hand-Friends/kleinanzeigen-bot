@@ -23,6 +23,8 @@ def coerce_page_number(value:Any) -> int | None:
     """
     if value is None:
         return None
+    if isinstance(value, bool):
+        return None
     if isinstance(value, float):
         if value.is_integer():
             return int(value)

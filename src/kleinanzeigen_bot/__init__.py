@@ -1047,14 +1047,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.debug("No login detected - DOM elements not found and server probe returned %s", state.name)
         return False
 
-    @staticmethod
-    def _coerce_page_number(value:Any) -> int | None:
-        """Safely coerce a value to int or return None if conversion fails.
-
-        Whole-number floats are accepted; non-integer floats are rejected.
-        """
-        return misc.coerce_page_number(value)
-
     async def _fetch_published_ads(self) -> list[dict[str, Any]]:
         """Fetch all published ads, handling API pagination.
 
@@ -1091,6 +1083,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             page_ads = json_data.get("ads", [])
             if isinstance(page_ads, list):
                 ads.extend(page_ads)
+            else:
+                preview = str(page_ads)
+                if len(preview) > SNIPPET_LIMIT:
+                    preview = preview[:SNIPPET_LIMIT] + "..."
+                LOG.warning("Unexpected 'ads' type on page %s: %s value: %s", page, type(page_ads).__name__, preview)
 
             paging = json_data.get("paging")
             if not isinstance(paging, dict):
@@ -1099,37 +1096,28 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             current_page = None
             total_pages = None
 
-            # Use explicit None checks, NOT truthy checks (0 is a valid page number)
+            # Use explicit None checks, NOT truthy checks
             # Support multiple field name variations for robustness
             if paging.get("pageNum") is not None:
-                current_page = self._coerce_page_number(paging.get("pageNum"))
+                current_page = misc.coerce_page_number(paging.get("pageNum"))
             elif paging.get("page") is not None:
-                current_page = self._coerce_page_number(paging.get("page"))
+                current_page = misc.coerce_page_number(paging.get("page"))
             elif paging.get("currentPage") is not None:
-                current_page = self._coerce_page_number(paging.get("currentPage"))
+                current_page = misc.coerce_page_number(paging.get("currentPage"))
 
             if paging.get("last") is not None:
-                total_pages = self._coerce_page_number(paging.get("last"))
+                total_pages = misc.coerce_page_number(paging.get("last"))
             elif paging.get("pages") is not None:
-                total_pages = self._coerce_page_number(paging.get("pages"))
+                total_pages = misc.coerce_page_number(paging.get("pages"))
             elif paging.get("totalPages") is not None:
-                total_pages = self._coerce_page_number(paging.get("totalPages"))
+                total_pages = misc.coerce_page_number(paging.get("totalPages"))
             elif paging.get("pageCount") is not None:
-                total_pages = self._coerce_page_number(paging.get("pageCount"))
+                total_pages = misc.coerce_page_number(paging.get("pageCount"))
             elif paging.get("maxPages") is not None:
-                total_pages = self._coerce_page_number(paging.get("maxPages"))
+                total_pages = misc.coerce_page_number(paging.get("maxPages"))
 
-            # Determine if we've reached the last page
-            # Normalize: page counter is always 1-indexed; detect 0- vs 1-indexed API
-            if current_page is not None:
-                if current_page == page:
-                    current_page_indexed = current_page
-                elif current_page == page - 1:
-                    current_page_indexed = current_page + 1
-                else:
-                    current_page_indexed = page
-            else:
-                current_page_indexed = page
+            # Determine if we've reached the last page (1-indexed)
+            current_page_indexed = current_page if current_page is not None else page
 
             if total_pages is None or current_page_indexed >= total_pages:
                 break

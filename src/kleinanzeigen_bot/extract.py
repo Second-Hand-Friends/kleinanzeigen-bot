@@ -565,17 +565,15 @@ class AdExtractor(WebScrapingMixin):
                 if not isinstance(paging, dict):
                     break
 
-                # Parse pagination info with explicit None checks (not truthy checks) to handle 0-based indexing
+                # Parse pagination info with explicit None checks (not truthy checks) to handle 1-based indexing
                 # Support multiple field name variations
                 current_page_num = misc.coerce_page_number(_get_paging_value(paging, ["pageNum", "page", "currentPage"]))
                 total_pages = misc.coerce_page_number(_get_paging_value(paging, ["last", "pages", "totalPages", "pageCount", "maxPages"]))
-                if current_page_num is None and total_pages is not None:
+                if current_page_num is None:
                     current_page_num = page
 
                 # Stop if we've reached the last page or there's no pagination info
-                current_page_indexed = (current_page_num - 1) if current_page_num is not None else page
-
-                if total_pages is None or current_page_indexed >= total_pages:
+                if total_pages is None or (current_page_num is not None and current_page_num >= total_pages):
                     break
 
                 # Always increment page counter to avoid infinite loops
