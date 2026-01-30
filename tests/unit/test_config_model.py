@@ -87,7 +87,7 @@ def test_timeout_config_resolve_falls_back_to_default() -> None:
 def test_diagnostics_pause_requires_capture_validation() -> None:
     """
     Unit: DiagnosticsConfig validator ensures pause_on_login_detection_failure
-    requires login_detection_capture to be enabled.
+    requires capture_on['login_detection'] to be enabled.
     """
     minimal_cfg = {
         "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
@@ -95,12 +95,12 @@ def test_diagnostics_pause_requires_capture_validation() -> None:
         "publishing": {"delete_old_ads": "BEFORE_PUBLISH", "delete_old_ads_by_title": False},
     }
 
-    valid_cfg = {**minimal_cfg, "diagnostics": {"login_detection_capture": True, "pause_on_login_detection_failure": True}}
+    valid_cfg = {**minimal_cfg, "diagnostics": {"capture_on": {"login_detection": True}, "pause_on_login_detection_failure": True}}
     config = Config.model_validate(valid_cfg)
     assert config.diagnostics is not None
     assert config.diagnostics.pause_on_login_detection_failure is True
-    assert config.diagnostics.login_detection_capture is True
+    assert config.diagnostics.capture_on == {"login_detection": True}
 
-    invalid_cfg = {**minimal_cfg, "diagnostics": {"login_detection_capture": False, "pause_on_login_detection_failure": True}}
-    with pytest.raises(ValueError, match = "pause_on_login_detection_failure requires login_detection_capture to be enabled"):
+    invalid_cfg = {**minimal_cfg, "diagnostics": {"capture_on": {"login_detection": False}, "pause_on_login_detection_failure": True}}
+    with pytest.raises(ValueError, match = "pause_on_login_detection_failure requires capture_on\\['login_detection'\\] to be enabled"):
         Config.model_validate(invalid_cfg)

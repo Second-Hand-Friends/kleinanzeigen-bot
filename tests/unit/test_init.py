@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from kleinanzeigen_bot import LOG, AdUpdateStrategy, KleinanzeigenBot, LoginState, misc
+from kleinanzeigen_bot import LOG, PUBLISH_MAX_RETRIES, AdUpdateStrategy, KleinanzeigenBot, LoginState, misc
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, DiagnosticsConfig, PublishingConfig
@@ -388,7 +388,7 @@ class TestKleinanzeigenBotAuthentication:
 
     @pytest.mark.asyncio
     async def test_get_login_state_unknown_captures_diagnostics_when_enabled(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-        test_bot.config.diagnostics = DiagnosticsConfig.model_validate({"login_detection_capture": True, "output_dir": str(tmp_path)})
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate({"capture_on": {"login_detection": True}, "output_dir": str(tmp_path)})
 
         page = MagicMock()
         page.save_screenshot = AsyncMock()
@@ -406,7 +406,7 @@ class TestKleinanzeigenBotAuthentication:
 
     @pytest.mark.asyncio
     async def test_get_login_state_unknown_does_not_capture_diagnostics_when_disabled(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-        test_bot.config.diagnostics = DiagnosticsConfig.model_validate({"login_detection_capture": False, "output_dir": str(tmp_path)})
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate({"capture_on": {"login_detection": False}, "output_dir": str(tmp_path)})
 
         page = MagicMock()
         page.save_screenshot = AsyncMock()
@@ -425,7 +425,7 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_get_login_state_unknown_pauses_for_inspection_when_enabled_and_interactive(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
         test_bot.config.diagnostics = DiagnosticsConfig.model_validate(
-            {"login_detection_capture": True, "pause_on_login_detection_failure": True, "output_dir": str(tmp_path)}
+            {"capture_on": {"login_detection": True}, "pause_on_login_detection_failure": True, "output_dir": str(tmp_path)}
         )
 
         page = MagicMock()
@@ -453,7 +453,7 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_get_login_state_unknown_does_not_pause_when_non_interactive(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
         test_bot.config.diagnostics = DiagnosticsConfig.model_validate(
-            {"login_detection_capture": True, "pause_on_login_detection_failure": True, "output_dir": str(tmp_path)}
+            {"capture_on": {"login_detection": True}, "pause_on_login_detection_failure": True, "output_dir": str(tmp_path)}
         )
 
         page = MagicMock()
@@ -652,7 +652,11 @@ class TestKleinanzeigenBotDiagnostics:
         diagnostics_ad_config:dict[str, Any],
     ) -> None:
         """Ensure publish failures capture diagnostics artifacts."""
-        test_bot.config.diagnostics = DiagnosticsConfig.model_validate({"publish_error_capture": True, "output_dir": str(tmp_path)})
+        log_file_path = tmp_path / "test.log"
+        log_file_path.write_text("Test log content\n", encoding = "utf-8")
+        test_bot.log_file_path = str(log_file_path)
+
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate({"capture_on": {"publish": True}, "output_dir": str(tmp_path)})
 
         page = MagicMock()
         page.save_screenshot = AsyncMock()
@@ -671,13 +675,50 @@ class TestKleinanzeigenBotDiagnostics:
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
-        assert page.save_screenshot.await_count == 3
-        assert page.get_content.await_count == 3
+        expected_retries = PUBLISH_MAX_RETRIES
+        assert page.save_screenshot.await_count == expected_retries
+        assert page.get_content.await_count == expected_retries
         entries = os.listdir(tmp_path)
         html_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_*.html")]
         json_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_*.json")]
-        assert len(html_files) == 3
-        assert len(json_files) == 3
+        assert len(html_files) == expected_retries
+        assert len(json_files) == expected_retries
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_publish_ads_captures_log_copy_when_enabled(
+        self,
+        test_bot:KleinanzeigenBot,
+        tmp_path:Path,
+        diagnostics_ad_config:dict[str, Any],
+    ) -> None:
+        """Ensure publish failures copy log file when capture_log_copy is enabled."""
+        log_file_path = tmp_path / "test.log"
+        log_file_path.write_text("Test log content\n", encoding = "utf-8")
+        test_bot.log_file_path = str(log_file_path)
+
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate({"capture_on": {"publish": True}, "capture_log_copy": True, "output_dir": str(tmp_path)})
+
+        page = MagicMock()
+        page.save_screenshot = AsyncMock()
+        page.get_content = AsyncMock(return_value = "<html></html>")
+        page.sleep = AsyncMock()
+        page.url = "https://example.com/fail"
+        test_bot.page = page
+
+        ad_cfg = Ad.model_validate(diagnostics_ad_config)
+        ad_cfg_orig = copy.deepcopy(diagnostics_ad_config)
+        ad_file = str(tmp_path / "ad_000001_Test.yml")
+
+        with (
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps({"ads": []})}),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
+        ):
+            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
+        entries = os.listdir(tmp_path)
+        log_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_*.log")]
+        assert len(log_files) == PUBLISH_MAX_RETRIES
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -688,7 +729,7 @@ class TestKleinanzeigenBotDiagnostics:
         diagnostics_ad_config:dict[str, Any],
     ) -> None:
         """Ensure diagnostics are not captured when disabled."""
-        test_bot.config.diagnostics = DiagnosticsConfig.model_validate({"publish_error_capture": False, "output_dir": str(tmp_path)})
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate({"capture_on": {"publish": False}, "output_dir": str(tmp_path)})
 
         page = MagicMock()
         page.save_screenshot = AsyncMock()

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import copy
 from gettext import gettext as _
-from typing import Annotated, Any, Final, Literal
+from typing import Annotated, Any, ClassVar, Final, Literal
 
 from pydantic import AfterValidator, Field, model_validator
 from typing_extensions import deprecated
@@ -196,18 +196,21 @@ class TimeoutConfig(ContextualModel):
 
 
 class DiagnosticsConfig(ContextualModel):
-    login_detection_capture:bool = Field(
-        default = False,
-        description = "If true, capture diagnostics artifacts (screenshot + HTML) when login detection returns UNKNOWN.",
+    CAPTURE_ON_ALLOWED_KEYS:ClassVar[set[str]] = {"login_detection", "publish"}
+    capture_on:dict[str, bool] = Field(
+        default_factory = dict,
+        description = "Enable diagnostics capture for specific operations. Allowed keys are listed in CAPTURE_ON_ALLOWED_KEYS. "
+        "Example: {'login_detection': True, 'publish': False}.",
+        examples = [{"login_detection": True, "publish": False}],
     )
-    publish_error_capture:bool = Field(
+    capture_log_copy:bool = Field(
         default = False,
-        description = "If true, capture diagnostics artifacts (screenshot + HTML + JSON) when publishing fails.",
+        description = "If true, copy the entire bot log file when diagnostics are captured (may duplicate log content).",
     )
     pause_on_login_detection_failure:bool = Field(
         default = False,
         description = "If true, pause (interactive runs only) after capturing login detection diagnostics "
-        "so that user can inspect the browser. Requires login_detection_capture to be enabled.",
+        "so that user can inspect the browser. Requires capture_on['login_detection'] to be enabled.",
     )
     output_dir:str | None = Field(
         default = None,
@@ -216,8 +219,12 @@ class DiagnosticsConfig(ContextualModel):
 
     @model_validator(mode = "after")
     def _validate_pause_requires_capture(self) -> "DiagnosticsConfig":
-        if self.pause_on_login_detection_failure and not self.login_detection_capture:
-            raise ValueError(_("pause_on_login_detection_failure requires login_detection_capture to be enabled"))
+        unknown_keys = set(self.capture_on) - self.CAPTURE_ON_ALLOWED_KEYS
+        if unknown_keys:
+            unknown_list = ", ".join(sorted(unknown_keys))
+            raise ValueError(_("capture_on contains unsupported keys: %s") % unknown_list)
+        if self.pause_on_login_detection_failure and not self.capture_on.get("login_detection", False):
+            raise ValueError(_("pause_on_login_detection_failure requires capture_on['login_detection'] to be enabled"))
         return self
 
 

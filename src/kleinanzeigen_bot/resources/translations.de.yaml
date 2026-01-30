@@ -63,6 +63,9 @@ kleinanzeigen_bot/__init__.py:
     "# Login detection returned UNKNOWN. Browser is paused for manual inspection.": "# Login-Erkennung ergab UNKNOWN. Browser ist zur manuellen Prüfung angehalten."
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
 
+  _capture_publish_error_diagnostics_if_enabled:
+    "Diagnostics capture failed during publish error handling: %s": "Diagnose-Erfassung fehlgeschlagen während der Veröffentlichung-Fehlerbehandlung: %s"
+
   login:
     "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
     "Current page URL after opening homepage: %s": "Aktuelle Seiten-URL nach dem Öffnen der Startseite: %s"
@@ -136,8 +139,6 @@ kleinanzeigen_bot/__init__.py:
     "DONE: (Re-)published %s (%s failed after retries)": "FERTIG: %s (erneut) veröffentlicht (%s fehlgeschlagen nach Wiederholungen)"
     "DONE: (Re-)published %s": "FERTIG: %s (erneut) veröffentlicht"
     "ad": "Anzeige"
-  _capture_publish_error_diagnostics_if_enabled:
-    "Publish diagnostics saved: %s %s %s": "Diagnosedaten gespeichert: %s %s %s"
   apply_auto_price_reduction:
     "Auto price reduction is enabled for [%s] but no price is configured.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber es wurde kein Preis konfiguriert."
     "Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber min_price entspricht dem Preis (%s) - es werden keine Reduktionen auftreten."
@@ -608,7 +609,8 @@ kleinanzeigen_bot/model/config_model.py:
   _validate_glob_pattern:
     "must be a non-empty, non-blank glob pattern": "muss ein nicht-leeres Glob-Muster sein"
   _validate_pause_requires_capture:
-    "pause_on_login_detection_failure requires login_detection_capture to be enabled": "pause_on_login_detection_failure erfordert, dass login_detection_capture aktiviert ist"
+    "capture_on contains unsupported keys: %s": "capture_on enthält nicht unterstützte Schlüssel: %s"
+    "pause_on_login_detection_failure requires capture_on['login_detection'] to be enabled": "pause_on_login_detection_failure erfordert, dass capture_on['login_detection'] aktiviert ist"
 
 #################################################
 kleinanzeigen_bot/model/ad_model.py:
@@ -641,6 +643,13 @@ kleinanzeigen_bot/model/update_check_state.py:
     "Interval too short: %s. Minimum interval is 1d. Using default interval for this run.": "Intervall zu kurz: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
     "Invalid interval format or unsupported unit: %s. Using default interval for this run.": "Ungültiges Intervallformat oder nicht unterstützte Einheit: %s. Es wird das Standardintervall für diesen Durchlauf verwendet."
     "Negative interval: %s. Minimum interval is 1d. Using default interval for this run.": "Negatives Intervall: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
+
+#################################################
+kleinanzeigen_bot/utils/diagnostics.py:
+#################################################
+  capture_diagnostics:
+    "Diagnostics saved: %s": "Diagnosedaten gespeichert: %s"
+    "Diagnostics capture enabled but no artifacts were saved": "Diagnoseerfassung aktiviert, aber keine Artefakte gespeichert"
 
 #################################################
 kleinanzeigen_bot/utils/xdg_paths.py:

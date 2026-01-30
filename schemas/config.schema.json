@@ -369,21 +369,23 @@
     },
     "DiagnosticsConfig": {
       "properties": {
-        "login_detection_capture": {
-          "default": false,
-          "description": "If true, capture diagnostics artifacts (screenshot + HTML) when login detection returns UNKNOWN.",
-          "title": "Login Detection Capture",
-          "type": "boolean"
+        "capture_on": {
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "description": "Enable diagnostics capture for specific operations. Supported keys: 'login_detection', 'publish'.",
+          "title": "Capture On",
+          "type": "object"
         },
-        "publish_error_capture": {
+        "capture_log_copy": {
           "default": false,
-          "description": "If true, capture diagnostics artifacts (screenshot + HTML + JSON) when publishing fails.",
-          "title": "Publish Error Capture",
+          "description": "If true, copy the entire bot log file when diagnostics are captured (may duplicate log content).",
+          "title": "Capture Log Copy",
           "type": "boolean"
         },
         "pause_on_login_detection_failure": {
           "default": false,
-          "description": "If true, pause (interactive runs only) after capturing login detection diagnostics so that user can inspect the browser. Requires login_detection_capture to be enabled.",
+          "description": "If true, pause (interactive runs only) after capturing login detection diagnostics so that user can inspect the browser. Requires capture_on['login_detection'] to be enabled.",
           "title": "Pause On Login Detection Failure",
           "type": "boolean"
         },
