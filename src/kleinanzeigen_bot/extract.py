@@ -30,6 +30,7 @@ BREADCRUMB_RE = re.compile(r"/c(\d+)")
 
 
 def _get_paging_value(paging:dict[str, Any], keys:list[str]) -> Any | None:
+    """Return the first non-None paging value for the given keys."""
     for key in keys:
         value = paging.get(key)
         if value is not None:

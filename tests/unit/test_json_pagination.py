@@ -76,6 +76,10 @@ class TestJSONPagination:
         if result is not None:
             pytest.fail(f"_coerce_page_number(3.14) expected None, got {result}")
 
+        result = misc.coerce_page_number(2.0)
+        if result != 2:
+            pytest.fail(f"_coerce_page_number(2.0) expected 2, got {result}")
+
     @pytest.mark.asyncio
     async def test_fetch_published_ads_single_page_no_paging(self, bot:KleinanzeigenBot) -> None:
         """Test fetching ads from single page with no paging info."""
