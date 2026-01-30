@@ -1065,7 +1065,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 break
 
             try:
-                response = await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page={page}")
+                response = await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum={page}")
             except TimeoutError as ex:
                 LOG.warning("Pagination request timed out on page %s: %s", page, ex)
                 break
@@ -1097,40 +1097,36 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             paging = json_data.get("paging")
             if not isinstance(paging, dict):
+                LOG.debug("No paging dict found on page %s, assuming single page", page)
                 break
 
-            current_page = None
-            total_pages = None
+            # Use only real API fields (confirmed from production data)
+            current_page_num = misc.coerce_page_number(paging.get("pageNum"))
+            total_pages = misc.coerce_page_number(paging.get("last"))
 
-            # Use explicit None checks, NOT truthy checks
-            # Known variants covered by tests: pageNum/last, page/totalPages, currentPage/maxPages
-            # Defensive fallbacks: pages, pageCount
-            if paging.get("pageNum") is not None:
-                current_page = misc.coerce_page_number(paging.get("pageNum"))
-            elif paging.get("page") is not None:
-                current_page = misc.coerce_page_number(paging.get("page"))
-            elif paging.get("currentPage") is not None:
-                current_page = misc.coerce_page_number(paging.get("currentPage"))
+            # Fallback to counter if API returns None for pageNum
+            if current_page_num is None:
+                current_page_num = page
 
-            if paging.get("last") is not None:
-                total_pages = misc.coerce_page_number(paging.get("last"))
-            elif paging.get("pages") is not None:
-                total_pages = misc.coerce_page_number(paging.get("pages"))
-            elif paging.get("totalPages") is not None:
-                total_pages = misc.coerce_page_number(paging.get("totalPages"))
-            elif paging.get("pageCount") is not None:
-                total_pages = misc.coerce_page_number(paging.get("pageCount"))
-            elif paging.get("maxPages") is not None:
-                total_pages = misc.coerce_page_number(paging.get("maxPages"))
-
-            # Determine if we've reached the last page (1-indexed)
-            current_page_indexed = current_page if current_page is not None else page
-
-            if total_pages is None or current_page_indexed >= total_pages:
+            if total_pages is None:
+                LOG.debug("No pagination info found, assuming single page")
                 break
 
-            # Calculate next page to request (1-indexed)
-            page += 1
+            # Stop if reached last page
+            if current_page_num >= total_pages:
+                LOG.info("Reached last page %s of %s, stopping pagination", current_page_num, total_pages)
+                break
+
+            # Safety: stop if no ads returned
+            if len(page_ads) == 0:
+                LOG.info("No ads found on page %s, stopping pagination", page)
+                break
+
+            LOG.debug("Page %s: fetched %s ads (numFound=%s)", page, len(page_ads), paging.get("numFound"))
+
+            # Use API's next field for navigation (more robust than our counter)
+            next_page = paging.get("next")
+            page = next_page if next_page is not None else page + 1
 
         return ads
 

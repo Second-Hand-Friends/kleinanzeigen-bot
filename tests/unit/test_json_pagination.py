@@ -94,7 +94,7 @@ class TestJSONPagination:
                 pytest.fail(f"Expected result[0]['id'] == 1, got {result[0]['id']}")
             if result[1]["id"] != 2:
                 pytest.fail(f"Expected result[1]['id'] == 2, got {result[1]['id']}")
-            mock_request.assert_awaited_once_with(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=1")
+            mock_request.assert_awaited_once_with(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum=1")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_single_page_with_paging(self, bot:KleinanzeigenBot) -> None:
@@ -110,7 +110,7 @@ class TestJSONPagination:
                 pytest.fail(f"Expected 1 ad, got {len(result)}")
             if result[0].get("id") != 1:
                 pytest.fail(f"Expected ad id 1, got {result[0].get('id')}")
-            mock_request.assert_awaited_once_with(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=1")
+            mock_request.assert_awaited_once_with(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum=1")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_multi_page(self, bot:KleinanzeigenBot) -> None:
@@ -134,9 +134,9 @@ class TestJSONPagination:
                 pytest.fail(f"Expected ids [1, 2, 3, 4, 5, 6] but got {[ad['id'] for ad in result]}")
             if mock_request.call_count != 3:
                 pytest.fail(f"Expected 3 web_request calls but got {mock_request.call_count}")
-            mock_request.assert_any_await(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=1")
-            mock_request.assert_any_await(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=2")
-            mock_request.assert_any_await(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page=3")
+            mock_request.assert_any_await(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum=1")
+            mock_request.assert_any_await(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum=2")
+            mock_request.assert_any_await(f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum=3")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_empty_list(self, bot:KleinanzeigenBot) -> None:
@@ -162,27 +162,6 @@ class TestJSONPagination:
             result = await bot._fetch_published_ads()
             if result != []:
                 pytest.fail(f"Expected empty list on invalid JSON, got {result}")
-
-    @pytest.mark.asyncio
-    async def test_fetch_published_ads_mixed_field_names(self, bot:KleinanzeigenBot) -> None:
-        """Test handling of different field name variations."""
-        page1_data = {"ads": [{"id": 1}], "paging": {"page": 1, "totalPages": 3}}
-        page2_data = {"ads": [{"id": 2}], "paging": {"currentPage": 2, "maxPages": 3}}
-
-        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
-            mock_request.side_effect = [
-                {"content": json.dumps(page1_data)},
-                {"content": json.dumps(page2_data)},
-                {"content": json.dumps({"ads": [], "paging": {"page": 3, "totalPages": 3}})},
-            ]
-
-            result = await bot._fetch_published_ads()
-
-            if len(result) != 2:
-                pytest.fail(f"Expected 2 ads, got {len(result)}")
-            ad_ids = [ad["id"] for ad in result]
-            if ad_ids != [1, 2]:
-                pytest.fail(f"Expected ids [1, 2], got {ad_ids}")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_missing_paging_dict(self, bot:KleinanzeigenBot) -> None:

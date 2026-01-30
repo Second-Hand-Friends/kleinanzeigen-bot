@@ -29,15 +29,6 @@ _SELL_DIRECTLY_MAX_PAGE_LIMIT:Final[int] = 100
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
 
 
-def _get_paging_value(paging:dict[str, Any], keys:list[str]) -> Any | None:
-    """Return the first non-None paging value for the given keys."""
-    for key in keys:
-        value = paging.get(key)
-        if value is not None:
-            return value
-    return None
-
-
 class AdExtractor(WebScrapingMixin):
     """
     Wrapper class for ad extraction that uses an active bot´s browser session to extract specific elements from an ad page.
@@ -567,19 +558,21 @@ class AdExtractor(WebScrapingMixin):
                 if not isinstance(paging, dict):
                     break
 
-                # Parse pagination info with explicit None checks (not truthy checks) to handle 1-based indexing
-                # Support multiple field name variations
-                current_page_num = misc.coerce_page_number(_get_paging_value(paging, ["pageNum", "page", "currentPage"]))
-                total_pages = misc.coerce_page_number(_get_paging_value(paging, ["last", "pages", "totalPages", "pageCount", "maxPages"]))
+                # Parse pagination info using real API fields
+                current_page_num = misc.coerce_page_number(paging.get("pageNum"))
+                total_pages = misc.coerce_page_number(paging.get("last"))
+
+                # Fallback to counter if API returns None for pageNum
                 if current_page_num is None:
                     current_page_num = page
 
-                # Stop if we've reached the last page or there's no pagination info
+                # Stop if we've reached the last page
                 if total_pages is None or current_page_num >= total_pages:
                     break
 
-                # Always increment page counter to avoid infinite loops
-                page += 1
+                # Use API's next field for navigation (more robust than our counter)
+                next_page = paging.get("next")
+                page = next_page if next_page is not None else page + 1
 
             # If the key doesn't exist or ad not found, return None (unknown)
             return None
