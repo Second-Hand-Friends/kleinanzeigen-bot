@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint-cli2/main/schema/markdownlint-cli2-config-schema.json",
+  "config": {
+    "MD013": false,
+    "MD033": false
+  },
+  "ignores": [
+    "CODE_OF_CONDUCT.md",
+    "data/"
+  ]
+}

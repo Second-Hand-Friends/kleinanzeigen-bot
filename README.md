@@ -4,6 +4,7 @@
 [![License](https://img.shields.io/github/license/Second-Hand-Friends/kleinanzeigen-bot.svg?color=blue)](LICENSE.txt)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.1%20adopted-ff69b4.svg)](CODE_OF_CONDUCT.md)
 [![codecov](https://codecov.io/github/Second-Hand-Friends/kleinanzeigen-bot/graph/badge.svg?token=SKLDTVWHVK)](https://codecov.io/github/Second-Hand-Friends/kleinanzeigen-bot)
+
 <!--[![Maintainability](https://qlty.sh/badges/69ff94b8-90e1-4096-91ed-3bcecf0b0597/maintainability.svg)](https://qlty.sh/gh/Second-Hand-Friends/projects/kleinanzeigen-bot)-->
 
 **Feedback and high-quality pull requests are highly welcome!**
@@ -20,13 +21,12 @@
 1. [Related Open-Source Projects](#related)
 1. [License](#license)
 
-For details on the new smoke test strategy and contributor guidance, see [TESTING.md](./docs/TESTING.md).
-
 ## <a name="about"></a>About
 
 **kleinanzeigen-bot** is a command-line application to **publish, update, delete, and republish listings** on kleinanzeigen.de.
 
 ### Key Features
+
 - **Automated Publishing**: Publish new listings from YAML/JSON configuration files
 - **Smart Republishing**: Automatically republish listings at configurable intervals to keep them at the top of search results
 - **Bulk Management**: Update or delete multiple listings at once
@@ -49,52 +49,56 @@ Es liegt in Ihrer Verantwortung, die rechtliche Zulässigkeit der Nutzung dieses
 Die Entwickler übernehmen keinerlei Haftung für mögliche Schäden oder rechtliche Konsequenzen.
 Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist untersagt.
 
-
 ## <a name="installation"></a>Installation
 
 ### Installation using pre-compiled exe
 
 1. The following components need to be installed:
+
    1. [Chromium](https://www.chromium.org/getting-involved/download-chromium), [Google Chrome](https://www.google.com/chrome/),
-      or Chromium based [Microsoft Edge](https://www.microsoft.com/edge) browser
+      or Chromium-based [Microsoft Edge](https://www.microsoft.com/edge) browser
 
 1. Open a command/terminal window
 
 1. Download and run the app by entering the following commands:
 
    1. On Windows:
-       ```batch
-       curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-windows-amd64.exe -o kleinanzeigen-bot.exe
 
-       kleinanzeigen-bot --help
-       ```
+      ```batch
+      curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-windows-amd64.exe -o kleinanzeigen-bot.exe
+
+      kleinanzeigen-bot --help
+      ```
 
    1. On Linux:
-       ```shell
-       curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-linux-amd64 -o kleinanzeigen-bot
 
-       chmod 755 kleinanzeigen-bot
+      ```shell
+      curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-linux-amd64 -o kleinanzeigen-bot
 
-       ./kleinanzeigen-bot --help
-       ```
+      chmod 755 kleinanzeigen-bot
+
+      ./kleinanzeigen-bot --help
+      ```
 
    1. On macOS:
-       ```shell
-       curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-darwin-amd64 -o kleinanzeigen-bot
 
-       chmod 755 kleinanzeigen-bot
+      ```shell
+      curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-darwin-amd64 -o kleinanzeigen-bot
 
-       ./kleinanzeigen-bot --help
-       ```
+      chmod 755 kleinanzeigen-bot
+
+      ./kleinanzeigen-bot --help
+      ```
 
 ### Installation using Docker
 
 1. The following components need to be installed:
    1. [Docker](https://www.docker.com/)
    1. [Bash](https://www.gnu.org/software/bash/) (on Windows e.g. via [Cygwin](https://www.cygwin.com/), [MSys2](https://www.msys2.org/) or git)
-   1. [X11 - X Window System](https://en.wikipedia.org/wiki/X_Window_System) display server (on Windows e.g. https://github.com/P-St/Portable-X-Server/releases/latest)
+   1. [X11 - X Window System](https://en.wikipedia.org/wiki/X_Window_System) display server (on Windows e.g. [Portable-X-Server](https://github.com/P-St/Portable-X-Server/releases/latest))
 
 **Running the docker image:**
+
 1. Ensure the X11 Server is running
 
 1. Run the docker image:
@@ -116,42 +120,53 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 ### Installation from source
 
 1. The following components need to be installed:
+
    1. [Chromium](https://www.chromium.org/getting-involved/download-chromium), [Google Chrome](https://www.google.com/chrome/),
-      or Chromium based [Microsoft Edge](https://www.microsoft.com/edge) browser
+      or Chromium-based [Microsoft Edge](https://www.microsoft.com/edge) browser
    1. [Python](https://www.python.org/) **3.10** or newer
    1. [pip](https://pypi.org/project/pip/)
    1. [git client](https://git-scm.com/downloads)
 
 1. Open a command/terminal window
+
 1. Clone the repo using
-   ```
+
+   ```bash
    git clone https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
    ```
+
 1. Change into the directory:
-   ```
+
+   ```bash
    cd kleinanzeigen-bot
    ```
+
 1. Install the Python dependencies using:
+
    ```bash
    pip install pdm
 
    pdm install
    ```
+
 1. Run the app:
-   ```
+
+   ```bash
    pdm run app --help
    ```
 
 ### Installation from source using Docker
 
 1. The following components need to be installed:
+
    1. [Docker](https://www.docker.com/)
    1. [git client](https://git-scm.com/downloads)
    1. [Bash](https://www.gnu.org/software/bash/) (on Windows e.g. via [Cygwin](https://www.cygwin.com/), [MSys2](https://www.msys2.org/) or git)
-   1. [X11 - X Window System](https://en.wikipedia.org/wiki/X_Window_System) display server (on Windows e.g. https://github.com/P-St/Portable-X-Server/releases/latest)
+   1. [X11 - X Window System](https://en.wikipedia.org/wiki/X_Window_System) display server (on Windows e.g. [Portable-X-Server](https://github.com/P-St/Portable-X-Server/releases/latest))
 
 1. Clone the repo using
-   ```
+
+   ```bash
    git clone https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
    ```
 
@@ -161,7 +176,7 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 
 1. Ensure the image is built:
 
-   ```
+   ```text
    $ docker image ls
    REPOSITORY                            TAG      IMAGE ID       CREATED       SIZE
    second-hand-friends/kleinanzeigen-bot latest   c31fd256eeea   1 minute ago  590MB
@@ -169,6 +184,7 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
    ```
 
 **Running the docker image:**
+
 1. Ensure the X11 Server is running
 
 1. Run the docker image:
@@ -187,10 +203,9 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
      --help
    ```
 
-
 ## <a name="usage"></a>Usage
 
-```
+```console
 Usage: kleinanzeigen-bot COMMAND [OPTIONS]
 
 Commands:
@@ -250,19 +265,24 @@ All configuration files can be in YAML or JSON format.
 
 ### Installation modes (portable vs. system-wide)
 
-On first run, the app may ask which installation mode to use. In non-interactive environments (CI/headless), it defaults to portable mode and will not prompt; `--config` and `--logfile` override only their specific paths, and do not change other mode-dependent paths or the chosen installation mode behavior.
+On first run, the app may ask which installation mode to use. In non-interactive environments (CI/headless), it defaults to portable mode and will not prompt.
+
+The `--config` and `--logfile` flags override only their specific paths. They do not change the chosen installation mode or other mode-dependent paths (downloads, state files, etc.).
 
 1. **Portable mode (recommended for most users, especially on Windows):**
+
    - Stores config, logs, downloads, and state in the current directory
    - No admin permissions required
    - Easy backup/migration; works from USB drives
 
-2. **System-wide mode (advanced users / multi-user setups):**
+1. **System-wide mode (advanced users / multi-user setups):**
+
    - Stores files in OS-standard locations
    - Cleaner directory structure; better separation from working directory
    - Requires proper permissions for user data directories
 
 **OS notes (brief):**
+
 - **Windows:** System-wide uses AppData (Roaming/Local); portable keeps everything beside the `.exe`.
 - **Linux:** System-wide follows XDG Base Directory spec; portable stays in the current working directory.
 - **macOS:** System-wide uses `~/Library/Application Support/kleinanzeigen-bot` (and related dirs); portable stays in the current directory.
@@ -274,157 +294,13 @@ When executing the app it by default looks for a `config.yaml` file in the curre
 The configuration file to be used can also be specified using the `--config <PATH>` command line parameter. It must point to a YAML or JSON file.
 Valid file extensions are `.json`, `.yaml` and `.yml`
 
-The following parameters can be configured:
+The configuration file supports many options including login credentials, ad file patterns, browser settings, timeouts, and update check configuration. To generate a default configuration file with all current defaults, run:
 
-```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/config.schema.json
-
-# glob (wildcard) patterns to select ad configuration files
-# if relative paths are specified, then they are relative to this configuration file
-ad_files:
-  - "./**/ad_*.{json,yml,yaml}"
-
-# default values for ads, can be overwritten in each ad configuration file
-ad_defaults:
-  active: true
-  type: OFFER # one of: OFFER, WANTED
-
-  description_prefix: ""
-  description_suffix: ""
-
-  price_type: NEGOTIABLE # one of: FIXED, NEGOTIABLE, GIVE_AWAY, NOT_APPLICABLE
-  shipping_type: SHIPPING # one of: PICKUP, SHIPPING, NOT_APPLICABLE
-  # NOTE: shipping_costs and shipping_options must be configured per-ad, not as defaults
-  sell_directly: false # requires shipping_type SHIPPING to take effect
-  contact:
-    name: ""
-    street: ""
-    zipcode:
-    phone: "" # IMPORTANT: surround phone number with quotes to prevent removal of leading zeros
-  republication_interval: 7 # every X days ads should be re-published
-
-# additional name to category ID mappings, see default list at
-# https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml
-categories:
-  Verschenken & Tauschen > Tauschen: 272/273
-  Verschenken & Tauschen > Verleihen: 272/274
-  Verschenken & Tauschen > Verschenken: 272/192
-
-# timeout tuning (optional)
-timeouts:
-  multiplier: 1.0                     # Scale all timeouts (e.g. 2.0 for slower networks)
-  default: 5.0                        # Base timeout for web_find/web_click/etc.
-  page_load: 15.0                     # Timeout for web_open page loads
-  captcha_detection: 2.0              # Timeout for captcha iframe detection
-  sms_verification: 4.0               # Timeout for SMS verification banners
-  email_verification: 4.0             # Timeout for email verification banners
-  gdpr_prompt: 10.0                   # Timeout when handling GDPR dialogs
-  login_detection: 10.0               # Timeout for DOM-based login detection fallback (auth probe is tried first)
-  publishing_result: 300.0            # Timeout for publishing status checks
-  publishing_confirmation: 20.0       # Timeout for publish confirmation redirect
-  image_upload: 30.0                  # Timeout for image upload and server-side processing
-  pagination_initial: 10.0            # Timeout for first pagination lookup
-  pagination_follow_up: 5.0           # Timeout for subsequent pagination clicks
-  quick_dom: 2.0                      # Generic short DOM timeout (shipping dialogs, etc.)
-  update_check: 10.0                  # Timeout for GitHub update requests
-  chrome_remote_probe: 2.0            # Timeout for local remote-debugging probes
-  chrome_remote_debugging: 5.0        # Timeout for remote debugging API calls
-  chrome_binary_detection: 10.0       # Timeout for chrome --version subprocess
-  retry_enabled: true                 # Enables DOM retry/backoff when timeouts occur
-  retry_max_attempts: 2
-  retry_backoff_factor: 1.5
-
-# download configuration
-download:
-  include_all_matching_shipping_options: false  # if true, all shipping options matching the package size will be included
-  excluded_shipping_options: []  # list of shipping options to exclude, e.g. ['DHL_2', 'DHL_5']
-  folder_name_max_length: 100  # maximum length for folder names when downloading ads (default: 100)
-  rename_existing_folders: false  # if true, rename existing folders without titles to include titles (default: false)
-
-# publishing configuration
-publishing:
-  delete_old_ads: "AFTER_PUBLISH" # one of: AFTER_PUBLISH, BEFORE_PUBLISH, NEVER
-  delete_old_ads_by_title: true # only works if delete_old_ads is set to BEFORE_PUBLISH
-
-# captcha-Handling (optional)
-# To ensure that the bot does not require manual confirmation after a captcha, but instead automatically pauses for a defined period and then restarts, you can enable the captcha section:
-
-captcha:
-  auto_restart: true  # If true, the bot aborts when a Captcha appears and retries publishing later
-                      # If false (default), the Captcha must be solved manually to continue
-  restart_delay: 1h 30m  # Time to wait before retrying after a Captcha was encountered (default: 6h)
-
-# browser configuration
-browser:
-  # https://peter.sh/experiments/chromium-command-line-switches/
-  arguments:
-    # https://stackoverflow.com/a/50725918/5116073
-    - --disable-dev-shm-usage
-    - --no-sandbox
-    # --headless
-    # --start-maximized
-  binary_location: # path to custom browser executable, if not specified will be looked up on PATH
-  extensions: [] # a list of .crx extension files to be loaded
-  use_private_window: true
-  user_data_dir: "" # see https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md
-  profile_name: ""
-
-# update check configuration
-update_check:
-  enabled: true  # Enable/disable update checks
-  channel: latest  # One of: latest, prerelease
-  interval: 7d    # Check interval (e.g. 7d for 7 days)
-                  # If the interval is invalid, too short (<1d), or too long (>30d),
-                  # the bot logs a warning and uses a default interval for this run:
-                  #   - 1d for 'prerelease' channel
-                  #   - 7d for 'latest' channel
-                  # The config file is not changed automatically; please fix your config to avoid repeated warnings.
-
-# login credentials
-login:
-  username: ""
-  password: ""
-
-# diagnostics (optional) - see "Login Detection Behavior" section below for usage details
-diagnostics:
-  login_detection_capture: false       # Capture screenshot + HTML when login state is UNKNOWN
-  pause_on_login_detection_failure: false  # Pause for manual inspection (interactive only)
-  output_dir: ""                    # Custom output directory (default: portable .temp/diagnostics, xdg cache/diagnostics)
+```bash
+kleinanzeigen-bot create-config
 ```
 
-Slow networks or sluggish remote browsers often just need a higher `timeouts.multiplier`, while truly problematic selectors can get explicit values directly under `timeouts`.
-
-> **Developer Note:** Remember to regenerate the schemas after changing the configuration model so editors stay in sync.
-
-### Login Detection Behavior
-
-The bot uses a **server-side auth probe** to detect login state more reliably:
-
-1. **Auth probe (primary method)**: Sends a GET request to `{root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT`
-   - Returns `LOGGED_IN` if response is HTTP 200 with valid JSON containing `"ads"` key
-   - Returns `LOGGED_OUT` if response is HTTP 401/403 or HTML contains login markers
-   - Returns `UNKNOWN` on timeouts, assertion failures, or unexpected response bodies
-
-2. **DOM fallback**: Only consulted when auth probe returns `UNKNOWN`
-   - Looks for `.mr-medium` element containing username
-   - Falls back to `#user-email` ID
-   - Uses `login_detection` timeout (default: 10.0 seconds)
-
-This approach reduces unnecessary re-login attempts because the server-side probe is not affected by client-side rendering delays (SPA hydration) or A/B test variations, though it may return UNKNOWN and fall back to DOM-based checks.
-
-**⚠️ PII Warning:** HTML dumps may contain your account email or other personally identifiable information. Review files in the diagnostics output directory before sharing them publicly.
-
-**Optional diagnostics** help troubleshoot login detection issues:
-
-- Enable `login_detection_capture` to capture screenshots and HTML dumps when state is `UNKNOWN`
-- Enable `pause_on_login_detection_failure` to pause the bot for manual inspection (interactive sessions only; requires `login_detection_capture=true`)
-- Use custom `output_dir` to specify where artifacts are saved
-
-**Output locations (default):**
-
-- **Portable mode**: `./.temp/diagnostics/`
-- **System-wide mode (XDG)**: `~/.cache/kleinanzeigen-bot/diagnostics/` (Linux) or `~/Library/Caches/kleinanzeigen-bot/diagnostics/` (macOS)
-- **Custom**: Path resolved relative to your `config.yaml` if `output_dir` is specified
+For the complete configuration reference with all available options and detailed explanations, see [Configuration Reference](docs/CONFIGURATION.md).
 
 ### <a name="ad-config"></a>2) Ad configuration
 
@@ -432,216 +308,26 @@ Each ad is described in a separate JSON or YAML file with prefix `ad_<filename>`
 
 Parameter values specified in the `ad_defaults` section of the `config.yaml` file don't need to be specified again in the ad configuration file.
 
-The following parameters can be configured:
+For the complete ad configuration reference including automatic price reduction, shipping options, and description prefix/suffix, see [Ad Configuration Reference](docs/AD_CONFIGURATION.md).
 
-```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
-active: # true or false (default: true)
-type: # one of: OFFER, WANTED (default: OFFER)
-title:
-description: # can be multiline, see syntax here https://yaml-multiline.info/
+### <a name="existing-browser"></a>3) Using an existing browser window
 
-description_prefix: # optional prefix to be added to the description overriding the default prefix
-description_suffix: # optional suffix to be added to the description overriding the default suffix
+By default a new browser process will be launched. To reuse a manually launched browser window/process, you can enable remote debugging. This is useful for debugging or when you want to keep your browser session open.
 
-# built-in category name as specified in https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml
-# or custom category name as specified in config.yaml
-# or category ID (e.g. 161/278)
-category: # e.g. "Elektronik > Notebooks"
-
-price: # price in euros; decimals allowed but will be rounded to nearest whole euro on processing (prefer whole euros for predictability)
-price_type: # one of: FIXED, NEGOTIABLE, GIVE_AWAY (default: NEGOTIABLE)
-auto_price_reduction:
-  enabled: # true or false to enable automatic price reduction on reposts (default: false)
-  strategy: # "PERCENTAGE" or "FIXED" (required when enabled is true)
-  amount: # reduction amount; interpreted as percent for PERCENTAGE or currency units for FIXED (prefer whole euros for predictability)
-  min_price: # required when enabled is true; minimum price floor (use 0 for no lower bound, prefer whole euros for predictability)
-  delay_reposts: # number of reposts to wait before first reduction (default: 0)
-  delay_days: # number of days to wait after publication before reductions (default: 0)
-  # NOTE: All prices are rounded to whole euros after each reduction step.
-
-special_attributes:
-  # haus_mieten.zimmer_d: value # Zimmer
-
-shipping_type: # one of: PICKUP, SHIPPING, NOT_APPLICABLE (default: SHIPPING)
-shipping_costs: # e.g. 2.95 (for individual postage, keep shipping_type SHIPPING and leave shipping_options empty)
-
-# specify shipping options / packages
-# it is possible to select multiple packages, but only from one size (S, M, L)!
-# possible package types for size S:
-# - DHL_2
-# - Hermes_Päckchen
-# - Hermes_S
-# possible package types for size M:
-# - DHL_5
-# - Hermes_M
-# possible package types for size L:
-# - DHL_10
-# - DHL_20
-# - DHL_31,5
-# - Hermes_L
-shipping_options: []
-sell_directly: # true or false, requires shipping_type SHIPPING to take effect (default: false)
-
-# list of wildcard patterns to select images
-# if relative paths are specified, then they are relative to this ad configuration file
-images:
- #- laptop_*.{jpg,png}
-
-contact:
-  name:
-  street:
-  zipcode:
-  phone: "" # IMPORTANT: surround phone number with quotes to prevent removal of leading zeros
-
-republication_interval: # every X days the ad should be re-published (default: 7)
-
-# The following fields are automatically managed by the bot:
-id: # the ID assigned by kleinanzeigen.de
-created_on: # ISO timestamp when the ad was first published
-updated_on: # ISO timestamp when the ad was last published
-content_hash: # hash of the ad content, used to detect changes
-repost_count: # how often the ad has been (re)published; used for automatic price reductions
-```
-
-#### Automatic price reduction on reposts
-
-When `auto_price_reduction.enabled` is set to `true`, the bot lowers the configured `price` every time the ad is reposted. The starting point for the calculation is always the base price from your ad file (the value of `price`), ensuring the first publication uses the unchanged amount. For each repost the bot subtracts either a percentage of the previously published price (strategy: PERCENTAGE) or a fixed amount (strategy: FIXED) and clamps the result to `min_price`.
-
-**Important:** Price reductions only apply when using the `publish` command (which deletes the old ad and creates a new one). Using the `update` command to modify ad content does NOT trigger price reductions or increment `repost_count`.
-
-`repost_count` is tracked for every ad (and persisted inside the corresponding `ad_*.yaml`) so reductions continue across runs.
-
-`min_price` is required whenever `enabled` is `true` and must be less than or equal to `price`; this makes an explicit floor (including `0`) mandatory. If `min_price` equals the current price, the bot will log a warning and perform no reduction.
-
-**Note:** `repost_count` and price reduction counters are only incremented and persisted after a successful publish. Failed publish attempts do not advance the counters.
-
-**PERCENTAGE strategy example:**
-
-```yaml
-price: 150
-price_type: FIXED
-auto_price_reduction:
-  enabled: true
-  strategy: PERCENTAGE
-  amount: 10
-  min_price: 90
-  delay_reposts: 0
-  delay_days: 0
-```
-
-This posts the ad at 150 € the first time, then 135 € (−10%), 122 € (−10%), 110 € (−10%), 99 € (−10%), and stops decreasing at 90 €.
-
-**Note:** The bot applies commercial rounding (ROUND_HALF_UP) to full euros after each reduction step. For example, 121.5 rounds to 122, and 109.8 rounds to 110. This step-wise rounding affects the final price progression, especially for percentage-based reductions.
-
-**FIXED strategy example:**
-
-```yaml
-price: 150
-price_type: FIXED
-auto_price_reduction:
-  enabled: true
-  strategy: FIXED
-  amount: 15
-  min_price: 90
-  delay_reposts: 0
-  delay_days: 0
-```
-
-This posts the ad at 150 € the first time, then 135 € (−15 €), 120 € (−15 €), 105 € (−15 €), and stops decreasing at 90 €.
-
-**Note on `delay_days` behavior:** The `delay_days` parameter counts complete 24-hour periods (whole days) since the ad was published. For example, if `delay_days: 7` and the ad was published 6 days and 23 hours ago, the reduction will not yet apply. This ensures predictable behavior and avoids partial-day ambiguity.
-
-Set `auto_price_reduction.enabled: false` (or omit the entire `auto_price_reduction` section) to keep the existing behaviour—prices stay fixed and `repost_count` only acts as tracked metadata for future changes.
-
-You can configure `auto_price_reduction` once under `ad_defaults` in `config.yaml`. The `min_price` can be set there or overridden per ad file as needed.
-
-### <a name="description-prefix-suffix"></a>3) Description Prefix and Suffix
-
-You can add prefix and suffix text to your ad descriptions in two ways:
-
-#### New Format (Recommended)
-
-In your config.yaml file you can specify a `description_prefix` and `description_suffix` under the `ad_defaults` section.
-
-```yaml
-ad_defaults:
-  description_prefix: "Prefix text"
-  description_suffix: "Suffix text"
-```
-
-#### Legacy Format
-
-In your ad configuration file you can specify a `description_prefix` and `description_suffix` under the `description` section.
-
-```yaml
-description:
-  prefix: "Prefix text"
-  suffix: "Suffix text"
-```
-
-#### Precedence
-
-The new format has precedence over the legacy format. If you specify both the new and the legacy format in your config, the new format will be used. We recommend using the new format as it is more flexible and easier to manage.
-
-### <a name="existing-browser"></a>4) Using an existing browser window
-
-By default a new browser process will be launched. To reuse a manually launched browser window/process follow these steps:
-
-1. Manually launch your browser from the command line with the `--remote-debugging-port=<NUMBER>` flag.
-   You are free to choose an unused port number 1025 and 65535, e.g.:
-   - `chrome --remote-debugging-port=9222`
-   - `chromium --remote-debugging-port=9222`
-   - `msedge --remote-debugging-port=9222`
-
-   This runs the browser in debug mode which allows it to be remote controlled by the bot.
-
-   **⚠️ IMPORTANT: Chrome 136+ Security Requirement**
-
-   Starting with Chrome 136 (March 2025), Google has implemented security changes that require `--user-data-dir` to be specified when using `--remote-debugging-port`. This prevents attackers from accessing the default Chrome profile and stealing cookies/credentials.
-
-   **You must now use:**
-   ```bash
-   chrome --remote-debugging-port=9222 --user-data-dir=/path/to/custom/directory
-   ```
-
-   **And in your config.yaml:**
-   ```yaml
-   browser:
-     arguments:
-       - --remote-debugging-port=9222
-       - --user-data-dir=/path/to/custom/directory
-     user_data_dir: "/path/to/custom/directory"
-   ```
-
-   **The bot will automatically detect Chrome 136+ and validate your configuration. If validation fails, you'll see clear error messages with specific instructions on how to fix your configuration.**
-
-1. In your config.yaml specify the same flags as browser arguments, e.g.:
-   ```yaml
-   browser:
-     arguments:
-     - --remote-debugging-port=9222
-     - --user-data-dir=/tmp/chrome-debug-profile  # Required for Chrome 136+
-     user_data_dir: "/tmp/chrome-debug-profile"   # Must match the argument above
-   ```
-
-1. When now publishing ads the manually launched browser will be re-used.
-
-> NOTE: If an existing browser is used all other settings configured under `browser` in your config.yaml file will ignored
-  because they are only used to programmatically configure/launch a dedicated browser instance.
-
-> **Security Note:** This change was implemented by Google to protect users from cookie theft attacks. The custom user data directory uses a different encryption key than the default profile, making it more secure for debugging purposes.
+For detailed instructions on setting up remote debugging with Chrome 136+ security requirements, see [Browser Troubleshooting - Using an Existing Browser Window](docs/BROWSER_TROUBLESHOOTING.md#using-an-existing-browser-window).
 
 ### <a name="browser-connection-issues"></a>Browser Connection Issues
 
 If you encounter browser connection problems, the bot includes a diagnostic command to help identify issues:
 
 **For binary users:**
+
 ```bash
 kleinanzeigen-bot diagnose
 ```
 
 **For source users:**
+
 ```bash
 pdm run app diagnose
 ```
@@ -662,14 +348,14 @@ This command will check your browser setup and provide troubleshooting informati
 - [tillvogt/KleinanzeigenScraper](https://github.com/tillvogt/KleinanzeigenScraper) (Python) Webscraper which stores scraped info from kleinanzeigen.de in an SQL database
 - [TLINDEN/Kleingebäck](https://github.com/TLINDEN/kleingebaeck) (Go) kleinanzeigen.de Backup
 
-
 ## <a name="license"></a>License
 
 All files in this repository are released under the [GNU Affero General Public License v3.0 or later](LICENSE.txt).
 
 Individual files contain the following tag instead of the full license text:
-```
+
+```text
 SPDX-License-Identifier: AGPL-3.0-or-later
 ```
 
-This enables machine processing of license information based on the SPDX License Identifiers that are available here: https://spdx.org/licenses/.
+This enables machine processing of license information based on the SPDX License Identifiers that are available here: <https://spdx.org/licenses/>.
