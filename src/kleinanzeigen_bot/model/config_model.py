@@ -200,6 +200,10 @@ class DiagnosticsConfig(ContextualModel):
         default = False,
         description = "If true, capture diagnostics artifacts (screenshot + HTML) when login detection returns UNKNOWN.",
     )
+    publish_error_capture:bool = Field(
+        default = False,
+        description = "If true, capture diagnostics artifacts (screenshot + HTML + JSON) when publishing fails.",
+    )
     pause_on_login_detection_failure:bool = Field(
         default = False,
         description = "If true, pause (interactive runs only) after capturing login detection diagnostics "

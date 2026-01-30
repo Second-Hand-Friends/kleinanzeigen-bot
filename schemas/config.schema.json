@@ -375,6 +375,12 @@
           "title": "Login Detection Capture",
           "type": "boolean"
         },
+        "publish_error_capture": {
+          "default": false,
+          "description": "If true, capture diagnostics artifacts (screenshot + HTML + JSON) when publishing fails.",
+          "title": "Publish Error Capture",
+          "type": "boolean"
+        },
         "pause_on_login_detection_failure": {
           "default": false,
           "description": "If true, pause (interactive runs only) after capturing login detection diagnostics so that user can inspect the browser. Requires login_detection_capture to be enabled.",
@@ -520,7 +526,7 @@
         },
         "email_verification": {
           "default": 4.0,
-          "description": "Timeout for eMail verification prompts.",
+          "description": "Timeout for email verification prompts.",
           "minimum": 0.1,
           "title": "Email Verification",
           "type": "number"

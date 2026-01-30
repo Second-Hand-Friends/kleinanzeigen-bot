@@ -225,6 +225,7 @@ Diagnostics configuration for troubleshooting login detection issues.
 ```yaml
 diagnostics:
   login_detection_capture: false       # Capture screenshot + HTML when login state is UNKNOWN
+  publish_error_capture: false         # Capture screenshot + HTML + JSON on each failed publish attempt (timeouts/protocol errors)
   pause_on_login_detection_failure: false  # Pause for manual inspection (interactive only)
   output_dir: ""                       # Custom output directory (default: portable .temp/diagnostics, xdg cache/diagnostics)
 ```
@@ -250,6 +251,7 @@ The bot uses a layered approach to detect login state, prioritizing stealth over
 **Optional diagnostics:**
 
 - Enable `login_detection_capture` to capture screenshots and HTML dumps when state is `UNKNOWN`
+- Enable `publish_error_capture` to capture screenshots, HTML dumps, and JSON payloads on every failed publish attempt. Failures include timeouts/network issues, browser protocol errors, client-side exceptions, and validation/authorization blocks that manifest as timeouts or protocol errors during the publish flow. Artifacts are captured for each failed attempt (attempt 1/2/3), not just the final failure.
 - Enable `pause_on_login_detection_failure` to pause the bot for manual inspection (interactive sessions only; requires `login_detection_capture=true`)
 - Use custom `output_dir` to specify where artifacts are saved
 
@@ -259,7 +261,7 @@ The bot uses a layered approach to detect login state, prioritizing stealth over
 - **System-wide mode (XDG)**: `~/.cache/kleinanzeigen-bot/diagnostics/` (Linux) or `~/Library/Caches/kleinanzeigen-bot/diagnostics/` (macOS)
 - **Custom**: Path resolved relative to your `config.yaml` if `output_dir` is specified
 
-> **⚠️ PII Warning:** HTML dumps may contain your account email or other personally identifiable information. Review files in the diagnostics output directory before sharing them publicly.
+> **⚠️ PII Warning:** HTML dumps and JSON payloads (from `publish_error_capture`) may contain your account email and ad data (titles, descriptions, contact info, prices). Review or redact these artifacts before sharing them publicly.
 
 ## Installation Modes
 

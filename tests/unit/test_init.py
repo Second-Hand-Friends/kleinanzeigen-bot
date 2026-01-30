@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import copy, io, json, logging, os, tempfile  # isort: skip
+import copy, fnmatch, io, json, logging, os, tempfile  # isort: skip
 from collections.abc import Generator
 from contextlib import redirect_stdout
 from datetime import timedelta
@@ -622,6 +622,98 @@ class TestKleinanzeigenBotAuthentication:
             assert mock_find.call_count == 3
             assert mock_click.call_count == 2  # Click to accept GDPR and continue
             assert mock_ainput.call_count == 0
+
+
+class TestKleinanzeigenBotDiagnostics:
+    @pytest.fixture
+    def diagnostics_ad_config(self) -> dict[str, Any]:
+        return {
+            "active": True,
+            "type": "OFFER",
+            "title": "Test ad title",
+            "description": "Test description",
+            "category": "161/176/sonstige",
+            "price_type": "NEGOTIABLE",
+            "shipping_type": "PICKUP",
+            "sell_directly": False,
+            "contact": {
+                "name": "Tester",
+                "zipcode": "12345",
+            },
+            "republication_interval": 7,
+        }
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_publish_ads_captures_diagnostics_on_failures(
+        self,
+        test_bot:KleinanzeigenBot,
+        tmp_path:Path,
+        diagnostics_ad_config:dict[str, Any],
+    ) -> None:
+        """Ensure publish failures capture diagnostics artifacts."""
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate({"publish_error_capture": True, "output_dir": str(tmp_path)})
+
+        page = MagicMock()
+        page.save_screenshot = AsyncMock()
+        page.get_content = AsyncMock(return_value = "<html></html>")
+        page.sleep = AsyncMock()
+        page.url = "https://example.com/fail"
+        test_bot.page = page
+
+        ad_cfg = Ad.model_validate(diagnostics_ad_config)
+        ad_cfg_orig = copy.deepcopy(diagnostics_ad_config)
+        ad_file = str(tmp_path / "ad_000001_Test.yml")
+
+        with (
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps({"ads": []})}),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
+        ):
+            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
+        assert page.save_screenshot.await_count == 3
+        assert page.get_content.await_count == 3
+        entries = os.listdir(tmp_path)
+        html_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_*.html")]
+        json_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_*.json")]
+        assert len(html_files) == 3
+        assert len(json_files) == 3
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_publish_ads_does_not_capture_diagnostics_when_disabled(
+        self,
+        test_bot:KleinanzeigenBot,
+        tmp_path:Path,
+        diagnostics_ad_config:dict[str, Any],
+    ) -> None:
+        """Ensure diagnostics are not captured when disabled."""
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate({"publish_error_capture": False, "output_dir": str(tmp_path)})
+
+        page = MagicMock()
+        page.save_screenshot = AsyncMock()
+        page.get_content = AsyncMock(return_value = "<html></html>")
+        page.sleep = AsyncMock()
+        page.url = "https://example.com/fail"
+        test_bot.page = page
+
+        ad_cfg = Ad.model_validate(diagnostics_ad_config)
+        ad_cfg_orig = copy.deepcopy(diagnostics_ad_config)
+        ad_file = str(tmp_path / "ad_000001_Test.yml")
+
+        with (
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps({"ads": []})}),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
+        ):
+            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
+        page.save_screenshot.assert_not_called()
+        page.get_content.assert_not_called()
+        entries = os.listdir(tmp_path)
+        html_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_*.html")]
+        json_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_*.json")]
+        assert not html_files
+        assert not json_files
 
 
 class TestKleinanzeigenBotLocalization:

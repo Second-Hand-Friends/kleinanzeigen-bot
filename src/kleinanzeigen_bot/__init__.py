@@ -1004,6 +1004,82 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.warning("############################################")
             await ainput(_("Press a key to continue..."))
 
+    async def _capture_publish_error_diagnostics_if_enabled(
+        self,
+        ad_cfg:Ad,
+        ad_cfg_orig:dict[str, Any],
+        ad_file:str,
+        attempt:int,
+        exc:Exception,
+    ) -> None:
+        """Capture publish failure diagnostics when enabled and a page is available.
+
+        Runs only if diagnostics.publish_error_capture is enabled and self.page is set.
+        Uses the ad configuration and publish attempt details to write screenshot, HTML,
+        and JSON payloads for debugging.
+        """
+        diagnostics = getattr(self.config, "diagnostics", None)
+        if diagnostics is None or not diagnostics.publish_error_capture:
+            return
+
+        page = getattr(self, "page", None)
+        if page is None:
+            return
+
+        try:
+            out_dir = self._diagnostics_output_dir()
+            out_dir.mkdir(parents = True, exist_ok = True)
+
+            ts = misc.now().strftime("%Y%m%dT%H%M%S")
+            suffix = secrets.token_hex(4)
+            ad_basename = Path(ad_file).name
+            match = re.search(r"(ad_\d{6})", ad_basename)
+            ad_token = match.group(1) if match else "ad_unknown"
+            safe_ad_token = re.sub(r"[^A-Za-z0-9_-]", "_", ad_token)
+            base = f"publish_error_{ts}_{suffix}_attempt{attempt}_{safe_ad_token}"
+            screenshot_path = out_dir / f"{base}.png"
+            html_path = out_dir / f"{base}.html"
+            json_path = out_dir / f"{base}.json"
+
+            try:
+                await page.save_screenshot(str(screenshot_path))
+            except Exception as inner_exc:  # noqa: BLE001
+                LOG.debug("Publish diagnostics screenshot capture failed: %s", inner_exc)
+
+            try:
+                html = await page.get_content()
+                html_path.write_text(html, encoding = "utf-8")
+            except Exception as inner_exc:  # noqa: BLE001
+                LOG.debug("Publish diagnostics HTML capture failed: %s", inner_exc)
+
+            try:
+                payload = {
+                    "timestamp": misc.now().isoformat(timespec = "seconds"),
+                    "attempt": attempt,
+                    "page_url": getattr(page, "url", None),
+                    "exception": {
+                        "type": exc.__class__.__name__,
+                        "message": str(exc),
+                        "repr": repr(exc),
+                    },
+                    "ad_token": ad_token,
+                    "ad_config_effective": ad_cfg.model_dump(mode = "json"),
+                    "ad_config_original": ad_cfg_orig,
+                }
+                with json_path.open("w", encoding = "utf-8") as handle:
+                    json.dump(payload, handle, indent = 2, default = str)
+                    handle.write("\n")
+                LOG.info(
+                    "Publish diagnostics saved: %s %s %s",
+                    screenshot_path,
+                    html_path,
+                    json_path,
+                )
+            except Exception as inner_exc:  # noqa: BLE001
+                LOG.debug("Publish diagnostics JSON capture failed: %s", inner_exc)
+        except Exception as outer_exc:  # noqa: BLE001
+            LOG.debug("Publish diagnostics capture failed: %s", outer_exc)
+
     async def is_logged_in(self, *, include_probe:bool = True) -> bool:
         # Use login_detection timeout (10s default) instead of default (5s)
         # to allow sufficient time for client-side JavaScript rendering after page load.
@@ -1234,6 +1310,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 except asyncio.CancelledError:
                     raise  # Respect task cancellation
                 except (TimeoutError, ProtocolException) as ex:
+                    await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
                     if attempt < max_retries:
                         LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
                         await self.web_sleep(2)  # Wait before retry
