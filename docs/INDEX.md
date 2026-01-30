@@ -10,8 +10,6 @@ This directory contains detailed documentation for kleinanzeigen-bot users and c
 
 - [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md) - Troubleshooting guide for browser connection issues, including Chrome 136+ security requirements, remote debugging setup, and common solutions.
 
-- [Update Check Feature](./UPDATE_CHECK.md) - Information about the update check feature, including configuration, state file format, and error handling.
-
 ## Contributor Documentation
 
 Contributor documentation is located in the main repository:
@@ -33,4 +31,3 @@ New users should start with the [README](../README.md), then refer to these docu
 ### Common Troubleshooting Tips
 
 - Browser connection issues: confirm remote debugging settings and Chrome 136+ requirements in [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md).
-- Update checks not running: verify `update_check.enabled` and `update_check.interval` in [Update Check Feature](./UPDATE_CHECK.md).

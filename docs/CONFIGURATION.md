@@ -206,8 +206,6 @@ update_check:
 - `latest`: Only final releases
 - `preview`: Includes pre-releases
 
-For more details on state file format and error handling, see [Update Check Feature](./UPDATE_CHECK.md).
-
 ### login
 
 Login credentials.
