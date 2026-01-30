@@ -894,9 +894,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def _auth_probe_login_state(self) -> LoginState:
         """Probe an auth-required endpoint to classify login state.
 
-        The probe is non-mutating (GET request). It is used as a primary method by
-        get_login_state() to classify login state, falling back to DOM checks only when
-        the probe returns UNKNOWN.
+        The probe is non-mutating (GET request). It is used as a fallback method by
+        get_login_state() when DOM-based checks are inconclusive.
         """
 
         url = f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"
@@ -932,20 +931,21 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         """Determine current login state using layered detection.
 
         Order:
-        1) Server-side auth probe via `_auth_probe_login_state` (preferred)
-        2) DOM-based check via `is_logged_in(include_probe=False)`
+        1) DOM-based check via `is_logged_in(include_probe=False)` (preferred - stealthy)
+        2) Server-side auth probe via `_auth_probe_login_state` (fallback - more reliable)
         3) If still inconclusive, capture diagnostics via
            `_capture_login_detection_diagnostics_if_enabled` and return `UNKNOWN`
         """
-        # Prefer the deterministic, server-side auth probe first.
+        # Prefer DOM-based checks first to minimize bot-like behavior.
+        # The auth probe makes a JSON API request that normal users wouldn't trigger.
+        if await self.is_logged_in(include_probe = False):
+            return LoginState.LOGGED_IN
+
+        # Fall back to the more reliable server-side auth probe.
         # SPA/hydration delays can cause DOM-based checks to temporarily miss login indicators.
         state = await self._auth_probe_login_state()
         if state != LoginState.UNKNOWN:
             return state
-
-        # Fall back to DOM-based checks only when the probe is inconclusive.
-        if await self.is_logged_in(include_probe = False):
-            return LoginState.LOGGED_IN
 
         await self._capture_login_detection_diagnostics_if_enabled()
         return LoginState.UNKNOWN

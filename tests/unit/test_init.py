@@ -345,34 +345,36 @@ class TestKleinanzeigenBotAuthentication:
             assert await test_bot.is_logged_in() is False
 
     @pytest.mark.asyncio
-    async def test_get_login_state_prefers_auth_probe_over_dom(self, test_bot:KleinanzeigenBot) -> None:
+    async def test_get_login_state_prefers_dom_over_auth_probe(self, test_bot:KleinanzeigenBot) -> None:
         with (
-            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.LOGGED_IN) as probe,
-            patch.object(test_bot, "web_text", side_effect = AssertionError("DOM check must not run when probe is deterministic")) as web_text,
-        ):
-            assert await test_bot.get_login_state() == LoginState.LOGGED_IN
-            probe.assert_awaited_once()
-            web_text.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_get_login_state_falls_back_to_dom_when_probe_unknown(self, test_bot:KleinanzeigenBot) -> None:
-        with (
-            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN) as probe,
             patch.object(test_bot, "web_text", new_callable = AsyncMock, return_value = "Welcome dummy_user") as web_text,
+            patch.object(
+                test_bot, "_auth_probe_login_state", new_callable = AsyncMock, side_effect = AssertionError("Probe must not run when DOM is deterministic")
+            ) as probe,
         ):
             assert await test_bot.get_login_state() == LoginState.LOGGED_IN
-            probe.assert_awaited_once()
             web_text.assert_awaited_once()
+            probe.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_get_login_state_prefers_logged_out_from_probe_over_dom(self, test_bot:KleinanzeigenBot) -> None:
+    async def test_get_login_state_falls_back_to_auth_probe_when_dom_inconclusive(self, test_bot:KleinanzeigenBot) -> None:
         with (
+            patch.object(test_bot, "web_text", side_effect = TimeoutError) as web_text,
+            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.LOGGED_IN) as probe,
+        ):
+            assert await test_bot.get_login_state() == LoginState.LOGGED_IN
+            assert web_text.call_count == 2
+            probe.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_get_login_state_falls_back_to_auth_probe_when_dom_logged_out(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch.object(test_bot, "web_text", side_effect = TimeoutError) as web_text,
             patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.LOGGED_OUT) as probe,
-            patch.object(test_bot, "web_text", side_effect = AssertionError("DOM check must not run when probe is deterministic")) as web_text,
         ):
             assert await test_bot.get_login_state() == LoginState.LOGGED_OUT
+            assert web_text.call_count == 2
             probe.assert_awaited_once()
-            web_text.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_login_state_returns_unknown_when_probe_unknown_and_dom_inconclusive(self, test_bot:KleinanzeigenBot) -> None:
