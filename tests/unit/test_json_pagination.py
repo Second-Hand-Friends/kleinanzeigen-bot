@@ -76,9 +76,19 @@ class TestJSONPagination:
         if result is not None:
             pytest.fail(f"_coerce_page_number(3.14) expected None, got {result}")
 
+    def test_coerce_page_number_with_whole_number_float(self) -> None:
+        """Test that whole-number floats are accepted and converted to int."""
         result = misc.coerce_page_number(2.0)
         if result != 2:
             pytest.fail(f"_coerce_page_number(2.0) expected 2, got {result}")
+
+        result = misc.coerce_page_number(0.0)
+        if result != 0:
+            pytest.fail(f"_coerce_page_number(0.0) expected 0, got {result}")
+
+        result = misc.coerce_page_number(42.0)
+        if result != 42:
+            pytest.fail(f"_coerce_page_number(42.0) expected 42, got {result}")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_single_page_no_paging(self, bot:KleinanzeigenBot) -> None:
@@ -115,8 +125,8 @@ class TestJSONPagination:
     @pytest.mark.asyncio
     async def test_fetch_published_ads_multi_page(self, bot:KleinanzeigenBot) -> None:
         """Test fetching ads from multiple pages (3 pages, 2 ads each)."""
-        page1_data = {"ads": [{"id": 1}, {"id": 2}], "paging": {"pageNum": 1, "last": 3}}
-        page2_data = {"ads": [{"id": 3}, {"id": 4}], "paging": {"pageNum": 2, "last": 3}}
+        page1_data = {"ads": [{"id": 1}, {"id": 2}], "paging": {"pageNum": 1, "last": 3, "next": 2}}
+        page2_data = {"ads": [{"id": 3}, {"id": 4}], "paging": {"pageNum": 2, "last": 3, "next": 3}}
         page3_data = {"ads": [{"id": 5}, {"id": 6}], "paging": {"pageNum": 3, "last": 3}}
 
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:

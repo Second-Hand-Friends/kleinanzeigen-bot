@@ -38,6 +38,10 @@ kleinanzeigen_bot/__init__.py:
     "Pagination request timed out on page %s: %s": "Zeitueberschreitung bei der Seitenabfrage auf Seite %s: %s"
     "Unexpected JSON payload on page %s (content: %s)": "Unerwartete JSON-Antwort auf Seite %s (Inhalt: %s)"
     "Unexpected 'ads' type on page %s: %s value: %s": "Unerwarteter 'ads'-Typ auf Seite %s: %s Wert: %s"
+    "Reached last page %s of %s, stopping pagination": "Letzte Seite %s von %s erreicht, beende Paginierung"
+    "No ads found on page %s, stopping pagination": "Keine Anzeigen auf Seite %s gefunden, beende Paginierung"
+    "Invalid 'next' page value in paging info: %s, stopping pagination": "Ungültiger 'next'-Seitenwert in Paginierungsinfo: %s, beende Paginierung"
+    "Invalid 'pageNum' in paging info: %s, stopping pagination": "Ungültiger 'pageNum'-Wert in Paginierungsinfo: %s, beende Paginierung"
 
   __check_ad_changed:
     "Hash comparison for [%s]:": "Hash-Vergleich für [%s]:"
@@ -309,6 +313,8 @@ kleinanzeigen_bot/extract.py:
   _extract_sell_directly_from_ad_page:
     "Could not extract ad ID from URL: %s": "Konnte Anzeigen-ID nicht aus der URL extrahieren: %s"
     "Stopping pagination after %s pages to avoid infinite loop": "Stoppe die Seitenaufschaltung nach %s Seiten, um eine Endlosschleife zu vermeiden"
+    "Invalid 'next' page value in paging info: %s, stopping pagination": "Ungültiger 'next'-Seitenwert in Paginierungsinfo: %s, beende Paginierung"
+    "Invalid 'pageNum' in paging info: %s, stopping pagination": "Ungültiger 'pageNum'-Wert in Paginierungsinfo: %s, beende Paginierung"
 
 #################################################
 kleinanzeigen_bot/utils/i18n.py:

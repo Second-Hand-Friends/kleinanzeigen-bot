@@ -20,6 +20,30 @@ def coerce_page_number(value:Any) -> int | None:
     """Safely coerce a value to int or return None if conversion fails.
 
     Whole-number floats are accepted; non-integer floats are rejected.
+
+    Args:
+        value: Value to coerce to int (can be int, str, float, or any type)
+
+    Returns:
+        int if value can be safely coerced, None otherwise
+
+    Examples:
+        >>> coerce_page_number(1)
+        1
+        >>> coerce_page_number("2")
+        2
+        >>> coerce_page_number(3.0)
+        3
+        >>> coerce_page_number(3.5) is None
+        True
+        >>> coerce_page_number(True) is None  # Not 1!
+        True
+        >>> coerce_page_number(None) is None
+        True
+        >>> coerce_page_number("invalid") is None
+        True
+        >>> coerce_page_number([1, 2, 3]) is None
+        True
     """
     if value is None:
         return None

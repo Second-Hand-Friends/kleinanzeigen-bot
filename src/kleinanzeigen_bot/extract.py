@@ -535,7 +535,7 @@ class AdExtractor(WebScrapingMixin):
                     LOG.warning("Stopping pagination after %s pages to avoid infinite loop", _SELL_DIRECTLY_MAX_PAGE_LIMIT)
                     break
 
-                response = await self.web_request(f"https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page={page}")
+                response = await self.web_request(f"https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum={page}")
 
                 try:
                     json_data = json.loads(response["content"])
@@ -562,17 +562,20 @@ class AdExtractor(WebScrapingMixin):
                 current_page_num = misc.coerce_page_number(paging.get("pageNum"))
                 total_pages = misc.coerce_page_number(paging.get("last"))
 
-                # Fallback to counter if API returns None for pageNum
                 if current_page_num is None:
-                    current_page_num = page
+                    LOG.warning("Invalid 'pageNum' in paging info: %s, stopping pagination", paging.get("pageNum"))
+                    break
 
                 # Stop if we've reached the last page
                 if total_pages is None or current_page_num >= total_pages:
                     break
 
                 # Use API's next field for navigation (more robust than our counter)
-                next_page = paging.get("next")
-                page = next_page if next_page is not None else page + 1
+                next_page = misc.coerce_page_number(paging.get("next"))
+                if next_page is None:
+                    LOG.warning("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
+                    break
+                page = next_page
 
             # If the key doesn't exist or ad not found, return None (unknown)
             return None

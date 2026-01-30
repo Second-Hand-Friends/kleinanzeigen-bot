@@ -1056,7 +1056,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         ads:list[dict[str, Any]] = []
         page = 1
         MAX_PAGE_LIMIT:Final[int] = 100
-        SNIPPET_LIMIT:Final[int] = 200
+        SNIPPET_LIMIT:Final[int] = 500
 
         while True:
             # Safety check: don't paginate beyond reasonable limit
@@ -1087,13 +1087,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 break
 
             page_ads = json_data.get("ads", [])
-            if isinstance(page_ads, list):
-                ads.extend(page_ads)
-            else:
+            if not isinstance(page_ads, list):
                 preview = str(page_ads)
                 if len(preview) > SNIPPET_LIMIT:
                     preview = preview[:SNIPPET_LIMIT] + "..."
                 LOG.warning("Unexpected 'ads' type on page %s: %s value: %s", page, type(page_ads).__name__, preview)
+                break
+
+            ads.extend(page_ads)
 
             paging = json_data.get("paging")
             if not isinstance(paging, dict):
@@ -1104,9 +1105,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             current_page_num = misc.coerce_page_number(paging.get("pageNum"))
             total_pages = misc.coerce_page_number(paging.get("last"))
 
-            # Fallback to counter if API returns None for pageNum
             if current_page_num is None:
-                current_page_num = page
+                LOG.warning("Invalid 'pageNum' in paging info: %s, stopping pagination", paging.get("pageNum"))
+                break
 
             if total_pages is None:
                 LOG.debug("No pagination info found, assuming single page")
@@ -1125,8 +1126,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.debug("Page %s: fetched %s ads (numFound=%s)", page, len(page_ads), paging.get("numFound"))
 
             # Use API's next field for navigation (more robust than our counter)
-            next_page = paging.get("next")
-            page = next_page if next_page is not None else page + 1
+            next_page = misc.coerce_page_number(paging.get("next"))
+            if next_page is None:
+                LOG.warning("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
+                break
+            page = next_page
 
         return ads
 
