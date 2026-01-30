@@ -1064,7 +1064,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.warning("Stopping pagination after %s pages to avoid infinite loop", MAX_PAGE_LIMIT)
                 break
 
-            response = await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page={page}")
+            try:
+                response = await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&page={page}")
+            except TimeoutError as ex:
+                LOG.warning("Pagination request timed out on page %s: %s", page, ex)
+                break
 
             try:
                 json_data = json.loads(response["content"])

@@ -34,6 +34,7 @@ kleinanzeigen_bot/__init__.py:
   _fetch_published_ads:
     "Failed to parse JSON response on page %s: %s (content: %s)": "Fehler beim Parsen der JSON-Antwort auf Seite %s: %s (Inhalt: %s)"
     "Stopping pagination after %s pages to avoid infinite loop": "Stoppe die Seitenaufschaltung nach %s Seiten, um eine Endlosschleife zu vermeiden"
+    "Pagination request timed out on page %s: %s": "Zeitueberschreitung bei der Seitenabfrage auf Seite %s: %s"
     "Unexpected JSON payload on page %s (content: %s)": "Unerwartete JSON-Antwort auf Seite %s (Inhalt: %s)"
     "Unexpected 'ads' type on page %s: %s value: %s": "Unerwarteter 'ads'-Typ auf Seite %s: %s Wert: %s"
 

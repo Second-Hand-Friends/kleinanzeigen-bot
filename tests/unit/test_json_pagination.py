@@ -215,3 +215,14 @@ class TestJSONPagination:
             # Should return empty list when ads is not a list
             assert len(result) == 0
             assert isinstance(result, list)
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_timeout(self, bot:KleinanzeigenBot) -> None:
+        """Test handling of timeout during pagination."""
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.side_effect = TimeoutError("timeout")
+
+            result = await bot._fetch_published_ads()
+
+            if result != []:
+                pytest.fail(f"Expected empty list on timeout, got {result}")
