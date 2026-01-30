@@ -29,6 +29,14 @@ _SELL_DIRECTLY_MAX_PAGE_LIMIT:Final[int] = 100
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
 
 
+def _get_paging_value(paging:dict[str, Any], keys:list[str]) -> Any | None:
+    for key in keys:
+        value = paging.get(key)
+        if value is not None:
+            return value
+    return None
+
+
 class AdExtractor(WebScrapingMixin):
     """
     Wrapper class for ad extraction that uses an active bot´s browser session to extract specific elements from an ad page.
@@ -526,13 +534,6 @@ class AdExtractor(WebScrapingMixin):
                 LOG.warning("Could not extract ad ID from URL: %s", self.page.url)
                 return None
 
-            def _get_paging_value(paging:dict[str, Any], keys:list[str]) -> Any:
-                for key in keys:
-                    value = paging.get(key)
-                    if value is not None:
-                        return value
-                return None
-
             # Fetch the management JSON data using web_request with pagination support
             page = 1
 
@@ -573,7 +574,7 @@ class AdExtractor(WebScrapingMixin):
                     current_page_num = page
 
                 # Stop if we've reached the last page or there's no pagination info
-                if total_pages is None or (current_page_num is not None and current_page_num >= total_pages):
+                if total_pages is None or current_page_num >= total_pages:
                     break
 
                 # Always increment page counter to avoid infinite loops

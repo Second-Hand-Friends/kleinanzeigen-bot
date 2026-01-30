@@ -1070,11 +1070,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.warning("Pagination request timed out on page %s: %s", page, ex)
                 break
 
+            content = response.get("content", "")
             try:
-                json_data = json.loads(response["content"])
+                json_data = json.loads(content)
             except json.JSONDecodeError as ex:
-                content = response.get("content", "")
                 snippet = content[:SNIPPET_LIMIT] + ("..." if len(content) > SNIPPET_LIMIT else "")
+                if not content:
+                    LOG.warning("Empty JSON response content on page %s", page)
                 LOG.warning("Failed to parse JSON response on page %s: %s (content: %s)", page, ex, snippet)
                 break
 
@@ -1101,7 +1103,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             total_pages = None
 
             # Use explicit None checks, NOT truthy checks
-            # Support multiple field name variations for robustness
+            # Known variants covered by tests: pageNum/last, page/totalPages, currentPage/maxPages
+            # Defensive fallbacks: pages, pageCount
             if paging.get("pageNum") is not None:
                 current_page = misc.coerce_page_number(paging.get("pageNum"))
             elif paging.get("page") is not None:

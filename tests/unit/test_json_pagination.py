@@ -144,8 +144,10 @@ class TestJSONPagination:
 
             result = await bot._fetch_published_ads()
 
-            assert len(result) == 0
-            assert isinstance(result, list)
+            if not isinstance(result, list):
+                pytest.fail(f"expected result to be list, got {type(result).__name__}")
+            if len(result) != 0:
+                pytest.fail(f"expected empty list from _fetch_published_ads, got {len(result)} items")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_invalid_json(self, bot:KleinanzeigenBot) -> None:
@@ -172,8 +174,11 @@ class TestJSONPagination:
 
             result = await bot._fetch_published_ads()
 
-            assert len(result) == 2
-            assert [ad["id"] for ad in result] == [1, 2]
+            if len(result) != 2:
+                pytest.fail(f"Expected 2 ads, got {len(result)}")
+            ad_ids = [ad["id"] for ad in result]
+            if ad_ids != [1, 2]:
+                pytest.fail(f"Expected ids [1, 2], got {ad_ids}")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_missing_paging_dict(self, bot:KleinanzeigenBot) -> None:
@@ -185,8 +190,12 @@ class TestJSONPagination:
 
             result = await bot._fetch_published_ads()
 
-            assert len(result) == 2
-            mock_request.assert_awaited_once()
+            if len(result) != 2:
+                pytest.fail(f"expected 2 ads, got {len(result)}")
+            try:
+                mock_request.assert_awaited_once()
+            except AssertionError as ex:
+                pytest.fail(f"web_request was not awaited exactly once: {ex}")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_non_integer_paging_values(self, bot:KleinanzeigenBot) -> None:
@@ -199,8 +208,10 @@ class TestJSONPagination:
             result = await bot._fetch_published_ads()
 
             # Should return ads from first page and stop due to invalid paging
-            assert len(result) == 1
-            assert result[0]["id"] == 1
+            if len(result) != 1:
+                pytest.fail(f"Expected 1 ad, got {len(result)}")
+            if result[0].get("id") != 1:
+                pytest.fail(f"Expected ad id 1, got {result[0].get('id')}")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_non_list_ads(self, bot:KleinanzeigenBot) -> None:
@@ -213,8 +224,10 @@ class TestJSONPagination:
             result = await bot._fetch_published_ads()
 
             # Should return empty list when ads is not a list
-            assert len(result) == 0
-            assert isinstance(result, list)
+            if not isinstance(result, list):
+                pytest.fail(f"expected empty list when 'ads' is not a list, got: {result}")
+            if len(result) != 0:
+                pytest.fail(f"expected empty list when 'ads' is not a list, got: {result}")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_timeout(self, bot:KleinanzeigenBot) -> None:

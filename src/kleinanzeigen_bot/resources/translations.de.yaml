@@ -32,6 +32,7 @@ kleinanzeigen_bot/__init__.py:
     "Python version: %s": "Python Version: %s"
 
   _fetch_published_ads:
+    "Empty JSON response content on page %s": "Leerer JSON-Antwortinhalt auf Seite %s"
     "Failed to parse JSON response on page %s: %s (content: %s)": "Fehler beim Parsen der JSON-Antwort auf Seite %s: %s (Inhalt: %s)"
     "Stopping pagination after %s pages to avoid infinite loop": "Stoppe die Seitenaufschaltung nach %s Seiten, um eine Endlosschleife zu vermeiden"
     "Pagination request timed out on page %s: %s": "Zeitueberschreitung bei der Seitenabfrage auf Seite %s: %s"

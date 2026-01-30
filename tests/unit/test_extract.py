@@ -746,12 +746,6 @@ class TestAdExtractorContent:
 
     # pylint: disable=protected-access
 
-    @pytest.fixture
-    def extractor_with_config(self) -> extract_module.AdExtractor:
-        """Create extractor with specific config for testing prefix/suffix handling."""
-        browser_mock = MagicMock(spec = Browser)
-        return extract_module.AdExtractor(browser_mock, Config())  # Empty config, will be overridden in tests
-
     @pytest.mark.asyncio
     async def test_extract_description_with_affixes(
         self, test_extractor:extract_module.AdExtractor, description_test_cases:list[tuple[dict[str, Any], str, str]], test_bot_config:Config
