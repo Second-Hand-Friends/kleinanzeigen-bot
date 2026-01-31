@@ -1,11 +1,7 @@
 # SPDX-FileCopyrightText: © 2025 Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio  # isort: skip
-import json  # isort: skip
-import re  # isort: skip
-import secrets  # isort: skip
-import shutil  # isort: skip
+import asyncio, json, re, secrets, shutil  # isort: skip
 from pathlib import Path
 from typing import Any, Final
 

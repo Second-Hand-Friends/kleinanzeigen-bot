@@ -606,11 +606,13 @@ kleinanzeigen_bot/model/config_model.py:
     "amount must be specified when auto_price_reduction is enabled": "amount muss angegeben werden, wenn auto_price_reduction aktiviert ist"
     "min_price must be specified when auto_price_reduction is enabled": "min_price muss angegeben werden, wenn auto_price_reduction aktiviert ist"
     "Percentage reduction amount must not exceed %s": "Prozentuale Reduktionsmenge darf %s nicht überschreiten"
+  migrate_legacy_diagnostics_keys:
+    "Deprecated: 'login_detection_capture' is replaced by 'capture_on.login_detection'. Please update your config.": "Veraltet: 'login_detection_capture' wurde durch 'capture_on.login_detection' ersetzt. Bitte aktualisieren Sie Ihre Konfiguration."
+    "Deprecated: 'publish_error_capture' is replaced by 'capture_on.publish'. Please update your config.": "Veraltet: 'publish_error_capture' wurde durch 'capture_on.publish' ersetzt. Bitte aktualisieren Sie Ihre Konfiguration."
   _validate_glob_pattern:
     "must be a non-empty, non-blank glob pattern": "muss ein nicht-leeres Glob-Muster sein"
   _validate_pause_requires_capture:
-    "capture_on contains unsupported keys: %s": "capture_on enthält nicht unterstützte Schlüssel: %s"
-    "pause_on_login_detection_failure requires capture_on['login_detection'] to be enabled": "pause_on_login_detection_failure erfordert, dass capture_on['login_detection'] aktiviert ist"
+    "pause_on_login_detection_failure requires capture_on.login_detection to be enabled": "pause_on_login_detection_failure erfordert, dass capture_on.login_detection aktiviert ist"
 
 #################################################
 kleinanzeigen_bot/model/ad_model.py:

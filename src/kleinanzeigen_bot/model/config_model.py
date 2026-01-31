@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import copy
 from gettext import gettext as _
-from typing import Annotated, Any, ClassVar, Final, Literal
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import AfterValidator, Field, model_validator
 from typing_extensions import deprecated
@@ -211,7 +211,6 @@ class CaptureOnConfig(ContextualModel):
 
 
 class DiagnosticsConfig(ContextualModel):
-    CAPTURE_ON_ALLOWED_KEYS:ClassVar[frozenset[str]] = frozenset({"login_detection", "publish"})
     capture_on:CaptureOnConfig = Field(
         default_factory = CaptureOnConfig,
         description = "Enable diagnostics capture for specific operations.",

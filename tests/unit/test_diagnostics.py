@@ -6,22 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from kleinanzeigen_bot.model.config_model import DiagnosticsConfig
 from kleinanzeigen_bot.utils.diagnostics import capture_diagnostics
-
-
-@pytest.mark.unit
-class TestDiagnosticsConfig:
-    """Tests for DiagnosticsConfig class."""
-
-    def test_diagnostics_config_allowed_keys_is_frozen(self) -> None:
-        """Test that CAPTURE_ON_ALLOWED_KEYS is immutable."""
-        # Should be a frozenset, not a set
-        assert isinstance(DiagnosticsConfig.CAPTURE_ON_ALLOWED_KEYS, frozenset)
-
-        # Should contain expected keys
-        assert "login_detection" in DiagnosticsConfig.CAPTURE_ON_ALLOWED_KEYS
-        assert "publish" in DiagnosticsConfig.CAPTURE_ON_ALLOWED_KEYS
 
 
 @pytest.mark.unit
