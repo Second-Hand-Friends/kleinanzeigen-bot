@@ -647,8 +647,10 @@ kleinanzeigen_bot/model/update_check_state.py:
 #################################################
 kleinanzeigen_bot/utils/diagnostics.py:
 #################################################
-  capture_diagnostics:
+  _copy_log_sync:
     "Log file not found for diagnostics copy: %s": "Logdatei nicht gefunden für Diagnosekopie: %s"
+
+  capture_diagnostics:
     "Diagnostics screenshot capture failed: %s": "Diagnose-Screenshot-Erfassung fehlgeschlagen: %s"
     "Diagnostics HTML capture failed: %s": "Diagnose-HTML-Erfassung fehlgeschlagen: %s"
     "Diagnostics JSON capture failed: %s": "Diagnose-JSON-Erfassung fehlgeschlagen: %s"
