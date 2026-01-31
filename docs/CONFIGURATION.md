@@ -220,14 +220,26 @@ login:
 
 ### diagnostics
 
-Diagnostics configuration for troubleshooting login detection issues.
+Diagnostics configuration for troubleshooting login detection issues and publish failures.
 
 ```yaml
 diagnostics:
-  login_detection_capture: false       # Capture screenshot + HTML when login state is UNKNOWN
+  capture_on:
+    login_detection: false      # Capture screenshot + HTML when login state is UNKNOWN
+    publish: false             # Capture screenshot + HTML + JSON on each failed publish attempt (timeouts/protocol errors)
+  capture_log_copy: false       # Copy entire bot log file when diagnostics are captured (may duplicate log content)
   pause_on_login_detection_failure: false  # Pause for manual inspection (interactive only)
-  output_dir: ""                       # Custom output directory (default: portable .temp/diagnostics, xdg cache/diagnostics)
+  output_dir: ""               # Custom output directory (see "Output locations (default)" below)
 ```
+
+**Migration Note:**
+
+Old diagnostics keys have been renamed/moved. Update configs and CI/automation accordingly:
+
+- `login_detection_capture` → `capture_on.login_detection`
+- `publish_error_capture` → `capture_on.publish`
+
+`capture_log_copy` is a new top-level flag. It may copy the same log multiple times during a single run if multiple diagnostic events are triggered.
 
 **Login Detection Behavior:**
 
@@ -249,8 +261,12 @@ The bot uses a layered approach to detect login state, prioritizing stealth over
 
 **Optional diagnostics:**
 
-- Enable `login_detection_capture` to capture screenshots and HTML dumps when state is `UNKNOWN`
-- Enable `pause_on_login_detection_failure` to pause the bot for manual inspection (interactive sessions only; requires `login_detection_capture=true`)
+- Enable `capture_on.login_detection` to capture screenshots and HTML dumps when state is `UNKNOWN`
+- Enable `capture_on.publish` to capture screenshots, HTML dumps, and JSON payloads for each failed publish attempt (e.g., attempts 1–3).
+- Enable `capture_log_copy` to copy the entire bot log file when a diagnostic event triggers (e.g., `capture_on.publish` or `capture_on.login_detection`):
+  - If multiple diagnostics trigger in the same run, the log will be copied multiple times
+  - Review or redact artifacts before sharing publicly
+- Enable `pause_on_login_detection_failure` to pause the bot for manual inspection in interactive sessions. This requires `capture_on.login_detection=true`; if this is not enabled, the runtime will fail startup with a validation error.
 - Use custom `output_dir` to specify where artifacts are saved
 
 **Output locations (default):**
@@ -259,7 +275,7 @@ The bot uses a layered approach to detect login state, prioritizing stealth over
 - **System-wide mode (XDG)**: `~/.cache/kleinanzeigen-bot/diagnostics/` (Linux) or `~/Library/Caches/kleinanzeigen-bot/diagnostics/` (macOS)
 - **Custom**: Path resolved relative to your `config.yaml` if `output_dir` is specified
 
-> **⚠️ PII Warning:** HTML dumps may contain your account email or other personally identifiable information. Review files in the diagnostics output directory before sharing them publicly.
+> **⚠️ PII Warning:** HTML dumps, JSON payloads, and log copies may contain PII. Typical examples include account email, ad titles/descriptions, contact info, and prices. Log copies are produced by `capture_log_copy` when diagnostics capture runs, such as `capture_on.publish` or `capture_on.login_detection`. Review or redact these artifacts before sharing them publicly.
 
 ## Installation Modes
 

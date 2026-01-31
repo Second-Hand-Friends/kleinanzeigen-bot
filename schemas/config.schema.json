@@ -263,6 +263,25 @@
       "title": "CaptchaConfig",
       "type": "object"
     },
+    "CaptureOnConfig": {
+      "description": "Configuration for which operations should trigger diagnostics capture.",
+      "properties": {
+        "login_detection": {
+          "default": false,
+          "description": "Capture screenshot and HTML when login state detection fails",
+          "title": "Login Detection",
+          "type": "boolean"
+        },
+        "publish": {
+          "default": false,
+          "description": "Capture screenshot, HTML, and JSON on publish failures",
+          "title": "Publish",
+          "type": "boolean"
+        }
+      },
+      "title": "CaptureOnConfig",
+      "type": "object"
+    },
     "ContactDefaults": {
       "properties": {
         "name": {
@@ -369,15 +388,19 @@
     },
     "DiagnosticsConfig": {
       "properties": {
-        "login_detection_capture": {
+        "capture_on": {
+          "$ref": "#/$defs/CaptureOnConfig",
+          "description": "Enable diagnostics capture for specific operations."
+        },
+        "capture_log_copy": {
           "default": false,
-          "description": "If true, capture diagnostics artifacts (screenshot + HTML) when login detection returns UNKNOWN.",
-          "title": "Login Detection Capture",
+          "description": "If true, copy the entire bot log file when diagnostics are captured (may duplicate log content).",
+          "title": "Capture Log Copy",
           "type": "boolean"
         },
         "pause_on_login_detection_failure": {
           "default": false,
-          "description": "If true, pause (interactive runs only) after capturing login detection diagnostics so that user can inspect the browser. Requires login_detection_capture to be enabled.",
+          "description": "If true, pause (interactive runs only) after capturing login detection diagnostics so that user can inspect the browser. Requires capture_on.login_detection to be enabled.",
           "title": "Pause On Login Detection Failure",
           "type": "boolean"
         },
@@ -520,7 +543,7 @@
         },
         "email_verification": {
           "default": 4.0,
-          "description": "Timeout for eMail verification prompts.",
+          "description": "Timeout for email verification prompts.",
           "minimum": 0.1,
           "title": "Email Verification",
           "type": "number"

@@ -11,9 +11,11 @@ from pydantic import AfterValidator, Field, model_validator
 from typing_extensions import deprecated
 
 from kleinanzeigen_bot.model.update_check_model import UpdateCheckConfig
-from kleinanzeigen_bot.utils import dicts
+from kleinanzeigen_bot.utils import dicts, loggers
 from kleinanzeigen_bot.utils.misc import get_attr
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
+
+LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 _MAX_PERCENTAGE:Final[int] = 100
 
@@ -195,25 +197,73 @@ class TimeoutConfig(ContextualModel):
         return base * self.multiplier * backoff
 
 
-class DiagnosticsConfig(ContextualModel):
-    login_detection_capture:bool = Field(
+class CaptureOnConfig(ContextualModel):
+    """Configuration for which operations should trigger diagnostics capture."""
+
+    login_detection:bool = Field(
         default = False,
-        description = "If true, capture diagnostics artifacts (screenshot + HTML) when login detection returns UNKNOWN.",
+        description = "Capture screenshot and HTML when login state detection fails",
+    )
+    publish:bool = Field(
+        default = False,
+        description = "Capture screenshot, HTML, and JSON on publish failures",
+    )
+
+
+class DiagnosticsConfig(ContextualModel):
+    capture_on:CaptureOnConfig = Field(
+        default_factory = CaptureOnConfig,
+        description = "Enable diagnostics capture for specific operations.",
+    )
+    capture_log_copy:bool = Field(
+        default = False,
+        description = "If true, copy the entire bot log file when diagnostics are captured (may duplicate log content).",
     )
     pause_on_login_detection_failure:bool = Field(
         default = False,
         description = "If true, pause (interactive runs only) after capturing login detection diagnostics "
-        "so that user can inspect the browser. Requires login_detection_capture to be enabled.",
+        "so that user can inspect the browser. Requires capture_on.login_detection to be enabled.",
     )
     output_dir:str | None = Field(
         default = None,
         description = "Optional output directory for diagnostics artifacts. If omitted, a safe default is used based on installation mode.",
     )
 
+    @model_validator(mode = "before")
+    @classmethod
+    def migrate_legacy_diagnostics_keys(cls, data:dict[str, Any]) -> dict[str, Any]:
+        """Migrate legacy login_detection_capture and publish_error_capture keys."""
+
+        # Migrate legacy login_detection_capture -> capture_on.login_detection
+        # Only migrate if the new key is not already explicitly set
+        if "login_detection_capture" in data:
+            LOG.warning("Deprecated: 'login_detection_capture' is replaced by 'capture_on.login_detection'. Please update your config.")
+            if "capture_on" not in data or data["capture_on"] is None:
+                data["capture_on"] = {}
+            if isinstance(data["capture_on"], dict) and "login_detection" not in data["capture_on"]:
+                data["capture_on"]["login_detection"] = data.pop("login_detection_capture")
+            else:
+                # Remove legacy key but don't overwrite explicit new value
+                data.pop("login_detection_capture")
+
+        # Migrate legacy publish_error_capture -> capture_on.publish
+        # Only migrate if the new key is not already explicitly set
+        if "publish_error_capture" in data:
+            LOG.warning("Deprecated: 'publish_error_capture' is replaced by 'capture_on.publish'. Please update your config.")
+            if "capture_on" not in data or data["capture_on"] is None:
+                data["capture_on"] = {}
+            if isinstance(data["capture_on"], dict) and "publish" not in data["capture_on"]:
+                data["capture_on"]["publish"] = data.pop("publish_error_capture")
+            else:
+                # Remove legacy key but don't overwrite explicit new value
+                data.pop("publish_error_capture")
+
+        return data
+
     @model_validator(mode = "after")
     def _validate_pause_requires_capture(self) -> "DiagnosticsConfig":
-        if self.pause_on_login_detection_failure and not self.login_detection_capture:
-            raise ValueError(_("pause_on_login_detection_failure requires login_detection_capture to be enabled"))
+        if self.pause_on_login_detection_failure and not self.capture_on.login_detection:
+            raise ValueError(_("pause_on_login_detection_failure requires capture_on.login_detection to be enabled"))
         return self
 
 
