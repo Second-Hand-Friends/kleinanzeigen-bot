@@ -1,3 +1,4 @@
+# SPDX-FileCopyrightText: © 2025 Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import asyncio  # isort: skip
@@ -32,12 +33,15 @@ def _write_json_sync(json_path:Path, json_payload:dict[str, Any]) -> None:
         handle.write("\n")  # noqa: ASYNC240
 
 
-def _copy_log_sync(log_file_path:str, log_path:Path) -> None:
-    """Synchronous helper to copy log file."""
+def _copy_log_sync(log_file_path:str, log_path:Path) -> bool:
+    """Synchronous helper to copy log file. Returns True if copy succeeded."""
     log_source = Path(log_file_path)
-    if log_source.exists():  # noqa: ASYNC240
-        loggers.flush_all_handlers()
-        shutil.copy2(log_source, log_path)  # noqa: ASYNC240
+    if not log_source.exists():  # noqa: ASYNC240
+        LOG.warning("Log file not found for diagnostics copy: %s", log_file_path)
+        return False
+    loggers.flush_all_handlers()
+    shutil.copy2(log_source, log_path)  # noqa: ASYNC240
+    return True
 
 
 async def capture_diagnostics(
@@ -110,8 +114,9 @@ async def capture_diagnostics(
 
         if copy_log and log_file_path:
             try:
-                await asyncio.to_thread(_copy_log_sync, log_file_path, log_path)  # noqa: ASYNC240
-                result.add_saved(log_path)
+                copy_succeeded = await asyncio.to_thread(_copy_log_sync, log_file_path, log_path)  # noqa: ASYNC240
+                if copy_succeeded:
+                    result.add_saved(log_path)
             except Exception as exc:  # noqa: BLE001
                 LOG.debug("Diagnostics log copy failed: %s", exc)
 

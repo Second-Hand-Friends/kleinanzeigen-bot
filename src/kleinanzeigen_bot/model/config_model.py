@@ -196,10 +196,10 @@ class TimeoutConfig(ContextualModel):
 
 
 class DiagnosticsConfig(ContextualModel):
-    CAPTURE_ON_ALLOWED_KEYS:Final[ClassVar[frozenset[str]]] = frozenset({"login_detection", "publish"})
+    CAPTURE_ON_ALLOWED_KEYS:ClassVar[frozenset[str]] = frozenset({"login_detection", "publish"})
     capture_on:dict[str, bool] = Field(
         default_factory = dict,
-        description = "Enable diagnostics capture for specific operations. Allowed keys are listed in CAPTURE_ON_ALLOWED_KEYS. "
+        description = "Enable diagnostics capture for specific operations. Allowed keys: 'login_detection', 'publish'. "
         "Example: {'login_detection': True, 'publish': False}.",
         examples = [{"login_detection": True, "publish": False}],
     )
