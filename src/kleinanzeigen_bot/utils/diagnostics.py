@@ -1,6 +1,6 @@
-# SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import asyncio  # isort: skip
 import json, re, secrets, shutil  # isort: skip
 from pathlib import Path
 from typing import Any, Final
@@ -25,6 +25,21 @@ class CaptureResult:
         return bool(self.saved_artifacts)
 
 
+def _write_json_sync(json_path:Path, json_payload:dict[str, Any]) -> None:
+    """Synchronous helper to write JSON to file."""
+    with json_path.open("w", encoding = "utf-8") as handle:  # noqa: ASYNC240
+        json.dump(json_payload, handle, indent = 2, default = str)  # noqa: ASYNC240
+        handle.write("\n")  # noqa: ASYNC240
+
+
+def _copy_log_sync(log_file_path:str, log_path:Path) -> None:
+    """Synchronous helper to copy log file."""
+    log_source = Path(log_file_path)
+    if log_source.exists():  # noqa: ASYNC240
+        loggers.flush_all_handlers()
+        shutil.copy2(log_source, log_path)  # noqa: ASYNC240
+
+
 async def capture_diagnostics(
     *,
     output_dir:Path,
@@ -36,7 +51,7 @@ async def capture_diagnostics(
     log_file_path:str | None = None,
     copy_log:bool = False,
 ) -> CaptureResult:
-    """Capture diagnostics artifacts for the given operation.
+    """Capture diagnostics artifacts for a given operation.
 
     Args:
         output_dir: The output directory for diagnostics artifacts
@@ -46,7 +61,7 @@ async def capture_diagnostics(
         page: Optional page object with save_screenshot and get_content methods
         json_payload: Optional JSON data to save
         log_file_path: Optional log file path to copy
-        copy_log: Whether to copy the log file
+        copy_log: Whether to copy log file
 
     Returns:
         CaptureResult containing the list of successfully saved artifacts
@@ -54,7 +69,7 @@ async def capture_diagnostics(
     result = CaptureResult()
 
     try:
-        output_dir.mkdir(parents = True, exist_ok = True)  # noqa: ASYNC240
+        await asyncio.to_thread(output_dir.mkdir, parents = True, exist_ok = True)  # noqa: ASYNC240
 
         ts = misc.now().strftime("%Y%m%dT%H%M%S")
         suffix = secrets.token_hex(4)
@@ -81,27 +96,22 @@ async def capture_diagnostics(
 
             try:
                 html = await page.get_content()
-                html_path.write_text(html, encoding = "utf-8")  # noqa: ASYNC240
+                await asyncio.to_thread(html_path.write_text, html, encoding = "utf-8")  # noqa: ASYNC240
                 result.add_saved(html_path)
             except Exception as exc:  # noqa: BLE001
                 LOG.debug("Diagnostics HTML capture failed: %s", exc)
 
         if json_payload is not None:
             try:
-                with json_path.open("w", encoding = "utf-8") as handle:  # noqa: ASYNC240
-                    json.dump(json_payload, handle, indent = 2, default = str)  # noqa: ASYNC240
-                    handle.write("\n")  # noqa: ASYNC240
+                await asyncio.to_thread(_write_json_sync, json_path, json_payload)  # noqa: ASYNC240
                 result.add_saved(json_path)
             except Exception as exc:  # noqa: BLE001
                 LOG.debug("Diagnostics JSON capture failed: %s", exc)
 
         if copy_log and log_file_path:
             try:
-                log_source = Path(log_file_path)
-                if log_source.exists():  # noqa: ASYNC240
-                    loggers.flush_all_handlers()
-                    shutil.copy2(log_source, log_path)  # noqa: ASYNC240
-                    result.add_saved(log_path)
+                await asyncio.to_thread(_copy_log_sync, log_file_path, log_path)  # noqa: ASYNC240
+                result.add_saved(log_path)
             except Exception as exc:  # noqa: BLE001
                 LOG.debug("Diagnostics log copy failed: %s", exc)
 
