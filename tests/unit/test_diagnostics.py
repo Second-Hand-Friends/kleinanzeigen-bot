@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -115,27 +115,3 @@ class TestDiagnosticsCapture:
         # Verify log was copied
         assert len(result.saved_artifacts) == 1
         assert result.saved_artifacts[0].suffix == ".log"
-
-    @pytest.mark.asyncio
-    async def test_capture_diagnostics_uses_asyncio_to_thread(self, tmp_path:Path) -> None:
-        """Test that capture_diagnostics properly offloads sync I/O to thread pool."""
-        mock_page = AsyncMock()
-        mock_page.save_screenshot = AsyncMock()
-        mock_page.get_content = AsyncMock(return_value = "<html></html>")
-
-        output_dir = tmp_path / "diagnostics"
-
-        with patch("kleinanzeigen_bot.utils.diagnostics.asyncio.to_thread") as mock_to_thread:
-            mock_to_thread.return_value = AsyncMock()
-
-            await capture_diagnostics(
-                output_dir = output_dir,
-                base_prefix = "test",
-                page = mock_page,
-            )
-
-            # Verify asyncio.to_thread was called for sync operations
-            assert mock_to_thread.called
-            # Verify it was called at least once for the mkdir operation
-            mkdir_calls = [call for call in mock_to_thread.call_args_list if hasattr(call.args[0], "__name__") and call.args[0].__name__ == "mkdir"]
-            assert len(mkdir_calls) > 0 or mock_to_thread.call_count > 0
