@@ -30,12 +30,6 @@ reviews:
   in_progress_fortune: false
   poem: false
 
-  # Ignore formatting issues handled by autopep8
-  ignore_comments:
-    - "spacing in type hints"
-    - "space after colon"
-    - "type annotation"
-    - "PEP 8"
 
   # Path filters to focus on important files
   path_filters:
@@ -95,6 +89,7 @@ reviews:
         13. Use type hints for all function parameters and return values
         14. Use structured logging with context and appropriate log levels.
         15. Log message strings should be plain English without `_()` (TranslatingLogger handles translation); wrap non-log user-facing strings with `_()` and add translations
+        16. NEVER flag PEP 8 whitespace/spacing issues (autopep8 handles these automatically via pdm run format)
     - path: "tests/**/*.py"
       instructions: |
         TESTING RULES:
@@ -113,6 +108,7 @@ reviews:
         13. Focus on minimal health checks, not full user workflows
         14. Include SPDX license headers
         15. Use descriptive test names in English
+        16. NEVER flag PEP 8 whitespace/spacing issues (autopep8 handles these automatically via pdm run format)
     - path: "scripts/**/*.py"
       instructions: |
         SCRIPT RULES:
