@@ -222,7 +222,7 @@ class DiagnosticsConfig(ContextualModel):
     pause_on_login_detection_failure:bool = Field(
         default = False,
         description = "If true, pause (interactive runs only) after capturing login detection diagnostics "
-        "so that user can inspect the browser. Requires capture_on['login_detection'] to be enabled.",
+        "so that user can inspect the browser. Requires capture_on.login_detection to be enabled.",
     )
     output_dir:str | None = Field(
         default = None,
@@ -237,20 +237,28 @@ class DiagnosticsConfig(ContextualModel):
             return data
 
         # Migrate legacy login_detection_capture -> capture_on.login_detection
+        # Only migrate if the new key is not already explicitly set
         if "login_detection_capture" in data:
             LOG.warning("Deprecated: 'login_detection_capture' is replaced by 'capture_on.login_detection'. Please update your config.")
             if "capture_on" not in data or data["capture_on"] is None:
                 data["capture_on"] = {}
-            if isinstance(data["capture_on"], dict):
+            if isinstance(data["capture_on"], dict) and "login_detection" not in data["capture_on"]:
                 data["capture_on"]["login_detection"] = data.pop("login_detection_capture")
+            else:
+                # Remove legacy key but don't overwrite explicit new value
+                data.pop("login_detection_capture")
 
         # Migrate legacy publish_error_capture -> capture_on.publish
+        # Only migrate if the new key is not already explicitly set
         if "publish_error_capture" in data:
             LOG.warning("Deprecated: 'publish_error_capture' is replaced by 'capture_on.publish'. Please update your config.")
             if "capture_on" not in data or data["capture_on"] is None:
                 data["capture_on"] = {}
-            if isinstance(data["capture_on"], dict):
+            if isinstance(data["capture_on"], dict) and "publish" not in data["capture_on"]:
                 data["capture_on"]["publish"] = data.pop("publish_error_capture")
+            else:
+                # Remove legacy key but don't overwrite explicit new value
+                data.pop("publish_error_capture")
 
         return data
 

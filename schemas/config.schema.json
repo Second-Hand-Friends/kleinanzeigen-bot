@@ -400,7 +400,7 @@
         },
         "pause_on_login_detection_failure": {
           "default": false,
-          "description": "If true, pause (interactive runs only) after capturing login detection diagnostics so that user can inspect the browser. Requires capture_on['login_detection'] to be enabled.",
+          "description": "If true, pause (interactive runs only) after capturing login detection diagnostics so that user can inspect the browser. Requires capture_on.login_detection to be enabled.",
           "title": "Pause On Login Detection Failure",
           "type": "boolean"
         },

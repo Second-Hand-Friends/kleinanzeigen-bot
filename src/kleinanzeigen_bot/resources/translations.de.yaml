@@ -658,7 +658,7 @@ kleinanzeigen_bot/utils/diagnostics.py:
     "Diagnostics JSON capture failed: %s": "Diagnose-JSON-Erfassung fehlgeschlagen: %s"
     "Diagnostics log copy failed: %s": "Diagnose-Log-Kopie fehlgeschlagen: %s"
     "Diagnostics saved: %s": "Diagnosedaten gespeichert: %s"
-    "Diagnostics capture enabled but no artifacts were saved": "Diagnoseerfassung aktiviert, aber keine Artefakte gespeichert"
+    "Diagnostics capture attempted but no artifacts were saved (all captures failed)": "Diagnoseerfassung versucht, aber keine Artefakte gespeichert (alle Erfassungen fehlgeschlagen)"
     "Diagnostics capture failed: %s": "Diagnoseerfassung fehlgeschlagen: %s"
 
 #################################################

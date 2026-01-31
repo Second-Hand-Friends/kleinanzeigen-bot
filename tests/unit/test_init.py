@@ -679,8 +679,8 @@ class TestKleinanzeigenBotDiagnostics:
         assert page.save_screenshot.await_count == expected_retries
         assert page.get_content.await_count == expected_retries
         entries = os.listdir(tmp_path)
-        html_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_*.html")]
-        json_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_*.json")]
+        html_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_000001_Test.html")]
+        json_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_000001_Test.json")]
         assert len(html_files) == expected_retries
         assert len(json_files) == expected_retries
 
@@ -717,7 +717,7 @@ class TestKleinanzeigenBotDiagnostics:
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
         entries = os.listdir(tmp_path)
-        log_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_*.log")]
+        log_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_000001_Test.log")]
         assert len(log_files) == PUBLISH_MAX_RETRIES
 
     @pytest.mark.unit
@@ -751,8 +751,8 @@ class TestKleinanzeigenBotDiagnostics:
         page.save_screenshot.assert_not_called()
         page.get_content.assert_not_called()
         entries = os.listdir(tmp_path)
-        html_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_*.html")]
-        json_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_*.json")]
+        html_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_000001_Test.html")]
+        json_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_000001_Test.json")]
         assert not html_files
         assert not json_files
 

@@ -232,11 +232,14 @@ diagnostics:
   output_dir: ""               # Custom output directory (see "Output locations (default)" below)
 ```
 
-**Migration Note:** Old diagnostics keys have been renamed/moved. Update configs and CI/automation accordingly:
+**Migration Note:**
 
-- `login_detection_capture` -> `capture_on.login_detection`
-- `publish_error_capture` -> `capture_on.publish`
-- `capture_log_copy` is a new top-level flag that may copy the same log multiple times during a single run if multiple diagnostic events are triggered
+Old diagnostics keys have been renamed/moved. Update configs and CI/automation accordingly:
+
+- `login_detection_capture` → `capture_on.login_detection`
+- `publish_error_capture` → `capture_on.publish`
+
+`capture_log_copy` is a new top-level flag. It may copy the same log multiple times during a single run if multiple diagnostic events are triggered.
 
 **Login Detection Behavior:**
 
@@ -259,7 +262,7 @@ The bot uses a layered approach to detect login state, prioritizing stealth over
 **Optional diagnostics:**
 
 - Enable `capture_on.login_detection` to capture screenshots and HTML dumps when state is `UNKNOWN`
-- Enable `capture_on.publish` to capture screenshots, HTML dumps, and JSON payloads for each failed publish attempt (attempt 1/2/3).
+- Enable `capture_on.publish` to capture screenshots, HTML dumps, and JSON payloads for each failed publish attempt (e.g., attempts 1–3).
 - Enable `capture_log_copy` to copy the entire bot log file when a diagnostic event actually triggers (e.g., during `capture_on.publish` or `capture_on.login_detection`). Note: if multiple diagnostics trigger in the same run, the log will be copied multiple times. Please review or redact these artifacts before sharing publicly.
 - Enable `pause_on_login_detection_failure` to pause the bot for manual inspection in interactive sessions. This requires `capture_on.login_detection=true`; if this is not enabled, the runtime will fail startup with a validation error.
 - Use custom `output_dir` to specify where artifacts are saved

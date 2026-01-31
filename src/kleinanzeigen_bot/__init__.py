@@ -1018,9 +1018,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if page is None:
             return
 
-        ad_basename = Path(ad_file).name
-        match = re.search(r"(ad_\d+)", ad_basename)
-        ad_token = match.group(1) if match else "ad_unknown"
+        # Use the ad filename (without extension) as identifier
+        ad_file_stem = Path(ad_file).stem
 
         json_payload = {
             "timestamp": misc.now().isoformat(timespec = "seconds"),
@@ -1031,7 +1030,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 "message": str(exc),
                 "repr": repr(exc),
             },
-            "ad_token": ad_token,
+            "ad_file": ad_file,
+            "ad_title": ad_cfg.title,
             "ad_config_effective": ad_cfg.model_dump(mode = "json"),
             "ad_config_original": ad_cfg_orig,
         }
@@ -1041,7 +1041,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 output_dir = self._diagnostics_output_dir(),
                 base_prefix = "publish_error",
                 attempt = attempt,
-                subject = ad_token,
+                subject = ad_file_stem,
                 page = page,
                 json_payload = json_payload,
                 log_file_path = self.log_file_path,

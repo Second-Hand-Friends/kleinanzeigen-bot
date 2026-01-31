@@ -72,7 +72,7 @@ async def capture_diagnostics(
     result = CaptureResult()
 
     try:
-        await asyncio.to_thread(output_dir.mkdir, parents = True, exist_ok = True)  # noqa: ASYNC240
+        await asyncio.to_thread(output_dir.mkdir, parents = True, exist_ok = True)
 
         ts = misc.now().strftime("%Y%m%dT%H%M%S")
         suffix = secrets.token_hex(4)
@@ -99,31 +99,36 @@ async def capture_diagnostics(
 
             try:
                 html = await page.get_content()
-                await asyncio.to_thread(html_path.write_text, html, encoding = "utf-8")  # noqa: ASYNC240
+                await asyncio.to_thread(html_path.write_text, html, encoding = "utf-8")
                 result.add_saved(html_path)
             except Exception as exc:  # noqa: BLE001
                 LOG.debug("Diagnostics HTML capture failed: %s", exc)
 
         if json_payload is not None:
             try:
-                await asyncio.to_thread(_write_json_sync, json_path, json_payload)  # noqa: ASYNC240
+                await asyncio.to_thread(_write_json_sync, json_path, json_payload)
                 result.add_saved(json_path)
             except Exception as exc:  # noqa: BLE001
                 LOG.debug("Diagnostics JSON capture failed: %s", exc)
 
         if copy_log and log_file_path:
             try:
-                copy_succeeded = await asyncio.to_thread(_copy_log_sync, log_file_path, log_path)  # noqa: ASYNC240
+                copy_succeeded = await asyncio.to_thread(_copy_log_sync, log_file_path, log_path)
                 if copy_succeeded:
                     result.add_saved(log_path)
             except Exception as exc:  # noqa: BLE001
                 LOG.debug("Diagnostics log copy failed: %s", exc)
 
+        # Determine if any capture was actually requested
+        capture_requested = page is not None or json_payload is not None or (copy_log and log_file_path)
+
         if result.has_any():
             artifacts_str = " ".join(map(str, result.saved_artifacts))
             LOG.info("Diagnostics saved: %s", artifacts_str)
+        elif capture_requested:
+            LOG.warning("Diagnostics capture attempted but no artifacts were saved (all captures failed)")
         else:
-            LOG.warning("Diagnostics capture enabled but no artifacts were saved")
+            LOG.debug("No diagnostics capture requested")
     except Exception as exc:  # noqa: BLE001
         LOG.debug("Diagnostics capture failed: %s", exc)
 

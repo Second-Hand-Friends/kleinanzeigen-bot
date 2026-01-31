@@ -30,6 +30,13 @@ reviews:
   in_progress_fortune: false
   poem: false
 
+  # Ignore formatting issues handled by autopep8
+  ignore_comments:
+    - "spacing in type hints"
+    - "space after colon"
+    - "type annotation"
+    - "PEP 8"
+
   # Path filters to focus on important files
   path_filters:
     # Source code

@@ -87,7 +87,7 @@ def test_timeout_config_resolve_falls_back_to_default() -> None:
 def test_diagnostics_pause_requires_capture_validation() -> None:
     """
     Unit: DiagnosticsConfig validator ensures pause_on_login_detection_failure
-    requires capture_on['login_detection'] to be enabled.
+    requires capture_on.login_detection to be enabled.
     """
     minimal_cfg = {
         "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
