@@ -1047,10 +1047,97 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.debug("No login detected - DOM elements not found and server probe returned %s", state.name)
         return False
 
+    async def _fetch_published_ads(self) -> list[dict[str, Any]]:
+        """Fetch all published ads, handling API pagination.
+
+        Returns:
+            List of all published ads across all pages.
+        """
+        ads:list[dict[str, Any]] = []
+        page = 1
+        MAX_PAGE_LIMIT:Final[int] = 100
+        SNIPPET_LIMIT:Final[int] = 500
+
+        while True:
+            # Safety check: don't paginate beyond reasonable limit
+            if page > MAX_PAGE_LIMIT:
+                LOG.warning("Stopping pagination after %s pages to avoid infinite loop", MAX_PAGE_LIMIT)
+                break
+
+            try:
+                response = await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum={page}")
+            except TimeoutError as ex:
+                LOG.warning("Pagination request timed out on page %s: %s", page, ex)
+                break
+
+            content = response.get("content", "")
+            try:
+                json_data = json.loads(content)
+            except json.JSONDecodeError as ex:
+                if not content:
+                    LOG.warning("Empty JSON response content on page %s", page)
+                    break
+                snippet = content[:SNIPPET_LIMIT] + ("..." if len(content) > SNIPPET_LIMIT else "")
+                LOG.warning("Failed to parse JSON response on page %s: %s (content: %s)", page, ex, snippet)
+                break
+
+            if not isinstance(json_data, dict):
+                snippet = content[:SNIPPET_LIMIT] + ("..." if len(content) > SNIPPET_LIMIT else "")
+                LOG.warning("Unexpected JSON payload on page %s (content: %s)", page, snippet)
+                break
+
+            page_ads = json_data.get("ads", [])
+            if not isinstance(page_ads, list):
+                preview = str(page_ads)
+                if len(preview) > SNIPPET_LIMIT:
+                    preview = preview[:SNIPPET_LIMIT] + "..."
+                LOG.warning("Unexpected 'ads' type on page %s: %s value: %s", page, type(page_ads).__name__, preview)
+                break
+
+            ads.extend(page_ads)
+
+            paging = json_data.get("paging")
+            if not isinstance(paging, dict):
+                LOG.debug("No paging dict found on page %s, assuming single page", page)
+                break
+
+            # Use only real API fields (confirmed from production data)
+            current_page_num = misc.coerce_page_number(paging.get("pageNum"))
+            total_pages = misc.coerce_page_number(paging.get("last"))
+
+            if current_page_num is None:
+                LOG.warning("Invalid 'pageNum' in paging info: %s, stopping pagination", paging.get("pageNum"))
+                break
+
+            if total_pages is None:
+                LOG.debug("No pagination info found, assuming single page")
+                break
+
+            # Stop if reached last page
+            if current_page_num >= total_pages:
+                LOG.info("Reached last page %s of %s, stopping pagination", current_page_num, total_pages)
+                break
+
+            # Safety: stop if no ads returned
+            if len(page_ads) == 0:
+                LOG.info("No ads found on page %s, stopping pagination", page)
+                break
+
+            LOG.debug("Page %s: fetched %s ads (numFound=%s)", page, len(page_ads), paging.get("numFound"))
+
+            # Use API's next field for navigation (more robust than our counter)
+            next_page = misc.coerce_page_number(paging.get("next"))
+            if next_page is None:
+                LOG.warning("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
+                break
+            page = next_page
+
+        return ads
+
     async def delete_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
 
-        published_ads = json.loads((await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
+        published_ads = await self._fetch_published_ads()
 
         for ad_file, ad_cfg, _ad_cfg_orig in ad_cfgs:
             count += 1
@@ -1094,7 +1181,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def extend_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         """Extends ads that are close to expiry."""
         # Fetch currently published ads from API
-        published_ads = json.loads((await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
+        published_ads = await self._fetch_published_ads()
 
         # Filter ads that need extension
         ads_to_extend = []
@@ -1213,7 +1300,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         failed_count = 0
         max_retries = 3
 
-        published_ads = json.loads((await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
+        published_ads = await self._fetch_published_ads()
 
         for ad_file, ad_cfg, ad_cfg_orig in ad_cfgs:
             LOG.info("Processing %s/%s: '%s' from [%s]...", count + 1, len(ad_cfgs), ad_cfg.title, ad_file)
@@ -1561,12 +1648,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         """
         count = 0
 
-        published_ads = json.loads((await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"))["content"])["ads"]
+        published_ads = await self._fetch_published_ads()
 
         for ad_file, ad_cfg, ad_cfg_orig in ad_cfgs:
             ad = next((ad for ad in published_ads if ad["id"] == ad_cfg.id), None)
 
             if not ad:
+                LOG.warning(" -> SKIPPED: ad '%s' (ID: %s) not found in published ads", ad_cfg.title, ad_cfg.id)
                 continue
 
             LOG.info("Processing %s/%s: '%s' from [%s]...", count + 1, len(ad_cfgs), ad_cfg.title, ad_file)

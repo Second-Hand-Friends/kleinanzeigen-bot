@@ -16,12 +16,55 @@ from . import i18n
 T = TypeVar("T")
 
 
+def coerce_page_number(value:Any) -> int | None:
+    """Safely coerce a value to int or return None if conversion fails.
+
+    Whole-number floats are accepted; non-integer floats are rejected.
+
+    Args:
+        value: Value to coerce to int (can be int, str, float, or any type)
+
+    Returns:
+        int if value can be safely coerced, None otherwise
+
+    Examples:
+        >>> coerce_page_number(1)
+        1
+        >>> coerce_page_number("2")
+        2
+        >>> coerce_page_number(3.0)
+        3
+        >>> coerce_page_number(3.5) is None
+        True
+        >>> coerce_page_number(True) is None  # Not 1!
+        True
+        >>> coerce_page_number(None) is None
+        True
+        >>> coerce_page_number("invalid") is None
+        True
+        >>> coerce_page_number([1, 2, 3]) is None
+        True
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, float):
+        if value.is_integer():
+            return int(value)
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def ensure(
-        condition:Any | bool | Callable[[], bool],  # noqa: FBT001 Boolean-typed positional argument in function definition
-        error_message:str,
-        timeout:float = 5,
-        poll_frequency:float = 0.5
-    ) -> None:
+    condition:Any | bool | Callable[[], bool],  # noqa: FBT001 Boolean-typed positional argument in function definition
+    error_message:str,
+    timeout:float = 5,
+    poll_frequency:float = 0.5,
+) -> None:
     """
     Ensure a condition is true, retrying until timeout.
 
@@ -152,12 +195,7 @@ def parse_decimal(number:float | int | str) -> decimal.Decimal:
             raise decimal.DecimalException(f"Invalid number format: {number}") from ex
 
 
-def parse_datetime(
-    date:datetime | str | None,
-    *,
-    add_timezone_if_missing:bool = True,
-    use_local_timezone:bool = True
-) -> datetime | None:
+def parse_datetime(date:datetime | str | None, *, add_timezone_if_missing:bool = True, use_local_timezone:bool = True) -> datetime | None:
     """
     Parses a datetime object or ISO-formatted string.
 
@@ -184,10 +222,7 @@ def parse_datetime(
     dt = date if isinstance(date, datetime) else datetime.fromisoformat(date)
 
     if dt.tzinfo is None and add_timezone_if_missing:
-        dt = (
-            dt.astimezone() if use_local_timezone
-            else dt.replace(tzinfo = timezone.utc)
-        )
+        dt = dt.astimezone() if use_local_timezone else dt.replace(tzinfo = timezone.utc)
 
     return dt
 

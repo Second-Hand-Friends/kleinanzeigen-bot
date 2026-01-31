@@ -25,6 +25,7 @@ __all__ = [
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 _BREADCRUMB_MIN_DEPTH:Final[int] = 2
+_SELL_DIRECTLY_MAX_PAGE_LIMIT:Final[int] = 100
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
 
 
@@ -525,19 +526,56 @@ class AdExtractor(WebScrapingMixin):
                 LOG.warning("Could not extract ad ID from URL: %s", self.page.url)
                 return None
 
-            # Fetch the management JSON data using web_request
-            response = await self.web_request("https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json")
-            json_data = json.loads(response["content"])
+            # Fetch the management JSON data using web_request with pagination support
+            page = 1
 
-            # Find the current ad in the ads list
-            if isinstance(json_data, dict) and "ads" in json_data:
-                ads_list = json_data["ads"]
-                if isinstance(ads_list, list):
-                    # Filter ads to find the current ad by ID
-                    current_ad = next((ad for ad in ads_list if ad.get("id") == current_ad_id), None)
-                    if current_ad and "buyNowEligible" in current_ad:
-                        buy_now_eligible = current_ad["buyNowEligible"]
-                        return buy_now_eligible if isinstance(buy_now_eligible, bool) else None
+            while True:
+                # Safety check: don't paginate beyond reasonable limit
+                if page > _SELL_DIRECTLY_MAX_PAGE_LIMIT:
+                    LOG.warning("Stopping pagination after %s pages to avoid infinite loop", _SELL_DIRECTLY_MAX_PAGE_LIMIT)
+                    break
+
+                response = await self.web_request(f"https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum={page}")
+
+                try:
+                    json_data = json.loads(response["content"])
+                except json.JSONDecodeError as ex:
+                    LOG.debug("Failed to parse JSON response on page %s: %s", page, ex)
+                    break
+
+                # Find the current ad in the ads list
+                if isinstance(json_data, dict) and "ads" in json_data:
+                    ads_list = json_data["ads"]
+                    if isinstance(ads_list, list):
+                        # Filter ads to find the current ad by ID
+                        current_ad = next((ad for ad in ads_list if ad.get("id") == current_ad_id), None)
+                        if current_ad and "buyNowEligible" in current_ad:
+                            buy_now_eligible = current_ad["buyNowEligible"]
+                            return buy_now_eligible if isinstance(buy_now_eligible, bool) else None
+
+                # Check if we need to fetch more pages
+                paging = json_data.get("paging") if isinstance(json_data, dict) else None
+                if not isinstance(paging, dict):
+                    break
+
+                # Parse pagination info using real API fields
+                current_page_num = misc.coerce_page_number(paging.get("pageNum"))
+                total_pages = misc.coerce_page_number(paging.get("last"))
+
+                if current_page_num is None:
+                    LOG.warning("Invalid 'pageNum' in paging info: %s, stopping pagination", paging.get("pageNum"))
+                    break
+
+                # Stop if we've reached the last page
+                if total_pages is None or current_page_num >= total_pages:
+                    break
+
+                # Use API's next field for navigation (more robust than our counter)
+                next_page = misc.coerce_page_number(paging.get("next"))
+                if next_page is None:
+                    LOG.warning("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
+                    break
+                page = next_page
 
             # If the key doesn't exist or ad not found, return None (unknown)
             return None
