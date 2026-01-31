@@ -854,7 +854,8 @@ class TestAdExtractorContent:
         test_extractor.page.url = "https://www.kleinanzeigen.de/invalid-url"
         with patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request:
             result = await test_extractor._extract_sell_directly_from_ad_page()
-            # pageNum falls back to page -> "1" (coerced); last=0 makes current page > last so pagination ends and returns None
+            # When pageNum is missing from the API response, coerce_page_number() returns None,
+            # causing the pagination loop to break and return None without making a web_request call.
             assert result is None
 
             # Verify web_request was NOT called when URL is invalid

@@ -185,10 +185,7 @@ class TestJSONPagination:
 
             if len(result) != 2:
                 pytest.fail(f"expected 2 ads, got {len(result)}")
-            try:
-                mock_request.assert_awaited_once()
-            except AssertionError as ex:
-                pytest.fail(f"web_request was not awaited exactly once: {ex}")
+            mock_request.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_non_integer_paging_values(self, bot:KleinanzeigenBot) -> None:
