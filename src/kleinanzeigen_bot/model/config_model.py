@@ -231,10 +231,8 @@ class DiagnosticsConfig(ContextualModel):
 
     @model_validator(mode = "before")
     @classmethod
-    def migrate_legacy_diagnostics_keys(cls, data:Any) -> Any:
+    def migrate_legacy_diagnostics_keys(cls, data:dict[str, Any]) -> dict[str, Any]:
         """Migrate legacy login_detection_capture and publish_error_capture keys."""
-        if not isinstance(data, dict):
-            return data
 
         # Migrate legacy login_detection_capture -> capture_on.login_detection
         # Only migrate if the new key is not already explicitly set
