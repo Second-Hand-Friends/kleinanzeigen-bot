@@ -15,7 +15,7 @@ from kleinanzeigen_bot.utils import dicts, loggers
 from kleinanzeigen_bot.utils.misc import get_attr
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
 
-LOG: Final[loggers.Logger] = loggers.get_logger(__name__)
+LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 _MAX_PERCENTAGE:Final[int] = 100
 

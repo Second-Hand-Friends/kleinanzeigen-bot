@@ -104,3 +104,89 @@ def test_diagnostics_pause_requires_capture_validation() -> None:
     invalid_cfg = {**minimal_cfg, "diagnostics": {"capture_on": {"login_detection": False}, "pause_on_login_detection_failure": True}}
     with pytest.raises(ValueError, match = "pause_on_login_detection_failure requires capture_on.login_detection to be enabled"):
         Config.model_validate(invalid_cfg)
+
+
+def test_diagnostics_legacy_login_detection_capture_migration_when_capture_on_exists() -> None:
+    """
+    Unit: Test that legacy login_detection_capture is removed but doesn't overwrite explicit capture_on.login_detection.
+    """
+    minimal_cfg = {
+        "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
+        "login": {"username": "dummy", "password": "dummy"},  # noqa: S105
+    }
+
+    # When capture_on.login_detection is explicitly set to False, legacy True should be ignored
+    cfg_with_explicit = {
+        **minimal_cfg,
+        "diagnostics": {
+            "login_detection_capture": True,  # legacy key
+            "capture_on": {"login_detection": False},  # explicit new key set to False
+        },
+    }
+    config = Config.model_validate(cfg_with_explicit)
+    assert config.diagnostics is not None
+    assert config.diagnostics.capture_on.login_detection is False  # explicit value preserved
+
+
+def test_diagnostics_legacy_publish_error_capture_migration_when_capture_on_exists() -> None:
+    """
+    Unit: Test that legacy publish_error_capture is removed but doesn't overwrite explicit capture_on.publish.
+    """
+    minimal_cfg = {
+        "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
+        "login": {"username": "dummy", "password": "dummy"},  # noqa: S105
+    }
+
+    # When capture_on.publish is explicitly set to False, legacy True should be ignored
+    cfg_with_explicit = {
+        **minimal_cfg,
+        "diagnostics": {
+            "publish_error_capture": True,  # legacy key
+            "capture_on": {"publish": False},  # explicit new key set to False
+        },
+    }
+    config = Config.model_validate(cfg_with_explicit)
+    assert config.diagnostics is not None
+    assert config.diagnostics.capture_on.publish is False  # explicit value preserved
+
+
+def test_diagnostics_legacy_login_detection_capture_migration_when_capture_on_is_none() -> None:
+    """
+    Unit: Test that legacy login_detection_capture is migrated when capture_on is None.
+    """
+    minimal_cfg = {
+        "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
+        "login": {"username": "dummy", "password": "dummy"},  # noqa: S105
+    }
+
+    cfg_with_null_capture_on = {
+        **minimal_cfg,
+        "diagnostics": {
+            "login_detection_capture": True,  # legacy key
+            "capture_on": None,  # capture_on is explicitly None
+        },
+    }
+    config = Config.model_validate(cfg_with_null_capture_on)
+    assert config.diagnostics is not None
+    assert config.diagnostics.capture_on.login_detection is True  # legacy value migrated
+
+
+def test_diagnostics_legacy_publish_error_capture_migration_when_capture_on_is_none() -> None:
+    """
+    Unit: Test that legacy publish_error_capture is migrated when capture_on is None.
+    """
+    minimal_cfg = {
+        "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
+        "login": {"username": "dummy", "password": "dummy"},  # noqa: S105
+    }
+
+    cfg_with_null_capture_on = {
+        **minimal_cfg,
+        "diagnostics": {
+            "publish_error_capture": True,  # legacy key
+            "capture_on": None,  # capture_on is explicitly None
+        },
+    }
+    config = Config.model_validate(cfg_with_null_capture_on)
+    assert config.diagnostics is not None
+    assert config.diagnostics.capture_on.publish is True  # legacy value migrated
