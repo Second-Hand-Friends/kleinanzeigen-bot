@@ -31,19 +31,19 @@ class CaptureResult:
 
 def _write_json_sync(json_path:Path, json_payload:dict[str, Any]) -> None:
     """Synchronous helper to write JSON to file."""
-    with json_path.open("w", encoding = "utf-8") as handle:  # noqa: ASYNC240
-        json.dump(json_payload, handle, indent = 2, default = str)  # noqa: ASYNC240
-        handle.write("\n")  # noqa: ASYNC240
+    with json_path.open("w", encoding = "utf-8") as handle:
+        json.dump(json_payload, handle, indent = 2, default = str)
+        handle.write("\n")
 
 
 def _copy_log_sync(log_file_path:str, log_path:Path) -> bool:
     """Synchronous helper to copy log file. Returns True if copy succeeded."""
     log_source = Path(log_file_path)
-    if not log_source.exists():  # noqa: ASYNC240
+    if not log_source.exists():
         LOG.warning("Log file not found for diagnostics copy: %s", log_file_path)
         return False
     loggers.flush_all_handlers()
-    shutil.copy2(log_source, log_path)  # noqa: ASYNC240
+    shutil.copy2(log_source, log_path)
     return True
 
 

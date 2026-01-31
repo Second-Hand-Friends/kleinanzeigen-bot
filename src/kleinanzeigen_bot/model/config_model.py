@@ -217,6 +217,28 @@ class DiagnosticsConfig(ContextualModel):
         description = "Optional output directory for diagnostics artifacts. If omitted, a safe default is used based on installation mode.",
     )
 
+    @model_validator(mode = "before")
+    def migrate_legacy_diagnostics_keys(cls, data:dict[str, Any]) -> dict[str, Any]:
+        """Migrate legacy login_detection_capture and publish_error_capture keys."""
+        if not isinstance(data, dict):
+            return data
+
+        # Migrate legacy login_detection_capture -> capture_on.login_detection
+        if "login_detection_capture" in data:
+            if "capture_on" not in data or data["capture_on"] is None:
+                data["capture_on"] = {}
+            if isinstance(data["capture_on"], dict):
+                data["capture_on"]["login_detection"] = data.pop("login_detection_capture")
+
+        # Migrate legacy publish_error_capture -> capture_on.publish
+        if "publish_error_capture" in data:
+            if "capture_on" not in data or data["capture_on"] is None:
+                data["capture_on"] = {}
+            if isinstance(data["capture_on"], dict):
+                data["capture_on"]["publish"] = data.pop("publish_error_capture")
+
+        return data
+
     @model_validator(mode = "after")
     def _validate_pause_requires_capture(self) -> "DiagnosticsConfig":
         unknown_keys = set(self.capture_on) - self.CAPTURE_ON_ALLOWED_KEYS

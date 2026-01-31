@@ -232,14 +232,11 @@ diagnostics:
   output_dir: ""               # Custom output directory (see "Output locations (default)" below)
 ```
 
-Migration note: old diagnostics keys have been renamed/moved. Update configs and CI/automation accordingly:
+**Migration Note:** Old diagnostics keys have been renamed/moved. Update configs and CI/automation accordingly:
 
 - `login_detection_capture` -> `capture_on.login_detection`
 - `publish_error_capture` -> `capture_on.publish`
-
-New flag:
-
-- `capture_log_copy` is a new top-level diagnostics flag
+- `capture_log_copy` is a new top-level flag that may copy the same log multiple times during a single run if multiple diagnostic events are triggered
 
 **Login Detection Behavior:**
 
@@ -273,7 +270,7 @@ The bot uses a layered approach to detect login state, prioritizing stealth over
 - **System-wide mode (XDG)**: `~/.cache/kleinanzeigen-bot/diagnostics/` (Linux) or `~/Library/Caches/kleinanzeigen-bot/diagnostics/` (macOS)
 - **Custom**: Path resolved relative to your `config.yaml` if `output_dir` is specified
 
-> **⚠️ PII Warning:** HTML dumps, JSON payloads, and log copies may contain PII. Typical examples include account email, ad titles/descriptions, contact info, and prices. (Log copies are produced by `capture_log_copy` when diagnostics capture runs, such as `capture_on.publish` or `capture_on.login_detection`.) Review or redact these artifacts before sharing them publicly.
+> **⚠️ PII Warning:** HTML dumps, JSON payloads, and log copies may contain PII. Typical examples include account email, ad titles/descriptions, contact info, and prices. Log copies are produced by `capture_log_copy` when diagnostics capture runs, such as `capture_on.publish` or `capture_on.login_detection`. Review or redact these artifacts before sharing them publicly.
 
 ## Installation Modes
 
