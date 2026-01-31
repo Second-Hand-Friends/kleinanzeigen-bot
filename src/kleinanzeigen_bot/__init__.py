@@ -964,7 +964,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def _capture_login_detection_diagnostics_if_enabled(self) -> None:
         cfg = getattr(self.config, "diagnostics", None)
-        if cfg is None or not cfg.capture_on.get("login_detection", False):
+        if cfg is None or not cfg.capture_on.login_detection:
             return
 
         if self._login_detection_diagnostics_captured:
@@ -1006,12 +1006,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     ) -> None:
         """Capture publish failure diagnostics when enabled and a page is available.
 
-        Runs only if cfg.capture_on.get("publish", False) is enabled and self.page is set.
+        Runs only if cfg.capture_on.publish is enabled and self.page is set.
         Uses the ad configuration and publish attempt details to write screenshot, HTML,
         JSON payload, and optional log copy for debugging.
         """
         cfg = getattr(self.config, "diagnostics", None)
-        if cfg is None or not cfg.capture_on.get("publish", False):
+        if cfg is None or not cfg.capture_on.publish:
             return
 
         page = getattr(self, "page", None)

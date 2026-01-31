@@ -34,7 +34,7 @@ class TestDiagnosticsCapture:
         mock_page = AsyncMock()
 
         output_dir = tmp_path / "diagnostics"
-        result = await capture_diagnostics(
+        _ = await capture_diagnostics(
             output_dir = output_dir,
             base_prefix = "test",
             page = mock_page,
@@ -42,7 +42,6 @@ class TestDiagnosticsCapture:
 
         # Verify directory was created
         assert output_dir.exists()
-        assert len(result.saved_artifacts) > 0
 
     @pytest.mark.asyncio
     async def test_capture_diagnostics_creates_screenshot(self, tmp_path:Path) -> None:

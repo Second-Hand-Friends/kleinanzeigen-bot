@@ -11,9 +11,11 @@ from pydantic import AfterValidator, Field, model_validator
 from typing_extensions import deprecated
 
 from kleinanzeigen_bot.model.update_check_model import UpdateCheckConfig
-from kleinanzeigen_bot.utils import dicts
+from kleinanzeigen_bot.utils import dicts, loggers
 from kleinanzeigen_bot.utils.misc import get_attr
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
+
+LOG = loggers.get_logger(__name__)
 
 _MAX_PERCENTAGE:Final[int] = 100
 
@@ -195,13 +197,24 @@ class TimeoutConfig(ContextualModel):
         return base * self.multiplier * backoff
 
 
+class CaptureOnConfig(ContextualModel):
+    """Configuration for which operations should trigger diagnostics capture."""
+
+    login_detection:bool = Field(
+        default = False,
+        description = "Capture screenshot and HTML when login state detection fails",
+    )
+    publish:bool = Field(
+        default = False,
+        description = "Capture screenshot, HTML, and JSON on publish failures",
+    )
+
+
 class DiagnosticsConfig(ContextualModel):
     CAPTURE_ON_ALLOWED_KEYS:ClassVar[frozenset[str]] = frozenset({"login_detection", "publish"})
-    capture_on:dict[str, bool] = Field(
-        default_factory = dict,
-        description = "Enable diagnostics capture for specific operations. Allowed keys: 'login_detection', 'publish'. "
-        "Example: {'login_detection': True, 'publish': False}.",
-        examples = [{"login_detection": True, "publish": False}],
+    capture_on:CaptureOnConfig = Field(
+        default_factory = CaptureOnConfig,
+        description = "Enable diagnostics capture for specific operations.",
     )
     capture_log_copy:bool = Field(
         default = False,
@@ -218,6 +231,7 @@ class DiagnosticsConfig(ContextualModel):
     )
 
     @model_validator(mode = "before")
+    @classmethod
     def migrate_legacy_diagnostics_keys(cls, data:dict[str, Any]) -> dict[str, Any]:
         """Migrate legacy login_detection_capture and publish_error_capture keys."""
         if not isinstance(data, dict):
@@ -225,6 +239,7 @@ class DiagnosticsConfig(ContextualModel):
 
         # Migrate legacy login_detection_capture -> capture_on.login_detection
         if "login_detection_capture" in data:
+            LOG.warning("Deprecated: 'login_detection_capture' is replaced by 'capture_on.login_detection'. Please update your config.")
             if "capture_on" not in data or data["capture_on"] is None:
                 data["capture_on"] = {}
             if isinstance(data["capture_on"], dict):
@@ -232,6 +247,7 @@ class DiagnosticsConfig(ContextualModel):
 
         # Migrate legacy publish_error_capture -> capture_on.publish
         if "publish_error_capture" in data:
+            LOG.warning("Deprecated: 'publish_error_capture' is replaced by 'capture_on.publish'. Please update your config.")
             if "capture_on" not in data or data["capture_on"] is None:
                 data["capture_on"] = {}
             if isinstance(data["capture_on"], dict):
@@ -241,12 +257,8 @@ class DiagnosticsConfig(ContextualModel):
 
     @model_validator(mode = "after")
     def _validate_pause_requires_capture(self) -> "DiagnosticsConfig":
-        unknown_keys = set(self.capture_on) - self.CAPTURE_ON_ALLOWED_KEYS
-        if unknown_keys:
-            unknown_list = ", ".join(sorted(unknown_keys))
-            raise ValueError(_("capture_on contains unsupported keys: %s") % unknown_list)
-        if self.pause_on_login_detection_failure and not self.capture_on.get("login_detection", False):
-            raise ValueError(_("pause_on_login_detection_failure requires capture_on['login_detection'] to be enabled"))
+        if self.pause_on_login_detection_failure and not self.capture_on.login_detection:
+            raise ValueError(_("pause_on_login_detection_failure requires capture_on.login_detection to be enabled"))
         return self
 
 

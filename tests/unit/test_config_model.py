@@ -99,8 +99,8 @@ def test_diagnostics_pause_requires_capture_validation() -> None:
     config = Config.model_validate(valid_cfg)
     assert config.diagnostics is not None
     assert config.diagnostics.pause_on_login_detection_failure is True
-    assert config.diagnostics.capture_on == {"login_detection": True}
+    assert config.diagnostics.capture_on.login_detection is True
 
     invalid_cfg = {**minimal_cfg, "diagnostics": {"capture_on": {"login_detection": False}, "pause_on_login_detection_failure": True}}
-    with pytest.raises(ValueError, match = "pause_on_login_detection_failure requires capture_on\\['login_detection'\\] to be enabled"):
+    with pytest.raises(ValueError, match = "pause_on_login_detection_failure requires capture_on.login_detection to be enabled"):
         Config.model_validate(invalid_cfg)
