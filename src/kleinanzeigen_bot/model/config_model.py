@@ -85,7 +85,9 @@ class AdDefaults(ContextualModel):
     )
     sell_directly:bool = Field(default = False, description = "enable direct purchase option (only works when shipping_type is SHIPPING)")
     images:list[str] | None = Field(
-        default = None, description = "glob patterns for ad images (relative to ad file location)", examples = ['["images/*.jpg", "photos/*.{png,jpg}"]']
+        default = None,
+        description = "glob patterns for ad images (relative to ad file location)",
+        examples = ['"images/*.jpg"', '"photos/*.{png,jpg}"'],
     )
     contact:ContactDefaults = Field(default_factory = ContactDefaults, description = "default contact information for ads")
     republication_interval:int = Field(default = 7, description = "number of days between automatic republication of ads")
@@ -135,13 +137,13 @@ class BrowserConfig(ContextualModel):
             "Common options: --headless (run without GUI), --disable-dev-shm-usage (fix Docker issues), "
             "--user-data-dir=/path (custom profile location). Browser profile path is auto-configured based on installation mode."
         ),
-        examples = ['["--headless"", ""--disable-dev-shm-usage"", ""--user-data-dir=/path/to/profile"]'],
+        examples = ['"--headless"', '"--disable-dev-shm-usage"', '"--user-data-dir=/path/to/profile"'],
     )
     binary_location:str | None = Field(default = None, description = "path to custom browser executable, if not specified will be looked up on PATH")
     extensions:list[str] = Field(
         default_factory = list,
         description = "list of Chrome extension .crx files to load on startup (paths relative to config file)",
-        examples = ['[""extensions/adblock.crx"", ""/absolute/path/to/extension.crx"]'],
+        examples = ['"extensions/adblock.crx"', '"/absolute/path/to/extension.crx"'],
     )
     use_private_window:bool = Field(default = True, description = "open browser in private/incognito mode (recommended to avoid cookie conflicts)")
     user_data_dir:str | None = Field(
@@ -326,7 +328,7 @@ if relative paths are specified, then they are relative to this configuration fi
             "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml "
             "Format: 'Category > Subcategory': 'ID'. Example: {\"Elektronik > Notebooks\": \"161/278\"}"
         ),
-        examples = ['{"Elektronik > Notebooks": "161/278", "Jobs > Praktika": "102/125"}'],
+        examples = ['"Elektronik > Notebooks": "161/278"', '"Jobs > Praktika": "102/125"'],
     )
 
     download:DownloadConfig = Field(default_factory = DownloadConfig)
