@@ -106,6 +106,24 @@ def load_dict_from_module(module:ModuleType, filename:str, content_label:str = "
     return json.loads(content) if filename.endswith(".json") else YAML().load(content)  # type: ignore[no-any-return] # mypy
 
 
+def _configure_yaml() -> YAML:
+    """
+    Configure and return a YAML instance with standard settings.
+
+    Returns:
+        Configured YAML instance ready for dumping
+    """
+    yaml = YAML()
+    yaml.indent(mapping = 2, sequence = 4, offset = 2)
+    yaml.representer.add_representer(
+        str,  # use YAML | block style for multi-line strings
+        lambda dumper, data: dumper.represent_scalar("tag:yaml.org,2002:str", data, style = "|" if "\n" in data else None),
+    )
+    yaml.allow_duplicate_keys = False
+    yaml.explicit_start = False
+    return yaml
+
+
 def save_dict(filepath:str | Path, content:dict[str, Any], *, header:str | None = None) -> None:
     # Normalize filepath to NFC for cross-platform consistency (issue #728)
     # Ensures file paths match NFC-normalized directory names from sanitize_folder_name()
@@ -123,14 +141,7 @@ def save_dict(filepath:str | Path, content:dict[str, Any], *, header:str | None 
         if filepath.suffix == ".json":
             file.write(json.dumps(content, indent = 2, ensure_ascii = False))
         else:
-            yaml = YAML()
-            yaml.indent(mapping = 2, sequence = 4, offset = 2)
-            yaml.representer.add_representer(
-                str,  # use YAML | block style for multi-line strings
-                lambda dumper, data: dumper.represent_scalar("tag:yaml.org,2002:str", data, style = "|" if "\n" in data else None),
-            )
-            yaml.allow_duplicate_keys = False
-            yaml.explicit_start = False
+            yaml = _configure_yaml()
             yaml.dump(content, file)
 
 
@@ -348,12 +359,5 @@ def save_commented_model(
             file.write(header)
             file.write("\n")
 
-        yaml = YAML()
-        yaml.indent(mapping = 2, sequence = 4, offset = 2)
-        yaml.representer.add_representer(
-            str,
-            lambda dumper, data: dumper.represent_scalar("tag:yaml.org,2002:str", data, style = "|" if "\n" in data else None),
-        )
-        yaml.allow_duplicate_keys = False
-        yaml.explicit_start = False
+        yaml = _configure_yaml()
         yaml.dump(commented_data, file)
