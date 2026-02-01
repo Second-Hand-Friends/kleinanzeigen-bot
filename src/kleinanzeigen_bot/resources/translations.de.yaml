@@ -63,8 +63,11 @@ kleinanzeigen_bot/__init__.py:
 
   load_config:
     "config": "Konfiguration"
-    " -> found %s": "-> %s gefunden"
-    "category": "Kategorie"
+    "Loaded %s categories from categories.yaml": "%s Kategorien aus categories.yaml geladen"
+    "Loaded %s categories from categories_old.yaml": "%s Kategorien aus categories_old.yaml geladen"
+    "Loaded %s categories from config.yaml (custom)": "%s Kategorien aus config.yaml geladen (benutzerdefiniert)"
+    "Loaded %s categories in total": "%s Kategorien insgesamt geladen"
+    "No categories loaded - category files may be missing or empty": "Keine Kategorien geladen - Kategorie-Dateien fehlen oder sind leer"
 
   check_and_wait_for_captcha:
     "# Captcha present! Please solve the captcha.": "# Captcha vorhanden! Bitte lösen Sie das Captcha."
@@ -138,9 +141,8 @@ kleinanzeigen_bot/__init__.py:
     "Found extend button on page %s": "'Verlängern'-Button auf Seite %s gefunden"
 
   finalize_installation_mode:
-    "Config file: %s": "Konfigurationsdatei: %s"
     "First run detected, prompting user for installation mode": "Erster Start erkannt, frage Benutzer nach Installationsmodus"
-    "Installation mode: %s": "Installationsmodus: %s"
+    "Installation mode: %s [%s]": "Installationsmodus: %s [%s]"
 
   publish_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
@@ -686,7 +688,7 @@ kleinanzeigen_bot/utils/xdg_paths.py:
     "Failed to create %s %s: %s": "Fehler beim Erstellen von %s %s: %s"
   detect_installation_mode:
     "Detected installation mode: %s": "Erkannter Installationsmodus: %s"
-    "No existing installation found": "Keine bestehende Installation gefunden"
+    "No existing configuration (portable or system-wide) found": "Keine bestehende Konfiguration (portabel oder systemweit) gefunden"
   prompt_installation_mode:
     "Non-interactive mode detected, defaulting to portable installation": "Nicht-interaktiver Modus erkannt, Standard-Installation: portabel"
     "Choose installation type:": "Installationstyp wählen:"

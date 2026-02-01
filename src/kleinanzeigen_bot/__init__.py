@@ -252,8 +252,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         # Log installation mode and config location (INFO level for user visibility)
         mode_display = "portable (current directory)" if self.installation_mode == "portable" else "system-wide (XDG directories)"
-        LOG.info("Installation mode: %s", mode_display)
-        LOG.info("Config file: %s", self.config_file_path)
+        LOG.info("Installation mode: %s [%s]", mode_display, self.config_file_path)
 
     async def run(self, args:list[str]) -> None:
         self.parse_args(args)
@@ -585,7 +584,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             header=(
                 "# yaml-language-server: $schema="
                 "https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot"
-                "/refs/heads/main/schemas/config.schema.json"
+                "/main/schemas/config.schema.json"
             ),
             exclude = {"ad_defaults": {"description"}},
         )
@@ -599,12 +598,20 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self.config = Config.model_validate(config_yaml, strict = True, context = self.config_file_path)
 
         # load built-in category mappings
-        self.categories = dicts.load_dict_from_module(resources, "categories.yaml", "categories")
-        deprecated_categories = dicts.load_dict_from_module(resources, "categories_old.yaml", "categories")
+        self.categories = dicts.load_dict_from_module(resources, "categories.yaml", "")
+        LOG.debug("Loaded %s categories from categories.yaml", len(self.categories))
+        deprecated_categories = dicts.load_dict_from_module(resources, "categories_old.yaml", "")
+        LOG.debug("Loaded %s categories from categories_old.yaml", len(deprecated_categories))
         self.categories.update(deprecated_categories)
+        custom_count = 0
         if self.config.categories:
+            custom_count = len(self.config.categories)
             self.categories.update(self.config.categories)
-        LOG.info(" -> found %s", pluralize("category", self.categories))
+            LOG.debug("Loaded %s categories from config.yaml (custom)", custom_count)
+        total_count = len(self.categories)
+        if total_count == 0:
+            LOG.warning("No categories loaded - category files may be missing or empty")
+        LOG.debug("Loaded %s categories in total", total_count)
 
         # populate browser_config object used by WebScrapingMixin
         self.browser_config.arguments = self.config.browser.arguments
