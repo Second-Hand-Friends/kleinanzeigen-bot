@@ -6,22 +6,22 @@ from __future__ import annotations
 
 from typing import Literal
 
+from pydantic import Field
+
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
 
 
 class UpdateCheckConfig(ContextualModel):
-    """Configuration for update checking functionality.
-
-    Attributes:
-        enabled: Whether update checking is enabled.
-        channel: Which release channel to check ('latest' for stable, 'preview' for prereleases).
-        interval: How often to check for updates (e.g. '7d', '1d').
-            If the interval is invalid, too short (<1d), or too long (>30d),
-            the bot will log a warning and use a default interval for this run:
-                - 1d for 'preview' channel
-                - 7d for 'latest' channel
-            The config file is not changed automatically; please fix your config to avoid repeated warnings.
-    """
-    enabled:bool = True
-    channel:Literal["latest", "preview"] = "latest"
-    interval:str = "7d"  # Default interval of 7 days
+    enabled:bool = Field(default = True, description = "whether to check for updates on startup")
+    channel:Literal["latest", "preview"] = Field(
+        default = "latest", description = "which release channel to check (latest = stable, preview = prereleases)", examples = ["latest", "preview"]
+    )
+    interval:str = Field(
+        default = "7d",
+        description=(
+            "how often to check for updates (e.g., 7d, 1d). "
+            "If invalid, too short (<1d), or too long (>30d), "
+            "uses defaults: 1d for 'preview' channel, 7d for 'latest' channel"
+        ),
+        examples = ["7d", "1d", "14d"],
+    )
