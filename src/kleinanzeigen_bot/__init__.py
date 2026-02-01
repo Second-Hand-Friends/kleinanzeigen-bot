@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import atexit, asyncio, enum, json, os, re, secrets, signal, sys, textwrap  # isort: skip
+import atexit, asyncio, enum, json, os, re, signal, sys, textwrap  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 from datetime import datetime
@@ -19,7 +19,7 @@ from ._version import __version__
 from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, Contact, calculate_auto_price
 from .model.config_model import Config
 from .update_checker import UpdateChecker
-from .utils import dicts, error_handlers, loggers, misc, xdg_paths
+from .utils import diagnostics, dicts, error_handlers, loggers, misc, xdg_paths
 from .utils.exceptions import CaptchaEncountered
 from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
@@ -30,6 +30,8 @@ from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
 
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 LOG.setLevel(loggers.INFO)
+
+PUBLISH_MAX_RETRIES:Final[int] = 3
 
 colorama.just_fix_windows_console()
 
@@ -961,8 +963,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         return (Path.cwd() / ".temp" / "diagnostics").resolve()
 
     async def _capture_login_detection_diagnostics_if_enabled(self) -> None:
-        diagnostics = getattr(self.config, "diagnostics", None)
-        if diagnostics is None or not diagnostics.login_detection_capture:
+        cfg = getattr(self.config, "diagnostics", None)
+        if cfg is None or not cfg.capture_on.login_detection:
             return
 
         if self._login_detection_diagnostics_captured:
@@ -975,34 +977,78 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self._login_detection_diagnostics_captured = True
 
         try:
-            out_dir = self._diagnostics_output_dir()
-            out_dir.mkdir(parents = True, exist_ok = True)
-
-            # Intentionally no username/PII in filename.
-            ts = misc.now().strftime("%Y%m%dT%H%M%S")
-            suffix = secrets.token_hex(4)
-            base = f"login_detection_unknown_{ts}_{suffix}"
-            screenshot_path = out_dir / f"{base}.png"
-            html_path = out_dir / f"{base}.html"
-
-            try:
-                await page.save_screenshot(str(screenshot_path))
-            except Exception as exc:  # noqa: BLE001
-                LOG.debug("Login diagnostics screenshot capture failed: %s", exc)
-
-            try:
-                html = await page.get_content()
-                html_path.write_text(html, encoding = "utf-8")
-            except Exception as exc:  # noqa: BLE001
-                LOG.debug("Login diagnostics HTML capture failed: %s", exc)
+            await diagnostics.capture_diagnostics(
+                output_dir = self._diagnostics_output_dir(),
+                base_prefix = "login_detection_unknown",
+                page = page,
+            )
         except Exception as exc:  # noqa: BLE001
-            LOG.debug("Login diagnostics capture failed: %s", exc)
+            LOG.debug(
+                "Login diagnostics capture failed (output_dir=%s, base_prefix=%s): %s",
+                self._diagnostics_output_dir(),
+                "login_detection_unknown",
+                exc,
+            )
 
-        if getattr(diagnostics, "pause_on_login_detection_failure", False) and getattr(sys.stdin, "isatty", lambda: False)():
+        if cfg.pause_on_login_detection_failure and getattr(sys.stdin, "isatty", lambda: False)():
             LOG.warning("############################################")
             LOG.warning("# Login detection returned UNKNOWN. Browser is paused for manual inspection.")
             LOG.warning("############################################")
             await ainput(_("Press a key to continue..."))
+
+    async def _capture_publish_error_diagnostics_if_enabled(
+        self,
+        ad_cfg:Ad,
+        ad_cfg_orig:dict[str, Any],
+        ad_file:str,
+        attempt:int,
+        exc:Exception,
+    ) -> None:
+        """Capture publish failure diagnostics when enabled and a page is available.
+
+        Runs only if cfg.capture_on.publish is enabled and self.page is set.
+        Uses the ad configuration and publish attempt details to write screenshot, HTML,
+        JSON payload, and optional log copy for debugging.
+        """
+        cfg = getattr(self.config, "diagnostics", None)
+        if cfg is None or not cfg.capture_on.publish:
+            return
+
+        page = getattr(self, "page", None)
+        if page is None:
+            return
+
+        # Use the ad filename (without extension) as identifier
+        ad_file_stem = Path(ad_file).stem
+
+        json_payload = {
+            "timestamp": misc.now().isoformat(timespec = "seconds"),
+            "attempt": attempt,
+            "page_url": getattr(page, "url", None),
+            "exception": {
+                "type": exc.__class__.__name__,
+                "message": str(exc),
+                "repr": repr(exc),
+            },
+            "ad_file": ad_file,
+            "ad_title": ad_cfg.title,
+            "ad_config_effective": ad_cfg.model_dump(mode = "json"),
+            "ad_config_original": ad_cfg_orig,
+        }
+
+        try:
+            await diagnostics.capture_diagnostics(
+                output_dir = self._diagnostics_output_dir(),
+                base_prefix = "publish_error",
+                attempt = attempt,
+                subject = ad_file_stem,
+                page = page,
+                json_payload = json_payload,
+                log_file_path = self.log_file_path,
+                copy_log = cfg.capture_log_copy,
+            )
+        except Exception as error:  # noqa: BLE001
+            LOG.warning("Diagnostics capture failed during publish error handling: %s", error)
 
     async def is_logged_in(self, *, include_probe:bool = True) -> bool:
         # Use login_detection timeout (10s default) instead of default (5s)
@@ -1298,7 +1344,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
         failed_count = 0
-        max_retries = 3
+        max_retries = PUBLISH_MAX_RETRIES
 
         published_ads = await self._fetch_published_ads()
 
@@ -1321,6 +1367,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 except asyncio.CancelledError:
                     raise  # Respect task cancellation
                 except (TimeoutError, ProtocolException) as ex:
+                    await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
                     if attempt < max_retries:
                         LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
                         await self.web_sleep(2)  # Wait before retry
