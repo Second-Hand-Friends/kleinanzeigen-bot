@@ -220,7 +220,9 @@ def model_to_commented_yaml(
     if isinstance(model_instance, (list, tuple)):
         seq = CommentedSeq()
         for item in model_instance:
-            seq.append(model_to_commented_yaml(item, indent_level = indent_level + 1, exclude_none = exclude_none))
+            if exclude_none and item is None:
+                continue
+            seq.append(model_to_commented_yaml(item, indent_level = indent_level + 1, exclude_none = exclude_none, exclude = exclude))
         return seq
 
     # Handle dictionaries (not from Pydantic models)
@@ -229,7 +231,9 @@ def model_to_commented_yaml(
         for key, value in model_instance.items():
             if _should_exclude(key, exclude):
                 continue
-            cmap[key] = model_to_commented_yaml(value, indent_level = indent_level + 1, exclude_none = exclude_none)
+            if exclude_none and value is None:
+                continue
+            cmap[key] = model_to_commented_yaml(value, indent_level = indent_level + 1, exclude_none = exclude_none, exclude = exclude)
         return cmap
 
     # Handle Pydantic models
