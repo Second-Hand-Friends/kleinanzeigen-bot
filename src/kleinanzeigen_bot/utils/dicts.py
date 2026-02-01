@@ -182,7 +182,6 @@ def model_to_commented_yaml(
     model_instance:Any,
     *,
     indent_level:int = 0,
-    exclude_none:bool = True,
     exclude:set[str] | dict[str, Any] | None = None,
 ) -> Any:
     """
@@ -195,7 +194,6 @@ def model_to_commented_yaml(
     Args:
         model_instance: A Pydantic model instance to convert
         indent_level: Current indentation level (for recursive calls)
-        exclude_none: If True, exclude None values from output (default: True)
         exclude: Optional set of field names to exclude, or dict for nested exclusion
 
     Returns:
@@ -220,9 +218,7 @@ def model_to_commented_yaml(
     if isinstance(model_instance, (list, tuple)):
         seq = CommentedSeq()
         for item in model_instance:
-            if exclude_none and item is None:
-                continue
-            seq.append(model_to_commented_yaml(item, indent_level = indent_level + 1, exclude_none = exclude_none, exclude = exclude))
+            seq.append(model_to_commented_yaml(item, indent_level = indent_level + 1, exclude = exclude))
         return seq
 
     # Handle dictionaries (not from Pydantic models)
@@ -231,9 +227,7 @@ def model_to_commented_yaml(
         for key, value in model_instance.items():
             if _should_exclude(key, exclude):
                 continue
-            if exclude_none and value is None:
-                continue
-            cmap[key] = model_to_commented_yaml(value, indent_level = indent_level + 1, exclude_none = exclude_none, exclude = exclude)
+            cmap[key] = model_to_commented_yaml(value, indent_level = indent_level + 1, exclude = exclude)
         return cmap
 
     # Handle Pydantic models
@@ -255,10 +249,6 @@ def model_to_commented_yaml(
                 # Field is not set (e.g., required field with no default)
                 continue
 
-            # Skip None values if exclude_none is True
-            if exclude_none and value is None:
-                continue
-
             # Add visual separator between top-level sections (after first field)
             if indent_level == 0 and field_count > 0:
                 cmap.yaml_set_comment_before_after_key(field_name, before = "", indent = 0)
@@ -267,7 +257,7 @@ def model_to_commented_yaml(
             nested_exclude = _get_nested_exclude(field_name, exclude)
 
             # Process the value recursively
-            processed_value = model_to_commented_yaml(value, indent_level = indent_level + 1, exclude_none = exclude_none, exclude = nested_exclude)
+            processed_value = model_to_commented_yaml(value, indent_level = indent_level + 1, exclude = nested_exclude)
             cmap[field_name] = processed_value
             field_count += 1
 
@@ -301,7 +291,6 @@ def save_commented_model(
     model_instance:Any,
     *,
     header:str | None = None,
-    exclude_none:bool = True,
     exclude:set[str] | dict[str, Any] | None = None,
 ) -> None:
     """
@@ -315,7 +304,6 @@ def save_commented_model(
         filepath: Path to the output YAML file
         model_instance: Pydantic model instance to save
         header: Optional header string to write at the top of the file
-        exclude_none: If True, exclude None values from output (default: True)
         exclude: Optional set of field names to exclude, or dict for nested exclusion
 
     Example:
@@ -329,7 +317,7 @@ def save_commented_model(
     LOG.info("Saving [%s]...", filepath)
 
     # Convert to commented structure directly from model (preserves metadata)
-    commented_data = model_to_commented_yaml(model_instance, exclude_none = exclude_none, exclude = exclude)
+    commented_data = model_to_commented_yaml(model_instance, exclude = exclude)
 
     with open(filepath, "w", encoding = "utf-8") as file:
         if header:

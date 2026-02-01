@@ -587,7 +587,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 "https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot"
                 "/refs/heads/main/schemas/config.schema.json"
             ),
-            exclude_none = True,
             exclude = {"ad_defaults": {"description"}},
         )
 
