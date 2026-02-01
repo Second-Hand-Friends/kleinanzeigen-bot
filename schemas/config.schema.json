@@ -4,12 +4,18 @@
       "properties": {
         "active": {
           "default": true,
+          "description": "whether the ad should be published (false = skip this ad)",
           "title": "Active",
           "type": "boolean"
         },
         "type": {
           "default": "OFFER",
+          "description": "type of the ad listing",
           "enum": [
+            "OFFER",
+            "WANTED"
+          ],
+          "examples": [
             "OFFER",
             "WANTED"
           ],
@@ -25,7 +31,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "DEPRECATED: Use description_prefix/description_suffix instead"
         },
         "description_prefix": {
           "anyOf": [
@@ -37,7 +44,7 @@
             }
           ],
           "default": null,
-          "description": "prefix for the ad description",
+          "description": "text to prepend to the ad description",
           "title": "Description Prefix"
         },
         "description_suffix": {
@@ -50,12 +57,19 @@
             }
           ],
           "default": null,
-          "description": "suffix for the ad description",
+          "description": "text to append to the ad description",
           "title": "Description Suffix"
         },
         "price_type": {
           "default": "NEGOTIABLE",
+          "description": "pricing strategy for the listing",
           "enum": [
+            "FIXED",
+            "NEGOTIABLE",
+            "GIVE_AWAY",
+            "NOT_APPLICABLE"
+          ],
+          "examples": [
             "FIXED",
             "NEGOTIABLE",
             "GIVE_AWAY",
@@ -66,11 +80,17 @@
         },
         "auto_price_reduction": {
           "$ref": "#/$defs/AutoPriceReductionConfig",
-          "description": "automatic price reduction configuration"
+          "description": "automatic price reduction configuration for reposted ads"
         },
         "shipping_type": {
           "default": "SHIPPING",
+          "description": "shipping method for the item",
           "enum": [
+            "PICKUP",
+            "SHIPPING",
+            "NOT_APPLICABLE"
+          ],
+          "examples": [
             "PICKUP",
             "SHIPPING",
             "NOT_APPLICABLE"
@@ -80,7 +100,7 @@
         },
         "sell_directly": {
           "default": false,
-          "description": "requires shipping_type SHIPPING to take effect",
+          "description": "enable direct purchase option (only works when shipping_type is SHIPPING)",
           "title": "Sell Directly",
           "type": "boolean"
         },
@@ -97,13 +117,19 @@
             }
           ],
           "default": null,
+          "description": "glob patterns for ad images (relative to ad file location)",
+          "examples": [
+            "[\"images/*.jpg\", \"photos/*.{png,jpg}\"]"
+          ],
           "title": "Images"
         },
         "contact": {
-          "$ref": "#/$defs/ContactDefaults"
+          "$ref": "#/$defs/ContactDefaults",
+          "description": "default contact information for ads"
         },
         "republication_interval": {
           "default": 7,
+          "description": "number of days between automatic republication of ads",
           "title": "Republication Interval",
           "type": "integer"
         }
@@ -185,7 +211,10 @@
     "BrowserConfig": {
       "properties": {
         "arguments": {
-          "description": "See https://peter.sh/experiments/chromium-command-line-switches/. Browser profile path is auto-configured based on installation mode (portable/XDG).",
+          "description": "Chromium command line switches. See https://peter.sh/experiments/chromium-command-line-switches/ Common options: --headless (run without GUI), --disable-dev-shm-usage (fix Docker issues), --user-data-dir=/path (custom profile location). Browser profile path is auto-configured based on installation mode.",
+          "examples": [
+            "[\"--headless\"\", \"\"--disable-dev-shm-usage\"\", \"\"--user-data-dir=/path/to/profile\"]"
+          ],
           "items": {
             "type": "string"
           },
@@ -206,7 +235,10 @@
           "title": "Binary Location"
         },
         "extensions": {
-          "description": "a list of .crx extension files to be loaded",
+          "description": "list of Chrome extension .crx files to load on startup (paths relative to config file)",
+          "examples": [
+            "[\"\"extensions/adblock.crx\"\", \"\"/absolute/path/to/extension.crx\"]"
+          ],
           "items": {
             "type": "string"
           },
@@ -215,6 +247,7 @@
         },
         "use_private_window": {
           "default": true,
+          "description": "open browser in private/incognito mode (recommended to avoid cookie conflicts)",
           "title": "Use Private Window",
           "type": "boolean"
         },
@@ -241,6 +274,10 @@
             }
           ],
           "default": null,
+          "description": "name of the browser profile to use (leave empty for default profile)",
+          "examples": [
+            "\"Profile 1\""
+          ],
           "title": "Profile Name"
         }
       },
@@ -251,11 +288,18 @@
       "properties": {
         "auto_restart": {
           "default": false,
+          "description": "if true, abort when captcha is detected and auto-retry after restart_delay (if false, wait for manual solving)",
           "title": "Auto Restart",
           "type": "boolean"
         },
         "restart_delay": {
           "default": "6h",
+          "description": "duration to wait before retrying after captcha detection (e.g., 1h30m, 6h, 30m)",
+          "examples": [
+            "6h",
+            "1h30m",
+            "30m"
+          ],
           "title": "Restart Delay",
           "type": "string"
         }
@@ -285,28 +329,16 @@
     "ContactDefaults": {
       "properties": {
         "name": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Name"
+          "default": "",
+          "description": "contact name displayed on the ad",
+          "title": "Name",
+          "type": "string"
         },
         "street": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Street"
+          "default": "",
+          "description": "street address for the listing",
+          "title": "Street",
+          "type": "string"
         },
         "zipcode": {
           "anyOf": [
@@ -315,41 +347,29 @@
             },
             {
               "type": "string"
-            },
-            {
-              "type": "null"
             }
           ],
-          "default": null,
+          "default": "",
+          "description": "postal/ZIP code for the listing location",
           "title": "Zipcode"
         },
         "location": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
+          "default": "",
           "description": "city or locality of the listing (can include multiple districts)",
           "examples": [
             "Sample Town - District One"
           ],
-          "title": "Location"
+          "title": "Location",
+          "type": "string"
         },
         "phone": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
+          "default": "",
+          "description": "phone number for contact - only available for commercial accounts, personal accounts no longer support this",
+          "examples": [
+            "\"01234 567890\""
           ],
-          "default": null,
-          "title": "Phone"
+          "title": "Phone",
+          "type": "string"
         }
       },
       "title": "ContactDefaults",
@@ -458,11 +478,13 @@
     "LoginConfig": {
       "properties": {
         "username": {
+          "description": "kleinanzeigen.de login email or username",
           "minLength": 1,
           "title": "Username",
           "type": "string"
         },
         "password": {
+          "description": "kleinanzeigen.de login password",
           "minLength": 1,
           "title": "Password",
           "type": "string"
@@ -492,11 +514,17 @@
             }
           ],
           "default": "AFTER_PUBLISH",
+          "description": "when to delete old versions of republished ads",
+          "examples": [
+            "BEFORE_PUBLISH",
+            "AFTER_PUBLISH",
+            "NEVER"
+          ],
           "title": "Delete Old Ads"
         },
         "delete_old_ads_by_title": {
           "default": true,
-          "description": "only works if delete_old_ads is set to BEFORE_PUBLISH",
+          "description": "match old ads by title when deleting (only works with BEFORE_PUBLISH)",
           "title": "Delete Old Ads By Title",
           "type": "boolean"
         }
@@ -657,16 +685,21 @@
       "type": "object"
     },
     "UpdateCheckConfig": {
-      "description": "Configuration for update checking functionality.\n\nAttributes:\n    enabled: Whether update checking is enabled.\n    channel: Which release channel to check ('latest' for stable, 'preview' for prereleases).\n    interval: How often to check for updates (e.g. '7d', '1d').\n        If the interval is invalid, too short (<1d), or too long (>30d),\n        the bot will log a warning and use a default interval for this run:\n            - 1d for 'preview' channel\n            - 7d for 'latest' channel\n        The config file is not changed automatically; please fix your config to avoid repeated warnings.",
       "properties": {
         "enabled": {
           "default": true,
+          "description": "whether to check for updates on startup",
           "title": "Enabled",
           "type": "boolean"
         },
         "channel": {
           "default": "latest",
+          "description": "which release channel to check (latest = stable, preview = prereleases)",
           "enum": [
+            "latest",
+            "preview"
+          ],
+          "examples": [
             "latest",
             "preview"
           ],
@@ -675,6 +708,12 @@
         },
         "interval": {
           "default": "7d",
+          "description": "how often to check for updates (e.g., 7d, 1d). If invalid, too short (<1d), or too long (>30d), uses defaults: 1d for 'preview' channel, 7d for 'latest' channel",
+          "examples": [
+            "7d",
+            "1d",
+            "14d"
+          ],
           "title": "Interval",
           "type": "string"
         }
@@ -704,7 +743,10 @@
       "additionalProperties": {
         "type": "string"
       },
-      "description": "\nadditional name to category ID mappings, see default list at\nhttps://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml\n\nExample:\n    categories:\n       Elektronik > Notebooks: 161/278\n       Jobs > Praktika: 102/125\n    ",
+      "description": "additional name to category ID mappings. See full list at: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml Format: 'Category > Subcategory': 'ID'. Example: {\"Elektronik > Notebooks\": \"161/278\"}",
+      "examples": [
+        "{\"Elektronik > Notebooks\": \"161/278\", \"Jobs > Praktika\": \"102/125\"}"
+      ],
       "title": "Categories",
       "type": "object"
     },
@@ -734,16 +776,8 @@
       "description": "Centralized timeout configuration."
     },
     "diagnostics": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/DiagnosticsConfig"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Optional failure-only diagnostics capture."
+      "$ref": "#/$defs/DiagnosticsConfig",
+      "description": "diagnostics capture configuration for troubleshooting"
     }
   },
   "title": "Config",
