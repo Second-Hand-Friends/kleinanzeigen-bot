@@ -277,7 +277,7 @@ def model_to_commented_yaml(
 
             # Set the comment above the key
             if comment_parts:
-                full_comment = " | ".join(comment_parts)
+                full_comment = "\n".join(comment_parts)
                 cmap.yaml_set_comment_before_after_key(field_name, before = full_comment, indent = indent_level * 2)
 
         return cmap
