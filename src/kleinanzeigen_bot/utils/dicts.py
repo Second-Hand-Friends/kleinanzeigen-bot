@@ -8,7 +8,7 @@ from gettext import gettext as _
 from importlib.resources import read_text as get_resource_as_string
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Final, TypeVar, cast
+from typing import Any, Final, TypeVar, cast, get_origin
 
 from ruamel.yaml import YAML
 
@@ -287,8 +287,9 @@ def model_to_commented_yaml(
             # Add examples if available
             examples = field_info.examples
             if examples:
-                # Check if this is a list field by looking at the value type
-                is_list_field = isinstance(value, list)
+                # Check if this is a list field by inspecting type annotation first (handles empty lists),
+                # then fall back to runtime value type check
+                is_list_field = get_origin(field_info.annotation) is list or isinstance(value, list)
 
                 if is_list_field:
                     # For list fields, show YAML syntax with field name for clarity
