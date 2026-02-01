@@ -59,11 +59,11 @@ def test_timeout_config_defaults_and_effective_values() -> None:
     assert base == 12.0
     assert timeouts.effective("pagination_initial") == base * multiplier * (backoff**0)
     # attempt 1 should apply backoff factor once in addition to multiplier
-    assert timeouts.effective("pagination_initial", attempt=1) == base * multiplier * (backoff**1)
+    assert timeouts.effective("pagination_initial", attempt = 1) == base * multiplier * (backoff**1)
 
 
 def test_validate_glob_pattern_rejects_blank_strings() -> None:
-    with pytest.raises(ValueError, match="must be a non-empty, non-blank glob pattern"):
+    with pytest.raises(ValueError, match = "must be a non-empty, non-blank glob pattern"):
         Config.model_validate(
             {"ad_files": ["   "], "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}}, "login": {"username": "dummy", "password": "dummy"}}
         )
@@ -75,12 +75,12 @@ def test_validate_glob_pattern_rejects_blank_strings() -> None:
 
 
 def test_timeout_config_resolve_returns_specific_value() -> None:
-    timeouts = TimeoutConfig(default=4.0, page_load=12.5)
+    timeouts = TimeoutConfig(default = 4.0, page_load = 12.5)
     assert timeouts.resolve("page_load") == 12.5
 
 
 def test_timeout_config_resolve_falls_back_to_default() -> None:
-    timeouts = TimeoutConfig(default=3.0)
+    timeouts = TimeoutConfig(default = 3.0)
     assert timeouts.resolve("nonexistent_key") == 3.0
 
 
@@ -102,7 +102,7 @@ def test_diagnostics_pause_requires_capture_validation() -> None:
     assert config.diagnostics.capture_on.login_detection is True
 
     invalid_cfg = {**minimal_cfg, "diagnostics": {"capture_on": {"login_detection": False}, "pause_on_login_detection_failure": True}}
-    with pytest.raises(ValueError, match="pause_on_login_detection_failure requires capture_on.login_detection to be enabled"):
+    with pytest.raises(ValueError, match = "pause_on_login_detection_failure requires capture_on.login_detection to be enabled"):
         Config.model_validate(invalid_cfg)
 
 

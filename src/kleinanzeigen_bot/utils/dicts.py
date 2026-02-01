@@ -249,8 +249,12 @@ def model_to_commented_yaml(
                 # Field is not set (e.g., required field with no default)
                 continue
 
-            # Add visual separator between top-level sections (after first field)
+            # Add visual separators
             if indent_level == 0 and field_count > 0:
+                # Major section: blank line + prominent separator with 80 # characters
+                cmap.yaml_set_comment_before_after_key(field_name, before = "\n" + "#" * 80, indent = 0)
+            elif indent_level > 0:
+                # Nested fields: always add blank line separator (both between siblings and before first child)
                 cmap.yaml_set_comment_before_after_key(field_name, before = "", indent = 0)
 
             # Get nested exclude rules for this field
@@ -272,8 +276,25 @@ def model_to_commented_yaml(
             # Add examples if available
             examples = field_info.examples
             if examples:
-                examples_lines = ["Examples:", *[f"  - {ex}" for ex in examples]]
-                comment_parts.append("\n".join(examples_lines))
+                # Check if this is a list field by looking at the value type
+                is_list_field = isinstance(value, list)
+
+                if is_list_field:
+                    # For list fields, show YAML syntax with field name for clarity
+                    examples_lines = [
+                        "Example usage:",
+                        f"  {field_name}:",
+                        *[f"    - {ex}" for ex in examples]
+                    ]
+                    comment_parts.append("\n".join(examples_lines))
+                elif len(examples) == 1:
+                    # Single example for scalar field: use singular form without list marker
+                    comment_parts.append(f"Example: {examples[0]}")
+                else:
+                    # Multiple examples for scalar field: show as alternatives (not list items)
+                    # Use bullets (•) instead of hyphens to distinguish from YAML list syntax
+                    examples_lines = ["Examples (choose one):", *[f"  • {ex}" for ex in examples]]
+                    comment_parts.append("\n".join(examples_lines))
 
             # Set the comment above the key
             if comment_parts:
@@ -308,8 +329,11 @@ def save_commented_model(
 
     Example:
         >>> from kleinanzeigen_bot.model.config_model import Config
+        >>> from pathlib import Path
+        >>> import tempfile
         >>> config = Config()
-        >>> save_commented_model("config.yaml", config, header="# Config file")
+        >>> with tempfile.TemporaryDirectory() as tmpdir:
+        ...     save_commented_model(Path(tmpdir) / "config.yaml", config, header="# Config file")
     """
     filepath = Path(unicodedata.normalize("NFC", str(filepath)))
     filepath.parent.mkdir(parents = True, exist_ok = True)
