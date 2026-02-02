@@ -89,7 +89,7 @@ def detect_installation_mode() -> InstallationMode | None:
     LOG.debug("Checking for portable config at: %s", portable_config)
 
     if portable_config.exists():
-        LOG.info("Detected installation mode: %s", "portable")
+        LOG.debug("Detected installation mode: %s", "portable")
         return "portable"
 
     # Check for XDG installation
@@ -97,11 +97,11 @@ def detect_installation_mode() -> InstallationMode | None:
     LOG.debug("Checking for XDG config at: %s", xdg_config)
 
     if xdg_config.exists():
-        LOG.info("Detected installation mode: %s", "xdg")
+        LOG.debug("Detected installation mode: %s", "xdg")
         return "xdg"
 
     # Neither exists - first run
-    LOG.info("No existing installation found")
+    LOG.info("No existing configuration (portable or system-wide) found")
     return None
 
 

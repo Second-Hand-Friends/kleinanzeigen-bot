@@ -26,7 +26,11 @@ kleinanzeigen-bot download --ads=1,2,3
 
 For full JSON schema with IDE autocompletion support, see:
 
-- [schemas/ad.schema.json](../schemas/ad.schema.json)
+- [schemas/ad.schema.json](https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/ad.schema.json)
+
+📖 **[Complete Main Configuration Reference →](CONFIGURATION.md)**
+
+Full documentation for `config.yaml` including all options, timeouts, browser settings, update checks, and ad_defaults.
 
 ## Configuration Structure
 
@@ -35,11 +39,13 @@ For full JSON schema with IDE autocompletion support, see:
 Description values can be multiline. See <https://yaml-multiline.info/> for YAML syntax examples.
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
-active:  # true or false (default: true)
-type:    # one of: OFFER, WANTED (default: OFFER)
-title:   # Ad title
-description:  # Ad description
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/ad.schema.json
+active: true
+type: OFFER
+title: "Your Ad Title"
+description: |
+  Your ad description here.
+  Supports multiple lines.
 ```
 
 ### Description Prefix and Suffix

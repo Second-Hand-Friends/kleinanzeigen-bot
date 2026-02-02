@@ -79,7 +79,7 @@ def load_dict(filepath:str, content_label:str = "") -> dict[str, Any]:
 
 def load_dict_if_exists(filepath:str, content_label:str = "") -> dict[str, Any] | None:
     abs_filepath = files.abspath(filepath)
-    LOG.info("Loading %s[%s]...", content_label and content_label + " from " or "", abs_filepath)
+    LOG.debug("Loading %s[%s]...", content_label and content_label + " from " or "", abs_filepath)
 
     __, file_ext = os.path.splitext(filepath)
     if file_ext not in {".json", ".yaml", ".yml"}:

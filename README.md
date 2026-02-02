@@ -287,30 +287,58 @@ The `--config` and `--logfile` flags override only their specific paths. They do
 - **Linux:** System-wide follows XDG Base Directory spec; portable stays in the current working directory.
 - **macOS:** System-wide uses `~/Library/Application Support/kleinanzeigen-bot` (and related dirs); portable stays in the current directory.
 
-### <a name="main-config"></a>1) Main configuration
+### <a name="main-config"></a>1) Main configuration ⚙️
 
-When executing the app it by default looks for a `config.yaml` file in the current directory. If it does not exist it will be created automatically.
+The main configuration file (`config.yaml`) is **required** to run the bot. It contains your login credentials and controls all bot behavior.
 
-The configuration file to be used can also be specified using the `--config <PATH>` command line parameter. It must point to a YAML or JSON file.
-Valid file extensions are `.json`, `.yaml` and `.yml`
-
-The configuration file supports many options including login credentials, ad file patterns, browser settings, timeouts, and update check configuration. To generate a default configuration file with all current defaults, run:
+**Quick start:**
 
 ```bash
+# Generate a config file with all defaults
 kleinanzeigen-bot create-config
+
+# Or specify a custom location
+kleinanzeigen-bot --config /path/to/config.yaml publish
 ```
 
-For the complete configuration reference with all available options and detailed explanations, see [Configuration Reference](docs/CONFIGURATION.md).
+**Minimal config.yaml:**
 
-### <a name="ad-config"></a>2) Ad configuration
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json
+login:
+  username: "your_username"
+  password: "your_password"
+```
 
-Each ad is described in a separate JSON or YAML file with prefix `ad_<filename>`. The prefix is configurable in config file.
+📖 **[Complete Configuration Reference →](docs/CONFIGURATION.md)**
 
-Parameter values specified in the `ad_defaults` section of the `config.yaml` file don't need to be specified again in the ad configuration file.
+Full documentation including timeout tuning, browser settings, ad defaults, diagnostics, and all available options.
 
-For the complete ad configuration reference including automatic price reduction, shipping options, and description prefix/suffix, see [Ad Configuration Reference](docs/AD_CONFIGURATION.md).
+### <a name="ad-config"></a>2) Ad configuration 📝
 
-### <a name="existing-browser"></a>3) Using an existing browser window
+Each ad is defined in a separate YAML/JSON file (default pattern: `ad_*.yaml`). These files specify the title, description, price, category, images, and other ad-specific settings.
+
+**Quick example (`ad_laptop.yaml`):**
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/ad.schema.json
+active: true
+title: "Gaming Laptop - RTX 3060"
+description: |
+  Powerful gaming laptop in excellent condition.
+  Includes original box and charger.
+category: "Elektronik > Notebooks"
+price: 450
+price_type: NEGOTIABLE
+images:
+  - "laptop/*.jpg"  # Relative to ad file location (or use absolute paths); glob patterns supported
+```
+
+📖 **[Complete Ad Configuration Reference →](docs/AD_CONFIGURATION.md)**
+
+Full documentation including automatic price reduction, shipping options, category IDs, and special attributes.
+
+### <a name="existing-browser"></a>3) Using an existing browser window (Optional)
 
 By default a new browser process will be launched. To reuse a manually launched browser window/process, you can enable remote debugging. This is useful for debugging or when you want to keep your browser session open.
 

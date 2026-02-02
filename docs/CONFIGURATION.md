@@ -12,19 +12,50 @@ kleinanzeigen-bot create-config
 
 For full JSON schema with IDE autocompletion support, see:
 
-- [schemas/config.schema.json](../schemas/config.schema.json)
+- [schemas/config.schema.json](https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json)
 
 To enable IDE autocompletion in `config.yaml`, add this at the top of the file:
 
 ```yaml
-# yaml-language-server: $schema=schemas/config.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json
 ```
 
 For ad files, use the ad schema instead:
 
 ```yaml
-# yaml-language-server: $schema=schemas/ad.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/ad.schema.json
 ```
+
+## Minimal Configuration Example
+
+Here's the smallest viable `config.yaml` to get started. Only the **login** section is required—everything else uses sensible defaults:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json
+
+# REQUIRED: Your kleinanzeigen.de credentials
+login:
+  username: "your_username"
+  password: "your_password"
+
+# OPTIONAL: Where to find your ad files (default pattern shown)
+# ad_files:
+#   - "./**/ad_*.{json,yml,yaml}"
+
+# OPTIONAL: Default values for all ads
+# ad_defaults:
+#   price_type: NEGOTIABLE
+#   shipping_type: SHIPPING
+#   republication_interval: 7
+```
+
+Run `kleinanzeigen-bot create-config` to generate a complete configuration with all available options and their default values.
+
+The `ad_files` setting controls where the bot looks for your ad YAML files (default pattern: `./**/ad_*.{json,yml,yaml}`). The `ad_defaults` section lets you set default values that apply to all ads—things like price type, shipping options, and republication interval.
+
+📖 **[Complete Ad Configuration Reference →](AD_CONFIGURATION.md)**
+
+Full documentation for ad YAML files including automatic price reduction, description prefix/suffix, shipping options, category IDs, and special attributes.
 
 ## File Location
 
@@ -71,7 +102,7 @@ ad_defaults:
   republication_interval: 7  # every X days ads should be re-published
 ```
 
-> **Tip:** For current defaults of all timeout and diagnostic settings, run `kleinanzeigen-bot create-config` or see the [JSON schema](../schemas/config.schema.json).
+> **Tip:** For current defaults of all timeout and diagnostic settings, run `kleinanzeigen-bot create-config` or see the [JSON schema](https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json).
 
 ### categories
 
@@ -309,4 +340,4 @@ kleinanzeigen-bot create-config
 
 This generates a config file with `exclude_none=True`, giving you all the non-None defaults.
 
-For the complete machine-readable reference, see the [JSON schema](../schemas/config.schema.json).
+For the complete machine-readable reference, see the [JSON schema](https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json).
