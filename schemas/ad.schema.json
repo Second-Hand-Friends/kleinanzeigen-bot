@@ -22,7 +22,11 @@
             }
           ],
           "default": null,
-          "description": "PERCENTAGE reduces by a percentage of the previous price, FIXED reduces by a fixed amount",
+          "description": "reduction strategy (required when enabled: true). PERCENTAGE = % of price, FIXED = absolute amount",
+          "examples": [
+            "PERCENTAGE",
+            "FIXED"
+          ],
           "title": "Strategy"
         },
         "amount": {
@@ -36,7 +40,12 @@
             }
           ],
           "default": null,
-          "description": "magnitude of the reduction; interpreted as percent for PERCENTAGE or currency units for FIXED",
+          "description": "reduction amount (required when enabled: true). For PERCENTAGE: use percent value (e.g., 10 = 10%%). For FIXED: use currency amount",
+          "examples": [
+            10.0,
+            5.0,
+            20.0
+          ],
           "title": "Amount"
         },
         "min_price": {
@@ -50,7 +59,12 @@
             }
           ],
           "default": null,
-          "description": "required when enabled is true; minimum price floor (use 0 for no lower bound)",
+          "description": "minimum price floor (required when enabled: true). Use 0 for no minimum",
+          "examples": [
+            1.0,
+            5.0,
+            10.0
+          ],
           "title": "Min Price"
         },
         "delay_reposts": {

@@ -7,7 +7,7 @@ from kleinanzeigen_bot.model.config_model import AdDefaults, Config, TimeoutConf
 
 
 def test_migrate_legacy_description_prefix() -> None:
-    assert AdDefaults.model_validate({}).description_prefix is None
+    assert AdDefaults.model_validate({}).description_prefix == ""  # noqa: PLC1901 explicit empty check is clearer
 
     assert AdDefaults.model_validate({"description_prefix": "Prefix"}).description_prefix == "Prefix"
 
@@ -19,7 +19,7 @@ def test_migrate_legacy_description_prefix() -> None:
 
 
 def test_migrate_legacy_description_suffix() -> None:
-    assert AdDefaults.model_validate({}).description_suffix is None
+    assert AdDefaults.model_validate({}).description_suffix == ""  # noqa: PLC1901 explicit empty check is clearer
 
     assert AdDefaults.model_validate({"description_suffix": "Suffix"}).description_suffix == "Suffix"
 

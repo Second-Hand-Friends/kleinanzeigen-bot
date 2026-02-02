@@ -579,14 +579,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         default_config = Config.model_construct()
         default_config.login.username = "changeme"  # noqa: S105 placeholder for default config, not a real username
         default_config.login.password = "changeme"  # noqa: S105 placeholder for default config, not a real password
-        dicts.save_dict(
+        dicts.save_commented_model(
             self.config_file_path,
-            default_config.model_dump(exclude_none = True, exclude = {"ad_defaults": {"description"}}),
+            default_config,
             header=(
                 "# yaml-language-server: $schema="
                 "https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot"
                 "/refs/heads/main/schemas/config.schema.json"
             ),
+            exclude = {"ad_defaults": {"description"}},
         )
 
     def load_config(self) -> None:

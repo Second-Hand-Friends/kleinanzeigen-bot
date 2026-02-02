@@ -350,6 +350,8 @@ kleinanzeigen_bot/utils/dicts.py:
     "Unsupported file type. The filename \"%s\" must end with *.json, *.yaml, or *.yml": "Nicht unterstützter Dateityp. Der Dateiname \"%s\" muss mit *.json, *.yaml oder *.yml enden"
   save_dict:
     "Saving [%s]...": "Speichere [%s]..."
+  save_commented_model:
+    "Saving [%s]...": "Speichere [%s]..."
   load_dict_from_module:
     "Loading %s[%s.%s]...": "Lade %s[%s.%s]..."
 

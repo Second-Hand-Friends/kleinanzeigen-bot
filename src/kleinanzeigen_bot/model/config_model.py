@@ -23,12 +23,19 @@ _MAX_PERCENTAGE:Final[int] = 100
 class AutoPriceReductionConfig(ContextualModel):
     enabled:bool = Field(default = False, description = "automatically lower the price of reposted ads")
     strategy:Literal["FIXED", "PERCENTAGE"] | None = Field(
-        default = None, description = "PERCENTAGE reduces by a percentage of the previous price, FIXED reduces by a fixed amount"
+        default = None,
+        description = "reduction strategy (required when enabled: true). PERCENTAGE = % of price, FIXED = absolute amount",
+        examples = ["PERCENTAGE", "FIXED"],
     )
     amount:float | None = Field(
-        default = None, gt = 0, description = "magnitude of the reduction; interpreted as percent for PERCENTAGE or currency units for FIXED"
+        default = None,
+        gt = 0,
+        description = "reduction amount (required when enabled: true). For PERCENTAGE: use percent value (e.g., 10 = 10%%). For FIXED: use currency amount",
+        examples = [10.0, 5.0, 20.0],
     )
-    min_price:float | None = Field(default = None, ge = 0, description = "required when enabled is true; minimum price floor (use 0 for no lower bound)")
+    min_price:float | None = Field(
+        default = None, ge = 0, description = "minimum price floor (required when enabled: true). Use 0 for no minimum", examples = [1.0, 5.0, 10.0]
+    )
     delay_reposts:int = Field(default = 0, ge = 0, description = "number of reposts to wait before applying the first automatic price reduction")
     delay_days:int = Field(default = 0, ge = 0, description = "number of days to wait after publication before applying automatic price reductions")
 
@@ -47,34 +54,50 @@ class AutoPriceReductionConfig(ContextualModel):
 
 
 class ContactDefaults(ContextualModel):
-    name:str | None = None
-    street:str | None = None
-    zipcode:int | str | None = None
-    location:str | None = Field(
-        default = None, description = "city or locality of the listing (can include multiple districts)", examples = ["Sample Town - District One"]
+    name:str = Field(default = "", description = "contact name displayed on the ad")
+    street:str = Field(default = "", description = "street address for the listing")
+    zipcode:int | str = Field(default = "", description = "postal/ZIP code for the listing location")
+    location:str = Field(
+        default = "",
+        description = "city or locality of the listing (can include multiple districts)",
+        examples = ["Sample Town - District One"],
     )
-    phone:str | None = None
+    phone:str = Field(
+        default = "",
+        description = "phone number for contact - only available for commercial accounts, personal accounts no longer support this",
+        examples = ['"01234 567890"'],
+    )
 
 
 @deprecated("Use description_prefix/description_suffix instead")
 class DescriptionAffixes(ContextualModel):
-    prefix:str | None = None
-    suffix:str | None = None
+    prefix:str | None = Field(default = None, description = "text to prepend to the ad description (deprecated, use description_prefix)")
+    suffix:str | None = Field(default = None, description = "text to append to the ad description (deprecated, use description_suffix)")
 
 
 class AdDefaults(ContextualModel):
-    active:bool = True
-    type:Literal["OFFER", "WANTED"] = "OFFER"
-    description:DescriptionAffixes | None = None
-    description_prefix:str | None = Field(default = None, description = "prefix for the ad description")
-    description_suffix:str | None = Field(default = None, description = "suffix for the ad description")
-    price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] = "NEGOTIABLE"
-    auto_price_reduction:AutoPriceReductionConfig = Field(default_factory = AutoPriceReductionConfig, description = "automatic price reduction configuration")
-    shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] = "SHIPPING"
-    sell_directly:bool = Field(default = False, description = "requires shipping_type SHIPPING to take effect")
-    images:list[str] | None = Field(default = None)
-    contact:ContactDefaults = Field(default_factory = ContactDefaults)
-    republication_interval:int = 7
+    active:bool = Field(default = True, description = "whether the ad should be published (false = skip this ad)")
+    type:Literal["OFFER", "WANTED"] = Field(default = "OFFER", description = "type of the ad listing", examples = ["OFFER", "WANTED"])
+    description:DescriptionAffixes | None = Field(default = None, description = "DEPRECATED: Use description_prefix/description_suffix instead")
+    description_prefix:str | None = Field(default = "", description = "text to prepend to each ad (optional)")
+    description_suffix:str | None = Field(default = "", description = "text to append to each ad (optional)")
+    price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] = Field(
+        default = "NEGOTIABLE", description = "pricing strategy for the listing", examples = ["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"]
+    )
+    auto_price_reduction:AutoPriceReductionConfig = Field(
+        default_factory = AutoPriceReductionConfig, description = "automatic price reduction configuration for reposted ads"
+    )
+    shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] = Field(
+        default = "SHIPPING", description = "shipping method for the item", examples = ["PICKUP", "SHIPPING", "NOT_APPLICABLE"]
+    )
+    sell_directly:bool = Field(default = False, description = "enable direct purchase option (only works when shipping_type is SHIPPING)")
+    images:list[str] | None = Field(
+        default_factory = list,
+        description = "default image glob patterns (optional). Leave empty for no default images",
+        examples = ['"images/*.jpg"', '"photos/*.{png,jpg}"'],
+    )
+    contact:ContactDefaults = Field(default_factory = ContactDefaults, description = "default contact information for ads")
+    republication_interval:int = Field(default = 7, description = "number of days between automatic republication of ads")
 
     @model_validator(mode = "before")
     @classmethod
@@ -99,7 +122,8 @@ class DownloadConfig(ContextualModel):
     )
     excluded_shipping_options:list[str] = Field(
         default_factory = list,
-        description = "list of shipping options to exclude, e.g. ['DHL_2', 'DHL_5']",
+        description = ("shipping options to exclude (optional). Leave as [] to include all. Add items like 'DHL_2' to exclude specific carriers"),
+        examples = ['"DHL_2"', '"DHL_5"', '"Hermes"'],
     )
     folder_name_max_length:int = Field(
         default = 100,
@@ -117,36 +141,49 @@ class BrowserConfig(ContextualModel):
     arguments:list[str] = Field(
         default_factory = list,
         description=(
-            "See https://peter.sh/experiments/chromium-command-line-switches/. "
-            "Browser profile path is auto-configured based on installation mode (portable/XDG)."
+            "additional Chromium command line switches (optional). Leave as [] for default behavior. "
+            "See https://peter.sh/experiments/chromium-command-line-switches/ "
+            "Common: --headless (no GUI), --disable-dev-shm-usage (Docker fix), --user-data-dir=/path"
         ),
+        examples = ['"--headless"', '"--disable-dev-shm-usage"', '"--user-data-dir=/path/to/profile"'],
     )
-    binary_location:str | None = Field(default = None, description = "path to custom browser executable, if not specified will be looked up on PATH")
-    extensions:list[str] = Field(default_factory = list, description = "a list of .crx extension files to be loaded")
-    use_private_window:bool = True
+    binary_location:str | None = Field(default = "", description = "path to custom browser executable (optional). Leave empty to use system default")
+    extensions:list[str] = Field(
+        default_factory = list,
+        description = "Chrome extensions to load (optional). Leave as [] for no extensions. Add .crx file paths relative to config file",
+        examples = ['"extensions/adblock.crx"', '"/absolute/path/to/extension.crx"'],
+    )
+    use_private_window:bool = Field(default = True, description = "open browser in private/incognito mode (recommended to avoid cookie conflicts)")
     user_data_dir:str | None = Field(
-        default = None,
-        description=(
-            "See https://github.com/chromium/chromium/blob/main/docs/user_data_dir.md. "
-            "If not specified, defaults to XDG cache directory in XDG mode or .temp/browser-profile in portable mode."
-        ),
+        default = "",
+        description = "custom browser profile directory (optional). Leave empty for auto-configured default",
     )
-    profile_name:str | None = None
+    profile_name:str | None = Field(
+        default = "",
+        description = "browser profile name (optional). Leave empty for default profile",
+        examples = ['"Profile 1"'],
+    )
 
 
 class LoginConfig(ContextualModel):
-    username:str = Field(..., min_length = 1)
-    password:str = Field(..., min_length = 1)
+    username:str = Field(..., min_length = 1, description = "kleinanzeigen.de login email or username")
+    password:str = Field(..., min_length = 1, description = "kleinanzeigen.de login password")
 
 
 class PublishingConfig(ContextualModel):
-    delete_old_ads:Literal["BEFORE_PUBLISH", "AFTER_PUBLISH", "NEVER"] | None = "AFTER_PUBLISH"
-    delete_old_ads_by_title:bool = Field(default = True, description = "only works if delete_old_ads is set to BEFORE_PUBLISH")
+    delete_old_ads:Literal["BEFORE_PUBLISH", "AFTER_PUBLISH", "NEVER"] | None = Field(
+        default = "AFTER_PUBLISH", description = "when to delete old versions of republished ads", examples = ["BEFORE_PUBLISH", "AFTER_PUBLISH", "NEVER"]
+    )
+    delete_old_ads_by_title:bool = Field(default = True, description = "match old ads by title when deleting (only works with BEFORE_PUBLISH)")
 
 
 class CaptchaConfig(ContextualModel):
-    auto_restart:bool = False
-    restart_delay:str = "6h"
+    auto_restart:bool = Field(
+        default = False, description = "if true, abort when captcha is detected and auto-retry after restart_delay (if false, wait for manual solving)"
+    )
+    restart_delay:str = Field(
+        default = "6h", description = "duration to wait before retrying after captcha detection (e.g., 1h30m, 6h, 30m)", examples = ["6h", "1h30m", "30m"]
+    )
 
 
 class TimeoutConfig(ContextualModel):
@@ -291,15 +328,12 @@ if relative paths are specified, then they are relative to this configuration fi
 
     categories:dict[str, str] = Field(
         default_factory = dict,
-        description = """
-additional name to category ID mappings, see default list at
-https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml
-
-Example:
-    categories:
-       Elektronik > Notebooks: 161/278
-       Jobs > Praktika: 102/125
-    """,
+        description=(
+            "additional name to category ID mappings (optional). Leave as {} if not needed. "
+            "See full list at: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml "
+            "To add: use format 'Category > Subcategory': 'ID'"
+        ),
+        examples = ['"Elektronik > Notebooks": "161/278"', '"Jobs > Praktika": "102/125"'],
     )
 
     download:DownloadConfig = Field(default_factory = DownloadConfig)
@@ -309,7 +343,7 @@ Example:
     captcha:CaptchaConfig = Field(default_factory = CaptchaConfig)
     update_check:UpdateCheckConfig = Field(default_factory = UpdateCheckConfig, description = "Update check configuration")
     timeouts:TimeoutConfig = Field(default_factory = TimeoutConfig, description = "Centralized timeout configuration.")
-    diagnostics:DiagnosticsConfig | None = Field(default = None, description = "Optional failure-only diagnostics capture.")
+    diagnostics:DiagnosticsConfig = Field(default_factory = DiagnosticsConfig, description = "diagnostics capture configuration for troubleshooting")
 
     def with_values(self, values:dict[str, Any]) -> Config:
         return Config.model_validate(dicts.apply_defaults(copy.deepcopy(values), defaults = self.model_dump()))
