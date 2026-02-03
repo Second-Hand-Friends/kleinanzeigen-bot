@@ -582,8 +582,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             self.config_file_path,
             default_config,
             header = ("# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json"),
-            exclude = {
-                "ad_defaults": {"description"}},
+            exclude = {"ad_defaults": {"description"}},
         )
 
     def load_config(self) -> None:
@@ -2021,7 +2020,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Build lookup dict inline and pass directly to extractor (no cache abstraction needed)
         LOG.info("Fetching published ads...")
         published_ads = await self._fetch_published_ads()
-        published_ads_by_id = {int(ad["id"]): ad for ad in published_ads if ad.get("id") is not None}
+        published_ads_by_id:dict[int, dict[str, Any]] = {}
+        for ad in published_ads:
+            try:
+                ad_id = ad.get("id")
+                if ad_id is not None:
+                    published_ads_by_id[int(ad_id)] = ad
+            except (ValueError, TypeError):
+                LOG.warning("Skipping ad with non-numeric id: %s", ad.get("id"))
         LOG.info("Loaded %s published ads.", len(published_ads_by_id))
 
         ad_extractor = extract.AdExtractor(self.browser, self.config, self.installation_mode_or_portable, published_ads_by_id = published_ads_by_id)
