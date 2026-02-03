@@ -582,8 +582,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             self.config_file_path,
             default_config,
             header = ("# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json"),
-            exclude = {
-                "ad_defaults": {"description"}},
+            exclude = {"ad_defaults": {"description"}},
         )
 
     def load_config(self) -> None:
