@@ -2021,13 +2021,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.info("Fetching published ads...")
         published_ads = await self._fetch_published_ads()
         published_ads_by_id:dict[int, dict[str, Any]] = {}
-        for ad in published_ads:
+        for published_ad in published_ads:
             try:
-                ad_id = ad.get("id")
+                ad_id = published_ad.get("id")
                 if ad_id is not None:
-                    published_ads_by_id[int(ad_id)] = ad
+                    published_ads_by_id[int(ad_id)] = published_ad
             except (ValueError, TypeError):
-                LOG.warning("Skipping ad with non-numeric id: %s", ad.get("id"))
+                LOG.warning("Skipping ad with non-numeric id: %s", published_ad.get("id"))
         LOG.info("Loaded %s published ads.", len(published_ads_by_id))
 
         ad_extractor = extract.AdExtractor(self.browser, self.config, self.installation_mode_or_portable, published_ads_by_id = published_ads_by_id)
