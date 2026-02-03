@@ -25,7 +25,6 @@ __all__ = [
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 _BREADCRUMB_MIN_DEPTH:Final[int] = 2
-_SELL_DIRECTLY_MAX_PAGE_LIMIT:Final[int] = 100
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
 
 
@@ -34,13 +33,20 @@ class AdExtractor(WebScrapingMixin):
     Wrapper class for ad extraction that uses an active bot´s browser session to extract specific elements from an ad page.
     """
 
-    def __init__(self, browser:Browser, config:Config, installation_mode:xdg_paths.InstallationMode = "portable") -> None:
+    def __init__(
+        self,
+        browser:Browser,
+        config:Config,
+        installation_mode:xdg_paths.InstallationMode = "portable",
+        published_ads_by_id:dict[int, dict[str, Any]] | None = None,
+    ) -> None:
         super().__init__()
         self.browser = browser
         self.config:Config = config
         if installation_mode not in {"portable", "xdg"}:
             raise ValueError(f"Unsupported installation mode: {installation_mode}")
         self.installation_mode:xdg_paths.InstallationMode = installation_mode
+        self.published_ads_by_id:dict[int, dict[str, Any]] = published_ads_by_id or {}
 
     async def download_ad(self, ad_id:int) -> None:
         """
@@ -231,13 +237,18 @@ class AdExtractor(WebScrapingMixin):
         """
         info:dict[str, Any] = {"active": True}
 
-        # extract basic info
-        info["type"] = "OFFER" if "s-anzeige" in self.page.url else "WANTED"
-
-        # Extract title
+        # Extract title first (needed for directory creation)
         title = await self._extract_title_from_ad_page()
 
+        # Get BelenConf data which contains accurate ad_type information
         belen_conf = await self.web_execute("window.BelenConf")
+
+        # Extract ad type from BelenConf - more reliable than URL pattern matching
+        # BelenConf contains "ad_type":"WANTED" or "ad_type":"OFFER" in dimensions
+        ad_type_from_conf = None
+        if isinstance(belen_conf, dict):
+            ad_type_from_conf = belen_conf.get("universalAnalyticsOpts", {}).get("dimensions", {}).get("ad_type")
+        info["type"] = ad_type_from_conf if ad_type_from_conf in {"OFFER", "WANTED"} else ("OFFER" if "s-anzeige" in self.page.url else "WANTED")
 
         info["category"] = await self._extract_category_from_ad_page()
 
@@ -515,72 +526,35 @@ class AdExtractor(WebScrapingMixin):
 
     async def _extract_sell_directly_from_ad_page(self) -> bool | None:
         """
-        Extracts the sell directly option from an ad page using the JSON API.
+        Extracts the sell directly option from an ad page using the published ads data.
+
+        Uses data passed at construction time (from the manage-ads JSON) to avoid
+        repetitive API calls that create a bot detection signature.
 
         :return: bool | None - True if buyNowEligible, False if not eligible, None if unknown
         """
         try:
-            # Extract current ad ID from the page URL first
+            # Extract current ad ID from the page URL
             current_ad_id = self.extract_ad_id_from_ad_url(self.page.url)
             if current_ad_id == -1:
                 LOG.warning("Could not extract ad ID from URL: %s", self.page.url)
                 return None
 
-            # Fetch the management JSON data using web_request with pagination support
-            page = 1
+            # Direct dict lookup (O(1) instead of O(pages) API calls)
+            cached_ad = self.published_ads_by_id.get(current_ad_id)
+            if cached_ad is not None:
+                buy_now_eligible = cached_ad.get("buyNowEligible")
+                if isinstance(buy_now_eligible, bool):
+                    LOG.debug("sell_directly from data for ad %s: %s", current_ad_id, buy_now_eligible)
+                    return buy_now_eligible
+                LOG.debug("buyNowEligible not a bool for ad %s: %s", current_ad_id, buy_now_eligible)
+                return None
 
-            while True:
-                # Safety check: don't paginate beyond reasonable limit
-                if page > _SELL_DIRECTLY_MAX_PAGE_LIMIT:
-                    LOG.warning("Stopping pagination after %s pages to avoid infinite loop", _SELL_DIRECTLY_MAX_PAGE_LIMIT)
-                    break
-
-                response = await self.web_request(f"https://www.kleinanzeigen.de/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum={page}")
-
-                try:
-                    json_data = json.loads(response["content"])
-                except json.JSONDecodeError as ex:
-                    LOG.debug("Failed to parse JSON response on page %s: %s", page, ex)
-                    break
-
-                # Find the current ad in the ads list
-                if isinstance(json_data, dict) and "ads" in json_data:
-                    ads_list = json_data["ads"]
-                    if isinstance(ads_list, list):
-                        # Filter ads to find the current ad by ID
-                        current_ad = next((ad for ad in ads_list if ad.get("id") == current_ad_id), None)
-                        if current_ad and "buyNowEligible" in current_ad:
-                            buy_now_eligible = current_ad["buyNowEligible"]
-                            return buy_now_eligible if isinstance(buy_now_eligible, bool) else None
-
-                # Check if we need to fetch more pages
-                paging = json_data.get("paging") if isinstance(json_data, dict) else None
-                if not isinstance(paging, dict):
-                    break
-
-                # Parse pagination info using real API fields
-                current_page_num = misc.coerce_page_number(paging.get("pageNum"))
-                total_pages = misc.coerce_page_number(paging.get("last"))
-
-                if current_page_num is None:
-                    LOG.warning("Invalid 'pageNum' in paging info: %s, stopping pagination", paging.get("pageNum"))
-                    break
-
-                # Stop if we've reached the last page
-                if total_pages is None or current_page_num >= total_pages:
-                    break
-
-                # Use API's next field for navigation (more robust than our counter)
-                next_page = misc.coerce_page_number(paging.get("next"))
-                if next_page is None:
-                    LOG.warning("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
-                    break
-                page = next_page
-
-            # If the key doesn't exist or ad not found, return None (unknown)
+            # Ad not in user's published ads (may be someone else's ad)
+            LOG.debug("No data for ad %s, returning None for sell_directly", current_ad_id)
             return None
 
-        except (TimeoutError, json.JSONDecodeError, KeyError, TypeError) as e:
+        except (KeyError, TypeError) as e:
             LOG.debug("Could not determine sell_directly status: %s", e)
             return None
 
