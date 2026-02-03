@@ -871,8 +871,9 @@ class TestAdExtractorContent:
 
     @pytest.mark.asyncio
     async def test_extract_sell_directly_data_miss(self, test_extractor:extract_module.AdExtractor) -> None:
-        """Test sell_directly extraction with data miss - returns None without API call."""
-        test_extractor.published_ads_by_id = {}  # Empty - ad not in data
+        """Test sell_directly extraction with data miss - ad ID not in cache returns None."""
+        # Cache has a different ad ID than the one in the URL - true data miss
+        test_extractor.published_ads_by_id = {987654321: {"id": 987654321, "buyNowEligible": True}}
 
         test_extractor.page = MagicMock()
         test_extractor.page.url = "https://www.kleinanzeigen.de/s-anzeige/test-ad/123456789"

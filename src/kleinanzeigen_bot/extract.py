@@ -46,7 +46,7 @@ class AdExtractor(WebScrapingMixin):
         if installation_mode not in {"portable", "xdg"}:
             raise ValueError(f"Unsupported installation mode: {installation_mode}")
         self.installation_mode:xdg_paths.InstallationMode = installation_mode
-        self.published_ads_by_id = published_ads_by_id or {}
+        self.published_ads_by_id:dict[int, dict[str, Any]] = published_ads_by_id or {}
 
     async def download_ad(self, ad_id:int) -> None:
         """
@@ -245,7 +245,9 @@ class AdExtractor(WebScrapingMixin):
 
         # Extract ad type from BelenConf - more reliable than URL pattern matching
         # BelenConf contains "ad_type":"WANTED" or "ad_type":"OFFER" in dimensions
-        ad_type_from_conf = belen_conf.get("universalAnalyticsOpts", {}).get("dimensions", {}).get("ad_type")
+        ad_type_from_conf = None
+        if isinstance(belen_conf, dict):
+            ad_type_from_conf = belen_conf.get("universalAnalyticsOpts", {}).get("dimensions", {}).get("ad_type")
         info["type"] = ad_type_from_conf if ad_type_from_conf in {"OFFER", "WANTED"} else ("OFFER" if "s-anzeige" in self.page.url else "WANTED")
 
         info["category"] = await self._extract_category_from_ad_page()
