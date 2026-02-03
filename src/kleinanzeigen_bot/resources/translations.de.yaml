@@ -225,6 +225,8 @@ kleinanzeigen_bot/__init__.py:
     "Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...": "Attributfeld '%s' scheint eine Combobox zu sein (d.h. Texteingabefeld mit Dropdown-Filter)..."
 
   download_ads:
+    "Fetching published ads...": "Lade veröffentlichte Anzeigen..."
+    "Loaded %s published ads.": "%s veröffentlichte Anzeigen geladen."
     "Scanning your ad overview...": "Scanne Anzeigenübersicht..."
     "%s found.": "%s gefunden."
     "ad": "Anzeige"
@@ -317,9 +319,6 @@ kleinanzeigen_bot/extract.py:
 
   _extract_sell_directly_from_ad_page:
     "Could not extract ad ID from URL: %s": "Konnte Anzeigen-ID nicht aus der URL extrahieren: %s"
-    "Stopping pagination after %s pages to avoid infinite loop": "Stoppe die Seitenaufschaltung nach %s Seiten, um eine Endlosschleife zu vermeiden"
-    "Invalid 'next' page value in paging info: %s, stopping pagination": "Ungültiger 'next'-Seitenwert in Paginierungsinfo: %s, beende Paginierung"
-    "Invalid 'pageNum' in paging info: %s, stopping pagination": "Ungültiger 'pageNum'-Wert in Paginierungsinfo: %s, beende Paginierung"
 
 #################################################
 kleinanzeigen_bot/utils/i18n.py:

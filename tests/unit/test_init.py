@@ -165,8 +165,8 @@ class TestKleinanzeigenBotInitialization:
         assert update_checker_calls == [(test_bot.config, "xdg")]
 
     @pytest.mark.asyncio
-    async def test_download_ads_passes_installation_mode(self, test_bot:KleinanzeigenBot) -> None:
-        """Ensure download_ads wires installation mode into AdExtractor."""
+    async def test_download_ads_passes_installation_mode_and_published_ads(self, test_bot:KleinanzeigenBot) -> None:
+        """Ensure download_ads wires installation mode and published_ads_by_id into AdExtractor."""
         test_bot.installation_mode = "xdg"
         test_bot.ads_selector = "all"
         test_bot.browser = MagicMock()
@@ -174,10 +174,18 @@ class TestKleinanzeigenBotInitialization:
         extractor_mock = MagicMock()
         extractor_mock.extract_own_ads_urls = AsyncMock(return_value = [])
 
-        with patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock) as mock_extractor:
+        mock_published_ads = [{"id": 123, "buyNowEligible": True}, {"id": 456, "buyNowEligible": False}]
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = mock_published_ads),
+            patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock) as mock_extractor,
+        ):
             await test_bot.download_ads()
 
-        mock_extractor.assert_called_once_with(test_bot.browser, test_bot.config, "xdg")
+        # Verify published_ads_by_id is built correctly and passed to extractor
+        mock_extractor.assert_called_once_with(
+            test_bot.browser, test_bot.config, "xdg", published_ads_by_id = {123: mock_published_ads[0], 456: mock_published_ads[1]}
+        )
 
 
 class TestKleinanzeigenBotLogging:
