@@ -604,6 +604,7 @@ class WebScrapingMixin:
                     win_path(local_app_data, "Chromium", "Application", "chrome.exe") if local_app_data else None,
                     win_path(program_files, "Chromium", "Application", "chrome.exe"),
                     win_path(program_files_x86, "Chromium", "Application", "chrome.exe"),
+                    # Intentional fallback for portable/custom distributions installed under a bare "Chrome" directory.
                     win_path(program_files, "Chrome", "Application", "chrome.exe"),
                     win_path(program_files_x86, "Chrome", "Application", "chrome.exe"),
                     win_path(local_app_data, "Chrome", "Application", "chrome.exe") if local_app_data else None,
