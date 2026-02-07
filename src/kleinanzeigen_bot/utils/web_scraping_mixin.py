@@ -441,7 +441,11 @@ class WebScrapingMixin:
             else:
                 LOG.error("(fail) Browser binary not found: %s", self.browser_config.binary_location)
         else:
-            browser_path = self.get_compatible_browser()
+            try:
+                browser_path = self.get_compatible_browser()
+            except AssertionError as exc:
+                LOG.debug("Browser auto-detection failed: %s", exc)
+                browser_path = None
             if browser_path:
                 LOG.info("(ok) Auto-detected browser: %s", browser_path)
                 # Set the binary location for Chrome version detection
@@ -579,15 +583,27 @@ class WebScrapingMixin:
                 ]
 
             case "Windows":
+                program_files = os.environ.get("PROGRAMFILES", "C:\\Program Files")
+                program_files_x86 = os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)")
+                local_app_data = os.environ.get("LOCALAPPDATA")
+                if not local_app_data:
+                    user_profile = os.environ.get("USERPROFILE")
+                    if user_profile:
+                        local_app_data = user_profile + r"\AppData\Local"
+
                 browser_paths = [
-                    os.environ.get("PROGRAMFILES", "C:\\Program Files") + r"\Microsoft\Edge\Application\msedge.exe",
-                    os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)") + r"\Microsoft\Edge\Application\msedge.exe",
-                    os.environ["PROGRAMFILES"] + r"\Chromium\Application\chrome.exe",
-                    os.environ["PROGRAMFILES(X86)"] + r"\Chromium\Application\chrome.exe",
-                    os.environ["LOCALAPPDATA"] + r"\Chromium\Application\chrome.exe",
-                    os.environ["PROGRAMFILES"] + r"\Chrome\Application\chrome.exe",
-                    os.environ["PROGRAMFILES(X86)"] + r"\Chrome\Application\chrome.exe",
-                    os.environ["LOCALAPPDATA"] + r"\Chrome\Application\chrome.exe",
+                    local_app_data + r"\Google\Chrome\Application\chrome.exe" if local_app_data else None,
+                    program_files + r"\Google\Chrome\Application\chrome.exe",
+                    program_files_x86 + r"\Google\Chrome\Application\chrome.exe",
+                    local_app_data + r"\Microsoft\Edge\Application\msedge.exe" if local_app_data else None,
+                    program_files + r"\Microsoft\Edge\Application\msedge.exe",
+                    program_files_x86 + r"\Microsoft\Edge\Application\msedge.exe",
+                    local_app_data + r"\Chromium\Application\chrome.exe" if local_app_data else None,
+                    program_files + r"\Chromium\Application\chrome.exe",
+                    program_files_x86 + r"\Chromium\Application\chrome.exe",
+                    program_files + r"\Chrome\Application\chrome.exe",
+                    program_files_x86 + r"\Chrome\Application\chrome.exe",
+                    local_app_data + r"\Chrome\Application\chrome.exe" if local_app_data else None,
                     shutil.which("msedge.exe"),
                     shutil.which("chromium.exe"),
                     shutil.which("chrome.exe"),
