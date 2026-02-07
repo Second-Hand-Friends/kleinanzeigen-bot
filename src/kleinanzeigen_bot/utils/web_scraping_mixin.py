@@ -4,7 +4,7 @@
 import asyncio, enum, inspect, json, os, platform, secrets, shutil, subprocess, urllib.request  # isort: skip # noqa: S404
 from collections.abc import Awaitable, Callable, Coroutine, Iterable
 from gettext import gettext as _
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Final, Optional, cast
 
 try:
@@ -583,27 +583,30 @@ class WebScrapingMixin:
                 ]
 
             case "Windows":
+                def win_path(*parts:str) -> str:
+                    return str(PureWindowsPath(*parts))
+
                 program_files = os.environ.get("PROGRAMFILES", "C:\\Program Files")
                 program_files_x86 = os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)")
                 local_app_data = os.environ.get("LOCALAPPDATA")
                 if not local_app_data:
                     user_profile = os.environ.get("USERPROFILE")
                     if user_profile:
-                        local_app_data = user_profile + r"\AppData\Local"
+                        local_app_data = win_path(user_profile, "AppData", "Local")
 
                 browser_paths = [
-                    local_app_data + r"\Google\Chrome\Application\chrome.exe" if local_app_data else None,
-                    program_files + r"\Google\Chrome\Application\chrome.exe",
-                    program_files_x86 + r"\Google\Chrome\Application\chrome.exe",
-                    local_app_data + r"\Microsoft\Edge\Application\msedge.exe" if local_app_data else None,
-                    program_files + r"\Microsoft\Edge\Application\msedge.exe",
-                    program_files_x86 + r"\Microsoft\Edge\Application\msedge.exe",
-                    local_app_data + r"\Chromium\Application\chrome.exe" if local_app_data else None,
-                    program_files + r"\Chromium\Application\chrome.exe",
-                    program_files_x86 + r"\Chromium\Application\chrome.exe",
-                    program_files + r"\Chrome\Application\chrome.exe",
-                    program_files_x86 + r"\Chrome\Application\chrome.exe",
-                    local_app_data + r"\Chrome\Application\chrome.exe" if local_app_data else None,
+                    win_path(local_app_data, "Google", "Chrome", "Application", "chrome.exe") if local_app_data else None,
+                    win_path(program_files, "Google", "Chrome", "Application", "chrome.exe"),
+                    win_path(program_files_x86, "Google", "Chrome", "Application", "chrome.exe"),
+                    win_path(local_app_data, "Microsoft", "Edge", "Application", "msedge.exe") if local_app_data else None,
+                    win_path(program_files, "Microsoft", "Edge", "Application", "msedge.exe"),
+                    win_path(program_files_x86, "Microsoft", "Edge", "Application", "msedge.exe"),
+                    win_path(local_app_data, "Chromium", "Application", "chrome.exe") if local_app_data else None,
+                    win_path(program_files, "Chromium", "Application", "chrome.exe"),
+                    win_path(program_files_x86, "Chromium", "Application", "chrome.exe"),
+                    win_path(program_files, "Chrome", "Application", "chrome.exe"),
+                    win_path(program_files_x86, "Chrome", "Application", "chrome.exe"),
+                    win_path(local_app_data, "Chrome", "Application", "chrome.exe") if local_app_data else None,
                     shutil.which("msedge.exe"),
                     shutil.which("chromium.exe"),
                     shutil.which("chrome.exe"),
