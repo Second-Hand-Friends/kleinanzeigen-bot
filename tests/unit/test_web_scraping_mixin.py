@@ -1105,6 +1105,12 @@ class TestWebScrapingBrowserConfiguration:
         monkeypatch.setattr(os.path, "isfile", lambda p: p == local_chromium_path)
         assert scraper.get_compatible_browser() == local_chromium_path
 
+        monkeypatch.delenv("LOCALAPPDATA", raising = False)
+        monkeypatch.setenv("USERPROFILE", "C:\\Users\\FallbackUser")
+        fallback_local_chrome_path = "C:\\Users\\FallbackUser\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe"
+        monkeypatch.setattr(os.path, "isfile", lambda p: p == fallback_local_chrome_path)
+        assert scraper.get_compatible_browser() == fallback_local_chrome_path
+
         monkeypatch.delenv("PROGRAMFILES", raising = False)
         monkeypatch.delenv("PROGRAMFILES(X86)", raising = False)
         monkeypatch.delenv("LOCALAPPDATA", raising = False)
