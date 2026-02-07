@@ -191,7 +191,7 @@ class WebScrapingMixin:
         configured_timeout:float,
         effective_timeout:float,
         actual_duration:float,
-        retry_count:int,
+        attempt_index:int,
         success:bool,
     ) -> None:
         collector = getattr(self, "_timing_collector", None)
@@ -207,7 +207,7 @@ class WebScrapingMixin:
                 configured_timeout = configured_timeout,
                 effective_timeout = effective_timeout,
                 actual_duration = actual_duration,
-                retry_count = retry_count,
+                attempt_index = attempt_index,
                 success = success,
             )
         except Exception as exc:  # noqa: BLE001
@@ -234,7 +234,7 @@ class WebScrapingMixin:
                     configured_timeout = configured_timeout,
                     effective_timeout = effective_timeout,
                     actual_duration = loop.time() - attempt_started,
-                    retry_count = attempt,
+                    attempt_index = attempt,
                     success = True,
                 )
                 return result
@@ -245,7 +245,7 @@ class WebScrapingMixin:
                     configured_timeout = configured_timeout,
                     effective_timeout = effective_timeout,
                     actual_duration = loop.time() - attempt_started,
-                    retry_count = attempt,
+                    attempt_index = attempt,
                     success = False,
                 )
                 if attempt >= attempts - 1:

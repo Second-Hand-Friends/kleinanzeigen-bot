@@ -331,7 +331,7 @@ Example structure:
         "operation_type": "web_find",
         "effective_timeout_sec": 5.0,
         "actual_duration_sec": 1.2,
-        "retry_count": 0,
+        "attempt_index": 0,
         "success": true
       }
     ]
@@ -343,6 +343,7 @@ How to read it quickly:
 
 - Group by `command` and `session_id` first to compare slow vs fast runs
 - Look for high `actual_duration_sec` values near `effective_timeout_sec` and repeated `success: false` entries
+- `attempt_index` is zero-based (`0` first attempt, `1` first retry)
 - Use `operation_key` + `operation_type` to identify which timeout bucket (`default`, `page_load`, etc.) needs tuning
 - For deeper timeout tuning workflow, see [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md)
 

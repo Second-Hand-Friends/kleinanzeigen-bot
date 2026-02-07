@@ -620,8 +620,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         config_yaml = dicts.load_dict_if_exists(self.config_file_path, _("config"))
         self.config = Config.model_validate(config_yaml, strict = True, context = self.config_file_path)
 
-        diagnostics_cfg = getattr(self.config, "diagnostics", None)
-        timing_enabled = bool(diagnostics_cfg and diagnostics_cfg.timing_collection)
+        timing_enabled = self.config.diagnostics.timing_collection
         if timing_enabled:
             self._timing_collector = TimingCollector(self.installation_mode_or_portable, self.command)
         else:

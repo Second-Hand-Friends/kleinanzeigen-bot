@@ -45,6 +45,16 @@ def _nodriver_start_mock() -> Mock:
     return cast(Mock, cast(Any, nodriver).start)
 
 
+class RecordingCollector:
+    """Helper collector that stores timing records for assertions."""
+
+    def __init__(self, sink:list[dict[str, Any]]) -> None:
+        self._sink = sink
+
+    def record(self, **kwargs:Any) -> None:
+        self._sink.append(kwargs)
+
+
 class TrulyAwaitableMockPage:
     """A helper to make a mock Page object truly awaitable for tests."""
 
@@ -462,12 +472,7 @@ class TestTimeoutAndRetryHelpers:
     async def test_run_with_timeout_retries_records_success_timing(self, web_scraper:WebScrapingMixin) -> None:
         """_run_with_timeout_retries should emit a timing record for successful attempts."""
         recorded:list[dict[str, Any]] = []
-
-        class FakeCollector:
-            def record(self, **kwargs:Any) -> None:
-                recorded.append(kwargs)
-
-        cast(Any, web_scraper)._timing_collector = FakeCollector()
+        cast(Any, web_scraper)._timing_collector = RecordingCollector(recorded)
 
         async def operation(_timeout:float) -> str:
             return "ok"
@@ -478,18 +483,13 @@ class TestTimeoutAndRetryHelpers:
         assert len(recorded) == 1
         assert recorded[0]["operation_type"] == "web_find"
         assert recorded[0]["success"] is True
-        assert recorded[0]["retry_count"] == 0
+        assert recorded[0]["attempt_index"] == 0
 
     @pytest.mark.asyncio
     async def test_run_with_timeout_retries_records_timeout_timing(self, web_scraper:WebScrapingMixin) -> None:
         """_run_with_timeout_retries should emit timing records for timed out attempts."""
         recorded:list[dict[str, Any]] = []
-
-        class FakeCollector:
-            def record(self, **kwargs:Any) -> None:
-                recorded.append(kwargs)
-
-        cast(Any, web_scraper)._timing_collector = FakeCollector()
+        cast(Any, web_scraper)._timing_collector = RecordingCollector(recorded)
         web_scraper.config.timeouts.retry_max_attempts = 1
 
         async def always_timeout(_timeout:float) -> str:
@@ -501,8 +501,8 @@ class TestTimeoutAndRetryHelpers:
         assert len(recorded) == 2
         assert all(entry["operation_type"] == "web_find" for entry in recorded)
         assert all(entry["success"] is False for entry in recorded)
-        assert recorded[0]["retry_count"] == 0
-        assert recorded[1]["retry_count"] == 1
+        assert recorded[0]["attempt_index"] == 0
+        assert recorded[1]["attempt_index"] == 1
 
     @pytest.mark.asyncio
     async def test_run_with_timeout_retries_guard_clause(self, web_scraper:WebScrapingMixin) -> None:

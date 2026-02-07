@@ -25,7 +25,7 @@ class TestTimingCollector:
             configured_timeout = 5.0,
             effective_timeout = 5.0,
             actual_duration = 0.4,
-            retry_count = 0,
+            attempt_index = 0,
             success = True,
         )
 
@@ -84,7 +84,7 @@ class TestTimingCollector:
             configured_timeout = 5.0,
             effective_timeout = 5.0,
             actual_duration = 0.2,
-            retry_count = 0,
+            attempt_index = 0,
             success = True,
         )
 
@@ -97,3 +97,57 @@ class TestTimingCollector:
         assert "malformed-session" not in session_ids
         assert "recent-session" in session_ids
         assert collector.session_id in session_ids
+
+    def test_flush_returns_none_when_already_flushed(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        collector = TimingCollector("portable", "publish")
+        collector.record(
+            key = "default",
+            operation_type = "web_find",
+            description = "web_find(ID, submit)",
+            configured_timeout = 5.0,
+            effective_timeout = 5.0,
+            actual_duration = 0.1,
+            attempt_index = 0,
+            success = True,
+        )
+
+        first = collector.flush()
+        second = collector.flush()
+
+        assert first is not None
+        assert second is None
+
+    def test_flush_returns_none_when_no_records(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        collector = TimingCollector("portable", "publish")
+
+        assert collector.flush() is None
+
+    def test_flush_recovers_from_corrupted_json(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+
+        output_dir = tmp_path / ".temp" / "timing"
+        output_dir.mkdir(parents = True, exist_ok = True)
+        data_path = output_dir / "timing_data.json"
+        data_path.write_text("{ this is invalid json", encoding = "utf-8")
+
+        collector = TimingCollector("portable", "verify")
+        collector.record(
+            key = "default",
+            operation_type = "web_find",
+            description = "web_find(ID, submit)",
+            configured_timeout = 5.0,
+            effective_timeout = 5.0,
+            actual_duration = 0.1,
+            attempt_index = 0,
+            success = True,
+        )
+
+        file_path = collector.flush()
+
+        assert file_path is not None
+        payload = json.loads(file_path.read_text(encoding = "utf-8"))
+        assert isinstance(payload, list)
+        assert len(payload) == 1
+        assert payload[0]["session_id"] == collector.session_id

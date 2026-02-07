@@ -38,7 +38,7 @@ class TimingRecord:
     configured_timeout_sec:float
     effective_timeout_sec:float
     actual_duration_sec:float
-    retry_count:int
+    attempt_index:int
     success:bool
 
     def to_dict(self) -> dict[str, Any]:
@@ -71,7 +71,7 @@ class TimingCollector:
         configured_timeout:float,
         effective_timeout:float,
         actual_duration:float,
-        retry_count:int,
+        attempt_index:int,
         success:bool,
     ) -> None:
         self.records.append(
@@ -83,7 +83,7 @@ class TimingCollector:
                 configured_timeout_sec = configured_timeout,
                 effective_timeout_sec = effective_timeout,
                 actual_duration_sec = actual_duration,
-                retry_count = retry_count,
+                attempt_index = attempt_index,
                 success = success,
             )
         )
