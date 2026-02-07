@@ -55,6 +55,13 @@ class RecordingCollector:
         self._sink.append(kwargs)
 
 
+class FailingCollector:
+    """Helper collector that raises to test error handling."""
+
+    def record(self, **kwargs:Any) -> None:
+        raise RuntimeError("collector failed")
+
+
 class TrulyAwaitableMockPage:
     """A helper to make a mock Page object truly awaitable for tests."""
 
@@ -503,6 +510,18 @@ class TestTimeoutAndRetryHelpers:
         assert all(entry["success"] is False for entry in recorded)
         assert recorded[0]["attempt_index"] == 0
         assert recorded[1]["attempt_index"] == 1
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_ignores_collector_failure(self, web_scraper:WebScrapingMixin) -> None:
+        """_run_with_timeout_retries should continue when timing collector record fails."""
+        cast(Any, web_scraper)._timing_collector = FailingCollector()
+
+        async def operation(_timeout:float) -> str:
+            return "ok"
+
+        result = await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)")
+
+        assert result == "ok"
 
     @pytest.mark.asyncio
     async def test_run_with_timeout_retries_guard_clause(self, web_scraper:WebScrapingMixin) -> None:

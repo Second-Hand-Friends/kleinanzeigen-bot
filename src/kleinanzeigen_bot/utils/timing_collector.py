@@ -19,9 +19,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Final
 
-from kleinanzeigen_bot.utils import loggers, misc
-
-from . import xdg_paths
+from kleinanzeigen_bot.utils import loggers, misc, xdg_paths
 
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 

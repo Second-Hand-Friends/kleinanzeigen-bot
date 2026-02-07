@@ -5,6 +5,7 @@
 import json
 from datetime import timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -15,6 +16,12 @@ pytestmark = pytest.mark.unit
 
 
 class TestTimingCollector:
+    def test_output_dir_uses_xdg_cache_in_xdg_mode(self, tmp_path:Path) -> None:
+        with patch("kleinanzeigen_bot.utils.timing_collector.xdg_paths.get_xdg_base_dir", return_value = tmp_path / "xdg-cache"):
+            collector = TimingCollector("xdg", "publish")
+
+            assert collector.output_dir == (tmp_path / "xdg-cache" / "timing").resolve()
+
     def test_flush_writes_session_data(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
         collector = TimingCollector("portable", "publish")
@@ -151,3 +158,48 @@ class TestTimingCollector:
         assert isinstance(payload, list)
         assert len(payload) == 1
         assert payload[0]["session_id"] == collector.session_id
+
+    def test_flush_ignores_non_list_payload(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+
+        output_dir = tmp_path / ".temp" / "timing"
+        output_dir.mkdir(parents = True, exist_ok = True)
+        data_path = output_dir / "timing_data.json"
+        data_path.write_text(json.dumps({"unexpected": "shape"}), encoding = "utf-8")
+
+        collector = TimingCollector("portable", "verify")
+        collector.record(
+            key = "default",
+            operation_type = "web_find",
+            description = "web_find(ID, submit)",
+            configured_timeout = 5.0,
+            effective_timeout = 5.0,
+            actual_duration = 0.1,
+            attempt_index = 0,
+            success = True,
+        )
+
+        file_path = collector.flush()
+
+        assert file_path is not None
+        payload = json.loads(file_path.read_text(encoding = "utf-8"))
+        assert isinstance(payload, list)
+        assert len(payload) == 1
+        assert payload[0]["session_id"] == collector.session_id
+
+    def test_flush_returns_none_when_write_raises(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        collector = TimingCollector("portable", "verify")
+        collector.record(
+            key = "default",
+            operation_type = "web_find",
+            description = "web_find(ID, submit)",
+            configured_timeout = 5.0,
+            effective_timeout = 5.0,
+            actual_duration = 0.1,
+            attempt_index = 0,
+            success = True,
+        )
+
+        with patch.object(Path, "mkdir", side_effect = OSError("cannot create dir")):
+            assert collector.flush() is None
