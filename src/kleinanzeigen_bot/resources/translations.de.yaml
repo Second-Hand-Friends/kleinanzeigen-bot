@@ -261,6 +261,7 @@ kleinanzeigen_bot/__init__.py:
     "You provided no ads selector. Defaulting to \"new\".": "Es wurden keine Anzeigen-Selektor angegeben. Es wird \"new\" verwendet."
     "You provided no ads selector. Defaulting to \"changed\".": "Es wurden keine Anzeigen-Selektor angegeben. Es wird \"changed\" verwendet."
     "Unknown command: %s": "Unbekannter Befehl: %s"
+    "Timing collector flush failed: %s": "Zeitmessdaten konnten nicht gespeichert werden: %s"
 
   fill_login_data_and_send:
     "Logging in as [%s]...": "Anmeldung als [%s]..."
@@ -527,6 +528,9 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "Last page reached (no enabled 'Naechste' button found).": "Letzte Seite erreicht (kein aktivierter 'Naechste'-Button gefunden)."
     "No pagination controls found. Assuming last page.": "Keine Paginierungssteuerung gefunden. Es wird von der letzten Seite ausgegangen."
 
+  _record_timing:
+    "Timing collector failed for key=%s operation=%s: %s": "Zeitmessung fehlgeschlagen für key=%s operation=%s: %s"
+
   close_browser_session:
     "Closing Browser session...": "Schließe Browser-Sitzung..."
 
@@ -684,6 +688,15 @@ kleinanzeigen_bot/utils/diagnostics.py:
     "Diagnostics saved: %s": "Diagnosedaten gespeichert: %s"
     "Diagnostics capture attempted but no artifacts were saved (all captures failed)": "Diagnoseerfassung versucht, aber keine Artefakte gespeichert (alle Erfassungen fehlgeschlagen)"
     "Diagnostics capture failed: %s": "Diagnoseerfassung fehlgeschlagen: %s"
+
+#################################################
+kleinanzeigen_bot/utils/timing_collector.py:
+#################################################
+  _load_existing_sessions:
+    "Unable to load timing collection data from %s: %s": "Zeitmessdaten aus %s konnten nicht geladen werden: %s"
+
+  flush:
+    "Failed to flush timing collection data: %s": "Zeitmessdaten konnten nicht gespeichert werden: %s"
 
 #################################################
 kleinanzeigen_bot/utils/xdg_paths.py:

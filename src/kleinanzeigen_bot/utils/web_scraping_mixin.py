@@ -183,6 +183,36 @@ class WebScrapingMixin:
         # Always perform the initial attempt plus the configured number of retries.
         return 1 + cfg.retry_max_attempts
 
+    def _record_timing(
+        self,
+        *,
+        key:str,
+        description:str,
+        configured_timeout:float,
+        effective_timeout:float,
+        actual_duration:float,
+        retry_count:int,
+        success:bool,
+    ) -> None:
+        collector = getattr(self, "_timing_collector", None)
+        if collector is None:
+            return
+
+        operation_type = description.split("(", 1)[0] if "(" in description else description
+        try:
+            collector.record(
+                key = key,
+                operation_type = operation_type,
+                description = description,
+                configured_timeout = configured_timeout,
+                effective_timeout = effective_timeout,
+                actual_duration = actual_duration,
+                retry_count = retry_count,
+                success = success,
+            )
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("Timing collector failed for key=%s operation=%s: %s", key, operation_type, exc)
+
     async def _run_with_timeout_retries(
         self, operation:Callable[[float], Awaitable[T]], *, description:str, key:str = "default", override:float | None = None
     ) -> T:
@@ -190,12 +220,34 @@ class WebScrapingMixin:
         Execute an async callable with retry/backoff handling for TimeoutError.
         """
         attempts = self._timeout_attempts()
+        configured_timeout = self._timeout(key, override)
+        loop = asyncio.get_running_loop()
 
         for attempt in range(attempts):
             effective_timeout = self._effective_timeout(key, override, attempt = attempt)
+            attempt_started = loop.time()
             try:
-                return await operation(effective_timeout)
+                result = await operation(effective_timeout)
+                self._record_timing(
+                    key = key,
+                    description = description,
+                    configured_timeout = configured_timeout,
+                    effective_timeout = effective_timeout,
+                    actual_duration = loop.time() - attempt_started,
+                    retry_count = attempt,
+                    success = True,
+                )
+                return result
             except TimeoutError:
+                self._record_timing(
+                    key = key,
+                    description = description,
+                    configured_timeout = configured_timeout,
+                    effective_timeout = effective_timeout,
+                    actual_duration = loop.time() - attempt_started,
+                    retry_count = attempt,
+                    success = False,
+                )
                 if attempt >= attempts - 1:
                     raise
                 LOG.debug("Retrying %s after TimeoutError (attempt %d/%d, timeout %.1fs)", description, attempt + 1, attempts, effective_timeout)
