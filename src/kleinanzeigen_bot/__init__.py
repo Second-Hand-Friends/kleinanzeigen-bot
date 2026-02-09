@@ -198,7 +198,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     def _workspace_or_raise(self) -> xdg_paths.Workspace:
         if self.workspace is None:
-            raise AssertionError("Workspace must be resolved before command execution")
+            raise AssertionError(_("Workspace must be resolved before command execution"))
         return self.workspace
 
     @property

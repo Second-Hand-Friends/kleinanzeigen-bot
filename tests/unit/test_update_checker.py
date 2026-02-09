@@ -6,24 +6,22 @@ from __future__ import annotations
 
 import json
 import logging
-import tempfile
 from datetime import datetime, timedelta, timezone, tzinfo
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, cast
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from pytest_mock import MockerFixture
 
 from kleinanzeigen_bot.model import update_check_state as update_check_state_module
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.model.update_check_state import UpdateCheckState
 from kleinanzeigen_bot.update_checker import UpdateChecker
-
-DEFAULT_STATE_FILE:Final[Path] = Path(tempfile.gettempdir()) / "kleinanzeigen-bot-test-update-check-state.json"
 
 
 def _freeze_update_state_datetime(monkeypatch:pytest.MonkeyPatch, fixed_now:datetime) -> None:
@@ -80,20 +78,20 @@ def state_file(tmp_path:Path) -> Path:
 class TestUpdateChecker:
     """Tests for the update checker functionality."""
 
-    def test_get_local_version(self, config:Config) -> None:
+    def test_get_local_version(self, config:Config, state_file:Path) -> None:
         """Test that the local version is correctly retrieved."""
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         assert checker.get_local_version() is not None
 
-    def test_get_commit_hash(self, config:Config) -> None:
+    def test_get_commit_hash(self, config:Config, state_file:Path) -> None:
         """Test that the commit hash is correctly extracted from the version string."""
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         assert checker._get_commit_hash("2025+fb00f11") == "fb00f11"
         assert checker._get_commit_hash("2025") is None
 
-    def test_resolve_commitish(self, config:Config) -> None:
+    def test_resolve_commitish(self, config:Config, state_file:Path) -> None:
         """Test that a commit-ish is resolved to a full hash and date."""
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         with patch(
             "requests.get",
             return_value = MagicMock(json = lambda: {"sha": "e7a3d46", "commit": {"author": {"date": "2025-05-18T00:00:00Z"}}})
@@ -102,10 +100,10 @@ class TestUpdateChecker:
             assert commit_hash == "e7a3d46"
             assert commit_date == datetime(2025, 5, 18, tzinfo = timezone.utc)
 
-    def test_request_timeout_uses_config(self, config:Config, mocker:"MockerFixture") -> None:
+    def test_request_timeout_uses_config(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
         """Ensure HTTP calls honor the timeout configuration."""
         config.timeouts.multiplier = 1.5
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         mock_response = MagicMock(json = lambda: {"sha": "abc", "commit": {"author": {"date": "2025-05-18T00:00:00Z"}}})
         mock_get = mocker.patch("requests.get", return_value = mock_response)
 
@@ -114,9 +112,9 @@ class TestUpdateChecker:
         expected_timeout = config.timeouts.effective("update_check")
         assert mock_get.call_args.kwargs["timeout"] == expected_timeout
 
-    def test_resolve_commitish_no_commit(self, config:Config, mocker:"MockerFixture") -> None:
+    def test_resolve_commitish_no_commit(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
         """Test resolving a commit-ish when the API returns no commit data."""
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"sha": "abc"}))
         commit_hash, commit_date = checker._resolve_commitish("sha")
         assert commit_hash == "abc"
@@ -125,11 +123,12 @@ class TestUpdateChecker:
     def test_resolve_commitish_logs_warning_on_exception(
         self,
         config:Config,
+        state_file:Path,
         caplog:pytest.LogCaptureFixture
     ) -> None:
         """Test resolving a commit-ish logs a warning when the request fails."""
         caplog.set_level("WARNING", logger = "kleinanzeigen_bot.update_checker")
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         with patch("requests.get", side_effect = Exception("boom")):
             commit_hash, commit_date = checker._resolve_commitish("sha")
 
@@ -137,22 +136,22 @@ class TestUpdateChecker:
         assert commit_date is None
         assert any("Could not resolve commit 'sha': boom" in r.getMessage() for r in caplog.records)
 
-    def test_commits_match_short_hash(self, config:Config) -> None:
+    def test_commits_match_short_hash(self, config:Config, state_file:Path) -> None:
         """Test that short commit hashes are treated as matching prefixes."""
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         assert checker._commits_match("abc1234", "abc1234def5678") is True
 
-    def test_check_for_updates_disabled(self, config:Config) -> None:
+    def test_check_for_updates_disabled(self, config:Config, state_file:Path) -> None:
         """Test that the update checker does not check for updates if disabled."""
         config.update_check.enabled = False
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         with patch("requests.get") as mock_get:
             checker.check_for_updates()
             mock_get.assert_not_called()
 
-    def test_check_for_updates_no_local_version(self, config:Config) -> None:
+    def test_check_for_updates_no_local_version(self, config:Config, state_file:Path) -> None:
         """Test that the update checker handles the case where the local version cannot be determined."""
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         with patch.object(UpdateCheckState, "should_check", return_value = True), \
                 patch.object(UpdateChecker, "get_local_version", return_value = None):
             checker.check_for_updates()  # Should not raise exception
@@ -160,38 +159,40 @@ class TestUpdateChecker:
     def test_check_for_updates_logs_missing_local_version(
         self,
         config:Config,
+        state_file:Path,
         caplog:pytest.LogCaptureFixture
     ) -> None:
         """Test that the update checker logs a warning when the local version is missing."""
         caplog.set_level("WARNING", logger = "kleinanzeigen_bot.update_checker")
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         with patch.object(UpdateCheckState, "should_check", return_value = True), \
                 patch.object(UpdateChecker, "get_local_version", return_value = None):
             checker.check_for_updates()
 
         assert any("Could not determine local version." in r.getMessage() for r in caplog.records)
 
-    def test_check_for_updates_no_commit_hash(self, config:Config) -> None:
+    def test_check_for_updates_no_commit_hash(self, config:Config, state_file:Path) -> None:
         """Test that the update checker handles the case where the commit hash cannot be extracted."""
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         with patch.object(UpdateChecker, "get_local_version", return_value = "2025"):
             checker.check_for_updates()  # Should not raise exception
 
-    def test_check_for_updates_no_releases(self, config:Config) -> None:
+    def test_check_for_updates_no_releases(self, config:Config, state_file:Path) -> None:
         """Test that the update checker handles the case where no releases are found."""
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         with patch("requests.get", return_value = MagicMock(json = list)):
             checker.check_for_updates()  # Should not raise exception
 
-    def test_check_for_updates_api_error(self, config:Config) -> None:
+    def test_check_for_updates_api_error(self, config:Config, state_file:Path) -> None:
         """Test that the update checker handles API errors gracefully."""
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         with patch("requests.get", side_effect = Exception("API Error")):
             checker.check_for_updates()  # Should not raise exception
 
     def test_check_for_updates_latest_prerelease_warning(
         self,
         config:Config,
+        state_file:Path,
         mocker:"MockerFixture",
         caplog:pytest.LogCaptureFixture
     ) -> None:
@@ -206,13 +207,13 @@ class TestUpdateChecker:
             return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": True})
         )
 
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         checker.check_for_updates()
 
         expected = "Latest release from GitHub is a prerelease, but 'latest' channel expects a stable release."
         assert any(expected in r.getMessage() for r in caplog.records)
 
-    def test_check_for_updates_ahead(self, config:Config, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
+    def test_check_for_updates_ahead(self, config:Config, state_file:Path, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
         """Test that the update checker correctly identifies when the local version is ahead of the latest release."""
         caplog.set_level("INFO", logger = "kleinanzeigen_bot.update_checker")
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
@@ -234,7 +235,7 @@ class TestUpdateChecker:
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
 
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         checker.check_for_updates()
 
         print("LOG RECORDS:")
@@ -247,7 +248,7 @@ class TestUpdateChecker:
         )
         assert any(expected in r.getMessage() for r in caplog.records)
 
-    def test_check_for_updates_preview(self, config:Config, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
+    def test_check_for_updates_preview(self, config:Config, state_file:Path, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
         """Test that the update checker correctly handles preview releases."""
         caplog.set_level("INFO", logger = "kleinanzeigen_bot.update_checker")
         config.update_check.channel = "preview"
@@ -270,7 +271,7 @@ class TestUpdateChecker:
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
 
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         checker.check_for_updates()
 
         print("LOG RECORDS:")
@@ -287,6 +288,7 @@ class TestUpdateChecker:
     def test_check_for_updates_preview_missing_prerelease(
         self,
         config:Config,
+        state_file:Path,
         mocker:"MockerFixture",
         caplog:pytest.LogCaptureFixture
     ) -> None:
@@ -302,12 +304,12 @@ class TestUpdateChecker:
             return_value = mocker.Mock(json = lambda: [{"tag_name": "v1", "prerelease": False, "draft": False}])
         )
 
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         checker.check_for_updates()
 
         assert any("No prerelease found for 'preview' channel." in r.getMessage() for r in caplog.records)
 
-    def test_check_for_updates_behind(self, config:Config, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
+    def test_check_for_updates_behind(self, config:Config, state_file:Path, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
         """Test that the update checker correctly identifies when the local version is behind the latest release."""
         caplog.set_level("INFO", logger = "kleinanzeigen_bot.update_checker")
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
@@ -329,7 +331,7 @@ class TestUpdateChecker:
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
 
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         checker.check_for_updates()
 
         print("LOG RECORDS:")
@@ -342,6 +344,7 @@ class TestUpdateChecker:
     def test_check_for_updates_logs_release_notes(
         self,
         config:Config,
+        state_file:Path,
         mocker:"MockerFixture",
         caplog:pytest.LogCaptureFixture
     ) -> None:
@@ -366,12 +369,12 @@ class TestUpdateChecker:
             )
         )
 
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         checker.check_for_updates()
 
         assert any("Release notes:\nRelease notes here" in r.getMessage() for r in caplog.records)
 
-    def test_check_for_updates_same(self, config:Config, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
+    def test_check_for_updates_same(self, config:Config, state_file:Path, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
         """Test that the update checker correctly identifies when the local version is the same as the latest release."""
         caplog.set_level("INFO", logger = "kleinanzeigen_bot.update_checker")
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
@@ -393,7 +396,7 @@ class TestUpdateChecker:
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
 
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         checker.check_for_updates()
 
         print("LOG RECORDS:")
@@ -406,6 +409,7 @@ class TestUpdateChecker:
     def test_check_for_updates_unknown_channel(
         self,
         config:Config,
+        state_file:Path,
         mocker:"MockerFixture",
         caplog:pytest.LogCaptureFixture
     ) -> None:
@@ -417,7 +421,7 @@ class TestUpdateChecker:
         mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
         mock_get = mocker.patch("requests.get")
 
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         checker.check_for_updates()
 
         mock_get.assert_not_called()
@@ -426,6 +430,7 @@ class TestUpdateChecker:
     def test_check_for_updates_respects_interval_gate(
         self,
         config:Config,
+        state_file:Path,
         caplog:pytest.LogCaptureFixture
     ) -> None:
         """Ensure the interval guard short-circuits update checks without touching the network."""
@@ -434,7 +439,7 @@ class TestUpdateChecker:
         with patch.object(UpdateCheckState, "should_check", return_value = False) as should_check_mock, \
                 patch.object(UpdateCheckState, "update_last_check") as update_last_check_mock, \
                 patch("requests.get") as mock_get:
-            checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+            checker = UpdateChecker(config, state_file)
             checker.check_for_updates()
 
         should_check_mock.assert_called_once()
@@ -605,33 +610,33 @@ class TestUpdateChecker:
         # Should not raise
         state.save(state_file)
 
-    def test_resolve_commitish_no_author(self, config:Config, mocker:"MockerFixture") -> None:
+    def test_resolve_commitish_no_author(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
         """Test resolving a commit-ish when the API returns no author key."""
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"sha": "abc", "commit": {}}))
         commit_hash, commit_date = checker._resolve_commitish("sha")
         assert commit_hash == "abc"
         assert commit_date is None
 
-    def test_resolve_commitish_no_date(self, config:Config, mocker:"MockerFixture") -> None:
+    def test_resolve_commitish_no_date(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
         """Test resolving a commit-ish when the API returns no date key."""
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"sha": "abc", "commit": {"author": {}}}))
         commit_hash, commit_date = checker._resolve_commitish("sha")
         assert commit_hash == "abc"
         assert commit_date is None
 
-    def test_resolve_commitish_list_instead_of_dict(self, config:Config, mocker:"MockerFixture") -> None:
+    def test_resolve_commitish_list_instead_of_dict(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
         """Test resolving a commit-ish when the API returns a list instead of dict."""
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         mocker.patch("requests.get", return_value = mocker.Mock(json = list))
         commit_hash, commit_date = checker._resolve_commitish("sha")
         assert commit_hash is None
         assert commit_date is None
 
-    def test_check_for_updates_missing_release_commitish(self, config:Config, mocker:"MockerFixture") -> None:
+    def test_check_for_updates_missing_release_commitish(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
         """Test check_for_updates handles missing release commit-ish."""
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
         mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
@@ -641,21 +646,21 @@ class TestUpdateChecker:
         )
         checker.check_for_updates()  # Should not raise
 
-    def test_check_for_updates_no_releases_empty(self, config:Config, mocker:"MockerFixture") -> None:
+    def test_check_for_updates_no_releases_empty(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
         """Test check_for_updates handles no releases found (API returns empty list)."""
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         mocker.patch("requests.get", return_value = mocker.Mock(json = list))
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
         checker.check_for_updates()  # Should not raise
 
-    def test_check_for_updates_no_commit_hash_extracted(self, config:Config, mocker:"MockerFixture") -> None:
+    def test_check_for_updates_no_commit_hash_extracted(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
         """Test check_for_updates handles no commit hash extracted."""
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025")
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
         checker.check_for_updates()  # Should not raise
 
-    def test_check_for_updates_no_commit_dates(self, config:Config, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
+    def test_check_for_updates_no_commit_dates(self, config:Config, state_file:Path, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
         """Test check_for_updates logs warning if commit dates cannot be determined."""
         caplog.set_level("WARNING", logger = "kleinanzeigen_bot.update_checker")
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
@@ -669,7 +674,7 @@ class TestUpdateChecker:
                 json = lambda: {"tag_name": "latest", "prerelease": False}
             )
         )
-        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
+        checker = UpdateChecker(config, state_file)
         checker.check_for_updates()
         assert any("Could not determine commit dates for comparison." in r.getMessage() for r in caplog.records)
 

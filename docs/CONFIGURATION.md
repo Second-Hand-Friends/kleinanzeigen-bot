@@ -304,7 +304,7 @@ The bot uses a layered approach to detect login state, prioritizing stealth over
 
 **Output locations (default):**
 
-- **Portable mode + `--config /path/to/config.yaml`**: `/path/to/.temp/diagnostics/`
+- **Portable mode + `--config /path/to/config.yaml`**: `./.temp/diagnostics/` (`--config` only selects the config file and does not relocate portable runtime files)
 - **Portable mode without `--config`**: `./.temp/diagnostics/`
 - **User directories mode**: `~/.cache/kleinanzeigen-bot/diagnostics/` (Linux), `~/Library/Caches/kleinanzeigen-bot/diagnostics/` (macOS), or `%LOCALAPPDATA%\kleinanzeigen-bot\Cache\diagnostics\` (Windows)
 - **Custom**: Path resolved relative to your `config.yaml` if `output_dir` is specified

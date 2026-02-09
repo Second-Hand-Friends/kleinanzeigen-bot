@@ -25,6 +25,8 @@ kleinanzeigen_bot/__init__.py:
     "Direct execution not supported. Use 'pdm run app'": "Direkte Ausführung nicht unterstützt. Bitte 'pdm run app' verwenden"
   create_default_config:
     "Config file %s already exists. Aborting creation.": "Konfigurationsdatei %s existiert bereits. Erstellung abgebrochen."
+  _workspace_or_raise:
+    "Workspace must be resolved before command execution": "Arbeitsbereich muss vor der Befehlsausführung aufgelöst werden"
 
   configure_file_logging:
     "Logging to [%s]...": "Protokollierung in [%s]..."
@@ -702,3 +704,12 @@ kleinanzeigen_bot/utils/xdg_paths.py:
     "Invalid choice. Please enter 1 or 2.": "Ungültige Auswahl. Bitte 1 oder 2 eingeben."
   resolve_workspace:
     "Workspace mode and config path must be resolved when --config is supplied": "Arbeitsmodus und Konfigurationspfad müssen aufgelöst sein, wenn --config verwendet wird"
+  _format_hits:
+    "none": "keine"
+  _workspace_mode_resolution_error:
+    ? "Cannot determine workspace mode for --config=%(config_file)s. Use --workspace-mode=portable or --workspace-mode=xdg.\nFor cleanup guidance, see: %(url)s"
+    : "Arbeitsmodus für --config=%(config_file)s konnte nicht bestimmt werden. Verwende --workspace-mode=portable oder --workspace-mode=xdg.\nHinweise zur Bereinigung: %(url)s"
+    "Portable footprint hits": "Gefundene portable Spuren"
+    "XDG footprint hits": "Gefundene XDG-Spuren"
+    "Detected both portable and XDG footprints.": "Sowohl portable als auch XDG-Spuren wurden gefunden."
+    "Detected neither portable nor XDG footprints.": "Weder portable noch XDG-Spuren wurden gefunden."

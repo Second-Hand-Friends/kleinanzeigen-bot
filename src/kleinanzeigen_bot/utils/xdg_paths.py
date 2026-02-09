@@ -218,20 +218,22 @@ def _workspace_mode_resolution_error(
 ) -> ValueError:
     def _format_hits(label:str, hits:list[Path]) -> str:
         if not hits:
-            return f"{label}: none"
+            return f"{label}: {_('none')}"
         deduped = list(dict.fromkeys(hits))
         return f"{label}:\n- " + "\n- ".join(str(hit) for hit in deduped)
 
-    guidance = (
-        f"Cannot determine workspace mode for --config={config_file}. "
+    guidance = _(
+        "Cannot determine workspace mode for --config=%(config_file)s. "
         "Use --workspace-mode=portable or --workspace-mode=xdg.\n"
-        "For cleanup guidance, see: "
-        "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/docs/CONFIGURATION.md#installation-modes"
-    )
-    details = f"{_format_hits('Portable footprint hits', portable_hits)}\n{_format_hits('XDG footprint hits', xdg_hits)}"
+        "For cleanup guidance, see: %(url)s"
+    ) % {
+        "config_file": config_file,
+        "url": "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/docs/CONFIGURATION.md#installation-modes",
+    }
+    details = f"{_format_hits(_('Portable footprint hits'), portable_hits)}\n{_format_hits(_('XDG footprint hits'), xdg_hits)}"
     if detected_mode == "ambiguous":
-        return ValueError(f"{guidance}\nDetected both portable and XDG footprints.\n{details}")
-    return ValueError(f"{guidance}\nDetected neither portable nor XDG footprints.\n{details}")
+        return ValueError(f"{guidance}\n{_('Detected both portable and XDG footprints.')}\n{details}")
+    return ValueError(f"{guidance}\n{_('Detected neither portable nor XDG footprints.')}\n{details}")
 
 
 def resolve_workspace(
