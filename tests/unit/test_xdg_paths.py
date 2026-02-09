@@ -5,6 +5,7 @@
 """Unit tests for workspace/path resolution."""
 
 import io
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -144,7 +145,7 @@ class TestWorkspace:
     def test_ensure_directory_raises_when_target_is_not_directory(self, tmp_path:Path) -> None:
         target = tmp_path / "created"
 
-        with patch.object(Path, "is_dir", return_value = False), pytest.raises(NotADirectoryError, match = str(target)):
+        with patch.object(Path, "is_dir", return_value = False), pytest.raises(NotADirectoryError, match = re.escape(str(target))):
             xdg_paths.ensure_directory(target, "test directory")
 
     def test_for_config_derives_portable_layout(self, tmp_path:Path) -> None:
