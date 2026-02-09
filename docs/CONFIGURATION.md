@@ -304,8 +304,8 @@ The bot uses a layered approach to detect login state, prioritizing stealth over
 
 **Output locations (default):**
 
-- **Portable mode + `--config /path/to/config.yaml`**: `./.temp/diagnostics/` (`--config` only selects the config file and does not relocate portable runtime files)
-- **Portable mode without `--config`**: `./.temp/diagnostics/`
+- **Portable mode + `--config /path/to/config.yaml`**: `/path/to/.temp/diagnostics/` (portable runtime files are placed next to the selected config file)
+- **Portable mode without `--config`**: `./.temp/diagnostics/` (current working directory)
 - **User directories mode**: `~/.cache/kleinanzeigen-bot/diagnostics/` (Linux), `~/Library/Caches/kleinanzeigen-bot/diagnostics/` (macOS), or `%LOCALAPPDATA%\kleinanzeigen-bot\Cache\diagnostics\` (Windows)
 - **Custom**: Path resolved relative to your `config.yaml` if `output_dir` is specified
 
@@ -353,7 +353,7 @@ kleinanzeigen-bot --workspace-mode=xdg --config /path/to/config.yaml verify
 
 Then remove the unused footprint directories/files to make auto-detection unambiguous for future runs.
 
-- Remove **portable footprint** items in your working location: `config.yaml`, `.temp/` (Windows: `.temp\`), and `downloaded-ads/` (Windows: `downloaded-ads\`).
+- Remove **portable footprint** items in your working location: `config.yaml`, `.temp/` (Windows: `.temp\`), and `downloaded-ads/` (Windows: `downloaded-ads\`). Back up or move `config.yaml` to your desired location before deleting it.
 - Remove **user directories footprint** items:
   Linux: `~/.config/kleinanzeigen-bot/`, `~/.local/state/kleinanzeigen-bot/`, `~/.cache/kleinanzeigen-bot/`.
   macOS: `~/Library/Application Support/kleinanzeigen-bot/`, `~/Library/Caches/kleinanzeigen-bot/`.

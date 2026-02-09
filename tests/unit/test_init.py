@@ -133,6 +133,13 @@ class TestKleinanzeigenBotInitialization:
         test_bot._resolve_workspace()
         assert test_bot.workspace is None
 
+    def test_resolve_workspace_skips_create_config(self, test_bot:KleinanzeigenBot) -> None:
+        """Ensure workspace resolution returns early for create-config."""
+        test_bot.command = "create-config"
+        test_bot.workspace = None
+        test_bot._resolve_workspace()
+        assert test_bot.workspace is None
+
     def test_resolve_workspace_exits_on_workspace_resolution_error(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
         """Workspace resolution errors should terminate with code 2."""
         caplog.set_level(logging.ERROR)
@@ -233,6 +240,16 @@ class TestKleinanzeigenBotInitialization:
             test_bot._resolve_workspace()
 
         assert captured_mode["value"] == "portable"
+
+    def test_create_default_config_creates_parent_without_workspace(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """create_default_config should create parent directories when no workspace is set."""
+        config_path = tmp_path / "nested" / "config.yaml"
+        test_bot.workspace = None
+        test_bot.config_file_path = str(config_path)
+
+        test_bot.create_default_config()
+
+        assert config_path.exists()
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("command", ["verify", "update-check", "update-content-hash", "publish", "delete", "download"])

@@ -209,7 +209,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         """
         Resolve workspace paths after CLI args are parsed.
         """
-        if self.command in {"help", "version"}:
+        if self.command in {"help", "version", "create-config"}:
             return
         effective_config_arg = self._config_arg
         effective_workspace_mode = self._workspace_mode_arg
@@ -588,8 +588,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if os.path.exists(self.config_file_path):
             LOG.error("Config file %s already exists. Aborting creation.", self.config_file_path)
             return
-        if self.workspace:
-            xdg_paths.ensure_directory(self.workspace.config_file.parent, "config directory")
+        config_parent = self.workspace.config_file.parent if self.workspace else Path(self.config_file_path).parent
+        xdg_paths.ensure_directory(config_parent, "config directory")
         default_config = Config.model_construct()
         default_config.login.username = "changeme"  # noqa: S105 placeholder for default config, not a real username
         default_config.login.password = "changeme"  # noqa: S105 placeholder for default config, not a real password

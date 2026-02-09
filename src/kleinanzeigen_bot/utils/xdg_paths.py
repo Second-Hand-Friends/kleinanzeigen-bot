@@ -187,7 +187,7 @@ def _detect_mode_from_footprints_with_hits(
 
     if config_in_xdg_tree:
         xdg_hits.append(config_file)
-    if (xdg_config_dir / "config.yaml").exists():
+    if not config_in_xdg_tree and (xdg_config_dir / "config.yaml").exists():
         xdg_hits.append((xdg_config_dir / "config.yaml").resolve())
     if (xdg_config_dir / "downloaded-ads").exists():
         xdg_hits.append((xdg_config_dir / "downloaded-ads").resolve())
