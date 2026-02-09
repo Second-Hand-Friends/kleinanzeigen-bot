@@ -96,6 +96,7 @@ class TestWorkspace:
         ws = xdg_paths.resolve_workspace(
             config_arg = str(config_path),
             logfile_arg = None,
+            workspace_mode = "portable",
             logfile_explicitly_provided = False,
             log_basename = "kleinanzeigen-bot",
         )
@@ -115,7 +116,7 @@ class TestWorkspace:
             }[category],
         )
 
-        ws = xdg_paths.resolve_workspace(None, None, logfile_explicitly_provided = False, log_basename = "kleinanzeigen-bot")
+        ws = xdg_paths.resolve_workspace(None, None, workspace_mode = None, logfile_explicitly_provided = False, log_basename = "kleinanzeigen-bot")
 
         assert ws.config_file == (tmp_path / "xdg-config" / xdg_paths.APP_NAME / "config.yaml").resolve()
         assert ws.log_file == (tmp_path / "xdg-config" / xdg_paths.APP_NAME / "kleinanzeigen-bot.log").resolve()
@@ -127,7 +128,7 @@ class TestWorkspace:
         monkeypatch.setattr(xdg_paths, "detect_installation_mode", lambda: None)
         monkeypatch.setattr(xdg_paths, "prompt_installation_mode", lambda: "portable")
 
-        ws = xdg_paths.resolve_workspace(None, None, logfile_explicitly_provided = False, log_basename = "kleinanzeigen-bot")
+        ws = xdg_paths.resolve_workspace(None, None, workspace_mode = None, logfile_explicitly_provided = False, log_basename = "kleinanzeigen-bot")
 
         assert ws.config_file == (Path.cwd() / "config.yaml").resolve()
 
@@ -138,6 +139,7 @@ class TestWorkspace:
         ws = xdg_paths.resolve_workspace(
             config_arg = str(config_path),
             logfile_arg = str(explicit_log),
+            workspace_mode = "portable",
             logfile_explicitly_provided = True,
             log_basename = "kleinanzeigen-bot",
         )
@@ -148,8 +150,58 @@ class TestWorkspace:
         ws = xdg_paths.resolve_workspace(
             config_arg = str(tmp_path / "config.yaml"),
             logfile_arg = "",
+            workspace_mode = "portable",
             logfile_explicitly_provided = True,
             log_basename = "kleinanzeigen-bot",
         )
 
         assert ws.log_file is None
+
+    def test_resolve_workspace_fails_when_config_mode_is_ambiguous(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        config_path = tmp_path / "cfg" / "config.yaml"
+        config_path.parent.mkdir(parents = True, exist_ok = True)
+        config_path.touch()
+
+        cwd_config = tmp_path / "cwd" / "config.yaml"
+        cwd_config.parent.mkdir(parents = True, exist_ok = True)
+        cwd_config.touch()
+        monkeypatch.chdir(cwd_config.parent)
+
+        monkeypatch.setattr("platformdirs.user_config_dir", lambda app_name, *args, **kwargs: str(tmp_path / "xdg-config" / app_name))
+        monkeypatch.setattr("platformdirs.user_state_dir", lambda app_name, *args, **kwargs: str(tmp_path / "xdg-state" / app_name))
+        monkeypatch.setattr("platformdirs.user_cache_dir", lambda app_name, *args, **kwargs: str(tmp_path / "xdg-cache" / app_name))
+        (tmp_path / "xdg-config" / xdg_paths.APP_NAME / "config.yaml").parent.mkdir(parents = True, exist_ok = True)
+        (tmp_path / "xdg-config" / xdg_paths.APP_NAME / "config.yaml").touch()
+
+        with pytest.raises(ValueError, match = "Detected both portable and XDG footprints") as exc_info:
+            xdg_paths.resolve_workspace(
+                config_arg = str(config_path),
+                logfile_arg = None,
+                workspace_mode = None,
+                logfile_explicitly_provided = False,
+                log_basename = "kleinanzeigen-bot",
+            )
+        assert str(cwd_config.resolve()) in str(exc_info.value)
+        assert str((tmp_path / "xdg-config" / xdg_paths.APP_NAME / "config.yaml").resolve()) in str(exc_info.value)
+
+    def test_resolve_workspace_fails_when_config_mode_is_unknown(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        config_path = tmp_path / "cfg" / "config.yaml"
+        config_path.parent.mkdir(parents = True, exist_ok = True)
+        config_path.touch()
+        (tmp_path / "cwd").mkdir(parents = True, exist_ok = True)
+        monkeypatch.chdir(tmp_path / "cwd")
+
+        monkeypatch.setattr("platformdirs.user_config_dir", lambda app_name, *args, **kwargs: str(tmp_path / "xdg-config" / app_name))
+        monkeypatch.setattr("platformdirs.user_state_dir", lambda app_name, *args, **kwargs: str(tmp_path / "xdg-state" / app_name))
+        monkeypatch.setattr("platformdirs.user_cache_dir", lambda app_name, *args, **kwargs: str(tmp_path / "xdg-cache" / app_name))
+
+        with pytest.raises(ValueError, match = "Detected neither portable nor XDG footprints") as exc_info:
+            xdg_paths.resolve_workspace(
+                config_arg = str(config_path),
+                logfile_arg = None,
+                workspace_mode = None,
+                logfile_explicitly_provided = False,
+                log_basename = "kleinanzeigen-bot",
+            )
+        assert "Portable footprint hits: none" in str(exc_info.value)
+        assert "XDG footprint hits: none" in str(exc_info.value)

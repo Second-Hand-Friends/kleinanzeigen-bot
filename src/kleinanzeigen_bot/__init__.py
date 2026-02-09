@@ -7,7 +7,7 @@ import urllib.parse as urllib_parse
 from datetime import datetime
 from gettext import gettext as _
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 import certifi, colorama, nodriver  # isort: skip
 from nodriver.core.connection import ProtocolException
@@ -171,6 +171,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self.config_file_path = abspath("config.yaml")
         self.workspace:xdg_paths.Workspace | None = None
         self._config_arg:str | None = None
+        self._workspace_mode_arg:xdg_paths.InstallationMode | None = None
 
         self.categories:dict[str, str] = {}
 
@@ -211,19 +212,26 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if self.command in {"help", "version"}:
             return
         effective_config_arg = self._config_arg
+        effective_workspace_mode = self._workspace_mode_arg
         if not effective_config_arg:
             default_config = (Path.cwd() / "config.yaml").resolve()
-            if self.command == "create-config":
-                effective_config_arg = str(default_config)
-            elif self.config_file_path and Path(self.config_file_path).resolve() != default_config:
+            if self.config_file_path and Path(self.config_file_path).resolve() != default_config:
                 effective_config_arg = self.config_file_path
+                if effective_workspace_mode is None:
+                    # Backward compatibility for tests/programmatic assignment of config_file_path.
+                    effective_workspace_mode = "portable"
 
-        self.workspace = xdg_paths.resolve_workspace(
-            config_arg = effective_config_arg,
-            logfile_arg = self._logfile_arg,
-            logfile_explicitly_provided = self._logfile_explicitly_provided,
-            log_basename = self._log_basename,
-        )
+        try:
+            self.workspace = xdg_paths.resolve_workspace(
+                config_arg = effective_config_arg,
+                logfile_arg = self._logfile_arg,
+                workspace_mode = effective_workspace_mode,
+                logfile_explicitly_provided = self._logfile_explicitly_provided,
+                log_basename = self._log_basename,
+            )
+        except ValueError as exc:
+            LOG.error(str(exc))
+            sys.exit(2)
 
         xdg_paths.ensure_directory(self.workspace.config_file.parent, "config directory")
 
@@ -231,6 +239,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self.log_file_path = str(self.workspace.log_file) if self.workspace.log_file else None
 
         LOG.info("Config:    %s", self.workspace.config_file)
+        LOG.info("Workspace mode: %s", self.workspace.mode)
         LOG.info("Workspace: %s", self.workspace.config_dir)
         if loggers.is_debug(LOG):
             LOG.debug("Log file:        %s", self.workspace.log_file)
@@ -437,8 +446,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     Mit dieser Option können Sie bestimmte Anzeigen-IDs angeben, z. B. "--ads=1,2,3"
               --force           - Alias für '--ads=all'
               --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
-              --config=<PATH>   - Pfad zur YAML- oder JSON-Konfigurationsdatei; abgeleitete Pfade folgen dem Konfigurationsverzeichnis
-              --logfile=<PATH>  - Pfad zur Protokolldatei (STANDARD: <config-dir>/kleinanzeigen-bot.log)
+              --config=<PATH>   - Pfad zur YAML- oder JSON-Konfigurationsdatei (ändert den Workspace-Modus nicht implizit)
+              --workspace-mode=portable|xdg - Überschreibt den Workspace-Modus für diesen Lauf
+              --logfile=<PATH>  - Pfad zur Protokolldatei (STANDARD: vom aktiven Workspace-Modus abhängig)
               --lang=en|de      - Anzeigesprache (STANDARD: Systemsprache, wenn unterstützt, sonst Englisch)
               -v, --verbose     - Aktiviert detaillierte Ausgabe – nur nützlich zur Fehlerbehebung
             """.rstrip()
@@ -489,8 +499,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     Use this option to specify ad IDs, e.g. "--ads=1,2,3"
               --force           - alias for '--ads=all'
               --keep-old        - don't delete old ads on republication
-              --config=<PATH>   - path to the config YAML or JSON file; derived paths follow the config directory
-              --logfile=<PATH>  - path to the logfile (DEFAULT: <config-dir>/kleinanzeigen-bot.log)
+              --config=<PATH>   - path to the config YAML or JSON file (does not implicitly change workspace mode)
+              --workspace-mode=portable|xdg - overrides workspace mode for this run
+              --logfile=<PATH>  - path to the logfile (DEFAULT: depends on active workspace mode)
               --lang=en|de      - display language (STANDARD: system language if supported, otherwise English)
               -v, --verbose     - enables verbose output - only useful when troubleshooting issues
             """.rstrip()
@@ -499,7 +510,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     def parse_args(self, args:list[str]) -> None:
         try:
-            options, arguments = getopt.gnu_getopt(args[1:], "hv", ["ads=", "config=", "force", "help", "keep-old", "logfile=", "lang=", "verbose"])
+            options, arguments = getopt.gnu_getopt(
+                args[1:],
+                "hv",
+                ["ads=", "config=", "force", "help", "keep-old", "logfile=", "lang=", "verbose", "workspace-mode="],
+            )
         except getopt.error as ex:
             LOG.error(ex.msg)
             LOG.error("Use --help to display available options.")
@@ -520,6 +535,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         self.log_file_path = None
                     self._logfile_arg = value
                     self._logfile_explicitly_provided = True
+                case "--workspace-mode":
+                    mode = value.strip().lower()
+                    if mode not in {"portable", "xdg"}:
+                        LOG.error("Invalid --workspace-mode '%s'. Use 'portable' or 'xdg'.", value)
+                        sys.exit(2)
+                    self._workspace_mode_arg = cast(xdg_paths.InstallationMode, mode)
                 case "--ads":
                     self.ads_selector = value.strip().lower()
                 case "--force":

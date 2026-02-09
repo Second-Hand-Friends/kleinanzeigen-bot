@@ -133,6 +133,20 @@ class TestKleinanzeigenBotInitialization:
         test_bot._resolve_workspace()
         assert test_bot.workspace is None
 
+    def test_resolve_workspace_exits_on_workspace_resolution_error(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
+        """Workspace resolution errors should terminate with code 2."""
+        caplog.set_level(logging.ERROR)
+        test_bot.command = "verify"
+
+        with (
+            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", side_effect = ValueError("workspace error")),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            test_bot._resolve_workspace()
+
+        assert exc_info.value.code == 2
+        assert "workspace error" in caplog.text
+
     @pytest.mark.asyncio
     @pytest.mark.parametrize("command", ["verify", "update-check", "update-content-hash", "publish", "delete", "download"])
     async def test_run_uses_workspace_state_file_for_update_checker(self, test_bot:KleinanzeigenBot, command:str, tmp_path:Path) -> None:
@@ -898,6 +912,17 @@ class TestKleinanzeigenBotArgParsing:
         assert test_bot.log_file_path is not None
         assert "test.log" in test_bot.log_file_path
 
+    def test_parse_args_workspace_mode(self, test_bot:KleinanzeigenBot) -> None:
+        """Test parsing workspace mode option."""
+        test_bot.parse_args(["script.py", "--workspace-mode=xdg", "help"])
+        assert test_bot._workspace_mode_arg == "xdg"
+
+    def test_parse_args_workspace_mode_invalid(self, test_bot:KleinanzeigenBot) -> None:
+        """Test invalid workspace mode exits with error."""
+        with pytest.raises(SystemExit) as exc_info:
+            test_bot.parse_args(["script.py", "--workspace-mode=invalid", "help"])
+        assert exc_info.value.code == 2
+
     def test_parse_args_ads_selector(self, test_bot:KleinanzeigenBot) -> None:
         """Test parsing ads selector."""
         test_bot.parse_args(["script.py", "--ads=all", "publish"])
@@ -935,7 +960,7 @@ class TestKleinanzeigenBotArgParsing:
         assert exc_info.value.code == 2
 
     def test_parse_args_explicit_flags(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-        """Test that explicit flags are set when --config and --logfile options are provided."""
+        """Test that explicit flags are set when config/logfile/workspace options are provided."""
         config_path = tmp_path / "custom_config.yaml"
         log_path = tmp_path / "custom.log"
 
@@ -953,9 +978,11 @@ class TestKleinanzeigenBotArgParsing:
         # Test both flags together
         test_bot._config_arg = None
         test_bot._logfile_explicitly_provided = False
-        test_bot.parse_args(["script.py", "--config", str(config_path), "--logfile", str(log_path), "help"])
+        test_bot._workspace_mode_arg = None
+        test_bot.parse_args(["script.py", "--config", str(config_path), "--logfile", str(log_path), "--workspace-mode", "portable", "help"])
         assert test_bot._config_arg == str(config_path)
         assert test_bot._logfile_explicitly_provided is True
+        assert test_bot._workspace_mode_arg == "portable"
 
 
 class TestKleinanzeigenBotCommands:

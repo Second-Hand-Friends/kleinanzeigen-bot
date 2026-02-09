@@ -10,7 +10,7 @@ import sys
 from dataclasses import dataclass
 from gettext import gettext as _
 from pathlib import Path
-from typing import Final, Literal
+from typing import Final, Literal, cast
 
 import platformdirs
 
@@ -20,6 +20,7 @@ from kleinanzeigen_bot.utils.files import abspath
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 APP_NAME:Final[str] = "kleinanzeigen-bot"
+InstallationMode = Literal["portable", "xdg"]
 PathCategory = Literal["config", "cache", "state"]
 
 
@@ -27,8 +28,9 @@ PathCategory = Literal["config", "cache", "state"]
 class Workspace:
     """Resolved workspace paths for all bot side effects."""
 
+    mode:InstallationMode
     config_file:Path
-    config_dir:Path
+    config_dir:Path  # root directory for mode-dependent artifacts
     log_file:Path | None
     state_dir:Path
     download_dir:Path
@@ -42,6 +44,7 @@ class Workspace:
         config_dir = config_file.parent
         state_dir = config_dir / ".temp"
         return cls(
+            mode = "portable",
             config_file = config_file,
             config_dir = config_dir,
             log_file = config_dir / f"{log_basename}.log",
@@ -69,11 +72,12 @@ def _ensure_directory(path:Path, description:str) -> None:
     ensure_directory(path, description)
 
 
-def _build_xdg_workspace(log_basename:str) -> Workspace:
+def _build_xdg_workspace(log_basename:str, config_file_override:Path | None = None) -> Workspace:
     """Build an XDG-style workspace using standard user directories."""
-    config_file = (get_xdg_base_dir("config") / "config.yaml").resolve()
-    config_dir = config_file.parent
+    config_dir = get_xdg_base_dir("config").resolve()
+    config_file = config_file_override.resolve() if config_file_override is not None else config_dir / "config.yaml"
     return Workspace(
+        mode = "xdg",
         config_file = config_file,
         config_dir = config_dir,
         log_file = config_dir / f"{log_basename}.log",
@@ -161,18 +165,120 @@ def prompt_installation_mode() -> Literal["portable", "xdg"]:
         print(_("Invalid choice. Please enter 1 or 2."))
 
 
+def _detect_mode_from_footprints(config_file:Path) -> Literal["portable", "xdg", "ambiguous", "unknown"]:
+    """
+    Detect workspace mode when --config is supplied but no explicit mode is given.
+    """
+    detected_mode, _, _ = _detect_mode_from_footprints_with_hits(config_file)
+    return detected_mode
+
+
+def _detect_mode_from_footprints_with_hits(
+    config_file:Path,
+) -> tuple[Literal["portable", "xdg", "ambiguous", "unknown"], list[Path], list[Path]]:
+    """
+    Detect workspace mode and return concrete footprint hits for diagnostics.
+    """
+    config_file = config_file.resolve()
+    cwd_config = (Path.cwd() / "config.yaml").resolve()
+    xdg_config_dir = get_xdg_base_dir("config").resolve()
+    xdg_cache_dir = get_xdg_base_dir("cache").resolve()
+    xdg_state_dir = get_xdg_base_dir("state").resolve()
+
+    portable_hits:list[Path] = []
+    xdg_hits:list[Path] = []
+
+    if config_file == cwd_config:
+        portable_hits.append(cwd_config)
+    if cwd_config.exists():
+        portable_hits.append(cwd_config)
+    if (config_file.parent / ".temp").exists():
+        portable_hits.append((config_file.parent / ".temp").resolve())
+    if (config_file.parent / "downloaded-ads").exists():
+        portable_hits.append((config_file.parent / "downloaded-ads").resolve())
+
+    if config_file.is_relative_to(xdg_config_dir):
+        xdg_hits.append(config_file)
+    if (xdg_config_dir / "config.yaml").exists():
+        xdg_hits.append((xdg_config_dir / "config.yaml").resolve())
+    if (xdg_config_dir / "downloaded-ads").exists():
+        xdg_hits.append((xdg_config_dir / "downloaded-ads").resolve())
+    if (xdg_cache_dir / "browser-profile").exists():
+        xdg_hits.append((xdg_cache_dir / "browser-profile").resolve())
+    if (xdg_cache_dir / "diagnostics").exists():
+        xdg_hits.append((xdg_cache_dir / "diagnostics").resolve())
+    if (xdg_state_dir / "update_check_state.json").exists():
+        xdg_hits.append((xdg_state_dir / "update_check_state.json").resolve())
+
+    portable_detected = len(portable_hits) > 0
+    xdg_detected = len(xdg_hits) > 0
+
+    if portable_detected and xdg_detected:
+        return "ambiguous", portable_hits, xdg_hits
+    if portable_detected:
+        return "portable", portable_hits, xdg_hits
+    if xdg_detected:
+        return "xdg", portable_hits, xdg_hits
+    return "unknown", portable_hits, xdg_hits
+
+
+def _workspace_mode_resolution_error(
+    config_file:Path,
+    detected_mode:Literal["ambiguous", "unknown"],
+    portable_hits:list[Path],
+    xdg_hits:list[Path],
+) -> ValueError:
+    def _format_hits(label:str, hits:list[Path]) -> str:
+        if not hits:
+            return f"{label}: none"
+        deduped = list(dict.fromkeys(hits))
+        return f"{label}:\n- " + "\n- ".join(str(hit) for hit in deduped)
+
+    guidance = (
+        f"Cannot determine workspace mode for --config={config_file}. "
+        "Use --workspace-mode=portable or --workspace-mode=xdg.\n"
+        "For cleanup guidance, see: "
+        "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/docs/CONFIGURATION.md#installation-modes"
+    )
+    details = f"{_format_hits('Portable footprint hits', portable_hits)}\n{_format_hits('XDG footprint hits', xdg_hits)}"
+    if detected_mode == "ambiguous":
+        return ValueError(f"{guidance}\nDetected both portable and XDG footprints.\n{details}")
+    return ValueError(f"{guidance}\nDetected neither portable nor XDG footprints.\n{details}")
+
+
 def resolve_workspace(
     config_arg:str | None,
     logfile_arg:str | None,
     *,
+    workspace_mode:InstallationMode | None,
     logfile_explicitly_provided:bool,
     log_basename:str,
 ) -> Workspace:
     """Resolve workspace paths from CLI flags and auto-detected installation mode."""
+    config_path = Path(abspath(config_arg)).resolve() if config_arg else None
+    mode = workspace_mode
+
+    if config_path and mode is None:
+        detected_mode, portable_hits, xdg_hits = _detect_mode_from_footprints_with_hits(config_path)
+        if detected_mode in {"portable", "xdg"}:
+            mode = cast(InstallationMode, detected_mode)
+        else:
+            raise _workspace_mode_resolution_error(
+                config_path,
+                cast(Literal["ambiguous", "unknown"], detected_mode),
+                portable_hits,
+                xdg_hits,
+            )
+
     if config_arg:
-        workspace = Workspace.for_config(Path(abspath(config_arg)), log_basename)
+        if config_path is None or mode is None:
+            raise AssertionError("Workspace mode and config path must be resolved when --config is supplied")
+        if mode == "portable":
+            workspace = Workspace.for_config(config_path, log_basename)
+        else:
+            workspace = _build_xdg_workspace(log_basename, config_file_override = config_path)
     else:
-        mode = detect_installation_mode()
+        mode = mode or detect_installation_mode()
         if mode is None:
             mode = prompt_installation_mode()
 
@@ -180,6 +286,7 @@ def resolve_workspace(
 
     if logfile_explicitly_provided:
         workspace = Workspace(
+            mode = workspace.mode,
             config_file = workspace.config_file,
             config_dir = workspace.config_dir,
             log_file = Path(abspath(logfile_arg)).resolve() if logfile_arg else None,
