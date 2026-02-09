@@ -220,9 +220,7 @@ class WebScrapingMixin:
             and not has_remote_debugging
             and not is_test_environment
         ):
-            workspace = getattr(self, "workspace", None)
-            if workspace is not None and hasattr(workspace, "browser_profile_dir"):
-                self.browser_config.user_data_dir = str(workspace.browser_profile_dir)
+            LOG.debug("No browser user_data_dir configured. Set browser.user_data_dir or --user-data-dir for non-test runs.")
 
         # Chrome version detection and validation
         if has_remote_debugging:
@@ -341,9 +339,7 @@ class WebScrapingMixin:
                     user_data_dir_from_args,
                 )
         if not effective_user_data_dir and not is_test_environment:
-            workspace = getattr(self, "workspace", None)
-            if workspace is not None and hasattr(workspace, "browser_profile_dir"):
-                effective_user_data_dir = str(workspace.browser_profile_dir)
+            LOG.debug("No effective browser user_data_dir found. Browser will use its default profile location.")
         self.browser_config.user_data_dir = effective_user_data_dir
 
         if not loggers.is_debug(LOG):

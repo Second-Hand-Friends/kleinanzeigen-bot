@@ -147,6 +147,18 @@ class TestKleinanzeigenBotInitialization:
         assert exc_info.value.code == 2
         assert "workspace error" in caplog.text
 
+    def test_resolve_workspace_fails_fast_when_config_parent_cannot_be_created(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Workspace resolution should fail immediately when config directory creation fails."""
+        test_bot.command = "verify"
+        workspace = xdg_paths.Workspace.for_config(tmp_path / "blocked" / "config.yaml", "kleinanzeigen-bot")
+
+        with (
+            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", return_value = workspace),
+            patch("kleinanzeigen_bot.xdg_paths.ensure_directory", side_effect = OSError("mkdir denied")),
+            pytest.raises(OSError, match = "mkdir denied"),
+        ):
+            test_bot._resolve_workspace()
+
     @pytest.mark.asyncio
     @pytest.mark.parametrize("command", ["verify", "update-check", "update-content-hash", "publish", "delete", "download"])
     async def test_run_uses_workspace_state_file_for_update_checker(self, test_bot:KleinanzeigenBot, command:str, tmp_path:Path) -> None:

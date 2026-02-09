@@ -97,11 +97,17 @@ def invoke_cli(
 
 
 def _xdg_env_overrides(tmp_path:Path) -> dict[str, str]:
+    home = tmp_path / "home"
+    xdg_config = tmp_path / "xdg" / "config"
+    xdg_state = tmp_path / "xdg" / "state"
+    xdg_cache = tmp_path / "xdg" / "cache"
+    for path in (home, xdg_config, xdg_state, xdg_cache):
+        path.mkdir(parents = True, exist_ok = True)
     return {
-        "HOME": os.fspath(tmp_path / "home"),
-        "XDG_CONFIG_HOME": os.fspath(tmp_path / "xdg" / "config"),
-        "XDG_STATE_HOME": os.fspath(tmp_path / "xdg" / "state"),
-        "XDG_CACHE_HOME": os.fspath(tmp_path / "xdg" / "cache"),
+        "HOME": os.fspath(home),
+        "XDG_CONFIG_HOME": os.fspath(xdg_config),
+        "XDG_STATE_HOME": os.fspath(xdg_state),
+        "XDG_CACHE_HOME": os.fspath(xdg_cache),
     }
 
 

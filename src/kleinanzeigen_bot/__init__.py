@@ -7,7 +7,7 @@ import urllib.parse as urllib_parse
 from datetime import datetime
 from gettext import gettext as _
 from pathlib import Path
-from typing import Any, Final, cast
+from typing import Any, Final
 
 import certifi, colorama, nodriver  # isort: skip
 from nodriver.core.connection import ProtocolException
@@ -540,7 +540,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     if mode not in {"portable", "xdg"}:
                         LOG.error("Invalid --workspace-mode '%s'. Use 'portable' or 'xdg'.", value)
                         sys.exit(2)
-                    self._workspace_mode_arg = cast(xdg_paths.InstallationMode, mode)
+                    self._workspace_mode_arg = "portable" if mode == "portable" else "xdg"
                 case "--ads":
                     self.ads_selector = value.strip().lower()
                 case "--force":

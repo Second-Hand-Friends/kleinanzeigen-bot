@@ -7,10 +7,10 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from gettext import gettext as _
 from pathlib import Path
-from typing import Final, Literal, cast
+from typing import Final, Literal
 
 import platformdirs
 
@@ -65,11 +65,6 @@ def ensure_directory(path:Path, description:str) -> None:
         raise
     if not path.is_dir():
         raise NotADirectoryError(str(path))
-
-
-def _ensure_directory(path:Path, description:str) -> None:
-    """Backward-compatible alias for ensure_directory."""
-    ensure_directory(path, description)
 
 
 def _build_xdg_workspace(log_basename:str, config_file_override:Path | None = None) -> Workspace:
@@ -184,20 +179,20 @@ def _detect_mode_from_footprints_with_hits(
     xdg_config_dir = get_xdg_base_dir("config").resolve()
     xdg_cache_dir = get_xdg_base_dir("cache").resolve()
     xdg_state_dir = get_xdg_base_dir("state").resolve()
+    config_in_xdg_tree = config_file.is_relative_to(xdg_config_dir)
 
     portable_hits:list[Path] = []
     xdg_hits:list[Path] = []
 
     if config_file == cwd_config:
         portable_hits.append(cwd_config)
-    if cwd_config.exists():
-        portable_hits.append(cwd_config)
-    if (config_file.parent / ".temp").exists():
-        portable_hits.append((config_file.parent / ".temp").resolve())
-    if (config_file.parent / "downloaded-ads").exists():
-        portable_hits.append((config_file.parent / "downloaded-ads").resolve())
+    if not config_in_xdg_tree:
+        if (config_file.parent / ".temp").exists():
+            portable_hits.append((config_file.parent / ".temp").resolve())
+        if (config_file.parent / "downloaded-ads").exists():
+            portable_hits.append((config_file.parent / "downloaded-ads").resolve())
 
-    if config_file.is_relative_to(xdg_config_dir):
+    if config_in_xdg_tree:
         xdg_hits.append(config_file)
     if (xdg_config_dir / "config.yaml").exists():
         xdg_hits.append((xdg_config_dir / "config.yaml").resolve())
@@ -260,19 +255,21 @@ def resolve_workspace(
 
     if config_path and mode is None:
         detected_mode, portable_hits, xdg_hits = _detect_mode_from_footprints_with_hits(config_path)
-        if detected_mode in {"portable", "xdg"}:
-            mode = cast(InstallationMode, detected_mode)
+        if detected_mode == "portable":
+            mode = "portable"
+        elif detected_mode == "xdg":
+            mode = "xdg"
         else:
             raise _workspace_mode_resolution_error(
                 config_path,
-                cast(Literal["ambiguous", "unknown"], detected_mode),
+                detected_mode,
                 portable_hits,
                 xdg_hits,
             )
 
     if config_arg:
         if config_path is None or mode is None:
-            raise AssertionError("Workspace mode and config path must be resolved when --config is supplied")
+            raise ValueError(_("Workspace mode and config path must be resolved when --config is supplied"))
         if mode == "portable":
             workspace = Workspace.for_config(config_path, log_basename)
         else:
@@ -285,15 +282,6 @@ def resolve_workspace(
         workspace = Workspace.for_config((Path.cwd() / "config.yaml").resolve(), log_basename) if mode == "portable" else _build_xdg_workspace(log_basename)
 
     if logfile_explicitly_provided:
-        workspace = Workspace(
-            mode = workspace.mode,
-            config_file = workspace.config_file,
-            config_dir = workspace.config_dir,
-            log_file = Path(abspath(logfile_arg)).resolve() if logfile_arg else None,
-            state_dir = workspace.state_dir,
-            download_dir = workspace.download_dir,
-            browser_profile_dir = workspace.browser_profile_dir,
-            diagnostics_dir = workspace.diagnostics_dir,
-        )
+        workspace = replace(workspace, log_file = Path(abspath(logfile_arg)).resolve() if logfile_arg else None)
 
     return workspace
