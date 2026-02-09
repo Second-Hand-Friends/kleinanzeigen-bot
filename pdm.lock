@@ -628,20 +628,19 @@ files = [
 
 [[package]]
 name = "jaraco-text"
-version = "4.0.0"
-requires_python = ">=3.8"
+version = "4.1.0"
+requires_python = ">=3.9"
 summary = "Module for text manipulation"
 groups = ["default"]
 dependencies = [
     "autocommand",
-    "importlib-resources; python_version < \"3.9\"",
     "jaraco-context>=4.1",
     "jaraco-functools",
     "more-itertools",
 ]
 files = [
-    {file = "jaraco.text-4.0.0-py3-none-any.whl", hash = "sha256:08de508939b5e681b14cdac2f1f73036cd97f6f8d7b25e96b8911a9a428ca0d1"},
-    {file = "jaraco_text-4.0.0.tar.gz", hash = "sha256:5b71fecea69ab6f939d4c906c04fee1eda76500d1641117df6ec45b865f10db0"},
+    {file = "jaraco_text-4.1.0-py3-none-any.whl", hash = "sha256:389bbde1244fec831d06108197e097a8facf49f8104b3c309c3813aff86904f2"},
+    {file = "jaraco_text-4.1.0.tar.gz", hash = "sha256:d69b22dec062a6fcbcffef67205cbd20258c48df2d417b35185fa0fd8dd860ff"},
 ]
 
 [[package]]
@@ -1577,13 +1576,13 @@ files = [
 
 [[package]]
 name = "setuptools"
-version = "80.10.2"
+version = "82.0.0"
 requires_python = ">=3.9"
 summary = "Easily download, build, install, upgrade, and uninstall Python packages"
 groups = ["dev"]
 files = [
-    {file = "setuptools-80.10.2-py3-none-any.whl", hash = "sha256:95b30ddfb717250edb492926c92b5221f7ef3fbcc2b07579bcd4a27da21d0173"},
-    {file = "setuptools-80.10.2.tar.gz", hash = "sha256:8b0e9d10c784bf7d262c4e5ec5d4ec94127ce206e8738f29a437945fbc219b70"},
+    {file = "setuptools-82.0.0-py3-none-any.whl", hash = "sha256:70b18734b607bd1da571d097d236cfcfacaf01de45717d59e6e04b96877532e0"},
+    {file = "setuptools-82.0.0.tar.gz", hash = "sha256:22e0a2d69474c6ae4feb01951cb69d515ed23728cf96d05513d36e42b62b37cb"},
 ]
 
 [[package]]
