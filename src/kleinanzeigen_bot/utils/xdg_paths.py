@@ -160,14 +160,6 @@ def prompt_installation_mode() -> Literal["portable", "xdg"]:
         print(_("Invalid choice. Please enter 1 or 2."))
 
 
-def _detect_mode_from_footprints(config_file:Path) -> Literal["portable", "xdg", "ambiguous", "unknown"]:
-    """
-    Detect workspace mode when --config is supplied but no explicit mode is given.
-    """
-    detected_mode, _, _ = _detect_mode_from_footprints_with_hits(config_file)
-    return detected_mode
-
-
 def _detect_mode_from_footprints_with_hits(
     config_file:Path,
 ) -> tuple[Literal["portable", "xdg", "ambiguous", "unknown"], list[Path], list[Path]]:

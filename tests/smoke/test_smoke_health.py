@@ -97,6 +97,7 @@ def invoke_cli(
 
 
 def _xdg_env_overrides(tmp_path:Path) -> dict[str, str]:
+    """Create temporary HOME/XDG environment overrides for isolated smoke test runs."""
     home = tmp_path / "home"
     xdg_config = tmp_path / "xdg" / "config"
     xdg_state = tmp_path / "xdg" / "state"
