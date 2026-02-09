@@ -103,7 +103,7 @@ jobs:
 
 
     - name: Configure Fast APT Mirror
-      uses: vegardit/fast-apt-mirror.sh@e5288ed7a13da650050035a7d47c2aa17779bbb3 # v1.4.1
+      uses: vegardit/fast-apt-mirror.sh@29a5ef3401107220fc3c32a0c659b6a1211f9e0f # v1.4.2
 
 
     - name: Git Checkout
@@ -388,7 +388,7 @@ jobs:
 
 
     - name: Configure Fast APT Mirror
-      uses: vegardit/fast-apt-mirror.sh@e5288ed7a13da650050035a7d47c2aa17779bbb3 # v1.4.1
+      uses: vegardit/fast-apt-mirror.sh@29a5ef3401107220fc3c32a0c659b6a1211f9e0f # v1.4.2
 
 
     - name: Git Checkout
