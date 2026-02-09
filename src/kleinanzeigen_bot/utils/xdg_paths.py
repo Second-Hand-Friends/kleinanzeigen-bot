@@ -70,13 +70,14 @@ def ensure_directory(path:Path, description:str) -> None:
 def _build_xdg_workspace(log_basename:str, config_file_override:Path | None = None) -> Workspace:
     """Build an XDG-style workspace using standard user directories."""
     config_dir = get_xdg_base_dir("config").resolve()
+    state_dir = get_xdg_base_dir("state").resolve()
     config_file = config_file_override.resolve() if config_file_override is not None else config_dir / "config.yaml"
     return Workspace(
         mode = "xdg",
         config_file = config_file,
         config_dir = config_dir,
-        log_file = config_dir / f"{log_basename}.log",
-        state_dir = get_xdg_base_dir("state").resolve(),
+        log_file = state_dir / f"{log_basename}.log",
+        state_dir = state_dir,
         download_dir = config_dir / "downloaded-ads",
         browser_profile_dir = (get_xdg_base_dir("cache") / "browser-profile").resolve(),
         diagnostics_dir = (get_xdg_base_dir("cache") / "diagnostics").resolve(),

@@ -270,9 +270,9 @@ On first run, the app may ask which installation mode to use. In non-interactive
 
 Path resolution rules:
 
-- Runtime files are mode-dependent write locations (for example logfile, update state, browser profile/cache, diagnostics, and downloaded ads).
+- Runtime files are mode-dependent write locations (for example, logfile, update state, browser profile/cache, diagnostics, and downloaded ads).
 - `--config` selects only the config file; it does not silently switch workspace mode.
-- `--workspace-mode=portable`: runtime files are rooted next to the active config file (or CWD if no `--config` is supplied).
+- `--workspace-mode=portable`: runtime files are rooted next to the active config file (or the current working directory if no `--config` is supplied).
 - `--workspace-mode=xdg`: runtime files use OS-standard user directories.
 - `--config` without `--workspace-mode`: mode is inferred from existing footprints; on ambiguity/unknown, the command fails with guidance (for example: `Could not infer workspace mode for --config ...`) and asks you to rerun with `--workspace-mode=portable` or `--workspace-mode=xdg`.
 

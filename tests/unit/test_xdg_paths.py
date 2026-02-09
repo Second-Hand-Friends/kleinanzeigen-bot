@@ -27,6 +27,12 @@ class TestGetXdgBaseDir:
         with pytest.raises(ValueError, match = "Unsupported XDG category"):
             xdg_paths.get_xdg_base_dir("invalid")  # type: ignore[arg-type]
 
+    def test_raises_when_base_dir_is_none(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("platformdirs.user_state_dir", lambda app_name, *args, **kwargs: None)
+
+        with pytest.raises(RuntimeError, match = "Failed to resolve XDG base directory for category: state"):
+            xdg_paths.get_xdg_base_dir("state")
+
 
 class TestDetectInstallationMode:
     def test_detects_portable_mode_when_config_exists_in_cwd(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
@@ -63,6 +69,21 @@ class TestPromptInstallationMode:
         monkeypatch.setattr("sys.stdin", None)
         assert xdg_paths.prompt_installation_mode() == "portable"
 
+    def test_returns_portable_for_non_interactive_mode_not_tty(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        mock_stdin = io.StringIO()
+        mock_stdin.isatty = lambda: False  # type: ignore[method-assign]
+        monkeypatch.setattr("sys.stdin", mock_stdin)
+
+        assert xdg_paths.prompt_installation_mode() == "portable"
+
+    def test_returns_portable_when_user_enters_1(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        mock_stdin = io.StringIO()
+        mock_stdin.isatty = lambda: True  # type: ignore[method-assign]
+        monkeypatch.setattr("sys.stdin", mock_stdin)
+        monkeypatch.setattr("builtins.input", lambda _: "1")
+
+        assert xdg_paths.prompt_installation_mode() == "portable"
+
     def test_returns_xdg_when_user_enters_2(self, monkeypatch:pytest.MonkeyPatch, capsys:pytest.CaptureFixture[str]) -> None:
         mock_stdin = io.StringIO()
         mock_stdin.isatty = lambda: True  # type: ignore[method-assign]
@@ -75,6 +96,47 @@ class TestPromptInstallationMode:
         captured = capsys.readouterr()
         assert "Choose installation type:" in captured.out
         assert "[2] User directories" in captured.out
+
+    def test_reprompts_on_invalid_input_then_accepts_valid(
+        self,
+        monkeypatch:pytest.MonkeyPatch,
+        capsys:pytest.CaptureFixture[str],
+    ) -> None:
+        mock_stdin = io.StringIO()
+        mock_stdin.isatty = lambda: True  # type: ignore[method-assign]
+        monkeypatch.setattr("sys.stdin", mock_stdin)
+        inputs = iter(["invalid", "2"])
+        monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+
+        mode = xdg_paths.prompt_installation_mode()
+
+        assert mode == "xdg"
+        captured = capsys.readouterr()
+        assert "Invalid choice. Please enter 1 or 2." in captured.out
+
+    def test_returns_portable_on_eof_error(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        mock_stdin = io.StringIO()
+        mock_stdin.isatty = lambda: True  # type: ignore[method-assign]
+        monkeypatch.setattr("sys.stdin", mock_stdin)
+
+        def raise_eof(_prompt:str) -> str:
+            raise EOFError
+
+        monkeypatch.setattr("builtins.input", raise_eof)
+
+        assert xdg_paths.prompt_installation_mode() == "portable"
+
+    def test_returns_portable_on_keyboard_interrupt(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        mock_stdin = io.StringIO()
+        mock_stdin.isatty = lambda: True  # type: ignore[method-assign]
+        monkeypatch.setattr("sys.stdin", mock_stdin)
+
+        def raise_keyboard_interrupt(_prompt:str) -> str:
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr("builtins.input", raise_keyboard_interrupt)
+
+        assert xdg_paths.prompt_installation_mode() == "portable"
 
 
 class TestWorkspace:
@@ -119,7 +181,7 @@ class TestWorkspace:
         ws = xdg_paths.resolve_workspace(None, None, workspace_mode = None, logfile_explicitly_provided = False, log_basename = "kleinanzeigen-bot")
 
         assert ws.config_file == (tmp_path / "xdg-config" / xdg_paths.APP_NAME / "config.yaml").resolve()
-        assert ws.log_file == (tmp_path / "xdg-config" / xdg_paths.APP_NAME / "kleinanzeigen-bot.log").resolve()
+        assert ws.log_file == (tmp_path / "xdg-state" / xdg_paths.APP_NAME / "kleinanzeigen-bot.log").resolve()
         assert ws.state_dir == (tmp_path / "xdg-state" / xdg_paths.APP_NAME).resolve()
         assert ws.browser_profile_dir == (tmp_path / "xdg-cache" / xdg_paths.APP_NAME / "browser-profile").resolve()
         assert ws.diagnostics_dir == (tmp_path / "xdg-cache" / xdg_paths.APP_NAME / "diagnostics").resolve()
