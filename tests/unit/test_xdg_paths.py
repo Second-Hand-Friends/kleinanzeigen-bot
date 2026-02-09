@@ -6,6 +6,7 @@
 
 import io
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -140,6 +141,12 @@ class TestPromptInstallationMode:
 
 
 class TestWorkspace:
+    def test_ensure_directory_raises_when_target_is_not_directory(self, tmp_path:Path) -> None:
+        target = tmp_path / "created"
+
+        with patch.object(Path, "is_dir", return_value = False), pytest.raises(NotADirectoryError, match = str(target)):
+            xdg_paths.ensure_directory(target, "test directory")
+
     def test_for_config_derives_portable_layout(self, tmp_path:Path) -> None:
         config_file = tmp_path / "custom" / "config.yaml"
         ws = xdg_paths.Workspace.for_config(config_file, "mybot")
@@ -298,6 +305,33 @@ class TestWorkspace:
         assert ws.config_file == config_path.resolve()
         assert ws.browser_profile_dir == (xdg_cache_dir / "browser-profile").resolve()
 
+    def test_detect_mode_from_footprints_collects_portable_and_xdg_hit_paths(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        config_path = tmp_path / "config.yaml"
+        config_path.touch()
+        (tmp_path / "downloaded-ads").mkdir(parents = True, exist_ok = True)
+
+        xdg_config_dir = tmp_path / "xdg-config" / xdg_paths.APP_NAME
+        xdg_cache_dir = tmp_path / "xdg-cache" / xdg_paths.APP_NAME
+        xdg_state_dir = tmp_path / "xdg-state" / xdg_paths.APP_NAME
+        xdg_config_dir.mkdir(parents = True, exist_ok = True)
+        xdg_cache_dir.mkdir(parents = True, exist_ok = True)
+        xdg_state_dir.mkdir(parents = True, exist_ok = True)
+        (xdg_cache_dir / "diagnostics").mkdir(parents = True, exist_ok = True)
+        (xdg_state_dir / "update_check_state.json").touch()
+
+        monkeypatch.setattr("platformdirs.user_config_dir", lambda app_name, *args, **kwargs: str(tmp_path / "xdg-config" / app_name))
+        monkeypatch.setattr("platformdirs.user_state_dir", lambda app_name, *args, **kwargs: str(tmp_path / "xdg-state" / app_name))
+        monkeypatch.setattr("platformdirs.user_cache_dir", lambda app_name, *args, **kwargs: str(tmp_path / "xdg-cache" / app_name))
+
+        detected_mode, portable_hits, xdg_hits = xdg_paths._detect_mode_from_footprints_with_hits(config_path)  # noqa: SLF001
+
+        assert detected_mode == "ambiguous"
+        assert config_path.resolve() in portable_hits
+        assert (tmp_path / "downloaded-ads").resolve() in portable_hits
+        assert (xdg_cache_dir / "diagnostics").resolve() in xdg_hits
+        assert (xdg_state_dir / "update_check_state.json").resolve() in xdg_hits
+
     def test_resolve_workspace_ignores_unrelated_cwd_config_when_config_is_elsewhere(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         cwd = tmp_path / "cwd"
         cwd.mkdir(parents = True, exist_ok = True)
@@ -351,3 +385,15 @@ class TestWorkspace:
             )
         assert "Portable footprint hits: none" in str(exc_info.value)
         assert "XDG footprint hits: none" in str(exc_info.value)
+
+    def test_resolve_workspace_raises_when_config_path_is_unresolved(self) -> None:
+        with patch.object(Path, "resolve", return_value = None), pytest.raises(
+            ValueError, match = "Workspace mode and config path must be resolved"
+        ):
+            xdg_paths.resolve_workspace(
+                config_arg = "config.yaml",
+                logfile_arg = None,
+                workspace_mode = "portable",
+                logfile_explicitly_provided = False,
+                log_basename = "kleinanzeigen-bot",
+            )
