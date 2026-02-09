@@ -386,12 +386,20 @@ class TestWorkspace:
         assert "Portable footprint hits: none" in str(exc_info.value)
         assert "XDG footprint hits: none" in str(exc_info.value)
 
-    def test_resolve_workspace_raises_when_config_path_is_unresolved(self) -> None:
-        with patch.object(Path, "resolve", return_value = None), pytest.raises(
+    def test_resolve_workspace_raises_when_config_path_is_unresolved(self, tmp_path:Path) -> None:
+        config_path = (tmp_path / "config.yaml").resolve()
+        original_resolve = Path.resolve
+
+        def patched_resolve(self:Path, strict:bool = False) -> object:
+            if self == config_path:
+                return None
+            return original_resolve(self, strict)
+
+        with patch.object(Path, "resolve", patched_resolve), pytest.raises(
             ValueError, match = "Workspace mode and config path must be resolved"
         ):
             xdg_paths.resolve_workspace(
-                config_arg = "config.yaml",
+                config_arg = str(config_path),
                 logfile_arg = None,
                 workspace_mode = "portable",
                 logfile_explicitly_provided = False,

@@ -1033,9 +1033,20 @@ class TestWebScrapingBrowserConfiguration:
     @pytest.mark.asyncio
     async def test_create_browser_session_ensures_profile_directory_for_user_data_dir(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test configured user_data_dir creates profile structure and skips non-debug log-level override."""
+        class DummyConfig:
+            def __init__(self, **kwargs:object) -> None:
+                self.browser_args = cast(list[str], kwargs.get("browser_args", []))
+                self.user_data_dir = cast(str | None, kwargs.get("user_data_dir"))
+                self.browser_executable_path = cast(str | None, kwargs.get("browser_executable_path"))
+                self.headless = cast(bool, kwargs.get("headless", False))
+
+            def add_extension(self, _ext:str) -> None:
+                return
+
         mock_browser = AsyncMock()
         mock_browser.websocket_url = "ws://localhost:9222"
         monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
+        monkeypatch.setattr("kleinanzeigen_bot.utils.web_scraping_mixin.NodriverConfig", DummyConfig)
         monkeypatch.setattr(loggers, "is_debug", lambda _logger: True)
         monkeypatch.setattr(
             WebScrapingMixin,
