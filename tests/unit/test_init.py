@@ -16,7 +16,7 @@ from kleinanzeigen_bot import LOG, PUBLISH_MAX_RETRIES, AdUpdateStrategy, Kleina
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, DiagnosticsConfig, PublishingConfig
-from kleinanzeigen_bot.utils import dicts, loggers
+from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
@@ -126,28 +126,28 @@ class TestKleinanzeigenBotInitialization:
         with patch("kleinanzeigen_bot.__version__", "1.2.3"):
             assert test_bot.get_version() == "1.2.3"
 
-    def test_finalize_installation_mode_skips_help(self, test_bot:KleinanzeigenBot) -> None:
-        """Ensure finalize_installation_mode returns early for help."""
+    def test_resolve_workspace_skips_help(self, test_bot:KleinanzeigenBot) -> None:
+        """Ensure workspace resolution returns early for help."""
         test_bot.command = "help"
-        test_bot.installation_mode = None
-        test_bot.finalize_installation_mode()
-        assert test_bot.installation_mode is None
+        test_bot.workspace = None
+        test_bot._resolve_workspace()
+        assert test_bot.workspace is None
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("command", ["verify", "update-check", "update-content-hash", "publish", "delete", "download"])
-    async def test_run_uses_installation_mode_for_update_checker(self, test_bot:KleinanzeigenBot, command:str) -> None:
-        """Ensure UpdateChecker is initialized with the detected installation mode."""
-        update_checker_calls:list[tuple[Config, str | None]] = []
+    async def test_run_uses_workspace_state_file_for_update_checker(self, test_bot:KleinanzeigenBot, command:str, tmp_path:Path) -> None:
+        """Ensure UpdateChecker is initialized with the workspace state file."""
+        update_checker_calls:list[tuple[Config, Path]] = []
 
         class DummyUpdateChecker:
-            def __init__(self, config:Config, installation_mode:str | None) -> None:
-                update_checker_calls.append((config, installation_mode))
+            def __init__(self, config:Config, state_file:Path) -> None:
+                update_checker_calls.append((config, state_file))
 
             def check_for_updates(self, *_args:Any, **_kwargs:Any) -> None:
                 return None
 
-        def set_installation_mode() -> None:
-            test_bot.installation_mode = "xdg"
+        def set_workspace() -> None:
+            test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
 
         with (
             patch.object(test_bot, "configure_file_logging"),
@@ -157,17 +157,18 @@ class TestKleinanzeigenBotInitialization:
             patch.object(test_bot, "login", new_callable = AsyncMock),
             patch.object(test_bot, "download_ads", new_callable = AsyncMock),
             patch.object(test_bot, "close_browser_session"),
-            patch.object(test_bot, "finalize_installation_mode", side_effect = set_installation_mode),
+            patch.object(test_bot, "_resolve_workspace", side_effect = set_workspace),
             patch("kleinanzeigen_bot.UpdateChecker", DummyUpdateChecker),
         ):
             await test_bot.run(["app", command])
 
-        assert update_checker_calls == [(test_bot.config, "xdg")]
+        expected_state_path = (tmp_path / "config.yaml").resolve().parent / ".temp" / "update_check_state.json"
+        assert update_checker_calls == [(test_bot.config, expected_state_path)]
 
     @pytest.mark.asyncio
-    async def test_download_ads_passes_installation_mode_and_published_ads(self, test_bot:KleinanzeigenBot) -> None:
-        """Ensure download_ads wires installation mode and published_ads_by_id into AdExtractor."""
-        test_bot.installation_mode = "xdg"
+    async def test_download_ads_passes_download_dir_and_published_ads(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Ensure download_ads wires download_dir and published_ads_by_id into AdExtractor."""
+        test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
         test_bot.ads_selector = "all"
         test_bot.browser = MagicMock()
 
@@ -184,7 +185,10 @@ class TestKleinanzeigenBotInitialization:
 
         # Verify published_ads_by_id is built correctly and passed to extractor
         mock_extractor.assert_called_once_with(
-            test_bot.browser, test_bot.config, "xdg", published_ads_by_id = {123: mock_published_ads[0], 456: mock_published_ads[1]}
+            test_bot.browser,
+            test_bot.config,
+            test_bot.workspace.download_dir,
+            published_ads_by_id = {123: mock_published_ads[0], 456: mock_published_ads[1]},
         )
 
 
@@ -935,25 +939,23 @@ class TestKleinanzeigenBotArgParsing:
         config_path = tmp_path / "custom_config.yaml"
         log_path = tmp_path / "custom.log"
 
-        # Test --config flag sets config_explicitly_provided
+        # Test --config flag stores raw config arg
         test_bot.parse_args(["script.py", "--config", str(config_path), "help"])
-        assert test_bot.config_explicitly_provided is True
+        assert test_bot._config_arg == str(config_path)
         assert str(config_path.absolute()) == test_bot.config_file_path
 
-        # Reset for next test
-        test_bot.config_explicitly_provided = False
-
-        # Test --logfile flag sets log_file_explicitly_provided
+        # Test --logfile flag sets explicit logfile values
         test_bot.parse_args(["script.py", "--logfile", str(log_path), "help"])
-        assert test_bot.log_file_explicitly_provided is True
+        assert test_bot._logfile_explicitly_provided is True
+        assert test_bot._logfile_arg == str(log_path)
         assert str(log_path.absolute()) == test_bot.log_file_path
 
         # Test both flags together
-        test_bot.config_explicitly_provided = False
-        test_bot.log_file_explicitly_provided = False
+        test_bot._config_arg = None
+        test_bot._logfile_explicitly_provided = False
         test_bot.parse_args(["script.py", "--config", str(config_path), "--logfile", str(log_path), "help"])
-        assert test_bot.config_explicitly_provided is True
-        assert test_bot.log_file_explicitly_provided is True
+        assert test_bot._config_arg == str(config_path)
+        assert test_bot._logfile_explicitly_provided is True
 
 
 class TestKleinanzeigenBotCommands:

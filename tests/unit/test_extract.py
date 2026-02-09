@@ -46,7 +46,7 @@ def test_extractor(browser_mock:MagicMock, test_bot_config:Config) -> extract_mo
         - browser_mock: Used to mock browser interactions
         - test_bot_config: Used to initialize the extractor with a valid configuration
     """
-    return extract_module.AdExtractor(browser_mock, test_bot_config)
+    return extract_module.AdExtractor(browser_mock, test_bot_config, Path("downloaded-ads"))
 
 
 class TestAdExtractorBasics:
@@ -54,9 +54,10 @@ class TestAdExtractorBasics:
 
     def test_constructor(self, browser_mock:MagicMock, test_bot_config:Config) -> None:
         """Test the constructor of extract_module.AdExtractor"""
-        extractor = extract_module.AdExtractor(browser_mock, test_bot_config)
+        extractor = extract_module.AdExtractor(browser_mock, test_bot_config, Path("downloaded-ads"))
         assert extractor.browser == browser_mock
         assert extractor.config == test_bot_config
+        assert extractor.download_dir == Path("downloaded-ads")
 
     @pytest.mark.parametrize(
         ("url", "expected_id"),
@@ -950,7 +951,7 @@ class TestAdExtractorCategory:
     def extractor(self, test_bot_config:Config) -> extract_module.AdExtractor:
         browser_mock = MagicMock(spec = Browser)
         config = test_bot_config.with_values({"ad_defaults": {"description": {"prefix": "Test Prefix", "suffix": "Test Suffix"}}})
-        return extract_module.AdExtractor(browser_mock, config)
+        return extract_module.AdExtractor(browser_mock, config, Path("downloaded-ads"))
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
@@ -1092,7 +1093,7 @@ class TestAdExtractorContact:
     def extractor(self, test_bot_config:Config) -> extract_module.AdExtractor:
         browser_mock = MagicMock(spec = Browser)
         config = test_bot_config.with_values({"ad_defaults": {"description": {"prefix": "Test Prefix", "suffix": "Test Suffix"}}})
-        return extract_module.AdExtractor(browser_mock, config)
+        return extract_module.AdExtractor(browser_mock, config, Path("downloaded-ads"))
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
@@ -1163,7 +1164,7 @@ class TestAdExtractorDownload:
     def extractor(self, test_bot_config:Config) -> extract_module.AdExtractor:
         browser_mock = MagicMock(spec = Browser)
         config = test_bot_config.with_values({"ad_defaults": {"description": {"prefix": "Test Prefix", "suffix": "Test Suffix"}}})
-        return extract_module.AdExtractor(browser_mock, config)
+        return extract_module.AdExtractor(browser_mock, config, Path("downloaded-ads"))
 
     @pytest.mark.asyncio
     async def test_download_ad(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
@@ -1172,9 +1173,9 @@ class TestAdExtractorDownload:
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
         yaml_path = final_dir / "ad_12345.yaml"
+        extractor.download_dir = download_base
 
         with (
-            patch("kleinanzeigen_bot.extract.xdg_paths.get_downloaded_ads_path", return_value = download_base),
             patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict,
             patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
         ):

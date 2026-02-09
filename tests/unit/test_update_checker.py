@@ -6,12 +6,11 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
 from datetime import datetime, timedelta, timezone, tzinfo
-from typing import TYPE_CHECKING, Any, cast
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Final, cast
 from unittest.mock import MagicMock, patch
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 import pytest
 import requests
@@ -23,6 +22,8 @@ from kleinanzeigen_bot.model import update_check_state as update_check_state_mod
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.model.update_check_state import UpdateCheckState
 from kleinanzeigen_bot.update_checker import UpdateChecker
+
+DEFAULT_STATE_FILE:Final[Path] = Path(tempfile.gettempdir()) / "kleinanzeigen-bot-test-update-check-state.json"
 
 
 def _freeze_update_state_datetime(monkeypatch:pytest.MonkeyPatch, fixed_now:datetime) -> None:
@@ -81,18 +82,18 @@ class TestUpdateChecker:
 
     def test_get_local_version(self, config:Config) -> None:
         """Test that the local version is correctly retrieved."""
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         assert checker.get_local_version() is not None
 
     def test_get_commit_hash(self, config:Config) -> None:
         """Test that the commit hash is correctly extracted from the version string."""
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         assert checker._get_commit_hash("2025+fb00f11") == "fb00f11"
         assert checker._get_commit_hash("2025") is None
 
     def test_resolve_commitish(self, config:Config) -> None:
         """Test that a commit-ish is resolved to a full hash and date."""
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         with patch(
             "requests.get",
             return_value = MagicMock(json = lambda: {"sha": "e7a3d46", "commit": {"author": {"date": "2025-05-18T00:00:00Z"}}})
@@ -104,7 +105,7 @@ class TestUpdateChecker:
     def test_request_timeout_uses_config(self, config:Config, mocker:"MockerFixture") -> None:
         """Ensure HTTP calls honor the timeout configuration."""
         config.timeouts.multiplier = 1.5
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         mock_response = MagicMock(json = lambda: {"sha": "abc", "commit": {"author": {"date": "2025-05-18T00:00:00Z"}}})
         mock_get = mocker.patch("requests.get", return_value = mock_response)
 
@@ -115,7 +116,7 @@ class TestUpdateChecker:
 
     def test_resolve_commitish_no_commit(self, config:Config, mocker:"MockerFixture") -> None:
         """Test resolving a commit-ish when the API returns no commit data."""
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"sha": "abc"}))
         commit_hash, commit_date = checker._resolve_commitish("sha")
         assert commit_hash == "abc"
@@ -128,7 +129,7 @@ class TestUpdateChecker:
     ) -> None:
         """Test resolving a commit-ish logs a warning when the request fails."""
         caplog.set_level("WARNING", logger = "kleinanzeigen_bot.update_checker")
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         with patch("requests.get", side_effect = Exception("boom")):
             commit_hash, commit_date = checker._resolve_commitish("sha")
 
@@ -138,20 +139,20 @@ class TestUpdateChecker:
 
     def test_commits_match_short_hash(self, config:Config) -> None:
         """Test that short commit hashes are treated as matching prefixes."""
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         assert checker._commits_match("abc1234", "abc1234def5678") is True
 
     def test_check_for_updates_disabled(self, config:Config) -> None:
         """Test that the update checker does not check for updates if disabled."""
         config.update_check.enabled = False
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         with patch("requests.get") as mock_get:
             checker.check_for_updates()
             mock_get.assert_not_called()
 
     def test_check_for_updates_no_local_version(self, config:Config) -> None:
         """Test that the update checker handles the case where the local version cannot be determined."""
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         with patch.object(UpdateCheckState, "should_check", return_value = True), \
                 patch.object(UpdateChecker, "get_local_version", return_value = None):
             checker.check_for_updates()  # Should not raise exception
@@ -163,7 +164,7 @@ class TestUpdateChecker:
     ) -> None:
         """Test that the update checker logs a warning when the local version is missing."""
         caplog.set_level("WARNING", logger = "kleinanzeigen_bot.update_checker")
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         with patch.object(UpdateCheckState, "should_check", return_value = True), \
                 patch.object(UpdateChecker, "get_local_version", return_value = None):
             checker.check_for_updates()
@@ -172,19 +173,19 @@ class TestUpdateChecker:
 
     def test_check_for_updates_no_commit_hash(self, config:Config) -> None:
         """Test that the update checker handles the case where the commit hash cannot be extracted."""
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         with patch.object(UpdateChecker, "get_local_version", return_value = "2025"):
             checker.check_for_updates()  # Should not raise exception
 
     def test_check_for_updates_no_releases(self, config:Config) -> None:
         """Test that the update checker handles the case where no releases are found."""
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         with patch("requests.get", return_value = MagicMock(json = list)):
             checker.check_for_updates()  # Should not raise exception
 
     def test_check_for_updates_api_error(self, config:Config) -> None:
         """Test that the update checker handles API errors gracefully."""
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         with patch("requests.get", side_effect = Exception("API Error")):
             checker.check_for_updates()  # Should not raise exception
 
@@ -205,7 +206,7 @@ class TestUpdateChecker:
             return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": True})
         )
 
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         checker.check_for_updates()
 
         expected = "Latest release from GitHub is a prerelease, but 'latest' channel expects a stable release."
@@ -233,7 +234,7 @@ class TestUpdateChecker:
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
 
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         checker.check_for_updates()
 
         print("LOG RECORDS:")
@@ -269,7 +270,7 @@ class TestUpdateChecker:
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
 
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         checker.check_for_updates()
 
         print("LOG RECORDS:")
@@ -301,7 +302,7 @@ class TestUpdateChecker:
             return_value = mocker.Mock(json = lambda: [{"tag_name": "v1", "prerelease": False, "draft": False}])
         )
 
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         checker.check_for_updates()
 
         assert any("No prerelease found for 'preview' channel." in r.getMessage() for r in caplog.records)
@@ -328,7 +329,7 @@ class TestUpdateChecker:
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
 
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         checker.check_for_updates()
 
         print("LOG RECORDS:")
@@ -365,7 +366,7 @@ class TestUpdateChecker:
             )
         )
 
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         checker.check_for_updates()
 
         assert any("Release notes:\nRelease notes here" in r.getMessage() for r in caplog.records)
@@ -392,7 +393,7 @@ class TestUpdateChecker:
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
 
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         checker.check_for_updates()
 
         print("LOG RECORDS:")
@@ -416,7 +417,7 @@ class TestUpdateChecker:
         mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
         mock_get = mocker.patch("requests.get")
 
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         checker.check_for_updates()
 
         mock_get.assert_not_called()
@@ -433,7 +434,7 @@ class TestUpdateChecker:
         with patch.object(UpdateCheckState, "should_check", return_value = False) as should_check_mock, \
                 patch.object(UpdateCheckState, "update_last_check") as update_last_check_mock, \
                 patch("requests.get") as mock_get:
-            checker = UpdateChecker(config)
+            checker = UpdateChecker(config, DEFAULT_STATE_FILE)
             checker.check_for_updates()
 
         should_check_mock.assert_called_once()
@@ -606,7 +607,7 @@ class TestUpdateChecker:
 
     def test_resolve_commitish_no_author(self, config:Config, mocker:"MockerFixture") -> None:
         """Test resolving a commit-ish when the API returns no author key."""
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"sha": "abc", "commit": {}}))
         commit_hash, commit_date = checker._resolve_commitish("sha")
         assert commit_hash == "abc"
@@ -614,7 +615,7 @@ class TestUpdateChecker:
 
     def test_resolve_commitish_no_date(self, config:Config, mocker:"MockerFixture") -> None:
         """Test resolving a commit-ish when the API returns no date key."""
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"sha": "abc", "commit": {"author": {}}}))
         commit_hash, commit_date = checker._resolve_commitish("sha")
         assert commit_hash == "abc"
@@ -622,7 +623,7 @@ class TestUpdateChecker:
 
     def test_resolve_commitish_list_instead_of_dict(self, config:Config, mocker:"MockerFixture") -> None:
         """Test resolving a commit-ish when the API returns a list instead of dict."""
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         mocker.patch("requests.get", return_value = mocker.Mock(json = list))
         commit_hash, commit_date = checker._resolve_commitish("sha")
         assert commit_hash is None
@@ -630,7 +631,7 @@ class TestUpdateChecker:
 
     def test_check_for_updates_missing_release_commitish(self, config:Config, mocker:"MockerFixture") -> None:
         """Test check_for_updates handles missing release commit-ish."""
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
         mocker.patch.object(UpdateChecker, "_get_commit_hash", return_value = "fb00f11")
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
@@ -642,14 +643,14 @@ class TestUpdateChecker:
 
     def test_check_for_updates_no_releases_empty(self, config:Config, mocker:"MockerFixture") -> None:
         """Test check_for_updates handles no releases found (API returns empty list)."""
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         mocker.patch("requests.get", return_value = mocker.Mock(json = list))
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
         checker.check_for_updates()  # Should not raise
 
     def test_check_for_updates_no_commit_hash_extracted(self, config:Config, mocker:"MockerFixture") -> None:
         """Test check_for_updates handles no commit hash extracted."""
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025")
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
         checker.check_for_updates()  # Should not raise
@@ -668,7 +669,7 @@ class TestUpdateChecker:
                 json = lambda: {"tag_name": "latest", "prerelease": False}
             )
         )
-        checker = UpdateChecker(config)
+        checker = UpdateChecker(config, DEFAULT_STATE_FILE)
         checker.check_for_updates()
         assert any("Could not determine commit dates for comparison." in r.getMessage() for r in caplog.records)
 

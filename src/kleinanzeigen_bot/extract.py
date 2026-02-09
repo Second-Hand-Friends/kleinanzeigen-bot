@@ -15,7 +15,7 @@ from kleinanzeigen_bot.model.ad_model import ContactPartial
 
 from .model.ad_model import AdPartial
 from .model.config_model import Config
-from .utils import dicts, files, i18n, loggers, misc, reflect, xdg_paths
+from .utils import dicts, files, i18n, loggers, misc, reflect
 from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
 
 __all__ = [
@@ -37,15 +37,13 @@ class AdExtractor(WebScrapingMixin):
         self,
         browser:Browser,
         config:Config,
-        installation_mode:xdg_paths.InstallationMode = "portable",
+        download_dir:Path,
         published_ads_by_id:dict[int, dict[str, Any]] | None = None,
     ) -> None:
         super().__init__()
         self.browser = browser
         self.config:Config = config
-        if installation_mode not in {"portable", "xdg"}:
-            raise ValueError(f"Unsupported installation mode: {installation_mode}")
-        self.installation_mode:xdg_paths.InstallationMode = installation_mode
+        self.download_dir = download_dir
         self.published_ads_by_id:dict[int, dict[str, Any]] = published_ads_by_id or {}
 
     async def download_ad(self, ad_id:int) -> None:
@@ -56,10 +54,8 @@ class AdExtractor(WebScrapingMixin):
         :param ad_id: the ad ID
         """
 
-        # create sub-directory for ad(s) to download (if necessary):
-        download_dir = xdg_paths.get_downloaded_ads_path(self.installation_mode)
+        download_dir = self.download_dir
         LOG.info("Using download directory: %s", download_dir)
-        # Note: xdg_paths.get_downloaded_ads_path() already creates the directory
 
         # Extract ad info and determine final directory path
         ad_cfg, final_dir = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id)

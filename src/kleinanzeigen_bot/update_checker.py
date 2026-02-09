@@ -12,6 +12,8 @@ import colorama
 import requests
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from kleinanzeigen_bot.model.config_model import Config
 
 try:
@@ -20,7 +22,6 @@ except ImportError:
     __version__ = "unknown"
 
 from kleinanzeigen_bot.model.update_check_state import UpdateCheckState
-from kleinanzeigen_bot.utils import xdg_paths
 
 logger = logging.getLogger(__name__)
 
@@ -30,16 +31,15 @@ colorama.init()
 class UpdateChecker:
     """Checks for updates to the bot."""
 
-    def __init__(self, config:"Config", installation_mode:str | xdg_paths.InstallationMode = "portable") -> None:
+    def __init__(self, config:"Config", state_file:"Path") -> None:
         """Initialize the update checker.
 
         Args:
             config: The bot configuration.
-            installation_mode: Installation mode (portable/xdg).
+            state_file: Path to the update-check state JSON file.
         """
         self.config = config
-        self.state_file = xdg_paths.get_update_check_state_path(installation_mode)
-        # Note: xdg_paths handles directory creation
+        self.state_file = state_file
         self.state = UpdateCheckState.load(self.state_file)
 
     def get_local_version(self) -> str | None:

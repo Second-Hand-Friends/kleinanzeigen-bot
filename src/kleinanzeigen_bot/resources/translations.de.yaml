@@ -140,9 +140,9 @@ kleinanzeigen_bot/__init__.py:
   find_and_click_extend_button:
     "Found extend button on page %s": "'Verlängern'-Button auf Seite %s gefunden"
 
-  finalize_installation_mode:
-    "First run detected, prompting user for installation mode": "Erster Start erkannt, frage Benutzer nach Installationsmodus"
-    "Installation mode: %s [%s]": "Installationsmodus: %s [%s]"
+  _resolve_workspace:
+    "Config:    %s": "Konfiguration: %s"
+    "Workspace: %s": "Arbeitsverzeichnis: %s"
 
   publish_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
@@ -684,7 +684,7 @@ kleinanzeigen_bot/utils/diagnostics.py:
 #################################################
 kleinanzeigen_bot/utils/xdg_paths.py:
 #################################################
-  _ensure_directory:
+  ensure_directory:
     "Failed to create %s %s: %s": "Fehler beim Erstellen von %s %s: %s"
   detect_installation_mode:
     "Detected installation mode: %s": "Erkannter Installationsmodus: %s"
@@ -693,7 +693,7 @@ kleinanzeigen_bot/utils/xdg_paths.py:
     "Non-interactive mode detected, defaulting to portable installation": "Nicht-interaktiver Modus erkannt, Standard-Installation: portabel"
     "Choose installation type:": "Installationstyp wählen:"
     "[1] Portable (current directory)": "[1] Portabel (aktuelles Verzeichnis)"
-    "[2] System-wide (XDG directories)": "[2] Systemweit (XDG-Verzeichnisse)"
+    "[2] User directories (per-user standard locations)": "[2] Benutzerverzeichnisse (pro Benutzer, standardisierte Pfade)"
     "Enter 1 or 2: ": "1 oder 2 eingeben: "
     "Defaulting to portable installation mode": "Standard-Installationsmodus: portabel"
     "User selected installation mode: %s": "Benutzer hat Installationsmodus gewählt: %s"

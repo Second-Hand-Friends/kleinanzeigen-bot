@@ -152,11 +152,6 @@ class WebScrapingMixin:
         self._default_timeout_config:TimeoutConfig | None = None
         self.config:BotConfig = cast(BotConfig, None)
 
-    @property
-    def _installation_mode(self) -> str:
-        """Get installation mode with fallback to portable."""
-        return getattr(self, "installation_mode_or_portable", "portable")
-
     def _get_timeout_config(self) -> TimeoutConfig:
         config = getattr(self, "config", None)
         timeouts:TimeoutConfig | None = None
@@ -225,7 +220,9 @@ class WebScrapingMixin:
             and not has_remote_debugging
             and not is_test_environment
         ):
-            self.browser_config.user_data_dir = str(xdg_paths.get_browser_profile_path(self._installation_mode))
+            workspace = getattr(self, "workspace", None)
+            if workspace is not None and hasattr(workspace, "browser_profile_dir"):
+                self.browser_config.user_data_dir = str(workspace.browser_profile_dir)
 
         # Chrome version detection and validation
         if has_remote_debugging:
@@ -344,7 +341,9 @@ class WebScrapingMixin:
                     user_data_dir_from_args,
                 )
         if not effective_user_data_dir and not is_test_environment:
-            effective_user_data_dir = str(xdg_paths.get_browser_profile_path(self._installation_mode))
+            workspace = getattr(self, "workspace", None)
+            if workspace is not None and hasattr(workspace, "browser_profile_dir"):
+                effective_user_data_dir = str(workspace.browser_profile_dir)
         self.browser_config.user_data_dir = effective_user_data_dir
 
         if not loggers.is_debug(LOG):
@@ -365,6 +364,7 @@ class WebScrapingMixin:
 
         # Enhanced profile directory handling
         if cfg.user_data_dir:
+            xdg_paths.ensure_directory(Path(cfg.user_data_dir), "browser profile directory")
             profile_dir = os.path.join(cfg.user_data_dir, self.browser_config.profile_name or "Default")
             os.makedirs(profile_dir, exist_ok = True)
             prefs_file = os.path.join(profile_dir, "Preferences")
