@@ -159,6 +159,81 @@ class TestKleinanzeigenBotInitialization:
         ):
             test_bot._resolve_workspace()
 
+    def test_resolve_workspace_programmatic_config_in_xdg_defaults_to_xdg(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Programmatic config_file_path in XDG config tree should default workspace mode to xdg."""
+        test_bot.command = "verify"
+        xdg_dirs = {
+            "config": tmp_path / "xdg-config" / xdg_paths.APP_NAME,
+            "state": tmp_path / "xdg-state" / xdg_paths.APP_NAME,
+            "cache": tmp_path / "xdg-cache" / xdg_paths.APP_NAME,
+        }
+        for path in xdg_dirs.values():
+            path.mkdir(parents = True, exist_ok = True)
+        config_path = xdg_dirs["config"] / "config.yaml"
+        config_path.touch()
+        test_bot.config_file_path = str(config_path)
+
+        workspace = xdg_paths.Workspace.for_config(tmp_path / "resolved" / "config.yaml", "kleinanzeigen-bot")
+        captured_mode:dict[str, xdg_paths.InstallationMode | None] = {"value": None}
+
+        def fake_resolve_workspace(
+            config_arg:str | None,
+            logfile_arg:str | None,
+            *,
+            workspace_mode:xdg_paths.InstallationMode | None,
+            logfile_explicitly_provided:bool,
+            log_basename:str,
+        ) -> xdg_paths.Workspace:
+            captured_mode["value"] = workspace_mode
+            return workspace
+
+        with (
+            patch("kleinanzeigen_bot.xdg_paths.get_xdg_base_dir", side_effect = lambda category: xdg_dirs[category]),
+            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", side_effect = fake_resolve_workspace),
+            patch("kleinanzeigen_bot.xdg_paths.ensure_directory"),
+        ):
+            test_bot._resolve_workspace()
+
+        assert captured_mode["value"] == "xdg"
+
+    def test_resolve_workspace_programmatic_config_outside_xdg_defaults_to_portable(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Programmatic config_file_path outside XDG config tree should default workspace mode to portable."""
+        test_bot.command = "verify"
+        xdg_dirs = {
+            "config": tmp_path / "xdg-config" / xdg_paths.APP_NAME,
+            "state": tmp_path / "xdg-state" / xdg_paths.APP_NAME,
+            "cache": tmp_path / "xdg-cache" / xdg_paths.APP_NAME,
+        }
+        for path in xdg_dirs.values():
+            path.mkdir(parents = True, exist_ok = True)
+        config_path = tmp_path / "external" / "config.yaml"
+        config_path.parent.mkdir(parents = True, exist_ok = True)
+        config_path.touch()
+        test_bot.config_file_path = str(config_path)
+
+        workspace = xdg_paths.Workspace.for_config(tmp_path / "resolved" / "config.yaml", "kleinanzeigen-bot")
+        captured_mode:dict[str, xdg_paths.InstallationMode | None] = {"value": None}
+
+        def fake_resolve_workspace(
+            config_arg:str | None,
+            logfile_arg:str | None,
+            *,
+            workspace_mode:xdg_paths.InstallationMode | None,
+            logfile_explicitly_provided:bool,
+            log_basename:str,
+        ) -> xdg_paths.Workspace:
+            captured_mode["value"] = workspace_mode
+            return workspace
+
+        with (
+            patch("kleinanzeigen_bot.xdg_paths.get_xdg_base_dir", side_effect = lambda category: xdg_dirs[category]),
+            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", side_effect = fake_resolve_workspace),
+            patch("kleinanzeigen_bot.xdg_paths.ensure_directory"),
+        ):
+            test_bot._resolve_workspace()
+
+        assert captured_mode["value"] == "portable"
+
     @pytest.mark.asyncio
     @pytest.mark.parametrize("command", ["verify", "update-check", "update-content-hash", "publish", "delete", "download"])
     async def test_run_uses_workspace_state_file_for_update_checker(self, test_bot:KleinanzeigenBot, command:str, tmp_path:Path) -> None:

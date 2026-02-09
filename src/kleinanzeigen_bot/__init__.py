@@ -218,8 +218,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             if self.config_file_path and Path(self.config_file_path).resolve() != default_config:
                 effective_config_arg = self.config_file_path
                 if effective_workspace_mode is None:
-                    # Backward compatibility for tests/programmatic assignment of config_file_path.
-                    effective_workspace_mode = "portable"
+                    # Backward compatibility for tests/programmatic assignment of config_file_path:
+                    # infer a stable default from the configured path location.
+                    config_path = Path(self.config_file_path).resolve()
+                    xdg_config_dir = xdg_paths.get_xdg_base_dir("config").resolve()
+                    effective_workspace_mode = "xdg" if config_path.is_relative_to(xdg_config_dir) else "portable"
 
         try:
             self.workspace = xdg_paths.resolve_workspace(
