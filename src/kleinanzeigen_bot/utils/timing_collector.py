@@ -16,10 +16,12 @@ import json, uuid  # isort: skip
 import os
 from dataclasses import asdict, dataclass
 from datetime import timedelta
-from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
-from kleinanzeigen_bot.utils import loggers, misc, xdg_paths
+if TYPE_CHECKING:
+    from pathlib import Path
+
+from kleinanzeigen_bot.utils import loggers, misc
 
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
@@ -44,21 +46,15 @@ class TimingRecord:
 
 
 class TimingCollector:
-    def __init__(self, installation_mode:xdg_paths.InstallationMode, command:str) -> None:
-        self.installation_mode = installation_mode
+    def __init__(self, output_dir:Path, command:str) -> None:
+        self.output_dir = output_dir.resolve()
         self.command = command
         self.session_id = uuid.uuid4().hex[:8]
         self.started_at = misc.now().isoformat()
         self.records:list[TimingRecord] = []
         self._flushed = False
 
-        LOG.debug("Timing collection initialized (session=%s, mode=%s, command=%s)", self.session_id, installation_mode, command)
-
-    @property
-    def output_dir(self) -> Path:
-        if self.installation_mode == "portable":
-            return (Path.cwd() / ".temp" / "timing").resolve()
-        return (xdg_paths.get_xdg_base_dir("cache") / "timing").resolve()
+        LOG.debug("Timing collection initialized (session=%s, output_dir=%s, command=%s)", self.session_id, self.output_dir, command)
 
     def record(
         self,

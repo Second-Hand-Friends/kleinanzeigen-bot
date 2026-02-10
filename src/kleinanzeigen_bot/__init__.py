@@ -621,8 +621,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self.config = Config.model_validate(config_yaml, strict = True, context = self.config_file_path)
 
         timing_enabled = self.config.diagnostics.timing_collection
-        if timing_enabled:
-            self._timing_collector = TimingCollector(self.installation_mode_or_portable, self.command)
+        if timing_enabled and self.workspace:
+            timing_dir = self.workspace.diagnostics_dir.parent / "timing"
+            self._timing_collector = TimingCollector(timing_dir, self.command)
         else:
             self._timing_collector = None
 

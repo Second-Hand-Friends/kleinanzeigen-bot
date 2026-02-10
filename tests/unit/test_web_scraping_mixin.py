@@ -1930,10 +1930,9 @@ class TestWebScrapingDiagnostics:
             patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
             patch("psutil.process_iter", return_value = []),
             patch.object(scraper_with_config, "get_compatible_browser", side_effect = AssertionError("No browser found")),
-            pytest.raises(AssertionError, match = "No browser found"),
         ):
             scraper_with_config.diagnose_browser_issues()
-            assert "(fail) No compatible browser found" in caplog.text
+        assert "(fail) No compatible browser found" in caplog.text
 
     def test_diagnose_browser_issues_user_data_dir_permissions_issue(
         self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture, tmp_path:Path

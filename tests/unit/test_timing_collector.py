@@ -16,15 +16,14 @@ pytestmark = pytest.mark.unit
 
 
 class TestTimingCollector:
-    def test_output_dir_uses_xdg_cache_in_xdg_mode(self, tmp_path:Path) -> None:
-        with patch("kleinanzeigen_bot.utils.timing_collector.xdg_paths.get_xdg_base_dir", return_value = tmp_path / "xdg-cache"):
-            collector = TimingCollector("xdg", "publish")
+    def test_output_dir_resolves_to_given_path(self, tmp_path:Path) -> None:
+        collector = TimingCollector(tmp_path / "xdg-cache" / "timing", "publish")
 
-            assert collector.output_dir == (tmp_path / "xdg-cache" / "timing").resolve()
+        assert collector.output_dir == (tmp_path / "xdg-cache" / "timing").resolve()
 
     def test_flush_writes_session_data(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
-        collector = TimingCollector("portable", "publish")
+        collector = TimingCollector(tmp_path / ".temp" / "timing", "publish")
         collector.record(
             key = "default",
             operation_type = "web_find",
@@ -83,7 +82,7 @@ class TestTimingCollector:
         ]
         data_path.write_text(json.dumps(existing_payload), encoding = "utf-8")
 
-        collector = TimingCollector("portable", "verify")
+        collector = TimingCollector(tmp_path / ".temp" / "timing", "verify")
         collector.record(
             key = "default",
             operation_type = "web_find",
@@ -107,7 +106,7 @@ class TestTimingCollector:
 
     def test_flush_returns_none_when_already_flushed(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
-        collector = TimingCollector("portable", "publish")
+        collector = TimingCollector(tmp_path / ".temp" / "timing", "publish")
         collector.record(
             key = "default",
             operation_type = "web_find",
@@ -127,7 +126,7 @@ class TestTimingCollector:
 
     def test_flush_returns_none_when_no_records(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
-        collector = TimingCollector("portable", "publish")
+        collector = TimingCollector(tmp_path / ".temp" / "timing", "publish")
 
         assert collector.flush() is None
 
@@ -139,7 +138,7 @@ class TestTimingCollector:
         data_path = output_dir / "timing_data.json"
         data_path.write_text("{ this is invalid json", encoding = "utf-8")
 
-        collector = TimingCollector("portable", "verify")
+        collector = TimingCollector(tmp_path / ".temp" / "timing", "verify")
         collector.record(
             key = "default",
             operation_type = "web_find",
@@ -167,7 +166,7 @@ class TestTimingCollector:
         data_path = output_dir / "timing_data.json"
         data_path.write_text(json.dumps({"unexpected": "shape"}), encoding = "utf-8")
 
-        collector = TimingCollector("portable", "verify")
+        collector = TimingCollector(tmp_path / ".temp" / "timing", "verify")
         collector.record(
             key = "default",
             operation_type = "web_find",
@@ -189,7 +188,7 @@ class TestTimingCollector:
 
     def test_flush_returns_none_when_write_raises(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
-        collector = TimingCollector("portable", "verify")
+        collector = TimingCollector(tmp_path / ".temp" / "timing", "verify")
         collector.record(
             key = "default",
             operation_type = "web_find",
