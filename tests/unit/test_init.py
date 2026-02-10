@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import copy, fnmatch, io, json, logging, os, tempfile  # isort: skip
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import redirect_stdout
 from datetime import timedelta
 from pathlib import Path, PureWindowsPath
@@ -108,6 +108,26 @@ def mock_config_setup(test_bot:KleinanzeigenBot) -> Generator[None]:
         yield
 
 
+def _make_fake_resolve_workspace(
+    captured_mode:dict[str, xdg_paths.InstallationMode | None],
+    workspace:xdg_paths.Workspace,
+) -> Callable[..., xdg_paths.Workspace]:
+    """Create a fake resolve_workspace that captures the workspace_mode argument."""
+
+    def fake_resolve_workspace(
+        config_arg:str | None,
+        logfile_arg:str | None,
+        *,
+        workspace_mode:xdg_paths.InstallationMode | None,
+        logfile_explicitly_provided:bool,
+        log_basename:str,
+    ) -> xdg_paths.Workspace:
+        captured_mode["value"] = workspace_mode
+        return workspace
+
+    return fake_resolve_workspace
+
+
 class TestKleinanzeigenBotInitialization:
     """Tests for KleinanzeigenBot initialization and basic functionality."""
 
@@ -183,20 +203,9 @@ class TestKleinanzeigenBotInitialization:
         workspace = xdg_paths.Workspace.for_config(tmp_path / "resolved" / "config.yaml", "kleinanzeigen-bot")
         captured_mode:dict[str, xdg_paths.InstallationMode | None] = {"value": None}
 
-        def fake_resolve_workspace(
-            config_arg:str | None,
-            logfile_arg:str | None,
-            *,
-            workspace_mode:xdg_paths.InstallationMode | None,
-            logfile_explicitly_provided:bool,
-            log_basename:str,
-        ) -> xdg_paths.Workspace:
-            captured_mode["value"] = workspace_mode
-            return workspace
-
         with (
             patch("kleinanzeigen_bot.xdg_paths.get_xdg_base_dir", side_effect = lambda category: xdg_dirs[category]),
-            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", side_effect = fake_resolve_workspace),
+            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", side_effect = _make_fake_resolve_workspace(captured_mode, workspace)),
             patch("kleinanzeigen_bot.xdg_paths.ensure_directory"),
         ):
             test_bot._resolve_workspace()
@@ -221,20 +230,9 @@ class TestKleinanzeigenBotInitialization:
         workspace = xdg_paths.Workspace.for_config(tmp_path / "resolved" / "config.yaml", "kleinanzeigen-bot")
         captured_mode:dict[str, xdg_paths.InstallationMode | None] = {"value": None}
 
-        def fake_resolve_workspace(
-            config_arg:str | None,
-            logfile_arg:str | None,
-            *,
-            workspace_mode:xdg_paths.InstallationMode | None,
-            logfile_explicitly_provided:bool,
-            log_basename:str,
-        ) -> xdg_paths.Workspace:
-            captured_mode["value"] = workspace_mode
-            return workspace
-
         with (
             patch("kleinanzeigen_bot.xdg_paths.get_xdg_base_dir", side_effect = lambda category: xdg_dirs[category]),
-            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", side_effect = fake_resolve_workspace),
+            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", side_effect = _make_fake_resolve_workspace(captured_mode, workspace)),
             patch("kleinanzeigen_bot.xdg_paths.ensure_directory"),
         ):
             test_bot._resolve_workspace()
