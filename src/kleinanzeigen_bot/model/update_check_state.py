@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from pathlib import Path
 
-from kleinanzeigen_bot.utils import dicts, loggers, misc
+from kleinanzeigen_bot.utils import dicts, loggers, misc, xdg_paths
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
 
 LOG = loggers.get_logger(__name__)
@@ -117,6 +117,7 @@ class UpdateCheckState(ContextualModel):
                 if data["last_check"].tzinfo != datetime.timezone.utc:
                     data["last_check"] = data["last_check"].astimezone(datetime.timezone.utc)
                 data["last_check"] = data["last_check"].isoformat()
+            xdg_paths.ensure_directory(state_file.parent, "update check state directory")
             dicts.save_dict(str(state_file), data)
         except PermissionError:
             LOG.warning("Permission denied when saving update check state to %s", state_file)

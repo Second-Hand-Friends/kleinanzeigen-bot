@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import copy, fnmatch, io, json, logging, os, tempfile  # isort: skip
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import redirect_stdout
 from datetime import timedelta
 from pathlib import Path, PureWindowsPath
@@ -16,7 +16,7 @@ from kleinanzeigen_bot import LOG, PUBLISH_MAX_RETRIES, AdUpdateStrategy, Kleina
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, DiagnosticsConfig, PublishingConfig
-from kleinanzeigen_bot.utils import dicts, loggers
+from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
@@ -108,6 +108,26 @@ def mock_config_setup(test_bot:KleinanzeigenBot) -> Generator[None]:
         yield
 
 
+def _make_fake_resolve_workspace(
+    captured_mode:dict[str, xdg_paths.InstallationMode | None],
+    workspace:xdg_paths.Workspace,
+) -> Callable[..., xdg_paths.Workspace]:
+    """Create a fake resolve_workspace that captures the workspace_mode argument."""
+
+    def fake_resolve_workspace(
+        config_arg:str | None,
+        logfile_arg:str | None,
+        *,
+        workspace_mode:xdg_paths.InstallationMode | None,
+        logfile_explicitly_provided:bool,
+        log_basename:str,
+    ) -> xdg_paths.Workspace:
+        captured_mode["value"] = workspace_mode
+        return workspace
+
+    return fake_resolve_workspace
+
+
 class TestKleinanzeigenBotInitialization:
     """Tests for KleinanzeigenBot initialization and basic functionality."""
 
@@ -126,28 +146,124 @@ class TestKleinanzeigenBotInitialization:
         with patch("kleinanzeigen_bot.__version__", "1.2.3"):
             assert test_bot.get_version() == "1.2.3"
 
-    def test_finalize_installation_mode_skips_help(self, test_bot:KleinanzeigenBot) -> None:
-        """Ensure finalize_installation_mode returns early for help."""
+    def test_resolve_workspace_skips_help(self, test_bot:KleinanzeigenBot) -> None:
+        """Ensure workspace resolution returns early for help."""
         test_bot.command = "help"
-        test_bot.installation_mode = None
-        test_bot.finalize_installation_mode()
-        assert test_bot.installation_mode is None
+        test_bot.workspace = None
+        test_bot._resolve_workspace()
+        assert test_bot.workspace is None
+
+    def test_resolve_workspace_skips_create_config(self, test_bot:KleinanzeigenBot) -> None:
+        """Ensure workspace resolution returns early for create-config."""
+        test_bot.command = "create-config"
+        test_bot.workspace = None
+        test_bot._resolve_workspace()
+        assert test_bot.workspace is None
+
+    def test_resolve_workspace_exits_on_workspace_resolution_error(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
+        """Workspace resolution errors should terminate with code 2."""
+        caplog.set_level(logging.ERROR)
+        test_bot.command = "verify"
+
+        with (
+            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", side_effect = ValueError("workspace error")),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            test_bot._resolve_workspace()
+
+        assert exc_info.value.code == 2
+        assert "workspace error" in caplog.text
+
+    def test_resolve_workspace_fails_fast_when_config_parent_cannot_be_created(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Workspace resolution should fail immediately when config directory creation fails."""
+        test_bot.command = "verify"
+        workspace = xdg_paths.Workspace.for_config(tmp_path / "blocked" / "config.yaml", "kleinanzeigen-bot")
+
+        with (
+            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", return_value = workspace),
+            patch("kleinanzeigen_bot.xdg_paths.ensure_directory", side_effect = OSError("mkdir denied")),
+            pytest.raises(OSError, match = "mkdir denied"),
+        ):
+            test_bot._resolve_workspace()
+
+    def test_resolve_workspace_programmatic_config_in_xdg_defaults_to_xdg(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Programmatic config_file_path in XDG config tree should default workspace mode to xdg."""
+        test_bot.command = "verify"
+        xdg_dirs = {
+            "config": tmp_path / "xdg-config" / xdg_paths.APP_NAME,
+            "state": tmp_path / "xdg-state" / xdg_paths.APP_NAME,
+            "cache": tmp_path / "xdg-cache" / xdg_paths.APP_NAME,
+        }
+        for path in xdg_dirs.values():
+            path.mkdir(parents = True, exist_ok = True)
+        config_path = xdg_dirs["config"] / "config.yaml"
+        config_path.touch()
+        test_bot.config_file_path = str(config_path)
+
+        workspace = xdg_paths.Workspace.for_config(tmp_path / "resolved" / "config.yaml", "kleinanzeigen-bot")
+        captured_mode:dict[str, xdg_paths.InstallationMode | None] = {"value": None}
+
+        with (
+            patch("kleinanzeigen_bot.xdg_paths.get_xdg_base_dir", side_effect = lambda category: xdg_dirs[category]),
+            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", side_effect = _make_fake_resolve_workspace(captured_mode, workspace)),
+            patch("kleinanzeigen_bot.xdg_paths.ensure_directory"),
+        ):
+            test_bot._resolve_workspace()
+
+        assert captured_mode["value"] == "xdg"
+
+    def test_resolve_workspace_programmatic_config_outside_xdg_defaults_to_portable(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Programmatic config_file_path outside XDG config tree should default workspace mode to portable."""
+        test_bot.command = "verify"
+        xdg_dirs = {
+            "config": tmp_path / "xdg-config" / xdg_paths.APP_NAME,
+            "state": tmp_path / "xdg-state" / xdg_paths.APP_NAME,
+            "cache": tmp_path / "xdg-cache" / xdg_paths.APP_NAME,
+        }
+        for path in xdg_dirs.values():
+            path.mkdir(parents = True, exist_ok = True)
+        config_path = tmp_path / "external" / "config.yaml"
+        config_path.parent.mkdir(parents = True, exist_ok = True)
+        config_path.touch()
+        test_bot.config_file_path = str(config_path)
+
+        workspace = xdg_paths.Workspace.for_config(tmp_path / "resolved" / "config.yaml", "kleinanzeigen-bot")
+        captured_mode:dict[str, xdg_paths.InstallationMode | None] = {"value": None}
+
+        with (
+            patch("kleinanzeigen_bot.xdg_paths.get_xdg_base_dir", side_effect = lambda category: xdg_dirs[category]),
+            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", side_effect = _make_fake_resolve_workspace(captured_mode, workspace)),
+            patch("kleinanzeigen_bot.xdg_paths.ensure_directory"),
+        ):
+            test_bot._resolve_workspace()
+
+        assert captured_mode["value"] == "portable"
+
+    def test_create_default_config_creates_parent_without_workspace(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """create_default_config should create parent directories when no workspace is set."""
+        config_path = tmp_path / "nested" / "config.yaml"
+        test_bot.workspace = None
+        test_bot.config_file_path = str(config_path)
+
+        test_bot.create_default_config()
+
+        assert config_path.exists()
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("command", ["verify", "update-check", "update-content-hash", "publish", "delete", "download"])
-    async def test_run_uses_installation_mode_for_update_checker(self, test_bot:KleinanzeigenBot, command:str) -> None:
-        """Ensure UpdateChecker is initialized with the detected installation mode."""
-        update_checker_calls:list[tuple[Config, str | None]] = []
+    async def test_run_uses_workspace_state_file_for_update_checker(self, test_bot:KleinanzeigenBot, command:str, tmp_path:Path) -> None:
+        """Ensure UpdateChecker is initialized with the workspace state file."""
+        update_checker_calls:list[tuple[Config, Path]] = []
 
         class DummyUpdateChecker:
-            def __init__(self, config:Config, installation_mode:str | None) -> None:
-                update_checker_calls.append((config, installation_mode))
+            def __init__(self, config:Config, state_file:Path) -> None:
+                update_checker_calls.append((config, state_file))
 
             def check_for_updates(self, *_args:Any, **_kwargs:Any) -> None:
                 return None
 
-        def set_installation_mode() -> None:
-            test_bot.installation_mode = "xdg"
+        def set_workspace() -> None:
+            test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
 
         with (
             patch.object(test_bot, "configure_file_logging"),
@@ -157,17 +273,18 @@ class TestKleinanzeigenBotInitialization:
             patch.object(test_bot, "login", new_callable = AsyncMock),
             patch.object(test_bot, "download_ads", new_callable = AsyncMock),
             patch.object(test_bot, "close_browser_session"),
-            patch.object(test_bot, "finalize_installation_mode", side_effect = set_installation_mode),
+            patch.object(test_bot, "_resolve_workspace", side_effect = set_workspace),
             patch("kleinanzeigen_bot.UpdateChecker", DummyUpdateChecker),
         ):
             await test_bot.run(["app", command])
 
-        assert update_checker_calls == [(test_bot.config, "xdg")]
+        expected_state_path = (tmp_path / "config.yaml").resolve().parent / ".temp" / "update_check_state.json"
+        assert update_checker_calls == [(test_bot.config, expected_state_path)]
 
     @pytest.mark.asyncio
-    async def test_download_ads_passes_installation_mode_and_published_ads(self, test_bot:KleinanzeigenBot) -> None:
-        """Ensure download_ads wires installation mode and published_ads_by_id into AdExtractor."""
-        test_bot.installation_mode = "xdg"
+    async def test_download_ads_passes_download_dir_and_published_ads(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Ensure download_ads wires download_dir and published_ads_by_id into AdExtractor."""
+        test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
         test_bot.ads_selector = "all"
         test_bot.browser = MagicMock()
 
@@ -184,7 +301,10 @@ class TestKleinanzeigenBotInitialization:
 
         # Verify published_ads_by_id is built correctly and passed to extractor
         mock_extractor.assert_called_once_with(
-            test_bot.browser, test_bot.config, "xdg", published_ads_by_id = {123: mock_published_ads[0], 456: mock_published_ads[1]}
+            test_bot.browser,
+            test_bot.config,
+            test_bot.workspace.download_dir,
+            published_ads_by_id = {123: mock_published_ads[0], 456: mock_published_ads[1]},
         )
 
 
@@ -894,6 +1014,17 @@ class TestKleinanzeigenBotArgParsing:
         assert test_bot.log_file_path is not None
         assert "test.log" in test_bot.log_file_path
 
+    def test_parse_args_workspace_mode(self, test_bot:KleinanzeigenBot) -> None:
+        """Test parsing workspace mode option."""
+        test_bot.parse_args(["script.py", "--workspace-mode=xdg", "help"])
+        assert test_bot._workspace_mode_arg == "xdg"
+
+    def test_parse_args_workspace_mode_invalid(self, test_bot:KleinanzeigenBot) -> None:
+        """Test invalid workspace mode exits with error."""
+        with pytest.raises(SystemExit) as exc_info:
+            test_bot.parse_args(["script.py", "--workspace-mode=invalid", "help"])
+        assert exc_info.value.code == 2
+
     def test_parse_args_ads_selector(self, test_bot:KleinanzeigenBot) -> None:
         """Test parsing ads selector."""
         test_bot.parse_args(["script.py", "--ads=all", "publish"])
@@ -931,29 +1062,29 @@ class TestKleinanzeigenBotArgParsing:
         assert exc_info.value.code == 2
 
     def test_parse_args_explicit_flags(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-        """Test that explicit flags are set when --config and --logfile options are provided."""
+        """Test that explicit flags are set when config/logfile/workspace options are provided."""
         config_path = tmp_path / "custom_config.yaml"
         log_path = tmp_path / "custom.log"
 
-        # Test --config flag sets config_explicitly_provided
+        # Test --config flag stores raw config arg
         test_bot.parse_args(["script.py", "--config", str(config_path), "help"])
-        assert test_bot.config_explicitly_provided is True
+        assert test_bot._config_arg == str(config_path)
         assert str(config_path.absolute()) == test_bot.config_file_path
 
-        # Reset for next test
-        test_bot.config_explicitly_provided = False
-
-        # Test --logfile flag sets log_file_explicitly_provided
+        # Test --logfile flag sets explicit logfile values
         test_bot.parse_args(["script.py", "--logfile", str(log_path), "help"])
-        assert test_bot.log_file_explicitly_provided is True
+        assert test_bot._logfile_explicitly_provided is True
+        assert test_bot._logfile_arg == str(log_path)
         assert str(log_path.absolute()) == test_bot.log_file_path
 
         # Test both flags together
-        test_bot.config_explicitly_provided = False
-        test_bot.log_file_explicitly_provided = False
-        test_bot.parse_args(["script.py", "--config", str(config_path), "--logfile", str(log_path), "help"])
-        assert test_bot.config_explicitly_provided is True
-        assert test_bot.log_file_explicitly_provided is True
+        test_bot._config_arg = None
+        test_bot._logfile_explicitly_provided = False
+        test_bot._workspace_mode_arg = None
+        test_bot.parse_args(["script.py", "--config", str(config_path), "--logfile", str(log_path), "--workspace-mode", "portable", "help"])
+        assert test_bot._config_arg == str(config_path)
+        assert test_bot._logfile_explicitly_provided is True
+        assert test_bot._workspace_mode_arg == "portable"
 
 
 class TestKleinanzeigenBotCommands:

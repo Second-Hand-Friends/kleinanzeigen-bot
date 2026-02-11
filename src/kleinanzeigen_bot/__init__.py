@@ -7,7 +7,7 @@ import urllib.parse as urllib_parse
 from datetime import datetime
 from gettext import gettext as _
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 import certifi, colorama, nodriver  # isort: skip
 from nodriver.core.connection import ProtocolException
@@ -169,17 +169,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         self.config:Config
         self.config_file_path = abspath("config.yaml")
-        self.config_explicitly_provided = False
-
-        self.installation_mode:xdg_paths.InstallationMode | None = None
+        self.workspace:xdg_paths.Workspace | None = None
+        self._config_arg:str | None = None
+        self._workspace_mode_arg:xdg_paths.InstallationMode | None = None
 
         self.categories:dict[str, str] = {}
 
         self.file_log:loggers.LogFileHandle | None = None
-        log_file_basename = is_frozen() and os.path.splitext(os.path.basename(sys.executable))[0] or self.__module__
-        self.log_file_path:str | None = abspath(f"{log_file_basename}.log")
-        self.log_file_basename = log_file_basename
-        self.log_file_explicitly_provided = False
+        self._log_basename = os.path.splitext(os.path.basename(sys.executable))[0] if is_frozen() else self.__module__
+        self.log_file_path:str | None = abspath(f"{self._log_basename}.log")
+        self._logfile_arg:str | None = None
+        self._logfile_explicitly_provided = False
 
         self.command = "help"
         self.ads_selector = "due"
@@ -193,70 +193,67 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             self.file_log = None
         self.close_browser_session()
 
-    @property
-    def installation_mode_or_portable(self) -> xdg_paths.InstallationMode:
-        return self.installation_mode or "portable"
-
     def get_version(self) -> str:
         return __version__
 
-    def finalize_installation_mode(self) -> None:
+    def _workspace_or_raise(self) -> xdg_paths.Workspace:
+        if self.workspace is None:
+            raise AssertionError(_("Workspace must be resolved before command execution"))
+        return self.workspace
+
+    @property
+    def _update_check_state_path(self) -> Path:
+        return self._workspace_or_raise().state_dir / "update_check_state.json"
+
+    def _resolve_workspace(self) -> None:
         """
-        Finalize installation mode detection after CLI args are parsed.
-        Must be called after parse_args() to respect --config overrides.
+        Resolve workspace paths after CLI args are parsed.
         """
-        if self.command in {"help", "version"}:
+        if self.command in {"help", "version", "create-config"}:
             return
-        # Check if config_file_path was already customized (by --config or tests)
-        default_portable_config = xdg_paths.get_config_file_path("portable").resolve()
-        config_path = Path(self.config_file_path).resolve() if self.config_file_path else None
-        config_was_customized = self.config_explicitly_provided or (config_path is not None and config_path != default_portable_config)
+        effective_config_arg = self._config_arg
+        effective_workspace_mode = self._workspace_mode_arg
+        if not effective_config_arg:
+            default_config = (Path.cwd() / "config.yaml").resolve()
+            if self.config_file_path and Path(self.config_file_path).resolve() != default_config:
+                effective_config_arg = self.config_file_path
+                if effective_workspace_mode is None:
+                    # Backward compatibility for tests/programmatic assignment of config_file_path:
+                    # infer a stable default from the configured path location.
+                    config_path = Path(self.config_file_path).resolve()
+                    xdg_config_dir = xdg_paths.get_xdg_base_dir("config").resolve()
+                    effective_workspace_mode = "xdg" if config_path.is_relative_to(xdg_config_dir) else "portable"
 
-        if config_was_customized and self.config_file_path:
-            # Config path was explicitly set - detect mode based on it
-            LOG.debug("Detecting installation mode from explicit config path: %s", self.config_file_path)
+        try:
+            self.workspace = xdg_paths.resolve_workspace(
+                config_arg = effective_config_arg,
+                logfile_arg = self._logfile_arg,
+                workspace_mode = effective_workspace_mode,
+                logfile_explicitly_provided = self._logfile_explicitly_provided,
+                log_basename = self._log_basename,
+            )
+        except ValueError as exc:
+            LOG.error(str(exc))
+            sys.exit(2)
 
-            if config_path is not None and config_path == (Path.cwd() / "config.yaml").resolve():
-                # Explicit path points to CWD config
-                self.installation_mode = "portable"
-                LOG.debug("Explicit config is in CWD, using portable mode")
-            elif config_path is not None and config_path.is_relative_to(xdg_paths.get_xdg_base_dir("config").resolve()):
-                # Explicit path is within XDG config directory
-                self.installation_mode = "xdg"
-                LOG.debug("Explicit config is in XDG directory, using xdg mode")
-            else:
-                # Custom location - default to portable mode (all paths relative to config)
-                self.installation_mode = "portable"
-                LOG.debug("Explicit config is in custom location, defaulting to portable mode")
-        else:
-            # No explicit config - use auto-detection
-            LOG.debug("Detecting installation mode...")
-            self.installation_mode = xdg_paths.detect_installation_mode()
+        xdg_paths.ensure_directory(self.workspace.config_file.parent, "config directory")
 
-            if self.installation_mode is None:
-                # First run - prompt user
-                LOG.info("First run detected, prompting user for installation mode")
-                self.installation_mode = xdg_paths.prompt_installation_mode()
+        self.config_file_path = str(self.workspace.config_file)
+        self.log_file_path = str(self.workspace.log_file) if self.workspace.log_file else None
 
-            # Set config path based on detected mode
-            self.config_file_path = str(xdg_paths.get_config_file_path(self.installation_mode))
-
-        # Set log file path based on mode (unless explicitly overridden via --logfile)
-        using_default_portable_log = (
-            self.log_file_path is not None and Path(self.log_file_path).resolve() == xdg_paths.get_log_file_path(self.log_file_basename, "portable").resolve()
-        )
-        if not self.log_file_explicitly_provided and using_default_portable_log:
-            # Still using default portable path - update to match detected mode
-            self.log_file_path = str(xdg_paths.get_log_file_path(self.log_file_basename, self.installation_mode))
-            LOG.debug("Log file path: %s", self.log_file_path)
-
-        # Log installation mode and config location (INFO level for user visibility)
-        mode_display = "portable (current directory)" if self.installation_mode == "portable" else "system-wide (XDG directories)"
-        LOG.info("Installation mode: %s [%s]", mode_display, self.config_file_path)
+        LOG.info("Config:    %s", self.workspace.config_file)
+        LOG.info("Workspace mode: %s", self.workspace.mode)
+        LOG.info("Workspace: %s", self.workspace.config_dir)
+        if loggers.is_debug(LOG):
+            LOG.debug("Log file:        %s", self.workspace.log_file)
+            LOG.debug("State dir:       %s", self.workspace.state_dir)
+            LOG.debug("Download dir:    %s", self.workspace.download_dir)
+            LOG.debug("Browser profile: %s", self.workspace.browser_profile_dir)
+            LOG.debug("Diagnostics dir: %s", self.workspace.diagnostics_dir)
 
     async def run(self, args:list[str]) -> None:
         self.parse_args(args)
-        self.finalize_installation_mode()
+        self._resolve_workspace()
         try:
             match self.command:
                 case "help":
@@ -276,7 +273,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode_or_portable)
+                    checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
                     self.load_ads()
                     LOG.info("############################################")
@@ -285,13 +282,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 case "update-check":
                     self.configure_file_logging()
                     self.load_config()
-                    checker = UpdateChecker(self.config, self.installation_mode_or_portable)
+                    checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates(skip_interval_check = True)
                 case "update-content-hash":
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode_or_portable)
+                    checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
                     self.ads_selector = "all"
                     if ads := self.load_ads(exclude_ads_with_id = False):
@@ -304,7 +301,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode_or_portable)
+                    checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
 
                     if not (
@@ -347,7 +344,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode_or_portable)
+                    checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
                     if ads := self.load_ads():
                         await self.create_browser_session()
@@ -361,7 +358,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     self.configure_file_logging()
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode_or_portable)
+                    checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
 
                     # Default to all ads if no selector provided
@@ -385,7 +382,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         self.ads_selector = "new"
                     self.load_config()
                     # Check for updates on startup
-                    checker = UpdateChecker(self.config, self.installation_mode_or_portable)
+                    checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
                     await self.create_browser_session()
                     await self.login()
@@ -452,8 +449,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     Mit dieser Option können Sie bestimmte Anzeigen-IDs angeben, z. B. "--ads=1,2,3"
               --force           - Alias für '--ads=all'
               --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
-              --config=<PATH>   - Pfad zur YAML- oder JSON-Konfigurationsdatei (STANDARD: ./config.yaml)
-              --logfile=<PATH>  - Pfad zur Protokolldatei (STANDARD: ./kleinanzeigen-bot.log)
+              --config=<PATH>   - Pfad zur YAML- oder JSON-Konfigurationsdatei (ändert den Workspace-Modus nicht implizit)
+              --workspace-mode=portable|xdg - Überschreibt den Workspace-Modus für diesen Lauf
+              --logfile=<PATH>  - Pfad zur Protokolldatei (STANDARD: vom aktiven Workspace-Modus abhängig)
               --lang=en|de      - Anzeigesprache (STANDARD: Systemsprache, wenn unterstützt, sonst Englisch)
               -v, --verbose     - Aktiviert detaillierte Ausgabe – nur nützlich zur Fehlerbehebung
             """.rstrip()
@@ -504,8 +502,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     Use this option to specify ad IDs, e.g. "--ads=1,2,3"
               --force           - alias for '--ads=all'
               --keep-old        - don't delete old ads on republication
-              --config=<PATH>   - path to the config YAML or JSON file (DEFAULT: ./config.yaml)
-              --logfile=<PATH>  - path to the logfile (DEFAULT: ./kleinanzeigen-bot.log)
+              --config=<PATH>   - path to the config YAML or JSON file (does not implicitly change workspace mode)
+              --workspace-mode=portable|xdg - overrides workspace mode for this run
+              --logfile=<PATH>  - path to the logfile (DEFAULT: depends on active workspace mode)
               --lang=en|de      - display language (STANDARD: system language if supported, otherwise English)
               -v, --verbose     - enables verbose output - only useful when troubleshooting issues
             """.rstrip()
@@ -514,7 +513,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     def parse_args(self, args:list[str]) -> None:
         try:
-            options, arguments = getopt.gnu_getopt(args[1:], "hv", ["ads=", "config=", "force", "help", "keep-old", "logfile=", "lang=", "verbose"])
+            options, arguments = getopt.gnu_getopt(
+                args[1:],
+                "hv",
+                ["ads=", "config=", "force", "help", "keep-old", "logfile=", "lang=", "verbose", "workspace-mode="],
+            )
         except getopt.error as ex:
             LOG.error(ex.msg)
             LOG.error("Use --help to display available options.")
@@ -527,13 +530,20 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     sys.exit(0)
                 case "--config":
                     self.config_file_path = abspath(value)
-                    self.config_explicitly_provided = True
+                    self._config_arg = value
                 case "--logfile":
                     if value:
                         self.log_file_path = abspath(value)
                     else:
                         self.log_file_path = None
-                    self.log_file_explicitly_provided = True
+                    self._logfile_arg = value
+                    self._logfile_explicitly_provided = True
+                case "--workspace-mode":
+                    mode = value.strip().lower()
+                    if mode not in {"portable", "xdg"}:
+                        LOG.error("Invalid --workspace-mode '%s'. Use 'portable' or 'xdg'.", value)
+                        sys.exit(2)
+                    self._workspace_mode_arg = cast(xdg_paths.InstallationMode, mode)
                 case "--ads":
                     self.ads_selector = value.strip().lower()
                 case "--force":
@@ -561,6 +571,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if self.file_log:
             return
 
+        if self.workspace and self.workspace.log_file:
+            xdg_paths.ensure_directory(self.workspace.log_file.parent, "log directory")
+
         LOG.info("Logging to [%s]...", self.log_file_path)
         self.file_log = loggers.configure_file_logging(self.log_file_path)
 
@@ -575,15 +588,21 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if os.path.exists(self.config_file_path):
             LOG.error("Config file %s already exists. Aborting creation.", self.config_file_path)
             return
+        config_parent = self.workspace.config_file.parent if self.workspace else Path(self.config_file_path).parent
+        xdg_paths.ensure_directory(config_parent, "config directory")
         default_config = Config.model_construct()
         default_config.login.username = "changeme"  # noqa: S105 placeholder for default config, not a real username
         default_config.login.password = "changeme"  # noqa: S105 placeholder for default config, not a real password
         dicts.save_commented_model(
             self.config_file_path,
             default_config,
-            header = ("# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json"),
+            header = (
+                "# yaml-language-server: "
+                "$schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json"
+            ),
             exclude = {
-                "ad_defaults": {"description"}},
+                "ad_defaults": {"description"},
+            },
         )
 
     def load_config(self) -> None:
@@ -617,6 +636,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self.browser_config.use_private_window = self.config.browser.use_private_window
         if self.config.browser.user_data_dir:
             self.browser_config.user_data_dir = abspath(self.config.browser.user_data_dir, relative_to = self.config_file_path)
+        elif self.workspace:
+            self.browser_config.user_data_dir = str(self.workspace.browser_profile_dir)
         self.browser_config.profile_name = self.config.browser.profile_name
 
     def __check_ad_republication(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
@@ -962,10 +983,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if diagnostics is not None and diagnostics.output_dir and diagnostics.output_dir.strip():
             return Path(abspath(diagnostics.output_dir, relative_to = self.config_file_path)).resolve()
 
-        if self.installation_mode_or_portable == "xdg":
-            return xdg_paths.get_xdg_base_dir("cache") / "diagnostics"
-
-        return (Path.cwd() / ".temp" / "diagnostics").resolve()
+        workspace = self._workspace_or_raise()
+        xdg_paths.ensure_directory(workspace.diagnostics_dir, "diagnostics directory")
+        return workspace.diagnostics_dir
 
     async def _capture_login_detection_diagnostics_if_enabled(self) -> None:
         cfg = getattr(self.config, "diagnostics", None)
@@ -2031,7 +2051,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.warning("Skipping ad with non-numeric id: %s", published_ad.get("id"))
         LOG.info("Loaded %s published ads.", len(published_ads_by_id))
 
-        ad_extractor = extract.AdExtractor(self.browser, self.config, self.installation_mode_or_portable, published_ads_by_id = published_ads_by_id)
+        workspace = self._workspace_or_raise()
+        xdg_paths.ensure_directory(workspace.download_dir, "downloaded ads directory")
+        ad_extractor = extract.AdExtractor(self.browser, self.config, workspace.download_dir, published_ads_by_id = published_ads_by_id)
 
         # use relevant download routine
         if self.ads_selector in {"all", "new"}:  # explore ads overview for these two modes

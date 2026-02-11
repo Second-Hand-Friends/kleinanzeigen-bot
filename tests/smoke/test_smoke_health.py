@@ -14,7 +14,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 from unittest.mock import patch
 
 import pytest
@@ -35,9 +35,19 @@ class CLIResult:
     stderr:str
 
 
-def invoke_cli(args:list[str], cwd:Path | None = None) -> CLIResult:
+def invoke_cli(
+    args:list[str],
+    cwd:Path | None = None,
+    env_overrides:Mapping[str, str] | None = None,
+) -> CLIResult:
     """
     Run the kleinanzeigen-bot CLI in-process and capture stdout/stderr.
+
+    Args:
+        args: CLI arguments passed to ``kleinanzeigen_bot.main``.
+        cwd: Optional working directory for this in-process CLI run.
+        env_overrides: Optional environment variable overrides merged into the
+            current environment for the run (useful to isolate HOME/XDG paths).
     """
     stdout = io.StringIO()
     stderr = io.StringIO()
@@ -70,6 +80,9 @@ def invoke_cli(args:list[str], cwd:Path | None = None) -> CLIResult:
             stack.enter_context(patch("kleinanzeigen_bot.atexit.register", capture_register))
             stack.enter_context(contextlib.redirect_stdout(stdout))
             stack.enter_context(contextlib.redirect_stderr(stderr))
+            effective_env_overrides = env_overrides if env_overrides is not None else _default_smoke_env(cwd)
+            if effective_env_overrides is not None:
+                stack.enter_context(patch.dict(os.environ, effective_env_overrides))
             try:
                 kleinanzeigen_bot.main(["kleinanzeigen-bot", *args])
             except SystemExit as exc:
@@ -81,6 +94,29 @@ def invoke_cli(args:list[str], cwd:Path | None = None) -> CLIResult:
         if previous_cwd is not None:
             os.chdir(previous_cwd)
         set_current_locale(previous_locale)
+
+
+def _xdg_env_overrides(tmp_path:Path) -> dict[str, str]:
+    """Create temporary HOME/XDG environment overrides for isolated smoke test runs."""
+    home = tmp_path / "home"
+    xdg_config = tmp_path / "xdg" / "config"
+    xdg_state = tmp_path / "xdg" / "state"
+    xdg_cache = tmp_path / "xdg" / "cache"
+    for path in (home, xdg_config, xdg_state, xdg_cache):
+        path.mkdir(parents = True, exist_ok = True)
+    return {
+        "HOME": os.fspath(home),
+        "XDG_CONFIG_HOME": os.fspath(xdg_config),
+        "XDG_STATE_HOME": os.fspath(xdg_state),
+        "XDG_CACHE_HOME": os.fspath(xdg_cache),
+    }
+
+
+def _default_smoke_env(cwd:Path | None) -> dict[str, str] | None:
+    """Isolate HOME/XDG paths to temporary directories during smoke CLI calls."""
+    if cwd is None:
+        return None
+    return _xdg_env_overrides(cwd)
 
 
 @pytest.fixture(autouse = True)
@@ -188,7 +224,7 @@ def test_cli_subcommands_with_config_formats(
             yaml.dump(config_dict, f)
     elif serializer is not None:
         config_path.write_text(serializer(config_dict), encoding = "utf-8")
-    args = [subcommand, "--config", str(config_path)]
+    args = [subcommand, "--config", str(config_path), "--workspace-mode", "portable"]
     result = invoke_cli(args, cwd = tmp_path)
     assert result.returncode == 0
     out = (result.stdout + "\n" + result.stderr).lower()

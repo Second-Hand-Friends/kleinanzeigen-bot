@@ -59,11 +59,13 @@ Full documentation for ad YAML files including automatic price reduction, descri
 
 ## File Location
 
-The bot looks for `config.yaml` in the current directory by default. You can specify a different location using the `--config` command line option:
+The bot looks for `config.yaml` in the current directory by default. You can specify a different location using `--config`:
 
 ```bash
 kleinanzeigen-bot --config /path/to/config.yaml publish
 ```
+
+`--config` selects the configuration file only. Workspace behavior is controlled by installation mode (`portable` or `xdg`) and can be overridden via `--workspace-mode=portable|xdg` (see [Installation Modes](#installation-modes)).
 
 Valid file extensions: `.json`, `.yaml`, `.yml`
 
@@ -302,15 +304,16 @@ The bot uses a layered approach to detect login state, prioritizing stealth over
 
 **Output locations (default):**
 
-- **Portable mode**: `./.temp/diagnostics/`
-- **System-wide mode (XDG)**: `~/.cache/kleinanzeigen-bot/diagnostics/` (Linux) or `~/Library/Caches/kleinanzeigen-bot/diagnostics/` (macOS)
+- **Portable mode + `--config /path/to/config.yaml`**: `/path/to/.temp/diagnostics/` (portable runtime files are placed next to the selected config file)
+- **Portable mode without `--config`**: `./.temp/diagnostics/` (current working directory)
+- **User directories mode**: `~/.cache/kleinanzeigen-bot/diagnostics/` (Linux), `~/Library/Caches/kleinanzeigen-bot/diagnostics/` (macOS), or `%LOCALAPPDATA%\kleinanzeigen-bot\Cache\diagnostics\` (Windows)
 - **Custom**: Path resolved relative to your `config.yaml` if `output_dir` is specified
 
 > **⚠️ PII Warning:** HTML dumps, JSON payloads, and log copies may contain PII. Typical examples include account email, ad titles/descriptions, contact info, and prices. Log copies are produced by `capture_log_copy` when diagnostics capture runs, such as `capture_on.publish` or `capture_on.login_detection`. Review or redact these artifacts before sharing them publicly.
 
 ## Installation Modes
 
-On first run, the app may ask which installation mode to use.
+On first run, when the `--workspace-mode` flag is not provided, the app may ask which installation mode to use. In non-interactive environments, it defaults to portable mode.
 
 1. **Portable mode (recommended for most users, especially on Windows):**
 
@@ -318,7 +321,7 @@ On first run, the app may ask which installation mode to use.
    - No admin permissions required
    - Easy backup/migration; works from USB drives
 
-2. **System-wide mode (advanced users / multi-user setups):**
+2. **User directories mode (advanced users / multi-user setups):**
 
    - Stores files in OS-standard locations
    - Cleaner directory structure; better separation from working directory
@@ -326,9 +329,35 @@ On first run, the app may ask which installation mode to use.
 
 **OS notes:**
 
-- **Windows:** System-wide uses AppData (Roaming/Local); portable keeps everything beside the `.exe`.
-- **Linux:** System-wide follows XDG Base Directory spec; portable stays in the current working directory.
-- **macOS:** System-wide uses `~/Library/Application Support/kleinanzeigen-bot` (and related dirs); portable stays in the current directory.
+- **Windows:** User directories mode uses AppData (Roaming/Local); portable keeps everything beside the `.exe`.
+- **Linux:** User directories mode uses `~/.config/kleinanzeigen-bot/config.yaml`, `~/.local/state/kleinanzeigen-bot/`, and `~/.cache/kleinanzeigen-bot/`; portable stays in the current working directory (for example `./config.yaml`, `./.temp/`, `./downloaded-ads/`).
+- **macOS:** User directories mode uses `~/Library/Application Support/kleinanzeigen-bot/config.yaml` (config), `~/Library/Application Support/kleinanzeigen-bot/` (state/runtime), and `~/Library/Caches/kleinanzeigen-bot/` (cache/diagnostics); portable stays in the current directory.
+
+### Mixed footprint cleanup
+
+If both portable and XDG footprints exist, `--config` without `--workspace-mode` is intentionally rejected to avoid silent behavior changes.
+
+A footprint is the set of files/directories the bot creates for one mode (configuration file, runtime state/cache directories, and `downloaded-ads`).
+
+Use one explicit run to choose a mode:
+
+```bash
+kleinanzeigen-bot --workspace-mode=portable --config /path/to/config.yaml verify
+```
+
+or
+
+```bash
+kleinanzeigen-bot --workspace-mode=xdg --config /path/to/config.yaml verify
+```
+
+Then remove the unused footprint directories/files to make auto-detection unambiguous for future runs.
+
+- Remove **portable footprint** items in your working location: `config.yaml`, `.temp/` (Windows: `.temp\`), and `downloaded-ads/` (Windows: `downloaded-ads\`). Back up or move `config.yaml` to your desired location before deleting it.
+- Remove **user directories footprint** items:
+  Linux: `~/.config/kleinanzeigen-bot/`, `~/.local/state/kleinanzeigen-bot/`, `~/.cache/kleinanzeigen-bot/`.
+  macOS: `~/Library/Application Support/kleinanzeigen-bot/`, `~/Library/Caches/kleinanzeigen-bot/`.
+  Windows: `%APPDATA%\kleinanzeigen-bot\`, `%LOCALAPPDATA%\kleinanzeigen-bot\`, `%LOCALAPPDATA%\kleinanzeigen-bot\Cache\`.
 
 ## Getting Current Defaults
 

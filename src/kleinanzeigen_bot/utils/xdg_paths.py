@@ -1,41 +1,61 @@
-# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 
-"""XDG Base Directory path resolution with backward compatibility.
-
-Supports two installation modes:
-- Portable: All files in current working directory (for existing installations)
-- System-wide: Files organized in XDG directories (for new installations or package managers)
-"""
+"""XDG Base Directory path resolution with workspace abstraction."""
 
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass, replace
 from gettext import gettext as _
 from pathlib import Path
-from typing import Final, Literal, cast
+from typing import Final, Literal
 
 import platformdirs
 
 from kleinanzeigen_bot.utils import loggers
+from kleinanzeigen_bot.utils.files import abspath
 
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 APP_NAME:Final[str] = "kleinanzeigen-bot"
-
 InstallationMode = Literal["portable", "xdg"]
 PathCategory = Literal["config", "cache", "state"]
 
 
-def _normalize_mode(mode:str | InstallationMode) -> InstallationMode:
-    """Validate and normalize installation mode input."""
-    if mode in {"portable", "xdg"}:
-        return cast(InstallationMode, mode)
-    raise ValueError(f"Unsupported installation mode: {mode}")
+@dataclass(frozen = True)
+class Workspace:
+    """Resolved workspace paths for all bot side effects."""
+
+    mode:InstallationMode
+    config_file:Path
+    config_dir:Path  # root directory for mode-dependent artifacts
+    log_file:Path | None
+    state_dir:Path
+    download_dir:Path
+    browser_profile_dir:Path
+    diagnostics_dir:Path
+
+    @classmethod
+    def for_config(cls, config_file:Path, log_basename:str) -> Workspace:
+        """Build a portable-style workspace rooted at the config parent directory."""
+        config_file = config_file.resolve()
+        config_dir = config_file.parent
+        state_dir = config_dir / ".temp"
+        return cls(
+            mode = "portable",
+            config_file = config_file,
+            config_dir = config_dir,
+            log_file = config_dir / f"{log_basename}.log",
+            state_dir = state_dir,
+            download_dir = config_dir / "downloaded-ads",
+            browser_profile_dir = state_dir / "browser-profile",
+            diagnostics_dir = state_dir / "diagnostics",
+        )
 
 
-def _ensure_directory(path:Path, description:str) -> None:
+def ensure_directory(path:Path, description:str) -> None:
     """Create directory and verify it exists."""
     LOG.debug("Creating directory: %s", path)
     try:
@@ -47,15 +67,25 @@ def _ensure_directory(path:Path, description:str) -> None:
         raise NotADirectoryError(str(path))
 
 
+def _build_xdg_workspace(log_basename:str, config_file_override:Path | None = None) -> Workspace:
+    """Build an XDG-style workspace using standard user directories."""
+    config_dir = get_xdg_base_dir("config").resolve()
+    state_dir = get_xdg_base_dir("state").resolve()
+    config_file = config_file_override.resolve() if config_file_override is not None else config_dir / "config.yaml"
+    return Workspace(
+        mode = "xdg",
+        config_file = config_file,
+        config_dir = config_dir,
+        log_file = state_dir / f"{log_basename}.log",
+        state_dir = state_dir,
+        download_dir = config_dir / "downloaded-ads",
+        browser_profile_dir = (get_xdg_base_dir("cache") / "browser-profile").resolve(),
+        diagnostics_dir = (get_xdg_base_dir("cache") / "diagnostics").resolve(),
+    )
+
+
 def get_xdg_base_dir(category:PathCategory) -> Path:
-    """Get XDG base directory for the given category.
-
-    Args:
-        category: The XDG category (config, cache, or state)
-
-    Returns:
-        Path to the XDG base directory for this app
-    """
+    """Get XDG base directory for the given category."""
     resolved:str | None = None
     match category:
         case "config":
@@ -71,20 +101,12 @@ def get_xdg_base_dir(category:PathCategory) -> Path:
         raise RuntimeError(f"Failed to resolve XDG base directory for category: {category}")
 
     base_dir = Path(resolved)
-
     LOG.debug("XDG %s directory: %s", category, base_dir)
     return base_dir
 
 
-def detect_installation_mode() -> InstallationMode | None:
-    """Detect installation mode based on config file location.
-
-    Returns:
-        "portable" if ./config.yaml exists in CWD
-        "xdg" if config exists in XDG location
-        None if neither exists (first run)
-    """
-    # Check for portable installation (./config.yaml in CWD)
+def detect_installation_mode() -> Literal["portable", "xdg"] | None:
+    """Detect installation mode based on config file location."""
     portable_config = Path.cwd() / "config.yaml"
     LOG.debug("Checking for portable config at: %s", portable_config)
 
@@ -92,7 +114,6 @@ def detect_installation_mode() -> InstallationMode | None:
         LOG.debug("Detected installation mode: %s", "portable")
         return "portable"
 
-    # Check for XDG installation
     xdg_config = get_xdg_base_dir("config") / "config.yaml"
     LOG.debug("Checking for XDG config at: %s", xdg_config)
 
@@ -100,37 +121,37 @@ def detect_installation_mode() -> InstallationMode | None:
         LOG.debug("Detected installation mode: %s", "xdg")
         return "xdg"
 
-    # Neither exists - first run
     LOG.info("No existing configuration (portable or system-wide) found")
     return None
 
 
-def prompt_installation_mode() -> InstallationMode:
-    """Prompt user to choose installation mode on first run.
-
-    Returns:
-        "portable" or "xdg" based on user choice, or "portable" as default for non-interactive mode
-    """
-    # Check if running in non-interactive mode (no stdin or not a TTY)
+def prompt_installation_mode() -> Literal["portable", "xdg"]:
+    """Prompt user to choose installation mode on first run."""
     if not sys.stdin or not sys.stdin.isatty():
         LOG.info("Non-interactive mode detected, defaulting to portable installation")
         return "portable"
 
+    portable_ws = Workspace.for_config((Path.cwd() / "config.yaml").resolve(), APP_NAME)
+    xdg_workspace = _build_xdg_workspace(APP_NAME)
+
     print(_("Choose installation type:"))
     print(_("[1] Portable (current directory)"))
-    print(_("[2] System-wide (XDG directories)"))
+    print(f"    config: {portable_ws.config_file}")
+    print(f"    log:    {portable_ws.log_file}")
+    print(_("[2] User directories (per-user standard locations)"))
+    print(f"    config: {xdg_workspace.config_file}")
+    print(f"    log:    {xdg_workspace.log_file}")
 
     while True:
         try:
             choice = input(_("Enter 1 or 2: ")).strip()
         except (EOFError, KeyboardInterrupt):
-            # Non-interactive or interrupted - default to portable
-            print()  # newline after ^C or EOF
+            print()
             LOG.info("Defaulting to portable installation mode")
             return "portable"
 
         if choice == "1":
-            mode:InstallationMode = "portable"
+            mode:Literal["portable", "xdg"] = "portable"
             LOG.info("User selected installation mode: %s", mode)
             return mode
         if choice == "2":
@@ -140,130 +161,122 @@ def prompt_installation_mode() -> InstallationMode:
         print(_("Invalid choice. Please enter 1 or 2."))
 
 
-def get_config_file_path(mode:str | InstallationMode) -> Path:
-    """Get config.yaml file path for the given mode.
-
-    Args:
-        mode: Installation mode (portable or xdg)
-
-    Returns:
-        Path to config.yaml
+def _detect_mode_from_footprints_with_hits(
+    config_file:Path,
+) -> tuple[Literal["portable", "xdg", "ambiguous", "unknown"], list[Path], list[Path]]:
     """
-    mode = _normalize_mode(mode)
-    config_path = Path.cwd() / "config.yaml" if mode == "portable" else get_xdg_base_dir("config") / "config.yaml"
-
-    LOG.debug("Resolving config file path for mode '%s': %s", mode, config_path)
-    return config_path
-
-
-def get_ad_files_search_dir(mode:str | InstallationMode) -> Path:
-    """Get directory to search for ad files.
-
-    Ad files are searched relative to the config file directory,
-    matching the documented behavior that glob patterns are relative to config.yaml.
-
-    Args:
-        mode: Installation mode (portable or xdg)
-
-    Returns:
-        Path to ad files search directory (same as config file directory)
+    Detect workspace mode and return concrete footprint hits for diagnostics.
     """
-    mode = _normalize_mode(mode)
-    search_dir = Path.cwd() if mode == "portable" else get_xdg_base_dir("config")
+    config_file = config_file.resolve()
+    cwd_config = (Path.cwd() / "config.yaml").resolve()
+    xdg_config_dir = get_xdg_base_dir("config").resolve()
+    xdg_cache_dir = get_xdg_base_dir("cache").resolve()
+    xdg_state_dir = get_xdg_base_dir("state").resolve()
+    config_in_xdg_tree = config_file.is_relative_to(xdg_config_dir)
 
-    LOG.debug("Resolving ad files search directory for mode '%s': %s", mode, search_dir)
-    return search_dir
+    portable_hits:list[Path] = []
+    xdg_hits:list[Path] = []
 
+    if config_file == cwd_config:
+        portable_hits.append(cwd_config)
+    if not config_in_xdg_tree:
+        if (config_file.parent / ".temp").exists():
+            portable_hits.append((config_file.parent / ".temp").resolve())
+        if (config_file.parent / "downloaded-ads").exists():
+            portable_hits.append((config_file.parent / "downloaded-ads").resolve())
 
-def get_downloaded_ads_path(mode:str | InstallationMode) -> Path:
-    """Get downloaded ads directory path.
+    if config_in_xdg_tree:
+        xdg_hits.append(config_file)
+    if not config_in_xdg_tree and (xdg_config_dir / "config.yaml").exists():
+        xdg_hits.append((xdg_config_dir / "config.yaml").resolve())
+    if (xdg_config_dir / "downloaded-ads").exists():
+        xdg_hits.append((xdg_config_dir / "downloaded-ads").resolve())
+    if (xdg_cache_dir / "browser-profile").exists():
+        xdg_hits.append((xdg_cache_dir / "browser-profile").resolve())
+    if (xdg_cache_dir / "diagnostics").exists():
+        xdg_hits.append((xdg_cache_dir / "diagnostics").resolve())
+    if (xdg_state_dir / "update_check_state.json").exists():
+        xdg_hits.append((xdg_state_dir / "update_check_state.json").resolve())
 
-    Args:
-        mode: Installation mode (portable or xdg)
+    portable_detected = len(portable_hits) > 0
+    xdg_detected = len(xdg_hits) > 0
 
-    Returns:
-        Path to downloaded ads directory
-
-    Note:
-        Creates the directory if it doesn't exist.
-    """
-    mode = _normalize_mode(mode)
-    ads_path = Path.cwd() / "downloaded-ads" if mode == "portable" else get_xdg_base_dir("config") / "downloaded-ads"
-
-    LOG.debug("Resolving downloaded ads path for mode '%s': %s", mode, ads_path)
-
-    # Create directory if it doesn't exist
-    _ensure_directory(ads_path, "downloaded ads directory")
-
-    return ads_path
-
-
-def get_browser_profile_path(mode:str | InstallationMode, config_override:str | None = None) -> Path:
-    """Get browser profile directory path.
-
-    Args:
-        mode: Installation mode (portable or xdg)
-        config_override: Optional config override path (takes precedence)
-
-    Returns:
-        Path to browser profile directory
-
-    Note:
-        Creates the directory if it doesn't exist.
-    """
-    mode = _normalize_mode(mode)
-    if config_override:
-        profile_path = Path(config_override).expanduser().resolve()
-        LOG.debug("Resolving browser profile path for mode '%s' (config override): %s", mode, profile_path)
-    elif mode == "portable":
-        profile_path = (Path.cwd() / ".temp" / "browser-profile").resolve()
-        LOG.debug("Resolving browser profile path for mode '%s': %s", mode, profile_path)
-    else:  # xdg
-        profile_path = (get_xdg_base_dir("cache") / "browser-profile").resolve()
-        LOG.debug("Resolving browser profile path for mode '%s': %s", mode, profile_path)
-
-    # Create directory if it doesn't exist
-    _ensure_directory(profile_path, "browser profile directory")
-
-    return profile_path
+    if portable_detected and xdg_detected:
+        return "ambiguous", portable_hits, xdg_hits
+    if portable_detected:
+        return "portable", portable_hits, xdg_hits
+    if xdg_detected:
+        return "xdg", portable_hits, xdg_hits
+    return "unknown", portable_hits, xdg_hits
 
 
-def get_log_file_path(basename:str, mode:str | InstallationMode) -> Path:
-    """Get log file path.
+def _workspace_mode_resolution_error(
+    config_file:Path,
+    detected_mode:Literal["ambiguous", "unknown"],
+    portable_hits:list[Path],
+    xdg_hits:list[Path],
+) -> ValueError:
+    def _format_hits(label:str, hits:list[Path]) -> str:
+        if not hits:
+            return f"{label}: {_('none')}"
+        deduped = list(dict.fromkeys(hits))
+        return f"{label}:\n- " + "\n- ".join(str(hit) for hit in deduped)
 
-    Args:
-        basename: Log file basename (without .log extension)
-        mode: Installation mode (portable or xdg)
-
-    Returns:
-        Path to log file
-    """
-    mode = _normalize_mode(mode)
-    log_path = Path.cwd() / f"{basename}.log" if mode == "portable" else get_xdg_base_dir("state") / f"{basename}.log"
-
-    LOG.debug("Resolving log file path for mode '%s': %s", mode, log_path)
-
-    # Create parent directory if it doesn't exist
-    _ensure_directory(log_path.parent, "log directory")
-
-    return log_path
+    guidance = _(
+        "Cannot determine workspace mode for --config=%(config_file)s. "
+        "Use --workspace-mode=portable or --workspace-mode=xdg.\n"
+        "For cleanup guidance, see: %(url)s"
+    ) % {
+        "config_file": config_file,
+        "url": "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/docs/CONFIGURATION.md#installation-modes",
+    }
+    details = f"{_format_hits(_('Portable footprint hits'), portable_hits)}\n{_format_hits(_('XDG footprint hits'), xdg_hits)}"
+    if detected_mode == "ambiguous":
+        return ValueError(f"{guidance}\n{_('Detected both portable and XDG footprints.')}\n{details}")
+    return ValueError(f"{guidance}\n{_('Detected neither portable nor XDG footprints.')}\n{details}")
 
 
-def get_update_check_state_path(mode:str | InstallationMode) -> Path:
-    """Get update check state file path.
+def resolve_workspace(
+    config_arg:str | None,
+    logfile_arg:str | None,
+    *,
+    workspace_mode:InstallationMode | None,
+    logfile_explicitly_provided:bool,
+    log_basename:str,
+) -> Workspace:
+    """Resolve workspace paths from CLI flags and auto-detected installation mode."""
+    config_path = Path(abspath(config_arg)).resolve() if config_arg else None
+    mode = workspace_mode
 
-    Args:
-        mode: Installation mode (portable or xdg)
+    if config_path and mode is None:
+        detected_mode, portable_hits, xdg_hits = _detect_mode_from_footprints_with_hits(config_path)
+        if detected_mode == "portable":
+            mode = "portable"
+        elif detected_mode == "xdg":
+            mode = "xdg"
+        else:
+            raise _workspace_mode_resolution_error(
+                config_path,
+                detected_mode,
+                portable_hits,
+                xdg_hits,
+            )
 
-    Returns:
-        Path to update check state file
-    """
-    mode = _normalize_mode(mode)
-    state_path = Path.cwd() / ".temp" / "update_check_state.json" if mode == "portable" else get_xdg_base_dir("state") / "update_check_state.json"
+    if config_arg:
+        if config_path is None or mode is None:
+            raise RuntimeError("Workspace mode and config path must be resolved when --config is supplied")
+        if mode == "portable":
+            workspace = Workspace.for_config(config_path, log_basename)
+        else:
+            workspace = _build_xdg_workspace(log_basename, config_file_override = config_path)
+    else:
+        mode = mode or detect_installation_mode()
+        if mode is None:
+            mode = prompt_installation_mode()
 
-    LOG.debug("Resolving update check state path for mode '%s': %s", mode, state_path)
+        workspace = Workspace.for_config((Path.cwd() / "config.yaml").resolve(), log_basename) if mode == "portable" else _build_xdg_workspace(log_basename)
 
-    # Create parent directory if it doesn't exist
-    _ensure_directory(state_path.parent, "update check state directory")
+    if logfile_explicitly_provided:
+        workspace = replace(workspace, log_file = Path(abspath(logfile_arg)).resolve() if logfile_arg else None)
 
-    return state_path
+    return workspace

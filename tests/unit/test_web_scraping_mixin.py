@@ -988,6 +988,93 @@ class TestWebScrapingBrowserConfiguration:
         assert os.environ.get("MSEDGEDRIVER_TELEMETRY_OPTOUT") == "1"
 
     @pytest.mark.asyncio
+    async def test_create_browser_session_logs_missing_user_data_dir_for_non_test_runs(
+        self, monkeypatch:pytest.MonkeyPatch, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test non-test runtime without user_data_dir logs fallback diagnostics and default profile usage."""
+        class DummyConfig:
+            def __init__(self, **kwargs:object) -> None:
+                self.browser_args = cast(list[str], kwargs.get("browser_args", []))
+                self.user_data_dir = cast(str | None, kwargs.get("user_data_dir"))
+                self.browser_executable_path = cast(str | None, kwargs.get("browser_executable_path"))
+                self.headless = cast(bool, kwargs.get("headless", False))
+
+            def add_extension(self, _ext:str) -> None:
+                return
+
+        mock_browser = AsyncMock()
+        mock_browser.websocket_url = "ws://localhost:9222"
+        monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
+        monkeypatch.setattr("kleinanzeigen_bot.utils.web_scraping_mixin.NodriverConfig", DummyConfig)
+        monkeypatch.setattr(loggers, "is_debug", lambda _logger: False)
+        monkeypatch.setattr(
+            WebScrapingMixin,
+            "_validate_chrome_version_configuration",
+            AsyncMock(return_value = None),
+        )
+
+        async def mock_exists(path:str | Path) -> bool:
+            return str(path) == "/usr/bin/chrome"
+
+        monkeypatch.setattr(files, "exists", mock_exists)
+        caplog.set_level(logging.DEBUG)
+
+        with patch.dict(os.environ, {}, clear = True):
+            scraper = WebScrapingMixin()
+            scraper.browser_config.binary_location = "/usr/bin/chrome"
+            await scraper.create_browser_session()
+
+        cfg = _nodriver_start_mock().call_args[0][0]
+        assert cfg.user_data_dir is None
+        assert "--log-level=3" in cfg.browser_args
+        assert "No browser user_data_dir configured" in caplog.text
+        assert "No effective browser user_data_dir found" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_create_browser_session_ensures_profile_directory_for_user_data_dir(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        """Test configured user_data_dir creates profile structure and skips non-debug log-level override."""
+        class DummyConfig:
+            def __init__(self, **kwargs:object) -> None:
+                self.browser_args = cast(list[str], kwargs.get("browser_args", []))
+                self.user_data_dir = cast(str | None, kwargs.get("user_data_dir"))
+                self.browser_executable_path = cast(str | None, kwargs.get("browser_executable_path"))
+                self.headless = cast(bool, kwargs.get("headless", False))
+
+            def add_extension(self, _ext:str) -> None:
+                return
+
+        mock_browser = AsyncMock()
+        mock_browser.websocket_url = "ws://localhost:9222"
+        monkeypatch.setattr(nodriver, "start", AsyncMock(return_value = mock_browser))
+        monkeypatch.setattr("kleinanzeigen_bot.utils.web_scraping_mixin.NodriverConfig", DummyConfig)
+        monkeypatch.setattr(loggers, "is_debug", lambda _logger: True)
+        monkeypatch.setattr(
+            WebScrapingMixin,
+            "_validate_chrome_version_configuration",
+            AsyncMock(return_value = None),
+        )
+
+        async def mock_exists(path:str | Path) -> bool:
+            path_str = str(path)
+            if path_str == "/usr/bin/chrome":
+                return True
+            return bool(path_str.endswith("Preferences"))
+
+        monkeypatch.setattr(files, "exists", mock_exists)
+
+        with patch.dict(os.environ, {}, clear = True), \
+                patch("kleinanzeigen_bot.utils.web_scraping_mixin.xdg_paths.ensure_directory") as mock_ensure_dir:
+            scraper = WebScrapingMixin()
+            scraper.browser_config.binary_location = "/usr/bin/chrome"
+            scraper.browser_config.user_data_dir = str(tmp_path / "profile-root")
+            await scraper.create_browser_session()
+
+        cfg = _nodriver_start_mock().call_args[0][0]
+        assert cfg.user_data_dir == str(tmp_path / "profile-root")
+        assert "--log-level=3" not in cfg.browser_args
+        mock_ensure_dir.assert_called_once_with(Path(str(tmp_path / "profile-root")), "browser profile directory")
+
+    @pytest.mark.asyncio
     async def test_browser_extension_loading(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test browser extension loading."""
         class DummyConfig:
