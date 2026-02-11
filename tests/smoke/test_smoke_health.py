@@ -96,12 +96,12 @@ def invoke_cli(
         set_current_locale(previous_locale)
 
 
-def _xdg_env_overrides(tmp_path:Path) -> dict[str, str]:
-    """Create temporary HOME/XDG environment overrides for isolated smoke test runs."""
-    home = tmp_path / "home"
-    xdg_config = tmp_path / "xdg" / "config"
-    xdg_state = tmp_path / "xdg" / "state"
-    xdg_cache = tmp_path / "xdg" / "cache"
+def _xdg_env_overrides(base_path:Path) -> dict[str, str]:
+    """Create temporary HOME/XDG environment overrides rooted at the provided base path."""
+    home = base_path / "home"
+    xdg_config = base_path / "xdg" / "config"
+    xdg_state = base_path / "xdg" / "state"
+    xdg_cache = base_path / "xdg" / "cache"
     for path in (home, xdg_config, xdg_state, xdg_cache):
         path.mkdir(parents = True, exist_ok = True)
     return {

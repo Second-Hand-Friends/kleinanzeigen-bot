@@ -313,7 +313,7 @@ The bot uses a layered approach to detect login state, prioritizing stealth over
 **Timing collection output (default):**
 
 - **Portable mode**: `./.temp/timing/timing_data.json`
-- **System-wide mode (XDG)**: `~/.cache/kleinanzeigen-bot/timing/timing_data.json` (Linux) or `~/Library/Caches/kleinanzeigen-bot/timing/timing_data.json` (macOS)
+- **User directories mode**: `~/.cache/kleinanzeigen-bot/timing/timing_data.json` (Linux) or `~/Library/Caches/kleinanzeigen-bot/timing/timing_data.json` (macOS)
 - Data is grouped by run/session and retained for 30 days via automatic cleanup during each data write
 
 Example structure:

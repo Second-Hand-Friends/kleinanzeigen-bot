@@ -397,7 +397,7 @@ class TestWorkspace:
             return original_resolve(self, strict)
 
         with patch.object(Path, "resolve", patched_resolve), pytest.raises(
-            ValueError, match = "Workspace mode and config path must be resolved"
+            RuntimeError, match = "Workspace mode and config path must be resolved"
         ):
             xdg_paths.resolve_workspace(
                 config_arg = str(config_path),

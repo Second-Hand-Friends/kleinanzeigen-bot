@@ -78,7 +78,11 @@ The bot will also provide specific instructions on how to fix your configuration
 1. Override specific keys under `timeouts` (e.g., `pagination_initial: 20.0`) if only a single selector is problematic.
 1. For slow email verification prompts, raise `timeouts.email_verification`.
 1. Keep `retry_enabled` on so that DOM lookups are retried with exponential backoff.
-1. Attach `timing_data.json` when opening issues so maintainers can tune defaults from real-world timing evidence. It is written automatically during runs when `diagnostics.timing_collection` is enabled (default: `true`) to `./.temp/timing/timing_data.json` in portable mode or `~/.cache/kleinanzeigen-bot/timing/timing_data.json` in system-wide mode.
+1. Attach `timing_data.json` when opening issues so maintainers can tune defaults from real-world timing evidence.
+   - It is written automatically during runs when `diagnostics.timing_collection` is enabled (default: `true`, see `Configuration.md`).
+   - Portable mode path: `./.temp/timing/timing_data.json`
+   - User directories mode path: `~/.cache/kleinanzeigen-bot/timing/timing_data.json` (Linux), `~/Library/Caches/kleinanzeigen-bot/timing/timing_data.json` (macOS), or `%LOCALAPPDATA%\kleinanzeigen-bot\timing\timing_data.json` (Windows)
+   - Which one applies depends on your installation mode: portable mode writes next to your config/current directory, user directories mode writes in OS-standard user paths. Check which path exists on your system, or see `CONFIGURATION.md#installation-modes` for mode selection details.
 
 ### Issue: Bot fails to detect existing login session
 

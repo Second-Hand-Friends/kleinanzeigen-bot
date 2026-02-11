@@ -715,8 +715,7 @@ kleinanzeigen_bot/utils/xdg_paths.py:
     "Defaulting to portable installation mode": "Standard-Installationsmodus: portabel"
     "User selected installation mode: %s": "Benutzer hat Installationsmodus gewählt: %s"
     "Invalid choice. Please enter 1 or 2.": "Ungültige Auswahl. Bitte 1 oder 2 eingeben."
-  resolve_workspace:
-    "Workspace mode and config path must be resolved when --config is supplied": "Arbeitsmodus und Konfigurationspfad müssen aufgelöst sein, wenn --config verwendet wird"
+  resolve_workspace: {}
   _format_hits:
     "none": "keine"
   _workspace_mode_resolution_error:

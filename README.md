@@ -272,7 +272,7 @@ Path resolution rules:
 
 - Runtime files are mode-dependent write locations (for example, logfile, update state, browser profile/cache, diagnostics, and downloaded ads).
 - `--config` selects only the config file; it does not silently switch workspace mode.
-- `--workspace-mode=portable`: runtime files are rooted next to the active config file (or the current working directory if no `--config` is supplied).
+- `--workspace-mode=portable`: runtime files are placed in the same directory as the active config file (or the current working directory if no `--config` is supplied).
 - `--workspace-mode=xdg`: runtime files use OS-standard user directories.
 - `--config` without `--workspace-mode`: mode is inferred from existing footprints; on ambiguity/unknown, the command fails with guidance (for example: `Could not infer workspace mode for --config ...`) and asks you to rerun with `--workspace-mode=portable` or `--workspace-mode=xdg`.
 
@@ -280,7 +280,7 @@ Examples:
 
 - `kleinanzeigen-bot --config /sync/dropbox/config1.yaml verify` (no `--workspace-mode`): mode is inferred from detected footprints; if both portable and user-directories footprints are found (or none are found), the command fails and lists the found paths.
 - `kleinanzeigen-bot --workspace-mode=portable --config /sync/dropbox/config1.yaml verify`: runtime files are rooted at `/sync/dropbox/` (for example `/sync/dropbox/.temp/` and `/sync/dropbox/downloaded-ads/`).
-- `kleinanzeigen-bot --workspace-mode=xdg --config /sync/dropbox/config1.yaml verify`: config is read from `/sync/dropbox/config1.yaml`, while runtime files stay in user directories (for example Linux `~/.config/kleinanzeigen-bot/`, `~/.local/state/kleinanzeigen-bot/`, `~/.cache/kleinanzeigen-bot/`).
+- `kleinanzeigen-bot --workspace-mode=xdg --config /sync/dropbox/config1.yaml verify`: config is read from `/sync/dropbox/config1.yaml`, while runtime files stay in user directories (on Linux: `~/.config/kleinanzeigen-bot/`, `~/.local/state/kleinanzeigen-bot/`, `~/.cache/kleinanzeigen-bot/`).
 
 1. **Portable mode (recommended for most users, especially on Windows):**
 
@@ -296,11 +296,11 @@ Examples:
 
 **OS notes (brief):**
 
-- **Windows:** User directories mode uses AppData (Roaming/Local); portable keeps everything beside the `.exe`.
+- **Windows:** User directories mode uses AppData (Roaming/Local); portable keeps everything alongside the `.exe`.
 - **Linux:** User directories mode uses `~/.config/kleinanzeigen-bot/config.yaml`, `~/.local/state/kleinanzeigen-bot/`, and `~/.cache/kleinanzeigen-bot/`; portable uses `./config.yaml`, `./.temp/`, and `./downloaded-ads/`.
 - **macOS:** User directories mode uses `~/Library/Application Support/kleinanzeigen-bot/config.yaml` (config), `~/Library/Application Support/kleinanzeigen-bot/` (state/runtime), and `~/Library/Caches/kleinanzeigen-bot/` (cache/diagnostics); portable stays in the current working directory.
 
-If you have mixed legacy footprints (portable + XDG), pass an explicit mode (for example `--workspace-mode=portable`) and then clean up unused files. See [Configuration: Installation Modes](docs/CONFIGURATION.md#installation-modes).
+If you have footprints from both modes (portable + XDG), pass an explicit mode (for example `--workspace-mode=portable`) and then clean up unused files. See [Configuration: Installation Modes](docs/CONFIGURATION.md#installation-modes).
 
 ### <a name="main-config"></a>1) Main configuration ⚙️
 

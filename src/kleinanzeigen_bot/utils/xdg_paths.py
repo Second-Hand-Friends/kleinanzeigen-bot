@@ -264,7 +264,7 @@ def resolve_workspace(
 
     if config_arg:
         if config_path is None or mode is None:
-            raise ValueError(_("Workspace mode and config path must be resolved when --config is supplied"))
+            raise RuntimeError("Workspace mode and config path must be resolved when --config is supplied")
         if mode == "portable":
             workspace = Workspace.for_config(config_path, log_basename)
         else:
