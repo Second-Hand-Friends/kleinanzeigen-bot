@@ -43,7 +43,7 @@ class AdExtractor(WebScrapingMixin):
         super().__init__()
         self.browser = browser
         self.config:Config = config
-        self.download_dir = download_dir
+        self.download_dir:Path = download_dir
         self.published_ads_by_id:dict[int, dict[str, Any]] = published_ads_by_id or {}
 
     async def download_ad(self, ad_id:int) -> None:

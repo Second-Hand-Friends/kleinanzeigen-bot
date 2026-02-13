@@ -24,6 +24,7 @@ from .utils.exceptions import CaptchaEncountered
 from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
 from .utils.misc import ainput, ensure, is_frozen
+from .utils.timing_collector import TimingCollector
 from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
@@ -179,13 +180,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self._log_basename = os.path.splitext(os.path.basename(sys.executable))[0] if is_frozen() else self.__module__
         self.log_file_path:str | None = abspath(f"{self._log_basename}.log")
         self._logfile_arg:str | None = None
-        self._logfile_explicitly_provided = False
+        self._logfile_explicitly_provided:bool = False
 
         self.command = "help"
         self.ads_selector = "due"
         self.keep_old_ads = False
 
         self._login_detection_diagnostics_captured:bool = False
+        self._timing_collector:TimingCollector | None = None
 
     def __del__(self) -> None:
         if self.file_log:
@@ -393,6 +395,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     sys.exit(2)
         finally:
             self.close_browser_session()
+            if self._timing_collector is not None:
+                try:
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, self._timing_collector.flush)
+                except Exception as exc:  # noqa: BLE001
+                    LOG.warning("Timing collector flush failed: %s", exc)
 
     def show_help(self) -> None:
         if is_frozen():
@@ -612,6 +620,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         config_yaml = dicts.load_dict_if_exists(self.config_file_path, _("config"))
         self.config = Config.model_validate(config_yaml, strict = True, context = self.config_file_path)
+
+        timing_enabled = self.config.diagnostics.timing_collection
+        if timing_enabled and self.workspace:
+            timing_dir = self.workspace.diagnostics_dir.parent / "timing"
+            self._timing_collector = TimingCollector(timing_dir, self.command)
+        else:
+            self._timing_collector = None
 
         # load built-in category mappings
         self.categories = dicts.load_dict_from_module(resources, "categories.yaml", "")

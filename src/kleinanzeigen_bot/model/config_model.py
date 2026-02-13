@@ -265,6 +265,10 @@ class DiagnosticsConfig(ContextualModel):
         default = None,
         description = "Optional output directory for diagnostics artifacts. If omitted, a safe default is used based on installation mode.",
     )
+    timing_collection:bool = Field(
+        default = True,
+        description = "If true, collect local timeout timing data and write it to diagnostics JSON for troubleshooting and tuning.",
+    )
 
     @model_validator(mode = "before")
     @classmethod
