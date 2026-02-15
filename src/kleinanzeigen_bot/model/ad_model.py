@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib, json  # isort: skip
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime  # noqa: TC003 Move import into a type-checking block
 from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
 from gettext import gettext as _
@@ -20,6 +21,17 @@ from kleinanzeigen_bot.utils.pydantics import ContextualModel
 
 MAX_DESCRIPTION_LENGTH:Final[int] = 4000
 EURO_PRECISION:Final[Decimal] = Decimal("1")
+
+
+@dataclass(frozen = True)
+class PriceReductionStep:
+    """Single reduction step with before/after values and floor clamp state."""
+
+    cycle:int
+    price_before:Decimal
+    reduction_value:Decimal
+    price_after_rounding:Decimal
+    floor_applied:bool
 
 
 def _OPTIONAL() -> Any:
@@ -65,10 +77,7 @@ def _validate_shipping_option_item(v:str) -> str:
 ShippingOption = Annotated[str, AfterValidator(_validate_shipping_option_item)]
 
 
-def _validate_auto_price_reduction_constraints(
-    price:int | None,
-    auto_price_reduction:AutoPriceReductionConfig | dict[str, Any] | None
-) -> None:
+def _validate_auto_price_reduction_constraints(price:int | None, auto_price_reduction:AutoPriceReductionConfig | dict[str, Any] | None) -> None:
     """
     Validate auto_price_reduction configuration constraints.
 
@@ -115,20 +124,9 @@ class AdPartial(ContextualModel):
     special_attributes:dict[str, str] | None = _OPTIONAL()
     price:int | None = _OPTIONAL()
     price_type:Literal["FIXED", "NEGOTIABLE", "GIVE_AWAY", "NOT_APPLICABLE"] | None = _OPTIONAL()
-    auto_price_reduction:AutoPriceReductionConfig | None = Field(
-        default = None,
-        description = "automatic price reduction configuration"
-    )
-    repost_count:int = Field(
-        default = 0,
-        ge = 0,
-        description = "number of successful publications for this ad (persisted between runs)"
-    )
-    price_reduction_count:int = Field(
-        default = 0,
-        ge = 0,
-        description = "internal counter: number of automatic price reductions already applied"
-    )
+    auto_price_reduction:AutoPriceReductionConfig | None = Field(default = None, description = "automatic price reduction configuration")
+    repost_count:int = Field(default = 0, ge = 0, description = "number of successful publications for this ad (persisted between runs)")
+    price_reduction_count:int = Field(default = 0, ge = 0, description = "internal counter: number of automatic price reductions already applied")
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] | None = _OPTIONAL()
     shipping_costs:float | None = _OPTIONAL()
     shipping_options:list[ShippingOption] | None = _OPTIONAL()
@@ -205,11 +203,7 @@ class AdPartial(ContextualModel):
                     if not (isinstance(v, (Mapping, Sequence, set)) and not isinstance(v, (str, bytes)) and len(v) == 0)
                 }
             if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
-                return [
-                    prune(v)
-                    for v in obj
-                    if not (isinstance(v, (Mapping, Sequence, set)) and not isinstance(v, (str, bytes)) and len(v) == 0)
-                ]
+                return [prune(v) for v in obj if not (isinstance(v, (Mapping, Sequence, set)) and not isinstance(v, (str, bytes)) and len(v) == 0)]
             return obj
 
         pruned = prune(raw)
@@ -234,7 +228,7 @@ class AdPartial(ContextualModel):
             ignore = lambda k, _: k == "description",  # ignore legacy global description config
             override = lambda _, v: (
                 not isinstance(v, list) and (v is None or (isinstance(v, str) and v == ""))  # noqa: PLC1901
-            )
+            ),
         )
         # Ensure internal counters are integers (not user-configurable)
         if not isinstance(ad_cfg.get("price_reduction_count"), int):
@@ -244,12 +238,9 @@ class AdPartial(ContextualModel):
         return Ad.model_validate(ad_cfg)
 
 
-def calculate_auto_price(
-    *,
-    base_price:int | float | None,
-    auto_price_reduction:AutoPriceReductionConfig | None,
-    target_reduction_cycle:int
-) -> int | None:
+def _calculate_auto_price_internal(
+    *, base_price:int | float | None, auto_price_reduction:AutoPriceReductionConfig | None, target_reduction_cycle:int, with_trace:bool
+) -> tuple[int | None, list[PriceReductionStep], Decimal | None]:
     """
     Calculate the effective price for the current run using commercial rounding.
 
@@ -263,15 +254,15 @@ def calculate_auto_price(
     Returns an int representing whole euros, or None when base_price is None.
     """
     if base_price is None:
-        return None
+        return None, [], None
 
     price = Decimal(str(base_price))
 
     if not auto_price_reduction or not auto_price_reduction.enabled or target_reduction_cycle <= 0:
-        return int(price.quantize(EURO_PRECISION, rounding = ROUND_HALF_UP))
+        return int(price.quantize(EURO_PRECISION, rounding = ROUND_HALF_UP)), [], None
 
     if auto_price_reduction.strategy is None or auto_price_reduction.amount is None:
-        return int(price.quantize(EURO_PRECISION, rounding = ROUND_HALF_UP))
+        return int(price.quantize(EURO_PRECISION, rounding = ROUND_HALF_UP)), [], None
 
     if auto_price_reduction.min_price is None:
         raise ValueError(_("min_price must be specified when auto_price_reduction is enabled"))
@@ -279,8 +270,10 @@ def calculate_auto_price(
     # Prices are published as whole euros; ensure the configured floor cannot be undercut by int() conversion.
     price_floor = Decimal(str(auto_price_reduction.min_price)).quantize(EURO_PRECISION, rounding = ROUND_CEILING)
     repost_cycles = target_reduction_cycle
+    steps:list[PriceReductionStep] = []
 
-    for _cycle in range(repost_cycles):
+    for cycle_idx in range(repost_cycles):
+        price_before = price
         reduction_value = (
             price * Decimal(str(auto_price_reduction.amount)) / Decimal("100")
             if auto_price_reduction.strategy == "PERCENTAGE"
@@ -289,11 +282,59 @@ def calculate_auto_price(
         price -= reduction_value
         # Commercial rounding: round to full euros after each reduction step
         price = price.quantize(EURO_PRECISION, rounding = ROUND_HALF_UP)
+        floor_applied = False
         if price <= price_floor:
             price = price_floor
+            floor_applied = True
+
+        if with_trace:
+            steps.append(
+                PriceReductionStep(
+                    cycle = cycle_idx + 1,
+                    price_before = price_before,
+                    reduction_value = reduction_value,
+                    price_after_rounding = price,
+                    floor_applied = floor_applied,
+                )
+            )
+
+        if floor_applied:
             break
 
-    return int(price)
+    return int(price), steps, price_floor
+
+
+def calculate_auto_price(*, base_price:int | float | None, auto_price_reduction:AutoPriceReductionConfig | None, target_reduction_cycle:int) -> int | None:
+    return _calculate_auto_price_internal(
+        base_price = base_price,
+        auto_price_reduction = auto_price_reduction,
+        target_reduction_cycle = target_reduction_cycle,
+        with_trace = False,
+    )[0]
+
+
+def calculate_auto_price_with_trace(
+    *, base_price:int | float | None, auto_price_reduction:AutoPriceReductionConfig | None, target_reduction_cycle:int
+) -> tuple[int | None, list[PriceReductionStep], Decimal | None]:
+    """Calculate auto price and return a step-by-step reduction trace.
+
+    Args:
+        base_price: starting price before reductions.
+        auto_price_reduction: reduction configuration (strategy, amount, floor, enabled).
+        target_reduction_cycle: reduction cycle to compute (0 = no reduction, 1 = first reduction).
+
+    Returns:
+        A tuple of ``(price, steps, price_floor)`` where:
+        - ``price`` is the computed effective price (``int``) or ``None`` when ``base_price`` is ``None``.
+        - ``steps`` is a list of ``PriceReductionStep`` entries containing the cycle trace.
+        - ``price_floor`` is the rounded ``Decimal`` floor used for clamping, or ``None`` when not applicable.
+    """
+    return _calculate_auto_price_internal(
+        base_price = base_price,
+        auto_price_reduction = auto_price_reduction,
+        target_reduction_cycle = target_reduction_cycle,
+        with_trace = True,
+    )
 
 
 # pyright: reportGeneralTypeIssues=false, reportIncompatibleVariableOverride=false
