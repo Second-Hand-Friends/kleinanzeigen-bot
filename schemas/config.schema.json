@@ -455,6 +455,12 @@
           "default": null,
           "description": "Optional output directory for diagnostics artifacts. If omitted, a safe default is used based on installation mode.",
           "title": "Output Dir"
+        },
+        "timing_collection": {
+          "default": true,
+          "description": "If true, collect local timeout timing data and write it to diagnostics JSON for troubleshooting and tuning.",
+          "title": "Timing Collection",
+          "type": "boolean"
         }
       },
       "title": "DiagnosticsConfig",

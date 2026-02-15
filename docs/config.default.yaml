@@ -1,0 +1,312 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json
+
+# glob (wildcard) patterns to select ad configuration files
+# if relative paths are specified, then they are relative to this configuration file
+ad_files:
+  - ./**/ad_*.{json,yml,yaml}
+
+# ################################################################################
+# Default values for ads, can be overwritten in each ad configuration file
+ad_defaults:
+
+  # whether the ad should be published (false = skip this ad)
+  active: true
+
+  # type of the ad listing
+  # Examples (choose one):
+  #   • OFFER
+  #   • WANTED
+  type: OFFER
+
+  # text to prepend to each ad (optional)
+  description_prefix: ''
+
+  # text to append to each ad (optional)
+  description_suffix: ''
+
+  # pricing strategy for the listing
+  # Examples (choose one):
+  #   • FIXED
+  #   • NEGOTIABLE
+  #   • GIVE_AWAY
+  #   • NOT_APPLICABLE
+  price_type: NEGOTIABLE
+
+  # automatic price reduction configuration for reposted ads
+  auto_price_reduction:
+
+    # automatically lower the price of reposted ads
+    enabled: false
+
+    # reduction strategy (required when enabled: true). PERCENTAGE = % of price, FIXED = absolute amount
+    # Examples (choose one):
+    #   • PERCENTAGE
+    #   • FIXED
+    strategy:
+
+    # reduction amount (required when enabled: true). For PERCENTAGE: use percent value (e.g., 10 = 10%%). For FIXED: use currency amount
+    # Examples (choose one):
+    #   • 10.0
+    #   • 5.0
+    #   • 20.0
+    amount:
+
+    # minimum price floor (required when enabled: true). Use 0 for no minimum
+    # Examples (choose one):
+    #   • 1.0
+    #   • 5.0
+    #   • 10.0
+    min_price:
+
+    # number of reposts to wait before applying the first automatic price reduction
+    delay_reposts: 0
+
+    # number of days to wait after publication before applying automatic price reductions
+    delay_days: 0
+
+  # shipping method for the item
+  # Examples (choose one):
+  #   • PICKUP
+  #   • SHIPPING
+  #   • NOT_APPLICABLE
+  shipping_type: SHIPPING
+
+  # enable direct purchase option (only works when shipping_type is SHIPPING)
+  sell_directly: false
+
+  # default image glob patterns (optional). Leave empty for no default images
+  # Example usage:
+  #   images:
+  #     - "images/*.jpg"
+  #     - "photos/*.{png,jpg}"
+  images: []
+
+  # default contact information for ads
+  contact:
+
+    # contact name displayed on the ad
+    name: ''
+
+    # street address for the listing
+    street: ''
+
+    # postal/ZIP code for the listing location
+    zipcode: ''
+
+    # city or locality of the listing (can include multiple districts)
+    # Example: Sample Town - District One
+    location: ''
+
+    # phone number for contact - only available for commercial accounts, personal accounts no longer support this
+    # Example: "01234 567890"
+    phone: ''
+
+  # number of days between automatic republication of ads
+  republication_interval: 7
+
+# ################################################################################
+# additional name to category ID mappings (optional). Leave as {} if not needed. See full list at: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/src/kleinanzeigen_bot/resources/categories.yaml To add: use format 'Category > Subcategory': 'ID'
+# Examples (choose one):
+#   • "Elektronik > Notebooks": "161/278"
+#   • "Jobs > Praktika": "102/125"
+categories: {}
+
+# ################################################################################
+download:
+
+  # if true, all shipping options matching the package size will be included
+  include_all_matching_shipping_options: false
+
+  # shipping options to exclude (optional). Leave as [] to include all. Add items like 'DHL_2' to exclude specific carriers
+  # Example usage:
+  #   excluded_shipping_options:
+  #     - "DHL_2"
+  #     - "DHL_5"
+  #     - "Hermes"
+  excluded_shipping_options: []
+
+  # maximum length for folder names when downloading ads (default: 100)
+  folder_name_max_length: 100
+
+  # if true, rename existing folders without titles to include titles (default: false)
+  rename_existing_folders: false
+
+# ################################################################################
+publishing:
+
+  # when to delete old versions of republished ads
+  # Examples (choose one):
+  #   • BEFORE_PUBLISH
+  #   • AFTER_PUBLISH
+  #   • NEVER
+  delete_old_ads: AFTER_PUBLISH
+
+  # match old ads by title when deleting (only works with BEFORE_PUBLISH)
+  delete_old_ads_by_title: true
+
+# ################################################################################
+# Browser configuration
+browser:
+
+  # additional Chromium command line switches (optional). Leave as [] for default behavior. See https://peter.sh/experiments/chromium-command-line-switches/ Common: --headless (no GUI), --disable-dev-shm-usage (Docker fix), --user-data-dir=/path
+  # Example usage:
+  #   arguments:
+  #     - "--headless"
+  #     - "--disable-dev-shm-usage"
+  #     - "--user-data-dir=/path/to/profile"
+  arguments: []
+
+  # path to custom browser executable (optional). Leave empty to use system default
+  binary_location: ''
+
+  # Chrome extensions to load (optional). Leave as [] for no extensions. Add .crx file paths relative to config file
+  # Example usage:
+  #   extensions:
+  #     - "extensions/adblock.crx"
+  #     - "/absolute/path/to/extension.crx"
+  extensions: []
+
+  # open browser in private/incognito mode (recommended to avoid cookie conflicts)
+  use_private_window: true
+
+  # custom browser profile directory (optional). Leave empty for auto-configured default
+  user_data_dir: ''
+
+  # browser profile name (optional). Leave empty for default profile
+  # Example: "Profile 1"
+  profile_name: ''
+
+# ################################################################################
+# Login credentials
+login:
+
+  # kleinanzeigen.de login email or username
+  username: changeme
+
+  # kleinanzeigen.de login password
+  password: changeme
+
+# ################################################################################
+captcha:
+
+  # if true, abort when captcha is detected and auto-retry after restart_delay (if false, wait for manual solving)
+  auto_restart: false
+
+  # duration to wait before retrying after captcha detection (e.g., 1h30m, 6h, 30m)
+  # Examples (choose one):
+  #   • 6h
+  #   • 1h30m
+  #   • 30m
+  restart_delay: 6h
+
+# ################################################################################
+# Update check configuration
+update_check:
+
+  # whether to check for updates on startup
+  enabled: true
+
+  # which release channel to check (latest = stable, preview = prereleases)
+  # Examples (choose one):
+  #   • latest
+  #   • preview
+  channel: latest
+
+  # how often to check for updates (e.g., 7d, 1d). If invalid, too short (<1d), or too long (>30d), uses defaults: 1d for 'preview' channel, 7d for 'latest' channel
+  # Examples (choose one):
+  #   • 7d
+  #   • 1d
+  #   • 14d
+  interval: 7d
+
+# ################################################################################
+# Centralized timeout configuration.
+timeouts:
+
+  # Global multiplier applied to all timeout values.
+  multiplier: 1.0
+
+  # Baseline timeout for DOM interactions.
+  default: 5.0
+
+  # Page load timeout for web_open.
+  page_load: 15.0
+
+  # Timeout for captcha iframe detection.
+  captcha_detection: 2.0
+
+  # Timeout for SMS verification prompts.
+  sms_verification: 4.0
+
+  # Timeout for email verification prompts.
+  email_verification: 4.0
+
+  # Timeout for GDPR/consent dialogs.
+  gdpr_prompt: 10.0
+
+  # Timeout for detecting existing login session via DOM elements.
+  login_detection: 10.0
+
+  # Timeout for publishing result checks.
+  publishing_result: 300.0
+
+  # Timeout for publish confirmation redirect.
+  publishing_confirmation: 20.0
+
+  # Timeout for image upload and server-side processing.
+  image_upload: 30.0
+
+  # Timeout for initial pagination lookup.
+  pagination_initial: 10.0
+
+  # Timeout for subsequent pagination navigation.
+  pagination_follow_up: 5.0
+
+  # Generic short timeout for transient UI.
+  quick_dom: 2.0
+
+  # Timeout for GitHub update checks.
+  update_check: 10.0
+
+  # Timeout for local remote-debugging probes.
+  chrome_remote_probe: 2.0
+
+  # Timeout for remote debugging API calls.
+  chrome_remote_debugging: 5.0
+
+  # Timeout for chrome --version subprocesses.
+  chrome_binary_detection: 10.0
+
+  # Enable built-in retry/backoff for DOM operations.
+  retry_enabled: true
+
+  # Max retry attempts when retry is enabled.
+  retry_max_attempts: 2
+
+  # Exponential factor applied per retry attempt.
+  retry_backoff_factor: 1.5
+
+# ################################################################################
+# diagnostics capture configuration for troubleshooting
+diagnostics:
+
+  # Enable diagnostics capture for specific operations.
+  capture_on:
+
+    # Capture screenshot and HTML when login state detection fails
+    login_detection: false
+
+    # Capture screenshot, HTML, and JSON on publish failures
+    publish: false
+
+  # If true, copy the entire bot log file when diagnostics are captured (may duplicate log content).
+  capture_log_copy: false
+
+  # If true, pause (interactive runs only) after capturing login detection diagnostics so that user can inspect the browser. Requires capture_on.login_detection to be enabled.
+  pause_on_login_detection_failure: false
+
+  # Optional output directory for diagnostics artifacts. If omitted, a safe default is used based on installation mode.
+  output_dir:
+
+  # If true, collect local timeout timing data and write it to diagnostics JSON for troubleshooting and tuning.
+  timing_collection: true

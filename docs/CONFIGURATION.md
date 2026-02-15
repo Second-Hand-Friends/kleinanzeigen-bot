@@ -14,6 +14,8 @@ For full JSON schema with IDE autocompletion support, see:
 
 - [schemas/config.schema.json](https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json)
 
+A reference snapshot of default values is available at [docs/config.default.yaml](https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/docs/config.default.yaml).
+
 To enable IDE autocompletion in `config.yaml`, add this at the top of the file:
 
 ```yaml

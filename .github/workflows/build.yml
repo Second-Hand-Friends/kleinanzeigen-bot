@@ -145,6 +145,10 @@ jobs:
       run: pdm show
 
 
+    - name: Check generated schemas and default docs config
+      run: pdm run python scripts/check_generated_artifacts.py
+
+
     - name: Check with pip-audit
       # until https://github.com/astral-sh/ruff/issues/8277
       run:
