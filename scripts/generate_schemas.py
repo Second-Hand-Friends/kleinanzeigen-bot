@@ -27,7 +27,7 @@ def generate_schema(model:Type[BaseModel], name:str, out_dir:Path) -> None:
     with json_path.open("w", encoding = "utf-8") as f_json:
         json.dump(schema, f_json, indent = 2)
         f_json.write("\n")
-        print(f"[✓] {json_path}")
+        print(f"[OK] {json_path}")
 
 
 project_root = Path(__file__).parent.parent
