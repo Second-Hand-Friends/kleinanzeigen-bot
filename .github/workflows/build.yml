@@ -146,6 +146,7 @@ jobs:
 
 
     - name: Check generated schemas and default docs config
+      if: matrix.os == 'ubuntu-latest' && matrix.PYTHON_VERSION == '3.14'
       run: pdm run python scripts/check_generated_artifacts.py
 
 

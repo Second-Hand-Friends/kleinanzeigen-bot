@@ -1,19 +1,26 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+
 from __future__ import annotations
 
 import difflib
-import shutil
+import json
 import subprocess  # noqa: S404
 import sys
 import tempfile
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
-SCHEMA_FILES:Final[tuple[str, ...]] = (
-    "schemas/config.schema.json",
-    "schemas/ad.schema.json",
+if TYPE_CHECKING:
+    from pydantic import BaseModel
+
+from kleinanzeigen_bot.model.ad_model import AdPartial
+from kleinanzeigen_bot.model.config_model import Config
+
+SCHEMA_DEFINITIONS:Final[tuple[tuple[str, type[BaseModel], str], ...]] = (
+    ("schemas/config.schema.json", Config, "Config"),
+    ("schemas/ad.schema.json", AdPartial, "Ad"),
 )
 DEFAULT_CONFIG_PATH:Final[Path] = Path("docs/config.default.yaml")
 
@@ -33,15 +40,33 @@ def generate_default_config_via_cli(path:Path, repo_root:Path) -> None:
     )
 
 
-def get_changed_schema_files(repo_root:Path, git_executable:str) -> list[str]:
-    diff_result = subprocess.run(  # noqa: S603 trusted, static command arguments
-        [git_executable, "diff", "--name-only", "--", *SCHEMA_FILES],
-        cwd = repo_root,
-        check = True,
-        capture_output = True,
-        text = True,
-    )
-    return [line.strip() for line in diff_result.stdout.splitlines() if line.strip()]
+def generate_schema_content(model:type[BaseModel], name:str) -> str:
+    schema = model.model_json_schema(mode = "validation")
+    schema.setdefault("title", f"{name} Schema")
+    schema.setdefault("description", f"Auto-generated JSON Schema for {name}")
+    return json.dumps(schema, indent = 2) + "\n"
+
+
+def get_schema_diffs(repo_root:Path) -> dict[str, str]:
+    diffs:dict[str, str] = {}
+    for schema_path, model, schema_name in SCHEMA_DEFINITIONS:
+        expected_schema_path = repo_root / schema_path
+        expected = expected_schema_path.read_text(encoding = "utf-8") if expected_schema_path.is_file() else ""
+
+        generated = generate_schema_content(model, schema_name)
+        if expected == generated:
+            continue
+
+        diffs[schema_path] = "".join(
+            difflib.unified_diff(
+                expected.splitlines(keepends = True),
+                generated.splitlines(keepends = True),
+                fromfile = schema_path,
+                tofile = f"<generated via: {model.__name__}.model_json_schema>",
+            )
+        )
+
+    return diffs
 
 
 def get_default_config_diff(repo_root:Path) -> str:
@@ -72,28 +97,17 @@ def get_default_config_diff(repo_root:Path) -> str:
 def main() -> None:
     repo_root = Path(__file__).resolve().parent.parent
 
-    try:
-        subprocess.run(  # noqa: S603 trusted, static command arguments
-            [sys.executable, "scripts/generate_schemas.py"],
-            cwd = repo_root,
-            check = True,
-        )
-    except subprocess.CalledProcessError as exc:
-        raise RuntimeError(f"Failed to generate schemas (exit code {exc.returncode})") from exc
-
-    git_executable = shutil.which("git")
-    if git_executable is None:
-        raise RuntimeError("git executable not found")
-
-    changed_schema_files = get_changed_schema_files(repo_root, git_executable)
+    schema_diffs = get_schema_diffs(repo_root)
     default_config_diff = get_default_config_diff(repo_root)
 
-    if changed_schema_files or default_config_diff:
+    if schema_diffs or default_config_diff:
         messages:list[str] = ["Generated artifacts are not up-to-date."]
 
-        if changed_schema_files:
+        if schema_diffs:
             messages.append("Outdated schema files detected:")
-            messages.extend(f"- {path}" for path in changed_schema_files)
+            for path, schema_diff in schema_diffs.items():
+                messages.append(f"- {path}")
+                messages.append(schema_diff)
 
         if default_config_diff:
             messages.append("Outdated docs/config.default.yaml detected.")
