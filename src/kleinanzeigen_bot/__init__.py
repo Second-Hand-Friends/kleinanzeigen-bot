@@ -48,7 +48,11 @@ class LoginState(enum.Enum):
     UNKNOWN = enum.auto()
 
 
-def _repost_cycle_ready(ad_cfg:Ad, ad_file_relative:str) -> bool:
+def _repost_cycle_ready(
+    ad_cfg:Ad,
+    ad_file_relative:str,
+    repost_state:tuple[int, int, int, int] | None = None,
+) -> bool:
     """
     Check if the repost cycle delay has been satisfied.
 
@@ -56,7 +60,7 @@ def _repost_cycle_ready(ad_cfg:Ad, ad_file_relative:str) -> bool:
     :param ad_file_relative: Relative path to the ad file for logging
     :return: True if ready to apply price reduction, False otherwise
     """
-    total_reposts, delay_reposts, applied_cycles, eligible_cycles = _repost_delay_state(ad_cfg)
+    total_reposts, delay_reposts, applied_cycles, eligible_cycles = repost_state or _repost_delay_state(ad_cfg)
 
     if total_reposts <= delay_reposts:
         remaining = (delay_reposts + 1) - total_reposts
@@ -78,7 +82,11 @@ def _repost_cycle_ready(ad_cfg:Ad, ad_file_relative:str) -> bool:
     return True
 
 
-def _day_delay_elapsed(ad_cfg:Ad, ad_file_relative:str) -> bool:
+def _day_delay_elapsed(
+    ad_cfg:Ad,
+    ad_file_relative:str,
+    day_delay_state:tuple[bool, int | None, datetime | None] | None = None,
+) -> bool:
     """
     Check if the day delay has elapsed since the ad was last published.
 
@@ -87,7 +95,7 @@ def _day_delay_elapsed(ad_cfg:Ad, ad_file_relative:str) -> bool:
     :return: True if the delay has elapsed, False otherwise
     """
     delay_days = ad_cfg.auto_price_reduction.delay_days
-    ready, elapsed_days, reference = _day_delay_state(ad_cfg)
+    ready, elapsed_days, reference = day_delay_state or _day_delay_state(ad_cfg)
 
     if delay_days == 0:
         return True
@@ -163,13 +171,15 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
         LOG.warning("Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur.", ad_file_relative, base_price)
         return
 
-    total_reposts, delay_reposts, applied_cycles, eligible_cycles = _repost_delay_state(ad_cfg)
-    _, elapsed_days, reference = _day_delay_state(ad_cfg)
+    repost_state = _repost_delay_state(ad_cfg)
+    day_delay_state = _day_delay_state(ad_cfg)
+    total_reposts, delay_reposts, applied_cycles, eligible_cycles = repost_state
+    _, elapsed_days, reference = day_delay_state
     delay_days = ad_cfg.auto_price_reduction.delay_days
     elapsed_display = "missing" if elapsed_days is None else str(elapsed_days)
     reference_display = "missing" if reference is None else reference.isoformat(timespec = "seconds")
 
-    if not _repost_cycle_ready(ad_cfg, ad_file_relative):
+    if not _repost_cycle_ready(ad_cfg, ad_file_relative, repost_state = repost_state):
         next_repost = delay_reposts + 1 if total_reposts <= delay_reposts else delay_reposts + applied_cycles + 1
         LOG.info(
             "Auto price reduction decision for [%s]: skipped (repost delay). next reduction earliest at repost >= %s and day delay %s/%s days."
@@ -185,7 +195,7 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
         )
         return
 
-    if not _day_delay_elapsed(ad_cfg, ad_file_relative):
+    if not _day_delay_elapsed(ad_cfg, ad_file_relative, day_delay_state = day_delay_state):
         LOG.info(
             "Auto price reduction decision for [%s]: skipped (day delay). next reduction earliest when elapsed_days >= %s."
             " elapsed_days=%s repost_count=%s eligible_cycles=%s applied_cycles=%s reference=%s",
@@ -208,7 +218,6 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
         delay_days,
     )
 
-    applied_cycles = ad_cfg.price_reduction_count or 0
     next_cycle = applied_cycles + 1
 
     if loggers.is_debug(LOG):
