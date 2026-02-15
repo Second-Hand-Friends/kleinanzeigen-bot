@@ -328,6 +328,11 @@ def test_apply_auto_price_reduction_waits_when_reduction_already_applied(
 
     expected = _("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts") % ("ad_already.yaml", 3, 3)
     assert any(expected in message for message in caplog.messages)
+    decision_message = (
+        "Auto price reduction decision for [ad_already.yaml]: skipped (repost delay). "
+        "next reduction earliest at repost >= 4 and day delay 0/0 days. repost_count=3 eligible_cycles=3 applied_cycles=3"
+    )
+    assert any(decision_message in message for message in caplog.messages)
     assert ad_cfg.price == 100
     assert ad_cfg.price_reduction_count == 3
     assert "price_reduction_count" not in ad_orig

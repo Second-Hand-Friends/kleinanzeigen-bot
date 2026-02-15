@@ -104,6 +104,12 @@ def _day_delay_elapsed(ad_cfg:Ad, ad_file_relative:str) -> bool:
 
 
 def _repost_delay_state(ad_cfg:Ad) -> tuple[int, int, int, int]:
+    """Return repost-delay state tuple.
+
+    Returns:
+        tuple[int, int, int, int]:
+            (total_reposts, delay_reposts, applied_cycles, eligible_cycles)
+    """
     total_reposts = ad_cfg.repost_count or 0
     delay_reposts = ad_cfg.auto_price_reduction.delay_reposts
     applied_cycles = ad_cfg.price_reduction_count or 0
@@ -112,7 +118,14 @@ def _repost_delay_state(ad_cfg:Ad) -> tuple[int, int, int, int]:
 
 
 def _day_delay_state(ad_cfg:Ad) -> tuple[bool, int | None, datetime | None]:
+    """Return day-delay state tuple.
+
+    Returns:
+        tuple[bool, int | None, datetime | None]:
+            (ready_flag, elapsed_days_or_none, reference_timestamp_or_none)
+    """
     delay_days = ad_cfg.auto_price_reduction.delay_days
+    # Use getattr to support lightweight test doubles without these attributes.
     reference = getattr(ad_cfg, "updated_on", None) or getattr(ad_cfg, "created_on", None)
     if delay_days == 0:
         return True, 0, reference
@@ -157,7 +170,7 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
     reference_display = "missing" if reference is None else reference.isoformat(timespec = "seconds")
 
     if not _repost_cycle_ready(ad_cfg, ad_file_relative):
-        next_repost = delay_reposts + 1
+        next_repost = delay_reposts + 1 if total_reposts <= delay_reposts else delay_reposts + applied_cycles + 1
         LOG.info(
             "Auto price reduction decision for [%s]: skipped (repost delay). next reduction earliest at repost >= %s and day delay %s/%s days."
             " repost_count=%s eligible_cycles=%s applied_cycles=%s reference=%s",
@@ -686,7 +699,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         dicts.save_commented_model(
             self.config_file_path,
             default_config,
-            header = ("# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json"),
+            header = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json",
             exclude = {
                 "ad_defaults": {"description"},
             },
