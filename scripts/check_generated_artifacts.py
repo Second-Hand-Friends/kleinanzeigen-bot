@@ -12,13 +12,13 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-if TYPE_CHECKING:
-    from pydantic import BaseModel
-
 from schema_utils import generate_schema_content
 
 from kleinanzeigen_bot.model.ad_model import AdPartial
 from kleinanzeigen_bot.model.config_model import Config
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
 
 SCHEMA_DEFINITIONS:Final[tuple[tuple[str, type[BaseModel], str], ...]] = (
     ("schemas/config.schema.json", Config, "Config"),
@@ -28,6 +28,9 @@ DEFAULT_CONFIG_PATH:Final[Path] = Path("docs/config.default.yaml")
 
 
 def generate_default_config_via_cli(path:Path, repo_root:Path) -> None:
+    """
+    Run `python -m kleinanzeigen_bot --config <path> create-config` to generate a default config snapshot.
+    """
     subprocess.run(  # noqa: S603 trusted, static command arguments
         [
             sys.executable,
@@ -46,6 +49,9 @@ def generate_default_config_via_cli(path:Path, repo_root:Path) -> None:
 
 
 def get_schema_diffs(repo_root:Path) -> dict[str, str]:
+    """
+    Compare committed schema files with freshly generated schema content and return unified diffs per path.
+    """
     diffs:dict[str, str] = {}
     for schema_path, model, schema_name in SCHEMA_DEFINITIONS:
         expected_schema_path = repo_root / schema_path
@@ -68,6 +74,9 @@ def get_schema_diffs(repo_root:Path) -> dict[str, str]:
 
 
 def get_default_config_diff(repo_root:Path) -> str:
+    """
+    Compare docs/config.default.yaml with a freshly generated config artifact and return a unified diff string.
+    """
     expected_config_path = repo_root / DEFAULT_CONFIG_PATH
     if not expected_config_path.is_file():
         raise FileNotFoundError(f"Missing required default config file: {DEFAULT_CONFIG_PATH}")
