@@ -37,6 +37,7 @@ def generate_default_config_via_cli(path:Path, repo_root:Path) -> None:
         ],
         cwd = repo_root,
         check = True,
+        timeout = 60,
     )
 
 
