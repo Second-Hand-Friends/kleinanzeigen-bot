@@ -31,21 +31,31 @@ def generate_default_config_via_cli(path:Path, repo_root:Path) -> None:
     """
     Run `python -m kleinanzeigen_bot --config <path> create-config` to generate a default config snapshot.
     """
-    subprocess.run(  # noqa: S603 trusted, static command arguments
-        [
-            sys.executable,
-            "-m",
-            "kleinanzeigen_bot",
-            "--config",
-            str(path),
-            "create-config",
-        ],
-        cwd = repo_root,
-        check = True,
-        timeout = 60,
-        capture_output = True,
-        text = True,
-    )
+    try:
+        subprocess.run(  # noqa: S603 trusted, static command arguments
+            [
+                sys.executable,
+                "-m",
+                "kleinanzeigen_bot",
+                "--config",
+                str(path),
+                "create-config",
+            ],
+            cwd = repo_root,
+            check = True,
+            timeout = 60,
+            capture_output = True,
+            text = True,
+        )
+    except subprocess.CalledProcessError as error:
+        stderr = error.stderr.strip() if error.stderr else "<empty>"
+        stdout = error.stdout.strip() if error.stdout else "<empty>"
+        raise RuntimeError(
+            "Failed to generate default config via CLI.\n"
+            f"Return code: {error.returncode}\n"
+            f"stderr:\n{stderr}\n"
+            f"stdout:\n{stdout}"
+        ) from error
 
 
 def get_schema_diffs(repo_root:Path) -> dict[str, str]:
