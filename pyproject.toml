@@ -88,6 +88,8 @@ debug = "python -m pdb -m kleinanzeigen_bot"
 
 # build & packaging
 generate-schemas = "python scripts/generate_schemas.py"
+generate-config = { shell = "python -c \"from pathlib import Path; Path('docs/config.default.yaml').unlink(missing_ok=True)\" && python -m kleinanzeigen_bot --config docs/config.default.yaml create-config" }
+generate-artifacts = { composite = ["generate-schemas", "generate-config"] }
 compile.cmd = "python -O -m PyInstaller pyinstaller.spec --clean --workpath .temp"
 compile.env = {PYTHONHASHSEED = "1", SOURCE_DATE_EPOCH = "0"}  # https://pyinstaller.org/en/stable/advanced-topics.html#creating-a-reproducible-build
 

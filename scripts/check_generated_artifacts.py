@@ -1,0 +1,143 @@
+# SPDX-FileCopyrightText: © Jens Bergmann and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+"""CI guard: verifies generated schema and default-config artifacts are up-to-date."""
+
+from __future__ import annotations
+
+import difflib
+import subprocess  # noqa: S404
+import sys
+import tempfile
+from pathlib import Path
+from typing import TYPE_CHECKING, Final
+
+from schema_utils import generate_schema_content
+
+from kleinanzeigen_bot.model.ad_model import AdPartial
+from kleinanzeigen_bot.model.config_model import Config
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
+
+SCHEMA_DEFINITIONS:Final[tuple[tuple[str, type[BaseModel], str], ...]] = (
+    ("schemas/config.schema.json", Config, "Config"),
+    ("schemas/ad.schema.json", AdPartial, "Ad"),
+)
+DEFAULT_CONFIG_PATH:Final[Path] = Path("docs/config.default.yaml")
+
+
+def generate_default_config_via_cli(path:Path, repo_root:Path) -> None:
+    """
+    Run `python -m kleinanzeigen_bot --config <path> create-config` to generate a default config snapshot.
+    """
+    try:
+        subprocess.run(  # noqa: S603 trusted, static command arguments
+            [
+                sys.executable,
+                "-m",
+                "kleinanzeigen_bot",
+                "--config",
+                str(path),
+                "create-config",
+            ],
+            cwd = repo_root,
+            check = True,
+            timeout = 60,
+            capture_output = True,
+            text = True,
+        )
+    except subprocess.CalledProcessError as error:
+        stderr = error.stderr.strip() if error.stderr else "<empty>"
+        stdout = error.stdout.strip() if error.stdout else "<empty>"
+        raise RuntimeError(
+            "Failed to generate default config via CLI.\n"
+            f"Return code: {error.returncode}\n"
+            f"stderr:\n{stderr}\n"
+            f"stdout:\n{stdout}"
+        ) from error
+
+
+def get_schema_diffs(repo_root:Path) -> dict[str, str]:
+    """
+    Compare committed schema files with freshly generated schema content and return unified diffs per path.
+    """
+    diffs:dict[str, str] = {}
+    for schema_path, model, schema_name in SCHEMA_DEFINITIONS:
+        expected_schema_path = repo_root / schema_path
+        expected = expected_schema_path.read_text(encoding = "utf-8") if expected_schema_path.is_file() else ""
+
+        generated = generate_schema_content(model, schema_name)
+        if expected == generated:
+            continue
+
+        diffs[schema_path] = "".join(
+            difflib.unified_diff(
+                expected.splitlines(keepends = True),
+                generated.splitlines(keepends = True),
+                fromfile = schema_path,
+                tofile = f"<generated via: {model.__name__}.model_json_schema>",
+            )
+        )
+
+    return diffs
+
+
+def get_default_config_diff(repo_root:Path) -> str:
+    """
+    Compare docs/config.default.yaml with a freshly generated config artifact and return a unified diff string.
+    """
+    expected_config_path = repo_root / DEFAULT_CONFIG_PATH
+    if not expected_config_path.is_file():
+        raise FileNotFoundError(f"Missing required default config file: {DEFAULT_CONFIG_PATH}")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        generated_config_path = Path(tmpdir) / "config.default.yaml"
+        generate_default_config_via_cli(generated_config_path, repo_root)
+
+        expected = expected_config_path.read_text(encoding = "utf-8")
+        generated = generated_config_path.read_text(encoding = "utf-8")
+
+    if expected == generated:
+        return ""
+
+    return "".join(
+        difflib.unified_diff(
+            expected.splitlines(keepends = True),
+            generated.splitlines(keepends = True),
+            fromfile = str(DEFAULT_CONFIG_PATH),
+            tofile = "<generated via: python -m kleinanzeigen_bot --config /path/to/config.default.yaml create-config>",
+        )
+    )
+
+
+def main() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+
+    schema_diffs = get_schema_diffs(repo_root)
+    default_config_diff = get_default_config_diff(repo_root)
+
+    if schema_diffs or default_config_diff:
+        messages:list[str] = ["Generated artifacts are not up-to-date."]
+
+        if schema_diffs:
+            messages.append("Outdated schema files detected:")
+            for path, schema_diff in schema_diffs.items():
+                messages.append(f"- {path}")
+                messages.append(schema_diff)
+
+        if default_config_diff:
+            messages.append("Outdated docs/config.default.yaml detected.")
+            messages.append(default_config_diff)
+
+        messages.append("Regenerate with one of the following:")
+        messages.append("- Schema files: pdm run generate-schemas")
+        messages.append("- Default config snapshot: pdm run generate-config")
+        messages.append("- Both: pdm run generate-artifacts")
+        raise SystemExit("\n".join(messages))
+
+    print("Generated schemas and docs/config.default.yaml are up-to-date.")
+
+
+if __name__ == "__main__":
+    main()
