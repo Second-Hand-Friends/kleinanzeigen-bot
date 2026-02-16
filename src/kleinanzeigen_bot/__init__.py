@@ -65,7 +65,7 @@ def _repost_cycle_ready(
     if total_reposts <= delay_reposts:
         remaining = (delay_reposts + 1) - total_reposts
         LOG.info(
-            _("Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)"),
+            "Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)",
             ad_file_relative,
             max(remaining, 1),  # Clamp to 1 to avoid showing "0 more reposts" when at threshold
             total_reposts,
@@ -75,7 +75,7 @@ def _repost_cycle_ready(
 
     if eligible_cycles <= applied_cycles:
         LOG.debug(
-            _("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts"), ad_file_relative, applied_cycles, eligible_cycles
+            "Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts", ad_file_relative, applied_cycles, eligible_cycles
         )
         return False
 
