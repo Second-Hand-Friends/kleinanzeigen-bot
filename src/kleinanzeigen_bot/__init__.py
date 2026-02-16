@@ -58,6 +58,7 @@ def _repost_cycle_ready(
 
     :param ad_cfg: The ad configuration
     :param ad_file_relative: Relative path to the ad file for logging
+    :param repost_state: Optional precomputed repost-delay state tuple
     :return: True if ready to apply price reduction, False otherwise
     """
     total_reposts, delay_reposts, applied_cycles, eligible_cycles = repost_state or _repost_delay_state(ad_cfg)
@@ -92,6 +93,7 @@ def _day_delay_elapsed(
 
     :param ad_cfg: The ad configuration
     :param ad_file_relative: Relative path to the ad file for logging
+    :param day_delay_state: Optional precomputed day-delay state tuple
     :return: True if the delay has elapsed, False otherwise
     """
     delay_days = ad_cfg.auto_price_reduction.delay_days

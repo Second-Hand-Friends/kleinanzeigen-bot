@@ -150,6 +150,8 @@ def test_apply_auto_price_reduction_logs_drop(caplog:pytest.LogCaptureFixture, a
         ),
         price_reduction_count = 0,
         repost_count = 1,
+        updated_on = None,
+        created_on = None,
     )
 
     ad_orig:dict[str, Any] = {}
@@ -176,6 +178,8 @@ def test_apply_auto_price_reduction_logs_unchanged_price_at_floor(
         auto_price_reduction = AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = 10, min_price = 90, delay_reposts = 0, delay_days = 0),
         price_reduction_count = 0,
         repost_count = 1,
+        updated_on = None,
+        created_on = None,
     )
 
     ad_orig:dict[str, Any] = {}
@@ -206,6 +210,8 @@ def test_apply_auto_price_reduction_warns_when_price_missing(caplog:pytest.LogCa
         ),
         price_reduction_count = 2,
         repost_count = 2,
+        updated_on = None,
+        created_on = None,
     )
 
     ad_orig:dict[str, Any] = {}
@@ -234,6 +240,8 @@ def test_apply_auto_price_reduction_warns_when_min_price_equals_price(
         ),
         price_reduction_count = 0,
         repost_count = 1,
+        updated_on = None,
+        created_on = None,
     )
 
     ad_orig:dict[str, Any] = {}
@@ -261,6 +269,8 @@ def test_apply_auto_price_reduction_respects_repost_delay(caplog:pytest.LogCaptu
         ),
         price_reduction_count = 0,
         repost_count = 2,
+        updated_on = None,
+        created_on = None,
     )
 
     ad_orig:dict[str, Any] = {}
@@ -292,6 +302,8 @@ def test_apply_auto_price_reduction_after_repost_delay_reduces_once(apply_auto_p
         ),
         price_reduction_count = 0,
         repost_count = 3,
+        updated_on = None,
+        created_on = None,
     )
 
     ad_cfg_orig:dict[str, Any] = {}
@@ -319,6 +331,8 @@ def test_apply_auto_price_reduction_waits_when_reduction_already_applied(
         ),
         price_reduction_count = 3,
         repost_count = 3,
+        updated_on = None,
+        created_on = None,
     )
 
     ad_orig:dict[str, Any] = {}
@@ -431,6 +445,8 @@ def test_fractional_reduction_increments_counter_even_when_price_unchanged(
         auto_price_reduction = AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = 0.3, min_price = 50, delay_reposts = 0, delay_days = 0),
         price_reduction_count = 0,
         repost_count = 1,
+        updated_on = None,
+        created_on = None,
     )
 
     ad_orig:dict[str, Any] = {}
