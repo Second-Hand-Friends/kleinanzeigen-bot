@@ -104,6 +104,13 @@ ad_defaults:
   republication_interval: 7  # every X days ads should be re-published
 ```
 
+- `ad_defaults.republication_interval` controls when ads become due for republishing.
+- Automatic price reductions (including `delay_reposts` and `delay_days`) are evaluated only during `publish` runs.
+- Reductions do not run in the background between runs, and `update` does not evaluate or apply reductions.
+- When auto price reduction is enabled, each `publish` run logs the reduction decision.
+- `-v/--verbose` adds a detailed reduction calculation trace.
+- For full behavior and examples (including timeline examples), see [AD_CONFIGURATION.md](./AD_CONFIGURATION.md).
+
 > **Tip:** For current defaults of all timeout and diagnostic settings, run `kleinanzeigen-bot create-config` or see the [JSON schema](https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json).
 
 ### categories

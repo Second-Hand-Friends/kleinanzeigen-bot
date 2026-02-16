@@ -111,6 +111,10 @@ When `auto_price_reduction.enabled` is set to `true`, the bot lowers the configu
 
 **Note:** `repost_count` and price reduction counters are only incremented and persisted after a successful publish. Failed publish attempts do not advance the counters.
 
+When automatic price reduction is enabled, each `publish` run logs a concise decision line that states whether the reduction was applied or skipped and why (repost delay/day delay), including the earliest next eligible reduction condition.
+
+If you run with `-v` / `--verbose`, the bot additionally logs the full cycle-by-cycle calculation trace (base price, reduction value, rounded step result, and floor clamp).
+
 ```yaml
 auto_price_reduction:
   enabled:  # true or false to enable automatic price reduction on reposts (default: false)
@@ -162,6 +166,12 @@ This posts the ad at 150 € the first time, then 135 € (−15 €), 120 € (
 #### Note on `delay_days` Behavior
 
 The `delay_days` parameter counts complete 24-hour periods (whole days) since the ad was published. For example, if `delay_days: 7` and the ad was published 6 days and 23 hours ago, the reduction will not yet apply. This ensures predictable behavior and avoids partial-day ambiguity.
+
+Combined timeline example: with `republication_interval: 3`, `delay_reposts: 1`, and `delay_days: 2`, the first reduction is typically applied on the third publish cycle (around day 8 in a steady schedule, because due ads are republished after more than 3 full days):
+
+- day 0: first publish, no reduction
+- day 4: second publish, still waiting for repost delay
+- day 8: third publish, first reduction can apply
 
 Set `auto_price_reduction.enabled: false` (or omit the entire `auto_price_reduction` section) to keep the existing behavior—prices stay fixed and `repost_count` only acts as tracked metadata for future changes.
 
