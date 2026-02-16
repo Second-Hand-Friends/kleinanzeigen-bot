@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+"""CI guard: verifies generated schema and default-config artifacts are up-to-date."""
 
 from __future__ import annotations
 
 import difflib
-import json
 import subprocess  # noqa: S404
 import sys
 import tempfile
@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
+
+from schema_utils import generate_schema_content
 
 from kleinanzeigen_bot.model.ad_model import AdPartial
 from kleinanzeigen_bot.model.config_model import Config
@@ -38,14 +40,9 @@ def generate_default_config_via_cli(path:Path, repo_root:Path) -> None:
         cwd = repo_root,
         check = True,
         timeout = 60,
+        capture_output = True,
+        text = True,
     )
-
-
-def generate_schema_content(model:type[BaseModel], name:str) -> str:
-    schema = model.model_json_schema(mode = "validation")
-    schema.setdefault("title", f"{name} Schema")
-    schema.setdefault("description", f"Auto-generated JSON Schema for {name}")
-    return json.dumps(schema, indent = 2) + "\n"
 
 
 def get_schema_diffs(repo_root:Path) -> dict[str, str]:
@@ -90,7 +87,7 @@ def get_default_config_diff(repo_root:Path) -> str:
             expected.splitlines(keepends = True),
             generated.splitlines(keepends = True),
             fromfile = str(DEFAULT_CONFIG_PATH),
-            tofile = "<generated via: python -m kleinanzeigen_bot --config /tmp/config.default.yaml create-config>",
+            tofile = "<generated via: python -m kleinanzeigen_bot --config /path/to/config.default.yaml create-config>",
         )
     )
 
