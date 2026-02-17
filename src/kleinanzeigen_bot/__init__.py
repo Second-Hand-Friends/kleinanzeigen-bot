@@ -150,6 +150,14 @@ def _day_delay_state(ad_cfg:Ad) -> tuple[bool, int | None, datetime | None]:
     return elapsed_days >= delay_days, elapsed_days, reference
 
 
+def _relative_ad_path(ad_file:str, config_file_path:str) -> str:
+    """Compute an ad file path relative to the config directory, falling back to the absolute path."""
+    try:
+        return str(Path(ad_file).relative_to(Path(config_file_path).parent))
+    except ValueError:
+        return ad_file
+
+
 def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
     """
     Apply automatic price reduction to an ad based on repost count and configuration.
@@ -383,7 +391,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     # Check for updates on startup
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
-                    self.load_ads()
+                    self.ads_selector = "all"
+                    if ads := self.load_ads(exclude_ads_with_id = False):
+                        for ad_file, ad_cfg, ad_cfg_orig in ads:
+                            ad_file_relative = _relative_ad_path(ad_file, self.config_file_path)
+                            apply_auto_price_reduction(ad_cfg, ad_cfg_orig, ad_file_relative)
                     LOG.info("############################################")
                     LOG.info("DONE: No configuration errors found.")
                     LOG.info("############################################")
@@ -923,6 +935,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 ensure(images or not ad_cfg.images, f"No images found for given file patterns {ad_cfg.images} at {ad_dir}")
                 ad_cfg.images = list(dict.fromkeys(images))
 
+            LOG.info(" -> LOADED: ad [%s]", ad_file_relative)
             ads.append((ad_file, ad_cfg, ad_cfg_orig))
 
         LOG.info("Loaded %s", pluralize("ad", ads))
@@ -1552,12 +1565,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             # Apply auto price reduction only for REPLACE operations (actual reposts)
             # This ensures price reductions only happen on republish, not on UPDATE
-            try:
-                ad_file_relative = str(Path(ad_file).relative_to(Path(self.config_file_path).parent))
-            except ValueError:
-                # On Windows, relative_to fails when paths are on different drives
-                ad_file_relative = ad_file
-            apply_auto_price_reduction(ad_cfg, ad_cfg_orig, ad_file_relative)
+            apply_auto_price_reduction(ad_cfg, ad_cfg_orig, _relative_ad_path(ad_file, self.config_file_path))
 
             LOG.info("Publishing ad '%s'...", ad_cfg.title)
             await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html")
