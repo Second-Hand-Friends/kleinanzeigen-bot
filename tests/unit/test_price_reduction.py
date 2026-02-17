@@ -275,7 +275,7 @@ def test_apply_auto_price_reduction_respects_repost_delay(caplog:pytest.LogCaptu
 
     ad_orig:dict[str, Any] = {}
 
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.DEBUG):
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_delay.yaml")
 
     assert ad_cfg.price == 200

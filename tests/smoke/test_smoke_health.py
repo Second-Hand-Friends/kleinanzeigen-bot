@@ -273,4 +273,4 @@ def test_verify_shows_auto_price_reduction_decisions(tmp_path:Path, test_bot_con
     assert result.returncode == 0
     out = (result.stdout + "\n" + result.stderr).lower()
     assert "no configuration errors found" in out, f"Expected 'no configuration errors found' in output.\n{out}"
-    assert "auto price reduction decision for" in out, f"Expected auto price reduction decision log in output.\n{out}"
+    assert "auto price reduction applied" in out, f"Expected auto price reduction applied log in output.\n{out}"

@@ -75,7 +75,7 @@ def _repost_cycle_ready(
         return False
 
     if eligible_cycles <= applied_cycles:
-        LOG.debug(
+        LOG.info(
             "Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts", ad_file_relative, applied_cycles, eligible_cycles
         )
         return False
@@ -170,6 +170,7 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
     :param ad_file_relative: Relative path to the ad file for logging
     """
     if not ad_cfg.auto_price_reduction.enabled:
+        LOG.debug("Auto price reduction: not configured for [%s]", ad_file_relative)
         return
 
     base_price = ad_cfg.price
@@ -191,7 +192,7 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
 
     if not _repost_cycle_ready(ad_cfg, ad_file_relative, repost_state = repost_state):
         next_repost = delay_reposts + 1 if total_reposts <= delay_reposts else delay_reposts + applied_cycles + 1
-        LOG.info(
+        LOG.debug(
             "Auto price reduction decision for [%s]: skipped (repost delay). next reduction earliest at repost >= %s and day delay %s/%s days."
             " repost_count=%s eligible_cycles=%s applied_cycles=%s reference=%s",
             ad_file_relative,
@@ -206,7 +207,7 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
         return
 
     if not _day_delay_elapsed(ad_cfg, ad_file_relative, day_delay_state = day_delay_state):
-        LOG.info(
+        LOG.debug(
             "Auto price reduction decision for [%s]: skipped (day delay). next reduction earliest when elapsed_days >= %s."
             " elapsed_days=%s repost_count=%s eligible_cycles=%s applied_cycles=%s reference=%s",
             ad_file_relative,
@@ -219,7 +220,7 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
         )
         return
 
-    LOG.info(
+    LOG.debug(
         "Auto price reduction decision for [%s]: applying now (eligible_cycles=%s, applied_cycles=%s, elapsed_days=%s/%s).",
         ad_file_relative,
         eligible_cycles,

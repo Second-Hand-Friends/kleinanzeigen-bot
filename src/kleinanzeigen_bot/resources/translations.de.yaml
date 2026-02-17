@@ -165,11 +165,6 @@ kleinanzeigen_bot/__init__.py:
   apply_auto_price_reduction:
     "Auto price reduction is enabled for [%s] but no price is configured.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber es wurde kein Preis konfiguriert."
     "Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber min_price entspricht dem Preis (%s) - es werden keine Reduktionen auftreten."
-    ? "Auto price reduction decision for [%s]: skipped (repost delay). next reduction earliest at repost >= %s and day delay %s/%s days. repost_count=%s eligible_cycles=%s applied_cycles=%s reference=%s"
-    : "Entscheidung automatische Preisreduzierung für [%s]: übersprungen (Repost-Verzögerung). Nächste Reduktion frühestens bei Repost >= %s und Tagesverzögerung %s/%s Tage. repost_count=%s eligible_cycles=%s applied_cycles=%s reference=%s"
-    ? "Auto price reduction decision for [%s]: skipped (day delay). next reduction earliest when elapsed_days >= %s. elapsed_days=%s repost_count=%s eligible_cycles=%s applied_cycles=%s reference=%s"
-    : "Entscheidung automatische Preisreduzierung für [%s]: übersprungen (Tagesverzögerung). Nächste Reduktion frühestens bei elapsed_days >= %s. elapsed_days=%s repost_count=%s eligible_cycles=%s applied_cycles=%s reference=%s"
-    "Auto price reduction decision for [%s]: applying now (eligible_cycles=%s, applied_cycles=%s, elapsed_days=%s/%s).": "Entscheidung automatische Preisreduzierung für [%s]: wird jetzt angewendet (eligible_cycles=%s, applied_cycles=%s, elapsed_days=%s/%s)."
     "Auto price reduction applied: %s -> %s after %s reduction cycles": "Automatische Preisreduzierung angewendet: %s -> %s nach %s Reduktionszyklen"
     "Auto price reduction kept price %s after attempting %s reduction cycles": "Automatische Preisreduzierung hat Preis %s beibehalten nach dem Versuch von %s Reduktionszyklen"
   _repost_cycle_ready:
