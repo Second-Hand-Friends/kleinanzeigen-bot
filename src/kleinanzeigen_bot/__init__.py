@@ -75,7 +75,7 @@ def _repost_cycle_ready(
         return False
 
     if eligible_cycles <= applied_cycles:
-        LOG.debug(
+        LOG.info(
             "Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts", ad_file_relative, applied_cycles, eligible_cycles
         )
         return False
@@ -150,6 +150,14 @@ def _day_delay_state(ad_cfg:Ad) -> tuple[bool, int | None, datetime | None]:
     return elapsed_days >= delay_days, elapsed_days, reference
 
 
+def _relative_ad_path(ad_file:str, config_file_path:str) -> str:
+    """Compute an ad file path relative to the config directory, falling back to the absolute path."""
+    try:
+        return str(Path(ad_file).relative_to(Path(config_file_path).parent))
+    except ValueError:
+        return ad_file
+
+
 def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
     """
     Apply automatic price reduction to an ad based on repost count and configuration.
@@ -162,6 +170,7 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
     :param ad_file_relative: Relative path to the ad file for logging
     """
     if not ad_cfg.auto_price_reduction.enabled:
+        LOG.debug("Auto price reduction: not configured for [%s]", ad_file_relative)
         return
 
     base_price = ad_cfg.price
@@ -183,7 +192,7 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
 
     if not _repost_cycle_ready(ad_cfg, ad_file_relative, repost_state = repost_state):
         next_repost = delay_reposts + 1 if total_reposts <= delay_reposts else delay_reposts + applied_cycles + 1
-        LOG.info(
+        LOG.debug(
             "Auto price reduction decision for [%s]: skipped (repost delay). next reduction earliest at repost >= %s and day delay %s/%s days."
             " repost_count=%s eligible_cycles=%s applied_cycles=%s reference=%s",
             ad_file_relative,
@@ -198,7 +207,7 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
         return
 
     if not _day_delay_elapsed(ad_cfg, ad_file_relative, day_delay_state = day_delay_state):
-        LOG.info(
+        LOG.debug(
             "Auto price reduction decision for [%s]: skipped (day delay). next reduction earliest when elapsed_days >= %s."
             " elapsed_days=%s repost_count=%s eligible_cycles=%s applied_cycles=%s reference=%s",
             ad_file_relative,
@@ -211,7 +220,7 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
         )
         return
 
-    LOG.info(
+    LOG.debug(
         "Auto price reduction decision for [%s]: applying now (eligible_cycles=%s, applied_cycles=%s, elapsed_days=%s/%s).",
         ad_file_relative,
         eligible_cycles,
@@ -383,7 +392,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     # Check for updates on startup
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
-                    self.load_ads()
+                    self.ads_selector = "all"
+                    if ads := self.load_ads(exclude_ads_with_id = False):
+                        for ad_file, ad_cfg, ad_cfg_orig in ads:
+                            ad_file_relative = _relative_ad_path(ad_file, self.config_file_path)
+                            apply_auto_price_reduction(ad_cfg, ad_cfg_orig, ad_file_relative)
                     LOG.info("############################################")
                     LOG.info("DONE: No configuration errors found.")
                     LOG.info("############################################")
@@ -923,6 +936,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 ensure(images or not ad_cfg.images, f"No images found for given file patterns {ad_cfg.images} at {ad_dir}")
                 ad_cfg.images = list(dict.fromkeys(images))
 
+            LOG.info(" -> LOADED: ad [%s]", ad_file_relative)
             ads.append((ad_file, ad_cfg, ad_cfg_orig))
 
         LOG.info("Loaded %s", pluralize("ad", ads))
@@ -1552,12 +1566,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             # Apply auto price reduction only for REPLACE operations (actual reposts)
             # This ensures price reductions only happen on republish, not on UPDATE
-            try:
-                ad_file_relative = str(Path(ad_file).relative_to(Path(self.config_file_path).parent))
-            except ValueError:
-                # On Windows, relative_to fails when paths are on different drives
-                ad_file_relative = ad_file
-            apply_auto_price_reduction(ad_cfg, ad_cfg_orig, ad_file_relative)
+            apply_auto_price_reduction(ad_cfg, ad_cfg_orig, _relative_ad_path(ad_file, self.config_file_path))
 
             LOG.info("Publishing ad '%s'...", ad_cfg.title)
             await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html")

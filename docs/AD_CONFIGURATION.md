@@ -111,9 +111,9 @@ When `auto_price_reduction.enabled` is set to `true`, the bot lowers the configu
 
 **Note:** `repost_count` and price reduction counters are only incremented and persisted after a successful publish. Failed publish attempts do not advance the counters.
 
-When automatic price reduction is enabled, each `publish` run logs a concise decision line that states whether the reduction was applied or skipped and why (repost delay/day delay), including the earliest next eligible reduction condition.
+When automatic price reduction is enabled, each `publish` run logs one clear INFO message per ad summarizing the outcome—whether the price was reduced, kept, or the reduction was delayed (and why). The `verify` command also previews these outcomes for all configured ads so you can validate your pricing configuration without triggering a publish cycle. Ads without `auto_price_reduction` configured are silently skipped at default log level.
 
-If you run with `-v` / `--verbose`, the bot additionally logs the full cycle-by-cycle calculation trace (base price, reduction value, rounded step result, and floor clamp).
+If you run with `-v` / `--verbose`, the bot additionally logs structured decision details (repost counts, cycle state, day delay, reference timestamps) and the full cycle-by-cycle calculation trace (base price, reduction value, rounded step result, and floor clamp).
 
 ```yaml
 auto_price_reduction:
@@ -323,7 +323,7 @@ republication_interval: 7
 ## Troubleshooting
 
 - **Schema validation errors**: Run `kleinanzeigen-bot verify` (binary) or `pdm run app verify` (source) to see which fields fail validation.
-- **Price reduction not applying**: Confirm `auto_price_reduction.enabled` is `true`, `min_price` is set, and you are using `publish` (not `update`). Remember ad-level values override `ad_defaults`.
+- **Price reduction not applying**: Confirm `auto_price_reduction.enabled` is `true`, `min_price` is set, and you are using `publish` (not `update`). Run `kleinanzeigen-bot verify` to preview outcomes, or add `-v` for detailed decision data including repost/day-delay state. Remember ad-level values override `ad_defaults`.
 - **Shipping configuration issues**: Use `shipping_type: SHIPPING` when setting `shipping_costs` or `shipping_options`, and pick options from a single size group (S/M/L).
 - **Category not found**: Verify the category name or ID and check any custom mappings in `config.yaml`.
 - **File naming/prefix mismatch**: Ensure ad files match your `ad_files` glob and prefix (default `ad_`).

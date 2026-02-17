@@ -236,3 +236,41 @@ def test_cli_subcommands_with_config_formats(
         assert result.returncode == 0
     elif subcommand == "diagnose":
         assert "browser connection diagnostics" in out or "browser-verbindungsdiagnose" in out, f"Expected diagnostic output for 'diagnose'.\n{out}"
+
+
+@pytest.mark.smoke
+def test_verify_shows_auto_price_reduction_decisions(tmp_path:Path, test_bot_config:Config) -> None:
+    """Smoke: verify command previews auto price reduction decisions for all configured ads."""
+    config_dict = test_bot_config.model_dump()
+    config_dict["ad_files"] = ["./**/ad_*.yaml"]
+    config_path = tmp_path / "config.yaml"
+    yaml = YAML(typ = "unsafe", pure = True)
+    with open(config_path, "w", encoding = "utf-8") as f:
+        yaml.dump(config_dict, f)
+
+    ad_dir = tmp_path / "ads"
+    ad_dir.mkdir()
+    ad_yaml = ad_dir / "ad_test_pricing.yaml"
+    ad_yaml.write_text(
+        "title: Test Auto Pricing Ad\n"
+        "description: A test ad to verify auto price reduction preview\n"
+        "category: 161/gezielt\n"
+        "price: 200\n"
+        "price_type: FIXED\n"
+        "repost_count: 3\n"
+        "auto_price_reduction:\n"
+        "  enabled: true\n"
+        "  strategy: PERCENTAGE\n"
+        "  amount: 10\n"
+        "  min_price: 100\n"
+        "  delay_reposts: 0\n"
+        "  delay_days: 0\n",
+        encoding = "utf-8",
+    )
+
+    args = ["verify", "--config", str(config_path), "--workspace-mode", "portable"]
+    result = invoke_cli(args, cwd = tmp_path)
+    assert result.returncode == 0
+    out = (result.stdout + "\n" + result.stderr).lower()
+    assert "no configuration errors found" in out, f"Expected 'no configuration errors found' in output.\n{out}"
+    assert "auto price reduction applied" in out, f"Expected auto price reduction applied log in output.\n{out}"
