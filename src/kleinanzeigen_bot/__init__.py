@@ -627,8 +627,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     * all: downloads all ads from your profile
                     * new: downloads ads from your profile that are not locally saved yet
                     * <id(s)>: provide one or several ads by ID to download, like e.g. "--ads=1,2,3"
-              --ads=changed|<id(s)> (update) - specifies which ads to update (DEFAULT: changed)
+              --ads=all|changed|<id(s)> (update) - specifies which ads to update (DEFAULT: changed)
                     Possible values:
+                    * all: update all ads
                     * changed: only update ads that have been modified since last publication
                     * <id(s)>: provide one or several ads by ID to update, like e.g. "--ads=1,2,3"
               --ads=<id(s)> (extend) - specifies which ads to extend
@@ -646,7 +647,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             )
 
     def _is_valid_ads_selector(self, valid_keywords:set[str]) -> bool:
-        """Check if the current ads_selector is valid for the given set of keyword selectors."""
+        """Check if the current ads_selector is valid for the given set of keyword selectors.
+
+        Accepts a single keyword, a comma-separated list of keywords, or a comma-separated
+        list of numeric IDs. Mixed keyword+numeric selectors are not supported.
+        """
         return (
             self.ads_selector in valid_keywords
             or all(s.strip() in valid_keywords for s in self.ads_selector.split(","))
@@ -2199,13 +2204,16 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         xdg_paths.ensure_directory(workspace.download_dir, "downloaded ads directory")
         ad_extractor = extract.AdExtractor(self.browser, self.config, workspace.download_dir, published_ads_by_id = published_ads_by_id)
 
-        # use relevant download routine
-        if self.ads_selector in {"all", "new"}:  # explore ads overview for these two modes
+        # use relevant download routine — normalize comma-separated keyword selectors
+        selector_tokens = {s.strip() for s in self.ads_selector.split(",")}
+        effective_selector = "all" if "all" in selector_tokens else self.ads_selector
+
+        if effective_selector in {"all", "new"}:  # explore ads overview for these two modes
             LOG.info("Scanning your ad overview...")
             own_ad_urls = await ad_extractor.extract_own_ads_urls()
             LOG.info("%s found.", pluralize("ad", len(own_ad_urls)))
 
-            if self.ads_selector == "all":  # download all of your adds
+            if effective_selector == "all":  # download all of your adds
                 LOG.info("Starting download of all ads...")
 
                 success_count = 0
@@ -2217,7 +2225,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         success_count += 1
                 LOG.info("%d of %d ads were downloaded from your profile.", success_count, len(own_ad_urls))
 
-            elif self.ads_selector == "new":  # download only unsaved ads
+            elif effective_selector == "new":  # download only unsaved ads
                 # check which ads already saved
                 saved_ad_ids = []
                 ads = self.load_ads(ignore_inactive = False, exclude_ads_with_id = False)  # do not skip because of existing IDs
