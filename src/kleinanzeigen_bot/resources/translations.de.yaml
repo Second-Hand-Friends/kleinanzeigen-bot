@@ -253,14 +253,15 @@ kleinanzeigen_bot/__init__.py:
   run:
     "DONE: No configuration errors found.": "FERTIG: Keine Konfigurationsfehler gefunden."
     "DONE: No active ads found.": "FERTIG: Keine aktiven Anzeigen gefunden."
-    "You provided no ads selector. Defaulting to \"due\".": "Es wurden keine Anzeigen-Selektor angegeben. Es wird \"due\" verwendet."
+    "Invalid --ads selector: \"%s\". Valid values: all, new, due, changed, or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all, new, due, changed oder kommagetrennte numerische IDs."
+    "Invalid --ads selector: \"%s\". Valid values: all, changed, or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all, changed oder kommagetrennte numerische IDs."
+    "Invalid --ads selector: \"%s\". Valid values: all, new, or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all, new oder kommagetrennte numerische IDs."
+    "Invalid --ads selector: \"%s\". Valid values: all, or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
     "DONE: No new/outdated ads found.": "FERTIG: Keine neuen/veralteten Anzeigen gefunden."
     "DONE: No ads to delete found.": "FERTIG: Keine zu löschenden Anzeigen gefunden."
     "DONE: No changed ads found.": "FERTIG: Keine geänderten Anzeigen gefunden."
     "Extending all ads within 8-day window...": "Verlängere alle Anzeigen innerhalb des 8-Tage-Zeitfensters..."
     "DONE: No ads found to extend.": "FERTIG: Keine Anzeigen zum Verlängern gefunden."
-    "You provided no ads selector. Defaulting to \"new\".": "Es wurden keine Anzeigen-Selektor angegeben. Es wird \"new\" verwendet."
-    "You provided no ads selector. Defaulting to \"changed\".": "Es wurden keine Anzeigen-Selektor angegeben. Es wird \"changed\" verwendet."
     "Unknown command: %s": "Unbekannter Befehl: %s"
     "Timing collector flush failed: %s": "Zeitmessdaten konnten nicht gespeichert werden: %s"
 

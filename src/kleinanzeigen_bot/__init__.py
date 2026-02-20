@@ -299,6 +299,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         self.command = "help"
         self.ads_selector = "due"
+        self._ads_selector_explicit = False
         self.keep_old_ads = False
 
         self._login_detection_diagnostics_captured:bool = False
@@ -425,12 +426,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
 
-                    if not (
-                        self.ads_selector in {"all", "new", "due", "changed"}
-                        or any(selector in self.ads_selector.split(",") for selector in ("all", "new", "due", "changed"))
-                        or re.compile(r"\d+[,\d+]*").search(self.ads_selector)
-                    ):
-                        LOG.warning('You provided no ads selector. Defaulting to "due".')
+                    if not self._is_valid_ads_selector({"all", "new", "due", "changed"}):
+                        if self._ads_selector_explicit:
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, due, changed, or comma-separated numeric IDs.',
+                                self.ads_selector)
+                            sys.exit(2)
                         self.ads_selector = "due"
 
                     if ads := self.load_ads():
@@ -445,12 +445,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     self.configure_file_logging()
                     self.load_config()
 
-                    if not (
-                        self.ads_selector in {"all", "changed"}
-                        or any(selector in self.ads_selector.split(",") for selector in ("all", "changed"))
-                        or re.compile(r"\d+[,\d+]*").search(self.ads_selector)
-                    ):
-                        LOG.warning('You provided no ads selector. Defaulting to "changed".')
+                    if not self._is_valid_ads_selector({"all", "changed"}):
+                        if self._ads_selector_explicit:
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all, changed, or comma-separated numeric IDs.',
+                                self.ads_selector)
+                            sys.exit(2)
                         self.ads_selector = "changed"
 
                     if ads := self.load_ads():
@@ -482,8 +481,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
 
-                    # Default to all ads if no selector provided
-                    if not re.compile(r"\d+[,\d+]*").search(self.ads_selector):
+                    # Default to all ads if no selector provided, but reject invalid values
+                    if not self._is_valid_ads_selector({"all"}):
+                        if self._ads_selector_explicit:
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all, or comma-separated numeric IDs.',
+                                self.ads_selector)
+                            sys.exit(2)
                         LOG.info("Extending all ads within 8-day window...")
                         self.ads_selector = "all"
 
@@ -498,8 +501,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 case "download":
                     self.configure_file_logging()
                     # ad IDs depends on selector
-                    if not (self.ads_selector in {"all", "new"} or re.compile(r"\d+[,\d+]*").search(self.ads_selector)):
-                        LOG.warning('You provided no ads selector. Defaulting to "new".')
+                    if not self._is_valid_ads_selector({"all", "new"}):
+                        if self._ads_selector_explicit:
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, or comma-separated numeric IDs.',
+                                self.ads_selector)
+                            sys.exit(2)
                         self.ads_selector = "new"
                     self.load_config()
                     # Check for updates on startup
@@ -638,6 +644,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 )
             )
 
+    def _is_valid_ads_selector(self, valid_keywords:set[str]) -> bool:
+        """Check if the current ads_selector is valid for the given set of keyword selectors."""
+        return (
+            self.ads_selector in valid_keywords
+            or any(s in self.ads_selector.split(",") for s in valid_keywords)
+            or bool(re.compile(r"^\d+(,\d+)*$").match(self.ads_selector))
+        )
+
     def parse_args(self, args:list[str]) -> None:
         try:
             options, arguments = getopt.gnu_getopt(
@@ -673,8 +687,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     self._workspace_mode_arg = cast(xdg_paths.InstallationMode, mode)
                 case "--ads":
                     self.ads_selector = value.strip().lower()
+                    self._ads_selector_explicit = True
                 case "--force":
                     self.ads_selector = "all"
+                    self._ads_selector_explicit = True
                 case "--keep-old":
                     self.keep_old_ads = True
                 case "--lang":
@@ -859,7 +875,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         use_specific_ads = False
         selectors = self.ads_selector.split(",")
 
-        if re.compile(r"\d+[,\d+]*").search(self.ads_selector):
+        if re.compile(r"^\d+(,\d+)*$").match(self.ads_selector):
             ids = [int(n) for n in self.ads_selector.split(",")]
             use_specific_ads = True
             LOG.info("Start fetch task for the ad(s) with id(s):")
@@ -2227,7 +2243,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         new_count += 1
                 LOG.info("%s were downloaded from your profile.", pluralize("new ad", new_count))
 
-        elif re.compile(r"\d+[,\d+]*").search(self.ads_selector):  # download ad(s) with specific id(s)
+        elif re.compile(r"^\d+(,\d+)*$").match(self.ads_selector):  # download ad(s) with specific id(s)
             ids = [int(n) for n in self.ads_selector.split(",")]
             LOG.info("Starting download of ad(s) with the id(s):")
             LOG.info(" | ".join([str(ad_id) for ad_id in ids]))
