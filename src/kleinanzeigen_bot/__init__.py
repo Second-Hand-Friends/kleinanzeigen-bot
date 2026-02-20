@@ -2260,8 +2260,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         new_count += 1
                 LOG.info("%s were downloaded from your profile.", pluralize("new ad", new_count))
 
-        elif _NUMERIC_IDS_RE.match(self.ads_selector):  # download ad(s) with specific id(s)
-            ids = [int(n) for n in self.ads_selector.split(",")]
+        elif _NUMERIC_IDS_RE.match(effective_selector):  # download ad(s) with specific id(s)
+            ids = [int(n) for n in effective_selector.split(",")]
             LOG.info("Starting download of ad(s) with the id(s):")
             LOG.info(" | ".join([str(ad_id) for ad_id in ids]))
 
