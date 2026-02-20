@@ -256,7 +256,7 @@ kleinanzeigen_bot/__init__.py:
     "Invalid --ads selector: \"%s\". Valid values: all, new, due, changed, or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all, new, due, changed oder kommagetrennte numerische IDs."
     "Invalid --ads selector: \"%s\". Valid values: all, changed, or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all, changed oder kommagetrennte numerische IDs."
     "Invalid --ads selector: \"%s\". Valid values: all, new, or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all, new oder kommagetrennte numerische IDs."
-    "Invalid --ads selector: \"%s\". Valid values: all, or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
+    "Invalid --ads selector: \"%s\". Valid values: all or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
     "DONE: No new/outdated ads found.": "FERTIG: Keine neuen/veralteten Anzeigen gefunden."
     "DONE: No ads to delete found.": "FERTIG: Keine zu löschenden Anzeigen gefunden."
     "DONE: No changed ads found.": "FERTIG: Keine geänderten Anzeigen gefunden."

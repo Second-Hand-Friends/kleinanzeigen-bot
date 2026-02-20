@@ -1152,6 +1152,20 @@ class TestKleinanzeigenBotAdOperations:
             await test_bot.run(["script.py", "download"])
             assert test_bot.ads_selector == "new"
 
+    @pytest.mark.asyncio
+    async def test_run_update_default_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
+        """Test running update command with default selector falls back to changed."""
+        with patch.object(test_bot, "load_ads", return_value = []):
+            await test_bot.run(["script.py", "update"])
+            assert test_bot.ads_selector == "changed"
+
+    @pytest.mark.asyncio
+    async def test_run_extend_default_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
+        """Test running extend command with default selector falls back to all."""
+        with patch.object(test_bot, "load_ads", return_value = []):
+            await test_bot.run(["script.py", "extend"])
+            assert test_bot.ads_selector == "all"
+
     def test_load_ads_no_files(self, test_bot:KleinanzeigenBot) -> None:
         """Test loading ads with no files."""
         test_bot.config.ad_files = ["nonexistent/*.yaml"]

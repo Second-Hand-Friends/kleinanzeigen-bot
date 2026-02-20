@@ -33,6 +33,7 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 LOG.setLevel(loggers.INFO)
 
 PUBLISH_MAX_RETRIES:Final[int] = 3
+_NUMERIC_IDS_RE:Final = re.compile(r"^\d+(,\d+)*$")
 
 colorama.just_fix_windows_console()
 
@@ -299,7 +300,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         self.command = "help"
         self.ads_selector = "due"
-        self._ads_selector_explicit = False
+        self._ads_selector_explicit:bool = False
         self.keep_old_ads = False
 
         self._login_detection_diagnostics_captured:bool = False
@@ -484,7 +485,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     # Default to all ads if no selector provided, but reject invalid values
                     if not self._is_valid_ads_selector({"all"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, or comma-separated numeric IDs.',
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all or comma-separated numeric IDs.',
                                 self.ads_selector)
                             sys.exit(2)
                         LOG.info("Extending all ads within 8-day window...")
@@ -649,7 +650,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         return (
             self.ads_selector in valid_keywords
             or any(s in self.ads_selector.split(",") for s in valid_keywords)
-            or bool(re.compile(r"^\d+(,\d+)*$").match(self.ads_selector))
+            or bool(_NUMERIC_IDS_RE.match(self.ads_selector))
         )
 
     def parse_args(self, args:list[str]) -> None:
@@ -875,7 +876,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         use_specific_ads = False
         selectors = self.ads_selector.split(",")
 
-        if re.compile(r"^\d+(,\d+)*$").match(self.ads_selector):
+        if _NUMERIC_IDS_RE.match(self.ads_selector):
             ids = [int(n) for n in self.ads_selector.split(",")]
             use_specific_ads = True
             LOG.info("Start fetch task for the ad(s) with id(s):")
@@ -2243,7 +2244,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         new_count += 1
                 LOG.info("%s were downloaded from your profile.", pluralize("new ad", new_count))
 
-        elif re.compile(r"^\d+(,\d+)*$").match(self.ads_selector):  # download ad(s) with specific id(s)
+        elif _NUMERIC_IDS_RE.match(self.ads_selector):  # download ad(s) with specific id(s)
             ids = [int(n) for n in self.ads_selector.split(",")]
             LOG.info("Starting download of ad(s) with the id(s):")
             LOG.info(" | ".join([str(ad_id) for ad_id in ids]))
