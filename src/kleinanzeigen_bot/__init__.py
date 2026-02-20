@@ -300,7 +300,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         self.command = "help"
         self.ads_selector = "due"
-        self._ads_selector_explicit:bool = False
+        self._ads_selector_explicit: bool = False
         self.keep_old_ads = False
 
         self._login_detection_diagnostics_captured:bool = False
@@ -649,7 +649,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         """Check if the current ads_selector is valid for the given set of keyword selectors."""
         return (
             self.ads_selector in valid_keywords
-            or any(s in self.ads_selector.split(",") for s in valid_keywords)
+            or all(s.strip() in valid_keywords for s in self.ads_selector.split(","))
             or bool(_NUMERIC_IDS_RE.match(self.ads_selector))
         )
 
