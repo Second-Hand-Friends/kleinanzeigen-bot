@@ -33,7 +33,7 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 LOG.setLevel(loggers.INFO)
 
 PUBLISH_MAX_RETRIES:Final[int] = 3
-_NUMERIC_IDS_RE:Final = re.compile(r"^\d+(,\d+)*$")
+_NUMERIC_IDS_RE:Final[re.Pattern[str]] = re.compile(r"^\d+(,\d+)*$")
 
 colorama.just_fix_windows_console()
 
@@ -574,13 +574,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     * all: Lädt alle Anzeigen aus Ihrem Profil herunter
                     * new: Lädt Anzeigen aus Ihrem Profil herunter, die lokal noch nicht gespeichert sind
                     * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs zum Herunterladen an, z. B. "--ads=1,2,3"
-              --ads=changed|<id(s)> (update) - Gibt an, welche Anzeigen aktualisiert werden sollen (STANDARD: changed)
+              --ads=all|changed|<id(s)> (update) - Gibt an, welche Anzeigen aktualisiert werden sollen (STANDARD: changed)
                     Mögliche Werte:
+                    * all: Aktualisiert alle Anzeigen
                     * changed: Aktualisiert nur Anzeigen, die seit der letzten Veröffentlichung geändert wurden
                     * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs zum Aktualisieren an, z. B. "--ads=1,2,3"
-              --ads=<id(s)> (extend) - Gibt an, welche Anzeigen verlängert werden sollen
-                    Standardmäßig werden alle Anzeigen verlängert, die innerhalb von 8 Tagen ablaufen.
-                    Mit dieser Option können Sie bestimmte Anzeigen-IDs angeben, z. B. "--ads=1,2,3"
+              --ads=all|<id(s)> (extend) - Gibt an, welche Anzeigen verlängert werden sollen
+                    Mögliche Werte:
+                    * all: Verlängert alle Anzeigen, die innerhalb von 8 Tagen ablaufen
+                    * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
               --force           - Alias für '--ads=all'
               --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
               --config=<PATH>   - Pfad zur YAML- oder JSON-Konfigurationsdatei (ändert den Workspace-Modus nicht implizit)
@@ -632,9 +634,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     * all: update all ads
                     * changed: only update ads that have been modified since last publication
                     * <id(s)>: provide one or several ads by ID to update, like e.g. "--ads=1,2,3"
-              --ads=<id(s)> (extend) - specifies which ads to extend
-                    By default, extends all ads expiring within 8 days.
-                    Use this option to specify ad IDs, e.g. "--ads=1,2,3"
+              --ads=all|<id(s)> (extend) - specifies which ads to extend
+                    Possible values:
+                    * all: extend all ads expiring within 8 days
+                    * <id(s)>: specify ad IDs to extend, e.g. "--ads=1,2,3"
               --force           - alias for '--ads=all'
               --keep-old        - don't delete old ads on republication
               --config=<PATH>   - path to the config YAML or JSON file (does not implicitly change workspace mode)
@@ -2204,9 +2207,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         xdg_paths.ensure_directory(workspace.download_dir, "downloaded ads directory")
         ad_extractor = extract.AdExtractor(self.browser, self.config, workspace.download_dir, published_ads_by_id = published_ads_by_id)
 
-        # use relevant download routine — normalize comma-separated keyword selectors
+        # Normalize comma-separated keyword selectors; set deduplication collapses "new,new" → {"new"}
         selector_tokens = {s.strip() for s in self.ads_selector.split(",")}
-        effective_selector = "all" if "all" in selector_tokens else self.ads_selector
+        if "all" in selector_tokens:
+            effective_selector = "all"
+        elif len(selector_tokens) == 1:
+            effective_selector = next(iter(selector_tokens))  # e.g. "new,new" → "new"
+        else:
+            effective_selector = self.ads_selector  # numeric IDs: "123,456" — unchanged
 
         if effective_selector in {"all", "new"}:  # explore ads overview for these two modes
             LOG.info("Scanning your ad overview...")
