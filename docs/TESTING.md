@@ -49,19 +49,26 @@ async def test_bot_starts(smoke_bot):
     ...
 ```
 
-### Running Smoke, Unit, and Integration Tests
+### Running Tests
 
-- **Unit tests:**
-  - Run with: `pdm run utest` (excludes smoke and integration tests)
-  - Coverage: `pdm run utest:cov`
-- **Integration tests:**
-  - Run with: `pdm run itest` (excludes smoke tests)
-  - Coverage: `pdm run itest:cov`
-- **Smoke tests:**
-  - Run with: `pdm run smoke`
-  - Coverage: `pdm run smoke:cov`
-- **All tests in order:**
-  - Run with: `pdm run test` (runs unit, then integration, then smoke)
+- **Unified run (default, quiet):**
+  - `pdm run test` runs all tests in a single invocation with reduced output and coverage enabled.
+  - `pdm run test tests/unit/test_file.py::test_name` targets specific tests.
+  - `pdm run test -k "pattern"` filters tests by expression.
+- **Unified run (verbose):**
+  - `pdm run test -v` enables verbose pytest output.
+  - `pdm run test -vv` enables one additional verbosity level.
+  - `pdm run test:verbose` is equivalent to `pdm run test -v`.
+- **Split runs (targeted/stable):**
+  - `pdm run utest` runs unit tests only (excludes smoke and integration tests).
+  - `pdm run itest` runs integration tests only (excludes smoke tests, serial via `-n 0` for browser stability).
+  - `pdm run smoke` runs smoke tests only.
+
+### Coverage
+
+- `pdm run test` includes coverage with `--cov-report=term-missing`.
+- `pdm run test:cov:unified` remains the quality-gate unified coverage command.
+- `pdm run utest:cov`, `pdm run itest:cov`, and `pdm run smoke:cov` keep per-group coverage outputs for CI uploads.
 
 ### Parallel Execution and Slow-Test Tracking
 
@@ -90,21 +97,21 @@ async def test_bot_starts(smoke_bot):
 
 See also: `pyproject.toml` for test script definitions and `.github/workflows/build.yml` for CI setup.
 
-## Why Use Composite Test Groups?
+## Why Offer Both Unified and Split Runs?
 
-### Failing Fast and Early Feedback
+### Unified Runs (Default)
 
-- **Failing fast:** By running unit tests first, then integration, then smoke tests, CI and contributors get immediate feedback if a foundational component is broken.
-- **Critical errors surface early:** If a unit test fails, the job stops before running slower or less critical tests, saving time and resources.
-- **CI efficiency:** This approach prevents running hundreds of integration/smoke tests if the application is fundamentally broken (e.g., cannot start, cannot load config, etc.).
-- **Clear separation:** Each test group (unit, integration, smoke) is reported and covered separately, making it easy to see which layer is failing.
+- **Single summary:** See all failing tests in one run while developing locally.
+- **Coverage included:** The default `pdm run test` command reports coverage without needing a second command.
+- **Lower command overhead:** One pytest startup for the whole suite.
 
-### Tradeoff: Unified Reporting vs. Fast Failure
+### Split Runs (CI and Targeted Debugging)
 
-- **Unified reporting:** Running all tests in a single pytest invocation gives a single summary of all failures, but does not fail fast on critical errors.
-- **Composite groups:** Running groups separately means you may only see the first group's failures, but you catch the most important issues as soon as possible.
+- **Fail-fast flow in CI:** Unit, integration, and smoke runs are executed in sequence for faster failure feedback.
+- **Stable browser integrations:** `pdm run itest` keeps serial execution with `-n 0`.
+- **Separate coverage uploads:** CI still uses per-group coverage files/flags for Codecov.
 
-### When to Use Which
+### Tradeoff
 
-- **CI:** Composite groups are preferred for CI to catch critical failures early and avoid wasting resources.
-- **Local development:** You may prefer a unified run (`pdm run test`) to see all failures at once. Both options can be provided in `pyproject.toml` for flexibility.
+- Unified default uses `-n auto`; this can increase integration-test flakiness compared to serial integration runs.
+- When stability matters for integration debugging, run `pdm run itest` directly.

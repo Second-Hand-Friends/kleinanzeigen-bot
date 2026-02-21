@@ -117,11 +117,10 @@ utest = "python -m pytest --capture=tee-sys -m \"not itest and not smoke\""
 itest = "python -m pytest --capture=tee-sys -m \"itest and not smoke\" -n 0"
 # Run smoke tests only
 smoke = "python -m pytest --capture=tee-sys -m smoke"
-# Run all tests in order: unit, integration, smoke
-# (for CI: run these three scripts in sequence)
-test = { composite = ["utest", "itest", "smoke"] }
-# Run all tests in a single invocation for unified summary (unit tests run first)
-"test:unified" = "python -m pytest --capture=tee-sys"
+# Run all tests in a single invocation (quiet by default, use -v/-vv for details)
+test = "python scripts/run_tests.py"
+# Explicit verbose unified run
+"test:verbose" = "python scripts/run_tests.py -v"
 #
 # Coverage scripts:
 # - Each group writes its own data file to .temp/.coverage.<group>.xml
@@ -136,9 +135,11 @@ test = { composite = ["utest", "itest", "smoke"] }
 "test:cov:unified" = "python -m pytest --capture=tee-sys --cov=src/kleinanzeigen_bot --cov-report=term-missing"
 
 # Test script structure:
-# - Composite test groups (unit, integration, smoke) are run in order to fail fast and surface critical errors early.
-# - This prevents running all tests if a foundational component is broken, saving time.
-# - Each group is covered and reported separately.
+# - `test` runs all tests in a unified invocation (quiet default, coverage enabled).
+# - `test:verbose` runs unified with detailed output.
+# - Split groups (`utest`, `itest`, `smoke`) remain for targeted runs and CI fail-fast flow.
+# - `itest` remains serial (-n 0) when run explicitly for browser stability.
+# - Coverage scripts keep separate XML files for CI codecov uploads.
 #
 # See docs/TESTING.md for more details.
 
