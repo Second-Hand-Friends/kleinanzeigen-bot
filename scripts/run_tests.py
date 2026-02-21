@@ -15,6 +15,8 @@ import pytest
 ROOT:Final = Path(__file__).resolve().parent.parent
 TEMP:Final = ROOT / ".temp"
 
+# Most tests are currently unmarked, so utest intentionally uses negative markers
+# to select the default "unit-like" population while excluding integration/smoke.
 PROFILE_CONFIGS:Final[dict[str, tuple[str | None, str]]] = {
     "test": (None, "auto"),
     "utest": ("not itest and not smoke", "auto"),
