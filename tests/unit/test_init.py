@@ -1152,6 +1152,20 @@ class TestKleinanzeigenBotAdOperations:
             await test_bot.run(["script.py", "download"])
             assert test_bot.ads_selector == "new"
 
+    @pytest.mark.asyncio
+    async def test_run_update_default_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
+        """Test running update command with default selector falls back to changed."""
+        with patch.object(test_bot, "load_ads", return_value = []):
+            await test_bot.run(["script.py", "update"])
+            assert test_bot.ads_selector == "changed"
+
+    @pytest.mark.asyncio
+    async def test_run_extend_default_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
+        """Test running extend command with default selector falls back to all."""
+        with patch.object(test_bot, "load_ads", return_value = []):
+            await test_bot.run(["script.py", "extend"])
+            assert test_bot.ads_selector == "all"
+
     def test_load_ads_no_files(self, test_bot:KleinanzeigenBot) -> None:
         """Test loading ads with no files."""
         test_bot.config.ad_files = ["nonexistent/*.yaml"]
@@ -1172,17 +1186,31 @@ class TestKleinanzeigenBotAdManagement:
 
     @pytest.mark.asyncio
     async def test_run_publish_invalid_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
-        """Test running publish with invalid selector."""
-        with patch.object(test_bot, "load_ads", return_value = []):
+        """Test running publish with invalid selector exits with error."""
+        with pytest.raises(SystemExit) as exc_info:
             await test_bot.run(["script.py", "publish", "--ads=invalid"])
-            assert test_bot.ads_selector == "due"
+        assert exc_info.value.code == 2
 
     @pytest.mark.asyncio
     async def test_run_download_invalid_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
-        """Test running download with invalid selector."""
-        with patch.object(test_bot, "download_ads", new_callable = AsyncMock):
+        """Test running download with invalid selector exits with error."""
+        with pytest.raises(SystemExit) as exc_info:
             await test_bot.run(["script.py", "download", "--ads=invalid"])
-            assert test_bot.ads_selector == "new"
+        assert exc_info.value.code == 2
+
+    @pytest.mark.asyncio
+    async def test_run_update_invalid_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
+        """Test running update with invalid selector exits with error."""
+        with pytest.raises(SystemExit) as exc_info:
+            await test_bot.run(["script.py", "update", "--ads=invalid"])
+        assert exc_info.value.code == 2
+
+    @pytest.mark.asyncio
+    async def test_run_extend_invalid_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
+        """Test running extend with invalid selector exits with error."""
+        with pytest.raises(SystemExit) as exc_info:
+            await test_bot.run(["script.py", "extend", "--ads=invalid"])
+        assert exc_info.value.code == 2
 
 
 class TestKleinanzeigenBotAdConfiguration:
