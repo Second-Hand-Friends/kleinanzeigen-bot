@@ -33,7 +33,7 @@ Please read through this document before submitting any contributions to ensure 
 
 1. Fork and clone the repository
 1. Install dependencies: `pdm install`
-1. Run tests to verify setup: `pdm run test:cov`
+1. Run tests to verify setup: `pdm run test`
 
 ## Development Notes
 
@@ -118,18 +118,15 @@ This project uses a comprehensive testing strategy with three test types:
 ### Running Tests
 
 ```bash
-# Run all tests in order (unit → integration → smoke)
-pdm run test:cov
+# Canonical unified run (quiet by default, coverage enabled)
+pdm run test
+pdm run test -v
+pdm run test -vv
 
 # Run specific test types
 pdm run utest      # Unit tests only
 pdm run itest      # Integration tests only
 pdm run smoke      # Smoke tests only
-
-# Run with coverage
-pdm run utest:cov  # Unit tests with coverage
-pdm run itest:cov  # Integration tests with coverage
-pdm run smoke:cov  # Smoke tests with coverage
 ```
 
 ### Adding New Tests

@@ -168,8 +168,12 @@ jobs:
       run: pdm run basedpyright
 
 
+    - name: Prepare split coverage artifacts
+      run: pdm run ci:coverage:prepare
+
+
     - name: Run unit tests
-      run: pdm run utest:cov -vv
+      run: pdm run ci:test:unit -vv
 
 
     - name: Run integration tests
@@ -180,15 +184,15 @@ jobs:
             ubuntu-*)
                sudo apt-get install --no-install-recommends -y xvfb
                # Run tests INSIDE xvfb context
-               xvfb-run bash -c 'pdm run itest:cov -vv'
+               xvfb-run bash -c 'pdm run ci:test:integration -vv'
                ;;
-           *) pdm run itest:cov -vv
+           *) pdm run ci:test:integration -vv
               ;;
         esac
 
 
     - name: Run smoke tests
-      run: pdm run smoke:cov -vv
+      run: pdm run ci:test:smoke -vv
 
 
     - name: Run app from source
