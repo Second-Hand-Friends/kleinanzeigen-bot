@@ -116,4 +116,4 @@ For contributor workflow, setup, and submission expectations, see `CONTRIBUTING.
 ### Trade-off
 
 - Unified default uses `-n auto`; this can increase integration-test flakiness compared to serial integration runs.
-- When stability matters for integration debugging, run `pdm run itest` directly.
+- When integration-test stability is a concern, run `pdm run itest` directly.
