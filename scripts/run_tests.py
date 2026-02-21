@@ -63,11 +63,10 @@ def _cleanup_coverage_artifacts() -> None:
     TEMP.mkdir(parents = True, exist_ok = True)
     for pattern in ("coverage-*.xml", ".coverage-*.sqlite"):
         for stale_file in TEMP.glob(pattern):
-            stale_file.unlink()
+            stale_file.unlink(missing_ok = True)
 
     for stale_path in (TEMP / "coverage.sqlite", ROOT / ".coverage"):
-        if stale_path.exists():
-            stale_path.unlink()
+        stale_path.unlink(missing_ok = True)
 
 
 def _run_profile(*, profile:str, verbosity:int, passthrough:list[str]) -> int:
@@ -147,7 +146,7 @@ def main(argv:list[str] | None = None) -> int:
             marker = args.marker,
             coverage_file = args.coverage_file,
             xml_file = args.xml_file,
-            workers = str(args.workers),
+            workers = args.workers,
             verbosity = args.verbose,
             passthrough = passthrough,
         )

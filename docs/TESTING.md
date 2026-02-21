@@ -79,8 +79,8 @@ async def test_bot_starts(smoke_bot):
 
 ### CI Test Order
 
-- CI runs split suites in this order: unit, integration, smoke.
-- CI uses internal commands (`ci:coverage:prepare`, `ci:test:unit`, `ci:test:integration`, `ci:test:smoke`) backed by `scripts/run_tests.py`.
+- Split suites run in this order: unit, integration, smoke.
+- Internal commands (`ci:coverage:prepare`, `ci:test:unit`, `ci:test:integration`, `ci:test:smoke`) are backed by `scripts/run_tests.py`.
 - Coverage for each group is uploaded separately to Codecov (with flags: `unit-tests`, `integration-tests`, `smoke-tests`).
 - This ensures that foundational failures are caught early and that test types are clearly separated.
 
