@@ -338,10 +338,8 @@ testpaths = [
 addopts = """
   --strict-markers
   --doctest-modules
+  --cov=src/kleinanzeigen_bot
   --cov-report=term-missing
-  -n auto
-  --durations=25
-  --durations-min=0.5
 """
 markers = [
   "slow: marks a test as long running",

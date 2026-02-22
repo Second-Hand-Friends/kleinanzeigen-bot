@@ -43,12 +43,11 @@ def _append_verbosity(pytest_args:list[str], verbosity:int) -> None:
 
 
 def _pytest_base_args(*, workers:str, verbosity:int) -> list[str]:
-    # IMPORTANT: `-o addopts=...` replaces [tool.pytest.ini_options].addopts, it does not append.
-    # Keep this option list in sync with pyproject addopts defaults when those change.
+    # Stable pytest defaults (strict markers, doctest, coverage) live in pyproject addopts.
+    # This runner only adds dynamic execution policy (workers and verbosity).
     pytest_args = [
-        "-o",
-        f"addopts=--strict-markers --doctest-modules -n {workers}",
-        "--cov=src/kleinanzeigen_bot",
+        "-n",
+        workers,
     ]
     _append_verbosity(pytest_args, verbosity)
     return pytest_args
@@ -80,7 +79,6 @@ def _cleanup_coverage_artifacts() -> None:
 def _run_profile(*, profile:str, verbosity:int, passthrough:list[str]) -> int:
     marker, workers = PROFILE_CONFIGS[profile]
     pytest_args = _pytest_base_args(workers = workers, verbosity = verbosity)
-    pytest_args.append("--cov-report=term-missing")
 
     if marker is not None:
         pytest_args.extend(["-m", marker])
@@ -102,7 +100,6 @@ def _run_ci(*, marker:str, coverage_file:Path, xml_file:Path, workers:str, verbo
     pytest_args.extend([
         "-m",
         marker,
-        "--cov-report=term-missing",
         f"--cov-report=xml:{_display_path(resolved_xml_file)}",
     ])
     pytest_args.extend(passthrough)
@@ -161,7 +158,7 @@ def main(argv:list[str] | None = None) -> int:
             passthrough = passthrough,
         )
 
-    raise AssertionError(f"Unsupported command: {args.command}")
+    return 0
 
 
 if __name__ == "__main__":

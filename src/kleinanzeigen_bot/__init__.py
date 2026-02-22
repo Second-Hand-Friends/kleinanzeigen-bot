@@ -300,7 +300,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         self.command = "help"
         self.ads_selector = "due"
-        self._ads_selector_explicit: bool = False
+        self._ads_selector_explicit:bool = False
         self.keep_old_ads = False
 
         self._login_detection_diagnostics_captured:bool = False
