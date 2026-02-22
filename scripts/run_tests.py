@@ -1,7 +1,13 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""Unified pytest runner for public and CI test execution."""
+"""Unified pytest runner for public and CI test execution.
+
+This module invokes pytest via ``pytest.main()``. Programmatic callers should
+avoid repeated in-process invocations because Python's import cache can retain
+test module state between runs. CLI usage via ``pdm run`` is unaffected because
+each invocation runs in a fresh process.
+"""
 from __future__ import annotations
 
 import argparse
@@ -136,6 +142,8 @@ def main(argv:list[str] | None = None) -> int:
     parser = _build_parser()
     args, passthrough = parser.parse_known_args(effective_argv)
 
+    # This entrypoint is intended for one-shot CLI usage, not same-process
+    # repeated invocations that can reuse imports loaded by pytest.main().
     if args.command == "run":
         return _run_profile(profile = args.profile, verbosity = args.verbose, passthrough = passthrough)
 

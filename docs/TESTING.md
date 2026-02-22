@@ -74,7 +74,7 @@ async def test_bot_starts(smoke_bot):
 
 - `test`, `utest`, and `smoke` run with `-n auto`.
 - `itest` runs with `-n 0` by design to avoid flaky browser parallelism.
-- Verbose runs (`-v` and above) report the slowest 25 tests (`--durations=25 --durations-min=0.5`), while quiet/default runs omit durations.
+- Verbose runs (`-v`, `-vv`, `-vvv`) report the slowest 25 tests (`--durations=25 --durations-min=0.5`), while quiet/default runs omit durations.
 - Long-running scenarios are tagged with `@pytest.mark.slow` (smoke CLI checks and browser integrations). Keep them in CI, but skip locally via `pytest -m "not slow"` when you only need a quick signal.
 
 ### CI Test Order
