@@ -110,35 +110,26 @@ lint = { composite = ["lint:ruff", "lint:mypy", "lint:pyright"] }
 "lint:fix"     = {shell = "ruff check --preview --fix" }
 
 # tests
-# Run unit tests only (exclude smoke and itest)
-utest = "python -m pytest --capture=tee-sys -m \"not itest and not smoke\""
-# Run integration tests only (exclude smoke)
-# Uses -n 0 to disable xdist parallelization - browser tests are flaky with parallel workers
-itest = "python -m pytest --capture=tee-sys -m \"itest and not smoke\" -n 0"
-# Run smoke tests only
-smoke = "python -m pytest --capture=tee-sys -m smoke"
-# Run all tests in order: unit, integration, smoke
-# (for CI: run these three scripts in sequence)
-test = { composite = ["utest", "itest", "smoke"] }
-# Run all tests in a single invocation for unified summary (unit tests run first)
-"test:unified" = "python -m pytest --capture=tee-sys"
-#
-# Coverage scripts:
-# - Each group writes its own data file to .temp/.coverage.<group>.xml
-#
-"coverage:prepare" = { shell = "python scripts/coverage_helper.py prepare" }
-"test:cov"  = { composite = ["coverage:prepare", "utest:cov", "itest:cov", "smoke:cov", "coverage:combine"] }
-"utest:cov" = { shell = "python scripts/coverage_helper.py run .temp/.coverage-unit.sqlite .temp/coverage-unit.xml \"not itest and not smoke\"" }
-"itest:cov" = { shell = "python scripts/coverage_helper.py run .temp/.coverage-itest.sqlite .temp/coverage-integration.xml \"itest and not smoke\" -n 0" }
-"smoke:cov" = { shell = "python scripts/coverage_helper.py run .temp/.coverage-smoke.sqlite .temp/coverage-smoke.xml smoke" }
-"coverage:combine" = { shell = "python scripts/coverage_helper.py combine .temp/.coverage-unit.sqlite .temp/.coverage-itest.sqlite .temp/.coverage-smoke.sqlite" }
-# Run all tests with coverage in a single invocation
-"test:cov:unified" = "python -m pytest --capture=tee-sys --cov=src/kleinanzeigen_bot --cov-report=term-missing"
+# Public test commands
+# - Coverage is enabled by default for all public profiles.
+# - Quiet output is default; pass -v/-vv for more details and durations.
+test  = "python scripts/run_tests.py run test"
+utest = "python scripts/run_tests.py run utest"
+itest = "python scripts/run_tests.py run itest"
+smoke = "python scripts/run_tests.py run smoke"
+
+# CI/internal split coverage commands (for Codecov artifact uploads)
+"ci:coverage:prepare" = "python scripts/run_tests.py ci-prepare"
+"ci:test:unit" = "python scripts/run_tests.py ci-run --marker \"not itest and not smoke\" --coverage-file .temp/.coverage-unit.sqlite --xml-file .temp/coverage-unit.xml"
+"ci:test:integration" = "python scripts/run_tests.py ci-run --marker \"itest and not smoke\" --coverage-file .temp/.coverage-itest.sqlite --xml-file .temp/coverage-integration.xml --workers 0"
+"ci:test:smoke" = "python scripts/run_tests.py ci-run --marker smoke --coverage-file .temp/.coverage-smoke.sqlite --xml-file .temp/coverage-smoke.xml"
 
 # Test script structure:
-# - Composite test groups (unit, integration, smoke) are run in order to fail fast and surface critical errors early.
-# - This prevents running all tests if a foundational component is broken, saving time.
-# - Each group is covered and reported separately.
+# - `scripts/run_tests.py` is the single implementation for public and CI test execution.
+# - `test` is the canonical unified command.
+# - Split groups (`utest`, `itest`, `smoke`) remain for targeted runs.
+# - `itest` remains serial (-n 0) for browser stability.
+# - CI uses `ci:*` commands for per-suite XML outputs consumed by Codecov.
 #
 # See docs/TESTING.md for more details.
 
@@ -347,10 +338,8 @@ testpaths = [
 addopts = """
   --strict-markers
   --doctest-modules
+  --cov=src/kleinanzeigen_bot
   --cov-report=term-missing
-  -n auto
-  --durations=25
-  --durations-min=0.5
 """
 markers = [
   "slow: marks a test as long running",
@@ -371,6 +360,7 @@ filterwarnings = [
 data_file = ".temp/coverage.sqlite"
 branch = true  # track branch coverage
 relative_files = true
+disable_warnings = ["no-data-collected"]
 
 [tool.coverage.report]
 precision = 2

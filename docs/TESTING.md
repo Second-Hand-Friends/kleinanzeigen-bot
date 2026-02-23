@@ -49,30 +49,38 @@ async def test_bot_starts(smoke_bot):
     ...
 ```
 
-### Running Smoke, Unit, and Integration Tests
+### Running Tests
 
-- **Unit tests:**
-  - Run with: `pdm run utest` (excludes smoke and integration tests)
-  - Coverage: `pdm run utest:cov`
-- **Integration tests:**
-  - Run with: `pdm run itest` (excludes smoke tests)
-  - Coverage: `pdm run itest:cov`
-- **Smoke tests:**
-  - Run with: `pdm run smoke`
-  - Coverage: `pdm run smoke:cov`
-- **All tests in order:**
-  - Run with: `pdm run test` (runs unit, then integration, then smoke)
+- **Canonical unified command:**
+  - `pdm run test` runs all tests in one invocation.
+  - Output is quiet by default.
+  - Coverage is enabled by default with `--cov-report=term-missing`.
+- **Verbosity controls:**
+  - `pdm run test -v` enables verbose pytest output and durations.
+  - `pdm run test -vv` keeps pytest's second verbosity level and durations.
+- **Split runs (targeted/stable):**
+  - `pdm run utest` runs only unit tests.
+  - `pdm run itest` runs only integration tests and stays serial (`-n 0`) for browser stability.
+  - `pdm run smoke` runs only smoke tests.
+  - Split runs also include coverage by default.
+
+### Coverage
+
+- Local and CI-facing public commands (`test`, `utest`, `itest`, `smoke`) always enable coverage.
+- Default local report output remains `term-missing`.
+- CI still uploads split XML coverage files (unit/integration/smoke) to Codecov using internal `ci:*` runner commands.
 
 ### Parallel Execution and Slow-Test Tracking
 
-- `pytest-xdist` runs every invocation with `-n auto`, so the suite is split across CPU cores automatically.
-- Pytest now reports the slowest 25 tests (`--durations=25 --durations-min=0.5`), making regressions easy to spot in CI logs.
+- `test`, `utest`, and `smoke` run with `-n auto`.
+- `itest` runs with `-n 0` by design to avoid flaky browser parallelism.
+- Verbose runs (`-v`, `-vv`, `-vvv`) report the slowest 25 tests (`--durations=25 --durations-min=0.5`), while quiet/default runs omit durations.
 - Long-running scenarios are tagged with `@pytest.mark.slow` (smoke CLI checks and browser integrations). Keep them in CI, but skip locally via `pytest -m "not slow"` when you only need a quick signal.
-- Coverage commands (`pdm run test:cov`, etc.) remain compatible—`pytest-cov` merges the per-worker data transparently.
 
 ### CI Test Order
 
-- CI runs unit tests first, then integration tests, then smoke tests.
+- Split suites run in this order: unit, integration, smoke.
+- Internal commands (`ci:coverage:prepare`, `ci:test:unit`, `ci:test:integration`, `ci:test:smoke`) are backed by `scripts/run_tests.py`.
 - Coverage for each group is uploaded separately to Codecov (with flags: `unit-tests`, `integration-tests`, `smoke-tests`).
 - This ensures that foundational failures are caught early and that test types are clearly separated.
 
@@ -89,22 +97,23 @@ async def test_bot_starts(smoke_bot):
 - **Coverage clarity:** You can see which code paths are covered by each test type in Codecov.
 
 See also: `pyproject.toml` for test script definitions and `.github/workflows/build.yml` for CI setup.
+For contributor workflow, setup, and submission expectations, see `CONTRIBUTING.md`.
 
-## Why Use Composite Test Groups?
+## Why Offer Both Unified and Split Runs?
 
-### Failing Fast and Early Feedback
+### Unified Runs (Default)
 
-- **Failing fast:** By running unit tests first, then integration, then smoke tests, CI and contributors get immediate feedback if a foundational component is broken.
-- **Critical errors surface early:** If a unit test fails, the job stops before running slower or less critical tests, saving time and resources.
-- **CI efficiency:** This approach prevents running hundreds of integration/smoke tests if the application is fundamentally broken (e.g., cannot start, cannot load config, etc.).
-- **Clear separation:** Each test group (unit, integration, smoke) is reported and covered separately, making it easy to see which layer is failing.
+- **Single summary:** See all failing tests in one run while developing locally.
+- **Coverage included:** The default `pdm run test` command reports coverage without needing a second command.
+- **Lower command overhead:** One pytest startup for the whole suite.
 
-### Tradeoff: Unified Reporting vs. Fast Failure
+### Split Runs (CI and Targeted Debugging)
 
-- **Unified reporting:** Running all tests in a single pytest invocation gives a single summary of all failures, but does not fail fast on critical errors.
-- **Composite groups:** Running groups separately means you may only see the first group's failures, but you catch the most important issues as soon as possible.
+- **Fail-fast flow in CI:** Unit, integration, and smoke runs are executed in sequence for faster failure feedback.
+- **Stable browser integrations:** `pdm run itest` keeps serial execution with `-n 0`.
+- **Separate coverage uploads:** CI still uses per-group coverage files/flags for Codecov.
 
-### When to Use Which
+### Trade-off
 
-- **CI:** Composite groups are preferred for CI to catch critical failures early and avoid wasting resources.
-- **Local development:** You may prefer a unified run (`pdm run test`) to see all failures at once. Both options can be provided in `pyproject.toml` for flexibility.
+- Unified default uses `-n auto`; this can increase integration-test flakiness compared to serial integration runs.
+- When integration-test stability is a concern, run `pdm run itest` directly.
