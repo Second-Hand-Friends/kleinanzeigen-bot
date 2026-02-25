@@ -1246,23 +1246,27 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             effective_timeout,
         )
 
-        # Try to find the standard element first
-        try:
-            user_info = await self.web_text(By.CLASS_NAME, "mr-medium", timeout = login_check_timeout)
-            if username in user_info.lower():
-                LOG.debug("Login detected via .mr-medium element")
-                return True
-        except TimeoutError:
-            LOG.debug("Timeout waiting for .mr-medium element after %.1fs", effective_timeout)
+        login_selectors = [
+            (By.CLASS_NAME, "mr-medium"),
+            (By.ID, "user-email"),
+        ]
+        primary_selector_index = 0
 
-        # If standard element not found or didn't contain username, try the alternative
         try:
-            user_info = await self.web_text(By.ID, "user-email", timeout = login_check_timeout)
+            user_info, matched_selector = await self.web_text_first_available(
+                login_selectors,
+                timeout = login_check_timeout,
+                key = "login_detection",
+                description = "login_detection(selector_group)",
+            )
             if username in user_info.lower():
-                LOG.debug("Login detected via #user-email element")
+                if matched_selector == primary_selector_index:
+                    LOG.debug("Login detected via .mr-medium element")
+                else:
+                    LOG.debug("Login detected via #user-email element")
                 return True
         except TimeoutError:
-            LOG.debug("Timeout waiting for #user-email element after %.1fs", effective_timeout)
+            LOG.debug("Timeout waiting for login detection selector group after %.1fs", effective_timeout)
 
         if not include_probe:
             LOG.debug("No login detected - neither .mr-medium nor #user-email found with username")

@@ -536,6 +536,60 @@ class TestTimeoutAndRetryHelpers:
         ):
             await web_scraper._run_with_timeout_retries(never_called, description = "guarded-op")
 
+    def test_allocate_selector_group_budgets_distributes_total(self, web_scraper:WebScrapingMixin) -> None:
+        """Selector group budgets should consume the full timeout budget."""
+        budgets = web_scraper._allocate_selector_group_budgets(2.0, 2)
+        assert len(budgets) == 2
+        assert budgets[0] + budgets[1] == pytest.approx(2.0)
+
+    def test_allocate_selector_group_budgets_tiny_timeout_splits_equally(self, web_scraper:WebScrapingMixin) -> None:
+        """When timeout is too small for floors, budgets should split equally."""
+        budgets = web_scraper._allocate_selector_group_budgets(0.2, 2)
+        assert budgets == pytest.approx([0.1, 0.1])
+
+    @pytest.mark.asyncio
+    async def test_web_find_first_available_uses_shared_budget(self, web_scraper:WebScrapingMixin) -> None:
+        """web_find_first_available should try alternatives in order with shared budget slices."""
+        first_timeout:float | None = None
+        second_timeout:float | None = None
+        found = AsyncMock(spec = Element)
+
+        async def fake_find_once(
+            selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None
+        ) -> Element:
+            nonlocal first_timeout, second_timeout
+            if selector_value == "first":
+                first_timeout = timeout
+                raise TimeoutError("first timeout")
+            second_timeout = timeout
+            return found
+
+        with patch.object(web_scraper, "_web_find_once", side_effect = fake_find_once):
+            result, index = await web_scraper.web_find_first_available(
+                [(By.ID, "first"), (By.ID, "second")],
+                timeout = 2.0,
+                key = "login_detection",
+            )
+
+        assert result is found
+        assert index == 1
+        assert first_timeout is not None
+        assert second_timeout is not None
+        assert first_timeout + second_timeout == pytest.approx(2.0)
+
+    @pytest.mark.asyncio
+    async def test_web_find_first_available_exhausts_candidates_once_when_retry_disabled(self, web_scraper:WebScrapingMixin) -> None:
+        """Candidate exhaustion should not multiply attempts when retry is disabled."""
+        web_scraper.config.timeouts.retry_enabled = False
+
+        with (
+            patch.object(web_scraper, "_web_find_once", side_effect = TimeoutError("not found")) as find_once,
+            pytest.raises(TimeoutError, match = "No HTML element found using selector group"),
+        ):
+            await web_scraper.web_find_first_available([(By.ID, "first"), (By.ID, "second")], timeout = 1.0)
+
+        assert find_once.await_count == 2
+
 
 class TestSelectorTimeoutMessages:
     """Ensure selector helpers provide informative timeout messages."""

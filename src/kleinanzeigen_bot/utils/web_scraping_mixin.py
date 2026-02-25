@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import asyncio, enum, inspect, json, os, platform, secrets, shutil, subprocess, urllib.request  # isort: skip # noqa: S404
-from collections.abc import Awaitable, Callable, Coroutine, Iterable
+from collections.abc import Awaitable, Callable, Coroutine, Iterable, Sequence
 from gettext import gettext as _
 from pathlib import Path, PureWindowsPath
 from typing import Any, Final, Optional, cast
@@ -39,6 +39,9 @@ if TYPE_CHECKING:
 
 # Constants for RemoteObject conversion
 _KEY_VALUE_PAIR_SIZE = 2
+_PRIMARY_SELECTOR_BUDGET_RATIO:Final[float] = 0.70
+_BACKUP_SELECTOR_BUDGET_CAP_SECONDS:Final[float] = 0.75
+_BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS:Final[float] = 0.25
 
 
 def _resolve_user_data_dir_paths(arg_value:str, config_value:str) -> tuple[Any, Any]:
@@ -253,6 +256,134 @@ class WebScrapingMixin:
                 LOG.debug("Retrying %s after TimeoutError (attempt %d/%d, timeout %.1fs)", description, attempt + 1, attempts, effective_timeout)
 
         raise TimeoutError(f"{description} failed without executing operation")
+
+    @staticmethod
+    def _allocate_selector_group_budgets(total_timeout:float, selector_count:int) -> list[float]:
+        """Allocate a shared timeout budget across selector alternatives."""
+        if selector_count <= 0:
+            raise ValueError("selector_count must be > 0")
+        if selector_count == 1:
+            return [max(total_timeout, 0.0)]
+        if total_timeout <= 0:
+            return [0.0 for _ in range(selector_count)]
+
+        floor_total = _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS * selector_count
+        if total_timeout < floor_total:
+            equal_share = total_timeout / selector_count
+            return [equal_share for _ in range(selector_count)]
+
+        reserve_for_backups = _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS * (selector_count - 1)
+        primary = min(total_timeout * _PRIMARY_SELECTOR_BUDGET_RATIO, total_timeout - reserve_for_backups)
+        primary = max(primary, _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS)
+        budgets = [primary]
+        remaining = total_timeout - primary
+
+        for index in range(selector_count - 1):
+            is_last_backup = index == selector_count - 2
+            if is_last_backup:
+                alloc = min(remaining, _BACKUP_SELECTOR_BUDGET_CAP_SECONDS)
+                budgets.append(alloc)
+                surplus = remaining - alloc
+                if surplus > 0:
+                    budgets[0] += surplus
+                break
+
+            remaining_slots_after_this = selector_count - len(budgets) - 1
+            min_reserve = _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS * remaining_slots_after_this
+            alloc = remaining - min_reserve
+            alloc = max(_BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS, alloc)
+            alloc = min(_BACKUP_SELECTOR_BUDGET_CAP_SECONDS, alloc)
+            budgets.append(alloc)
+            remaining -= alloc
+
+        return budgets
+
+    async def web_find_first_available(
+        self,
+        selectors:Sequence[tuple[By, str]],
+        *,
+        parent:Element | None = None,
+        timeout:int | float | None = None,
+        key:str = "default",
+        description:str | None = None,
+    ) -> tuple[Element, int]:
+        """
+        Find the first matching selector from an ordered group using a shared timeout budget.
+        """
+        if not selectors:
+            raise ValueError("selectors must contain at least one selector")
+
+        async def attempt(effective_timeout:float) -> tuple[Element, int]:
+            budgets = self._allocate_selector_group_budgets(effective_timeout, len(selectors))
+            failures:list[str] = []
+            for index, ((selector_type, selector_value), candidate_timeout) in enumerate(zip(selectors, budgets, strict = True)):
+                try:
+                    element = await self._web_find_once(selector_type, selector_value, candidate_timeout, parent = parent)
+                    LOG.debug(
+                        "Selector group matched candidate %d/%d (%s=%s) within %.2fs (group budget %.2fs)",
+                        index + 1,
+                        len(selectors),
+                        selector_type.name,
+                        selector_value,
+                        candidate_timeout,
+                        effective_timeout,
+                    )
+                    return element, index
+                except TimeoutError as exc:
+                    failures.append(str(exc))
+                    LOG.debug(
+                        "Selector group candidate %d/%d timed out (%s=%s) after %.2fs (group budget %.2fs)",
+                        index + 1,
+                        len(selectors),
+                        selector_type.name,
+                        selector_value,
+                        candidate_timeout,
+                        effective_timeout,
+                    )
+
+            failure_summary = failures[-1] if failures else "No selector candidates executed."
+            raise TimeoutError(
+                f"No HTML element found using selector group after trying {len(selectors)} alternatives within {effective_timeout} seconds."
+                f" Last error: {failure_summary}"
+            )
+
+        attempt_description = description or f"web_find_first_available({len(selectors)} selectors)"
+        return await self._run_with_timeout_retries(attempt, description = attempt_description, key = key, override = timeout)
+
+    async def web_text_first_available(
+        self,
+        selectors:Sequence[tuple[By, str]],
+        *,
+        parent:Element | None = None,
+        timeout:int | float | None = None,
+        key:str = "default",
+        description:str | None = None,
+    ) -> tuple[str, int]:
+        """
+        Return visible text from the first selector that resolves from a selector group.
+        """
+        element, matched_index = await self.web_find_first_available(
+            selectors,
+            parent = parent,
+            timeout = timeout,
+            key = key,
+            description = description,
+        )
+        text = str(
+            await element.apply("""
+            function (elem) {
+                let sel = window.getSelection()
+                sel.removeAllRanges()
+                let range = document.createRange()
+                range.selectNode(elem)
+                sel.addRange(range)
+                let visibleText = sel.toString().trim()
+                sel.removeAllRanges()
+                return visibleText
+            }
+        """)
+        )
+        return text, matched_index
 
     async def create_browser_session(self) -> None:
         LOG.info("Creating Browser session...")
