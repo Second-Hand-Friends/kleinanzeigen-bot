@@ -542,10 +542,36 @@ class TestTimeoutAndRetryHelpers:
         assert len(budgets) == 2
         assert budgets[0] + budgets[1] == pytest.approx(2.0)
 
+    def test_allocate_selector_group_budgets_rejects_zero_selector_count(self, web_scraper:WebScrapingMixin) -> None:
+        """Selector budget helper should reject empty selector groups."""
+        with pytest.raises(ValueError, match = "selector_count must be > 0"):
+            web_scraper._allocate_selector_group_budgets(1.0, 0)
+
+    def test_allocate_selector_group_budgets_single_selector_clamps_negative_timeout(self, web_scraper:WebScrapingMixin) -> None:
+        """Single-selector budgets should never be negative."""
+        budgets = web_scraper._allocate_selector_group_budgets(-1.0, 1)
+        assert budgets == [0.0]
+
+    def test_allocate_selector_group_budgets_non_positive_timeout_returns_zeroes(self, web_scraper:WebScrapingMixin) -> None:
+        """Multi-selector groups with non-positive timeout should return zero budgets."""
+        budgets = web_scraper._allocate_selector_group_budgets(0.0, 3)
+        assert budgets == [0.0, 0.0, 0.0]
+
     def test_allocate_selector_group_budgets_tiny_timeout_splits_equally(self, web_scraper:WebScrapingMixin) -> None:
         """When timeout is too small for floors, budgets should split equally."""
         budgets = web_scraper._allocate_selector_group_budgets(0.2, 2)
         assert budgets == pytest.approx([0.1, 0.1])
+
+    def test_allocate_selector_group_budgets_redistributes_surplus_to_primary(self, web_scraper:WebScrapingMixin) -> None:
+        """Last-backup cap overflow should be redistributed back to primary budget."""
+        budgets = web_scraper._allocate_selector_group_budgets(5.0, 2)
+        assert budgets == pytest.approx([4.25, 0.75])
+
+    def test_allocate_selector_group_budgets_multiple_backups_apply_reserve_logic(self, web_scraper:WebScrapingMixin) -> None:
+        """Multi-backup groups should apply reserve/floor logic before final backup cap."""
+        budgets = web_scraper._allocate_selector_group_budgets(3.0, 4)
+        assert budgets == pytest.approx([2.1, 0.4, 0.25, 0.25])
+        assert sum(budgets) == pytest.approx(3.0)
 
     @pytest.mark.asyncio
     async def test_web_find_first_available_uses_shared_budget(self, web_scraper:WebScrapingMixin) -> None:
@@ -589,6 +615,24 @@ class TestTimeoutAndRetryHelpers:
             await web_scraper.web_find_first_available([(By.ID, "first"), (By.ID, "second")], timeout = 1.0)
 
         assert find_once.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_web_find_first_available_rejects_empty_selectors(self, web_scraper:WebScrapingMixin) -> None:
+        """Selector-group lookup should fail fast when no selectors are configured."""
+        with pytest.raises(ValueError, match = "selectors must contain at least one selector"):
+            await web_scraper.web_find_first_available([])
+
+    @pytest.mark.asyncio
+    async def test_web_text_first_available_returns_text_and_index(self, web_scraper:WebScrapingMixin) -> None:
+        """Text-group helper should return extracted text and the matched selector index."""
+        mock_element = AsyncMock(spec = Element)
+        mock_element.apply = AsyncMock(return_value = "dummy-user")
+
+        with patch.object(web_scraper, "web_find_first_available", new_callable = AsyncMock, return_value = (mock_element, 1)):
+            text, index = await web_scraper.web_text_first_available([(By.ID, "a"), (By.ID, "b")], key = "login_detection")
+
+        assert text == "dummy-user"
+        assert index == 1
 
 
 class TestSelectorTimeoutMessages:
