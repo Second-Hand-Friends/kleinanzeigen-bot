@@ -718,6 +718,16 @@ class TestSelectorTimeoutMessages:
         mock_page.xpath.assert_awaited_once_with("//div[@id='hero']", timeout = 0)
 
     @pytest.mark.asyncio
+    async def test_web_find_once_xpath_returns_none_when_no_matches(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
+        """_xpath_first should return None when xpath yields no usable match."""
+        mock_page.xpath = AsyncMock(return_value = [None, None])
+
+        result = await web_scraper._xpath_first("//missing")
+
+        assert result is None
+        mock_page.xpath.assert_awaited_once_with("//missing", timeout = 0)
+
+    @pytest.mark.asyncio
     async def test_web_find_all_once_xpath_uses_xpath_api(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
         """By.XPATH should use page.xpath and return all non-null matches."""
         first_match = MagicMock(spec = Element)
@@ -728,6 +738,18 @@ class TestSelectorTimeoutMessages:
 
         assert result == [first_match, second_match]
         mock_page.xpath.assert_awaited_once_with("//footer", timeout = 0)
+
+    @pytest.mark.asyncio
+    async def test_web_find_once_xpath_rejects_parent(self, web_scraper:WebScrapingMixin) -> None:
+        """XPath lookups currently do not support parent-scoped queries."""
+        with pytest.raises(AssertionError, match = "Specifying a parent element currently not supported"):
+            await web_scraper._web_find_once(By.XPATH, "//div", 0.1, parent = AsyncMock(spec = Element))
+
+    @pytest.mark.asyncio
+    async def test_web_find_all_once_xpath_rejects_parent(self, web_scraper:WebScrapingMixin) -> None:
+        """XPath multi-lookups currently do not support parent-scoped queries."""
+        with pytest.raises(AssertionError, match = "Specifying a parent element currently not supported"):
+            await web_scraper._web_find_all_once(By.XPATH, "//div", 0.1, parent = AsyncMock(spec = Element))
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
