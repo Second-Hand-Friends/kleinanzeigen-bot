@@ -559,17 +559,25 @@ class TestTimeoutAndRetryHelpers:
 
     def test_allocate_selector_group_budgets_tiny_timeout_splits_equally(self, web_scraper:WebScrapingMixin) -> None:
         """When timeout is too small for floors, budgets should split equally."""
+        # 0.2s is below floor_total for two selectors (2 * 0.25s), so equal split applies.
         budgets = web_scraper._allocate_selector_group_budgets(0.2, 2)
         assert budgets == pytest.approx([0.1, 0.1])
 
     def test_allocate_selector_group_budgets_redistributes_surplus_to_primary(self, web_scraper:WebScrapingMixin) -> None:
         """Last-backup cap overflow should be redistributed back to primary budget."""
         budgets = web_scraper._allocate_selector_group_budgets(5.0, 2)
+        # Derivation with current constants:
+        # primary=min(5.0*0.70, 5.0-0.25)=3.5; last backup cap=0.75; surplus=1.5 -> primary+surplus=5.0-0.75=4.25.
         assert budgets == pytest.approx([4.25, 0.75])
 
     def test_allocate_selector_group_budgets_multiple_backups_apply_reserve_logic(self, web_scraper:WebScrapingMixin) -> None:
         """Multi-backup groups should apply reserve/floor logic before final backup cap."""
         budgets = web_scraper._allocate_selector_group_budgets(3.0, 4)
+        # Derivation with current constants:
+        # reserve_for_backups=0.25*3=0.75; primary=min(3.0*0.70, 2.25)=2.1.
+        # remaining=0.9 -> backup1=max(0.25, min(0.75, 0.9-0.5))=0.4.
+        # remaining=0.5 -> backup2=max(0.25, min(0.75, 0.5-0.25))=0.25.
+        # final backup=min(0.25, 0.75)=0.25.
         assert budgets == pytest.approx([2.1, 0.4, 0.25, 0.25])
         assert sum(budgets) == pytest.approx(3.0)
 

@@ -286,7 +286,7 @@ class WebScrapingMixin:
                 surplus = remaining - alloc
                 if surplus > 0:
                     budgets[0] += surplus
-                break
+                continue
 
             remaining_slots_after_this = selector_count - len(budgets) - 1
             min_reserve = _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS * remaining_slots_after_this
@@ -369,7 +369,12 @@ class WebScrapingMixin:
             key = key,
             description = description,
         )
-        text = str(
+        text = await self._extract_visible_text(element)
+        return text, matched_index
+
+    async def _extract_visible_text(self, element:Element) -> str:
+        """Return visible text for a DOM element using user-selection extraction."""
+        return str(
             await element.apply("""
             function (elem) {
                 let sel = window.getSelection()
@@ -383,7 +388,6 @@ class WebScrapingMixin:
             }
         """)
         )
-        return text, matched_index
 
     async def create_browser_session(self) -> None:
         LOG.info("Creating Browser session...")
@@ -1144,20 +1148,8 @@ class WebScrapingMixin:
         )
 
     async def web_text(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> str:
-        return str(
-            await (await self.web_find(selector_type, selector_value, parent = parent, timeout = timeout)).apply("""
-            function (elem) {
-                let sel = window.getSelection()
-                sel.removeAllRanges()
-                let range = document.createRange()
-                range.selectNode(elem)
-                sel.addRange(range)
-                let visibleText = sel.toString().trim()
-                sel.removeAllRanges()
-                return visibleText
-            }
-        """)
-        )
+        element = await self.web_find(selector_type, selector_value, parent = parent, timeout = timeout)
+        return await self._extract_visible_text(element)
 
     async def web_sleep(self, min_ms:int = 1_000, max_ms:int = 2_500) -> None:
         duration = max_ms <= min_ms and min_ms or secrets.randbelow(max_ms - min_ms) + min_ms
