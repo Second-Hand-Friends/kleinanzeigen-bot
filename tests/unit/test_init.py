@@ -1535,6 +1535,7 @@ class TestKleinanzeigenBotShippingOptions:
         with (
             patch.object(test_bot, "web_execute", side_effect = mock_web_execute),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_by_rule", new_callable = AsyncMock) as mock_find_by_rule,
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
             patch.object(test_bot, "web_select", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
@@ -1560,6 +1561,18 @@ class TestKleinanzeigenBotShippingOptions:
                 return None
 
             mock_find.side_effect = mock_find_side_effect
+
+            submit_button = MagicMock()
+            submit_button.click = AsyncMock()
+
+            async def mock_find_by_rule_side_effect(rule_key:str, **_:Any) -> Element:
+                if rule_key == "publish.submit.primary":
+                    return submit_button
+                if rule_key == "publish.payment_form":
+                    return shipping_form_elem
+                raise TimeoutError(f"Rule not found in test: {rule_key}")
+
+            mock_find_by_rule.side_effect = mock_find_by_rule_side_effect
 
             # Mock web_check to return True for radio button checked state
             with patch.object(test_bot, "web_check", new_callable = AsyncMock) as mock_check:
@@ -1652,6 +1665,7 @@ class TestKleinanzeigenBotShippingOptions:
             mock_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
             with (
                 patch.object(test_bot, "web_find", new_callable = AsyncMock),
+                patch.object(test_bot, "web_find_by_rule", new_callable = AsyncMock) as mock_find_by_rule,
                 patch.object(test_bot, "web_input", new_callable = AsyncMock),
                 patch.object(test_bot, "web_click", new_callable = AsyncMock),
                 patch.object(test_bot, "web_open", new_callable = AsyncMock),
@@ -1667,6 +1681,16 @@ class TestKleinanzeigenBotShippingOptions:
                 patch("builtins.input", return_value = ""),
                 patch("kleinanzeigen_bot.utils.misc.ainput", new_callable = AsyncMock, return_value = ""),
             ):
+                submit_button = MagicMock()
+                submit_button.click = AsyncMock()
+
+                async def mock_find_by_rule_side_effect(rule_key:str, **_:Any) -> Element:
+                    if rule_key == "publish.submit.primary":
+                        return submit_button
+                    raise TimeoutError(f"Rule not found in test: {rule_key}")
+
+                mock_find_by_rule.side_effect = mock_find_by_rule_side_effect
+
                 test_bot.page = MagicMock()
                 test_bot.page.url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
                 test_bot.config.publishing.delete_old_ads = "BEFORE_PUBLISH"

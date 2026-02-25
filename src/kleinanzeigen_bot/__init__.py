@@ -1472,12 +1472,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         try:
             # Navigate to ad management page and find extend button across all pages
-            extend_button_xpath = f'//li[@data-adid="{ad_cfg.id}"]//button[contains(., "Verlängern")]'
-
             async def find_and_click_extend_button(page_num:int) -> bool:
                 """Try to find and click extend button on current page."""
                 try:
-                    extend_button = await self.web_find(By.XPATH, extend_button_xpath, timeout = self._timeout("quick_dom"))
+                    extend_button = await self.web_find_by_rule(
+                        "ad_management.extend_button",
+                        placeholders = {"ad_id": str(ad_cfg.id)},
+                        timeout = self._timeout("quick_dom"),
+                    )
                     LOG.info("Found extend button on page %s", page_num)
                     await extend_button.click()
                     return True  # Success - stop pagination
@@ -1499,7 +1501,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # Simply close the dialog with the X button (aria-label="Schließen")
             try:
                 dialog_close_timeout = self._timeout("quick_dom")
-                await self.web_click(By.CSS_SELECTOR, 'button[aria-label="Schließen"]', timeout = dialog_close_timeout)
+                dialog_close_button = await self.web_find_by_rule("ad_management.dialog_close_button", timeout = dialog_close_timeout)
+                await dialog_close_button.click()
                 LOG.debug(" -> Closed confirmation dialog")
             except TimeoutError:
                 LOG.warning(" -> No confirmation dialog found, extension may have completed directly")
@@ -1703,18 +1706,20 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # submit
         #############################
+        submit_button = await self.web_find_by_rule("publish.submit.primary")
+        await submit_button.click()
         try:
-            await self.web_click(By.ID, "pstad-submit")
+            imprint_button = await self.web_find_by_rule("publish.submit.imprint_guidance")
+            await imprint_button.click()
         except TimeoutError:
-            # https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/40
-            await self.web_click(By.XPATH, "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')]")
-            await self.web_click(By.ID, "imprint-guidance-submit")
+            # imprint confirmation is shown only on selected publish variants
+            pass
 
         # check for no image question
         try:
-            image_hint_xpath = '//button[contains(., "Ohne Bild veröffentlichen")]'
-            if not ad_cfg.images and await self.web_check(By.XPATH, image_hint_xpath, Is.DISPLAYED):
-                await self.web_click(By.XPATH, image_hint_xpath)
+            if not ad_cfg.images:
+                image_hint_button = await self.web_find_by_rule("publish.no_image_confirm", timeout = self._timeout("quick_dom"))
+                await image_hint_button.click()
         except TimeoutError:
             # Image hint not shown; continue publish flow.
             pass  # nosec
@@ -1723,8 +1728,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # wait for payment form if commercial account is used
         #############################
         try:
-            short_timeout = self._timeout("quick_dom")
-            await self.web_find(By.ID, "myftr-shppngcrt-frm", timeout = short_timeout)
+            await self.web_find_by_rule("publish.payment_form", timeout = self._timeout("quick_dom"))
 
             LOG.warning("############################################")
             LOG.warning("# Payment form detected! Please proceed with payment.")

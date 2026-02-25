@@ -12,7 +12,6 @@ import pytest
 from kleinanzeigen_bot import KleinanzeigenBot, misc
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.utils import dicts
-from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
 @pytest.fixture
@@ -280,7 +279,7 @@ class TestExtendAdMethod:
 
         with (
             patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate,
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_by_rule", new_callable = AsyncMock, side_effect = TimeoutError("No dialog")),
             patch("kleinanzeigen_bot.misc.now") as mock_now,
         ):
             # Test mock datetime - timezone not relevant for timestamp formatting test
@@ -326,7 +325,7 @@ class TestExtendAdMethod:
 
         with (
             patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate,
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_find_by_rule", new_callable = AsyncMock, side_effect = TimeoutError("Dialog not found")),
             patch("kleinanzeigen_bot.misc.now") as mock_now,
         ):
             # Test mock datetime - timezone not relevant for timestamp formatting test
@@ -334,9 +333,6 @@ class TestExtendAdMethod:
 
             # Pagination succeeds (button found and clicked)
             mock_paginate.return_value = True
-            # Dialog close button times out
-            mock_click.side_effect = TimeoutError("Dialog not found")
-
             result = await test_bot.extend_ad(str(ad_file), ad_cfg, base_ad_config_with_id)
 
             # Should still succeed (dialog might not appear)
@@ -370,7 +366,7 @@ class TestExtendAdMethod:
 
         with (
             patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate,
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_by_rule", new_callable = AsyncMock, side_effect = TimeoutError("No dialog")),
             patch("kleinanzeigen_bot.misc.now") as mock_now,
         ):
             # Test mock datetime - timezone not relevant for timestamp formatting test
@@ -398,19 +394,21 @@ class TestExtendAdMethod:
         extend_button_mock = AsyncMock()
         extend_button_mock.click = AsyncMock()
 
-        async def mock_web_find(selector_type:By, selector_value:str, **kwargs:Any) -> Element:
-            # Extend button (called by find_and_click_extend_button callback)
-            if selector_type == By.XPATH and "Verlängern" in selector_value:
-                return extend_button_mock
-            raise TimeoutError(f"Unexpected find: {selector_type} {selector_value}")
-
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find_by_rule", new_callable = AsyncMock, side_effect = [MagicMock(), TimeoutError()]),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = mock_web_find),
+            patch.object(
+                test_bot,
+                "web_find_by_rule",
+                new_callable = AsyncMock,
+                side_effect = [
+                    MagicMock(),  # ad_management.ad_list_container
+                    TimeoutError(),  # pagination.container (single page)
+                    extend_button_mock,  # ad_management.extend_button
+                    TimeoutError(),  # ad_management.dialog_close_button
+                ],
+            ),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "_timeout", return_value = 10),
             patch("kleinanzeigen_bot.misc.now") as mock_now,
         ):

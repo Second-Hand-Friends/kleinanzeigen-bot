@@ -36,6 +36,12 @@
         "value": "//li[@data-adid=\"{ad_id}\"]//button[contains(., \"Verl\\u00e4ngern\")]"
       }
     ],
+    "ad_management.dialog_close_button": [
+      {
+        "by": "CSS_SELECTOR",
+        "value": "button[aria-label=\"Schlie\\u00dfen\"]"
+      }
+    ],
     "publish.submit.primary": [
       {
         "by": "ID",
@@ -50,6 +56,18 @@
       {
         "by": "ID",
         "value": "imprint-guidance-submit"
+      }
+    ],
+    "publish.no_image_confirm": [
+      {
+        "by": "XPATH",
+        "value": "//button[contains(., \"Ohne Bild ver\\u00f6ffentlichen\")]"
+      }
+    ],
+    "publish.payment_form": [
+      {
+        "by": "ID",
+        "value": "myftr-shppngcrt-frm"
       }
     ]
   }
