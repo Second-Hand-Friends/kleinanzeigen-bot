@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "ruleset_version": "1.0.0",
+  "selectors": {
+    "auth.login_detection.user_info": [
+      {
+        "by": "CLASS_NAME",
+        "value": "mr-medium"
+      },
+      {
+        "by": "ID",
+        "value": "user-email"
+      }
+    ],
+    "pagination.container": [
+      {
+        "by": "CSS_SELECTOR",
+        "value": ".Pagination"
+      }
+    ],
+    "pagination.next_button": [
+      {
+        "by": "CSS_SELECTOR",
+        "value": "button[aria-label=\"N\\u00e4chste\"]"
+      }
+    ],
+    "ad_management.ad_list_container": [
+      {
+        "by": "ID",
+        "value": "my-manageitems-adlist"
+      }
+    ],
+    "ad_management.extend_button": [
+      {
+        "by": "XPATH",
+        "value": "//li[@data-adid=\"{ad_id}\"]//button[contains(., \"Verl\\u00e4ngern\")]"
+      }
+    ],
+    "publish.submit.primary": [
+      {
+        "by": "ID",
+        "value": "pstad-submit"
+      },
+      {
+        "by": "XPATH",
+        "value": "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')]"
+      }
+    ],
+    "publish.submit.imprint_guidance": [
+      {
+        "by": "ID",
+        "value": "imprint-guidance-submit"
+      }
+    ]
+  }
+}

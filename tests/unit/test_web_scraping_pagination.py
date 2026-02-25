@@ -3,12 +3,11 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Tests for the _navigate_paginated_ad_overview helper method."""
 
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element, WebScrapingMixin
+from kleinanzeigen_bot.utils.web_scraping_mixin import WebScrapingMixin
 
 
 class TestNavigatePaginatedAdOverview:
@@ -25,13 +24,12 @@ class TestNavigatePaginatedAdOverview:
         with (
             patch.object(mixin, "web_open", new_callable = AsyncMock),
             patch.object(mixin, "web_sleep", new_callable = AsyncMock),
-            patch.object(mixin, "web_find", new_callable = AsyncMock) as mock_find,
-            patch.object(mixin, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(mixin, "web_find_by_rule", new_callable = AsyncMock) as mock_find_by_rule,
             patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(mixin, "_timeout", return_value = 10),
         ):
-            # Ad list container exists
-            mock_find.return_value = MagicMock()
+            # ad_management.ad_list_container exists, pagination.container lookup times out.
+            mock_find_by_rule.side_effect = [MagicMock(), TimeoutError()]
 
             result = await mixin._navigate_paginated_ad_overview(callback)
 
@@ -49,13 +47,12 @@ class TestNavigatePaginatedAdOverview:
         with (
             patch.object(mixin, "web_open", new_callable = AsyncMock),
             patch.object(mixin, "web_sleep", new_callable = AsyncMock),
-            patch.object(mixin, "web_find", new_callable = AsyncMock) as mock_find,
-            patch.object(mixin, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(mixin, "web_find_by_rule", new_callable = AsyncMock) as mock_find_by_rule,
             patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(mixin, "_timeout", return_value = 10),
         ):
-            # Ad list container exists
-            mock_find.return_value = MagicMock()
+            # ad_management.ad_list_container exists, pagination.container lookup times out.
+            mock_find_by_rule.side_effect = [MagicMock(), TimeoutError()]
 
             result = await mixin._navigate_paginated_ad_overview(callback)
 
@@ -76,30 +73,21 @@ class TestNavigatePaginatedAdOverview:
         next_button_enabled.attrs = {}  # No "disabled" attribute = enabled
         next_button_enabled.click = AsyncMock()
 
-        find_call_count = {"count": 0}
-
-        async def mock_find_side_effect(selector_type:By, selector_value:str, **kwargs:Any) -> Element:
-            find_call_count["count"] += 1
-            if selector_type == By.ID and selector_value == "my-manageitems-adlist":
-                return MagicMock()  # Ad list container
-            if selector_type == By.CSS_SELECTOR and selector_value == ".Pagination":
-                return pagination_section
-            raise TimeoutError("Unexpected find")
-
-        find_all_call_count = {"count": 0}
-
-        async def mock_find_all_side_effect(selector_type:By, selector_value:str, **kwargs:Any) -> list[Element]:
-            find_all_call_count["count"] += 1
-            if selector_type == By.CSS_SELECTOR and 'aria-label="Nächste"' in selector_value:
-                # Return enabled next button on both calls (initial detection and navigation)
-                return [next_button_enabled]
-            return []
-
         with (
             patch.object(mixin, "web_open", new_callable = AsyncMock),
             patch.object(mixin, "web_sleep", new_callable = AsyncMock),
-            patch.object(mixin, "web_find", new_callable = AsyncMock, side_effect = mock_find_side_effect),
-            patch.object(mixin, "web_find_all", new_callable = AsyncMock, side_effect = mock_find_all_side_effect),
+            patch.object(
+                mixin,
+                "web_find_by_rule",
+                new_callable = AsyncMock,
+                side_effect = [
+                    MagicMock(),  # ad_management.ad_list_container
+                    pagination_section,  # initial pagination.container
+                    next_button_enabled,  # initial pagination.next_button
+                    pagination_section,  # follow-up pagination.container
+                    next_button_enabled,  # follow-up pagination.next_button
+                ],
+            ),
             patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(mixin, "_timeout", return_value = 10),
         ):
@@ -132,7 +120,7 @@ class TestNavigatePaginatedAdOverview:
         with (
             patch.object(mixin, "web_open", new_callable = AsyncMock),
             patch.object(mixin, "web_sleep", new_callable = AsyncMock),
-            patch.object(mixin, "web_find", new_callable = AsyncMock, side_effect = TimeoutError("Container not found")),
+            patch.object(mixin, "web_find_by_rule", new_callable = AsyncMock, side_effect = TimeoutError("Container not found")),
         ):
             result = await mixin._navigate_paginated_ad_overview(callback)
 
@@ -149,8 +137,7 @@ class TestNavigatePaginatedAdOverview:
         with (
             patch.object(mixin, "web_open", new_callable = AsyncMock),
             patch.object(mixin, "web_sleep", new_callable = AsyncMock),
-            patch.object(mixin, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(mixin, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(mixin, "web_find_by_rule", new_callable = AsyncMock, side_effect = [MagicMock(), TimeoutError()]),
             patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock, side_effect = TimeoutError("Scroll timeout")),
             patch.object(mixin, "_timeout", return_value = 10),
         ):
@@ -170,8 +157,7 @@ class TestNavigatePaginatedAdOverview:
         with (
             patch.object(mixin, "web_open", new_callable = AsyncMock),
             patch.object(mixin, "web_sleep", new_callable = AsyncMock),
-            patch.object(mixin, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(mixin, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(mixin, "web_find_by_rule", new_callable = AsyncMock, side_effect = [MagicMock(), TimeoutError()]),
             patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(mixin, "_timeout", return_value = 10),
         ):
