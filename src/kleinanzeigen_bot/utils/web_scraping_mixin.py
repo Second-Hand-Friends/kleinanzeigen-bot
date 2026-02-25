@@ -462,6 +462,56 @@ class WebScrapingMixin:
             description = description or f"web_text_by_rule({rule_key})",
         )
 
+    @staticmethod
+    def _to_selector_type(selector_name:str) -> By:
+        selector_type = _SELECTOR_BY_NAME.get(selector_name)
+        if selector_type is None:
+            raise AssertionError(f"Unsupported selector type in DOM rules: {selector_name}")
+        return selector_type
+
+    def _resolve_rule_selectors(self, rule_key:str, *, placeholders:Mapping[str, str] | None = None) -> list[tuple[By, str]]:
+        alternatives = resolve_selector_alternatives(rule_key, placeholders = placeholders)
+        return [(self._to_selector_type(item.by), item.value) for item in alternatives]
+
+    async def web_find_by_rule(
+        self,
+        rule_key:str,
+        *,
+        placeholders:Mapping[str, str] | None = None,
+        parent:Element | None = None,
+        timeout:int | float | None = None,
+        key:str = "default",
+        description:str | None = None,
+    ) -> Element:
+        selectors = self._resolve_rule_selectors(rule_key, placeholders = placeholders)
+        element, _ = await self.web_find_first_available(
+            selectors,
+            parent = parent,
+            timeout = timeout,
+            key = key,
+            description = description or f"web_find_by_rule({rule_key})",
+        )
+        return element
+
+    async def web_text_by_rule(
+        self,
+        rule_key:str,
+        *,
+        placeholders:Mapping[str, str] | None = None,
+        parent:Element | None = None,
+        timeout:int | float | None = None,
+        key:str = "default",
+        description:str | None = None,
+    ) -> tuple[str, int]:
+        selectors = self._resolve_rule_selectors(rule_key, placeholders = placeholders)
+        return await self.web_text_first_available(
+            selectors,
+            parent = parent,
+            timeout = timeout,
+            key = key,
+            description = description or f"web_text_by_rule({rule_key})",
+        )
+
     async def create_browser_session(self) -> None:
         LOG.info("Creating Browser session...")
 
