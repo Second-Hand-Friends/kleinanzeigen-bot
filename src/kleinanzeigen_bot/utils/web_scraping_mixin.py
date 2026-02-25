@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import asyncio, enum, inspect, json, os, platform, secrets, shutil, subprocess, urllib.request  # isort: skip # noqa: S404
-from collections.abc import Awaitable, Callable, Coroutine, Iterable, Sequence
+from collections.abc import Awaitable, Callable, Coroutine, Iterable, Mapping, Sequence
 from gettext import gettext as _
 from pathlib import Path, PureWindowsPath
 from typing import Any, Final, Optional, cast
@@ -31,6 +31,7 @@ from .chrome_version_detector import (
     get_chrome_version_diagnostic_info,
     validate_chrome_136_configuration,
 )
+from .dom_rules import resolve_selector_alternatives
 from .misc import T, ensure
 
 if TYPE_CHECKING:
@@ -105,6 +106,16 @@ class By(enum.Enum):
     TAG_NAME = enum.auto()
     TEXT = enum.auto()
     XPATH = enum.auto()
+
+
+_SELECTOR_BY_NAME:Final[dict[str, By]] = {
+    "ID": By.ID,
+    "CLASS_NAME": By.CLASS_NAME,
+    "CSS_SELECTOR": By.CSS_SELECTOR,
+    "TAG_NAME": By.TAG_NAME,
+    "TEXT": By.TEXT,
+    "XPATH": By.XPATH,
+}
 
 
 class Is(enum.Enum):
@@ -402,6 +413,56 @@ class WebScrapingMixin:
                 return visibleText
             }
         """)
+        )
+
+    @staticmethod
+    def _to_selector_type(selector_name:str) -> By:
+        selector_type = _SELECTOR_BY_NAME.get(selector_name)
+        if selector_type is None:
+            raise AssertionError(f"Unsupported selector type in DOM rules: {selector_name}")
+        return selector_type
+
+    def _resolve_rule_selectors(self, rule_key:str, *, placeholders:Mapping[str, str] | None = None) -> list[tuple[By, str]]:
+        alternatives = resolve_selector_alternatives(rule_key, placeholders = placeholders)
+        return [(self._to_selector_type(item.by), item.value) for item in alternatives]
+
+    async def web_find_by_rule(
+        self,
+        rule_key:str,
+        *,
+        placeholders:Mapping[str, str] | None = None,
+        parent:Element | None = None,
+        timeout:int | float | None = None,
+        key:str = "default",
+        description:str | None = None,
+    ) -> Element:
+        selectors = self._resolve_rule_selectors(rule_key, placeholders = placeholders)
+        element, _ = await self.web_find_first_available(
+            selectors,
+            parent = parent,
+            timeout = timeout,
+            key = key,
+            description = description or f"web_find_by_rule({rule_key})",
+        )
+        return element
+
+    async def web_text_by_rule(
+        self,
+        rule_key:str,
+        *,
+        placeholders:Mapping[str, str] | None = None,
+        parent:Element | None = None,
+        timeout:int | float | None = None,
+        key:str = "default",
+        description:str | None = None,
+    ) -> tuple[str, int]:
+        selectors = self._resolve_rule_selectors(rule_key, placeholders = placeholders)
+        return await self.web_text_first_available(
+            selectors,
+            parent = parent,
+            timeout = timeout,
+            key = key,
+            description = description or f"web_text_by_rule({rule_key})",
         )
 
     async def create_browser_session(self) -> None:
@@ -1224,7 +1285,7 @@ class WebScrapingMixin:
 
         # Check if ad list container exists
         try:
-            _ = await self.web_find(By.ID, "my-manageitems-adlist")
+            _ = await self.web_find_by_rule("ad_management.ad_list_container")
         except TimeoutError:
             LOG.warning("Ad list container not found. Maybe no ads present?")
             return False
@@ -1233,13 +1294,11 @@ class WebScrapingMixin:
         multi_page = False
         pagination_timeout = self._timeout("pagination_initial")
         try:
-            pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout = pagination_timeout)
-            next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section)
-            if next_buttons:
-                enabled_next_buttons = [btn for btn in next_buttons if not btn.attrs.get("disabled")]
-                if enabled_next_buttons:
-                    multi_page = True
-                    LOG.info("Multiple ad pages detected.")
+            pagination_section = await self.web_find_by_rule("pagination.container", timeout = pagination_timeout)
+            next_button = await self.web_find_by_rule("pagination.next_button", parent = pagination_section, timeout = pagination_timeout)
+            if not next_button.attrs.get("disabled"):
+                multi_page = True
+                LOG.info("Multiple ad pages detected.")
         except TimeoutError:
             LOG.info("No pagination controls found. Assuming single page.")
 
@@ -1266,15 +1325,9 @@ class WebScrapingMixin:
 
             follow_up_timeout = self._timeout("pagination_follow_up")
             try:
-                pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout = follow_up_timeout)
-                next_button_element = None
-                possible_next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section)
-                for btn in possible_next_buttons:
-                    if not btn.attrs.get("disabled"):
-                        next_button_element = btn
-                        break
-
-                if next_button_element:
+                pagination_section = await self.web_find_by_rule("pagination.container", timeout = follow_up_timeout)
+                next_button_element = await self.web_find_by_rule("pagination.next_button", parent = pagination_section, timeout = follow_up_timeout)
+                if not next_button_element.attrs.get("disabled"):
                     LOG.info("Navigating to page %s...", current_page + 1)
                     await next_button_element.click()
                     await self.web_sleep(3000, 4000)

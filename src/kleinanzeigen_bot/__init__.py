@@ -1246,18 +1246,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             effective_timeout,
         )
 
-        login_selectors = [
-            (By.CLASS_NAME, "mr-medium"),
-            (By.ID, "user-email"),
-        ]
         primary_selector_index = 0
 
         try:
-            user_info, matched_selector = await self.web_text_first_available(
-                login_selectors,
+            user_info, matched_selector = await self.web_text_by_rule(
+                "auth.login_detection.user_info",
                 timeout = login_check_timeout,
                 key = "login_detection",
-                description = "login_detection(selector_group)",
+                description = "login_detection(rule_group)",
             )
             if username in user_info.lower():
                 if matched_selector == primary_selector_index:

@@ -442,7 +442,7 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_is_logged_in_returns_true_when_logged_in(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login check returns true when logged in."""
-        with patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("Welcome dummy_user", 0)):
+        with patch.object(test_bot, "web_text_by_rule", new_callable = AsyncMock, return_value = ("Welcome dummy_user", 0)):
             assert await test_bot.is_logged_in() is True
 
     @pytest.mark.asyncio
@@ -450,7 +450,7 @@ class TestKleinanzeigenBotAuthentication:
         """Verify that login check returns true when logged in with alternative element."""
         with patch.object(
             test_bot,
-            "web_text_first_available",
+            "web_text_by_rule",
             new_callable = AsyncMock,
             return_value = ("angemeldet als: dummy_user", 1),
         ):
@@ -460,7 +460,7 @@ class TestKleinanzeigenBotAuthentication:
     async def test_is_logged_in_returns_false_when_not_logged_in(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login check returns false when not logged in."""
         with (
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
+            patch.object(test_bot, "web_text_by_rule", side_effect = TimeoutError),
             patch.object(
                 test_bot,
                 "web_request",
@@ -473,20 +473,20 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_is_logged_in_uses_selector_group_timeout_key(self, test_bot:KleinanzeigenBot) -> None:
         """Verify login detection uses selector-group lookup with login_detection timeout key."""
-        with patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("Welcome dummy_user", 0)) as group_text:
+        with patch.object(test_bot, "web_text_by_rule", new_callable = AsyncMock, return_value = ("Welcome dummy_user", 0)) as group_text:
             assert await test_bot.is_logged_in(include_probe = False) is True
 
         group_text.assert_awaited_once()
         call_args = group_text.await_args
         assert call_args is not None
-        assert call_args.args[0] == [(By.CLASS_NAME, "mr-medium"), (By.ID, "user-email")]
+        assert call_args.args[0] == "auth.login_detection.user_info"
         assert call_args.kwargs["key"] == "login_detection"
         assert call_args.kwargs["timeout"] == test_bot._timeout("login_detection")
 
     @pytest.mark.asyncio
     async def test_get_login_state_prefers_dom_over_auth_probe(self, test_bot:KleinanzeigenBot) -> None:
         with (
-            patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("Welcome dummy_user", 0)) as web_text,
+            patch.object(test_bot, "web_text_by_rule", new_callable = AsyncMock, return_value = ("Welcome dummy_user", 0)) as web_text,
             patch.object(
                 test_bot, "_auth_probe_login_state", new_callable = AsyncMock, side_effect = AssertionError("Probe must not run when DOM is deterministic")
             ) as probe,
@@ -498,7 +498,7 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_get_login_state_falls_back_to_auth_probe_when_dom_inconclusive(self, test_bot:KleinanzeigenBot) -> None:
         with (
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError) as web_text,
+            patch.object(test_bot, "web_text_by_rule", side_effect = TimeoutError) as web_text,
             patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.LOGGED_IN) as probe,
         ):
             assert await test_bot.get_login_state() == LoginState.LOGGED_IN
@@ -508,7 +508,7 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_get_login_state_falls_back_to_auth_probe_when_dom_logged_out(self, test_bot:KleinanzeigenBot) -> None:
         with (
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError) as web_text,
+            patch.object(test_bot, "web_text_by_rule", side_effect = TimeoutError) as web_text,
             patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.LOGGED_OUT) as probe,
         ):
             assert await test_bot.get_login_state() == LoginState.LOGGED_OUT
@@ -519,7 +519,7 @@ class TestKleinanzeigenBotAuthentication:
     async def test_get_login_state_returns_unknown_when_probe_unknown_and_dom_inconclusive(self, test_bot:KleinanzeigenBot) -> None:
         with (
             patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN) as probe,
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError) as web_text,
+            patch.object(test_bot, "web_text_by_rule", side_effect = TimeoutError) as web_text,
         ):
             assert await test_bot.get_login_state() == LoginState.UNKNOWN
             probe.assert_awaited_once()
@@ -536,7 +536,7 @@ class TestKleinanzeigenBotAuthentication:
 
         with (
             patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN),
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
+            patch.object(test_bot, "web_text_by_rule", side_effect = TimeoutError),
         ):
             assert await test_bot.get_login_state() == LoginState.UNKNOWN
 
@@ -554,7 +554,7 @@ class TestKleinanzeigenBotAuthentication:
 
         with (
             patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN),
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
+            patch.object(test_bot, "web_text_by_rule", side_effect = TimeoutError),
         ):
             assert await test_bot.get_login_state() == LoginState.UNKNOWN
 
@@ -577,7 +577,7 @@ class TestKleinanzeigenBotAuthentication:
 
         with (
             patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN),
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
+            patch.object(test_bot, "web_text_by_rule", side_effect = TimeoutError),
             patch("kleinanzeigen_bot.sys.stdin", stdin_mock),
             patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
@@ -605,7 +605,7 @@ class TestKleinanzeigenBotAuthentication:
 
         with (
             patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN),
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
+            patch.object(test_bot, "web_text_by_rule", side_effect = TimeoutError),
             patch("kleinanzeigen_bot.sys.stdin", stdin_mock),
             patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
         ):

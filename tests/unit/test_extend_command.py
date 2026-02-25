@@ -398,21 +398,7 @@ class TestExtendAdMethod:
         extend_button_mock = AsyncMock()
         extend_button_mock.click = AsyncMock()
 
-        pagination_section = MagicMock()
-
-        find_call_count = {"count": 0}
-
         async def mock_web_find(selector_type:By, selector_value:str, **kwargs:Any) -> Element:
-            find_call_count["count"] += 1
-            # Ad list container (called by pagination helper)
-            if selector_type == By.ID and selector_value == "my-manageitems-adlist":
-                return MagicMock()
-            # Pagination section (called by pagination helper)
-            if selector_type == By.CSS_SELECTOR and selector_value == ".Pagination":
-                # Raise TimeoutError on first call (pagination detection) to indicate single page
-                if find_call_count["count"] == 2:
-                    raise TimeoutError("No pagination")
-                return pagination_section
             # Extend button (called by find_and_click_extend_button callback)
             if selector_type == By.XPATH and "Verlängern" in selector_value:
                 return extend_button_mock
@@ -421,8 +407,8 @@ class TestExtendAdMethod:
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_by_rule", new_callable = AsyncMock, side_effect = [MagicMock(), TimeoutError()]),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = mock_web_find),
-            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "_timeout", return_value = 10),
