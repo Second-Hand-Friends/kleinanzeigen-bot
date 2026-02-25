@@ -299,9 +299,10 @@ kleinanzeigen_bot/extract.py:
     "No ad URLs were extracted.": "Es wurden keine Anzeigen-URLs extrahiert."
 
   extract_page_refs:
-    "Could not find ad list container or items on page %s.": "Anzeigenlistencontainer oder Elemente auf Seite %s nicht gefunden."
+    "Could not find ad list container or ad items on page %s.": "Anzeigenlistencontainer oder Anzeigenelemente auf Seite %s nicht gefunden."
     "Error extracting refs on page %s: %s": "Fehler beim Extrahieren der Referenzen auf Seite %s: %s"
     "Found %s ad items on page %s.": "%s Anzeigen-Elemente auf Seite %s gefunden."
+    "Skipping ad item %s/%s on page %s: no ad reference link found (likely unpublished or draft item).": "Überspringe Anzeigenelement %s/%s auf Seite %s: kein Anzeigenlink gefunden (wahrscheinlich unveröffentlicht oder Entwurf)."
     "Successfully extracted %s refs from page %s.": "%s Referenzen von Seite %s erfolgreich extrahiert."
 
   navigate_to_ad_page:
