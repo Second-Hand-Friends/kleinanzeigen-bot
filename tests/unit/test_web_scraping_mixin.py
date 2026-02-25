@@ -667,6 +667,29 @@ class TestSelectorTimeoutMessages:
         assert call.kwargs["apply_multiplier"] is False
 
     @pytest.mark.asyncio
+    async def test_web_find_once_xpath_uses_xpath_api(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
+        """By.XPATH should use the native page.xpath API and return first non-null match."""
+        xpath_match = MagicMock(spec = Element)
+        mock_page.xpath = AsyncMock(return_value = [None, xpath_match])
+
+        result = await web_scraper._web_find_once(By.XPATH, "//div[@id='hero']", 0.2)
+
+        assert result is xpath_match
+        mock_page.xpath.assert_awaited_once_with("//div[@id='hero']", timeout = 0)
+
+    @pytest.mark.asyncio
+    async def test_web_find_all_once_xpath_uses_xpath_api(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
+        """By.XPATH should use page.xpath and return all non-null matches."""
+        first_match = MagicMock(spec = Element)
+        second_match = MagicMock(spec = Element)
+        mock_page.xpath = AsyncMock(return_value = [first_match, None, second_match])
+
+        result = await web_scraper._web_find_all_once(By.XPATH, "//footer", 0.2)
+
+        assert result == [first_match, second_match]
+        mock_page.xpath.assert_awaited_once_with("//footer", timeout = 0)
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("selector_type", "selector_value", "expected_message"),
         [
