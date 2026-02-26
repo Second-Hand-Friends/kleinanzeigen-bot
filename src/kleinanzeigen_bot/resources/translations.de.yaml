@@ -532,6 +532,17 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
   _record_timing:
     "Timing collector failed for key=%s operation=%s: %s": "Zeitmessung fehlgeschlagen für key=%s operation=%s: %s"
 
+  _allocate_selector_group_budgets:
+    "selector_count must be > 0": "selector_count muss > 0 sein"
+
+  web_find_first_available:
+    "selectors must contain at least one selector": "selectors muss mindestens einen Selektor enthalten"
+
+  attempt:
+    "No selector candidates executed.": "Keine Selektor-Kandidaten ausgeführt."
+    ? "No HTML element found using selector group after trying %(count)d alternatives within %(timeout)s seconds. Last error: %(error)s"
+    : "Kein HTML-Element über Selektorgruppe gefunden, nachdem %(count)d Alternativen innerhalb von %(timeout)s Sekunden versucht wurden. Letzter Fehler: %(error)s"
+
   close_browser_session:
     "Closing Browser session...": "Schließe Browser-Sitzung..."
 

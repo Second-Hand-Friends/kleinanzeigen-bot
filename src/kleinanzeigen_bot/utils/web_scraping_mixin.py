@@ -268,7 +268,7 @@ class WebScrapingMixin:
         - Reassign final-backup surplus to the primary slot to preserve total timeout.
         """
         if selector_count <= 0:
-            raise ValueError("selector_count must be > 0")
+            raise ValueError(_("selector_count must be > 0"))
         if selector_count == 1:
             return [max(total_timeout, 0.0)]
         if total_timeout <= 0:
@@ -323,7 +323,7 @@ class WebScrapingMixin:
         Find the first matching selector from an ordered group using a shared timeout budget.
         """
         if not selectors:
-            raise ValueError("selectors must contain at least one selector")
+            raise ValueError(_("selectors must contain at least one selector"))
 
         async def attempt(effective_timeout:float) -> tuple[Element, int]:
             budgets = self._allocate_selector_group_budgets(effective_timeout, len(selectors))
@@ -353,10 +353,13 @@ class WebScrapingMixin:
                         effective_timeout,
                     )
 
-            failure_summary = failures[-1] if failures else "No selector candidates executed."
+            failure_summary = failures[-1] if failures else _("No selector candidates executed.")
             raise TimeoutError(
-                f"No HTML element found using selector group after trying {len(selectors)} alternatives within {effective_timeout} seconds."
-                f" Last error: {failure_summary}"
+                _(
+                    "No HTML element found using selector group after trying %(count)d alternatives within %(timeout)s seconds."
+                    " Last error: %(error)s"
+                )
+                % {"count": len(selectors), "timeout": effective_timeout, "error": failure_summary}
             )
 
         attempt_description = description or f"web_find_first_available({len(selectors)} selectors)"
