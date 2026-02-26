@@ -919,6 +919,21 @@ class TestWebScrolling:
             await web_scraper.web_await(condition, timeout = 0.05)
 
     @pytest.mark.asyncio
+    async def test_web_await_caps_sleep_to_remaining_timeout(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
+        """web_await should not sleep longer than the remaining timeout budget."""
+
+        async def condition() -> bool:
+            return False
+
+        with pytest.raises(TimeoutError):
+            await web_scraper.web_await(condition, timeout = 0.2, apply_multiplier = False)
+
+        sleep_mock = cast(AsyncMock, mock_page.sleep)
+        sleep_mock.assert_awaited()
+        slept_seconds = sleep_mock.await_args_list[0].args[0]
+        assert slept_seconds <= 0.2
+
+    @pytest.mark.asyncio
     async def test_web_find_retry_mechanism(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
         """Test web_find retries until element is found within timeout."""
         call_count = {"count": 0}

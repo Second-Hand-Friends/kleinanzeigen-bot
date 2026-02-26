@@ -846,11 +846,13 @@ class WebScrapingMixin:
                     return result
             except Exception as ex1:
                 ex = ex1
-            if loop.time() - start_at > effective_timeout:
+            elapsed = loop.time() - start_at
+            if elapsed >= effective_timeout:
                 if ex:
                     raise ex
                 raise TimeoutError(timeout_error_message or f"Condition not met within {effective_timeout} seconds")
-            await self.page.sleep(0.5)
+            remaining_timeout = max(effective_timeout - elapsed, 0.0)
+            await self.page.sleep(min(0.5, remaining_timeout))
 
     async def web_check(self, selector_type:By, selector_value:str, attr:Is, *, timeout:int | float | None = None) -> bool:
         """
