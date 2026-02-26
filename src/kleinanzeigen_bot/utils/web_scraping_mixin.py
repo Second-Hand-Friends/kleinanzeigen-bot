@@ -259,7 +259,14 @@ class WebScrapingMixin:
 
     @staticmethod
     def _allocate_selector_group_budgets(total_timeout:float, selector_count:int) -> list[float]:
-        """Allocate a shared timeout budget across selector alternatives."""
+        """Allocate a shared timeout budget across selector alternatives.
+
+        Strategy:
+        - Give the first selector a preferred share via `_PRIMARY_SELECTOR_BUDGET_RATIO`.
+        - Keep a minimum floor `_BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS` per selector.
+        - Cap backup slices with `_BACKUP_SELECTOR_BUDGET_CAP_SECONDS`.
+        - Reassign final-backup surplus to the primary slot to preserve total timeout.
+        """
         if selector_count <= 0:
             raise ValueError("selector_count must be > 0")
         if selector_count == 1:
@@ -267,12 +274,15 @@ class WebScrapingMixin:
         if total_timeout <= 0:
             return [0.0 for _ in range(selector_count)]
 
+        # If total_timeout cannot satisfy per-slot floor, split equally to preserve total budget.
         floor_total = _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS * selector_count
         if total_timeout < floor_total:
             equal_share = total_timeout / selector_count
             return [equal_share for _ in range(selector_count)]
 
+        # Reserve minimum floor for backups before sizing the primary slice.
         reserve_for_backups = _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS * (selector_count - 1)
+        # Primary gets preferred ratio, but never steals the reserved backup floors.
         primary = min(total_timeout * _PRIMARY_SELECTOR_BUDGET_RATIO, total_timeout - reserve_for_backups)
         primary = max(primary, _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS)
         budgets = [primary]
@@ -281,6 +291,7 @@ class WebScrapingMixin:
         for index in range(selector_count - 1):
             is_last_backup = index == selector_count - 2
             if is_last_backup:
+                # Last backup is capped; any surplus is folded back into primary to keep sum == total_timeout.
                 alloc = min(remaining, _BACKUP_SELECTOR_BUDGET_CAP_SECONDS)
                 budgets.append(alloc)
                 surplus = remaining - alloc
@@ -289,6 +300,7 @@ class WebScrapingMixin:
                 continue
 
             remaining_slots_after_this = selector_count - len(budgets) - 1
+            # Keep floor reserve for remaining backups, then clamp this slice to floor/cap bounds.
             min_reserve = _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS * remaining_slots_after_this
             alloc = remaining - min_reserve
             alloc = max(_BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS, alloc)
