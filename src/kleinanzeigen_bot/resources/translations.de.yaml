@@ -98,9 +98,8 @@ kleinanzeigen_bot/__init__.py:
   is_logged_in:
     "Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)": "Starte Login-Erkennung (Timeout: %.1fs Basis, %.1fs effektiv mit Multiplikator/Backoff)"
     "Login detected via .mr-medium element": "Login erkannt über .mr-medium Element"
-    "Timeout waiting for .mr-medium element after %.1fs": "Timeout beim Warten auf .mr-medium Element nach %.1fs"
     "Login detected via #user-email element": "Login erkannt über #user-email Element"
-    "Timeout waiting for #user-email element after %.1fs": "Timeout beim Warten auf #user-email Element nach %.1fs"
+    "Timeout waiting for login detection selector group after %.1fs": "Timeout beim Warten auf die Login-Erkennungs-Selektorgruppe nach %.1fs"
     "No login detected - neither .mr-medium nor #user-email found with username": "Kein Login erkannt - weder .mr-medium noch #user-email mit Benutzername gefunden"
     "No login detected - DOM elements not found and server probe returned %s": "Kein Login erkannt - DOM-Elemente nicht gefunden und Server-Probe ergab %s"
 
@@ -532,6 +531,17 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
 
   _record_timing:
     "Timing collector failed for key=%s operation=%s: %s": "Zeitmessung fehlgeschlagen für key=%s operation=%s: %s"
+
+  _allocate_selector_group_budgets:
+    "selector_count must be > 0": "selector_count muss > 0 sein"
+
+  web_find_first_available:
+    "selectors must contain at least one selector": "selectors muss mindestens einen Selektor enthalten"
+
+  attempt:
+    "No selector candidates executed.": "Keine Selektor-Kandidaten ausgeführt."
+    ? "No HTML element found using selector group after trying %(count)d alternatives within %(timeout)s seconds. Last error: %(error)s"
+    : "Kein HTML-Element über Selektorgruppe gefunden, nachdem %(count)d Alternativen innerhalb von %(timeout)s Sekunden versucht wurden. Letzter Fehler: %(error)s"
 
   close_browser_session:
     "Closing Browser session...": "Schließe Browser-Sitzung..."
