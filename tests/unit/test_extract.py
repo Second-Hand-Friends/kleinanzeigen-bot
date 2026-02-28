@@ -789,30 +789,28 @@ class TestAdExtractorContent:
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
         test_extractor.page = page_mock
 
-        with patch.multiple(
-            test_extractor,
-            web_text = AsyncMock(
-                side_effect = [
-                    "Test Title",  # Title succeeds
-                    TimeoutError("Timeout"),  # Description times out
-                    "03.02.2025",  # Date succeeds
-                ]
+        with (
+            patch.multiple(
+                test_extractor,
+                web_text = AsyncMock(
+                    side_effect = [
+                        "Test Title",  # Title succeeds
+                        TimeoutError("Timeout"),  # Description times out
+                        "03.02.2025",  # Date succeeds
+                    ]
+                ),
+                web_execute = AsyncMock(return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
+                _extract_category_from_ad_page = AsyncMock(return_value = "160"),
+                _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
+                _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
+                _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
+                _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
+                _download_images_from_ad_page = AsyncMock(return_value = []),
+                _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
             ),
-            web_execute = AsyncMock(return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
-            _extract_category_from_ad_page = AsyncMock(return_value = "160"),
-            _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
-            _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
-            _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
-            _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
-            _download_images_from_ad_page = AsyncMock(return_value = []),
-            _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+            pytest.raises(TimeoutError, match = "Timeout"),
         ):
-            try:
-                info = await test_extractor._extract_ad_page_info("/some/dir", 12345, "ad_12345")
-                assert not info.description
-            except TimeoutError:
-                # This is also acceptable - depends on how we want to handle timeouts
-                pass
+            await test_extractor._extract_ad_page_info("/some/dir", 12345, "ad_12345")
 
     @pytest.mark.asyncio
     async def test_extract_description_with_affixes_no_affixes(self, test_extractor:extract_module.AdExtractor) -> None:
