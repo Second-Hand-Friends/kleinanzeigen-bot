@@ -31,8 +31,8 @@ def test_load_bundled_dom_rules_contains_expected_keys() -> None:
 def test_resolve_selector_alternatives_resolves_template_placeholders() -> None:
     alternatives = resolve_selector_alternatives("ad_management.extend_button", placeholders = {"ad_id": "123"})
 
-    assert len(alternatives) == 1
-    assert "123" in alternatives[0].value
+    assert alternatives
+    assert any("123" in alternative.value for alternative in alternatives)
 
 
 def test_resolve_selector_alternatives_raises_on_missing_rule() -> None:

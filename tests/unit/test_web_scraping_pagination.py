@@ -98,6 +98,39 @@ class TestNavigatePaginatedAdOverview:
             next_button_enabled.click.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_disabled_next_button_stops_pagination_after_first_page(self) -> None:
+        """Test pagination stops when the next-page button is present but disabled."""
+        mixin = WebScrapingMixin()
+
+        callback = AsyncMock(return_value = True)
+        pagination_section = MagicMock()
+        disabled_button = MagicMock()
+        disabled_button.attrs = {"disabled": "disabled"}
+        disabled_button.click = AsyncMock()
+
+        with (
+            patch.object(mixin, "web_open", new_callable = AsyncMock),
+            patch.object(mixin, "web_sleep", new_callable = AsyncMock),
+            patch.object(
+                mixin,
+                "web_find_by_rule",
+                new_callable = AsyncMock,
+                side_effect = [
+                    MagicMock(),
+                    pagination_section,
+                    disabled_button,
+                ],
+            ),
+            patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(mixin, "_timeout", return_value = 10),
+        ):
+            result = await mixin._navigate_paginated_ad_overview(callback)
+
+            assert result is True
+            callback.assert_awaited_once_with(1)
+            disabled_button.click.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_web_open_raises_timeout(self) -> None:
         """Test that TimeoutError on web_open is caught and returns False."""
         mixin = WebScrapingMixin()

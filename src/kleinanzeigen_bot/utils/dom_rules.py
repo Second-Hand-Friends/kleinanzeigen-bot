@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from gettext import gettext as _
 from string import Formatter
 from typing import TYPE_CHECKING, Final
 
@@ -29,7 +30,10 @@ class SelectorPlaceholderError(SelectorRuleError):
     def __init__(self, rule_key:str, missing_keys:set[str]) -> None:
         self.rule_key = rule_key
         self.missing_keys = missing_keys
-        super().__init__(f"Missing placeholders {sorted(missing_keys)} for rule '{rule_key}'")
+        super().__init__(
+            _("Missing placeholders %(keys)s for rule '%(rule)s'")
+            % {"keys": sorted(missing_keys), "rule": rule_key}
+        )
 
 
 _FORMATTER:Final[Formatter] = Formatter()
@@ -37,7 +41,7 @@ _FORMATTER:Final[Formatter] = Formatter()
 
 def _get_placeholders(selector_value:str) -> set[str]:
     placeholders:set[str] = set()
-    for _, field_name, _, _ in _FORMATTER.parse(selector_value):
+    for _literal_text, field_name, _format_spec, _conversion in _FORMATTER.parse(selector_value):
         if not field_name:
             continue
         placeholders.add(field_name)
@@ -54,7 +58,7 @@ def resolve_selector_alternatives(rule_key:str, *, placeholders:Mapping[str, str
     rules = load_bundled_dom_rules()
     alternatives = rules.selectors.get(rule_key)
     if alternatives is None:
-        raise SelectorNotFoundError(f"DOM selector rule '{rule_key}' does not exist")
+        raise SelectorNotFoundError(_("DOM selector rule '%(rule)s' does not exist") % {"rule": rule_key})
 
     values = placeholders or {}
     resolved:list[SelectorAlternative] = []

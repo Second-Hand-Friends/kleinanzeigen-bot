@@ -658,6 +658,13 @@ kleinanzeigen_bot/model/config_model.py:
     "pause_on_login_detection_failure requires capture_on.login_detection to be enabled": "pause_on_login_detection_failure erfordert, dass capture_on.login_detection aktiviert ist"
 
 #################################################
+kleinanzeigen_bot/model/dom_rules_model.py:
+#################################################
+  _validate_selectors:
+    "selector rule keys must not be blank": "Selektor-Regelschlüssel dürfen nicht leer sein"
+    "selector rule '%(key)s' must define at least one alternative": "Selektor-Regel '%(key)s' muss mindestens eine Alternative definieren"
+
+#################################################
 kleinanzeigen_bot/model/ad_model.py:
 #################################################
   _validate_auto_price_reduction_constraints:
@@ -688,6 +695,15 @@ kleinanzeigen_bot/model/update_check_state.py:
     "Interval too short: %s. Minimum interval is 1d. Using default interval for this run.": "Intervall zu kurz: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
     "Invalid interval format or unsupported unit: %s. Using default interval for this run.": "Ungültiges Intervallformat oder nicht unterstützte Einheit: %s. Es wird das Standardintervall für diesen Durchlauf verwendet."
     "Negative interval: %s. Minimum interval is 1d. Using default interval for this run.": "Negatives Intervall: %s. Das Mindestintervall beträgt 1 Tag. Es wird das Standardintervall für diesen Durchlauf verwendet."
+
+#################################################
+kleinanzeigen_bot/utils/dom_rules.py:
+#################################################
+  __init__:
+    "Missing placeholders %(keys)s for rule '%(rule)s'": "Fehlende Platzhalter %(keys)s für Regel '%(rule)s'"
+
+  resolve_selector_alternatives:
+    "DOM selector rule '%(rule)s' does not exist": "DOM-Selektor-Regel '%(rule)s' existiert nicht"
 
 #################################################
 kleinanzeigen_bot/utils/diagnostics.py:

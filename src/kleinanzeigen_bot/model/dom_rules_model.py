@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 from __future__ import annotations
 
+from gettext import gettext as _
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -30,7 +31,7 @@ class DomRulesConfig(ContextualModel):
     def _validate_selectors(self) -> "DomRulesConfig":
         for key, alternatives in self.selectors.items():
             if not key.strip():
-                raise ValueError("selector rule keys must not be blank")
+                raise ValueError(_("selector rule keys must not be blank"))
             if not alternatives:
-                raise ValueError(f"selector rule '{key}' must define at least one alternative")
+                raise ValueError(_("selector rule '%(key)s' must define at least one alternative") % {"key": key})
         return self

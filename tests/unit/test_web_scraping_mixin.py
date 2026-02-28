@@ -644,29 +644,49 @@ class TestTimeoutAndRetryHelpers:
     async def test_web_find_by_rule_uses_resolved_selector_group(self, web_scraper:WebScrapingMixin) -> None:
         """web_find_by_rule should resolve selectors and return first available element."""
         expected_element = AsyncMock(spec = Element)
+        selectors = [(By.ID, "login-email")]
 
         with (
-            patch.object(web_scraper, "_resolve_rule_selectors", return_value = [(By.ID, "login-email")]) as resolve_rule,
+            patch.object(web_scraper, "_resolve_rule_selectors", return_value = selectors) as resolve_rule,
             patch.object(web_scraper, "web_find_first_available", new_callable = AsyncMock, return_value = (expected_element, 0)) as find_first,
         ):
             found = await web_scraper.web_find_by_rule("auth.login.email")
 
         assert found is expected_element
         resolve_rule.assert_called_once_with("auth.login.email", placeholders = None)
-        find_first.assert_awaited_once()
+        find_first.assert_awaited_once_with(
+            selectors,
+            parent = None,
+            timeout = None,
+            key = "default",
+            description = "web_find_by_rule(auth.login.email)",
+        )
 
     @pytest.mark.asyncio
     async def test_web_text_by_rule_returns_text_and_index(self, web_scraper:WebScrapingMixin) -> None:
         """web_text_by_rule should forward resolved selectors to text-group lookup."""
+        selectors = [(By.ID, "user-email")]
         with (
-            patch.object(web_scraper, "_resolve_rule_selectors", return_value = [(By.ID, "user-email")]),
+            patch.object(web_scraper, "_resolve_rule_selectors", return_value = selectors) as resolve_rule,
             patch.object(web_scraper, "web_text_first_available", new_callable = AsyncMock, return_value = ("dummy_user", 1)) as text_first,
         ):
             text, index = await web_scraper.web_text_by_rule("auth.login_detection.user_info")
 
         assert text == "dummy_user"
         assert index == 1
-        text_first.assert_awaited_once()
+        resolve_rule.assert_called_once_with("auth.login_detection.user_info", placeholders = None)
+        text_first.assert_awaited_once_with(
+            selectors,
+            parent = None,
+            timeout = None,
+            key = "default",
+            description = "web_text_by_rule(auth.login_detection.user_info)",
+        )
+
+    def test_to_selector_type_raises_on_unsupported_selector(self, web_scraper:WebScrapingMixin) -> None:
+        """_to_selector_type should reject selector names not supported by the runtime."""
+        with pytest.raises(AssertionError, match = "Unsupported selector type in DOM rules: UNKNOWN"):
+            _ = web_scraper._to_selector_type("UNKNOWN")
 
     def test_resolve_rule_selectors_maps_dom_rule_types(self, web_scraper:WebScrapingMixin) -> None:
         """_resolve_rule_selectors should convert DOM-rule by names into By enum values."""
