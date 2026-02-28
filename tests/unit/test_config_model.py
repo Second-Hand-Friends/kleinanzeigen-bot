@@ -101,6 +101,16 @@ def test_download_config_rejects_null_dir() -> None:
         )
 
 
+def test_download_config_rejects_blank_dir() -> None:
+    with pytest.raises(ValueError, match = "download.dir must be a non-empty path"):
+        Config.model_validate(
+            {
+                "download": {"dir": "   "},
+                "login": {"username": "dummy", "password": "dummy"},
+            }
+        )
+
+
 def test_download_config_rejects_blank_folder_name_template() -> None:
     with pytest.raises(ValueError, match = "download.folder_name_template must be a non-empty template"):
         Config.model_validate(
@@ -136,6 +146,46 @@ def test_download_config_rejects_path_separators_in_ad_file_name_template() -> N
         Config.model_validate(
             {
                 "download": {"ad_file_name_template": "nested/{id}"},
+                "login": {"username": "dummy", "password": "dummy"},
+            }
+        )
+
+
+def test_download_config_rejects_format_spec_in_template() -> None:
+    with pytest.raises(ValueError, match = "download.ad_file_name_template placeholders must not use format specifiers"):
+        Config.model_validate(
+            {
+                "download": {"ad_file_name_template": "listing_{id:10}"},
+                "login": {"username": "dummy", "password": "dummy"},
+            }
+        )
+
+
+def test_download_config_rejects_conversion_in_template() -> None:
+    with pytest.raises(ValueError, match = "download.folder_name_template placeholders must not use conversion flags"):
+        Config.model_validate(
+            {
+                "download": {"folder_name_template": "{title!r}"},
+                "login": {"username": "dummy", "password": "dummy"},
+            }
+        )
+
+
+def test_download_config_rejects_invalid_template_syntax() -> None:
+    with pytest.raises(ValueError, match = "download.ad_file_name_template contains invalid template syntax"):
+        Config.model_validate(
+            {
+                "download": {"ad_file_name_template": "listing_{id"},
+                "login": {"username": "dummy", "password": "dummy"},
+            }
+        )
+
+
+def test_download_config_rejects_empty_placeholder() -> None:
+    with pytest.raises(ValueError, match = "download.folder_name_template contains an empty placeholder"):
+        Config.model_validate(
+            {
+                "download": {"folder_name_template": "ad_{}"},
                 "login": {"username": "dummy", "password": "dummy"},
             }
         )
