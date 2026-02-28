@@ -47,7 +47,8 @@ def test_resolve_selector_alternatives_raises_on_missing_placeholder() -> None:
 
 def test_resolve_selector_alternatives_returns_independent_copies() -> None:
     first = resolve_selector_alternatives("pagination.container")
+    original_value = first[0].value
     first[0].value = ".Changed"
 
     second = resolve_selector_alternatives("pagination.container")
-    assert second[0].value == ".Pagination"
+    assert second[0].value == original_value
