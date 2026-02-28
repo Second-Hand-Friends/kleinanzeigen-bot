@@ -26,6 +26,8 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 _BREADCRUMB_MIN_DEPTH:Final[int] = 2
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
+_MAX_FILENAME_COMPONENT_LENGTH:Final[int] = 255
+_DOWNLOAD_STEM_SUFFIX_BUDGET:Final[int] = len("__img9999.jpeg")
 
 
 class AdExtractor(WebScrapingMixin):
@@ -46,6 +48,15 @@ class AdExtractor(WebScrapingMixin):
         self.download_dir:Path = download_dir
         self.published_ads_by_id:dict[int, dict[str, Any]] = published_ads_by_id or {}
 
+    def _render_download_ad_file_stem(self, ad_id:int) -> str:
+        stem = self.config.download.ad_file_name_template.format(id = ad_id).strip()
+        return misc.sanitize_folder_name(stem, _MAX_FILENAME_COMPONENT_LENGTH - _DOWNLOAD_STEM_SUFFIX_BUDGET)
+
+    def _render_download_folder_name(self, ad_id:int, title:str) -> str:
+        sanitized_title = misc.sanitize_folder_name(title, self.config.download.folder_name_max_length)
+        folder_name = self.config.download.folder_name_template.format(id = ad_id, title = sanitized_title).strip()
+        return misc.sanitize_folder_name(folder_name, self.config.download.folder_name_max_length)
+
     async def download_ad(self, ad_id:int) -> None:
         """
         Downloads an ad to a specific location, specified by config and ad ID.
@@ -58,10 +69,10 @@ class AdExtractor(WebScrapingMixin):
         LOG.info("Using download directory: %s", download_dir)
 
         # Extract ad info and determine final directory path
-        ad_cfg, final_dir = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id)
+        ad_cfg, final_dir, ad_file_stem = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id)
 
         # Save the ad configuration file (offload to executor to avoid blocking the event loop)
-        ad_file_path = str(Path(final_dir) / f"ad_{ad_id}.yaml")
+        ad_file_path = str(Path(final_dir) / f"{ad_file_stem}.yaml")
         header_string = (
             "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
         )
@@ -83,12 +94,12 @@ class AdExtractor(WebScrapingMixin):
             LOG.warning("Failed to download image %s: %s", url, e)
             return None
 
-    async def _download_images_from_ad_page(self, directory:str, ad_id:int) -> list[str]:
+    async def _download_images_from_ad_page(self, directory:str, ad_file_stem:str) -> list[str]:
         """
         Downloads all images of an ad.
 
         :param directory: the path of the directory created for this ad
-        :param ad_id: the ID of the ad to download the images from
+        :param ad_file_stem: the rendered filename stem shared by the ad config and images
         :return: the relative paths for all downloaded images
         """
 
@@ -102,7 +113,7 @@ class AdExtractor(WebScrapingMixin):
             n_images = len(images)
             LOG.info("Found %s.", i18n.pluralize("image", n_images))
 
-            img_fn_prefix = "ad_" + str(ad_id) + "__img"
+            img_fn_prefix = f"{ad_file_stem}__img"
             img_nr = 1
             dl_counter = 0
 
@@ -222,13 +233,14 @@ class AdExtractor(WebScrapingMixin):
         """
         return await self.web_text(By.ID, "viewad-title")
 
-    async def _extract_ad_page_info(self, directory:str, ad_id:int) -> AdPartial:
+    async def _extract_ad_page_info(self, directory:str, ad_id:int, ad_file_stem:str) -> AdPartial:
         """
         Extracts ad information and downloads images to the specified directory.
         NOTE: Requires that the driver session currently is on the ad page.
 
         :param directory: the directory to download images to
         :param ad_id: the ad ID
+        :param ad_file_stem: the rendered filename stem shared by the ad config and images
         :return: an AdPartial object containing the ad information
         """
         info:dict[str, Any] = {"active": True}
@@ -280,7 +292,7 @@ class AdExtractor(WebScrapingMixin):
         info["price"], info["price_type"] = await self._extract_pricing_info_from_ad_page()
         info["shipping_type"], info["shipping_costs"], info["shipping_options"] = await self._extract_shipping_info_from_ad_page()
         info["sell_directly"] = await self._extract_sell_directly_from_ad_page()
-        info["images"] = await self._download_images_from_ad_page(directory, ad_id)
+        info["images"] = await self._download_images_from_ad_page(directory, ad_file_stem)
         info["contact"] = await self._extract_contact_from_ad_page()
         info["id"] = ad_id
 
@@ -303,13 +315,13 @@ class AdExtractor(WebScrapingMixin):
 
         return ad_cfg
 
-    async def _extract_ad_page_info_with_directory_handling(self, relative_directory:Path, ad_id:int) -> tuple[AdPartial, Path]:
+    async def _extract_ad_page_info_with_directory_handling(self, relative_directory:Path, ad_id:int) -> tuple[AdPartial, Path, str]:
         """
         Extracts ad information and handles directory creation/renaming.
 
         :param relative_directory: Base directory for downloads
         :param ad_id: The ad ID
-        :return: AdPartial with directory information
+        :return: AdPartial with directory information and rendered ad file stem
         """
         # First, extract basic info to get the title
         info:dict[str, Any] = {"active": True}
@@ -320,9 +332,9 @@ class AdExtractor(WebScrapingMixin):
         LOG.info('Extracting title from ad %s: "%s"', ad_id, title)
 
         # Determine the final directory path
-        sanitized_title = misc.sanitize_folder_name(title, self.config.download.folder_name_max_length)
-        final_dir = relative_directory / f"ad_{ad_id}_{sanitized_title}"
-        temp_dir = relative_directory / f"ad_{ad_id}"
+        ad_file_stem = self._render_download_ad_file_stem(ad_id)
+        final_dir = relative_directory / self._render_download_folder_name(ad_id, title)
+        temp_dir = relative_directory / ad_file_stem
 
         loop = asyncio.get_running_loop()
 
@@ -333,7 +345,12 @@ class AdExtractor(WebScrapingMixin):
             LOG.debug("Removing directory tree: %s", final_dir)
             await loop.run_in_executor(None, shutil.rmtree, str(final_dir))
 
-        if await files.exists(temp_dir):
+        if final_dir == temp_dir:
+            if not await files.exists(final_dir):
+                LOG.debug("Creating new directory: %s", final_dir)
+                await loop.run_in_executor(None, final_dir.mkdir)
+                LOG.info("New directory for ad created at %s.", final_dir)
+        elif await files.exists(temp_dir):
             if self.config.download.rename_existing_folders:
                 # Rename the old folder to the new name with title
                 LOG.info("Renaming folder from %s to %s for ad %s...", temp_dir.name, final_dir.name, ad_id)
@@ -350,9 +367,9 @@ class AdExtractor(WebScrapingMixin):
             LOG.info("New directory for ad created at %s.", final_dir)
 
         # Now extract complete ad info (including images) to the final directory
-        ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id)
+        ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id, ad_file_stem)
 
-        return ad_cfg, final_dir
+        return ad_cfg, final_dir, ad_file_stem
 
     async def _extract_category_from_ad_page(self) -> str:
         """

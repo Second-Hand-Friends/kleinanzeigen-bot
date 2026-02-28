@@ -468,6 +468,16 @@
     },
     "DownloadConfig": {
       "properties": {
+        "dir": {
+          "default": "downloaded-ads",
+          "description": "directory where downloaded ads are written. Relative paths are resolved against the config file location",
+          "examples": [
+            "\"downloaded-ads\"",
+            "\"./ads\""
+          ],
+          "title": "Dir",
+          "type": "string"
+        },
         "include_all_matching_shipping_options": {
           "default": false,
           "description": "if true, all shipping options matching the package size will be included",
@@ -494,6 +504,27 @@
           "minimum": 10,
           "title": "Folder Name Max Length",
           "type": "integer"
+        },
+        "folder_name_template": {
+          "default": "ad_{id}_{title}",
+          "description": "folder naming template for downloaded ad directories. Allowed placeholders: {id}, {title}",
+          "examples": [
+            "\"ad_{id}_{title}\"",
+            "\"{title}\"",
+            "\"listing_{id}_{title}\""
+          ],
+          "title": "Folder Name Template",
+          "type": "string"
+        },
+        "ad_file_name_template": {
+          "default": "ad_{id}",
+          "description": "base name template for downloaded ad files. The bot writes the ad config as <base>.yaml and downloaded images as <base>__imgN.<ext>. Allowed placeholders: {id}",
+          "examples": [
+            "\"ad_{id}\"",
+            "\"listing_{id}\""
+          ],
+          "title": "Ad File Name Template",
+          "type": "string"
         },
         "rename_existing_folders": {
           "default": false,
@@ -757,7 +788,7 @@
       "default": [
         "./**/ad_*.{json,yml,yaml}"
       ],
-      "description": "\nglob (wildcard) patterns to select ad configuration files\nif relative paths are specified, then they are relative to this configuration file\n",
+      "description": "\nglob (wildcard) patterns to select ad configuration files\nif relative paths are specified, then they are relative to this configuration file\nuse relative patterns for portable configs; absolute patterns may behave differently across platforms\n",
       "items": {
         "type": "string"
       },

@@ -17,7 +17,7 @@ from wcmatch import glob
 from . import extract, resources
 from ._version import __version__
 from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, Contact, calculate_auto_price, calculate_auto_price_with_trace
-from .model.config_model import Config
+from .model.config_model import DEFAULT_DOWNLOAD_DIR, Config
 from .update_checker import UpdateChecker
 from .utils import diagnostics, dicts, error_handlers, loggers, misc, xdg_paths
 from .utils.exceptions import CaptchaEncountered
@@ -323,6 +323,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     @property
     def _update_check_state_path(self) -> Path:
         return self._workspace_or_raise().state_dir / "update_check_state.json"
+
+    def _resolve_download_dir(self) -> Path:
+        workspace = self._workspace_or_raise()
+        configured_dir = self.config.download.dir
+        if not configured_dir or configured_dir == DEFAULT_DOWNLOAD_DIR:
+            return workspace.download_dir
+        return Path(abspath(configured_dir, relative_to = str(Path(self.config_file_path).parent))).resolve()
 
     def _resolve_workspace(self) -> None:
         """
@@ -2207,9 +2214,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.warning("Skipping ad with non-numeric id: %s", published_ad.get("id"))
         LOG.info("Loaded %s published ads.", len(published_ads_by_id))
 
-        workspace = self._workspace_or_raise()
-        xdg_paths.ensure_directory(workspace.download_dir, "downloaded ads directory")
-        ad_extractor = extract.AdExtractor(self.browser, self.config, workspace.download_dir, published_ads_by_id = published_ads_by_id)
+        download_dir = self._resolve_download_dir()
+        xdg_paths.ensure_directory(download_dir, "downloaded ads directory")
+        LOG.info("Ads download directory: %s", download_dir)
+        ad_extractor = extract.AdExtractor(self.browser, self.config, download_dir, published_ads_by_id = published_ads_by_id)
 
         # Normalize comma-separated keyword selectors; set deduplication collapses "new,new" → {"new"}
         selector_tokens = {s.strip() for s in self.ads_selector.split(",")}
