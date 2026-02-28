@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/actions/workflows/build.yml/badge.svg)](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/actions/workflows/build.yml)
 [![License](https://img.shields.io/github/license/Second-Hand-Friends/kleinanzeigen-bot.svg?color=blue)](LICENSE.txt)
-[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.1%20adopted-ff69b4.svg)](CODE_OF_CONDUCT.md)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v3.0%20adopted-ff69b4.svg)](CODE_OF_CONDUCT.md)
 [![codecov](https://codecov.io/github/Second-Hand-Friends/kleinanzeigen-bot/graph/badge.svg?token=SKLDTVWHVK)](https://codecov.io/github/Second-Hand-Friends/kleinanzeigen-bot)
 
 <!--[![Maintainability](https://qlty.sh/badges/69ff94b8-90e1-4096-91ed-3bcecf0b0597/maintainability.svg)](https://qlty.sh/gh/Second-Hand-Friends/projects/kleinanzeigen-bot)-->
