@@ -2,6 +2,7 @@
 
 # glob (wildcard) patterns to select ad configuration files
 # if relative paths are specified, then they are relative to this configuration file
+# use relative patterns for portable configs; absolute patterns may behave differently across platforms
 ad_files:
   - ./**/ad_*.{json,yml,yaml}
 
@@ -118,7 +119,6 @@ download:
   # Examples (choose one):
   #   • "downloaded-ads"
   #   • "./ads"
-  #   • "/absolute/path/to/ads"
   dir: downloaded-ads
 
   # if true, all shipping options matching the package size will be included
