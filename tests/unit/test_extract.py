@@ -778,7 +778,7 @@ class TestAdExtractorContent:
                 _download_images_from_ad_page = AsyncMock(return_value = []),
                 _extract_contact_from_ad_page = AsyncMock(return_value = {}),
             ):
-                info = await test_extractor._extract_ad_page_info("/some/dir", 12345)
+                info = await test_extractor._extract_ad_page_info("/some/dir", 12345, "ad_12345")
                 assert info.description == raw_description
 
     @pytest.mark.asyncio
@@ -808,7 +808,7 @@ class TestAdExtractorContent:
             _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
         ):
             try:
-                info = await test_extractor._extract_ad_page_info("/some/dir", 12345)
+                info = await test_extractor._extract_ad_page_info("/some/dir", 12345, "ad_12345")
                 assert not info.description
             except TimeoutError:
                 # This is also acceptable - depends on how we want to handle timeouts
@@ -841,7 +841,7 @@ class TestAdExtractorContent:
             _download_images_from_ad_page = AsyncMock(return_value = []),
             _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
         ):
-            info = await test_extractor._extract_ad_page_info("/some/dir", 12345)
+            info = await test_extractor._extract_ad_page_info("/some/dir", 12345, "ad_12345")
             assert info.description == raw_description
 
     @pytest.mark.asyncio
@@ -1211,7 +1211,7 @@ class TestAdExtractorDownload:
     async def test_download_images_no_images(self, extractor:extract_module.AdExtractor) -> None:
         """Test image download when no images are found."""
         with patch.object(extractor, "web_find", new_callable = AsyncMock, side_effect = TimeoutError):
-            image_paths = await extractor._download_images_from_ad_page("/some/dir", 12345)
+            image_paths = await extractor._download_images_from_ad_page("/some/dir", "ad_12345")
             assert len(image_paths) == 0
 
     @pytest.mark.asyncio
@@ -1232,7 +1232,7 @@ class TestAdExtractorDownload:
             patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [img_with_url, img_without_url]),
             patch.object(extract_module.AdExtractor, "_download_and_save_image_sync", return_value = "/some/dir/ad_12345__img1.jpg"),
         ):
-            image_paths = await extractor._download_images_from_ad_page("/some/dir", 12345)
+            image_paths = await extractor._download_images_from_ad_page("/some/dir", "ad_12345")
 
             # Should only download the one valid image (skip the None)
             assert len(image_paths) == 1
@@ -1272,7 +1272,24 @@ class TestAdExtractorDownload:
             actual_path = Path(actual_call[0][0])
             assert actual_path == yaml_path
             assert mock_extract_with_dir.return_value[2] == "listing_12345"
-            assert extractor._render_download_ad_file_stem(12345) + "__img" == "listing_12345__img"
+            assert mock_extract_with_dir.return_value[2] + "__img" == "listing_12345__img"
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_download_images_use_provided_ad_file_stem(self, extractor:extract_module.AdExtractor) -> None:
+        image_box_mock = MagicMock()
+        img_with_url = MagicMock()
+        img_with_url.attrs = {"src": "http://example.com/valid_image.jpg"}
+
+        with (
+            patch.object(extractor, "web_find", new_callable = AsyncMock, return_value = image_box_mock),
+            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [img_with_url]),
+            patch.object(extract_module.AdExtractor, "_download_and_save_image_sync", return_value = "/some/dir/listing_12345__img1.jpg") as mock_download,
+        ):
+            image_paths = await extractor._download_images_from_ad_page("/some/dir", "listing_12345")
+
+            assert image_paths == ["listing_12345__img1.jpg"]
+            assert mock_download.call_args.args[2] == "listing_12345__img"
 
     def test_render_download_ad_file_stem_reserves_suffix_budget(self, extractor:extract_module.AdExtractor) -> None:
         extractor.config.download.ad_file_name_template = "listing_{id}"

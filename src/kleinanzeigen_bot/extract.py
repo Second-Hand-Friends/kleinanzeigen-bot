@@ -94,12 +94,12 @@ class AdExtractor(WebScrapingMixin):
             LOG.warning("Failed to download image %s: %s", url, e)
             return None
 
-    async def _download_images_from_ad_page(self, directory:str, ad_id:int) -> list[str]:
+    async def _download_images_from_ad_page(self, directory:str, ad_file_stem:str) -> list[str]:
         """
         Downloads all images of an ad.
 
         :param directory: the path of the directory created for this ad
-        :param ad_id: the ID of the ad to download the images from
+        :param ad_file_stem: the rendered filename stem shared by the ad config and images
         :return: the relative paths for all downloaded images
         """
 
@@ -113,7 +113,7 @@ class AdExtractor(WebScrapingMixin):
             n_images = len(images)
             LOG.info("Found %s.", i18n.pluralize("image", n_images))
 
-            img_fn_prefix = self._render_download_ad_file_stem(ad_id) + "__img"
+            img_fn_prefix = f"{ad_file_stem}__img"
             img_nr = 1
             dl_counter = 0
 
@@ -233,13 +233,14 @@ class AdExtractor(WebScrapingMixin):
         """
         return await self.web_text(By.ID, "viewad-title")
 
-    async def _extract_ad_page_info(self, directory:str, ad_id:int) -> AdPartial:
+    async def _extract_ad_page_info(self, directory:str, ad_id:int, ad_file_stem:str) -> AdPartial:
         """
         Extracts ad information and downloads images to the specified directory.
         NOTE: Requires that the driver session currently is on the ad page.
 
         :param directory: the directory to download images to
         :param ad_id: the ad ID
+        :param ad_file_stem: the rendered filename stem shared by the ad config and images
         :return: an AdPartial object containing the ad information
         """
         info:dict[str, Any] = {"active": True}
@@ -291,7 +292,7 @@ class AdExtractor(WebScrapingMixin):
         info["price"], info["price_type"] = await self._extract_pricing_info_from_ad_page()
         info["shipping_type"], info["shipping_costs"], info["shipping_options"] = await self._extract_shipping_info_from_ad_page()
         info["sell_directly"] = await self._extract_sell_directly_from_ad_page()
-        info["images"] = await self._download_images_from_ad_page(directory, ad_id)
+        info["images"] = await self._download_images_from_ad_page(directory, ad_file_stem)
         info["contact"] = await self._extract_contact_from_ad_page()
         info["id"] = ad_id
 
@@ -366,7 +367,7 @@ class AdExtractor(WebScrapingMixin):
             LOG.info("New directory for ad created at %s.", final_dir)
 
         # Now extract complete ad info (including images) to the final directory
-        ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id)
+        ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id, ad_file_stem)
 
         return ad_cfg, final_dir, ad_file_stem
 
