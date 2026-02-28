@@ -152,6 +152,16 @@ def test_validate_download_template_rejects_missing_required_placeholder() -> No
         )
 
 
+def test_validate_download_template_rejects_literal_without_required_placeholder() -> None:
+    with pytest.raises(ValueError, match = r"download\.ad_file_name_template must include placeholder\(s\): \{id\}"):
+        config_model._validate_download_template(
+            "listing",
+            allowed_fields = frozenset({"id"}),
+            required_fields = frozenset({"id"}),
+            field_name = "download.ad_file_name_template",
+        )
+
+
 def test_download_config_rejects_path_separators_in_ad_file_name_template() -> None:
     with pytest.raises(ValueError, match = "download.ad_file_name_template must not contain path separators"):
         Config.model_validate(
