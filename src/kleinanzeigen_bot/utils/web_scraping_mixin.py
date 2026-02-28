@@ -557,6 +557,12 @@ class WebScrapingMixin:
             user_data_dir = self.browser_config.user_data_dir,
         )
 
+        # When --no-sandbox is in browser_args, nodriver's Config.sandbox must also be set to False.
+        # Otherwise nodriver re-adds --no-sandbox itself but still runs internal sandbox-related logic
+        # that can cause startup failures in containerized environments (Docker, LXC, etc.).
+        if any(arg == "--no-sandbox" for arg in browser_args):
+            cfg.sandbox = False
+
         # already logged by nodriver:
         # LOG.debug("-> Effective browser arguments: \n\t\t%s", "\n\t\t".join(cfg.browser_args))
 
