@@ -880,7 +880,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         ad_files:dict[str, str] = {}
         data_root_dir = os.path.dirname(self.config_file_path)
         for file_pattern in self.config.ad_files:
-            for ad_file in glob.glob(file_pattern, root_dir = data_root_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
+            glob_kwargs:dict[str, Any] = {"flags": glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB}
+            if not Path(file_pattern).is_absolute():
+                glob_kwargs["root_dir"] = data_root_dir
+            for ad_file in glob.glob(file_pattern, **glob_kwargs):
                 if not str(ad_file).endswith("ad_fields.yaml"):
                     ad_files[abspath(ad_file, relative_to = data_root_dir)] = ad_file
         LOG.info(" -> found %s", pluralize("ad config file", ad_files))
