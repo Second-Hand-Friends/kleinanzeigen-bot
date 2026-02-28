@@ -309,6 +309,7 @@ class TestKleinanzeigenBotInitialization:
 
     @pytest.mark.asyncio
     async def test_download_ads_uses_configured_download_dir_relative_to_config(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Relative download.dir values resolve from config.yaml and are passed to AdExtractor."""
         test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
         test_bot.config_file_path = str(tmp_path / "config.yaml")
         test_bot.config.download.dir = "ads"
@@ -333,6 +334,7 @@ class TestKleinanzeigenBotInitialization:
 
     @pytest.mark.asyncio
     async def test_download_ads_uses_configured_download_dir_absolute_path(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Absolute download.dir values are passed through unchanged, with no published ads selected."""
         test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
         test_bot.config_file_path = str(tmp_path / "nested" / "config.yaml")
         test_bot.config.download.dir = str((tmp_path / "absolute-ads").resolve())
@@ -1231,7 +1233,7 @@ class TestKleinanzeigenBotAdOperations:
         ads = test_bot.load_ads()
         assert len(ads) == 0
 
-    def test_load_ads_from_shared_download_folder_ignores_images(self, test_bot:KleinanzeigenBot, tmp_path:Path, minimal_ad_config:dict[str, Any]) -> None:
+    def test_load_ads_from_shared_download_folder_resolves_images(self, test_bot:KleinanzeigenBot, tmp_path:Path, minimal_ad_config:dict[str, Any]) -> None:
         """Publish discovery should work when ad_files points at the same tree used for downloads."""
         ads_root = tmp_path / "ads"
         ad_dir = ads_root / "Test Title"
