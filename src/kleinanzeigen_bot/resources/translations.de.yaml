@@ -233,6 +233,7 @@ kleinanzeigen_bot/__init__.py:
     "Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...": "Attributfeld '%s' scheint eine Combobox zu sein (d.h. Texteingabefeld mit Dropdown-Filter)..."
 
   download_ads:
+    "Ads download directory: %s": "Anzeigen-Download-Verzeichnis: %s"
     "Fetching published ads...": "Lade veröffentlichte Anzeigen..."
     "Loaded %s published ads.": "%s veröffentlichte Anzeigen geladen."
     "Scanning your ad overview...": "Scanne Anzeigenübersicht..."
@@ -651,6 +652,14 @@ kleinanzeigen_bot/model/config_model.py:
     "Deprecated: 'publish_error_capture' is replaced by 'capture_on.publish'. Please update your config.": "Veraltet: 'publish_error_capture' wurde durch 'capture_on.publish' ersetzt. Bitte aktualisieren Sie Ihre Konfiguration."
   _validate_glob_pattern:
     "must be a non-empty, non-blank glob pattern": "muss ein nicht-leeres Glob-Muster sein"
+  _validate_download_template:
+    "%s must be a non-empty template": "%s muss eine nicht-leere Vorlage sein"
+    "%s must not contain path separators": "%s darf keine Pfadtrenner enthalten"
+    "%s contains invalid template syntax: %s": "%s enthält eine ungültige Vorlagensyntax: %s"
+    "%s contains an empty placeholder": "%s enthält einen leeren Platzhalter"
+    "%s only supports placeholders: %s": "%s unterstützt nur Platzhalter: %s"
+    "%s must include placeholder(s): %s": "%s muss Platzhalter enthalten: %s"
+    "%s must include at least one placeholder: %s": "%s muss mindestens einen Platzhalter enthalten: %s"
   _validate_pause_requires_capture:
     "pause_on_login_detection_failure requires capture_on.login_detection to be enabled": "pause_on_login_detection_failure erfordert, dass capture_on.login_detection aktiviert ist"
 

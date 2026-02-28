@@ -114,6 +114,13 @@ categories: {}
 # ################################################################################
 download:
 
+  # directory where downloaded ads are written. Relative paths are resolved against the config file location
+  # Examples (choose one):
+  #   • "downloaded-ads"
+  #   • "./ads"
+  #   • "/absolute/path/to/ads"
+  dir: downloaded-ads
+
   # if true, all shipping options matching the package size will be included
   include_all_matching_shipping_options: false
 
@@ -127,6 +134,19 @@ download:
 
   # maximum length for folder names when downloading ads (default: 100)
   folder_name_max_length: 100
+
+  # folder naming template for downloaded ad directories. Allowed placeholders: {id}, {title}
+  # Examples (choose one):
+  #   • "ad_{id}_{title}"
+  #   • "{title}"
+  #   • "listing_{id}_{title}"
+  folder_name_template: ad_{id}_{title}
+
+  # base name template for downloaded ad files. The bot writes the ad config as <base>.yaml and downloaded images as <base>__imgN.<ext>. Allowed placeholders: {id}
+  # Examples (choose one):
+  #   • "ad_{id}"
+  #   • "listing_{id}"
+  ad_file_name_template: ad_{id}
 
   # if true, rename existing folders without titles to include titles (default: false)
   rename_existing_folders: false

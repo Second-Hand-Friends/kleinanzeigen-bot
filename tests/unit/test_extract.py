@@ -1191,6 +1191,7 @@ class TestAdExtractorDownload:
                     }
                 ),
                 str(final_dir),
+                "ad_12345",
             )
 
             await extractor.download_ad(12345)
@@ -1236,6 +1237,40 @@ class TestAdExtractorDownload:
             # Should only download the one valid image (skip the None)
             assert len(image_paths) == 1
             assert image_paths[0] == "ad_12345__img1.jpg"
+
+    @pytest.mark.asyncio
+    async def test_download_ad_uses_custom_folder_and_file_templates(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+        download_base = tmp_path / "ads"
+        final_dir = download_base / "Test Advertisement Title"
+        yaml_path = final_dir / "listing_12345.yaml"
+        extractor.download_dir = download_base
+        extractor.config.download.folder_name_template = "{title}"
+        extractor.config.download.ad_file_name_template = "listing_{id}"
+
+        with (
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict,
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+        ):
+            mock_extract_with_dir.return_value = (
+                AdPartial.model_validate(
+                    {
+                        "title": "Test Advertisement Title",
+                        "description": "Test Description",
+                        "category": "Dienstleistungen",
+                        "price": 100,
+                        "images": [],
+                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
+                    }
+                ),
+                final_dir,
+                "listing_12345",
+            )
+
+            await extractor.download_ad(12345)
+
+            actual_call = mock_save_dict.call_args
+            actual_path = Path(actual_call[0][0])
+            assert actual_path == yaml_path
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
@@ -1290,13 +1325,14 @@ class TestAdExtractorDownload:
                 ),
             ),
         ):
-            ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+            ad_cfg, result_dir, ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
             # Verify the old directory was deleted and recreated
             assert result_dir == final_dir
             assert result_dir.exists()
             assert not old_file.exists()  # Old file should be gone
             assert ad_cfg.title == "Test Title"
+            assert ad_file_stem == "ad_12345"
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
@@ -1354,7 +1390,7 @@ class TestAdExtractorDownload:
                 ),
             ),
         ):
-            ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+            ad_cfg, result_dir, ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
             # Verify the directory was renamed from temp_dir to final_dir
             final_dir = base_dir / "ad_12345_Test Title"
@@ -1363,6 +1399,7 @@ class TestAdExtractorDownload:
             assert not temp_dir.exists()  # Old temp dir should be gone
             assert (result_dir / "existing_image.jpg").exists()  # File should be preserved
             assert ad_cfg.title == "Test Title"
+            assert ad_file_stem == "ad_12345"
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
@@ -1420,13 +1457,14 @@ class TestAdExtractorDownload:
                 ),
             ),
         ):
-            ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+            ad_cfg, result_dir, ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
             # Verify the existing temp_dir was used (not renamed)
             assert result_dir == temp_dir
             assert result_dir.exists()
             assert (result_dir / "existing_image.jpg").exists()  # File should be preserved
             assert ad_cfg.title == "Test Title"
+            assert ad_file_stem == "ad_12345"
 
     @pytest.mark.asyncio
     async def test_download_ad_with_umlauts_in_title(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
@@ -1483,7 +1521,7 @@ class TestAdExtractorDownload:
                 ),
             ),
         ):
-            ad_cfg, result_dir = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+            ad_cfg, result_dir, ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
             # Verify directory was created with NFC-normalized name
             assert result_dir.exists()
@@ -1492,7 +1530,7 @@ class TestAdExtractorDownload:
             # Test saving YAML file to the Unicode directory path
             # Before fix: Failed on Linux/Windows due to NFC/NFD mismatch
             # After fix: Both directory and file use NFC normalization
-            ad_file_path = Path(result_dir) / "ad_12345.yaml"
+            ad_file_path = Path(result_dir) / f"{ad_file_stem}.yaml"
 
             from kleinanzeigen_bot.utils import dicts  # noqa: PLC0415
 
@@ -1506,3 +1544,51 @@ class TestAdExtractorDownload:
             # Verify file was created successfully (no FileNotFoundError)
             assert ad_file_path.exists()
             assert ad_file_path.is_file()
+
+    @pytest.mark.asyncio
+    async def test_extract_ad_page_info_with_custom_templates(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+        base_dir = tmp_path / "ads"
+        base_dir.mkdir()
+        extractor.config.download.folder_name_template = "{title}"
+        extractor.config.download.ad_file_name_template = "listing_{id}"
+
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+        extractor.page = page_mock
+
+        with (
+            patch.object(
+                extractor,
+                "web_text",
+                new_callable = AsyncMock,
+                side_effect = [
+                    "Test Title",
+                    "Test Title",
+                    "Description text",
+                    "03.02.2025",
+                ],
+            ),
+            patch.object(
+                extractor,
+                "web_execute",
+                new_callable = AsyncMock,
+                return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}},
+            ),
+            patch.object(extractor, "_extract_category_from_ad_page", new_callable = AsyncMock, return_value = "160"),
+            patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable = AsyncMock, return_value = {}),
+            patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable = AsyncMock, return_value = (None, "NOT_APPLICABLE")),
+            patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)),
+            patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False),
+            patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []),
+            patch.object(
+                extractor,
+                "_extract_contact_from_ad_page",
+                new_callable = AsyncMock,
+                return_value = ContactPartial(name = "Test", zipcode = "12345", location = "Berlin"),
+            ),
+        ):
+            ad_cfg, result_dir, ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+            assert ad_cfg.title == "Test Title"
+            assert result_dir == base_dir / "Test Title"
+            assert ad_file_stem == "listing_12345"

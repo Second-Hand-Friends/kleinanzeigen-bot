@@ -307,6 +307,30 @@ class TestKleinanzeigenBotInitialization:
             published_ads_by_id = {123: mock_published_ads[0], 456: mock_published_ads[1]},
         )
 
+    @pytest.mark.asyncio
+    async def test_download_ads_uses_configured_download_dir_relative_to_config(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
+        test_bot.config_file_path = str(tmp_path / "config.yaml")
+        test_bot.config.download.dir = "ads"
+        test_bot.ads_selector = "all"
+        test_bot.browser = MagicMock()
+
+        extractor_mock = MagicMock()
+        extractor_mock.extract_own_ads_urls = AsyncMock(return_value = [])
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = []),
+            patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock) as mock_extractor,
+        ):
+            await test_bot.download_ads()
+
+        mock_extractor.assert_called_once_with(
+            test_bot.browser,
+            test_bot.config,
+            (tmp_path / "ads").resolve(),
+            published_ads_by_id = {},
+        )
+
 
 class TestKleinanzeigenBotLogging:
     """Tests for logging functionality."""
@@ -1182,6 +1206,34 @@ class TestKleinanzeigenBotAdOperations:
         test_bot.config.ad_files = ["nonexistent/*.yaml"]
         ads = test_bot.load_ads()
         assert len(ads) == 0
+
+    def test_load_ads_from_shared_download_folder_ignores_images(self, test_bot:KleinanzeigenBot, tmp_path:Path, minimal_ad_config:dict[str, Any]) -> None:
+        """Publish discovery should work when ad_files points at the same tree used for downloads."""
+        ads_root = tmp_path / "ads"
+        ad_dir = ads_root / "Test Title"
+        ad_dir.mkdir(parents = True)
+
+        ad_file = ad_dir / "ad_12345.yaml"
+        dicts.save_dict(
+            ad_file,
+            minimal_ad_config
+            | {
+                "id": 12345,
+                "title": "Shared Folder Ad",
+                "images": ["ad_12345__img1.jpg", "ad_12345__img2.jpg"],
+            },
+        )
+        (ad_dir / "ad_12345__img1.jpg").write_bytes(b"fake-jpg-1")
+        (ad_dir / "ad_12345__img2.jpg").write_bytes(b"fake-jpg-2")
+
+        test_bot.config_file_path = str(tmp_path / "config.yaml")
+        test_bot.config.ad_files = ["ads/**/ad_*.yaml"]
+
+        ads = test_bot.load_ads(ignore_inactive = False, exclude_ads_with_id = False)
+
+        assert len(ads) == 1
+        assert ads[0][1].id == 12345
+        assert ads[0][1].images == [str((ad_dir / "ad_12345__img1.jpg").resolve()), str((ad_dir / "ad_12345__img2.jpg").resolve())]
 
 
 class TestKleinanzeigenBotAdManagement:

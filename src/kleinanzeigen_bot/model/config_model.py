@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 from gettext import gettext as _
+from string import Formatter
 from typing import Annotated, Any, Final, Literal
 
 from pydantic import AfterValidator, Field, model_validator
@@ -18,6 +19,10 @@ from kleinanzeigen_bot.utils.pydantics import ContextualModel
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 _MAX_PERCENTAGE:Final[int] = 100
+_FIELD_NAME_PREFIX:Final[str] = "download."
+_FOLDER_TEMPLATE_ALLOWED_FIELDS:Final[frozenset[str]] = frozenset({"id", "title"})
+_AD_FILE_TEMPLATE_ALLOWED_FIELDS:Final[frozenset[str]] = frozenset({"id"})
+DEFAULT_DOWNLOAD_DIR:Final[str] = "downloaded-ads"
 
 
 class AutoPriceReductionConfig(ContextualModel):
@@ -116,6 +121,11 @@ class AdDefaults(ContextualModel):
 
 
 class DownloadConfig(ContextualModel):
+    dir:str = Field(
+        default = DEFAULT_DOWNLOAD_DIR,
+        description = "directory where downloaded ads are written. Relative paths are resolved against the config file location",
+        examples = [f'"{DEFAULT_DOWNLOAD_DIR}"', '"./ads"', '"/absolute/path/to/ads"'],
+    )
     include_all_matching_shipping_options:bool = Field(
         default = False,
         description = "if true, all shipping options matching the package size will be included",
@@ -131,10 +141,39 @@ class DownloadConfig(ContextualModel):
         le = 255,
         description = "maximum length for folder names when downloading ads (default: 100)",
     )
+    folder_name_template:str = Field(
+        default = "ad_{id}_{title}",
+        description = "folder naming template for downloaded ad directories. Allowed placeholders: {id}, {title}",
+        examples = ['"ad_{id}_{title}"', '"{title}"', '"listing_{id}_{title}"'],
+    )
+    ad_file_name_template:str = Field(
+        default = "ad_{id}",
+        description = (
+            "base name template for downloaded ad files. The bot writes the ad config as <base>.yaml "
+            "and downloaded images as <base>__imgN.<ext>. Allowed placeholders: {id}"
+        ),
+        examples = ['"ad_{id}"', '"listing_{id}"'],
+    )
     rename_existing_folders:bool = Field(
         default = False,
         description = "if true, rename existing folders without titles to include titles (default: false)",
     )
+
+    @model_validator(mode = "after")
+    def _validate_templates(self) -> "DownloadConfig":
+        self.folder_name_template = _validate_download_template(
+            self.folder_name_template,
+            allowed_fields = _FOLDER_TEMPLATE_ALLOWED_FIELDS,
+            required_fields = frozenset(),
+            field_name = f"{_FIELD_NAME_PREFIX}folder_name_template",
+        )
+        self.ad_file_name_template = _validate_download_template(
+            self.ad_file_name_template,
+            allowed_fields = _AD_FILE_TEMPLATE_ALLOWED_FIELDS,
+            required_fields = frozenset({"id"}),
+            field_name = f"{_FIELD_NAME_PREFIX}ad_file_name_template",
+        )
+        return self
 
 
 class BrowserConfig(ContextualModel):
@@ -312,6 +351,47 @@ def _validate_glob_pattern(v:str) -> str:
     if not v.strip():
         raise ValueError(_("must be a non-empty, non-blank glob pattern"))
     return v
+
+
+def _validate_download_template(
+    template:str,
+    *,
+    allowed_fields:frozenset[str],
+    required_fields:frozenset[str],
+    field_name:str,
+) -> str:
+    if not template.strip():
+        raise ValueError(_("%s must be a non-empty template") % field_name)
+    if "/" in template or "\\" in template:
+        raise ValueError(_("%s must not contain path separators") % field_name)
+
+    formatter = Formatter()
+    used_fields:set[str] = set()
+    try:
+        parsed = list(formatter.parse(template))
+    except ValueError as exc:
+        raise ValueError(_("%s contains invalid template syntax: %s") % (field_name, exc)) from exc
+
+    for literal_text, field_name_part, format_spec, conversion in parsed:
+        del literal_text, format_spec, conversion
+        if field_name_part is None:
+            continue
+        if not field_name_part:
+            raise ValueError(_("%s contains an empty placeholder") % field_name)
+        if field_name_part not in allowed_fields:
+            allowed = ", ".join(sorted(f"{{{name}}}" for name in allowed_fields))
+            raise ValueError(_("%s only supports placeholders: %s") % (field_name, allowed))
+        used_fields.add(field_name_part)
+
+    missing_fields = required_fields - used_fields
+    if missing_fields:
+        required = ", ".join(sorted(f"{{{name}}}" for name in missing_fields))
+        raise ValueError(_("%s must include placeholder(s): %s") % (field_name, required))
+    if not used_fields:
+        allowed = ", ".join(sorted(f"{{{name}}}" for name in allowed_fields))
+        raise ValueError(_("%s must include at least one placeholder: %s") % (field_name, allowed))
+
+    return template
 
 
 GlobPattern = Annotated[str, AfterValidator(_validate_glob_pattern)]
