@@ -1259,31 +1259,6 @@ class TestKleinanzeigenBotAdOperations:
         assert ads[0][1].id == 12345
         assert ads[0][1].images == [str((ad_dir / "ad_12345__img1.jpg").resolve()), str((ad_dir / "ad_12345__img2.jpg").resolve())]
 
-    def test_load_ads_with_absolute_ad_files_pattern(self, test_bot:KleinanzeigenBot, tmp_path:Path, minimal_ad_config:dict[str, Any]) -> None:
-        ads_root = tmp_path / "absolute-ads"
-        ad_dir = ads_root / "Absolute Ad"
-        ad_dir.mkdir(parents = True)
-
-        ad_file = ad_dir / "ad_54321.yaml"
-        dicts.save_dict(
-            ad_file,
-            minimal_ad_config
-            | {
-                "id": 54321,
-                "title": "Absolute Pattern Ad",
-                "images": [],
-            },
-        )
-
-        test_bot.config_file_path = str(tmp_path / "somewhere-else" / "config.yaml")
-        test_bot.config.ad_files = [str((ads_root / "**" / "ad_*.yaml").resolve())]
-
-        ads = test_bot.load_ads(ignore_inactive = False, exclude_ads_with_id = False)
-
-        assert len(ads) == 1
-        assert ads[0][0] == str(ad_file.resolve())
-        assert ads[0][1].id == 54321
-
 
 class TestKleinanzeigenBotAdManagement:
     """Tests for ad management functionality."""

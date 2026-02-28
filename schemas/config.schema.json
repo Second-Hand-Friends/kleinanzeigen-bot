@@ -473,8 +473,7 @@
           "description": "directory where downloaded ads are written. Relative paths are resolved against the config file location",
           "examples": [
             "\"downloaded-ads\"",
-            "\"./ads\"",
-            "\"/absolute/path/to/ads\""
+            "\"./ads\""
           ],
           "title": "Dir",
           "type": "string"
@@ -789,7 +788,7 @@
       "default": [
         "./**/ad_*.{json,yml,yaml}"
       ],
-      "description": "\nglob (wildcard) patterns to select ad configuration files\nif relative paths are specified, then they are relative to this configuration file\n",
+      "description": "\nglob (wildcard) patterns to select ad configuration files\nif relative paths are specified, then they are relative to this configuration file\nuse relative patterns for portable configs; absolute patterns may behave differently across platforms\n",
       "items": {
         "type": "string"
       },

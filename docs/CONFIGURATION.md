@@ -75,12 +75,16 @@ Valid file extensions: `.json`, `.yaml`, `.yml`
 
 ### ad_files
 
-Glob (wildcard) patterns to select ad configuration files. If relative paths are specified, they are relative to this configuration file.
+Glob (wildcard) patterns to select ad configuration files. Use relative patterns so they resolve relative to `config.yaml`.
 
 ```yaml
 ad_files:
   - "./**/ad_*.{json,yml,yaml}"
 ```
+
+- Relative `ad_files` patterns are resolved relative to `config.yaml`.
+- Absolute `ad_files` paths or glob patterns are not recommended and may behave differently across platforms.
+- For portable configurations, prefer relative patterns.
 
 ### ad_defaults
 

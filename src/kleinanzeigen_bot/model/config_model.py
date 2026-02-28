@@ -124,7 +124,7 @@ class DownloadConfig(ContextualModel):
     dir:str = Field(
         default = DEFAULT_DOWNLOAD_DIR,
         description = "directory where downloaded ads are written. Relative paths are resolved against the config file location",
-        examples = [f'"{DEFAULT_DOWNLOAD_DIR}"', '"./ads"', '"/absolute/path/to/ads"'],
+        examples = [f'"{DEFAULT_DOWNLOAD_DIR}"', '"./ads"'],
     )
     include_all_matching_shipping_options:bool = Field(
         default = False,
@@ -417,6 +417,7 @@ class Config(ContextualModel):
         description = """
 glob (wildcard) patterns to select ad configuration files
 if relative paths are specified, then they are relative to this configuration file
+use relative patterns for portable configs; absolute patterns may behave differently across platforms
 """,
     )
 
