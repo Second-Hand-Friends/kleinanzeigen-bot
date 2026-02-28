@@ -419,7 +419,7 @@ class WebScrapingMixin:
     def _to_selector_type(selector_name:str) -> By:
         selector_type = _SELECTOR_BY_NAME.get(selector_name)
         if selector_type is None:
-            raise AssertionError(f"Unsupported selector type in DOM rules: {selector_name}")
+            raise AssertionError(_("Unsupported selector type in DOM rules: %(selector_name)s") % {"selector_name": selector_name})
         return selector_type
 
     def _resolve_rule_selectors(self, rule_key:str, *, placeholders:Mapping[str, str] | None = None) -> list[tuple[By, str]]:
@@ -1326,10 +1326,10 @@ class WebScrapingMixin:
             follow_up_timeout = self._timeout("pagination_follow_up")
             try:
                 pagination_section = await self.web_find_by_rule("pagination.container", timeout = follow_up_timeout)
-                next_button_element = await self.web_find_by_rule("pagination.next_button", parent = pagination_section, timeout = follow_up_timeout)
-                if not next_button_element.attrs.get("disabled"):
+                next_button = await self.web_find_by_rule("pagination.next_button", parent = pagination_section, timeout = follow_up_timeout)
+                if not next_button.attrs.get("disabled"):
                     LOG.info("Navigating to page %s...", current_page + 1)
-                    await next_button_element.click()
+                    await next_button.click()
                     await self.web_sleep(3000, 4000)
                     current_page += 1
                 else:

@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-from typing import Any
+from collections.abc import Generator
 
 import pytest
 
@@ -11,6 +11,13 @@ from kleinanzeigen_bot.utils.dom_rules import (
     load_bundled_dom_rules,
     resolve_selector_alternatives,
 )
+
+
+@pytest.fixture(autouse = True)
+def _clear_dom_rules_cache() -> Generator[None, None, None]:
+    load_bundled_dom_rules.cache_clear()
+    yield
+    load_bundled_dom_rules.cache_clear()
 
 
 def test_load_bundled_dom_rules_contains_expected_keys() -> None:
@@ -44,10 +51,3 @@ def test_resolve_selector_alternatives_returns_independent_copies() -> None:
 
     second = resolve_selector_alternatives("pagination.container")
     assert second[0].value == ".Pagination"
-
-
-@pytest.fixture(autouse = True)
-def _clear_dom_rules_cache() -> Any:
-    load_bundled_dom_rules.cache_clear()
-    yield
-    load_bundled_dom_rules.cache_clear()

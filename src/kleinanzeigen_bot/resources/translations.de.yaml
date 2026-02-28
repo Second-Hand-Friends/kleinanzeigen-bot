@@ -535,6 +535,9 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
   _allocate_selector_group_budgets:
     "selector_count must be > 0": "selector_count muss > 0 sein"
 
+  _to_selector_type:
+    "Unsupported selector type in DOM rules: %(selector_name)s": "Nicht unterstützter Selektor-Typ in DOM-Regeln: %(selector_name)s"
+
   web_find_first_available:
     "selectors must contain at least one selector": "selectors muss mindestens einen Selektor enthalten"
 

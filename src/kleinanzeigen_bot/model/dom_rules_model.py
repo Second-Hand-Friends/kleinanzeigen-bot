@@ -18,7 +18,13 @@ class SelectorAlternative(ContextualModel):
 class DomRulesConfig(ContextualModel):
     schema_version:Literal[1] = Field(description = "DOM rules schema version.")
     ruleset_version:str = Field(min_length = 1, description = "Version of the bundled ruleset.")
-    selectors:dict[str, list[SelectorAlternative]] = Field(default_factory = dict, description = "Rule key to selector alternatives mapping.")
+    selectors:dict[str, list[SelectorAlternative]] = Field(
+        default_factory = dict,
+        description = (
+            "Rule key to selector alternatives mapping. Example: "
+            '{"publish.submit.primary": [{"by": "ID", "value": "pstad-submit"}, {"by": "XPATH", "value": "//button"}]}.'
+        ),
+    )
 
     @model_validator(mode = "after")
     def _validate_selectors(self) -> "DomRulesConfig":
