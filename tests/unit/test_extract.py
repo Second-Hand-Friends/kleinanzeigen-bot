@@ -1703,7 +1703,7 @@ class TestAdExtractorDownload:
         with (
             patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
             patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock, return_value = ad_cfg) as mock_extract,
-            patch.object(extract_module.files, "exists", new_callable = AsyncMock, side_effect = [False, False]),
+            patch("kleinanzeigen_bot.extract.files.exists", new_callable = AsyncMock, side_effect = [False, False]),
         ):
             result_cfg, result_dir, ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
