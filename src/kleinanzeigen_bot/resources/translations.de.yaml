@@ -657,9 +657,13 @@ kleinanzeigen_bot/model/config_model.py:
     "%s must not contain path separators": "%s darf keine Pfadtrenner enthalten"
     "%s contains invalid template syntax: %s": "%s enthält eine ungültige Vorlagensyntax: %s"
     "%s contains an empty placeholder": "%s enthält einen leeren Platzhalter"
+    "%s placeholders must not use conversion flags": "%s Platzhalter dürfen keine Konvertierungskennzeichen verwenden"
+    "%s placeholders must not use format specifiers": "%s Platzhalter dürfen keine Formatangaben verwenden"
     "%s only supports placeholders: %s": "%s unterstützt nur Platzhalter: %s"
     "%s must include placeholder(s): %s": "%s muss Platzhalter enthalten: %s"
     "%s must include at least one placeholder: %s": "%s muss mindestens einen Platzhalter enthalten: %s"
+  _validate_dir:
+    "download.dir must be a non-empty path": "download.dir muss ein nicht-leerer Pfad sein"
   _validate_pause_requires_capture:
     "pause_on_login_detection_failure requires capture_on.login_detection to be enabled": "pause_on_login_detection_failure erfordert, dass capture_on.login_detection aktiviert ist"
 

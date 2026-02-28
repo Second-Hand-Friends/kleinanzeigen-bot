@@ -8,7 +8,7 @@ from gettext import gettext as _
 from string import Formatter
 from typing import Annotated, Any, Final, Literal
 
-from pydantic import AfterValidator, Field, model_validator
+from pydantic import AfterValidator, Field, field_validator, model_validator
 from typing_extensions import deprecated
 
 from kleinanzeigen_bot.model.update_check_model import UpdateCheckConfig
@@ -158,6 +158,14 @@ class DownloadConfig(ContextualModel):
         default = False,
         description = "if true, rename existing folders without titles to include titles (default: false)",
     )
+
+    @field_validator("dir")
+    @classmethod
+    def _validate_dir(cls, value:str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError(_("download.dir must be a non-empty path"))
+        return trimmed
 
     @model_validator(mode = "after")
     def _validate_templates(self) -> "DownloadConfig":
@@ -373,11 +381,15 @@ def _validate_download_template(
         raise ValueError(_("%s contains invalid template syntax: %s") % (field_name, exc)) from exc
 
     for literal_text, field_name_part, format_spec, conversion in parsed:
-        del literal_text, format_spec, conversion
+        del literal_text
         if field_name_part is None:
             continue
         if not field_name_part:
             raise ValueError(_("%s contains an empty placeholder") % field_name)
+        if conversion is not None:
+            raise ValueError(_("%s placeholders must not use conversion flags") % field_name)
+        if format_spec:
+            raise ValueError(_("%s placeholders must not use format specifiers") % field_name)
         if field_name_part not in allowed_fields:
             allowed = ", ".join(sorted(f"{{{name}}}" for name in allowed_fields))
             raise ValueError(_("%s only supports placeholders: %s") % (field_name, allowed))

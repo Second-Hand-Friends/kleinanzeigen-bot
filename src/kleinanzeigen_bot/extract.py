@@ -26,6 +26,8 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 _BREADCRUMB_MIN_DEPTH:Final[int] = 2
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
+_MAX_FILENAME_COMPONENT_LENGTH:Final[int] = 255
+_DOWNLOAD_STEM_SUFFIX_BUDGET:Final[int] = len("__img9999.jpeg")
 
 
 class AdExtractor(WebScrapingMixin):
@@ -48,7 +50,7 @@ class AdExtractor(WebScrapingMixin):
 
     def _render_download_ad_file_stem(self, ad_id:int) -> str:
         stem = self.config.download.ad_file_name_template.format(id = ad_id).strip()
-        return misc.sanitize_folder_name(stem, 255)
+        return misc.sanitize_folder_name(stem, _MAX_FILENAME_COMPONENT_LENGTH - _DOWNLOAD_STEM_SUFFIX_BUDGET)
 
     def _render_download_folder_name(self, ad_id:int, title:str) -> str:
         sanitized_title = misc.sanitize_folder_name(title, self.config.download.folder_name_max_length)
