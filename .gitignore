@@ -1,8 +1,13 @@
 # Local work folder that is not checked in
 _LOCAL/
 
-# docker
-.dockerignore
+.*
+!.act-event.json
+!.actrc
+!.gitattribute
+!.gitignore
+!.github/
+!.markdownlint-cli2.jsonc
 
 # kleinanzeigen_bot
 /config.yaml
@@ -12,33 +17,13 @@ _LOCAL/
 downloaded-ads
 
 # python
-/.venv
 __pycache__
 /dist
-/.temp
-/.eggs
-/*.egg-info
-/.pdm-build/
-/.pdm-python
-
-
-# Eclipse
-/.project
-/.pydevproject
-/.settings/
-**/.*.md.html
 
 # IntelliJ
-/.idea
 /*.iml
 /*.ipr
 /*.iws
-
-# Visual Studio Code
-/.vscode
-
-# OSX
-.DS_Store
 
 # Vim
 *.swo
