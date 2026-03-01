@@ -729,6 +729,33 @@ class TestAdExtractorNavigation:
         assert refs == ["/s-anzeige/ok/999"]
 
     @pytest.mark.asyncio
+    async def test_extract_own_ads_urls_skips_single_item_without_href(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Anchor without href should be skipped instead of adding a 'None' entry."""
+        ad_list_container_mock = MagicMock()
+        first_item = MagicMock()
+        second_item = MagicMock()
+        missing_href_link = MagicMock()
+        missing_href_link.attrs = {}
+        valid_link = MagicMock()
+        valid_link.attrs = {"href": "/s-anzeige/ok/999"}
+
+        with (
+            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, return_value = [first_item, second_item]),
+            patch.object(
+                test_extractor,
+                "web_find",
+                new_callable = AsyncMock,
+                side_effect = [ad_list_container_mock, TimeoutError(), ad_list_container_mock, missing_href_link, valid_link],
+            ),
+        ):
+            refs = await test_extractor.extract_own_ads_urls()
+
+        assert refs == ["/s-anzeige/ok/999"]
+
+    @pytest.mark.asyncio
     async def test_extract_own_ads_urls_generic_exception_in_callback(self, test_extractor:extract_module.AdExtractor) -> None:
         """Test that generic Exception in extract_page_refs callback continues pagination."""
         with (

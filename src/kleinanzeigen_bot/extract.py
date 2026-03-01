@@ -168,7 +168,16 @@ class AdExtractor(WebScrapingMixin):
                 for index, li in enumerate(list_items, start = 1):
                     try:
                         link_elem = await self.web_find(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = li)
-                        page_refs.append(str(link_elem.attrs["href"]))
+                        href = link_elem.attrs.get("href")
+                        if href:
+                            page_refs.append(str(href))
+                        else:
+                            LOG.warning(
+                                "Skipping ad item %s/%s on page %s: ad reference link has no href attribute.",
+                                index,
+                                len(list_items),
+                                page_num,
+                            )
                     except TimeoutError:
                         LOG.warning(
                             "Skipping ad item %s/%s on page %s: no ad reference link found (likely unpublished or draft item).",
