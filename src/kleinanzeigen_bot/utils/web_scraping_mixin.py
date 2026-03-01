@@ -1009,6 +1009,17 @@ class WebScrapingMixin:
         # Return primitive values as-is
         return data
 
+    async def _xpath_first(self, selector_value:str) -> Element | None:
+        matches = await self.page.xpath(selector_value, timeout = 0)
+        for match in matches:
+            if match is not None:
+                return cast(Element, match)
+        return None
+
+    async def _xpath_all(self, selector_value:str) -> list[Element]:
+        matches = await self.page.xpath(selector_value, timeout = 0)
+        return [cast(Element, match) for match in matches if match is not None]
+
     async def web_find(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element:
         """
         Locates an HTML element by the given selector type and value.
@@ -1084,7 +1095,7 @@ class WebScrapingMixin:
             case By.XPATH:
                 ensure(not parent, f"Specifying a parent element currently not supported with selector type: {selector_type}")
                 return await self.web_await(
-                    lambda: self.page.find_element_by_text(selector_value, best_match = True),
+                    lambda: self._xpath_first(selector_value),
                     timeout = timeout,
                     timeout_error_message = f"No HTML element found using XPath '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
@@ -1129,7 +1140,7 @@ class WebScrapingMixin:
             case By.XPATH:
                 ensure(not parent, f"Specifying a parent element currently not supported with selector type: {selector_type}")
                 return await self.web_await(
-                    lambda: self.page.find_elements_by_text(selector_value),
+                    lambda: self._xpath_all(selector_value),
                     timeout = timeout,
                     timeout_error_message = f"No HTML elements found using XPath '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
