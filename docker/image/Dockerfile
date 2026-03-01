@@ -52,6 +52,7 @@ FROM python:3.14-slim AS build-image
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG LC_ALL=C
+ARG GIT_COMMIT_HASH
 
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
