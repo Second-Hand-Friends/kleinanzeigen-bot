@@ -97,10 +97,9 @@ kleinanzeigen_bot/__init__.py:
 
   is_logged_in:
     "Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)": "Starte Login-Erkennung (Timeout: %.1fs Basis, %.1fs effektiv mit Multiplikator/Backoff)"
-    "Login detected via .mr-medium element": "Login erkannt über .mr-medium Element"
-    "Login detected via #user-email element": "Login erkannt über #user-email Element"
+    "Login detected via login detection selector '%s'": "Login erkannt über Login-Erkennungs-Selektor '%s'"
     "Timeout waiting for login detection selector group after %.1fs": "Timeout beim Warten auf die Login-Erkennungs-Selektorgruppe nach %.1fs"
-    "No login detected - neither .mr-medium nor #user-email found with username": "Kein Login erkannt - weder .mr-medium noch #user-email mit Benutzername gefunden"
+    "No login detected via configured login detection selectors": "Kein Login über die konfigurierten Login-Erkennungs-Selektoren erkannt"
     "No login detected - DOM elements not found and server probe returned %s": "Kein Login erkannt - DOM-Elemente nicht gefunden und Server-Probe ergab %s"
 
   handle_after_login_logic:

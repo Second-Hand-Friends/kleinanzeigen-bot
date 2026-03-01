@@ -484,6 +484,40 @@ class TestKleinanzeigenBotAuthentication:
         assert call_args.kwargs["timeout"] == test_bot._timeout("login_detection")
 
     @pytest.mark.asyncio
+    async def test_is_logged_in_logs_selector_label_without_raw_selector_literals(
+        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Login detection logs should reference stable labels, not raw selector values."""
+        caplog.set_level("DEBUG")
+
+        with (
+            caplog.at_level("DEBUG"),
+            patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("angemeldet als: dummy_user", 1)),
+        ):
+            assert await test_bot.is_logged_in(include_probe = False) is True
+
+        assert "Login detected via login detection selector 'user_info_secondary'" in caplog.text
+        assert ".mr-medium" not in caplog.text
+        assert "#user-email" not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_is_logged_in_logs_generic_message_when_selector_group_does_not_match(
+        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Missing selector-group match should log a generic message when probe is disabled."""
+        caplog.set_level("DEBUG")
+
+        with (
+            caplog.at_level("DEBUG"),
+            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
+        ):
+            assert await test_bot.is_logged_in(include_probe = False) is False
+
+        assert "No login detected via configured login detection selectors" in caplog.text
+        assert ".mr-medium" not in caplog.text
+        assert "#user-email" not in caplog.text
+
+    @pytest.mark.asyncio
     async def test_get_login_state_prefers_dom_over_auth_probe(self, test_bot:KleinanzeigenBot) -> None:
         with (
             patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("Welcome dummy_user", 0)) as web_text,
