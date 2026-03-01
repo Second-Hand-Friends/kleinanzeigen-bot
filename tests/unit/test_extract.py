@@ -716,9 +716,13 @@ class TestAdExtractorNavigation:
             patch.object(test_extractor, "web_open", new_callable = AsyncMock),
             patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
             patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_find_by_rule", new_callable = AsyncMock, side_effect = [ad_list_container_mock, TimeoutError()]),
             patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, return_value = [first_item, second_item]),
-            patch.object(test_extractor, "web_find", new_callable = AsyncMock, side_effect = [ad_list_container_mock, TimeoutError(), valid_link]),
+            patch.object(
+                test_extractor,
+                "web_find",
+                new_callable = AsyncMock,
+                side_effect = [ad_list_container_mock, TimeoutError(), ad_list_container_mock, TimeoutError(), valid_link],
+            ),
         ):
             refs = await test_extractor.extract_own_ads_urls()
 
