@@ -164,13 +164,33 @@ class AdExtractor(WebScrapingMixin):
                 list_items = await self.web_find_all(By.CLASS_NAME, "cardbox", parent = ad_list_container)
                 LOG.info("Found %s ad items on page %s.", len(list_items), page_num)
 
-                page_refs:list[str] = [str((await self.web_find(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = li)).attrs["href"]) for li in list_items]
+                page_refs:list[str] = []
+                for index, li in enumerate(list_items, start = 1):
+                    try:
+                        link_elem = await self.web_find(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = li)
+                        href = link_elem.attrs.get("href")
+                        if href:
+                            page_refs.append(str(href))
+                        else:
+                            LOG.warning(
+                                "Skipping ad item %s/%s on page %s: ad reference link has no href attribute.",
+                                index,
+                                len(list_items),
+                                page_num,
+                            )
+                    except TimeoutError:
+                        LOG.warning(
+                            "Skipping ad item %s/%s on page %s: no ad reference link found (likely unpublished or draft item).",
+                            index,
+                            len(list_items),
+                            page_num,
+                        )
                 refs.extend(page_refs)
                 LOG.info("Successfully extracted %s refs from page %s.", len(page_refs), page_num)
                 return False  # Continue to next page
 
             except TimeoutError:
-                LOG.warning("Could not find ad list container or items on page %s.", page_num)
+                LOG.warning("Could not find ad list container or ad items on page %s.", page_num)
                 return True  # Stop pagination (ads disappeared)
             except Exception as e:
                 # Continue despite error for resilience against transient web scraping issues
