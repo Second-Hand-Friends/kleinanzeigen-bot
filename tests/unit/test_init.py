@@ -497,8 +497,8 @@ class TestKleinanzeigenBotAuthentication:
             assert await test_bot.is_logged_in(include_probe = False) is True
 
         assert "Login detected via login detection selector 'user_info_secondary'" in caplog.text
-        assert ".mr-medium" not in caplog.text
-        assert "#user-email" not in caplog.text
+        for forbidden in (".mr-medium", "#user-email", "mr-medium", "user-email"):
+            assert forbidden not in caplog.text
 
     @pytest.mark.asyncio
     async def test_is_logged_in_logs_generic_message_when_selector_group_does_not_match(
@@ -514,8 +514,8 @@ class TestKleinanzeigenBotAuthentication:
             assert await test_bot.is_logged_in(include_probe = False) is False
 
         assert "No login detected via configured login detection selectors" in caplog.text
-        assert ".mr-medium" not in caplog.text
-        assert "#user-email" not in caplog.text
+        for forbidden in (".mr-medium", "#user-email", "mr-medium", "user-email"):
+            assert forbidden not in caplog.text
 
     @pytest.mark.asyncio
     async def test_get_login_state_prefers_dom_over_auth_probe(self, test_bot:KleinanzeigenBot) -> None:
