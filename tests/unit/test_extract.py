@@ -597,7 +597,7 @@ class TestAdExtractorNavigation:
             mock_web_find.assert_has_calls(
                 [
                     call(By.ID, "my-manageitems-adlist"),
-                    call(By.CSS_SELECTOR, ".Pagination", timeout = 10),
+                    call(By.CSS_SELECTOR, ".Pagination", timeout_key = "pagination_initial"),
                     call(By.ID, "my-manageitems-adlist"),
                     call(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = cardbox_mock),
                 ],
@@ -631,10 +631,19 @@ class TestAdExtractorNavigation:
         next_button_call = {"count": 0}
         cardbox_call = {"count": 0}
 
-        async def fake_web_find(selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element:
+        async def fake_web_find(
+            selector_type:By,
+            selector_value:str,
+            *,
+            parent:Element | None = None,
+            timeout:int | float | None = None,
+            timeout_key:str | None = None,
+        ) -> Element:
             if selector_type == By.ID and selector_value == "my-manageitems-adlist":
                 return ad_list_container_mock
             if selector_type == By.CSS_SELECTOR and selector_value == ".Pagination":
+                if timeout_key not in {"pagination_initial", "pagination_follow_up"}:
+                    raise AssertionError(f"Unexpected timeout_key for pagination: {timeout_key}")
                 return pagination_section_mock
             if selector_type == By.CSS_SELECTOR and selector_value == "div h3 a.text-onSurface":
                 return link_queue.pop(0)
