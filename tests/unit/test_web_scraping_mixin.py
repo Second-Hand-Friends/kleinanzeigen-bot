@@ -1,8 +1,7 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""Unit tests for web_scraping_mixin.py focusing on error handling scenarios.
-"""
+"""Unit tests for web_scraping_mixin.py focusing on error handling scenarios."""
 
 import json
 import logging
@@ -524,9 +523,7 @@ class TestTimeoutAndRetryHelpers:
             assert timeout == pytest.approx(1.0)
             return "ok"
 
-        result = await web_scraper._run_with_timeout_retries(
-            operation, description = "web_find(ID, test)", key = "default", timeout_key = "quick_dom"
-        )
+        result = await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)", key = "default", timeout_key = "quick_dom")
 
         assert result == "ok"
         assert recorded[0]["key"] == "default"
@@ -542,9 +539,7 @@ class TestTimeoutAndRetryHelpers:
         async def operation(_timeout:float) -> str:
             return "ok"
 
-        await web_scraper._run_with_timeout_retries(
-            operation, description = "web_find(ID, test)", key = "default", timeout_key = "default"
-        )
+        await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)", key = "default", timeout_key = "default")
 
         assert recorded[0]["timeout_source_key"] == "default"
         assert recorded[0]["timeout_origin"] == "operation_key"
@@ -570,9 +565,7 @@ class TestTimeoutAndRetryHelpers:
             return "ok"
 
         with pytest.raises(ValueError, match = "mutually exclusive"):
-            await web_scraper._run_with_timeout_retries(
-                operation, description = "web_find(ID, test)", timeout_key = "quick_dom", override = 0.5
-            )
+            await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)", timeout_key = "quick_dom", override = 0.5)
 
     @pytest.mark.asyncio
     async def test_run_with_timeout_retries_ignores_collector_failure(self, web_scraper:WebScrapingMixin) -> None:
@@ -651,9 +644,7 @@ class TestTimeoutAndRetryHelpers:
         second_timeout:float | None = None
         found = AsyncMock(spec = Element)
 
-        async def fake_find_once(
-            selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None
-        ) -> Element:
+        async def fake_find_once(selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None) -> Element:
             nonlocal first_timeout, second_timeout
             if selector_value == "first":
                 first_timeout = timeout
@@ -900,7 +891,9 @@ class TestSelectorTimeoutMessages:
 
         assert result is select_elem
         web_scraper.web_await.assert_awaited_once()
-        assert web_scraper.web_await.await_args.kwargs["timeout"] == pytest.approx(1.0)
+        await_args = web_scraper.web_await.await_args
+        assert await_args is not None
+        assert await_args.kwargs["timeout"] == pytest.approx(1.0)
         web_scraper.web_find.assert_awaited_once_with(By.ID, "select-id", timeout = None, timeout_key = "quick_dom")
 
     @pytest.mark.asyncio
@@ -930,9 +923,7 @@ class TestSelectorTimeoutMessages:
         assert web_scraper.web_find.await_args_list[1].kwargs["timeout_key"] == "quick_dom"
 
     @pytest.mark.asyncio
-    async def test_web_select_combobox_timeout_key_uses_real_web_find_stack(
-        self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage
-    ) -> None:
+    async def test_web_select_combobox_timeout_key_uses_real_web_find_stack(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
         input_field = AsyncMock(spec = Element)
         input_field.attrs = {"aria-controls": "dropdown-id"}
         input_field.clear_input = AsyncMock()
@@ -1394,6 +1385,7 @@ class TestWebScrapingBrowserConfiguration:
         self, monkeypatch:pytest.MonkeyPatch, caplog:pytest.LogCaptureFixture
     ) -> None:
         """Test non-test runtime without user_data_dir logs fallback diagnostics and default profile usage."""
+
         class DummyConfig:
             def __init__(self, **kwargs:object) -> None:
                 self.browser_args = cast(list[str], kwargs.get("browser_args", []))
@@ -1435,6 +1427,7 @@ class TestWebScrapingBrowserConfiguration:
     @pytest.mark.asyncio
     async def test_create_browser_session_ensures_profile_directory_for_user_data_dir(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test configured user_data_dir creates profile structure and skips non-debug log-level override."""
+
         class DummyConfig:
             def __init__(self, **kwargs:object) -> None:
                 self.browser_args = cast(list[str], kwargs.get("browser_args", []))
@@ -1464,8 +1457,7 @@ class TestWebScrapingBrowserConfiguration:
 
         monkeypatch.setattr(files, "exists", mock_exists)
 
-        with patch.dict(os.environ, {}, clear = True), \
-                patch("kleinanzeigen_bot.utils.web_scraping_mixin.xdg_paths.ensure_directory") as mock_ensure_dir:
+        with patch.dict(os.environ, {}, clear = True), patch("kleinanzeigen_bot.utils.web_scraping_mixin.xdg_paths.ensure_directory") as mock_ensure_dir:
             scraper = WebScrapingMixin()
             scraper.browser_config.binary_location = "/usr/bin/chrome"
             scraper.browser_config.user_data_dir = str(tmp_path / "profile-root")
