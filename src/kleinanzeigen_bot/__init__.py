@@ -7,7 +7,7 @@ import urllib.parse as urllib_parse
 from datetime import datetime
 from gettext import gettext as _
 from pathlib import Path
-from typing import Any, Final, cast
+from typing import Any, Final, Sequence, cast
 
 import certifi, colorama, nodriver  # isort: skip
 from nodriver.core.connection import ProtocolException
@@ -34,8 +34,17 @@ LOG.setLevel(loggers.INFO)
 
 PUBLISH_MAX_RETRIES:Final[int] = 3
 _NUMERIC_IDS_RE:Final[re.Pattern[str]] = re.compile(r"^\d+(,\d+)*$")
+_LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
+    (By.CLASS_NAME, "mr-medium"),
+    (By.ID, "user-email"),
+]
+_LOGIN_DETECTION_SELECTOR_LABELS:Final[tuple[str, ...]] = ("user_info_primary", "user_info_secondary")
 
 colorama.just_fix_windows_console()
+
+
+def _format_login_detection_selectors(selectors:Sequence[tuple["By", str]]) -> str:
+    return ", ".join(f"{selector_type.name}={selector_value}" for selector_type, selector_value in selectors)
 
 
 class AdUpdateStrategy(enum.Enum):
@@ -1245,38 +1254,39 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             login_check_timeout,
             effective_timeout,
         )
-
-        login_selectors = [
-            (By.CLASS_NAME, "mr-medium"),
-            (By.ID, "user-email"),
-        ]
-        primary_selector_index = 0
+        tried_login_selectors = _format_login_detection_selectors(_LOGIN_DETECTION_SELECTORS)
 
         try:
             user_info, matched_selector = await self.web_text_first_available(
-                login_selectors,
+                _LOGIN_DETECTION_SELECTORS,
                 timeout = login_check_timeout,
                 key = "login_detection",
                 description = "login_detection(selector_group)",
             )
             if username in user_info.lower():
-                if matched_selector == primary_selector_index:
-                    LOG.debug("Login detected via .mr-medium element")
-                else:
-                    LOG.debug("Login detected via #user-email element")
+                matched_selector_label = (
+                    _LOGIN_DETECTION_SELECTOR_LABELS[matched_selector]
+                    if 0 <= matched_selector < len(_LOGIN_DETECTION_SELECTOR_LABELS)
+                    else f"selector_index_{matched_selector}"
+                )
+                LOG.debug("Login detected via login detection selector '%s'", matched_selector_label)
                 return True
         except TimeoutError:
             LOG.debug("Timeout waiting for login detection selector group after %.1fs", effective_timeout)
 
         if not include_probe:
-            LOG.debug("No login detected - neither .mr-medium nor #user-email found with username")
+            LOG.debug("No login detected via configured login detection selectors (%s)", tried_login_selectors)
             return False
 
         state = await self._auth_probe_login_state()
         if state == LoginState.LOGGED_IN:
             return True
 
-        LOG.debug("No login detected - DOM elements not found and server probe returned %s", state.name)
+        LOG.debug(
+            "No login detected - DOM login detection selectors (%s) did not confirm login and server probe returned %s",
+            tried_login_selectors,
+            state.name,
+        )
         return False
 
     async def _fetch_published_ads(self) -> list[dict[str, Any]]:

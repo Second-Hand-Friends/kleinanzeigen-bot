@@ -484,6 +484,63 @@ class TestKleinanzeigenBotAuthentication:
         assert call_args.kwargs["timeout"] == test_bot._timeout("login_detection")
 
     @pytest.mark.asyncio
+    async def test_is_logged_in_logs_selector_label_without_raw_selector_literals(
+        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Login detection logs should reference stable labels, not raw selector values."""
+        caplog.set_level("DEBUG")
+
+        with (
+            caplog.at_level("DEBUG"),
+            patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("angemeldet als: dummy_user", 1)),
+        ):
+            assert await test_bot.is_logged_in(include_probe = False) is True
+
+        assert "Login detected via login detection selector 'user_info_secondary'" in caplog.text
+        for forbidden in (".mr-medium", "#user-email", "mr-medium", "user-email"):
+            assert forbidden not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_is_logged_in_logs_generic_message_when_selector_group_does_not_match(
+        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Missing selector-group match should log the tried selectors when probe is disabled."""
+        caplog.set_level("DEBUG")
+
+        with (
+            caplog.at_level("DEBUG"),
+            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
+        ):
+            assert await test_bot.is_logged_in(include_probe = False) is False
+
+        assert any(
+            record.message == "No login detected via configured login detection selectors (CLASS_NAME=mr-medium, ID=user-email)"
+            for record in caplog.records
+        )
+
+    @pytest.mark.asyncio
+    async def test_is_logged_in_logs_raw_selectors_when_probe_reports_logged_out(
+        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Probe-based final failure should include the tried raw selectors for debugging."""
+        caplog.set_level("DEBUG")
+
+        with (
+            caplog.at_level("DEBUG"),
+            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
+            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.LOGGED_OUT),
+        ):
+            assert await test_bot.is_logged_in() is False
+
+        assert any(
+            record.message == (
+                "No login detected - DOM login detection selectors (CLASS_NAME=mr-medium, ID=user-email) "
+                "did not confirm login and server probe returned LOGGED_OUT"
+            )
+            for record in caplog.records
+        )
+
+    @pytest.mark.asyncio
     async def test_get_login_state_prefers_dom_over_auth_probe(self, test_bot:KleinanzeigenBot) -> None:
         with (
             patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("Welcome dummy_user", 0)) as web_text,
