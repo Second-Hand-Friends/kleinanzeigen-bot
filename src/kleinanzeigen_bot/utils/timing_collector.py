@@ -16,7 +16,7 @@ import json, uuid  # isort: skip
 import os
 from dataclasses import asdict, dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -33,6 +33,9 @@ TIMING_FILE:Final[str] = "timing_data.json"
 class TimingRecord:
     timestamp:str
     operation_key:str
+    timeout_source_key:str | None
+    timeout_origin:Literal["operation_key", "named_timeout", "inline_override"] | None
+    timeout_override_sec:float | None
     operation_type:str
     description:str
     configured_timeout_sec:float
@@ -60,6 +63,9 @@ class TimingCollector:
         self,
         *,
         key:str,
+        timeout_source_key:str | None,
+        timeout_origin:Literal["operation_key", "named_timeout", "inline_override"] | None,
+        timeout_override_sec:float | None,
         operation_type:str,
         description:str,
         configured_timeout:float,
@@ -72,6 +78,9 @@ class TimingCollector:
             TimingRecord(
                 timestamp = misc.now().isoformat(),
                 operation_key = key,
+                timeout_source_key = timeout_source_key,
+                timeout_origin = timeout_origin,
+                timeout_override_sec = timeout_override_sec,
                 operation_type = operation_type,
                 description = description,
                 configured_timeout_sec = configured_timeout,
@@ -81,14 +90,14 @@ class TimingCollector:
                 success = success,
             )
         )
-        LOG.debug(
-            "Timing captured: %s [%s] duration=%.3fs timeout=%.3fs success=%s",
-            operation_type,
-            key,
-            actual_duration,
-            effective_timeout,
-            success,
-        )
+        if timeout_origin == "inline_override" and timeout_override_sec is not None:
+            key_label = f"{key} via override={timeout_override_sec:.3f}s"
+        elif timeout_source_key and timeout_source_key != key:
+            key_label = f"{key} via {timeout_source_key}"
+        else:
+            key_label = key
+
+        LOG.debug("Timing captured: %s [%s] duration=%.3fs timeout=%.3fs success=%s", operation_type, key_label, actual_duration, effective_timeout, success)
 
     def flush(self) -> Path | None:
         if self._flushed:

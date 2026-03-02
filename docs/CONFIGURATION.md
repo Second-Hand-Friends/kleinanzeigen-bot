@@ -336,8 +336,14 @@ Example structure:
     "ended_at": "2026-02-07T10:04:30+01:00",
     "records": [
       {
+        "timestamp": "2026-02-07T10:00:05+01:00",
         "operation_key": "default",
+        "timeout_source_key": "quick_dom",
+        "timeout_origin": "named_timeout",
+        "timeout_override_sec": null,
         "operation_type": "web_find",
+        "description": "web_find(ID, submit)",
+        "configured_timeout_sec": 2.0,
         "effective_timeout_sec": 5.0,
         "actual_duration_sec": 1.2,
         "attempt_index": 0,
@@ -353,7 +359,9 @@ How to read it quickly:
 - Group by `command` and `session_id` first to compare slow vs fast runs
 - Look for high `actual_duration_sec` values near `effective_timeout_sec` and repeated `success: false` entries
 - `attempt_index` is zero-based (`0` first attempt, `1` first retry)
-- Use `operation_key` + `operation_type` to identify which timeout bucket (`default`, `page_load`, etc.) needs tuning
+- Prefer `timeout_source_key` to identify which configured timeout bucket needs tuning; fall back to `operation_key` for legacy sessions
+- If `timeout_origin` is `inline_override`, treat `timeout_source_key` as grouping-only rather than a configured bucket
+- Missing provenance fields on older sessions are expected legacy shape, not corruption
 - For deeper timeout tuning workflow, see [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md)
 
 > **⚠️ PII Warning:** HTML dumps, JSON payloads, timing data JSON files (for example `timing_data.json`), and log copies may contain PII. Typical examples include account email, ad titles/descriptions, contact info, and prices. Log copies are produced by `capture_log_copy` when diagnostics capture runs, such as `capture_on.publish` or `capture_on.login_detection`. Review or redact these artifacts before sharing them publicly.

@@ -981,8 +981,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def check_and_wait_for_captcha(self, *, is_login_page:bool = True) -> None:
         try:
-            captcha_timeout = self._timeout("captcha_detection")
-            await self.web_find(By.CSS_SELECTOR, "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']", timeout = captcha_timeout)
+            await self.web_find(
+                By.CSS_SELECTOR,
+                "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']",
+                timeout_key = "captcha_detection",
+            )
 
             if not is_login_page and self.config.captcha.auto_restart:
                 LOG.warning("Captcha recognized - auto-restart enabled, abort run...")
@@ -1052,8 +1055,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def handle_after_login_logic(self) -> None:
         try:
-            sms_timeout = self._timeout("sms_verification")
-            await self.web_find(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout = sms_timeout)
+            await self.web_find(
+                By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout_key = "sms_verification"
+            )
             LOG.warning("############################################")
             LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
             LOG.warning("############################################")
@@ -1063,8 +1067,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             pass
 
         try:
-            email_timeout = self._timeout("email_verification")
-            await self.web_find(By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout = email_timeout)
+            await self.web_find(
+                By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout_key = "email_verification"
+            )
             LOG.warning("############################################")
             LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
             LOG.warning("############################################")
@@ -1075,11 +1080,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         try:
             LOG.info("Handling GDPR disclaimer...")
-            gdpr_timeout = self._timeout("gdpr_prompt")
-            await self.web_find(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
+            await self.web_find(By.ID, "gdpr-banner-accept", timeout_key = "gdpr_prompt")
             await self.web_click(By.ID, "gdpr-banner-cmp-button")
             await self.web_click(
-                By.XPATH, "//div[@id='ConsentManagementPage']//*//button//*[contains(., 'Alle ablehnen und fortfahren')]", timeout = gdpr_timeout
+                By.XPATH,
+                "//div[@id='ConsentManagementPage']//*//button//*[contains(., 'Alle ablehnen und fortfahren')]",
+                timeout_key = "gdpr_prompt",
             )
         except TimeoutError:
             # GDPR banner not shown within timeout.
@@ -1491,7 +1497,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             async def find_and_click_extend_button(page_num:int) -> bool:
                 """Try to find and click extend button on current page."""
                 try:
-                    extend_button = await self.web_find(By.XPATH, extend_button_xpath, timeout = self._timeout("quick_dom"))
+                    extend_button = await self.web_find(By.XPATH, extend_button_xpath, timeout_key = "quick_dom")
                     LOG.info("Found extend button on page %s", page_num)
                     await extend_button.click()
                     return True  # Success - stop pagination
@@ -1512,8 +1518,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # - Paid bump-up option (skipped by closing dialog)
             # Simply close the dialog with the X button (aria-label="Schließen")
             try:
-                dialog_close_timeout = self._timeout("quick_dom")
-                await self.web_click(By.CSS_SELECTOR, 'button[aria-label="Schließen"]', timeout = dialog_close_timeout)
+                await self.web_click(By.CSS_SELECTOR, 'button[aria-label="Schließen"]', timeout_key = "quick_dom")
                 LOG.debug(" -> Closed confirmation dialog")
             except TimeoutError:
                 LOG.warning(" -> No confirmation dialog found, extension may have completed directly")
@@ -1737,8 +1742,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # wait for payment form if commercial account is used
         #############################
         try:
-            short_timeout = self._timeout("quick_dom")
-            await self.web_find(By.ID, "myftr-shppngcrt-frm", timeout = short_timeout)
+            await self.web_find(By.ID, "myftr-shppngcrt-frm", timeout_key = "quick_dom")
 
             LOG.warning("############################################")
             LOG.warning("# Payment form detected! Please proceed with payment.")
@@ -2007,7 +2011,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
 
     async def __set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
-        short_timeout = self._timeout("quick_dom")
         if ad_cfg.shipping_type == "PICKUP":
             try:
                 await self.web_click(By.ID, "radio-pickup")
@@ -2019,13 +2022,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             if mode == AdUpdateStrategy.MODIFY:
                 try:
                     # when "Andere Versandmethoden" is not available, go back and start over new
-                    await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
+                    await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]', timeout_key = "quick_dom")
                 except TimeoutError:
                     await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
 
                     # in some categories we need to go another dialog back
                     try:
-                        await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
+                        await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]', timeout_key = "quick_dom")
                     except TimeoutError:
                         await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
 
@@ -2051,7 +2054,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     try:
                         # only click on "Individueller Versand" when "IndividualShippingInput" is not available, otherwise its already checked
                         # (important for mode = UPDATE)
-                        await self.web_find(By.XPATH, '//input[contains(@placeholder, "Versandkosten (optional)")]', timeout = short_timeout)
+                        await self.web_find(
+                            By.XPATH, '//input[contains(@placeholder, "Versandkosten (optional)")]', timeout_key = "quick_dom"
+                        )
                     except TimeoutError:
                         # Input not visible yet; click the individual shipping option.
                         await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
@@ -2169,7 +2174,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 thumbnails = await self.web_find_all(
                     By.CSS_SELECTOR,
                     "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)",
-                    timeout = self._timeout("quick_dom"),  # Fast timeout for polling
+                    timeout_key = "quick_dom",  # Fast timeout for polling
                 )
                 current_count = len(thumbnails)
                 if current_count < expected_count:
@@ -2185,7 +2190,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # Get current count for better error message
             try:
                 thumbnails = await self.web_find_all(
-                    By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout = self._timeout("quick_dom")
+                    By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout_key = "quick_dom"
                 )
                 current_count = len(thumbnails)
             except TimeoutError:
