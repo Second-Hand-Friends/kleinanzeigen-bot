@@ -504,7 +504,7 @@ class TestKleinanzeigenBotAuthentication:
     async def test_is_logged_in_logs_generic_message_when_selector_group_does_not_match(
         self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
     ) -> None:
-        """Missing selector-group match should log a generic message when probe is disabled."""
+        """Missing selector-group match should log the tried selectors when probe is disabled."""
         caplog.set_level("DEBUG")
 
         with (
@@ -513,9 +513,32 @@ class TestKleinanzeigenBotAuthentication:
         ):
             assert await test_bot.is_logged_in(include_probe = False) is False
 
-        assert "No login detected via configured login detection selectors" in caplog.text
-        for forbidden in (".mr-medium", "#user-email", "mr-medium", "user-email"):
-            assert forbidden not in caplog.text
+        assert any(
+            record.message == "No login detected via configured login detection selectors (CLASS_NAME=mr-medium, ID=user-email)"
+            for record in caplog.records
+        )
+
+    @pytest.mark.asyncio
+    async def test_is_logged_in_logs_raw_selectors_when_probe_reports_logged_out(
+        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Probe-based final failure should include the tried raw selectors for debugging."""
+        caplog.set_level("DEBUG")
+
+        with (
+            caplog.at_level("DEBUG"),
+            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
+            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.LOGGED_OUT),
+        ):
+            assert await test_bot.is_logged_in() is False
+
+        assert any(
+            record.message == (
+                "No login detected - DOM login detection selectors (CLASS_NAME=mr-medium, ID=user-email) "
+                "did not confirm login and server probe returned LOGGED_OUT"
+            )
+            for record in caplog.records
+        )
 
     @pytest.mark.asyncio
     async def test_get_login_state_prefers_dom_over_auth_probe(self, test_bot:KleinanzeigenBot) -> None:

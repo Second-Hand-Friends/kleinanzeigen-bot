@@ -7,7 +7,7 @@ import urllib.parse as urllib_parse
 from datetime import datetime
 from gettext import gettext as _
 from pathlib import Path
-from typing import Any, Final, cast
+from typing import Any, Final, Sequence, cast
 
 import certifi, colorama, nodriver  # isort: skip
 from nodriver.core.connection import ProtocolException
@@ -41,6 +41,10 @@ _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
 _LOGIN_DETECTION_SELECTOR_LABELS:Final[tuple[str, ...]] = ("user_info_primary", "user_info_secondary")
 
 colorama.just_fix_windows_console()
+
+
+def _format_login_detection_selectors(selectors:Sequence[tuple["By", str]]) -> str:
+    return ", ".join(f"{selector_type.name}={selector_value}" for selector_type, selector_value in selectors)
 
 
 class AdUpdateStrategy(enum.Enum):
@@ -1250,6 +1254,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             login_check_timeout,
             effective_timeout,
         )
+        tried_login_selectors = _format_login_detection_selectors(_LOGIN_DETECTION_SELECTORS)
 
         try:
             user_info, matched_selector = await self.web_text_first_available(
@@ -1270,14 +1275,18 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.debug("Timeout waiting for login detection selector group after %.1fs", effective_timeout)
 
         if not include_probe:
-            LOG.debug("No login detected via configured login detection selectors")
+            LOG.debug("No login detected via configured login detection selectors (%s)", tried_login_selectors)
             return False
 
         state = await self._auth_probe_login_state()
         if state == LoginState.LOGGED_IN:
             return True
 
-        LOG.debug("No login detected - DOM elements not found and server probe returned %s", state.name)
+        LOG.debug(
+            "No login detected - DOM login detection selectors (%s) did not confirm login and server probe returned %s",
+            tried_login_selectors,
+            state.name,
+        )
         return False
 
     async def _fetch_published_ads(self) -> list[dict[str, Any]]:
