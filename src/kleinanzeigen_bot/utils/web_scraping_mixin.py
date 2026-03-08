@@ -239,6 +239,7 @@ class WebScrapingMixin:
         raise ValueError(f"Unknown timeout bucket '{timeout_key}'")
 
     def _resolve_timeout_request(self, *, key:str, override:float | None = None, timeout_key:str | None = None) -> ResolvedTimeoutRequest:
+        # `key` is the semantic operation label; `timeout_key` selects a configured timeout bucket.
         self._ensure_timeout_inputs_valid(timeout = override, timeout_key = timeout_key)
 
         if override is not None:
@@ -291,7 +292,8 @@ class WebScrapingMixin:
         Execute an async callable with retry/backoff handling for TimeoutError.
         """
         attempts = self._timeout_attempts()
-        timeout_request = self._resolve_timeout_request(key = key, override = override, timeout_key = timeout_key)
+        operation_key = key
+        timeout_request = self._resolve_timeout_request(key = operation_key, override = override, timeout_key = timeout_key)
         loop = asyncio.get_running_loop()
 
         for attempt in range(attempts):
@@ -300,7 +302,7 @@ class WebScrapingMixin:
             try:
                 result = await operation(effective_timeout)
                 self._record_timing(
-                    key = key,
+                    key = operation_key,
                     timeout_source_key = timeout_request.timeout_source_key,
                     timeout_origin = timeout_request.timeout_origin,
                     timeout_override_sec = timeout_request.timeout_override_sec,
@@ -314,7 +316,7 @@ class WebScrapingMixin:
                 return result
             except TimeoutError:
                 self._record_timing(
-                    key = key,
+                    key = operation_key,
                     timeout_source_key = timeout_request.timeout_source_key,
                     timeout_origin = timeout_request.timeout_origin,
                     timeout_override_sec = timeout_request.timeout_override_sec,

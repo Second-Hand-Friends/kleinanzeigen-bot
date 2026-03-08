@@ -163,6 +163,12 @@ timeouts:
 - Unknown keys under `timeouts` are rejected during config validation (for example `quick_domm`)
 - Keep `retry_enabled` on so DOM lookups are retried with exponential backoff
 
+For maintainers extending web-scraping helpers:
+
+- Use `timeout_key` to select the configured timeout bucket.
+- Use `key` as the semantic operation label for timing aggregation.
+- Use `timeout` only for explicit numeric one-off overrides.
+
 For more details on timeout configuration and troubleshooting, see [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md).
 
 ### download
