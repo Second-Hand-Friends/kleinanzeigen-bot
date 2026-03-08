@@ -221,10 +221,14 @@ All Python files must start with SPDX license headers:
 - Add a new timeout key only when a recurring workflow has its own timing profile (pagination, captcha detection, publishing confirmations, Chrome probes, etc.). Whenever you add one, extend `TimeoutConfig`, document it in the sample `timeouts:` block in `docs/CONFIGURATION.md`, and explain it in `docs/BROWSER_TROUBLESHOOTING.md`.
 - Encourage users to raise `timeouts.multiplier` when everything is slow, and override existing keys in `config.yaml` before introducing new ones. This keeps the configuration surface minimal.
 - For maintainers extending web-scraping helpers, keep timeout semantics explicit:
-  - `key`: semantic operation label used for timing aggregation (`operation_key` in timing output).
-  - `timeout_key`: optional configured timeout bucket selector; when set, timing uses this as `timeout_source_key`.
-  - `timeout`: optional numeric one-off override; use for local exceptions, not long-term tuning.
-  - `timeout_origin`: derived timing output field that indicates how timeout was chosen (`operation_key`, `named_timeout`, or `inline_override`); it is not a helper call parameter.
+  - Helper call inputs:
+    - `key`: semantic operation label used by the helper call.
+    - `timeout_key`: optional configured timeout bucket selector.
+    - `timeout`: optional numeric one-off override; mutually exclusive with `timeout_key`.
+  - Derived timing output fields:
+    - `operation_key`: emitted from `key` for timing aggregation.
+    - `timeout_source_key`: emitted from the resolved timeout bucket (or grouping key for inline overrides).
+    - `timeout_origin`: derived resolution mode (`operation_key`, `named_timeout`, or `inline_override`); not a helper call parameter.
   - Example:
 
     ```python
