@@ -481,12 +481,11 @@ class TestKleinanzeigenBotAuthentication:
         assert call_args is not None
         assert call_args.args[0] == [(By.CLASS_NAME, "mr-medium"), (By.ID, "user-email")]
         assert call_args.kwargs["key"] == "login_detection"
-        assert call_args.kwargs["timeout"] == test_bot._timeout("login_detection")
+        assert call_args.kwargs["timeout_key"] == "login_detection"
+        assert call_args.kwargs.get("timeout") is None
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_logs_selector_label_without_raw_selector_literals(
-        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
-    ) -> None:
+    async def test_is_logged_in_logs_selector_label_without_raw_selector_literals(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
         """Login detection logs should reference stable labels, not raw selector values."""
         caplog.set_level("DEBUG")
 
@@ -514,14 +513,11 @@ class TestKleinanzeigenBotAuthentication:
             assert await test_bot.is_logged_in(include_probe = False) is False
 
         assert any(
-            record.message == "No login detected via configured login detection selectors (CLASS_NAME=mr-medium, ID=user-email)"
-            for record in caplog.records
+            record.message == "No login detected via configured login detection selectors (CLASS_NAME=mr-medium, ID=user-email)" for record in caplog.records
         )
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_logs_raw_selectors_when_probe_reports_logged_out(
-        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
-    ) -> None:
+    async def test_is_logged_in_logs_raw_selectors_when_probe_reports_logged_out(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
         """Probe-based final failure should include the tried raw selectors for debugging."""
         caplog.set_level("DEBUG")
 
@@ -533,7 +529,8 @@ class TestKleinanzeigenBotAuthentication:
             assert await test_bot.is_logged_in() is False
 
         assert any(
-            record.message == (
+            record.message
+            == (
                 "No login detected - DOM login detection selectors (CLASS_NAME=mr-medium, ID=user-email) "
                 "did not confirm login and server probe returned LOGGED_OUT"
             )

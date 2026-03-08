@@ -85,9 +85,7 @@ def _repost_cycle_ready(
         return False
 
     if eligible_cycles <= applied_cycles:
-        LOG.info(
-            "Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts", ad_file_relative, applied_cycles, eligible_cycles
-        )
+        LOG.info("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts", ad_file_relative, applied_cycles, eligible_cycles)
         return False
 
     return True
@@ -438,8 +436,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
                     if not self._is_valid_ads_selector({"all", "new", "due", "changed"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, due, changed, or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, due, changed, or comma-separated numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         self.ads_selector = "due"
 
@@ -457,8 +454,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
                     if not self._is_valid_ads_selector({"all", "changed"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, changed, or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all, changed, or comma-separated numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         self.ads_selector = "changed"
 
@@ -494,8 +490,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     # Default to all ads if no selector provided, but reject invalid values
                     if not self._is_valid_ads_selector({"all"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all or comma-separated numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         LOG.info("Extending all ads within 8-day window...")
                         self.ads_selector = "all"
@@ -513,8 +508,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     # ad IDs depends on selector
                     if not self._is_valid_ads_selector({"all", "new"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, or comma-separated numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         self.ads_selector = "new"
                     self.load_config()
@@ -1055,9 +1049,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def handle_after_login_logic(self) -> None:
         try:
-            await self.web_find(
-                By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout_key = "sms_verification"
-            )
+            await self.web_find(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout_key = "sms_verification")
             LOG.warning("############################################")
             LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
             LOG.warning("############################################")
@@ -1067,9 +1059,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             pass
 
         try:
-            await self.web_find(
-                By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout_key = "email_verification"
-            )
+            await self.web_find(By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout_key = "email_verification")
             LOG.warning("############################################")
             LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
             LOG.warning("############################################")
@@ -1265,7 +1255,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         try:
             user_info, matched_selector = await self.web_text_first_available(
                 _LOGIN_DETECTION_SELECTORS,
-                timeout = login_check_timeout,
+                timeout_key = "login_detection",
                 key = "login_detection",
                 description = "login_detection(selector_group)",
             )
@@ -2054,9 +2044,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     try:
                         # only click on "Individueller Versand" when "IndividualShippingInput" is not available, otherwise its already checked
                         # (important for mode = UPDATE)
-                        await self.web_find(
-                            By.XPATH, '//input[contains(@placeholder, "Versandkosten (optional)")]', timeout_key = "quick_dom"
-                        )
+                        await self.web_find(By.XPATH, '//input[contains(@placeholder, "Versandkosten (optional)")]', timeout_key = "quick_dom")
                     except TimeoutError:
                         # Input not visible yet; click the individual shipping option.
                         await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
@@ -2189,9 +2177,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         except TimeoutError as ex:
             # Get current count for better error message
             try:
-                thumbnails = await self.web_find_all(
-                    By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout_key = "quick_dom"
-                )
+                thumbnails = await self.web_find_all(By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout_key = "quick_dom")
                 current_count = len(thumbnails)
             except TimeoutError:
                 # Still no thumbnails after full timeout
