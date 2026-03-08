@@ -65,7 +65,7 @@ class AdExtractor(WebScrapingMixin):
         header_string = (
             "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
         )
-        await asyncio.get_running_loop().run_in_executor(None, lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(), header = header_string))
+        await asyncio.get_running_loop().run_in_executor(None, lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(mode = "json"), header = header_string))
 
     @staticmethod
     def _download_and_save_image_sync(url:str, directory:str, filename_prefix:str, img_nr:int) -> str | None:
