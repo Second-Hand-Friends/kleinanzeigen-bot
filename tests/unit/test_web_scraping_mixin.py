@@ -570,6 +570,52 @@ class TestTimeoutAndRetryHelpers:
         assert result == "ok"
 
     @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_delegates_effective_math_to_timeout_config(self, web_scraper:WebScrapingMixin) -> None:
+        web_scraper.config.timeouts.default = 5.0
+        timeout_cfg_cls = type(web_scraper.config.timeouts)
+
+        async def operation(_timeout:float) -> str:
+            return "ok"
+
+        with patch.object(
+            timeout_cfg_cls,
+            "effective_from_base",
+            autospec = True,
+            wraps = timeout_cfg_cls.effective_from_base,
+        ) as effective_from_base:
+            result = await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)")
+
+        assert result == "ok"
+        effective_from_base.assert_called_once()
+        assert effective_from_base.call_args.args[1] == pytest.approx(web_scraper.config.timeouts.default)
+        assert effective_from_base.call_args.kwargs["attempt"] == 0
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_delegates_effective_math_across_retries(self, web_scraper:WebScrapingMixin) -> None:
+        web_scraper.config.timeouts.default = 5.0
+        timeout_cfg_cls = type(web_scraper.config.timeouts)
+        call_count = {"count": 0}
+
+        async def operation(_timeout:float) -> str:
+            call_count["count"] += 1
+            if call_count["count"] == 1:
+                raise TimeoutError("boom")
+            return "ok"
+
+        with patch.object(
+            timeout_cfg_cls,
+            "effective_from_base",
+            autospec = True,
+            wraps = timeout_cfg_cls.effective_from_base,
+        ) as effective_from_base:
+            result = await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)")
+
+        assert result == "ok"
+        assert effective_from_base.call_count == 2
+        assert [call.args[1] for call in effective_from_base.call_args_list] == [pytest.approx(web_scraper.config.timeouts.default)] * 2
+        assert [call.kwargs["attempt"] for call in effective_from_base.call_args_list] == [0, 1]
+
+    @pytest.mark.asyncio
     async def test_run_with_timeout_retries_rejects_timeout_key_and_override(self, web_scraper:WebScrapingMixin) -> None:
         async def operation(_timeout:float) -> str:
             return "ok"

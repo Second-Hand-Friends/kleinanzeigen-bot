@@ -294,8 +294,7 @@ class WebScrapingMixin:
         loop = asyncio.get_running_loop()
 
         for attempt in range(attempts):
-            backoff = timeout_cfg.retry_backoff_factor**attempt if attempt > 0 else 1.0
-            effective_timeout = timeout_request.configured_timeout * timeout_cfg.multiplier * backoff
+            effective_timeout = timeout_cfg.effective_from_base(timeout_request.configured_timeout, attempt = attempt)
             attempt_started = loop.time()
             try:
                 result = await operation(effective_timeout)

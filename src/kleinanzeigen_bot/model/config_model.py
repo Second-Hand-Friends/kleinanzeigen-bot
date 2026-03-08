@@ -254,8 +254,14 @@ class TimeoutConfig(ContextualModel):
         Return the effective timeout (seconds) with multiplier/backoff applied.
         """
         base = self.resolve(key, override)
+        return self.effective_from_base(base, attempt = attempt)
+
+    def effective_from_base(self, base_timeout:float, *, attempt:int = 0) -> float:
+        """
+        Apply multiplier/backoff modifiers to an already-resolved base timeout.
+        """
         backoff = self.retry_backoff_factor**attempt if attempt > 0 else 1.0
-        return base * self.multiplier * backoff
+        return float(base_timeout) * self.multiplier * backoff
 
 
 class CaptureOnConfig(ContextualModel):

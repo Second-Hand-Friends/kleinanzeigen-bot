@@ -128,6 +128,22 @@ def test_timeout_config_effective_allows_valid_bucket_with_override() -> None:
     assert timeouts.effective("update_check", override = 0.25, attempt = 1) == pytest.approx(0.75)
 
 
+@pytest.mark.parametrize(
+    ("key", "override", "attempt"),
+    [
+        ("default", None, 0),
+        ("update_check", None, 2),
+        ("update_check", 0.25, 1),
+        ("update_check", 0.25, -1),
+    ],
+)
+def test_timeout_config_effective_matches_effective_from_base(key:str, override:float | None, attempt:int) -> None:
+    timeouts = TimeoutConfig(default = 3.0, update_check = 10.0, multiplier = 2.0, retry_backoff_factor = 1.5)
+
+    resolved = timeouts.resolve(key, override)
+    assert timeouts.effective(key, override, attempt = attempt) == pytest.approx(timeouts.effective_from_base(resolved, attempt = attempt))
+
+
 def test_timeout_config_rejects_unknown_timeout_fields_in_config() -> None:
     minimal_cfg = {
         "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
