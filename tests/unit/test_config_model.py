@@ -79,6 +79,15 @@ def test_timeout_config_resolve_returns_specific_value() -> None:
     assert timeouts.resolve("page_load") == 12.5
 
 
+def test_timeout_config_bucket_keys_include_named_timeouts_only() -> None:
+    keys = TimeoutConfig.timeout_bucket_keys()
+
+    assert "default" in keys
+    assert "quick_dom" in keys
+    assert "multiplier" not in keys
+    assert "retry_backoff_factor" not in keys
+
+
 def test_timeout_config_resolve_falls_back_to_default() -> None:
     timeouts = TimeoutConfig(default = 3.0)
     assert timeouts.resolve("nonexistent_key") == 3.0

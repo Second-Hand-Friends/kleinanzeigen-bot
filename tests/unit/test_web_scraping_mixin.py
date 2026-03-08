@@ -568,6 +568,22 @@ class TestTimeoutAndRetryHelpers:
             await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)", timeout_key = "quick_dom", override = 0.5)
 
     @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_rejects_unknown_timeout_key_with_suggestion(self, web_scraper:WebScrapingMixin) -> None:
+        async def operation(_timeout:float) -> str:
+            return "ok"
+
+        with pytest.raises(ValueError, match = "Did you mean 'quick_dom'\\?"):
+            await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)", timeout_key = "quick_domm")
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_rejects_unknown_timeout_key_without_suggestion(self, web_scraper:WebScrapingMixin) -> None:
+        async def operation(_timeout:float) -> str:
+            return "ok"
+
+        with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+            await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)", timeout_key = "zzz")
+
+    @pytest.mark.asyncio
     async def test_run_with_timeout_retries_ignores_collector_failure(self, web_scraper:WebScrapingMixin) -> None:
         """_run_with_timeout_retries should continue when timing collector record fails."""
         cast(Any, web_scraper)._timing_collector = FailingCollector()
@@ -685,6 +701,11 @@ class TestTimeoutAndRetryHelpers:
         assert recorded[0]["operation_type"] == "web_find_first_available"
         assert recorded[0]["timeout_source_key"] == "quick_dom"
         assert recorded[0]["timeout_origin"] == "named_timeout"
+
+    @pytest.mark.asyncio
+    async def test_web_find_first_available_rejects_unknown_key(self, web_scraper:WebScrapingMixin) -> None:
+        with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+            await web_scraper.web_find_first_available([(By.ID, "only")], key = "quick_domm")
 
     @pytest.mark.asyncio
     async def test_web_find_first_available_exhausts_candidates_once_when_retry_disabled(self, web_scraper:WebScrapingMixin) -> None:
@@ -897,9 +918,19 @@ class TestSelectorTimeoutMessages:
         web_scraper.web_find.assert_awaited_once_with(By.ID, "select-id", timeout = None, timeout_key = "quick_dom")
 
     @pytest.mark.asyncio
+    async def test_web_select_rejects_unknown_timeout_key(self, web_scraper:WebScrapingMixin) -> None:
+        with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+            await web_scraper.web_select(By.ID, "select-id", "value", timeout_key = "quick_domm")
+
+    @pytest.mark.asyncio
     async def test_web_select_combobox_rejects_timeout_key_and_timeout(self, web_scraper:WebScrapingMixin) -> None:
         with pytest.raises(ValueError, match = "mutually exclusive"):
             await web_scraper.web_select_combobox(By.ID, "combo-id", "Option", timeout = 0.1, timeout_key = "quick_dom")
+
+    @pytest.mark.asyncio
+    async def test_web_select_combobox_rejects_unknown_timeout_key(self, web_scraper:WebScrapingMixin) -> None:
+        with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+            await web_scraper.web_select_combobox(By.ID, "combo-id", "Option", timeout_key = "quick_domm")
 
     @pytest.mark.asyncio
     async def test_web_select_combobox_propagates_timeout_key(self, web_scraper:WebScrapingMixin) -> None:

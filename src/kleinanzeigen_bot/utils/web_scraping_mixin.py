@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio, enum, inspect, json, os, platform, secrets, shutil, subprocess, urllib.request  # isort: skip # noqa: S404
+import asyncio, difflib, enum, inspect, json, os, platform, secrets, shutil, subprocess, urllib.request  # isort: skip # noqa: S404
 from collections.abc import Awaitable, Callable, Coroutine, Iterable, Sequence
 from gettext import gettext as _
 from pathlib import Path, PureWindowsPath
-from typing import Any, Final, Literal, Optional, cast
+from typing import Any, Final, Literal, NamedTuple, Optional, cast
 
 try:
     from typing import Never  # type: ignore[attr-defined,unused-ignore] # mypy
@@ -42,6 +42,13 @@ _KEY_VALUE_PAIR_SIZE = 2
 _PRIMARY_SELECTOR_BUDGET_RATIO:Final[float] = 0.70
 _BACKUP_SELECTOR_BUDGET_CAP_SECONDS:Final[float] = 0.75
 _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS:Final[float] = 0.25
+
+
+class ResolvedTimeoutRequest(NamedTuple):
+    timeout_source_key:str
+    configured_timeout:float
+    timeout_origin:Literal["operation_key", "named_timeout", "inline_override"]
+    timeout_override_sec:float | None
 
 
 def _resolve_user_data_dir_paths(arg_value:str, config_value:str) -> tuple[Any, Any]:
@@ -222,32 +229,54 @@ class WebScrapingMixin:
         except Exception as exc:  # noqa: BLE001
             LOG.warning("Timing collector failed for key=%s operation=%s: %s", key, operation_type, exc)
 
-    def _normalize_timeout_provenance(
-        self, *, key:str, override:float | None = None, timeout_key:str | None = None
-    ) -> tuple[str, float, Literal["operation_key", "named_timeout", "inline_override"], float | None]:
-        if timeout_key is not None and override is not None:
-            raise ValueError(_("timeout_key and timeout are mutually exclusive"))
+    def _validate_timeout_key(self, timeout_key:str) -> str:
+        if timeout_key in TimeoutConfig.timeout_bucket_keys():
+            return timeout_key
 
-        timeout_bucket_key = timeout_key or key
-        configured_timeout = self._timeout(timeout_bucket_key if timeout_key is not None else key, override)
+        suggestions = difflib.get_close_matches(timeout_key, TimeoutConfig.TIMEOUT_BUCKET_KEYS, n = 1)
+        if suggestions:
+            raise ValueError(f"Unknown timeout bucket '{timeout_key}'. Did you mean '{suggestions[0]}'?")
+        raise ValueError(f"Unknown timeout bucket '{timeout_key}'")
+
+    def _resolve_timeout_request(self, *, key:str, override:float | None = None, timeout_key:str | None = None) -> ResolvedTimeoutRequest:
+        self._ensure_timeout_inputs_valid(timeout = override, timeout_key = timeout_key)
+
         if override is not None:
-            return key, configured_timeout, "inline_override", float(override)
-        if timeout_key is None or timeout_key == key:
-            return timeout_bucket_key, configured_timeout, "operation_key", None
-        return timeout_bucket_key, configured_timeout, "named_timeout", None
+            return ResolvedTimeoutRequest(
+                timeout_source_key = key,
+                configured_timeout = self._timeout(key, override),
+                timeout_origin = "inline_override",
+                timeout_override_sec = float(override),
+            )
+
+        if timeout_key is not None:
+            timeout_bucket_key = self._validate_timeout_key(timeout_key)
+            return ResolvedTimeoutRequest(
+                timeout_source_key = timeout_bucket_key,
+                configured_timeout = self._timeout(timeout_bucket_key),
+                timeout_origin = "operation_key" if timeout_bucket_key == key else "named_timeout",
+                timeout_override_sec = None,
+            )
+
+        timeout_bucket_key = self._validate_timeout_key(key)
+
+        return ResolvedTimeoutRequest(
+            timeout_source_key = timeout_bucket_key,
+            configured_timeout = self._timeout(timeout_bucket_key),
+            timeout_origin = "operation_key",
+            timeout_override_sec = None,
+        )
 
     def _ensure_timeout_inputs_valid(self, *, timeout:float | None, timeout_key:str | None) -> None:
         if timeout is not None and timeout_key is not None:
-            raise ValueError(_("timeout_key and timeout are mutually exclusive"))
+            raise ValueError("timeout_key and timeout are mutually exclusive")
 
     def _resolve_wrapper_wait_timeout(self, *, timeout:float | None, timeout_key:str | None) -> float | None:
-        self._ensure_timeout_inputs_valid(timeout = timeout, timeout_key = timeout_key)
-        if timeout is not None:
-            return timeout
-        if timeout_key is not None:
-            # Derive a numeric timeout for web_await while preserving timeout_key for timed DOM lookups.
-            return self._timeout(timeout_key)
-        return None
+        if timeout is None and timeout_key is None:
+            return None
+
+        # Derive a numeric timeout for web_await while preserving timeout_key for timed DOM lookups.
+        return self._resolve_timeout_request(key = "default", override = timeout, timeout_key = timeout_key).configured_timeout
 
     async def _run_with_timeout_retries(
         self,
@@ -262,23 +291,21 @@ class WebScrapingMixin:
         Execute an async callable with retry/backoff handling for TimeoutError.
         """
         attempts = self._timeout_attempts()
-        timeout_bucket_key, configured_timeout, timeout_origin, timeout_override_sec = self._normalize_timeout_provenance(
-            key = key, override = override, timeout_key = timeout_key
-        )
+        timeout_request = self._resolve_timeout_request(key = key, override = override, timeout_key = timeout_key)
         loop = asyncio.get_running_loop()
 
         for attempt in range(attempts):
-            effective_timeout = self._effective_timeout(timeout_bucket_key, override, attempt = attempt)
+            effective_timeout = self._effective_timeout(timeout_request.timeout_source_key, override, attempt = attempt)
             attempt_started = loop.time()
             try:
                 result = await operation(effective_timeout)
                 self._record_timing(
                     key = key,
-                    timeout_source_key = timeout_bucket_key,
-                    timeout_origin = timeout_origin,
-                    timeout_override_sec = timeout_override_sec,
+                    timeout_source_key = timeout_request.timeout_source_key,
+                    timeout_origin = timeout_request.timeout_origin,
+                    timeout_override_sec = timeout_request.timeout_override_sec,
                     description = description,
-                    configured_timeout = configured_timeout,
+                    configured_timeout = timeout_request.configured_timeout,
                     effective_timeout = effective_timeout,
                     actual_duration = loop.time() - attempt_started,
                     attempt_index = attempt,
@@ -288,11 +315,11 @@ class WebScrapingMixin:
             except TimeoutError:
                 self._record_timing(
                     key = key,
-                    timeout_source_key = timeout_bucket_key,
-                    timeout_origin = timeout_origin,
-                    timeout_override_sec = timeout_override_sec,
+                    timeout_source_key = timeout_request.timeout_source_key,
+                    timeout_origin = timeout_request.timeout_origin,
+                    timeout_override_sec = timeout_request.timeout_override_sec,
                     description = description,
-                    configured_timeout = configured_timeout,
+                    configured_timeout = timeout_request.configured_timeout,
                     effective_timeout = effective_timeout,
                     actual_duration = loop.time() - attempt_started,
                     attempt_index = attempt,

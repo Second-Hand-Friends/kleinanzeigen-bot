@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import copy
 from gettext import gettext as _
-from typing import Annotated, Any, Final, Literal
+from typing import Annotated, Any, ClassVar, Final, Literal
 
 from pydantic import AfterValidator, Field, model_validator
 from typing_extensions import deprecated
@@ -187,6 +187,26 @@ class CaptchaConfig(ContextualModel):
 
 
 class TimeoutConfig(ContextualModel):
+    TIMEOUT_BUCKET_KEYS:ClassVar[tuple[str, ...]] = (
+        "default",
+        "page_load",
+        "captcha_detection",
+        "sms_verification",
+        "email_verification",
+        "gdpr_prompt",
+        "login_detection",
+        "publishing_result",
+        "publishing_confirmation",
+        "image_upload",
+        "pagination_initial",
+        "pagination_follow_up",
+        "quick_dom",
+        "update_check",
+        "chrome_remote_probe",
+        "chrome_remote_debugging",
+        "chrome_binary_detection",
+    )
+
     multiplier:float = Field(default = 1.0, ge = 0.1, description = "Global multiplier applied to all timeout values.")
     default:float = Field(default = 5.0, ge = 0.0, description = "Baseline timeout for DOM interactions.")
     page_load:float = Field(default = 15.0, ge = 1.0, description = "Page load timeout for web_open.")
@@ -208,6 +228,10 @@ class TimeoutConfig(ContextualModel):
     retry_enabled:bool = Field(default = True, description = "Enable built-in retry/backoff for DOM operations.")
     retry_max_attempts:int = Field(default = 2, ge = 1, description = "Max retry attempts when retry is enabled.")
     retry_backoff_factor:float = Field(default = 1.5, ge = 1.0, description = "Exponential factor applied per retry attempt.")
+
+    @classmethod
+    def timeout_bucket_keys(cls) -> frozenset[str]:
+        return frozenset(cls.TIMEOUT_BUCKET_KEYS)
 
     def resolve(self, key:str = "default", override:float | None = None) -> float:
         """
