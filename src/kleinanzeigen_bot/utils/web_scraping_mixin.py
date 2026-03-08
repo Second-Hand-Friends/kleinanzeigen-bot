@@ -42,7 +42,6 @@ _KEY_VALUE_PAIR_SIZE = 2
 _PRIMARY_SELECTOR_BUDGET_RATIO:Final[float] = 0.70
 _BACKUP_SELECTOR_BUDGET_CAP_SECONDS:Final[float] = 0.75
 _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS:Final[float] = 0.25
-_TIMEOUT_KEY_CONFLICT_MESSAGE:Final[str] = "timeout_key and timeout override are mutually exclusive"
 
 
 def _resolve_user_data_dir_paths(arg_value:str, config_value:str) -> tuple[Any, Any]:
@@ -227,7 +226,7 @@ class WebScrapingMixin:
         self, *, key:str, override:float | None = None, timeout_key:str | None = None
     ) -> tuple[str, float, Literal["operation_key", "named_timeout", "inline_override"], float | None]:
         if timeout_key is not None and override is not None:
-            raise ValueError(_TIMEOUT_KEY_CONFLICT_MESSAGE)
+            raise ValueError(_("timeout_key and timeout are mutually exclusive"))
 
         timeout_bucket_key = timeout_key or key
         configured_timeout = self._timeout(timeout_bucket_key if timeout_key is not None else key, override)
@@ -239,7 +238,7 @@ class WebScrapingMixin:
 
     def _ensure_timeout_inputs_valid(self, *, timeout:float | None, timeout_key:str | None) -> None:
         if timeout is not None and timeout_key is not None:
-            raise ValueError(_TIMEOUT_KEY_CONFLICT_MESSAGE)
+            raise ValueError(_("timeout_key and timeout are mutually exclusive"))
 
     def _resolve_wrapper_wait_timeout(self, *, timeout:float | None, timeout_key:str | None) -> float | None:
         self._ensure_timeout_inputs_valid(timeout = timeout, timeout_key = timeout_key)
@@ -404,17 +403,12 @@ class WebScrapingMixin:
 
             failure_summary = failures[-1] if failures else _("No selector candidates executed.")
             raise TimeoutError(
-                _(
-                    "No HTML element found using selector group after trying %(count)d alternatives within %(timeout)s seconds."
-                    " Last error: %(error)s"
-                )
+                _("No HTML element found using selector group after trying %(count)d alternatives within %(timeout)s seconds. Last error: %(error)s")
                 % {"count": len(selectors), "timeout": effective_timeout, "error": failure_summary}
             )
 
         attempt_description = description or f"web_find_first_available({len(selectors)} selectors)"
-        return await self._run_with_timeout_retries(
-            attempt, description = attempt_description, key = key, override = timeout, timeout_key = timeout_key
-        )
+        return await self._run_with_timeout_retries(attempt, description = attempt_description, key = key, override = timeout, timeout_key = timeout_key)
 
     async def web_text_first_available(
         self,
@@ -840,6 +834,7 @@ class WebScrapingMixin:
                 ]
 
             case "Windows":
+
                 def win_path(*parts:str) -> str:
                     return str(PureWindowsPath(*parts))
 
@@ -916,9 +911,7 @@ class WebScrapingMixin:
             remaining_timeout = max(effective_timeout - elapsed, 0.0)
             await self.page.sleep(min(0.5, remaining_timeout))
 
-    async def web_check(
-        self, selector_type:By, selector_value:str, attr:Is, *, timeout:int | float | None = None, timeout_key:str | None = None
-    ) -> bool:
+    async def web_check(self, selector_type:By, selector_value:str, attr:Is, *, timeout:int | float | None = None, timeout_key:str | None = None) -> bool:
         """
         Locates an HTML element and returns a state.
 

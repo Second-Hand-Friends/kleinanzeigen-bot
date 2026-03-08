@@ -531,6 +531,12 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
   _record_timing:
     "Timing collector failed for key=%s operation=%s: %s": "Zeitmessung fehlgeschlagen für key=%s operation=%s: %s"
 
+  _normalize_timeout_provenance:
+    "timeout_key and timeout are mutually exclusive": "timeout_key und timeout schließen sich gegenseitig aus"
+
+  _ensure_timeout_inputs_valid:
+    "timeout_key and timeout are mutually exclusive": "timeout_key und timeout schließen sich gegenseitig aus"
+
   _allocate_selector_group_budgets:
     "selector_count must be > 0": "selector_count muss > 0 sein"
 
