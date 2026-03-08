@@ -357,6 +357,75 @@ class TestKleinanzeigenBotInitialization:
             published_ads_by_id = {},
         )
 
+    @pytest.mark.parametrize(("published_ads_by_id", "ad_id", "expected_active", "expected_ownership"), [
+        ({123: {"id": 123, "state": "active"}}, 123, True, True),
+        ({123: {"id": 123, "state": "inactive"}}, 123, False, True),
+        ({}, 123, False, False),
+    ])
+    def test_resolve_download_ad_activity(
+        self,
+        test_bot:KleinanzeigenBot,
+        published_ads_by_id:dict[int, dict[str, Any]],
+        ad_id:int,
+        expected_active:bool,
+        expected_ownership:bool,
+    ) -> None:
+        resolved_active, ownership = test_bot._resolve_download_ad_activity(ad_id, published_ads_by_id)
+
+        assert resolved_active is expected_active
+        assert ownership is expected_ownership
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "scenario",
+        [
+            {
+                "published_ads": [{"id": 123, "state": "active"}],
+                "expected_active": True,
+                "expected_warning_fragment": None,
+            },
+            {
+                "published_ads": [{"id": 999, "state": "active"}],
+                "expected_active": False,
+                "expected_warning_fragment": "Saving downloaded ad as inactive.",
+            },
+        ],
+    )
+    async def test_download_ads_numeric_selector_resolves_and_passes_active_state(
+        self,
+        test_bot:KleinanzeigenBot,
+        tmp_path:Path,
+        caplog:pytest.LogCaptureFixture,
+        scenario:dict[str, Any],
+    ) -> None:
+        published_ads = scenario["published_ads"]
+        expected_active = scenario["expected_active"]
+        expected_warning_fragment = scenario["expected_warning_fragment"]
+
+        test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
+        test_bot.ads_selector = "123"
+        test_bot.browser = MagicMock()
+
+        extractor_mock = MagicMock()
+        extractor_mock.navigate_to_ad_page = AsyncMock(return_value = True)
+        extractor_mock.download_ad = AsyncMock()
+
+        caplog.set_level(logging.WARNING)
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = published_ads),
+            patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock),
+        ):
+            await test_bot.download_ads()
+
+        extractor_mock.download_ad.assert_awaited_once_with(123, active = expected_active)
+
+        warning_messages = [record.getMessage() for record in caplog.records if record.levelno >= logging.WARNING]
+        if expected_warning_fragment is None:
+            assert all("Saving downloaded ad as inactive." not in msg for msg in warning_messages)
+        else:
+            assert any(expected_warning_fragment in msg for msg in warning_messages)
+
 
 class TestKleinanzeigenBotLogging:
     """Tests for logging functionality."""

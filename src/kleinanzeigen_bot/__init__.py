@@ -1383,6 +1383,21 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return ads
 
+    def _resolve_download_ad_activity(self, ad_id:int, published_ads_by_id:dict[int, dict[str, Any]]) -> tuple[bool, bool]:
+        """Resolve downloaded ad activity and ownership for numeric selectors.
+
+        Returns:
+            tuple[bool, bool]:
+                active value and ownership (True own / False foreign).
+        """
+        published_ad = published_ads_by_id.get(ad_id)
+        if published_ad is None:
+            # Intentional simplification: a missing ID is treated as foreign.
+            # We explicitly do not model a third "missing but maybe own" state here.
+            return False, False
+
+        return published_ad.get("state") == "active", True
+
     async def delete_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
 
@@ -2290,7 +2305,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             for ad_id in ids:  # call download routine for every id
                 exists = await ad_extractor.navigate_to_ad_page(ad_id)
                 if exists:
-                    await ad_extractor.download_ad(ad_id)
+                    resolved_active, ownership = self._resolve_download_ad_activity(ad_id, published_ads_by_id)
+                    if ownership is False:
+                        LOG.warning("Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.", ad_id)
+
+                    await ad_extractor.download_ad(ad_id, active = resolved_active)
                     LOG.info("Downloaded ad with id %d", ad_id)
                 else:
                     LOG.error("The page with the id %d does not exist!", ad_id)

@@ -57,19 +57,23 @@ class AdExtractor(WebScrapingMixin):
         folder_name = self.config.download.folder_name_template.format(id = ad_id, title = sanitized_title).strip()
         return misc.sanitize_folder_name(folder_name, self.config.download.folder_name_max_length)
 
-    async def download_ad(self, ad_id:int) -> None:
+    async def download_ad(self, ad_id:int, *, active:bool | None = None) -> None:
         """
         Downloads an ad to a specific location, specified by config and ad ID.
         NOTE: Requires that the driver session currently is on the ad page.
 
         :param ad_id: the ad ID
+        :param active: Optional active state override for downloaded ad config
         """
 
         download_dir = self.download_dir
         LOG.info("Using download directory: %s", download_dir)
 
         # Extract ad info and determine final directory path
-        ad_cfg, final_dir, ad_file_stem = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id)
+        if active is None:
+            ad_cfg, final_dir, ad_file_stem = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id)
+        else:
+            ad_cfg, final_dir, ad_file_stem = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id, active = active)
 
         # Save the ad configuration file (offload to executor to avoid blocking the event loop)
         ad_file_path = str(Path(final_dir) / f"{ad_file_stem}.yaml")
@@ -253,7 +257,7 @@ class AdExtractor(WebScrapingMixin):
         """
         return await self.web_text(By.ID, "viewad-title")
 
-    async def _extract_ad_page_info(self, directory:str, ad_id:int, ad_file_stem:str) -> AdPartial:
+    async def _extract_ad_page_info(self, directory:str, ad_id:int, ad_file_stem:str, *, active:bool | None = None) -> AdPartial:
         """
         Extracts ad information and downloads images to the specified directory.
         NOTE: Requires that the driver session currently is on the ad page.
@@ -261,9 +265,10 @@ class AdExtractor(WebScrapingMixin):
         :param directory: the directory to download images to
         :param ad_id: the ad ID
         :param ad_file_stem: the rendered filename stem shared by the ad config and images
+        :param active: Optional active state override for downloaded ad config
         :return: an AdPartial object containing the ad information
         """
-        info:dict[str, Any] = {"active": True}
+        info:dict[str, Any] = {"active": True if active is None else active}
 
         # Extract title first (needed for directory creation)
         title = await self._extract_title_from_ad_page()
@@ -335,12 +340,15 @@ class AdExtractor(WebScrapingMixin):
 
         return ad_cfg
 
-    async def _extract_ad_page_info_with_directory_handling(self, relative_directory:Path, ad_id:int) -> tuple[AdPartial, Path, str]:
+    async def _extract_ad_page_info_with_directory_handling(
+        self, relative_directory:Path, ad_id:int, *, active:bool | None = None
+    ) -> tuple[AdPartial, Path, str]:
         """
         Extracts ad information and handles directory creation/renaming.
 
         :param relative_directory: Base directory for downloads
         :param ad_id: The ad ID
+        :param active: Optional active state override for downloaded ad config
         :return: AdPartial with directory information and rendered ad file stem
         """
         # First, extract basic info to get the title
@@ -387,7 +395,10 @@ class AdExtractor(WebScrapingMixin):
             LOG.info("New directory for ad created at %s.", final_dir)
 
         # Now extract complete ad info (including images) to the final directory
-        ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id, ad_file_stem)
+        if active is None:
+            ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id, ad_file_stem)
+        else:
+            ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id, ad_file_stem, active = active)
 
         return ad_cfg, final_dir, ad_file_stem
 
