@@ -63,6 +63,7 @@ dev = [
     "pyinstaller",
     "types-requests>=2.32.0.20250515",
     "pytest-mock>=3.14.0",
+    "jsonschema>=4.26.0",
 ]
 
 [project.urls]

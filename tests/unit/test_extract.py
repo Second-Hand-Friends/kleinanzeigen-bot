@@ -2,18 +2,27 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import json  # isort: skip
+import asyncio
 from gettext import gettext as _
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, Final, TypedDict
 from unittest.mock import AsyncMock, MagicMock, call, patch
 from urllib.error import URLError
 
 import pytest
+from jsonschema import Draft202012Validator
+from ruamel.yaml import YAML
 
 import kleinanzeigen_bot.extract as extract_module
 from kleinanzeigen_bot.model.ad_model import AdPartial, ContactPartial
 from kleinanzeigen_bot.model.config_model import Config, DownloadConfig
 from kleinanzeigen_bot.utils.web_scraping_mixin import Browser, By, Element
+
+SCHEMA_PATH:Final[Path] = Path(__file__).resolve().parents[2] / "schemas" / "ad.schema.json"
+
+
+def _read_text_file(path:Path) -> str:
+    return path.read_text(encoding = "utf-8")
 
 
 class _DimensionsDict(TypedDict):
@@ -1255,7 +1264,38 @@ class TestAdExtractorDownload:
             actual_call = mock_save_dict.call_args
             actual_path = Path(actual_call[0][0])
             assert actual_path == yaml_path
-            assert actual_call[0][1] == mock_extract_with_dir.return_value[0].model_dump()
+            assert actual_call[0][1] == mock_extract_with_dir.return_value[0].model_dump(mode = "json")
+
+    @pytest.mark.asyncio
+    async def test_download_ad_writes_schema_compliant_yaml(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+        """Test that downloaded ad YAML validates against ad.schema.json."""
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        yaml_path = final_dir / "ad_12345.yaml"
+        extractor.download_dir = download_base
+
+        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
+            mock_extract_with_dir.return_value = (
+                AdPartial.model_validate(
+                    {
+                        "title": "Test Advertisement Title",
+                        "description": "Test Description",
+                        "category": "Dienstleistungen",
+                        "created_on": "2026-03-08T00:00:00+01:00",
+                        "updated_on": "2026-03-09T01:02:03+01:00",
+                    }
+                ),
+                final_dir,
+            )
+
+            await extractor.download_ad(12345)
+
+        loaded_ad = YAML(typ = "safe").load(await asyncio.to_thread(_read_text_file, yaml_path))
+        schema = json.loads(await asyncio.to_thread(_read_text_file, SCHEMA_PATH))
+
+        Draft202012Validator(schema).validate(loaded_ad)
+        assert isinstance(loaded_ad["created_on"], str)
+        assert isinstance(loaded_ad["updated_on"], str)
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
