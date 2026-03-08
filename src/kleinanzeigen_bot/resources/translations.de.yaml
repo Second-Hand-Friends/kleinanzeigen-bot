@@ -99,7 +99,6 @@ kleinanzeigen_bot/__init__.py:
     "Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)": "Starte Login-Erkennung (Timeout: %.1fs Basis, %.1fs effektiv mit Multiplikator/Backoff)"
     "Login detected via login detection selector '%s'": "Login erkannt über Login-Erkennungs-Selektor '%s'"
     "Timeout waiting for login detection selector group after %.1fs": "Timeout beim Warten auf die Login-Erkennungs-Selektorgruppe nach %.1fs"
-    "Login detection timeout configuration error: %s": "Konfigurationsfehler beim Timeout der Login-Erkennung: %s"
 
   handle_after_login_logic:
     "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."

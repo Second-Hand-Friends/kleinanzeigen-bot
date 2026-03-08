@@ -506,8 +506,7 @@ class TestKleinanzeigenBotAuthentication:
         assert recorded[0]["timeout_origin"] == "operation_key"
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_logs_unknown_timeout_bucket_errors(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
-        caplog.set_level("ERROR")
+    async def test_is_logged_in_propagates_unknown_timeout_bucket_errors(self, test_bot:KleinanzeigenBot) -> None:
         with (
             patch.object(test_bot, "web_text_first_available", side_effect = ValueError("Unknown timeout bucket 'login_detecton'")),
             pytest.raises(ValueError, match = r"^Unknown timeout bucket 'login_detecton'$") as exc_info,
@@ -515,7 +514,6 @@ class TestKleinanzeigenBotAuthentication:
             await test_bot.is_logged_in(include_probe = False)
 
         assert str(exc_info.value) == "Unknown timeout bucket 'login_detecton'"
-        assert "Login detection timeout configuration error" in caplog.text
 
     @pytest.mark.asyncio
     async def test_is_logged_in_logs_selector_label_without_raw_selector_literals(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:

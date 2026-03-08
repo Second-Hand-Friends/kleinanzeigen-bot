@@ -46,7 +46,6 @@ _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS:Final[float] = 0.25
 
 class ResolvedTimeoutRequest(NamedTuple):
     timeout_source_key:str
-    timeout_math_key:str
     configured_timeout:float
     timeout_origin:Literal["operation_key", "named_timeout", "inline_override"]
     timeout_override_sec:float | None
@@ -242,7 +241,6 @@ class WebScrapingMixin:
         if override is not None:
             return ResolvedTimeoutRequest(
                 timeout_source_key = key,
-                timeout_math_key = "default",
                 configured_timeout = float(override),
                 timeout_origin = "inline_override",
                 timeout_override_sec = float(override),
@@ -252,7 +250,6 @@ class WebScrapingMixin:
             timeout_bucket_key = self._validate_timeout_key(timeout_key)
             return ResolvedTimeoutRequest(
                 timeout_source_key = timeout_bucket_key,
-                timeout_math_key = timeout_bucket_key,
                 configured_timeout = self._timeout(timeout_bucket_key),
                 timeout_origin = "operation_key" if timeout_bucket_key == key else "named_timeout",
                 timeout_override_sec = None,
@@ -262,7 +259,6 @@ class WebScrapingMixin:
 
         return ResolvedTimeoutRequest(
             timeout_source_key = timeout_bucket_key,
-            timeout_math_key = timeout_bucket_key,
             configured_timeout = self._timeout(timeout_bucket_key),
             timeout_origin = "operation_key",
             timeout_override_sec = None,
@@ -294,10 +290,12 @@ class WebScrapingMixin:
         attempts = self._timeout_attempts()
         operation_key = key
         timeout_request = self._resolve_timeout_request(key = operation_key, override = override, timeout_key = timeout_key)
+        timeout_cfg = self._get_timeout_config()
         loop = asyncio.get_running_loop()
 
         for attempt in range(attempts):
-            effective_timeout = self._effective_timeout(timeout_request.timeout_math_key, override, attempt = attempt)
+            backoff = timeout_cfg.retry_backoff_factor**attempt if attempt > 0 else 1.0
+            effective_timeout = timeout_request.configured_timeout * timeout_cfg.multiplier * backoff
             attempt_started = loop.time()
             try:
                 result = await operation(effective_timeout)
