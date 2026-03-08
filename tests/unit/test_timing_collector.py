@@ -11,7 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from kleinanzeigen_bot.utils import misc
-from kleinanzeigen_bot.utils.timing_collector import RETENTION_DAYS, TimingCollector
+from kleinanzeigen_bot.utils.timing_collector import RETENTION_DAYS, TIMING_SCHEMA_VERSION, TimingCollector
 
 pytestmark = pytest.mark.unit
 
@@ -47,6 +47,7 @@ class TestTimingCollector:
         data = json.loads(file_path.read_text(encoding = "utf-8"))
         assert isinstance(data, list)
         assert len(data) == 1
+        assert data[0]["schema_version"] == TIMING_SCHEMA_VERSION
         assert data[0]["command"] == "publish"
         assert len(data[0]["records"]) == 1
         assert data[0]["records"][0]["operation_key"] == "default"
@@ -278,6 +279,8 @@ class TestTimingCollector:
         assert file_path is not None
         payload = json.loads(file_path.read_text(encoding = "utf-8"))
         assert len(payload) == 2
+        assert "schema_version" not in payload[0]
+        assert payload[1]["schema_version"] == TIMING_SCHEMA_VERSION
         assert "timeout_source_key" not in payload[0]["records"][0]
         assert payload[1]["records"][0]["timeout_source_key"] == "quick_dom"
 

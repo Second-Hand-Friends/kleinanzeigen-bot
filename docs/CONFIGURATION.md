@@ -331,6 +331,7 @@ Example structure:
 ```json
 [
   {
+    "schema_version": 2,
     "session_id": "abc12345",
     "command": "publish",
     "started_at": "2026-02-07T10:00:00+01:00",
@@ -360,6 +361,7 @@ How to read it quickly:
 - Group by `command` and `session_id` first to compare slow vs fast runs
 - Look for high `actual_duration_sec` values near `effective_timeout_sec` and repeated `success: false` entries
 - `attempt_index` is zero-based (`0` first attempt, `1` first retry)
+- `schema_version` identifies the timing payload shape; missing value indicates a legacy session entry
 - Prefer `timeout_source_key` to identify which configured timeout bucket needs tuning; fall back to `operation_key` for legacy sessions
 - If `timeout_origin` is `inline_override`, treat `timeout_source_key` as grouping-only rather than a configured bucket
 - Missing provenance fields on older sessions are expected legacy shape, not corruption

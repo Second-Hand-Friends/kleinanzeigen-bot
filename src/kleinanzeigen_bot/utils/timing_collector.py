@@ -27,6 +27,7 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 RETENTION_DAYS:Final[int] = 30
 TIMING_FILE:Final[str] = "timing_data.json"
+TIMING_SCHEMA_VERSION:Final[int] = 2
 
 
 @dataclass
@@ -112,6 +113,7 @@ class TimingCollector:
             data = self._load_existing_sessions()
             data.append(
                 {
+                    "schema_version": TIMING_SCHEMA_VERSION,
                     "session_id": self.session_id,
                     "command": self.command,
                     "started_at": self.started_at,
