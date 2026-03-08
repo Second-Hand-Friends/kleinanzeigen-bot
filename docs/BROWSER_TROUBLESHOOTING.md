@@ -112,7 +112,7 @@ The bot uses a **DOM-based check** as the primary method to detect login state:
    - Returns `UNKNOWN` on timeouts, assertion failures, or unexpected response bodies
    - Only used when DOM check is inconclusive (UNKNOWN or timed out)
 
-3. **Diagnostics capture**: If the state remains `UNKNOWN` and `diagnostics.login_detection_capture` is enabled
+3. **Diagnostics capture**: If the state remains `UNKNOWN` and `diagnostics.capture_on.login_detection` is enabled
 
    - Captures a screenshot and HTML dump for troubleshooting
    - Pauses for manual inspection if `diagnostics.pause_on_login_detection_failure` is enabled and running in an interactive terminal
@@ -140,7 +140,8 @@ timeouts:
 
 # Enable diagnostics when troubleshooting login detection issues
 diagnostics:
-  login_detection_capture: true  # Capture artifacts on UNKNOWN state
+  capture_on:
+    login_detection: true  # Capture artifacts on UNKNOWN state
   pause_on_login_detection_failure: true  # Pause for inspection (interactive only)
   output_dir: "./diagnostics"  # Custom output directory (optional)
 ```
