@@ -415,6 +415,7 @@ class TestExtendAdMethod:
                 return pagination_section
             # Extend button (called by find_and_click_extend_button callback)
             if selector_type == By.XPATH and "Verlängern" in selector_value:
+                assert kwargs.get("timeout_key") == "pagination_initial"
                 return extend_button_mock
             raise TimeoutError(f"Unexpected find: {selector_type} {selector_value}")
 

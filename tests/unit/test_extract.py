@@ -645,6 +645,8 @@ class TestAdExtractorNavigation:
                 expected_timeout_key = "pagination_initial" if next_button_call["count"] == 0 else "pagination_follow_up"
                 if timeout_key != expected_timeout_key:
                     raise AssertionError(f"Unexpected timeout_key for pagination: {timeout_key}; expected {expected_timeout_key}")
+                if timeout is not None:
+                    raise AssertionError(f"Unexpected numeric timeout for pagination: {timeout}")
                 return pagination_section_mock
             if selector_type == By.CSS_SELECTOR and selector_value == "div h3 a.text-onSurface":
                 return link_queue.pop(0)
@@ -663,6 +665,8 @@ class TestAdExtractorNavigation:
                 expected_timeout_key = "pagination_initial" if next_button_call["count"] == 1 else "pagination_follow_up"
                 if timeout_key != expected_timeout_key:
                     raise AssertionError(f"Unexpected timeout_key for next-button lookup: {timeout_key}; expected {expected_timeout_key}")
+                if timeout is not None:
+                    raise AssertionError(f"Unexpected numeric timeout for next-button lookup: {timeout}")
                 if next_button_call["count"] == 1:
                     return [next_button_enabled]  # initial detection -> multi page
                 if next_button_call["count"] == 2:

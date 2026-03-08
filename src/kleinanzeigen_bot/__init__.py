@@ -1487,7 +1487,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             async def find_and_click_extend_button(page_num:int) -> bool:
                 """Try to find and click extend button on current page."""
                 try:
-                    extend_button = await self.web_find(By.XPATH, extend_button_xpath, timeout_key = "quick_dom")
+                    timeout_key = "pagination_initial" if page_num == 1 else "pagination_follow_up"
+                    extend_button = await self.web_find(By.XPATH, extend_button_xpath, timeout_key = timeout_key)
                     LOG.info("Found extend button on page %s", page_num)
                     await extend_button.click()
                     return True  # Success - stop pagination

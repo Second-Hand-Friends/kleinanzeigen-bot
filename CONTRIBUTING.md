@@ -224,7 +224,7 @@ All Python files must start with SPDX license headers:
   - `key`: semantic operation label used for timing aggregation (`operation_key` in timing output).
   - `timeout_key`: optional configured timeout bucket selector; when set, timing uses this as `timeout_source_key`.
   - `timeout`: optional numeric one-off override; use for local exceptions, not long-term tuning.
-  - `timeout_origin`: timing field indicating how timeout was chosen (`operation_key`, `named_timeout`, or `inline_override`).
+  - `timeout_origin`: derived timing output field that indicates how timeout was chosen (`operation_key`, `named_timeout`, or `inline_override`); it is not a helper call parameter.
   - Example:
 
     ```python
