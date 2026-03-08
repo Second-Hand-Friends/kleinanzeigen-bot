@@ -109,9 +109,44 @@ def test_timeout_config_schema_forbids_unknown_fields() -> None:
     assert schema["$defs"]["TimeoutConfig"]["additionalProperties"] is False
 
 
-def test_timeout_config_resolve_falls_back_to_default() -> None:
+def test_timeout_config_resolve_rejects_unknown_key() -> None:
     timeouts = TimeoutConfig(default = 3.0)
-    assert timeouts.resolve("nonexistent_key") == 3.0
+    with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+        timeouts.resolve("nonexistent_key")
+
+
+def test_timeout_config_effective_rejects_unknown_key() -> None:
+    timeouts = TimeoutConfig(default = 3.0)
+    with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+        timeouts.effective("nonexistent_key")
+
+
+@pytest.mark.parametrize("invalid_key", ["multiplier", "retry_enabled", "retry_max_attempts", "retry_backoff_factor"])
+def test_timeout_config_resolve_rejects_non_bucket_fields(invalid_key:str) -> None:
+    timeouts = TimeoutConfig(default = 3.0)
+    with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+        timeouts.resolve(invalid_key)
+
+
+@pytest.mark.parametrize("invalid_key", ["multiplier", "retry_enabled", "retry_max_attempts", "retry_backoff_factor"])
+def test_timeout_config_effective_rejects_non_bucket_fields(invalid_key:str) -> None:
+    timeouts = TimeoutConfig(default = 3.0)
+    with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+        timeouts.effective(invalid_key)
+
+
+@pytest.mark.parametrize("invalid_key", ["nonexistent_key", "multiplier", "retry_enabled", "retry_max_attempts", "retry_backoff_factor"])
+def test_timeout_config_resolve_rejects_unknown_keys_even_with_override(invalid_key:str) -> None:
+    timeouts = TimeoutConfig(default = 3.0)
+    with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+        timeouts.resolve(invalid_key, override = 0.25)
+
+
+@pytest.mark.parametrize("invalid_key", ["nonexistent_key", "multiplier", "retry_enabled", "retry_max_attempts", "retry_backoff_factor"])
+def test_timeout_config_effective_rejects_unknown_keys_even_with_override(invalid_key:str) -> None:
+    timeouts = TimeoutConfig(default = 3.0)
+    with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+        timeouts.effective(invalid_key, override = 0.25)
 
 
 def test_diagnostics_pause_requires_capture_validation() -> None:

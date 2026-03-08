@@ -239,17 +239,13 @@ class TimeoutConfig(ContextualModel):
         """
         Return the base timeout (seconds) for the given key without applying modifiers.
         """
+        if key not in self.timeout_bucket_keys():
+            raise ValueError(f"Unknown timeout bucket '{key}'")
+
         if override is not None:
             return float(override)
 
-        if key == "default":
-            return float(self.default)
-
-        attr = getattr(self, key, None)
-        if isinstance(attr, (int, float)):
-            return float(attr)
-
-        return float(self.default)
+        return float(getattr(self, key))
 
     def effective(self, key:str = "default", override:float | None = None, *, attempt:int = 0) -> float:
         """
