@@ -485,6 +485,39 @@ class TestKleinanzeigenBotAuthentication:
         assert call_args.kwargs.get("timeout") is None
 
     @pytest.mark.asyncio
+    async def test_is_logged_in_records_login_detection_timing_provenance(self, test_bot:KleinanzeigenBot) -> None:
+        recorded:list[dict[str, Any]] = []
+
+        class RecordingCollector:
+            def record(self, **kwargs:Any) -> None:
+                recorded.append(kwargs)
+
+        cast(Any, test_bot)._timing_collector = RecordingCollector()
+
+        with (
+            patch.object(test_bot, "_web_find_once", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "_extract_visible_text", new_callable = AsyncMock, return_value = f"Welcome {test_bot.config.login.username}"),
+        ):
+            assert await test_bot.is_logged_in(include_probe = False) is True
+
+        assert recorded
+        assert recorded[0]["key"] == "login_detection"
+        assert recorded[0]["timeout_source_key"] == "login_detection"
+        assert recorded[0]["timeout_origin"] == "operation_key"
+
+    @pytest.mark.asyncio
+    async def test_is_logged_in_logs_unknown_timeout_bucket_errors(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
+        caplog.set_level("ERROR")
+        with (
+            patch.object(test_bot, "web_text_first_available", side_effect = ValueError("Unknown timeout bucket 'login_detecton'")),
+            pytest.raises(ValueError, match = r"^Unknown timeout bucket 'login_detecton'$") as exc_info,
+        ):
+            await test_bot.is_logged_in(include_probe = False)
+
+        assert str(exc_info.value) == "Unknown timeout bucket 'login_detecton'"
+        assert "Login detection timeout configuration error" in caplog.text
+
+    @pytest.mark.asyncio
     async def test_is_logged_in_logs_selector_label_without_raw_selector_literals(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
         """Login detection logs should reference stable labels, not raw selector values."""
         caplog.set_level("DEBUG")

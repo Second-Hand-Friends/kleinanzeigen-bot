@@ -165,9 +165,26 @@ timeouts:
 
 For maintainers extending web-scraping helpers:
 
-- Use `timeout_key` to select the configured timeout bucket.
-- Use `key` as the semantic operation label for timing aggregation.
-- Use `timeout` only for explicit numeric one-off overrides.
+- `key`: semantic operation label used for timing aggregation (`operation_key` in timing output).
+- `timeout_key`: optional configured timeout bucket selector; when set, timing uses this as `timeout_source_key`.
+- `timeout`: optional numeric one-off override; use for local exceptions, not long-term tuning.
+- `timeout_origin` in timing output indicates how timeout was chosen: `operation_key`, `named_timeout`, or `inline_override`.
+
+Example provenance mapping:
+
+```python
+await self.web_find_first_available(
+    selectors,
+    key = "login_detection",
+    timeout_key = "quick_dom",
+)
+```
+
+Produces timing semantics similar to:
+
+- `operation_key = "login_detection"`
+- `timeout_source_key = "quick_dom"`
+- `timeout_origin = "named_timeout"`
 
 For more details on timeout configuration and troubleshooting, see [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md).
 

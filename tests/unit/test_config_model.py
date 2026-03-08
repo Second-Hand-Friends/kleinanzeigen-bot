@@ -92,7 +92,7 @@ def test_timeout_config_bucket_keys_include_named_timeouts_only() -> None:
     assert "retry_backoff_factor" not in keys
 
 
-def test_timeout_config_bucket_keys_derive_from_model_fields() -> None:
+def test_timeout_config_bucket_keys_match_explicit_bucket_set() -> None:
     assert TimeoutConfig.timeout_bucket_keys() == {
         "default",
         "page_load",
@@ -112,6 +112,20 @@ def test_timeout_config_bucket_keys_derive_from_model_fields() -> None:
         "chrome_remote_debugging",
         "chrome_binary_detection",
     }
+    assert TimeoutConfig.timeout_bucket_keys() == TimeoutConfig.TIMEOUT_BUCKET_FIELDS
+    assert TimeoutConfig.timeout_bucket_keys().issubset(TimeoutConfig.model_fields.keys())
+
+
+def test_timeout_config_resolve_allows_valid_bucket_with_override() -> None:
+    timeouts = TimeoutConfig(default = 3.0, update_check = 10.0)
+
+    assert timeouts.resolve("update_check", override = 0.25) == pytest.approx(0.25)
+
+
+def test_timeout_config_effective_allows_valid_bucket_with_override() -> None:
+    timeouts = TimeoutConfig(default = 3.0, update_check = 10.0, multiplier = 2.0, retry_backoff_factor = 1.5)
+
+    assert timeouts.effective("update_check", override = 0.25, attempt = 1) == pytest.approx(0.75)
 
 
 def test_timeout_config_rejects_unknown_timeout_fields_in_config() -> None:

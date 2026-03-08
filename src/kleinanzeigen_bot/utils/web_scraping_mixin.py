@@ -398,6 +398,9 @@ class WebScrapingMixin:
     ) -> tuple[Element, int]:
         """
         Find the first matching selector from an ordered group using a shared timeout budget.
+
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         """
         if not selectors:
             raise ValueError(_("selectors must contain at least one selector"))
@@ -451,6 +454,9 @@ class WebScrapingMixin:
     ) -> tuple[str, int]:
         """
         Return visible text from the first selector that resolves from a selector group.
+
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         """
         element, matched_index = await self.web_find_first_available(
             selectors,
@@ -944,7 +950,8 @@ class WebScrapingMixin:
         """
         Locates an HTML element and returns a state.
 
-        :param timeout: timeout in seconds
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         :raises TimeoutError: if element could not be found within time
         """
 
@@ -999,7 +1006,8 @@ class WebScrapingMixin:
         """
         Locates an HTML element by ID.
 
-        :param timeout: timeout in seconds
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         :raises TimeoutError: if element could not be found within time
         """
         self._ensure_timeout_inputs_valid(timeout = timeout, timeout_key = timeout_key)
@@ -1106,7 +1114,8 @@ class WebScrapingMixin:
         """
         Locates an HTML element by the given selector type and value.
 
-        :param timeout: timeout in seconds (base value before multiplier/backoff)
+        :param timeout: explicit numeric timeout override in seconds (base value before multiplier/backoff)
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         :raises TimeoutError: if element could not be found within time
         """
 
@@ -1123,7 +1132,8 @@ class WebScrapingMixin:
         """
         Locates multiple HTML elements by the given selector type and value.
 
-        :param timeout: timeout in seconds (base value before multiplier/backoff)
+        :param timeout: explicit numeric timeout override in seconds (base value before multiplier/backoff)
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         :raises TimeoutError: if element could not be found within time
         """
 
@@ -1238,7 +1248,8 @@ class WebScrapingMixin:
         """
         Enters text into an HTML input field.
 
-        :param timeout: timeout in seconds
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         :raises TimeoutError: if element could not be found within time
         """
         self._ensure_timeout_inputs_valid(timeout = timeout, timeout_key = timeout_key)
@@ -1271,6 +1282,12 @@ class WebScrapingMixin:
     async def web_text(
         self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None, timeout_key:str | None = None
     ) -> str:
+        """
+        Return visible text of a single matching element.
+
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
+        """
         element = await self.web_find(selector_type, selector_value, parent = parent, timeout = timeout, timeout_key = timeout_key)
         return await self._extract_visible_text(element)
 
@@ -1333,7 +1350,12 @@ class WebScrapingMixin:
         multi_page = False
         try:
             pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout_key = "pagination_initial")
-            next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section)
+            next_buttons = await self.web_find_all(
+                By.CSS_SELECTOR,
+                'button[aria-label="Nächste"]',
+                parent = pagination_section,
+                timeout_key = "pagination_initial",
+            )
             if next_buttons:
                 enabled_next_buttons = [btn for btn in next_buttons if not btn.attrs.get("disabled")]
                 if enabled_next_buttons:
@@ -1366,7 +1388,12 @@ class WebScrapingMixin:
             try:
                 pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout_key = "pagination_follow_up")
                 next_button_element = None
-                possible_next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section)
+                possible_next_buttons = await self.web_find_all(
+                    By.CSS_SELECTOR,
+                    'button[aria-label="Nächste"]',
+                    parent = pagination_section,
+                    timeout_key = "pagination_follow_up",
+                )
                 for btn in possible_next_buttons:
                     if not btn.attrs.get("disabled"):
                         next_button_element = btn
@@ -1443,7 +1470,8 @@ class WebScrapingMixin:
         """
         Selects an <option/> of a <select/> HTML element.
 
-        :param timeout: timeout in seconds
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         :raises TimeoutError: if element could not be found within time
         :raises UnexpectedTagNameException: if element is not a <select> element
         """
@@ -1499,7 +1527,8 @@ class WebScrapingMixin:
         filter the dropdown and clicking the first <li> whose visible text matches.
         Returns the dropdown <ul> element on success.
 
-        :param timeout: timeout in seconds
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         :raises TimeoutError: when the input or matching dropdown option cannot be located
         """
         # Validate timeout inputs even though combobox selection currently has no wrapper-local wait phase.

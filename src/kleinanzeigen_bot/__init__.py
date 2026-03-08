@@ -1269,6 +1269,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 return True
         except TimeoutError:
             LOG.debug("Timeout waiting for login detection selector group after %.1fs", effective_timeout)
+        except ValueError as ex:
+            if "Unknown timeout bucket" in str(ex):
+                LOG.error("Login detection timeout configuration error: %s", ex)
+            raise
 
         if not include_probe:
             LOG.debug("No login detected via configured login detection selectors (%s)", tried_login_selectors)
