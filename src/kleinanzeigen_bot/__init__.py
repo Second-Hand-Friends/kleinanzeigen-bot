@@ -1071,7 +1071,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         try:
             LOG.info("Handling GDPR disclaimer...")
             await self.web_find(By.ID, "gdpr-banner-accept", timeout_key = "gdpr_prompt")
-            await self.web_click(By.ID, "gdpr-banner-cmp-button")
+            await self.web_click(By.ID, "gdpr-banner-cmp-button", timeout_key = "gdpr_prompt")
             await self.web_click(
                 By.XPATH,
                 "//div[@id='ConsentManagementPage']//*//button//*[contains(., 'Alle ablehnen und fortfahren')]",

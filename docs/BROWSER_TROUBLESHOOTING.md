@@ -84,6 +84,7 @@ The bot will also provide specific instructions on how to fix your configuration
    - User directories mode path: `~/.cache/kleinanzeigen-bot/timing/timing_data.json` (Linux), `~/Library/Caches/kleinanzeigen-bot/timing/timing_data.json` (macOS), or `%LOCALAPPDATA%\kleinanzeigen-bot\timing\timing_data.json` (Windows)
    - Which one applies depends on your installation mode: portable mode writes next to your config/current directory, user directories mode writes in OS-standard user paths. Check which path exists on your system, or see `CONFIGURATION.md#installation-modes` for mode selection details.
    - When analyzing runs, prefer `timeout_source_key`; fall back to `operation_key` for legacy sessions that predate provenance fields.
+   - If `timeout_origin` is `inline_override`, treat `timeout_source_key` as grouping-only metadata rather than a configured timeout bucket to tune.
 
 ### Issue: Bot fails to detect existing login session
 

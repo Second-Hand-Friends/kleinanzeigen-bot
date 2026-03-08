@@ -163,28 +163,7 @@ timeouts:
 - Unknown keys under `timeouts` are rejected during config validation (for example `quick_domm`)
 - Keep `retry_enabled` on so DOM lookups are retried with exponential backoff
 
-For maintainers extending web-scraping helpers:
-
-- `key`: semantic operation label used for timing aggregation (`operation_key` in timing output).
-- `timeout_key`: optional configured timeout bucket selector; when set, timing uses this as `timeout_source_key`.
-- `timeout`: optional numeric one-off override; use for local exceptions, not long-term tuning.
-- `timeout_origin` in timing output indicates how timeout was chosen: `operation_key`, `named_timeout`, or `inline_override`.
-
-Example provenance mapping:
-
-```python
-await self.web_find_first_available(
-    selectors,
-    key = "login_detection",
-    timeout_key = "quick_dom",
-)
-```
-
-Produces timing semantics similar to:
-
-- `operation_key = "login_detection"`
-- `timeout_source_key = "quick_dom"`
-- `timeout_origin = "named_timeout"`
+For maintainer implementation guidance around timeout provenance semantics, see [CONTRIBUTING.md](../CONTRIBUTING.md#timeout-configuration).
 
 For more details on timeout configuration and troubleshooting, see [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md).
 
@@ -369,7 +348,7 @@ Example structure:
         "operation_type": "web_find",
         "description": "web_find(ID, submit)",
         "configured_timeout_sec": 2.0,
-        "effective_timeout_sec": 5.0,
+        "effective_timeout_sec": 2.0,
         "actual_duration_sec": 1.2,
         "attempt_index": 0,
         "success": true
@@ -384,10 +363,7 @@ How to read it quickly:
 - Group by `command` and `session_id` first to compare slow vs fast runs
 - Look for high `actual_duration_sec` values near `effective_timeout_sec` and repeated `success: false` entries
 - `attempt_index` is zero-based (`0` first attempt, `1` first retry)
-- `schema_version` identifies the timing payload shape; missing value indicates a legacy session entry
-- Prefer `timeout_source_key` to identify which configured timeout bucket needs tuning; fall back to `operation_key` for legacy sessions
-- If `timeout_origin` is `inline_override`, treat `timeout_source_key` as grouping-only rather than a configured bucket
-- Missing provenance fields on older sessions are expected legacy shape, not corruption
+- For maintainer-level interpretation details of provenance/versioning fields, see [CONTRIBUTING.md](../CONTRIBUTING.md#timeout-configuration)
 - For deeper timeout tuning workflow, see [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md)
 
 > **⚠️ PII Warning:** HTML dumps, JSON payloads, timing data JSON files (for example `timing_data.json`), and log copies may contain PII. Typical examples include account email, ad titles/descriptions, contact info, and prices. Log copies are produced by `capture_log_copy` when diagnostics capture runs, such as `capture_on.publish` or `capture_on.login_detection`. Review or redact these artifacts before sharing them publicly.
