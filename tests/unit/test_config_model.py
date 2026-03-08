@@ -1,7 +1,11 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import json
+from pathlib import Path
+
 import pytest
+from pydantic import ValidationError
 
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, TimeoutConfig
 
@@ -86,6 +90,23 @@ def test_timeout_config_bucket_keys_include_named_timeouts_only() -> None:
     assert "quick_dom" in keys
     assert "multiplier" not in keys
     assert "retry_backoff_factor" not in keys
+
+
+def test_timeout_config_rejects_unknown_timeout_fields_in_config() -> None:
+    minimal_cfg = {
+        "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
+        "login": {"username": "dummy", "password": "dummy"},  # noqa: S105
+    }
+
+    with pytest.raises(ValidationError, match = "quick_domm"):
+        Config.model_validate({**minimal_cfg, "timeouts": {"quick_domm": 2.0}})
+
+
+def test_timeout_config_schema_forbids_unknown_fields() -> None:
+    schema_path = Path(__file__).resolve().parents[2] / "schemas" / "config.schema.json"
+    schema = json.loads(schema_path.read_text(encoding = "utf-8"))
+
+    assert schema["$defs"]["TimeoutConfig"]["additionalProperties"] is False
 
 
 def test_timeout_config_resolve_falls_back_to_default() -> None:

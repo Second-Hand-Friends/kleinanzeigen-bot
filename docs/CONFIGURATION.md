@@ -160,6 +160,7 @@ timeouts:
 
 - Slow networks or sluggish remote browsers often just need a higher `timeouts.multiplier`
 - For truly problematic selectors, override specific keys directly under `timeouts`
+- Unknown keys under `timeouts` are rejected during config validation (for example `quick_domm`)
 - Keep `retry_enabled` on so DOM lookups are retried with exponential backoff
 
 For more details on timeout configuration and troubleshooting, see [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md).

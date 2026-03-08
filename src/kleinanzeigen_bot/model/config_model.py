@@ -7,7 +7,7 @@ import copy
 from gettext import gettext as _
 from typing import Annotated, Any, ClassVar, Final, Literal
 
-from pydantic import AfterValidator, Field, model_validator
+from pydantic import AfterValidator, ConfigDict, Field, model_validator
 from typing_extensions import deprecated
 
 from kleinanzeigen_bot.model.update_check_model import UpdateCheckConfig
@@ -187,6 +187,8 @@ class CaptchaConfig(ContextualModel):
 
 
 class TimeoutConfig(ContextualModel):
+    model_config = ConfigDict(extra = "forbid")
+
     TIMEOUT_BUCKET_KEYS:ClassVar[tuple[str, ...]] = (
         "default",
         "page_load",
