@@ -560,6 +560,16 @@ class TestTimeoutAndRetryHelpers:
         assert recorded[0]["timeout_override_sec"] == pytest.approx(0.5)
 
     @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_accepts_override_for_non_bucket_operation_key(self, web_scraper:WebScrapingMixin) -> None:
+        async def operation(timeout:float) -> str:
+            assert timeout == pytest.approx(0.5)
+            return "ok"
+
+        result = await web_scraper._run_with_timeout_retries(operation, description = "custom op", key = "custom_operation", override = 0.5)
+
+        assert result == "ok"
+
+    @pytest.mark.asyncio
     async def test_run_with_timeout_retries_rejects_timeout_key_and_override(self, web_scraper:WebScrapingMixin) -> None:
         async def operation(_timeout:float) -> str:
             return "ok"
@@ -568,11 +578,11 @@ class TestTimeoutAndRetryHelpers:
             await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)", timeout_key = "quick_dom", override = 0.5)
 
     @pytest.mark.asyncio
-    async def test_run_with_timeout_retries_rejects_unknown_timeout_key_with_suggestion(self, web_scraper:WebScrapingMixin) -> None:
+    async def test_run_with_timeout_retries_rejects_unknown_timeout_key(self, web_scraper:WebScrapingMixin) -> None:
         async def operation(_timeout:float) -> str:
             return "ok"
 
-        with pytest.raises(ValueError, match = "Did you mean 'quick_dom'\\?"):
+        with pytest.raises(ValueError, match = "Unknown timeout bucket"):
             await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)", timeout_key = "quick_domm")
 
     @pytest.mark.asyncio
@@ -580,8 +590,10 @@ class TestTimeoutAndRetryHelpers:
         async def operation(_timeout:float) -> str:
             return "ok"
 
-        with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+        with pytest.raises(ValueError, match = r"^Unknown timeout bucket 'zzz'$") as exc_info:
             await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)", timeout_key = "zzz")
+
+        assert str(exc_info.value) == "Unknown timeout bucket 'zzz'"
 
     @pytest.mark.asyncio
     async def test_run_with_timeout_retries_ignores_collector_failure(self, web_scraper:WebScrapingMixin) -> None:

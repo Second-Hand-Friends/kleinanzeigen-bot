@@ -189,24 +189,13 @@ class CaptchaConfig(ContextualModel):
 class TimeoutConfig(ContextualModel):
     model_config = ConfigDict(extra = "forbid")
 
-    TIMEOUT_BUCKET_KEYS:ClassVar[tuple[str, ...]] = (
-        "default",
-        "page_load",
-        "captcha_detection",
-        "sms_verification",
-        "email_verification",
-        "gdpr_prompt",
-        "login_detection",
-        "publishing_result",
-        "publishing_confirmation",
-        "image_upload",
-        "pagination_initial",
-        "pagination_follow_up",
-        "quick_dom",
-        "update_check",
-        "chrome_remote_probe",
-        "chrome_remote_debugging",
-        "chrome_binary_detection",
+    NON_TIMEOUT_BUCKET_FIELDS:ClassVar[frozenset[str]] = frozenset(
+        {
+            "multiplier",
+            "retry_enabled",
+            "retry_max_attempts",
+            "retry_backoff_factor",
+        }
     )
 
     multiplier:float = Field(default = 1.0, ge = 0.1, description = "Global multiplier applied to all timeout values.")
@@ -233,7 +222,7 @@ class TimeoutConfig(ContextualModel):
 
     @classmethod
     def timeout_bucket_keys(cls) -> frozenset[str]:
-        return frozenset(cls.TIMEOUT_BUCKET_KEYS)
+        return frozenset(field for field in cls.model_fields if field not in cls.NON_TIMEOUT_BUCKET_FIELDS)
 
     def resolve(self, key:str = "default", override:float | None = None) -> float:
         """

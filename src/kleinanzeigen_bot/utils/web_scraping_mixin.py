@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio, difflib, enum, inspect, json, os, platform, secrets, shutil, subprocess, urllib.request  # isort: skip # noqa: S404
+import asyncio, enum, inspect, json, os, platform, secrets, shutil, subprocess, urllib.request  # isort: skip # noqa: S404
 from collections.abc import Awaitable, Callable, Coroutine, Iterable, Sequence
 from gettext import gettext as _
 from pathlib import Path, PureWindowsPath
@@ -46,6 +46,7 @@ _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS:Final[float] = 0.25
 
 class ResolvedTimeoutRequest(NamedTuple):
     timeout_source_key:str
+    timeout_math_key:str
     configured_timeout:float
     timeout_origin:Literal["operation_key", "named_timeout", "inline_override"]
     timeout_override_sec:float | None
@@ -232,10 +233,6 @@ class WebScrapingMixin:
     def _validate_timeout_key(self, timeout_key:str) -> str:
         if timeout_key in TimeoutConfig.timeout_bucket_keys():
             return timeout_key
-
-        suggestions = difflib.get_close_matches(timeout_key, TimeoutConfig.TIMEOUT_BUCKET_KEYS, n = 1)
-        if suggestions:
-            raise ValueError(f"Unknown timeout bucket '{timeout_key}'. Did you mean '{suggestions[0]}'?")
         raise ValueError(f"Unknown timeout bucket '{timeout_key}'")
 
     def _resolve_timeout_request(self, *, key:str, override:float | None = None, timeout_key:str | None = None) -> ResolvedTimeoutRequest:
@@ -245,7 +242,8 @@ class WebScrapingMixin:
         if override is not None:
             return ResolvedTimeoutRequest(
                 timeout_source_key = key,
-                configured_timeout = self._timeout(key, override),
+                timeout_math_key = "default",
+                configured_timeout = float(override),
                 timeout_origin = "inline_override",
                 timeout_override_sec = float(override),
             )
@@ -254,6 +252,7 @@ class WebScrapingMixin:
             timeout_bucket_key = self._validate_timeout_key(timeout_key)
             return ResolvedTimeoutRequest(
                 timeout_source_key = timeout_bucket_key,
+                timeout_math_key = timeout_bucket_key,
                 configured_timeout = self._timeout(timeout_bucket_key),
                 timeout_origin = "operation_key" if timeout_bucket_key == key else "named_timeout",
                 timeout_override_sec = None,
@@ -263,6 +262,7 @@ class WebScrapingMixin:
 
         return ResolvedTimeoutRequest(
             timeout_source_key = timeout_bucket_key,
+            timeout_math_key = timeout_bucket_key,
             configured_timeout = self._timeout(timeout_bucket_key),
             timeout_origin = "operation_key",
             timeout_override_sec = None,
@@ -297,7 +297,7 @@ class WebScrapingMixin:
         loop = asyncio.get_running_loop()
 
         for attempt in range(attempts):
-            effective_timeout = self._effective_timeout(timeout_request.timeout_source_key, override, attempt = attempt)
+            effective_timeout = self._effective_timeout(timeout_request.timeout_math_key, override, attempt = attempt)
             attempt_started = loop.time()
             try:
                 result = await operation(effective_timeout)

@@ -92,6 +92,28 @@ def test_timeout_config_bucket_keys_include_named_timeouts_only() -> None:
     assert "retry_backoff_factor" not in keys
 
 
+def test_timeout_config_bucket_keys_derive_from_model_fields() -> None:
+    assert TimeoutConfig.timeout_bucket_keys() == {
+        "default",
+        "page_load",
+        "captcha_detection",
+        "sms_verification",
+        "email_verification",
+        "gdpr_prompt",
+        "login_detection",
+        "publishing_result",
+        "publishing_confirmation",
+        "image_upload",
+        "pagination_initial",
+        "pagination_follow_up",
+        "quick_dom",
+        "update_check",
+        "chrome_remote_probe",
+        "chrome_remote_debugging",
+        "chrome_binary_detection",
+    }
+
+
 def test_timeout_config_rejects_unknown_timeout_fields_in_config() -> None:
     minimal_cfg = {
         "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
@@ -111,14 +133,16 @@ def test_timeout_config_schema_forbids_unknown_fields() -> None:
 
 def test_timeout_config_resolve_rejects_unknown_key() -> None:
     timeouts = TimeoutConfig(default = 3.0)
-    with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+    with pytest.raises(ValueError, match = r"^Unknown timeout bucket 'nonexistent_key'$") as exc_info:
         timeouts.resolve("nonexistent_key")
+    assert str(exc_info.value) == "Unknown timeout bucket 'nonexistent_key'"
 
 
 def test_timeout_config_effective_rejects_unknown_key() -> None:
     timeouts = TimeoutConfig(default = 3.0)
-    with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+    with pytest.raises(ValueError, match = r"^Unknown timeout bucket 'nonexistent_key'$") as exc_info:
         timeouts.effective("nonexistent_key")
+    assert str(exc_info.value) == "Unknown timeout bucket 'nonexistent_key'"
 
 
 @pytest.mark.parametrize("invalid_key", ["multiplier", "retry_enabled", "retry_max_attempts", "retry_backoff_factor"])
