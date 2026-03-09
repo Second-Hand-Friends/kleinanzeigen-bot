@@ -1265,6 +1265,37 @@ class TestAdExtractorDownload:
             assert actual_call[0][1] == mock_extract_with_dir.return_value[0].model_dump(mode = "json")
 
     @pytest.mark.asyncio
+    async def test_download_ad_passes_active_override(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+        """Test downloading an ad with an explicit active override."""
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        extractor.download_dir = download_base
+
+        with (
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True),
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+        ):
+            mock_extract_with_dir.return_value = (
+                AdPartial.model_validate(
+                    {
+                        "title": "Test Advertisement Title",
+                        "description": "Test Description",
+                        "category": "Dienstleistungen",
+                        "price": 100,
+                        "images": [],
+                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
+                        "active": False,
+                    }
+                ),
+                final_dir,
+                "ad_12345",
+            )
+
+            await extractor.download_ad(12345, active = False)
+
+            mock_extract_with_dir.assert_awaited_once_with(download_base, 12345, active = False)
+
+    @pytest.mark.asyncio
     async def test_download_ad_writes_schema_compliant_yaml(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
         """Test that downloaded ad YAML validates against ad.schema.json."""
         validator_module = pytest.importorskip("jsonschema")
@@ -1844,3 +1875,40 @@ class TestAdExtractorDownload:
             assert ad_file_stem == "ad_12345"
             mock_extract.assert_awaited_once_with(str(final_dir), 12345, "ad_12345")
             mock_mkdir.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_extract_ad_page_info_with_directory_handling_passes_active_override(
+        self, extractor:extract_module.AdExtractor, tmp_path:Path
+    ) -> None:
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+
+        final_dir = base_dir / "ad_12345_Test Title"
+        ad_cfg = AdPartial.model_validate(
+            {
+                "title": "Test Title",
+                "description": "Test Description",
+                "category": "Dienstleistungen",
+                "price": 100,
+                "images": [],
+                "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
+                "active": False,
+            }
+        )
+
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+        extractor.page = page_mock
+
+        with (
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
+            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock, return_value = ad_cfg) as mock_extract,
+            patch("kleinanzeigen_bot.extract.files.exists", new_callable = AsyncMock, side_effect = [False, False]),
+        ):
+            result_cfg, result_dir, ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345, active = False)
+
+            assert result_cfg == ad_cfg
+            assert result_dir == final_dir
+            assert result_dir.exists()
+            assert ad_file_stem == "ad_12345"
+            mock_extract.assert_awaited_once_with(str(final_dir), 12345, "ad_12345", active = False)
