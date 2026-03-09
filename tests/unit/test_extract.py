@@ -1270,10 +1270,11 @@ class TestAdExtractorDownload:
         """Test downloading an ad with an explicit active override."""
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
+        yaml_path = final_dir / "ad_12345.yaml"
         extractor.download_dir = download_base
 
         with (
-            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True),
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict,
             patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
         ):
             mock_extract_with_dir.return_value = (
@@ -1295,6 +1296,13 @@ class TestAdExtractorDownload:
             await extractor.download_ad(12345, active = False)
 
             mock_extract_with_dir.assert_awaited_once_with(download_base, 12345, active = False)
+            mock_save_dict.assert_called_once()
+
+            actual_call = mock_save_dict.call_args
+            actual_path = Path(actual_call[0][0])
+            saved_payload = actual_call[0][1]
+            assert actual_path == yaml_path
+            assert saved_payload["active"] is False
 
     @pytest.mark.asyncio
     async def test_download_ad_writes_schema_compliant_yaml(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:

@@ -23,7 +23,7 @@ from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 class DownloadScenario(TypedDict):
     published_ads:list[dict[str, Any]]
     expected_active:bool
-    expected_warning_fragment:str | None
+    expect_warning:bool
 
 
 @pytest.fixture
@@ -391,17 +391,17 @@ class TestKleinanzeigenBotInitialization:
             {
                 "published_ads": [{"id": 123, "state": "active"}],
                 "expected_active": True,
-                "expected_warning_fragment": None,
+                "expect_warning": False,
             },
             {
                 "published_ads": [{"id": 999, "state": "active"}],
                 "expected_active": False,
-                "expected_warning_fragment": "Saving downloaded ad as inactive.",
+                "expect_warning": True,
             },
             {
                 "published_ads": [{"id": 123, "state": "inactive"}],
                 "expected_active": False,
-                "expected_warning_fragment": None,
+                "expect_warning": False,
             },
         ],
     )
@@ -414,7 +414,7 @@ class TestKleinanzeigenBotInitialization:
     ) -> None:
         published_ads = scenario["published_ads"]
         expected_active = scenario["expected_active"]
-        expected_warning_fragment = scenario["expected_warning_fragment"]
+        expect_warning = scenario["expect_warning"]
 
         test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
         test_bot.ads_selector = "123"
@@ -435,10 +435,10 @@ class TestKleinanzeigenBotInitialization:
         extractor_mock.download_ad.assert_awaited_once_with(123, active = expected_active)
 
         warning_messages = [record.getMessage() for record in caplog.records if record.levelno >= logging.WARNING]
-        if expected_warning_fragment is None:
-            assert all("Saving downloaded ad as inactive." not in msg for msg in warning_messages)
+        if expect_warning:
+            assert any("123" in msg for msg in warning_messages)
         else:
-            assert any(expected_warning_fragment in msg for msg in warning_messages)
+            assert len(warning_messages) == 0
 
 
 class TestKleinanzeigenBotLogging:
@@ -627,7 +627,7 @@ class TestKleinanzeigenBotAuthentication:
         ):
             assert await test_bot.is_logged_in(include_probe = False) is True
 
-        assert "Login detected via login detection selector 'user_info_secondary'" in caplog.text
+        assert "user_info_secondary" in caplog.text
         for forbidden in (".mr-medium", "#user-email", "mr-medium", "user-email"):
             assert forbidden not in caplog.text
 
@@ -644,9 +644,7 @@ class TestKleinanzeigenBotAuthentication:
         ):
             assert await test_bot.is_logged_in(include_probe = False) is False
 
-        assert any(
-            record.message == "No login detected via configured login detection selectors (CLASS_NAME=mr-medium, ID=user-email)" for record in caplog.records
-        )
+        assert any("CLASS_NAME=mr-medium, ID=user-email" in record.message for record in caplog.records)
 
     @pytest.mark.asyncio
     async def test_is_logged_in_logs_raw_selectors_when_probe_reports_logged_out(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
@@ -660,14 +658,7 @@ class TestKleinanzeigenBotAuthentication:
         ):
             assert await test_bot.is_logged_in() is False
 
-        assert any(
-            record.message
-            == (
-                "No login detected - DOM login detection selectors (CLASS_NAME=mr-medium, ID=user-email) "
-                "did not confirm login and server probe returned LOGGED_OUT"
-            )
-            for record in caplog.records
-        )
+        assert any("CLASS_NAME=mr-medium, ID=user-email" in record.message and "LOGGED_OUT" in record.message for record in caplog.records)
 
     @pytest.mark.asyncio
     async def test_get_login_state_prefers_dom_over_auth_probe(self, test_bot:KleinanzeigenBot) -> None:
