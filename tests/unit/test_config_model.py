@@ -81,7 +81,7 @@ def test_download_config_accepts_custom_dir_and_templates() -> None:
             "download": {
                 "dir": "./ads",
                 "folder_name_template": "{title}",
-                "ad_file_name_template": "listing_{id}",
+                "ad_file_name_template": "listing_{id}_{title}",
             },
             "login": {"username": "dummy", "password": "dummy"},
         }
@@ -89,7 +89,7 @@ def test_download_config_accepts_custom_dir_and_templates() -> None:
 
     assert cfg.download.dir == "./ads"
     assert cfg.download.folder_name_template == "{title}"
-    assert cfg.download.ad_file_name_template == "listing_{id}"
+    assert cfg.download.ad_file_name_template == "listing_{id}_{title}"
 
 
 def test_download_config_rejects_null_dir() -> None:

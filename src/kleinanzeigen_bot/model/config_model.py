@@ -21,7 +21,7 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 _MAX_PERCENTAGE:Final[int] = 100
 _FIELD_NAME_PREFIX:Final[str] = "download."
 _FOLDER_TEMPLATE_ALLOWED_FIELDS:Final[frozenset[str]] = frozenset({"id", "title"})
-_AD_FILE_TEMPLATE_ALLOWED_FIELDS:Final[frozenset[str]] = frozenset({"id"})
+_AD_FILE_TEMPLATE_ALLOWED_FIELDS:Final[frozenset[str]] = frozenset({"id", "title"})
 DEFAULT_DOWNLOAD_DIR:Final[str] = "downloaded-ads"
 
 
@@ -150,9 +150,9 @@ class DownloadConfig(ContextualModel):
         default = "ad_{id}",
         description = (
             "base name template for downloaded ad files. The bot writes the ad config as <base>.yaml "
-            "and downloaded images as <base>__imgN.<ext>. Allowed placeholders: {id}"
+            "and downloaded images as <base>__imgN.<ext>. Allowed placeholders: {id}, {title}"
         ),
-        examples = ['"ad_{id}"', '"listing_{id}"'],
+        examples = ['"ad_{id}"', '"listing_{id}"', '"listing_{id}_{title}"'],
     )
     rename_existing_folders:bool = Field(
         default = False,

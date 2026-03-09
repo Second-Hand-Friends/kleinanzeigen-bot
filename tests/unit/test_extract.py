@@ -1835,7 +1835,7 @@ class TestAdExtractorDownload:
             assert result_dir == final_dir
             assert result_dir.exists()
             assert ad_file_stem == "ad_12345"
-            mock_extract.assert_awaited_once_with(str(final_dir), 12345, "ad_12345")
+            mock_extract.assert_awaited_once_with(str(final_dir), 12345, "ad_12345", active = None)
 
     @pytest.mark.asyncio
     async def test_extract_ad_page_info_with_directory_handling_keeps_existing_matching_temp_dir_without_recreating(
@@ -1873,7 +1873,7 @@ class TestAdExtractorDownload:
             assert result_cfg == ad_cfg
             assert result_dir == final_dir
             assert ad_file_stem == "ad_12345"
-            mock_extract.assert_awaited_once_with(str(final_dir), 12345, "ad_12345")
+            mock_extract.assert_awaited_once_with(str(final_dir), 12345, "ad_12345", active = None)
             mock_mkdir.assert_not_called()
 
     @pytest.mark.asyncio

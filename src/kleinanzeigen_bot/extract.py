@@ -70,10 +70,7 @@ class AdExtractor(WebScrapingMixin):
         LOG.info("Using download directory: %s", download_dir)
 
         # Extract ad info and determine final directory path
-        if active is None:
-            ad_cfg, final_dir, ad_file_stem = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id)
-        else:
-            ad_cfg, final_dir, ad_file_stem = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id, active = active)
+        ad_cfg, final_dir, ad_file_stem = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id, active = active)
 
         # Save the ad configuration file (offload to executor to avoid blocking the event loop)
         ad_file_path = str(Path(final_dir) / f"{ad_file_stem}.yaml")
@@ -395,10 +392,7 @@ class AdExtractor(WebScrapingMixin):
             LOG.info("New directory for ad created at %s.", final_dir)
 
         # Now extract complete ad info (including images) to the final directory
-        if active is None:
-            ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id, ad_file_stem)
-        else:
-            ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id, ad_file_stem, active = active)
+        ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id, ad_file_stem, active = active)
 
         return ad_cfg, final_dir, ad_file_stem
 

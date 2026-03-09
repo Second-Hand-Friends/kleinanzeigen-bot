@@ -179,7 +179,7 @@ download:
   excluded_shipping_options: []  # list of shipping options to exclude, e.g. ['DHL_2', 'DHL_5']
   folder_name_max_length: 100  # maximum length for folder names when downloading ads (default: 100)
   folder_name_template: "ad_{id}_{title}"  # folder naming template; placeholders: {id}, {title}
-  ad_file_name_template: "ad_{id}"  # base name for ad.yaml and image prefixes; placeholder: {id}
+  ad_file_name_template: "ad_{id}"  # base name for ad.yaml and image prefixes; placeholders: {id}, {title}; must include {id}
   rename_existing_folders: false  # if true, rename existing folders without titles to include titles (default: false)
 ```
 
@@ -187,9 +187,10 @@ download:
 - Leaving `download.dir` at the default `downloaded-ads` keeps the existing workspace-mode behavior: in portable mode it uses the portable workspace download folder, and in XDG mode it uses the XDG config workspace download folder.
 - If you set a custom relative `download.dir`, it is resolved relative to `config.yaml`, not the current shell working directory.
 - To use one folder for both workflows, point `download.dir` and `ad_files` at the same tree explicitly.
-- Warning: if you point a custom `download.dir` and `ad_files` at the same tree, running `download` again for an already-downloaded ad can overwrite that ad's downloaded config file and refresh its images/folder contents. If you manually edit ads for publishing, keep them in a separate publish folder or use backups/version control.
+- `ad_files` is a glob pattern resolved relative to `config.yaml`. If you customize `download.ad_file_name_template`, make sure your `ad_files` pattern still matches the downloaded `<base>.yaml` filenames.
+- Warning: if `download` and `publish` share the same tree, running `download` again for an already-downloaded ad can overwrite that ad's downloaded config file and refresh its images/folder contents. This also applies if you point `ad_files` at the default `downloaded-ads` tree. If you manually edit ads for publishing, keep them in a separate publish folder or use backups/version control.
 - `download.folder_name_template` affects newly created download folders.
-- `download.ad_file_name_template` defines the shared base name for downloaded files: the bot writes the ad config as `<base>.yaml` and images as `<base>__img1.<ext>`, `<base>__img2.<ext>`, and so on.
+- `download.ad_file_name_template` defines the shared base name for downloaded files: the bot writes the ad config as `<base>.yaml` and images as `<base>__img1.<ext>`, `<base>__img2.<ext>`, and so on. It supports `{id}` and `{title}`, and `{id}` is required.
 
 ### publishing
 
