@@ -27,6 +27,7 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 _BREADCRUMB_MIN_DEPTH:Final[int] = 2
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
 _MAX_FILENAME_COMPONENT_LENGTH:Final[int] = 255
+# Stem is character-count bounded (not byte-count bounded) and reserves room for image suffixes like "__img1234.jpeg".
 _DOWNLOAD_STEM_SUFFIX_BUDGET:Final[int] = len("__img9999.jpeg")
 
 
@@ -48,9 +49,18 @@ class AdExtractor(WebScrapingMixin):
         self.download_dir:Path = download_dir
         self.published_ads_by_id:dict[int, dict[str, Any]] = published_ads_by_id or {}
 
-    def _render_download_ad_file_stem(self, ad_id:int) -> str:
-        stem = self.config.download.ad_file_name_template.format(id = ad_id).strip()
-        return misc.sanitize_folder_name(stem, _MAX_FILENAME_COMPONENT_LENGTH - _DOWNLOAD_STEM_SUFFIX_BUDGET)
+    def _render_download_ad_file_stem(self, ad_id:int, title:str) -> str:
+        max_stem_length = _MAX_FILENAME_COMPONENT_LENGTH - _DOWNLOAD_STEM_SUFFIX_BUDGET
+        sanitized_title = misc.sanitize_folder_name(title, _MAX_FILENAME_COMPONENT_LENGTH)
+        template = self.config.download.ad_file_name_template
+
+        if "{id}" in template and "{title}" in template:
+            fixed_stem = template.format(id = ad_id, title = "").strip()
+            available_title_length = max(0, max_stem_length - len(fixed_stem))
+            sanitized_title = misc.sanitize_folder_name(sanitized_title, available_title_length)
+
+        stem = template.format(id = ad_id, title = sanitized_title).strip()
+        return misc.sanitize_folder_name(stem, max_stem_length)
 
     def _render_download_folder_name(self, ad_id:int, title:str) -> str:
         sanitized_title = misc.sanitize_folder_name(title, self.config.download.folder_name_max_length)
@@ -357,7 +367,7 @@ class AdExtractor(WebScrapingMixin):
         LOG.info('Extracting title from ad %s: "%s"', ad_id, title)
 
         # Determine the final directory path
-        ad_file_stem = self._render_download_ad_file_stem(ad_id)
+        ad_file_stem = self._render_download_ad_file_stem(ad_id, title)
         final_dir = relative_directory / self._render_download_folder_name(ad_id, title)
         temp_dir = relative_directory / ad_file_stem
 

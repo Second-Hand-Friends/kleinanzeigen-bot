@@ -3,7 +3,6 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import pytest
 
-from kleinanzeigen_bot.model import config_model
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, TimeoutConfig
 
 
@@ -144,21 +143,21 @@ def test_download_config_rejects_invalid_folder_name_template_placeholder() -> N
 
 def test_validate_download_template_rejects_missing_required_placeholder() -> None:
     with pytest.raises(ValueError, match = r"download\.ad_file_name_template must include placeholder\(s\): \{id\}"):
-        config_model._validate_download_template(
-            "{title}",
-            allowed_fields = frozenset({"id", "title"}),
-            required_fields = frozenset({"id"}),
-            field_name = "download.ad_file_name_template",
+        Config.model_validate(
+            {
+                "download": {"ad_file_name_template": "{title}"},
+                "login": {"username": "dummy", "password": "dummy"},
+            }
         )
 
 
 def test_validate_download_template_rejects_literal_without_required_placeholder() -> None:
     with pytest.raises(ValueError, match = r"download\.ad_file_name_template must include placeholder\(s\): \{id\}"):
-        config_model._validate_download_template(
-            "listing",
-            allowed_fields = frozenset({"id"}),
-            required_fields = frozenset({"id"}),
-            field_name = "download.ad_file_name_template",
+        Config.model_validate(
+            {
+                "download": {"ad_file_name_template": "listing"},
+                "login": {"username": "dummy", "password": "dummy"},
+            }
         )
 
 

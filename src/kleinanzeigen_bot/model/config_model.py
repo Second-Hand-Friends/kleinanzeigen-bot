@@ -123,7 +123,10 @@ class AdDefaults(ContextualModel):
 class DownloadConfig(ContextualModel):
     dir:str = Field(
         default = DEFAULT_DOWNLOAD_DIR,
-        description = "directory where downloaded ads are written. Relative paths are resolved against the config file location",
+        description=(
+            "directory where downloaded ads are written. The default literal 'downloaded-ads' uses workspace-specific "
+            "resolution; custom relative paths are resolved against the config file location"
+        ),
         examples = [f'"{DEFAULT_DOWNLOAD_DIR}"', '"./ads"'],
     )
     include_all_matching_shipping_options:bool = Field(
@@ -139,18 +142,21 @@ class DownloadConfig(ContextualModel):
         default = 100,
         ge = 10,
         le = 255,
-        description = "maximum length for folder names when downloading ads (default: 100)",
+        description = "maximum length for downloaded folder names (default: 100). does not limit downloaded file base names",
     )
     folder_name_template:str = Field(
         default = "ad_{id}_{title}",
-        description = "folder naming template for downloaded ad directories. Allowed placeholders: {id}, {title}",
+        description=(
+            "folder naming template for downloaded ad directories. Allowed placeholders: {id}, {title}. Template must include at least one placeholder"
+        ),
         examples = ['"ad_{id}_{title}"', '"{title}"', '"listing_{id}_{title}"'],
     )
     ad_file_name_template:str = Field(
         default = "ad_{id}",
-        description = (
+        description=(
             "base name template for downloaded ad files. The bot writes the ad config as <base>.yaml "
-            "and downloaded images as <base>__imgN.<ext>. Allowed placeholders: {id}, {title}"
+            "and downloaded images as <base>__imgN.<ext>. Supported placeholders: {id}, {title}. "
+            "Template must include {id}. Long titles may be truncated to keep filename limits"
         ),
         examples = ['"ad_{id}"', '"listing_{id}"', '"listing_{id}_{title}"'],
     )
@@ -380,8 +386,7 @@ def _validate_download_template(
     except ValueError as exc:
         raise ValueError(_("%s contains invalid template syntax: %s") % (field_name, exc)) from exc
 
-    for literal_text, field_name_part, format_spec, conversion in parsed:
-        del literal_text
+    for _literal_text, field_name_part, format_spec, conversion in parsed:
         if field_name_part is None:
             continue
         if not field_name_part:

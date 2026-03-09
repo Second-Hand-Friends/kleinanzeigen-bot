@@ -6,7 +6,7 @@ from collections.abc import Callable, Generator
 from contextlib import redirect_stdout
 from datetime import timedelta
 from pathlib import Path, PureWindowsPath
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -18,6 +18,12 @@ from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, DiagnosticsConfig, PublishingConfig
 from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
+
+
+class DownloadScenario(TypedDict):
+    published_ads:list[dict[str, Any]]
+    expected_active:bool
+    expected_warning_fragment:str | None
 
 
 @pytest.fixture
@@ -357,11 +363,14 @@ class TestKleinanzeigenBotInitialization:
             published_ads_by_id = {},
         )
 
-    @pytest.mark.parametrize(("published_ads_by_id", "ad_id", "expected_active", "expected_ownership"), [
-        ({123: {"id": 123, "state": "active"}}, 123, True, True),
-        ({123: {"id": 123, "state": "inactive"}}, 123, False, True),
-        ({}, 123, False, False),
-    ])
+    @pytest.mark.parametrize(
+        ("published_ads_by_id", "ad_id", "expected_active", "expected_ownership"),
+        [
+            ({123: {"id": 123, "state": "active"}}, 123, True, True),
+            ({123: {"id": 123, "state": "inactive"}}, 123, False, True),
+            ({}, 123, False, False),
+        ],
+    )
     def test_resolve_download_ad_activity(
         self,
         test_bot:KleinanzeigenBot,
@@ -396,7 +405,7 @@ class TestKleinanzeigenBotInitialization:
         test_bot:KleinanzeigenBot,
         tmp_path:Path,
         caplog:pytest.LogCaptureFixture,
-        scenario:dict[str, Any],
+        scenario:DownloadScenario,
     ) -> None:
         published_ads = scenario["published_ads"]
         expected_active = scenario["expected_active"]
@@ -603,9 +612,7 @@ class TestKleinanzeigenBotAuthentication:
         assert call_args.kwargs["timeout"] == test_bot._timeout("login_detection")
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_logs_selector_label_without_raw_selector_literals(
-        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
-    ) -> None:
+    async def test_is_logged_in_logs_selector_label_without_raw_selector_literals(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
         """Login detection logs should reference stable labels, not raw selector values."""
         caplog.set_level("DEBUG")
 
@@ -633,14 +640,11 @@ class TestKleinanzeigenBotAuthentication:
             assert await test_bot.is_logged_in(include_probe = False) is False
 
         assert any(
-            record.message == "No login detected via configured login detection selectors (CLASS_NAME=mr-medium, ID=user-email)"
-            for record in caplog.records
+            record.message == "No login detected via configured login detection selectors (CLASS_NAME=mr-medium, ID=user-email)" for record in caplog.records
         )
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_logs_raw_selectors_when_probe_reports_logged_out(
-        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
-    ) -> None:
+    async def test_is_logged_in_logs_raw_selectors_when_probe_reports_logged_out(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
         """Probe-based final failure should include the tried raw selectors for debugging."""
         caplog.set_level("DEBUG")
 
@@ -652,7 +656,8 @@ class TestKleinanzeigenBotAuthentication:
             assert await test_bot.is_logged_in() is False
 
         assert any(
-            record.message == (
+            record.message
+            == (
                 "No login detected - DOM login detection selectors (CLASS_NAME=mr-medium, ID=user-email) "
                 "did not confirm login and server probe returned LOGGED_OUT"
             )

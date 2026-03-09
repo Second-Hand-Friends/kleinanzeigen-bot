@@ -85,9 +85,7 @@ def _repost_cycle_ready(
         return False
 
     if eligible_cycles <= applied_cycles:
-        LOG.info(
-            "Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts", ad_file_relative, applied_cycles, eligible_cycles
-        )
+        LOG.info("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts", ad_file_relative, applied_cycles, eligible_cycles)
         return False
 
     return True
@@ -445,8 +443,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
                     if not self._is_valid_ads_selector({"all", "new", "due", "changed"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, due, changed, or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, due, changed, or comma-separated numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         self.ads_selector = "due"
 
@@ -464,8 +461,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
                     if not self._is_valid_ads_selector({"all", "changed"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, changed, or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all, changed, or comma-separated numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         self.ads_selector = "changed"
 
@@ -501,8 +497,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     # Default to all ads if no selector provided, but reject invalid values
                     if not self._is_valid_ads_selector({"all"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all or comma-separated numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         LOG.info("Extending all ads within 8-day window...")
                         self.ads_selector = "all"
@@ -520,8 +515,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     # ad IDs depends on selector
                     if not self._is_valid_ads_selector({"all", "new"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, or comma-separated numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         self.ads_selector = "new"
                     self.load_config()
@@ -2306,7 +2300,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 exists = await ad_extractor.navigate_to_ad_page(ad_id)
                 if exists:
                     resolved_active, ownership = self._resolve_download_ad_activity(ad_id, published_ads_by_id)
-                    if ownership is False:
+                    if not ownership:
                         LOG.warning("Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.", ad_id)
 
                     await ad_extractor.download_ad(ad_id, active = resolved_active)
