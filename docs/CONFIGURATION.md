@@ -175,8 +175,8 @@ Download configuration for the `download` command.
 
 ```yaml
 download:
-  dir: "downloaded-ads"  # custom relative paths are resolved relative to config.yaml
-                        # leaving this default keeps workspace-mode download-folder behavior
+  dir: "downloaded-ads"  # default literal keeps workspace-mode download-folder behavior
+                        # custom relative paths are resolved relative to config.yaml
   include_all_matching_shipping_options: false  # if true, all shipping options matching the package size will be included
   excluded_shipping_options: []  # list of shipping options to exclude, e.g. ['DHL_2', 'DHL_5']
   folder_name_max_length: 100  # maximum length for downloaded folder names (default: 100)
@@ -205,7 +205,7 @@ Examples:
 - `ad_file_name_template: "ad_{id}"` with `id = 1234` -> `ad_1234`
 - `ad_file_name_template: "ad_{id}_{title}"` with `id = 1234`, `title = "Road Bike / XL"` -> `ad_1234_Road Bike  XL`
 
-`{title}` output is sanitized for filesystem safety. Keep `{id}` in `ad_file_name_template` to reduce collision risk when long titles are truncated (for example, two very long similar titles could shorten to the same prefix). If you need more entropy, prefer templates like `{id}-{title}` and keep your `ad_files` glob aligned with the resulting filenames.
+`{title}` output is sanitized for filesystem safety. Keep `{id}` in `ad_file_name_template` to reduce collision risk when long or similar titles are truncated to the same prefix. If you need more entropy, prefer templates like `{id}-{title}` and keep your `ad_files` glob aligned with the resulting `<base>.yaml` filenames.
 
 ### publishing
 
