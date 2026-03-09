@@ -10,7 +10,6 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 from urllib.error import URLError
 
 import pytest
-from jsonschema import Draft202012Validator
 from ruamel.yaml import YAML
 
 import kleinanzeigen_bot.extract as extract_module
@@ -1268,6 +1267,9 @@ class TestAdExtractorDownload:
     @pytest.mark.asyncio
     async def test_download_ad_writes_schema_compliant_yaml(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
         """Test that downloaded ad YAML validates against ad.schema.json."""
+        validator_module = pytest.importorskip("jsonschema")
+        draft_validator = validator_module.Draft202012Validator
+
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
         yaml_path = final_dir / "ad_12345.yaml"
@@ -1285,6 +1287,7 @@ class TestAdExtractorDownload:
                     }
                 ),
                 final_dir,
+                "ad_12345",
             )
 
             await extractor.download_ad(12345)
@@ -1292,7 +1295,7 @@ class TestAdExtractorDownload:
         loaded_ad = YAML(typ = "safe").load(await asyncio.to_thread(_read_text_file, yaml_path))
         schema = json.loads(await asyncio.to_thread(_read_text_file, SCHEMA_PATH))
 
-        Draft202012Validator(schema).validate(loaded_ad)
+        draft_validator(schema).validate(loaded_ad)
         assert isinstance(loaded_ad["created_on"], str)
         assert isinstance(loaded_ad["updated_on"], str)
 
