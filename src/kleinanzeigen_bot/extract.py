@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import asyncio
 from gettext import gettext as _
+from string import Formatter
 
 import json, mimetypes, re, shutil  # isort: skip
 import urllib.error as urllib_error
@@ -53,11 +54,14 @@ class AdExtractor(WebScrapingMixin):
         max_stem_length = _MAX_FILENAME_COMPONENT_LENGTH - _DOWNLOAD_STEM_SUFFIX_BUDGET
         sanitized_title = misc.sanitize_folder_name(title, _MAX_FILENAME_COMPONENT_LENGTH)
         template = self.config.download.ad_file_name_template
+        parsed_template = list(Formatter().parse(template))
+        has_id_placeholder = any(field_name_part == "id" for _literal, field_name_part, _format_spec, _conversion in parsed_template)
+        title_placeholder_count = sum(1 for _literal, field_name_part, _format_spec, _conversion in parsed_template if field_name_part == "title")
 
-        if "{id}" in template and "{title}" in template:
+        if has_id_placeholder and title_placeholder_count > 0:
             fixed_stem = template.format(id = ad_id, title = "").strip()
             available_title_length = max(0, max_stem_length - len(fixed_stem))
-            sanitized_title = misc.sanitize_folder_name(sanitized_title, available_title_length)
+            sanitized_title = misc.sanitize_folder_name(sanitized_title, available_title_length // title_placeholder_count)
 
         stem = template.format(id = ad_id, title = sanitized_title).strip()
         return misc.sanitize_folder_name(stem, max_stem_length)

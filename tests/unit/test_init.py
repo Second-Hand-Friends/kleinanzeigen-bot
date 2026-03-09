@@ -398,6 +398,11 @@ class TestKleinanzeigenBotInitialization:
                 "expected_active": False,
                 "expected_warning_fragment": "Saving downloaded ad as inactive.",
             },
+            {
+                "published_ads": [{"id": 123, "state": "inactive"}],
+                "expected_active": False,
+                "expected_warning_fragment": None,
+            },
         ],
     )
     async def test_download_ads_numeric_selector_resolves_and_passes_active_state(

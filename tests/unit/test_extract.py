@@ -1479,6 +1479,26 @@ class TestAdExtractorDownload:
         assert stem_1.endswith("_11111")
         assert stem_2.endswith("_22222")
 
+    def test_render_download_ad_file_stem_preserves_id_with_repeated_title_placeholders(self, extractor:extract_module.AdExtractor) -> None:
+        extractor.config.download.ad_file_name_template = "{title}_{title}_{id}"
+        long_title = "Z" * 400
+
+        stem = extractor._render_download_ad_file_stem(12345, long_title)
+
+        assert len(stem) <= 255 - len("__img9999.jpeg")
+        assert stem.endswith("_12345")
+
+    def test_render_download_ad_file_stem_keeps_distinct_ids_with_repeated_title_placeholders(self, extractor:extract_module.AdExtractor) -> None:
+        extractor.config.download.ad_file_name_template = "{title}_{title}_{id}"
+        long_title = "W" * 400
+
+        stem_1 = extractor._render_download_ad_file_stem(11111, long_title)
+        stem_2 = extractor._render_download_ad_file_stem(22222, long_title)
+
+        assert stem_1 != stem_2
+        assert stem_1.endswith("_11111")
+        assert stem_2.endswith("_22222")
+
     @pytest.mark.asyncio
     # pylint: disable=protected-access
     async def test_extract_ad_page_info_with_directory_handling_final_dir_exists(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
