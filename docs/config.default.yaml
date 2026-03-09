@@ -142,10 +142,11 @@ download:
   #   • "listing_{id}_{title}"
   folder_name_template: ad_{id}_{title}
 
-  # base name template for downloaded ad files. The bot writes the ad config as <base>.yaml and downloaded images as <base>__imgN.<ext>. Allowed placeholders: {id}
+  # base name template for downloaded ad files. The bot writes the ad config as <base>.yaml and downloaded images as <base>__imgN.<ext>. Allowed placeholders: {id}, {title}
   # Examples (choose one):
   #   • "ad_{id}"
   #   • "listing_{id}"
+  #   • "listing_{id}_{title}"
   ad_file_name_template: ad_{id}
 
   # if true, rename existing folders without titles to include titles (default: false)
