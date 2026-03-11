@@ -189,6 +189,7 @@ download:
 
 - `download.dir` sets where `download` writes files.
 - `download.folder_name_template` controls newly created download folder names. Supported placeholders: `{id}`, `{title}`.
+- `download.folder_name_template` must include at least one placeholder (`{id}` or `{title}`), otherwise validation fails with "must include at least one placeholder".
 - `download.folder_name_max_length` limits folder-name rendering only.
 - `download.ad_file_name_template` controls the shared file stem for downloaded files.
 - Downloaded files use this stem for `<base>.yaml` and image files `<base>__imgN.<ext>`.
