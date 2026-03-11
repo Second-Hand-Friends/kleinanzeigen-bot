@@ -136,12 +136,21 @@ class AdExtractor(WebScrapingMixin):
         )
         loop = asyncio.get_running_loop()
         backup_dir = final_dir.with_name(f".bak-{ad_file_stem}")
+
+        if backup_dir == final_dir:
+            raise RuntimeError(
+                _("Internal backup directory collision for ad %(ad_id)s: %(backup)s matches final directory %(final)s. Adjust download templates.")
+                % {"ad_id": ad_id, "backup": backup_dir, "final": final_dir}
+            )
+        if await files.exists(backup_dir):
+            raise RuntimeError(
+                _("Stale backup directory exists for ad %(ad_id)s: %(backup)s. Remove it manually and retry.") % {"ad_id": ad_id, "backup": backup_dir}
+            )
+
         try:
             await loop.run_in_executor(None, lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(mode = "json"), header = header_string))
 
             if await files.exists(final_dir):
-                if await files.exists(backup_dir):
-                    await loop.run_in_executor(None, shutil.rmtree, str(backup_dir))
                 await loop.run_in_executor(None, final_dir.rename, backup_dir)
 
             await loop.run_in_executor(None, staging_dir.rename, final_dir)
@@ -168,31 +177,32 @@ class AdExtractor(WebScrapingMixin):
         final_dir = relative_directory / self._render_download_folder_name(ad_id, title)
         temp_dir = relative_directory / ad_file_stem
         current_ad_yaml = final_dir / f"{ad_file_stem}.yaml"
-        folder_template_uses_id = "{id}" in self.config.download.folder_name_template
+        folder_template_uses_id = any(
+            field_name_part == "id"
+            for _literal_text, field_name_part, _format_spec, _conversion in Formatter().parse(self.config.download.folder_name_template)
+        )
 
         if await files.exists(final_dir):
             if not (folder_template_uses_id or await files.exists(current_ad_yaml)):
-                fallback_dir = temp_dir
-                suffix = 1
-                while fallback_dir == final_dir or await files.exists(fallback_dir):
-                    fallback_dir = relative_directory / f"{ad_file_stem}__download_{suffix}"
-                    suffix += 1
-
-                LOG.warning(
-                    "Directory %s already exists but does not contain %s. Using fallback directory %s to avoid overwriting another ad.",
-                    final_dir,
-                    current_ad_yaml.name,
-                    fallback_dir,
+                raise RuntimeError(
+                    _("Directory %(final)s already exists but does not contain %(yaml)s. Move or remove it manually, or adjust download templates, then retry.")
+                    % {"final": final_dir, "yaml": current_ad_yaml.name}
                 )
-                final_dir = fallback_dir
         elif await files.exists(temp_dir) and not self.config.download.rename_existing_folders:
             final_dir = temp_dir
             LOG.info("Using existing folder for ad %s at %s.", ad_id, final_dir)
 
         staging_dir = relative_directory / f".tmp-{ad_file_stem}"
+        if staging_dir == final_dir:
+            raise RuntimeError(
+                _("Internal staging directory collision for ad %(ad_id)s: %(staging)s matches final directory %(final)s. Adjust download templates.")
+                % {"ad_id": ad_id, "staging": staging_dir, "final": final_dir}
+            )
         loop = asyncio.get_running_loop()
         if await files.exists(staging_dir):
-            await loop.run_in_executor(None, shutil.rmtree, str(staging_dir))
+            raise RuntimeError(
+                _("Stale staging directory exists for ad %(ad_id)s: %(staging)s. Remove it manually and retry.") % {"ad_id": ad_id, "staging": staging_dir}
+            )
 
         await loop.run_in_executor(None, staging_dir.mkdir)
         try:

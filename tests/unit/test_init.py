@@ -318,7 +318,7 @@ class TestKleinanzeigenBotInitialization:
         """Relative download.dir values resolve from config.yaml and are passed to AdExtractor."""
         test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
         test_bot.config_file_path = str(tmp_path / "config.yaml")
-        test_bot.config.download.dir = "ads"
+        test_bot.config.download.dir = "  ads  "
         test_bot.ads_selector = "all"
         test_bot.browser = MagicMock()
 
@@ -436,7 +436,7 @@ class TestKleinanzeigenBotInitialization:
 
         warning_messages = [record.getMessage() for record in caplog.records if record.levelno >= logging.WARNING]
         if expect_warning:
-            assert any("123" in msg for msg in warning_messages)
+            assert any("Ad id 123 is not in your published profile ads." in msg for msg in warning_messages)
         else:
             assert len(warning_messages) == 0
 

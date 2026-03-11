@@ -1550,7 +1550,7 @@ class TestAdExtractorDownload:
             assert not backup_dir.exists()
 
     @pytest.mark.asyncio
-    async def test_download_ad_removes_stale_backup_dir_before_swap(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_download_ad_fails_when_stale_backup_dir_exists(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
         staging_dir = download_base / ".tmp-ad_12345"
@@ -1580,11 +1580,12 @@ class TestAdExtractorDownload:
                 "ad_12345",
             )
 
-            await extractor.download_ad(12345)
+            with pytest.raises(RuntimeError, match = "Stale backup directory exists"):
+                await extractor.download_ad(12345)
 
             assert final_dir.exists()
-            assert not backup_dir.exists()
-            assert not stale_backup_file.exists()
+            assert backup_dir.exists()
+            assert stale_backup_file.exists()
 
     @pytest.mark.asyncio
     async def test_download_ad_logs_warning_when_backup_cleanup_fails(
@@ -1636,7 +1637,38 @@ class TestAdExtractorDownload:
             assert any("Could not remove backup directory" in message for message in caplog.messages)
 
     @pytest.mark.asyncio
-    async def test_staging_helper_uses_distinct_fallback_directory_when_temp_equals_final(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_download_ad_fails_when_backup_dir_collides_with_final_dir(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / ".bak-ad_12345"
+        staging_dir = download_base / ".tmp-ad_12345"
+        extractor.download_dir = download_base
+
+        staging_dir.mkdir(parents = True)
+
+        with patch.object(extractor, "_extract_ad_page_info_with_staging_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
+            mock_extract_with_dir.return_value = (
+                AdPartial.model_validate(
+                    {
+                        "title": "Test Advertisement Title",
+                        "description": "Test Description",
+                        "category": "Dienstleistungen",
+                        "price": 100,
+                        "images": [],
+                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
+                    }
+                ),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            with pytest.raises(RuntimeError, match = "Internal backup directory collision"):
+                await extractor.download_ad(12345)
+
+    @pytest.mark.asyncio
+    async def test_staging_helper_fails_when_existing_final_dir_does_not_match_current_yaml(
+        self, extractor:extract_module.AdExtractor, tmp_path:Path
+    ) -> None:
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
         extractor.config.download.folder_name_template = "{title}"
@@ -1666,12 +1698,41 @@ class TestAdExtractorDownload:
                 }
             )
 
-            _ad_cfg, staging_dir, final_dir, ad_file_stem = await extractor._extract_ad_page_info_with_staging_directory_handling(base_dir, 12345)
+            with pytest.raises(RuntimeError, match = "already exists but does not contain"):
+                await extractor._extract_ad_page_info_with_staging_directory_handling(base_dir, 12345)
 
-            assert ad_file_stem == "ad_12345"
-            assert final_dir != colliding_dir
-            assert final_dir.name.startswith("ad_12345__download_")
-            assert staging_dir.exists()
+    @pytest.mark.asyncio
+    async def test_staging_helper_treats_escaped_id_as_non_identity_placeholder(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        extractor.config.download.folder_name_template = "{{id}}_{title}"
+        extractor.config.download.ad_file_name_template = "ad_{id}"
+
+        final_dir = base_dir / "{id}_Test Title"
+        final_dir.mkdir()
+        (final_dir / "ad_99999.yaml").write_text("foreign")
+
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+        extractor.page = page_mock
+
+        with (
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
+            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock) as mock_extract,
+        ):
+            mock_extract.return_value = AdPartial.model_validate(
+                {
+                    "title": "Test Title",
+                    "description": "Test Description",
+                    "category": "Dienstleistungen",
+                    "price": 100,
+                    "images": [],
+                    "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
+                }
+            )
+
+            with pytest.raises(RuntimeError, match = "already exists but does not contain"):
+                await extractor._extract_ad_page_info_with_staging_directory_handling(base_dir, 12345)
 
     @pytest.mark.asyncio
     async def test_staging_helper_keeps_existing_final_dir_when_current_yaml_exists(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
@@ -1724,7 +1785,7 @@ class TestAdExtractorDownload:
         assert not expected_staging_dir.exists()
 
     @pytest.mark.asyncio
-    async def test_staging_helper_removes_stale_staging_dir_before_reuse(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_staging_helper_fails_when_stale_staging_dir_exists(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
         stale_staging_dir = base_dir / ".tmp-ad_12345"
@@ -1747,11 +1808,28 @@ class TestAdExtractorDownload:
                 }
             )
 
-            _ad_cfg, staging_dir, _final_dir, _ad_file_stem = await extractor._extract_ad_page_info_with_staging_directory_handling(base_dir, 12345)
+            with pytest.raises(RuntimeError, match = "Stale staging directory exists"):
+                await extractor._extract_ad_page_info_with_staging_directory_handling(base_dir, 12345)
 
-            assert staging_dir == stale_staging_dir
-            assert staging_dir.exists()
-            assert not stale_file.exists()
+            assert stale_staging_dir.exists()
+            assert stale_file.exists()
+
+    @pytest.mark.asyncio
+    async def test_staging_helper_fails_when_staging_dir_collides_with_final_dir(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        extractor.config.download.folder_name_template = ".tmp-ad_{id}"
+        extractor.config.download.ad_file_name_template = "ad_{id}"
+
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+        extractor.page = page_mock
+
+        with (
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "ignored"),
+            pytest.raises(RuntimeError, match = "Internal staging directory collision"),
+        ):
+            await extractor._extract_ad_page_info_with_staging_directory_handling(base_dir, 12345)
 
     @pytest.mark.asyncio
     async def test_staging_helper_uses_existing_temp_dir_when_rename_disabled(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:

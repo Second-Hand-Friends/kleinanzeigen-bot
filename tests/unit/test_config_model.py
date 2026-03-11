@@ -78,9 +78,9 @@ def test_download_config_accepts_custom_dir_and_templates() -> None:
     cfg = Config.model_validate(
         {
             "download": {
-                "dir": "./ads",
-                "folder_name_template": "{title}",
-                "ad_file_name_template": "listing_{id}_{title}",
+                "dir": "  ./ads  ",
+                "folder_name_template": "  {title}  ",
+                "ad_file_name_template": "  listing_{id}_{title}  ",
             },
             "login": {"username": "dummy", "password": "dummy"},
         }
@@ -92,7 +92,7 @@ def test_download_config_accepts_custom_dir_and_templates() -> None:
 
 
 def test_download_config_rejects_null_dir() -> None:
-    with pytest.raises(ValueError, match = "download.dir"):
+    with pytest.raises(ValueError, match = r"download\.dir\s+Input should be a valid string"):
         Config.model_validate(
             {
                 "download": {"dir": None},

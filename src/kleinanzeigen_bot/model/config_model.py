@@ -374,15 +374,16 @@ def _validate_download_template(
     required_fields:frozenset[str],
     field_name:str,
 ) -> str:
-    if not template.strip():
+    trimmed_template = template.strip()
+    if not trimmed_template:
         raise ValueError(_("%s must be a non-empty template") % field_name)
-    if "/" in template or "\\" in template:
+    if "/" in trimmed_template or "\\" in trimmed_template:
         raise ValueError(_("%s must not contain path separators") % field_name)
 
     formatter = Formatter()
     used_fields:set[str] = set()
     try:
-        parsed = list(formatter.parse(template))
+        parsed = list(formatter.parse(trimmed_template))
     except ValueError as exc:
         raise ValueError(_("%s contains invalid template syntax: %s") % (field_name, exc)) from exc
 
@@ -408,7 +409,7 @@ def _validate_download_template(
         allowed = ", ".join(sorted(f"{{{name}}}" for name in allowed_fields))
         raise ValueError(_("%s must include at least one placeholder: %s") % (field_name, allowed))
 
-    return template
+    return trimmed_template
 
 
 GlobPattern = Annotated[str, AfterValidator(_validate_glob_pattern)]

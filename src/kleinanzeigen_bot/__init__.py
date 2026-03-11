@@ -334,9 +334,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     def _resolve_download_dir(self) -> Path:
         workspace = self._workspace_or_raise()
         configured_dir = self.config.download.dir
-        if not configured_dir or configured_dir == DEFAULT_DOWNLOAD_DIR:
+        trimmed_dir = configured_dir.strip() if configured_dir is not None else ""
+        if not trimmed_dir or trimmed_dir == DEFAULT_DOWNLOAD_DIR:
             return workspace.download_dir
-        return Path(abspath(configured_dir, relative_to = str(Path(self.config_file_path).parent))).resolve()
+        return Path(abspath(trimmed_dir, relative_to = str(Path(self.config_file_path).parent))).resolve()
 
     def _resolve_workspace(self) -> None:
         """

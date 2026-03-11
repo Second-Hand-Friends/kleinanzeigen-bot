@@ -283,6 +283,9 @@ kleinanzeigen_bot/extract.py:
   download_ad:
     "Using download directory: %s": "Verwende Download-Verzeichnis: %s"
     "Could not remove backup directory %s: %s": "Konnte Sicherungsverzeichnis %s nicht entfernen: %s"
+    ? "Internal backup directory collision for ad %(ad_id)s: %(backup)s matches final directory %(final)s. Adjust download templates."
+    : "Interner Sicherungsverzeichnis-Konflikt für Anzeige %(ad_id)s: %(backup)s entspricht dem finalen Verzeichnis %(final)s. Passe die Download-Vorlagen an."
+    "Stale backup directory exists for ad %(ad_id)s: %(backup)s. Remove it manually and retry.": "Veraltetes Sicherungsverzeichnis für Anzeige %(ad_id)s vorhanden: %(backup)s. Entferne es manuell und versuche es erneut."
 
   _download_and_save_image_sync:
     "Failed to download image %s: %s": "Fehler beim Herunterladen des Bildes %s: %s"
@@ -320,8 +323,12 @@ kleinanzeigen_bot/extract.py:
 
   _extract_ad_page_info_with_staging_directory_handling:
     "Extracting title from ad %s: \"%s\"": "Extrahiere Titel aus Anzeige %s: \"%s\""
-    "Directory %s already exists but does not contain %s. Using fallback directory %s to avoid overwriting another ad.": "Verzeichnis %s existiert bereits, enthält aber %s nicht. Verwende Ausweichverzeichnis %s, um das Überschreiben einer anderen Anzeige zu vermeiden."
     "Using existing folder for ad %s at %s.": "Verwende bestehenden Ordner für Anzeige %s unter %s."
+    ? "Internal staging directory collision for ad %(ad_id)s: %(staging)s matches final directory %(final)s. Adjust download templates."
+    : "Interner Staging-Verzeichnis-Konflikt für Anzeige %(ad_id)s: %(staging)s entspricht dem finalen Verzeichnis %(final)s. Passe die Download-Vorlagen an."
+    "Stale staging directory exists for ad %(ad_id)s: %(staging)s. Remove it manually and retry.": "Veraltetes Staging-Verzeichnis für Anzeige %(ad_id)s vorhanden: %(staging)s. Entferne es manuell und versuche es erneut."
+    ? "Directory %(final)s already exists but does not contain %(yaml)s. Move or remove it manually, or adjust download templates, then retry."
+    : "Verzeichnis %(final)s existiert bereits, enthält aber %(yaml)s nicht. Verschiebe oder entferne es manuell oder passe die Download-Vorlagen an und versuche es erneut."
 
   _extract_contact_from_ad_page:
     "No street given in the contact.": "Keine Straße in den Kontaktdaten angegeben."
