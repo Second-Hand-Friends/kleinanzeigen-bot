@@ -2051,7 +2051,7 @@ class TestAdExtractorDownload:
             mock_extract.assert_awaited_once_with(str(final_dir), 12345, "ad_12345", active=None)
 
     @pytest.mark.asyncio
-    async def test_extract_ad_page_info_with_directory_handling_keeps_existing_matching_temp_dir_without_recreating(
+    async def test_extract_ad_page_info_with_directory_handling_recreates_existing_matching_temp_dir(
         self, extractor: extract_module.AdExtractor, tmp_path: Path
     ) -> None:
         base_dir = tmp_path / "downloaded-ads"
@@ -2060,6 +2060,9 @@ class TestAdExtractorDownload:
         extractor.config.download.ad_file_name_template = "ad_{id}"
 
         final_dir = base_dir / "ad_12345"
+        final_dir.mkdir()
+        old_file = final_dir / "old_file.txt"
+        old_file.write_text("old content")
         ad_cfg = AdPartial.model_validate(
             {
                 "title": "Test Title",
@@ -2078,7 +2081,7 @@ class TestAdExtractorDownload:
         with (
             patch.object(extractor, "_extract_title_from_ad_page", new_callable=AsyncMock, return_value="Test Title"),
             patch.object(extractor, "_extract_ad_page_info", new_callable=AsyncMock, return_value=ad_cfg) as mock_extract,
-            patch("kleinanzeigen_bot.extract.files.exists", new_callable=AsyncMock, side_effect=[False, True]),
+            patch("kleinanzeigen_bot.extract.files.exists", new_callable=AsyncMock, side_effect=[True, False]),
             patch.object(Path, "mkdir", autospec=True) as mock_mkdir,
         ):
             result_cfg, result_dir, ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
@@ -2087,7 +2090,8 @@ class TestAdExtractorDownload:
             assert result_dir == final_dir
             assert ad_file_stem == "ad_12345"
             mock_extract.assert_awaited_once_with(str(final_dir), 12345, "ad_12345", active=None)
-            mock_mkdir.assert_not_called()
+            assert not old_file.exists()
+            mock_mkdir.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_extract_ad_page_info_with_directory_handling_avoids_deleting_colliding_title_folder(
@@ -2131,6 +2135,53 @@ class TestAdExtractorDownload:
             assert ad_file_stem == "ad_12345"
             assert colliding_title_dir.exists()
             assert foreign_yaml.exists()
+            mock_extract.assert_awaited_once_with(str(expected_fallback_dir), 12345, "ad_12345", active=None)
+
+    @pytest.mark.asyncio
+    async def test_extract_ad_page_info_with_directory_handling_cleans_existing_fallback_temp_dir(
+        self, extractor: extract_module.AdExtractor, tmp_path: Path
+    ) -> None:
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        extractor.config.download.folder_name_template = "{title}"
+        extractor.config.download.ad_file_name_template = "ad_{id}"
+
+        colliding_title_dir = base_dir / "Shared Title"
+        colliding_title_dir.mkdir()
+        (colliding_title_dir / "ad_99999.yaml").write_text("foreign ad")
+
+        expected_fallback_dir = base_dir / "ad_12345"
+        expected_fallback_dir.mkdir()
+        stale_file = expected_fallback_dir / "stale.txt"
+        stale_file.write_text("stale")
+
+        ad_cfg = AdPartial.model_validate(
+            {
+                "title": "Shared Title",
+                "description": "Test Description",
+                "category": "Dienstleistungen",
+                "price": 100,
+                "images": [],
+                "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
+            }
+        )
+
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+        extractor.page = page_mock
+
+        with (
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable=AsyncMock, return_value="Shared Title"),
+            patch.object(extractor, "_extract_ad_page_info", new_callable=AsyncMock, return_value=ad_cfg) as mock_extract,
+        ):
+            result_cfg, result_dir, ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+            assert result_cfg == ad_cfg
+            assert result_dir == expected_fallback_dir
+            assert result_dir.exists()
+            assert ad_file_stem == "ad_12345"
+            assert colliding_title_dir.exists()
+            assert not stale_file.exists()
             mock_extract.assert_awaited_once_with(str(expected_fallback_dir), 12345, "ad_12345", active=None)
 
     @pytest.mark.asyncio
