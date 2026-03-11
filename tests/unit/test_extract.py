@@ -1231,12 +1231,14 @@ class TestAdExtractorDownload:
         # Use tmp_path for OS-agnostic path handling
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
-        yaml_path = final_dir / "ad_12345.yaml"
+        staging_dir = download_base / ".tmp-ad_12345"
+        staging_yaml_path = staging_dir / "ad_12345.yaml"
         extractor.download_dir = download_base
+        staging_dir.mkdir(parents=True)
 
         with (
             patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec=True) as mock_save_dict,
-            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
+            patch.object(extractor, "_extract_ad_page_info_with_staging_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
         ):
             mock_extract_with_dir.return_value = (
                 AdPartial.model_validate(
@@ -1249,6 +1251,7 @@ class TestAdExtractorDownload:
                         "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
                     }
                 ),
+                staging_dir,
                 final_dir,
                 "ad_12345",
             )
@@ -1262,20 +1265,24 @@ class TestAdExtractorDownload:
             # Verify saved to correct location with correct data
             actual_call = mock_save_dict.call_args
             actual_path = Path(actual_call[0][0])
-            assert actual_path == yaml_path
+            assert actual_path == staging_yaml_path
             assert actual_call[0][1] == mock_extract_with_dir.return_value[0].model_dump(mode="json")
+            assert final_dir.exists()
+            assert not staging_dir.exists()
 
     @pytest.mark.asyncio
     async def test_download_ad_passes_active_override(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         """Test downloading an ad with an explicit active override."""
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
-        yaml_path = final_dir / "ad_12345.yaml"
+        staging_dir = download_base / ".tmp-ad_12345"
+        staging_yaml_path = staging_dir / "ad_12345.yaml"
         extractor.download_dir = download_base
+        staging_dir.mkdir(parents=True)
 
         with (
             patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec=True) as mock_save_dict,
-            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
+            patch.object(extractor, "_extract_ad_page_info_with_staging_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
         ):
             mock_extract_with_dir.return_value = (
                 AdPartial.model_validate(
@@ -1289,6 +1296,7 @@ class TestAdExtractorDownload:
                         "active": False,
                     }
                 ),
+                staging_dir,
                 final_dir,
                 "ad_12345",
             )
@@ -1301,8 +1309,10 @@ class TestAdExtractorDownload:
             actual_call = mock_save_dict.call_args
             actual_path = Path(actual_call[0][0])
             saved_payload = actual_call[0][1]
-            assert actual_path == yaml_path
+            assert actual_path == staging_yaml_path
             assert saved_payload["active"] is False
+            assert final_dir.exists()
+            assert not staging_dir.exists()
 
     @pytest.mark.asyncio
     async def test_download_ad_writes_schema_compliant_yaml(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
@@ -1312,10 +1322,12 @@ class TestAdExtractorDownload:
 
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
         yaml_path = final_dir / "ad_12345.yaml"
         extractor.download_dir = download_base
+        staging_dir.mkdir(parents=True)
 
-        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir:
+        with patch.object(extractor, "_extract_ad_page_info_with_staging_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir:
             mock_extract_with_dir.return_value = (
                 AdPartial.model_validate(
                     {
@@ -1326,6 +1338,7 @@ class TestAdExtractorDownload:
                         "updated_on": "2026-03-09T01:02:03+01:00",
                     }
                 ),
+                staging_dir,
                 final_dir,
                 "ad_12345",
             )
@@ -1375,14 +1388,16 @@ class TestAdExtractorDownload:
     async def test_download_ad_uses_custom_folder_and_file_templates(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         download_base = tmp_path / "ads"
         final_dir = download_base / "Test Advertisement Title"
-        yaml_path = final_dir / "listing_12345_Test Advertisement Title.yaml"
+        staging_dir = download_base / ".tmp-listing_12345_Test Advertisement Title"
+        staging_yaml_path = staging_dir / "listing_12345_Test Advertisement Title.yaml"
         extractor.download_dir = download_base
         extractor.config.download.folder_name_template = "{title}"
         extractor.config.download.ad_file_name_template = "listing_{id}_{title}"
+        staging_dir.mkdir(parents=True)
 
         with (
             patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec=True) as mock_save_dict,
-            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
+            patch.object(extractor, "_extract_ad_page_info_with_staging_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
         ):
             mock_extract_with_dir.return_value = (
                 AdPartial.model_validate(
@@ -1395,6 +1410,7 @@ class TestAdExtractorDownload:
                         "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
                     }
                 ),
+                staging_dir,
                 final_dir,
                 "listing_12345_Test Advertisement Title",
             )
@@ -1403,9 +1419,151 @@ class TestAdExtractorDownload:
 
             actual_call = mock_save_dict.call_args
             actual_path = Path(actual_call[0][0])
-            assert actual_path == yaml_path
-            assert mock_extract_with_dir.return_value[2] == "listing_12345_Test Advertisement Title"
-            assert mock_extract_with_dir.return_value[2] + "__img" == "listing_12345_Test Advertisement Title__img"
+            assert actual_path == staging_yaml_path
+            assert mock_extract_with_dir.return_value[3] == "listing_12345_Test Advertisement Title"
+            assert mock_extract_with_dir.return_value[3] + "__img" == "listing_12345_Test Advertisement Title__img"
+            assert final_dir.exists()
+            assert not staging_dir.exists()
+
+    @pytest.mark.asyncio
+    async def test_download_ad_replaces_final_dir_after_staging_success(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+        final_yaml = final_dir / "ad_12345.yaml"
+        old_file = final_dir / "old_file.txt"
+        extractor.download_dir = download_base
+
+        final_dir.mkdir(parents=True)
+        old_file.write_text("old")
+        staging_dir.mkdir(parents=True)
+
+        with patch.object(extractor, "_extract_ad_page_info_with_staging_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir:
+            mock_extract_with_dir.return_value = (
+                AdPartial.model_validate(
+                    {
+                        "title": "Test Advertisement Title",
+                        "description": "Test Description",
+                        "category": "Dienstleistungen",
+                        "price": 100,
+                        "images": [],
+                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
+                    }
+                ),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            await extractor.download_ad(12345)
+
+            assert final_dir.exists()
+            assert not old_file.exists()
+            assert final_yaml.exists()
+            assert not staging_dir.exists()
+
+    @pytest.mark.asyncio
+    async def test_download_ad_preserves_final_dir_when_yaml_write_fails(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+        old_file = final_dir / "old_file.txt"
+        extractor.download_dir = download_base
+
+        final_dir.mkdir(parents=True)
+        old_file.write_text("old")
+        staging_dir.mkdir(parents=True)
+
+        with (
+            patch.object(extractor, "_extract_ad_page_info_with_staging_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec=True, side_effect=OSError("write failed")),
+        ):
+            mock_extract_with_dir.return_value = (
+                AdPartial.model_validate(
+                    {
+                        "title": "Test Advertisement Title",
+                        "description": "Test Description",
+                        "category": "Dienstleistungen",
+                        "price": 100,
+                        "images": [],
+                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
+                    }
+                ),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            with pytest.raises(OSError, match="write failed"):
+                await extractor.download_ad(12345)
+
+            assert final_dir.exists()
+            assert old_file.exists()
+            assert not staging_dir.exists()
+
+    @pytest.mark.asyncio
+    async def test_download_ad_restores_final_dir_when_swap_rename_fails(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+        backup_dir = download_base / ".bak-ad_12345"
+        old_file = final_dir / "old_file.txt"
+        extractor.download_dir = download_base
+
+        final_dir.mkdir(parents=True)
+        old_file.write_text("old")
+        staging_dir.mkdir(parents=True)
+
+        original_rename = Path.rename
+
+        def _rename_side_effect(path_obj: Path, target: Path) -> Path:
+            if path_obj == staging_dir and target == final_dir:
+                raise OSError("rename failed")
+            return original_rename(path_obj, target)
+
+        with (
+            patch.object(extractor, "_extract_ad_page_info_with_staging_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec=True),
+            patch.object(Path, "rename", autospec=True, side_effect=_rename_side_effect),
+        ):
+            mock_extract_with_dir.return_value = (
+                AdPartial.model_validate(
+                    {
+                        "title": "Test Advertisement Title",
+                        "description": "Test Description",
+                        "category": "Dienstleistungen",
+                        "price": 100,
+                        "images": [],
+                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
+                    }
+                ),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            with pytest.raises(OSError, match="rename failed"):
+                await extractor.download_ad(12345)
+
+            assert final_dir.exists()
+            assert old_file.exists()
+            assert not staging_dir.exists()
+            assert not backup_dir.exists()
+
+    @pytest.mark.asyncio
+    async def test_staging_helper_cleans_staging_dir_when_extraction_fails(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        expected_staging_dir = base_dir / ".tmp-ad_12345"
+
+        with (
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable=AsyncMock, return_value="Test Title"),
+            patch.object(extractor, "_extract_ad_page_info", new_callable=AsyncMock, side_effect=RuntimeError("extract failed")),
+            pytest.raises(RuntimeError, match="extract failed"),
+        ):
+            await extractor._extract_ad_page_info_with_staging_directory_handling(base_dir, 12345)
+
+        assert not expected_staging_dir.exists()
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access

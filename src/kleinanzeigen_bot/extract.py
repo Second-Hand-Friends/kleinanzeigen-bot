@@ -122,15 +122,77 @@ class AdExtractor(WebScrapingMixin):
         download_dir = self.download_dir
         LOG.info("Using download directory: %s", download_dir)
 
-        # Extract ad info and determine final directory path
-        ad_cfg, final_dir, ad_file_stem = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id, active=active)
+        # Extract ad info into a staging directory and determine final target directory
+        ad_cfg, staging_dir, final_dir, ad_file_stem = await self._extract_ad_page_info_with_staging_directory_handling(
+            download_dir,
+            ad_id,
+            active=active,
+        )
 
         # Save the ad configuration file (offload to executor to avoid blocking the event loop)
-        ad_file_path = str(Path(final_dir) / f"{ad_file_stem}.yaml")
+        ad_file_path = str(Path(staging_dir) / f"{ad_file_stem}.yaml")
         header_string = (
             "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
         )
-        await asyncio.get_running_loop().run_in_executor(None, lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(mode="json"), header=header_string))
+        loop = asyncio.get_running_loop()
+        backup_dir = final_dir.with_name(f".bak-{ad_file_stem}")
+        try:
+            await loop.run_in_executor(None, lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(mode="json"), header=header_string))
+
+            if await files.exists(final_dir):
+                if await files.exists(backup_dir):
+                    await loop.run_in_executor(None, shutil.rmtree, str(backup_dir))
+                await loop.run_in_executor(None, final_dir.rename, backup_dir)
+
+            await loop.run_in_executor(None, staging_dir.rename, final_dir)
+
+            if await files.exists(backup_dir):
+                await loop.run_in_executor(None, shutil.rmtree, str(backup_dir))
+        except Exception:
+            if await files.exists(backup_dir) and not await files.exists(final_dir):
+                await loop.run_in_executor(None, backup_dir.rename, final_dir)
+            if await files.exists(staging_dir):
+                await loop.run_in_executor(None, shutil.rmtree, str(staging_dir))
+            raise
+
+    async def _extract_ad_page_info_with_staging_directory_handling(
+        self, relative_directory: Path, ad_id: int, *, active: bool | None = None
+    ) -> tuple[AdPartial, Path, Path, str]:
+        """Extract ad information into a staging directory and return final target metadata."""
+        title = await self._extract_title_from_ad_page()
+        LOG.info('Extracting title from ad %s: "%s"', ad_id, title)
+        ad_file_stem = self._render_download_ad_file_stem(ad_id, title)
+        final_dir = relative_directory / self._render_download_folder_name(ad_id, title)
+        temp_dir = relative_directory / ad_file_stem
+        current_ad_yaml = final_dir / f"{ad_file_stem}.yaml"
+        folder_template_uses_id = "{id}" in self.config.download.folder_name_template
+
+        if await files.exists(final_dir):
+            if not (folder_template_uses_id or await files.exists(current_ad_yaml)):
+                LOG.warning(
+                    "Directory %s already exists but does not contain %s. Using fallback directory %s to avoid overwriting another ad.",
+                    final_dir,
+                    current_ad_yaml.name,
+                    temp_dir,
+                )
+                final_dir = temp_dir
+        elif await files.exists(temp_dir) and not self.config.download.rename_existing_folders:
+            final_dir = temp_dir
+            LOG.info("Using existing folder for ad %s at %s.", ad_id, final_dir)
+
+        staging_dir = relative_directory / f".tmp-{ad_file_stem}"
+        loop = asyncio.get_running_loop()
+        if await files.exists(staging_dir):
+            await loop.run_in_executor(None, shutil.rmtree, str(staging_dir))
+
+        await loop.run_in_executor(None, staging_dir.mkdir)
+        try:
+            ad_cfg = await self._extract_ad_page_info(str(staging_dir), ad_id, ad_file_stem, active=active)
+        except Exception:
+            if await files.exists(staging_dir):
+                await loop.run_in_executor(None, shutil.rmtree, str(staging_dir))
+            raise
+        return ad_cfg, staging_dir, final_dir, ad_file_stem
 
     @staticmethod
     def _download_and_save_image_sync(url: str, directory: str, filename_prefix: str, img_nr: int) -> str | None:
