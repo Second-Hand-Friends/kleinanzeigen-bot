@@ -282,6 +282,7 @@ kleinanzeigen_bot/extract.py:
 #################################################
   download_ad:
     "Using download directory: %s": "Verwende Download-Verzeichnis: %s"
+    "Could not remove backup directory %s: %s": "Konnte Sicherungsverzeichnis %s nicht entfernen: %s"
 
   _download_and_save_image_sync:
     "Failed to download image %s: %s": "Fehler beim Herunterladen des Bildes %s: %s"
