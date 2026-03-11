@@ -374,15 +374,26 @@ class AdExtractor(WebScrapingMixin):
         ad_file_stem = self._render_download_ad_file_stem(ad_id, title)
         final_dir = relative_directory / self._render_download_folder_name(ad_id, title)
         temp_dir = relative_directory / ad_file_stem
+        current_ad_yaml = final_dir / f"{ad_file_stem}.yaml"
+        folder_template_uses_id = "{id}" in self.config.download.folder_name_template
 
         loop = asyncio.get_running_loop()
 
         # Handle existing directories
         if await files.exists(final_dir):
-            # If the folder with title already exists, delete it
-            LOG.info("Deleting current folder of ad %s...", ad_id)
-            LOG.debug("Removing directory tree: %s", final_dir)
-            await loop.run_in_executor(None, shutil.rmtree, str(final_dir))
+            if folder_template_uses_id or await files.exists(current_ad_yaml):
+                # If the folder already contains the current ad file, replace it.
+                LOG.info("Deleting current folder of ad %s...", ad_id)
+                LOG.debug("Removing directory tree: %s", final_dir)
+                await loop.run_in_executor(None, shutil.rmtree, str(final_dir))
+            else:
+                LOG.warning(
+                    "Directory %s already exists but does not contain %s. Using fallback directory %s to avoid overwriting another ad.",
+                    final_dir,
+                    current_ad_yaml.name,
+                    temp_dir,
+                )
+                final_dir = temp_dir
 
         if final_dir == temp_dir:
             if not await files.exists(final_dir):
