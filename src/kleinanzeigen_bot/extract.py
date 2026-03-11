@@ -23,13 +23,13 @@ __all__ = [
     "AdExtractor",
 ]
 
-LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
+LOG: Final[loggers.Logger] = loggers.get_logger(__name__)
 
-_BREADCRUMB_MIN_DEPTH:Final[int] = 2
+_BREADCRUMB_MIN_DEPTH: Final[int] = 2
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
-_MAX_FILENAME_COMPONENT_LENGTH:Final[int] = 255
+_MAX_FILENAME_COMPONENT_LENGTH: Final[int] = 255
 # Stem is character-count bounded (not byte-count bounded) and reserves room for image suffixes like "__img1234.jpeg".
-_DOWNLOAD_STEM_SUFFIX_BUDGET:Final[int] = len("__img9999.jpeg")
+_DOWNLOAD_STEM_SUFFIX_BUDGET: Final[int] = len("__img9999.jpeg")
 
 
 class AdExtractor(WebScrapingMixin):
@@ -39,62 +39,78 @@ class AdExtractor(WebScrapingMixin):
 
     def __init__(
         self,
-        browser:Browser,
-        config:Config,
-        download_dir:Path,
-        published_ads_by_id:dict[int, dict[str, Any]] | None = None,
+        browser: Browser,
+        config: Config,
+        download_dir: Path,
+        published_ads_by_id: dict[int, dict[str, Any]] | None = None,
     ) -> None:
         super().__init__()
         self.browser = browser
-        self.config:Config = config
-        self.download_dir:Path = download_dir
-        self.published_ads_by_id:dict[int, dict[str, Any]] = published_ads_by_id or {}
+        self.config: Config = config
+        self.download_dir: Path = download_dir
+        self.published_ads_by_id: dict[int, dict[str, Any]] = published_ads_by_id or {}
 
-    def _render_download_ad_file_stem(self, ad_id:int, title:str) -> str:
-        max_stem_length = _MAX_FILENAME_COMPONENT_LENGTH - _DOWNLOAD_STEM_SUFFIX_BUDGET
-        sanitized_title = misc.sanitize_folder_name(title, _MAX_FILENAME_COMPONENT_LENGTH)
-        template = self.config.download.ad_file_name_template
+    def _render_download_name_with_budget(self, template: str, ad_id: int, title: str, max_length: int) -> str:
+        """Render download names with readable title truncation while preserving id placeholders.
+
+        Rules:
+        - keep fixed template parts (literals and `{id}`) intact when possible,
+        - spend remaining budget on `{title}` placeholders from left to right,
+        - first `{title}` gets priority; repeated titles are truncated later.
+
+        Notes:
+        - if fixed literals are too long, truncate literals before dropping `{id}` content,
+        - literals are preserved as-authored where space permits, so truncating later `{title}` values may leave trailing separators.
+        """
+        sanitized_title = misc.sanitize_folder_name(title, max_length)
         parsed_template = list(Formatter().parse(template))
-        has_id_placeholder = any(field_name_part == "id" for _literal, field_name_part, _format_spec, _conversion in parsed_template)
-        title_placeholder_count = sum(1 for _literal, field_name_part, _format_spec, _conversion in parsed_template if field_name_part == "title")
+        id_value = str(ad_id)
 
-        if has_id_placeholder and title_placeholder_count > 0:
-            fixed_stem = template.format(id = ad_id, title = "").strip()
-            available_title_length = max(0, max_stem_length - len(fixed_stem))
-            sanitized_title = misc.sanitize_folder_name(sanitized_title, available_title_length // title_placeholder_count)
+        fixed_name = template.format(id=ad_id, title="").strip()
+        remaining_title_budget = max(0, max_length - len(fixed_name))
+        remaining_id_placeholders = sum(1 for _literal, field_name_part, _format_spec, _conversion in parsed_template if field_name_part == "id")
 
-        stem = template.format(id = ad_id, title = sanitized_title).strip()
-        return misc.sanitize_folder_name(stem, max_stem_length)
-
-    def _render_download_folder_name(self, ad_id:int, title:str) -> str:
-        max_folder_length = self.config.download.folder_name_max_length
-        sanitized_title = misc.sanitize_folder_name(title, max_folder_length)
-        template = self.config.download.folder_name_template
-        parsed_template = list(Formatter().parse(template))
-
-        fixed_folder_name = template.format(id = ad_id, title = "").strip()
-        remaining_title_budget = max(0, max_folder_length - len(fixed_folder_name))
-
-        parts:list[str] = []
+        parts: list[str] = []
+        current_length = 0
         for literal_text, field_name_part, _format_spec, _conversion in parsed_template:
-            parts.append(literal_text)
+            reserved_for_future_ids = remaining_id_placeholders * len(id_value)
+            remaining_length = max_length - current_length
+            literal_length = min(len(literal_text), max(0, remaining_length - reserved_for_future_ids))
+            parts.append(literal_text[:literal_length])
+            current_length += literal_length
 
             if field_name_part is None:
                 continue
 
             if field_name_part == "id":
-                parts.append(str(ad_id))
+                remaining_length = max_length - current_length
+                id_part = id_value[:remaining_length]
+                parts.append(id_part)
+                current_length += len(id_part)
+                remaining_id_placeholders -= 1
                 continue
 
             if field_name_part == "title":
-                title_part_length = min(len(sanitized_title), remaining_title_budget)
+                reserved_for_future_ids = remaining_id_placeholders * len(id_value)
+                remaining_length = max_length - current_length
+                title_part_length = min(len(sanitized_title), remaining_title_budget, max(0, remaining_length - reserved_for_future_ids))
                 parts.append(sanitized_title[:title_part_length])
+                current_length += title_part_length
                 remaining_title_budget -= title_part_length
 
-        folder_name = "".join(parts).strip()
-        return misc.sanitize_folder_name(folder_name, max_folder_length)
+        rendered_name = "".join(parts).strip()
+        return misc.sanitize_folder_name(rendered_name, max_length)
 
-    async def download_ad(self, ad_id:int, *, active:bool | None = None) -> None:
+    def _render_download_ad_file_stem(self, ad_id: int, title: str) -> str:
+        """Render ad file stem while reserving suffix budget for downloaded image names."""
+        max_stem_length = _MAX_FILENAME_COMPONENT_LENGTH - _DOWNLOAD_STEM_SUFFIX_BUDGET
+        return self._render_download_name_with_budget(self.config.download.ad_file_name_template, ad_id, title, max_stem_length)
+
+    def _render_download_folder_name(self, ad_id: int, title: str) -> str:
+        """Render download folder name using folder_name_max_length as the total cap."""
+        return self._render_download_name_with_budget(self.config.download.folder_name_template, ad_id, title, self.config.download.folder_name_max_length)
+
+    async def download_ad(self, ad_id: int, *, active: bool | None = None) -> None:
         """
         Downloads an ad to a specific location, specified by config and ad ID.
         NOTE: Requires that the driver session currently is on the ad page.
@@ -107,17 +123,17 @@ class AdExtractor(WebScrapingMixin):
         LOG.info("Using download directory: %s", download_dir)
 
         # Extract ad info and determine final directory path
-        ad_cfg, final_dir, ad_file_stem = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id, active = active)
+        ad_cfg, final_dir, ad_file_stem = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id, active=active)
 
         # Save the ad configuration file (offload to executor to avoid blocking the event loop)
         ad_file_path = str(Path(final_dir) / f"{ad_file_stem}.yaml")
         header_string = (
             "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
         )
-        await asyncio.get_running_loop().run_in_executor(None, lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(mode = "json"), header = header_string))
+        await asyncio.get_running_loop().run_in_executor(None, lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(mode="json"), header=header_string))
 
     @staticmethod
-    def _download_and_save_image_sync(url:str, directory:str, filename_prefix:str, img_nr:int) -> str | None:
+    def _download_and_save_image_sync(url: str, directory: str, filename_prefix: str, img_nr: int) -> str | None:
         try:
             with urllib_request.urlopen(url) as response:  # noqa: S310 Audit URL open for permitted schemes.
                 content_type = response.info().get_content_type()
@@ -132,7 +148,7 @@ class AdExtractor(WebScrapingMixin):
             LOG.warning("Failed to download image %s: %s", url, e)
             return None
 
-    async def _download_images_from_ad_page(self, directory:str, ad_file_stem:str) -> list[str]:
+    async def _download_images_from_ad_page(self, directory: str, ad_file_stem: str) -> list[str]:
         """
         Downloads all images of an ad.
 
@@ -141,13 +157,13 @@ class AdExtractor(WebScrapingMixin):
         :return: the relative paths for all downloaded images
         """
 
-        n_images:int
+        n_images: int
         img_paths = []
         try:
             # download all images from box
             image_box = await self.web_find(By.CLASS_NAME, "galleryimage-large")
 
-            images = await self.web_find_all(By.CSS_SELECTOR, ".galleryimage-element[data-ix] > img", parent = image_box)
+            images = await self.web_find_all(By.CSS_SELECTOR, ".galleryimage-element[data-ix] > img", parent=image_box)
             n_images = len(images)
             LOG.info("Found %s.", i18n.pluralize("image", n_images))
 
@@ -177,7 +193,7 @@ class AdExtractor(WebScrapingMixin):
 
         return img_paths
 
-    def extract_ad_id_from_ad_url(self, url:str) -> int:
+    def extract_ad_id_from_ad_url(self, url: str) -> int:
         """
         Extracts the ID of an ad, given by its reference link.
 
@@ -186,9 +202,9 @@ class AdExtractor(WebScrapingMixin):
         """
 
         try:
-            path = url.split("?", maxsplit = 1)[0]  # Remove query string if present
-            last_segment = path.rstrip("/").rsplit("/", maxsplit = 1)[-1]  # Get last path component
-            id_part = last_segment.split("-", maxsplit = 1)[0]  # Extract part before first hyphen
+            path = url.split("?", maxsplit=1)[0]  # Remove query string if present
+            last_segment = path.rstrip("/").rsplit("/", maxsplit=1)[-1]  # Get last path component
+            id_part = last_segment.split("-", maxsplit=1)[0]  # Extract part before first hyphen
             return int(id_part)
         except (IndexError, ValueError) as ex:
             LOG.warning("Failed to extract ad ID from URL '%s': %s", url, ex)
@@ -200,9 +216,9 @@ class AdExtractor(WebScrapingMixin):
 
         :return: the links to your ad pages
         """
-        refs:list[str] = []
+        refs: list[str] = []
 
-        async def extract_page_refs(page_num:int) -> bool:
+        async def extract_page_refs(page_num: int) -> bool:
             """Extract ad reference URLs from the current page.
 
             :param page_num: The current page number being processed
@@ -210,13 +226,13 @@ class AdExtractor(WebScrapingMixin):
             """
             try:
                 ad_list_container = await self.web_find(By.ID, "my-manageitems-adlist")
-                list_items = await self.web_find_all(By.CLASS_NAME, "cardbox", parent = ad_list_container)
+                list_items = await self.web_find_all(By.CLASS_NAME, "cardbox", parent=ad_list_container)
                 LOG.info("Found %s ad items on page %s.", len(list_items), page_num)
 
-                page_refs:list[str] = []
-                for index, li in enumerate(list_items, start = 1):
+                page_refs: list[str] = []
+                for index, li in enumerate(list_items, start=1):
                     try:
-                        link_elem = await self.web_find(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = li)
+                        link_elem = await self.web_find(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent=li)
                         href = link_elem.attrs.get("href")
                         if href:
                             page_refs.append(str(href))
@@ -254,7 +270,7 @@ class AdExtractor(WebScrapingMixin):
 
         return refs
 
-    async def navigate_to_ad_page(self, id_or_url:int | str) -> bool:
+    async def navigate_to_ad_page(self, id_or_url: int | str) -> bool:
         """
         Navigates to an ad page specified with an ad ID; or alternatively by a given URL.
         :return: whether the navigation to the ad page was successful
@@ -291,7 +307,7 @@ class AdExtractor(WebScrapingMixin):
         """
         return await self.web_text(By.ID, "viewad-title")
 
-    async def _extract_ad_page_info(self, directory:str, ad_id:int, ad_file_stem:str, *, active:bool | None = None) -> AdPartial:
+    async def _extract_ad_page_info(self, directory: str, ad_id: int, ad_file_stem: str, *, active: bool | None = None) -> AdPartial:
         """
         Extracts ad information and downloads images to the specified directory.
         NOTE: Requires that the driver session currently is on the ad page.
@@ -302,7 +318,7 @@ class AdExtractor(WebScrapingMixin):
         :param active: Optional active state override for downloaded ad config
         :return: an AdPartial object containing the ad information
         """
-        info:dict[str, Any] = {"active": True if active is None else active}
+        info: dict[str, Any] = {"active": True if active is None else active}
 
         # Extract title first (needed for directory creation)
         title = await self._extract_title_from_ad_page()
@@ -337,7 +353,7 @@ class AdExtractor(WebScrapingMixin):
         # Remove prefix and suffix if present
         description_text = raw_description
         if prefix and description_text.startswith(prefix.strip()):
-            description_text = description_text[len(prefix.strip()):]
+            description_text = description_text[len(prefix.strip()) :]
         if suffix and description_text.endswith(suffix.strip()):
             description_text = description_text[: -len(suffix.strip())]
 
@@ -375,7 +391,7 @@ class AdExtractor(WebScrapingMixin):
         return ad_cfg
 
     async def _extract_ad_page_info_with_directory_handling(
-        self, relative_directory:Path, ad_id:int, *, active:bool | None = None
+        self, relative_directory: Path, ad_id: int, *, active: bool | None = None
     ) -> tuple[AdPartial, Path, str]:
         """
         Extracts ad information and handles directory creation/renaming.
@@ -386,7 +402,7 @@ class AdExtractor(WebScrapingMixin):
         :return: AdPartial with directory information and rendered ad file stem
         """
         # First, extract basic info to get the title
-        info:dict[str, Any] = {"active": True}
+        info: dict[str, Any] = {"active": True}
 
         # extract basic info
         info["type"] = "OFFER" if "s-anzeige" in self.page.url else "WANTED"
@@ -444,7 +460,7 @@ class AdExtractor(WebScrapingMixin):
             LOG.info("New directory for ad created at %s.", final_dir)
 
         # Now extract complete ad info (including images) to the final directory
-        ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id, ad_file_stem, active = active)
+        ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id, ad_file_stem, active=active)
 
         return ad_cfg, final_dir, ad_file_stem
 
@@ -461,11 +477,11 @@ class AdExtractor(WebScrapingMixin):
             LOG.warning("Breadcrumb container 'vap-brdcrmb' not found; cannot extract ad category: %s", exc)
             raise
         try:
-            breadcrumb_links = await self.web_find_all(By.CSS_SELECTOR, "a", parent = category_line)
+            breadcrumb_links = await self.web_find_all(By.CSS_SELECTOR, "a", parent=category_line)
         except TimeoutError:
             breadcrumb_links = []
 
-        category_ids:list[str] = []
+        category_ids: list[str] = []
         for link in breadcrumb_links:
             href = str(link.attrs.get("href", "") or "")
             matches = BREADCRUMB_RE.findall(href)
@@ -482,22 +498,22 @@ class AdExtractor(WebScrapingMixin):
         LOG.debug("Falling back to legacy breadcrumb selectors; collected ids: %s", category_ids)
         fallback_timeout = self._effective_timeout()
         try:
-            category_first_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
-            category_second_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(3)", parent = category_line)
+            category_first_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(2)", parent=category_line)
+            category_second_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(3)", parent=category_line)
         except TimeoutError as exc:
             LOG.error("Legacy breadcrumb selectors not found within %.1f seconds (collected ids: %s)", fallback_timeout, category_ids)
             raise TimeoutError(_("Unable to locate breadcrumb fallback selectors within %(seconds).1f seconds.") % {"seconds": fallback_timeout}) from exc
-        href_first:str = str(category_first_part.attrs["href"])
-        href_second:str = str(category_second_part.attrs["href"])
-        cat_num_first_raw = href_first.rsplit("/", maxsplit = 1)[-1]
-        cat_num_second_raw = href_second.rsplit("/", maxsplit = 1)[-1]
+        href_first: str = str(category_first_part.attrs["href"])
+        href_second: str = str(category_second_part.attrs["href"])
+        cat_num_first_raw = href_first.rsplit("/", maxsplit=1)[-1]
+        cat_num_second_raw = href_second.rsplit("/", maxsplit=1)[-1]
         cat_num_first = cat_num_first_raw[1:] if cat_num_first_raw.startswith("c") else cat_num_first_raw
         cat_num_second = cat_num_second_raw[1:] if cat_num_second_raw.startswith("c") else cat_num_second_raw
-        category:str = cat_num_first + "/" + cat_num_second
+        category: str = cat_num_first + "/" + cat_num_second
 
         return category
 
-    async def _extract_special_attributes_from_ad_page(self, belen_conf:dict[str, Any]) -> dict[str, str]:
+    async def _extract_special_attributes_from_ad_page(self, belen_conf: dict[str, Any]) -> dict[str, str]:
         """
         Extracts the special attributes from an ad page.
         If no items are available then special_attributes is empty
@@ -520,17 +536,17 @@ class AdExtractor(WebScrapingMixin):
         :return: the price of the offer (optional); and the pricing type
         """
         try:
-            price_str:str = await self.web_text(By.ID, "viewad-price")
-            price:int | None = None
-            match price_str.rsplit(maxsplit = 1)[-1]:
+            price_str: str = await self.web_text(By.ID, "viewad-price")
+            price: int | None = None
+            match price_str.rsplit(maxsplit=1)[-1]:
                 case "€":
                     price_type = "FIXED"
                     # replace('.', '') is to remove the thousands separator before parsing as int
-                    price = int(price_str.replace(".", "").split(maxsplit = 1)[0])
+                    price = int(price_str.replace(".", "").split(maxsplit=1)[0])
                 case "VB":
                     price_type = "NEGOTIABLE"
                     if price_str != "VB":  # can be either 'X € VB', or just 'VB'
-                        price = int(price_str.replace(".", "").split(maxsplit = 1)[0])
+                        price = int(price_str.replace(".", "").split(maxsplit=1)[0])
                 case "verschenken":
                     price_type = "GIVE_AWAY"
                 case _:
@@ -654,7 +670,7 @@ class AdExtractor(WebScrapingMixin):
 
         :return: a dictionary containing the address parts with their corresponding values
         """
-        contact:dict[str, (str | None)] = {}
+        contact: dict[str, (str | None)] = {}
         address_text = await self.web_text(By.ID, "viewad-locality")
         # format: e.g. (Beispiel Allee 42,) 12345 Bundesland - Stadt
         try:
@@ -663,23 +679,23 @@ class AdExtractor(WebScrapingMixin):
         except TimeoutError:
             LOG.info("No street given in the contact.")
 
-        (zipcode, location) = address_text.split(" ", maxsplit = 1)
+        (zipcode, location) = address_text.split(" ", maxsplit=1)
         contact["zipcode"] = zipcode  # e.g. 19372
         contact["location"] = location  # e.g. Mecklenburg-Vorpommern - Steinbeck
 
-        contact_person_element:Element = await self.web_find(By.ID, "viewad-contact")
-        name_element = await self.web_find(By.CLASS_NAME, "iconlist-text", parent = contact_person_element)
+        contact_person_element: Element = await self.web_find(By.ID, "viewad-contact")
+        name_element = await self.web_find(By.CLASS_NAME, "iconlist-text", parent=contact_person_element)
         try:
-            name = await self.web_text(By.TAG_NAME, "a", parent = name_element)
+            name = await self.web_text(By.TAG_NAME, "a", parent=name_element)
         except TimeoutError:  # edge case: name without link
-            name = await self.web_text(By.TAG_NAME, "span", parent = name_element)
+            name = await self.web_text(By.TAG_NAME, "span", parent=name_element)
         contact["name"] = name
 
         if "street" not in contact:
             contact["street"] = None
         try:  # phone number is unusual for non-professional sellers today
             phone_element = await self.web_find(By.ID, "viewad-contact-phone")
-            phone_number = await self.web_text(By.TAG_NAME, "a", parent = phone_element)
+            phone_number = await self.web_text(By.TAG_NAME, "a", parent=phone_element)
             contact["phone"] = "".join(phone_number.replace("-", " ").split(" ")).replace("+49(0)", "0")
         except TimeoutError:
             contact["phone"] = None  # phone seems to be a deprecated feature (for non-professional users)
