@@ -1003,99 +1003,127 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def login(self) -> None:
         LOG.info("Checking if already logged in...")
         await self.web_open(f"{self.root_url}")
-        if getattr(self, "page", None) is not None:
-            LOG.debug("Current page URL after opening homepage: %s", self.page.url)
+        try:
+            await asyncio.wait_for(self._click_gdpr_banner(), timeout=20.0)
+        except (TimeoutError, asyncio.TimeoutError):
+            pass
 
         state = await self.get_login_state()
         if state == LoginState.LOGGED_IN:
             LOG.info("Already logged in as [%s]. Skipping login.", self.config.login.username)
             return
 
-        if state == LoginState.UNKNOWN:
-            LOG.warning("Login state is UNKNOWN - cannot determine if already logged in. Skipping login attempt.")
-            return
-
-        LOG.info("Opening login page...")
-        await self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
+        LOG.info("Navigating to SSO login page (Auth0)...")
+        # m-einloggen-sso.html triggers immediate server-side redirect to Auth0
+        # This avoids waiting for JS on m-einloggen.html which may not execute in headless mode
+        try:
+            await asyncio.wait_for(self.web_open(f"{self.root_url}/m-einloggen-sso.html"), timeout=30.0)
+        except (TimeoutError, asyncio.TimeoutError):
+            LOG.warning("Timeout navigating to SSO login page, proceeding anyway")
 
         await self.fill_login_data_and_send()
         await self.handle_after_login_logic()
 
-        # Sometimes a second login is required
         state = await self.get_login_state()
-        if state == LoginState.UNKNOWN:
-            LOG.warning("Login state is UNKNOWN after first login attempt - cannot determine login status. Aborting login process.")
-            return
-
-        if state == LoginState.LOGGED_OUT:
-            LOG.debug("First login attempt did not succeed, trying second login attempt")
-            await self.fill_login_data_and_send()
-            await self.handle_after_login_logic()
-
-            state = await self.get_login_state()
-            if state == LoginState.LOGGED_IN:
-                LOG.debug("Second login attempt succeeded")
-            else:
-                LOG.warning("Second login attempt also failed - login may not have succeeded")
+        if state == LoginState.LOGGED_IN:
+            LOG.info("Login confirmed.")
+        else:
+            LOG.warning("Login state after attempt: %s - continuing anyway.", state.name)
 
     async def fill_login_data_and_send(self) -> None:
+        """Auth0 2-step login via m-einloggen-sso.html (server-side redirect, no JS needed).
+
+        Step 1: /u/login/identifier - email
+        Step 2: /u/login/password   - password
+        """
         LOG.info("Logging in as [%s]...", self.config.login.username)
-        await self.web_input(By.ID, "login-email", self.config.login.username)
 
-        # clearing password input in case browser has stored login data set
-        await self.web_input(By.ID, "login-password", "")
-        await self.web_input(By.ID, "login-password", self.config.login.password)
+        # m-einloggen-sso.html triggers an immediate HTTP 302 to Auth0.
+        # Wait up to 10s for the redirect to complete.
+        for _i in range(10):
+            url = self.page.url if hasattr(self, 'page') and self.page else ''
+            if 'login.kleinanzeigen.de' in url or '/u/login' in url:
+                LOG.info("Auth0 redirect confirmed after %ds: %s", _i, url)
+                break
+            await asyncio.sleep(1)
+        else:
+            LOG.warning("Auth0 redirect not detected after 10s, current URL: %s",
+                        self.page.url if hasattr(self, 'page') and self.page else 'unknown')
 
+        # Step 1: email identifier
+        LOG.info("Auth0 Step 1: entering email...")
+        await self.web_input(By.ID, "username", self.config.login.username)
+        await asyncio.wait_for(self.web_click(By.CSS_SELECTOR, "button[type='submit']"), timeout=10.0)
+
+        # Step 2: wait for password page then enter password
+        LOG.info("Waiting for Auth0 password page...")
+        for _i in range(15):
+            await asyncio.sleep(1)
+            url = self.page.url if hasattr(self, 'page') and self.page else ''
+            if '/u/login/password' in url:
+                LOG.info("Auth0 password page reached after %ds", _i + 1)
+                break
+            if _i == 14:
+                LOG.warning("Password page not reached after 15s, current URL: %s", url)
+
+        LOG.info("Auth0 Step 2: entering password...")
+        await self.web_input(By.CSS_SELECTOR, "input[type='password']", self.config.login.password)
         await self.check_and_wait_for_captcha(is_login_page = True)
-
-        await self.web_click(By.CSS_SELECTOR, "form#login-form button[type='submit']")
+        await asyncio.wait_for(self.web_click(By.CSS_SELECTOR, "button[type='submit']"), timeout=10.0)
+        LOG.info("Auth0 login submitted.")
+        await asyncio.sleep(3)
 
     async def handle_after_login_logic(self) -> None:
+        # All checks wrapped in hard asyncio timeouts to prevent CDP queue hangs (Auth0)
         try:
-            sms_timeout = self._timeout("sms_verification")
-            await self.web_find(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout = sms_timeout)
-            LOG.warning("############################################")
-            LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
-            LOG.warning("############################################")
-            await ainput(_("Press ENTER when done..."))
-        except TimeoutError:
-            # No SMS verification prompt detected.
+            await asyncio.wait_for(self._check_sms_verification(), timeout=20.0)
+        except (TimeoutError, asyncio.TimeoutError):
             pass
 
         try:
-            email_timeout = self._timeout("email_verification")
-            await self.web_find(By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout = email_timeout)
-            LOG.warning("############################################")
-            LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
-            LOG.warning("############################################")
-            await ainput(_("Press ENTER when done..."))
-        except TimeoutError:
-            # No email verification prompt detected.
+            await asyncio.wait_for(self._check_email_verification(), timeout=20.0)
+        except (TimeoutError, asyncio.TimeoutError):
             pass
 
         try:
             LOG.info("Handling GDPR disclaimer...")
-            gdpr_timeout = self._timeout("gdpr_prompt")
-            await self.web_find(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
-            await self.web_click(By.ID, "gdpr-banner-cmp-button")
-            await self.web_click(
-                By.XPATH, "//div[@id='ConsentManagementPage']//*//button//*[contains(., 'Alle ablehnen und fortfahren')]", timeout = gdpr_timeout
-            )
-        except TimeoutError:
-            # GDPR banner not shown within timeout.
-            pass
+            await asyncio.wait_for(self._click_gdpr_banner(), timeout=20.0)
+        except (TimeoutError, asyncio.TimeoutError):
+            LOG.debug("GDPR banner not found or timed out")
+
+    async def _check_sms_verification(self) -> None:
+        sms_timeout = self._timeout("sms_verification")
+        await self.web_find(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout = sms_timeout)
+        LOG.warning("############################################")
+        LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
+        LOG.warning("############################################")
+        await ainput(_("Press ENTER when done..."))
+
+    async def _check_email_verification(self) -> None:
+        email_timeout = self._timeout("email_verification")
+        await self.web_find(By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout = email_timeout)
+        LOG.warning("############################################")
+        LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
+        LOG.warning("############################################")
+        await ainput(_("Press ENTER when done..."))
+
+    async def _click_gdpr_banner(self) -> None:
+        gdpr_timeout = self._timeout("gdpr_prompt")
+        await self.web_find(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
+        await self.web_click(By.ID, "gdpr-banner-accept")
 
     async def _auth_probe_login_state(self) -> LoginState:
         """Probe an auth-required endpoint to classify login state.
 
-        The probe is non-mutating (GET request). It is used as a fallback method by
-        get_login_state() when DOM-based checks are inconclusive.
+        DISABLED: Auth0 migration causes fetch() to block CDP queue for minutes.
+        DOM-based check is sufficient; UNKNOWN triggers login attempt anyway.
         """
+        return LoginState.UNKNOWN
 
         url = f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"
         try:
             response = await self.web_request(url, valid_response_codes = [200, 401, 403])
-        except (TimeoutError, AssertionError):
+        except (TimeoutError, AssertionError, TypeError):
             # AssertionError can occur when web_request() fails to parse the response (e.g., unexpected content type)
             # Treat both timeout and assertion failures as UNKNOWN to avoid false assumptions about login state
             return LoginState.UNKNOWN
@@ -1137,7 +1165,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         # Fall back to the more reliable server-side auth probe.
         # SPA/hydration delays can cause DOM-based checks to temporarily miss login indicators.
-        state = await self._auth_probe_login_state()
+        # Auth0 migration may cause fetch to hang → enforce hard timeout
+        try:
+            state = await asyncio.wait_for(self._auth_probe_login_state(), timeout=12.0)
+        except asyncio.TimeoutError:
+            LOG.warning("Auth probe timed out after 12s (Auth0 redirect?), treating as UNKNOWN")
+            state = LoginState.UNKNOWN
         if state != LoginState.UNKNOWN:
             return state
 
@@ -1308,8 +1341,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             try:
                 response = await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum={page}")
-            except TimeoutError as ex:
-                LOG.warning("Pagination request timed out on page %s: %s", page, ex)
+            except (TimeoutError, TypeError) as ex:
+                LOG.warning("Pagination request failed on page %s: %s", page, ex)
                 break
 
             content = response.get("content", "")
