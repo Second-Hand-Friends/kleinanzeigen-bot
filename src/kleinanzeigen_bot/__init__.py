@@ -2035,14 +2035,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             special_shipping_selector = '//select[contains(@id, ".versand_s")]'
             is_commercial_shipping = False
             try:
-                if await self.web_check(By.XPATH, special_shipping_selector, Is.DISPLAYED, timeout = short_timeout):
-                    # try to set special attribute selector (then we have a commercial account)
-                    shipping_value = "ja" if ad_cfg.shipping_type == "SHIPPING" else "nein"
-                    await self.web_select(By.XPATH, special_shipping_selector, shipping_value)
-                    is_commercial_shipping = True
+                has_commercial_selector = await self.web_check(By.XPATH, special_shipping_selector, Is.DISPLAYED, timeout = short_timeout)
             except TimeoutError:
                 # Element does not exist in DOM (non-commercial account or UI change); fall through to dialog-based shipping.
-                pass
+                has_commercial_selector = False
+            if has_commercial_selector:
+                shipping_value = "ja" if ad_cfg.shipping_type == "SHIPPING" else "nein"
+                await self.web_select(By.XPATH, special_shipping_selector, shipping_value)
+                is_commercial_shipping = True
             if not is_commercial_shipping:
                 try:
                     # no options. only costs. Set custom shipping cost
