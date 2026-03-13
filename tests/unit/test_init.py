@@ -593,6 +593,13 @@ class TestKleinanzeigenBotAuthentication:
             assert await test_bot.get_login_state() == LoginState.LOGGED_IN
             web_text.assert_awaited_once()
 
+    def test_current_page_url_strips_query_and_fragment(self, test_bot:KleinanzeigenBot) -> None:
+        page = MagicMock()
+        page.url = "https://login.kleinanzeigen.de/u/login/password?state=secret&code=abc#frag"
+        test_bot.page = page
+
+        assert test_bot._current_page_url() == "https://login.kleinanzeigen.de/u/login/password"
+
     @pytest.mark.asyncio
     async def test_get_login_state_returns_unknown_when_dom_checks_are_inconclusive(self, test_bot:KleinanzeigenBot) -> None:
         with patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError(), TimeoutError(), TimeoutError()]) as web_text:
@@ -819,6 +826,24 @@ class TestKleinanzeigenBotAuthentication:
             assert mock_click.call_count == 2
 
     @pytest.mark.asyncio
+    async def test_fill_login_data_and_send_logs_generic_start_message(
+        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        with (
+            caplog.at_level("INFO"),
+            patch.object(test_bot, "_wait_for_auth0_login_context", new_callable = AsyncMock),
+            patch.object(test_bot, "_wait_for_auth0_password_step", new_callable = AsyncMock),
+            patch.object(test_bot, "_wait_for_post_auth0_submit_transition", new_callable = AsyncMock),
+            patch.object(test_bot, "web_input"),
+            patch.object(test_bot, "web_click"),
+            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
+        ):
+            await test_bot.fill_login_data_and_send()
+
+        assert "Logging in..." in caplog.text
+        assert test_bot.config.login.username not in caplog.text
+
+    @pytest.mark.asyncio
     async def test_fill_login_data_and_send_fails_when_password_step_missing(self, test_bot:KleinanzeigenBot) -> None:
         """Missing Auth0 password step should fail fast."""
         with (
@@ -867,10 +892,11 @@ class TestKleinanzeigenBotAuthentication:
             patch.object(test_bot, "is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError) as mock_is_logged_in,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
         ):
-            await test_bot._wait_for_post_auth0_submit_transition()
+            with pytest.raises(TimeoutError, match = "Auth0 post-submit verification remained inconclusive"):
+                await test_bot._wait_for_post_auth0_submit_transition()
 
             mock_wait.assert_awaited_once()
-            mock_is_logged_in.assert_awaited_once()
+            assert mock_is_logged_in.await_count == 2
             mock_sleep.assert_awaited_once()
             assert mock_sleep.await_args is not None
             sleep_kwargs = cast(Any, mock_sleep.await_args).kwargs
@@ -886,11 +912,25 @@ class TestKleinanzeigenBotAuthentication:
             patch.object(test_bot, "is_logged_in", new_callable = AsyncMock, return_value = False) as mock_is_logged_in,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
         ):
-            await test_bot._wait_for_post_auth0_submit_transition()
+            with pytest.raises(TimeoutError, match = "Auth0 post-submit verification remained inconclusive"):
+                await test_bot._wait_for_post_auth0_submit_transition()
 
             mock_wait.assert_awaited_once()
-            mock_is_logged_in.assert_awaited_once()
+            assert mock_is_logged_in.await_count == 2
             mock_sleep.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_click_gdpr_banner_uses_quick_dom_timeout_and_passes_click_timeout(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch.object(test_bot, "_timeout", return_value = 1.25) as mock_timeout,
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await test_bot._click_gdpr_banner()
+
+            mock_timeout.assert_called_once_with("quick_dom")
+            mock_find.assert_awaited_once_with(By.ID, "gdpr-banner-accept", timeout = 1.25)
+            mock_click.assert_awaited_once_with(By.ID, "gdpr-banner-accept", timeout = 1.25)
 
     @pytest.mark.asyncio
     async def test_handle_after_login_logic(self, test_bot:KleinanzeigenBot) -> None:

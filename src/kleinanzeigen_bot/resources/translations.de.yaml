@@ -86,14 +86,24 @@ kleinanzeigen_bot/__init__.py:
 
   login:
     "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
-    "Already logged in as [%s]. Skipping login.": "Bereits eingeloggt als [%s]. Überspringe Anmeldung."
+    "Already logged in. Skipping login.": "Bereits eingeloggt. Überspringe Anmeldung."
     "Navigating to SSO login page (Auth0)...": "Navigiere zur SSO-Anmeldeseite (Auth0)..."
     "Timeout navigating to SSO login page after %.1fs": "Zeitüberschreitung beim Navigieren zur SSO-Anmeldeseite nach %.1fs"
     "Login confirmed.": "Anmeldung bestätigt."
     "Login state after attempt is %s (url=%s)": "Login-Status nach dem Versuch ist %s (URL=%s)"
+    "Login could not be confirmed after Auth0 flow (state=%s, url=%s)": "Anmeldung nach Auth0-Flow konnte nicht bestätigt werden (Status=%s, URL=%s)"
+
+  _wait_for_auth0_login_context:
+    "Auth0 redirect not detected (url=%s)": "Auth0-Weiterleitung nicht erkannt (URL=%s)"
+
+  _wait_for_auth0_password_step:
+    "Auth0 password step not reached (url=%s)": "Auth0-Passwortschritt nicht erreicht (URL=%s)"
+
+  _wait_for_post_auth0_submit_transition:
+    "Auth0 post-submit verification remained inconclusive (url=%s)": "Auth0-Verifikation nach Absenden blieb unklar (URL=%s)"
 
   fill_login_data_and_send:
-    "Logging in as [%s]...": "Anmeldung als [%s]..."
+    "Logging in...": "Anmeldung..."
     "Auth0 Step 1: entering email...": "Auth0 Schritt 1: E-Mail wird eingegeben..."
     "Waiting for Auth0 password page...": "Warte auf Auth0-Passwortseite..."
     "Auth0 Step 2: entering password...": "Auth0 Schritt 2: Passwort wird eingegeben..."

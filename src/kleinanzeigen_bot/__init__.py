@@ -1015,7 +1015,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         state = await self.get_login_state(capture_diagnostics = False)
         if state == LoginState.LOGGED_IN:
-            LOG.info("Already logged in as [%s]. Skipping login.", self.config.login.username)
+            LOG.info("Already logged in. Skipping login.")
             return
 
         LOG.debug("Navigating to SSO login page (Auth0)...")
@@ -1023,7 +1023,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # This avoids waiting for JS on m-einloggen.html which may not execute in headless mode
         try:
             await asyncio.wait_for(self.web_open(f"{self.root_url}/m-einloggen-sso.html"), timeout = sso_navigation_timeout)
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             LOG.warning("Timeout navigating to SSO login page after %.1fs", sso_navigation_timeout)
             await self._capture_login_detection_diagnostics_if_enabled()
             raise
@@ -1033,7 +1033,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         try:
             await self.fill_login_data_and_send()
             await self.handle_after_login_logic()
-        except (AssertionError, TimeoutError, asyncio.TimeoutError):
+        except (AssertionError, TimeoutError):
+            # AssertionError is intentionally part of auth-boundary control flow so
+            # diagnostics are captured before the original error is re-raised.
             await self._capture_login_detection_diagnostics_if_enabled()
             raise
 
@@ -1045,14 +1047,21 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         current_url = self._current_page_url()
         LOG.warning("Login state after attempt is %s (url=%s)", state.name, current_url)
         await self._capture_login_detection_diagnostics_if_enabled()
-        raise AssertionError(f"Login could not be confirmed after Auth0 flow (state={state.name}, url={current_url})")
+        raise AssertionError(_("Login could not be confirmed after Auth0 flow (state=%s, url=%s)") % (state.name, current_url))
 
     def _current_page_url(self) -> str:
         page = getattr(self, "page", None)
         if page is None:
             return "unknown"
         url = getattr(page, "url", None)
-        return str(url) if isinstance(url, str) and url else "unknown"
+        if not isinstance(url, str) or not url:
+            return "unknown"
+
+        parsed = urllib_parse.urlparse(url)
+        host = parsed.hostname or parsed.netloc.split("@")[-1]
+        netloc = f"{host}:{parsed.port}" if parsed.port is not None and host else host
+        sanitized = urllib_parse.urlunparse((parsed.scheme, netloc, parsed.path, "", "", ""))
+        return sanitized or "unknown"
 
     async def _wait_for_auth0_login_context(self) -> None:
         redirect_timeout = self._timeout("login_detection")
@@ -1065,7 +1074,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             )
         except TimeoutError as ex:
             current_url = self._current_page_url()
-            raise AssertionError(f"Auth0 redirect not detected (url={current_url})") from ex
+            raise AssertionError(_("Auth0 redirect not detected (url=%s)") % current_url) from ex
 
     async def _wait_for_auth0_password_step(self) -> None:
         password_step_timeout = self._timeout("login_detection")
@@ -1078,7 +1087,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             )
         except TimeoutError as ex:
             current_url = self._current_page_url()
-            raise AssertionError(f"Auth0 password step not reached (url={current_url})") from ex
+            raise AssertionError(_("Auth0 password step not reached (url=%s)") % current_url) from ex
 
     async def _wait_for_post_auth0_submit_transition(self) -> None:
         post_submit_timeout = self._timeout("login_detection")
@@ -1100,7 +1109,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         login_confirmed = False
         try:
             login_confirmed = await asyncio.wait_for(self.is_logged_in(include_probe = False), timeout = post_submit_timeout)
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             LOG.debug("Post-submit login verification did not complete within %.1fs", post_submit_timeout)
 
         if login_confirmed:
@@ -1109,13 +1118,22 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.debug("Auth0 post-submit verification remained inconclusive; applying bounded fallback pause")
         await self.web_sleep(min_ms = fallback_min_ms, max_ms = fallback_max_ms)
 
+        try:
+            if await asyncio.wait_for(self.is_logged_in(include_probe = False), timeout = quick_dom_timeout):
+                return
+        except TimeoutError:
+            LOG.debug("Final post-submit login confirmation did not complete within %.1fs", quick_dom_timeout)
+
+        current_url = self._current_page_url()
+        raise TimeoutError(_("Auth0 post-submit verification remained inconclusive (url=%s)") % current_url)
+
     async def fill_login_data_and_send(self) -> None:
         """Auth0 2-step login via m-einloggen-sso.html (server-side redirect, no JS needed).
 
         Step 1: /u/login/identifier - email
         Step 2: /u/login/password   - password
         """
-        LOG.info("Logging in as [%s]...", self.config.login.username)
+        LOG.info("Logging in...")
 
         await self._wait_for_auth0_login_context()
 
@@ -1169,9 +1187,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         await ainput(_("Press ENTER when done..."))
 
     async def _click_gdpr_banner(self, *, timeout:float | None = None) -> None:
-        gdpr_timeout = self._timeout("gdpr_prompt") if timeout is None else timeout
+        gdpr_timeout = self._timeout("quick_dom") if timeout is None else timeout
         await self.web_find(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
-        await self.web_click(By.ID, "gdpr-banner-accept")
+        await self.web_click(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
 
     async def get_login_state(self, *, capture_diagnostics:bool = True) -> LoginState:
         """Determine current login state using DOM-first detection.
@@ -1401,6 +1419,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             try:
                 response = await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum={page}")
             except (TimeoutError, TypeError) as ex:
+                # TypeError is handled defensively for malformed/shape-unstable
+                # responses returned during pagination to avoid hard crashes.
                 LOG.warning("Pagination request failed on page %s: %s", page, ex)
                 break
 
