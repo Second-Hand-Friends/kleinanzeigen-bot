@@ -1095,10 +1095,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         the flow when the banner is already gone.
         """
         try:
-            await self.web_find(By.ID, "gdpr-banner-accept", timeout = 5)
-            LOG.info("Consent banner detected — clicking 'Alle akzeptieren'...")
+            banner_timeout = self._timeout("quick_dom")
+            await self.web_find(By.ID, "gdpr-banner-accept", timeout = banner_timeout)
+            LOG.debug("Consent banner detected, clicking 'Alle akzeptieren'...")
             await self.web_click(By.ID, "gdpr-banner-accept")
-            await self.web_sleep(1)
         except TimeoutError:
             pass
 

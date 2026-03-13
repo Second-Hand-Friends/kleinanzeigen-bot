@@ -704,6 +704,7 @@ class TestKleinanzeigenBotAuthentication:
             patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
             # Mock the sequence of web_find calls:
+            # 0. Consent banner not found (in _dismiss_consent_banner, before login state check)
             # First login attempt:
             # 1. Captcha iframe found (in check_and_wait_for_captcha)
             # 2. Phone verification not found (in handle_after_login_logic)
@@ -715,6 +716,7 @@ class TestKleinanzeigenBotAuthentication:
             # 7. Email verification not found (in handle_after_login_logic)
             # 8. GDPR banner not found (in handle_after_login_logic)
             mock_find.side_effect = [
+                TimeoutError(),  # Consent banner (before login state check)
                 AsyncMock(),  # Captcha iframe (first login)
                 TimeoutError(),  # Phone verification (first login)
                 TimeoutError(),  # Email verification (first login)
@@ -731,7 +733,7 @@ class TestKleinanzeigenBotAuthentication:
             await test_bot.login()
 
             # Verify the complete flow
-            assert mock_find.call_count == 8  # Exactly 8 web_find calls
+            assert mock_find.call_count == 9  # 1 consent banner + 8 original web_find calls
             assert mock_ainput.call_count == 2  # Two captcha prompts
             assert mock_input.call_count == 6  # Two login attempts with username, clear password, and set password
             assert mock_click.call_count == 2  # Two submit button clicks
