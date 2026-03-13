@@ -1817,6 +1817,84 @@ class TestKleinanzeigenBotShippingOptions:
             mock_set_condition.assert_called_once_with("67890")  # Converted to string
 
 
+class TestShippingSelectorTimeout:
+    """Regression tests for commercial shipping selector (versand_s) timeout handling.
+
+    Ensures that TimeoutError from web_check (element absent) is caught gracefully,
+    while TimeoutError from web_select (element found but interaction fails) propagates.
+    """
+
+    @pytest.mark.asyncio
+    async def test_missing_versand_s_falls_back_to_dialog(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """When versand_s selector is absent, web_check raises TimeoutError and the bot falls through to dialog-based shipping."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING"})
+
+        with (
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = TimeoutError("element not found")) as mock_check,
+            patch.object(test_bot, "web_select", new_callable = AsyncMock) as mock_select,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_find", new_callable = AsyncMock),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+            # Probe must have been awaited with quick_dom timeout
+            mock_check.assert_awaited_once()
+            assert mock_check.await_args is not None
+            assert mock_check.await_args.kwargs["timeout"] == test_bot._timeout("quick_dom")
+
+            # web_select must NOT have been called with versand_s (commercial path was skipped)
+            for call in mock_select.call_args_list:
+                assert "versand_s" not in str(call), "web_select should not be called for versand_s when element is absent"
+
+            # Dialog-based fallback should have been triggered (click on "Versandmethoden auswählen")
+            clicked_selectors = [str(c) for c in mock_click.call_args_list]
+            assert any("Versandmethoden" in s for s in clicked_selectors), \
+                "Expected dialog-based shipping fallback when versand_s is absent"
+
+    @pytest.mark.asyncio
+    async def test_visible_versand_s_uses_commercial_select(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """When versand_s selector is present, web_check succeeds and web_select sets the value."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING"})
+
+        with (
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True) as mock_check,
+            patch.object(test_bot, "web_select", new_callable = AsyncMock) as mock_select,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+            # Probe must have been awaited with quick_dom timeout
+            mock_check.assert_awaited_once()
+            assert mock_check.await_args is not None
+            assert mock_check.await_args.kwargs["timeout"] == test_bot._timeout("quick_dom")
+
+            # web_select must have been awaited with versand_s and "ja" (SHIPPING)
+            mock_select.assert_awaited_once_with(By.XPATH, '//select[contains(@id, ".versand_s")]', "ja")
+
+            # Dialog-based fallback should NOT have been triggered
+            clicked_selectors = [str(c) for c in mock_click.call_args_list]
+            assert not any("Versandmethoden" in s for s in clicked_selectors), \
+                "Dialog-based shipping should not be triggered when versand_s is present"
+
+    @pytest.mark.asyncio
+    async def test_web_select_timeout_propagates_after_successful_probe(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """When web_check succeeds but web_select raises TimeoutError, the error must propagate (not be swallowed)."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING"})
+
+        with (
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True) as mock_check,
+            patch.object(test_bot, "web_select", new_callable = AsyncMock, side_effect = TimeoutError("select timed out")),
+            pytest.raises(TimeoutError, match = "select timed out"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+        # Probe must have been awaited with quick_dom timeout
+        mock_check.assert_awaited_once()
+        assert mock_check.await_args is not None
+        assert mock_check.await_args.kwargs["timeout"] == test_bot._timeout("quick_dom")
+
+
 class TestKleinanzeigenBotUrlConstruction:
     """Tests for URL construction functionality."""
 
