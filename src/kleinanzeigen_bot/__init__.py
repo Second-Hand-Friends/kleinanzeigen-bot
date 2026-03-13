@@ -38,7 +38,10 @@ _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
     (By.ID, "user-email"),
 ]
-_LOGIN_DETECTION_SELECTOR_LABELS:Final[tuple[str, ...]] = ("user_info_primary", "user_info_secondary")
+_LOGGED_OUT_CTA_SELECTORS:Final[list[tuple["By", str]]] = [
+    (By.CSS_SELECTOR, 'a[href*="einloggen"]'),
+    (By.CSS_SELECTOR, 'a[href*="/m-einloggen"]'),
+]
 
 colorama.just_fix_windows_console()
 
@@ -997,38 +1000,116 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             await ainput(_("Press a key to continue..."))
         except TimeoutError:
-            # No captcha detected within timeout.
-            pass
+            LOG.debug("No captcha detected within timeout on login page")
 
     async def login(self) -> None:
+        sso_navigation_timeout = self._timeout("page_load")
+        pre_login_gdpr_timeout = self._timeout("quick_dom")
+
         LOG.info("Checking if already logged in...")
         await self.web_open(f"{self.root_url}")
         try:
-            await asyncio.wait_for(self._click_gdpr_banner(), timeout=20.0)
-        except (TimeoutError, asyncio.TimeoutError):
-            pass
+            await self._click_gdpr_banner(timeout = pre_login_gdpr_timeout)
+        except TimeoutError:
+            LOG.debug("No GDPR banner detected before login")
 
-        state = await self.get_login_state()
+        state = await self.get_login_state(capture_diagnostics = False)
         if state == LoginState.LOGGED_IN:
             LOG.info("Already logged in as [%s]. Skipping login.", self.config.login.username)
             return
 
-        LOG.info("Navigating to SSO login page (Auth0)...")
+        LOG.debug("Navigating to SSO login page (Auth0)...")
         # m-einloggen-sso.html triggers immediate server-side redirect to Auth0
         # This avoids waiting for JS on m-einloggen.html which may not execute in headless mode
         try:
-            await asyncio.wait_for(self.web_open(f"{self.root_url}/m-einloggen-sso.html"), timeout=30.0)
+            await asyncio.wait_for(self.web_open(f"{self.root_url}/m-einloggen-sso.html"), timeout = sso_navigation_timeout)
         except (TimeoutError, asyncio.TimeoutError):
-            LOG.warning("Timeout navigating to SSO login page, proceeding anyway")
+            LOG.warning("Timeout navigating to SSO login page after %.1fs", sso_navigation_timeout)
+            await self._capture_login_detection_diagnostics_if_enabled()
+            raise
 
-        await self.fill_login_data_and_send()
-        await self.handle_after_login_logic()
+        self._login_detection_diagnostics_captured = False
+
+        try:
+            await self.fill_login_data_and_send()
+            await self.handle_after_login_logic()
+        except (AssertionError, TimeoutError, asyncio.TimeoutError):
+            await self._capture_login_detection_diagnostics_if_enabled()
+            raise
 
         state = await self.get_login_state()
         if state == LoginState.LOGGED_IN:
             LOG.info("Login confirmed.")
-        else:
-            LOG.warning("Login state after attempt: %s - continuing anyway.", state.name)
+            return
+
+        current_url = self._current_page_url()
+        LOG.warning("Login state after attempt is %s (url=%s)", state.name, current_url)
+        await self._capture_login_detection_diagnostics_if_enabled()
+        raise AssertionError(f"Login could not be confirmed after Auth0 flow (state={state.name}, url={current_url})")
+
+    def _current_page_url(self) -> str:
+        page = getattr(self, "page", None)
+        if page is None:
+            return "unknown"
+        url = getattr(page, "url", None)
+        return str(url) if isinstance(url, str) and url else "unknown"
+
+    async def _wait_for_auth0_login_context(self) -> None:
+        redirect_timeout = self._timeout("login_detection")
+        try:
+            await self.web_await(
+                lambda: "login.kleinanzeigen.de" in self._current_page_url() or "/u/login" in self._current_page_url(),
+                timeout = redirect_timeout,
+                timeout_error_message = f"Auth0 redirect did not start within {redirect_timeout} seconds",
+                apply_multiplier = False,
+            )
+        except TimeoutError as ex:
+            current_url = self._current_page_url()
+            raise AssertionError(f"Auth0 redirect not detected (url={current_url})") from ex
+
+    async def _wait_for_auth0_password_step(self) -> None:
+        password_step_timeout = self._timeout("login_detection")
+        try:
+            await self.web_await(
+                lambda: "/u/login/password" in self._current_page_url(),
+                timeout = password_step_timeout,
+                timeout_error_message = f"Auth0 password page not reached within {password_step_timeout} seconds",
+                apply_multiplier = False,
+            )
+        except TimeoutError as ex:
+            current_url = self._current_page_url()
+            raise AssertionError(f"Auth0 password step not reached (url={current_url})") from ex
+
+    async def _wait_for_post_auth0_submit_transition(self) -> None:
+        post_submit_timeout = self._timeout("login_detection")
+        quick_dom_timeout = self._timeout("quick_dom")
+        fallback_max_ms = max(700, int(quick_dom_timeout * 1_000))
+        fallback_min_ms = max(300, fallback_max_ms // 2)
+
+        try:
+            await self.web_await(
+                lambda: "/u/login/password" not in self._current_page_url() and "/u/login/identifier" not in self._current_page_url(),
+                timeout = post_submit_timeout,
+                timeout_error_message = f"Auth0 post-submit transition did not complete within {post_submit_timeout} seconds",
+                apply_multiplier = False,
+            )
+            return
+        except TimeoutError:
+            LOG.debug("Post-submit transition not detected via URL, checking logged-in selectors")
+
+        try:
+            await self.web_await(
+                lambda: self.is_logged_in(include_probe = False),
+                timeout = post_submit_timeout,
+                timeout_error_message = (
+                    "Could not confirm login via UI selectors after Auth0 submit within "
+                    f"{post_submit_timeout} seconds"
+                ),
+                apply_multiplier = False,
+            )
+        except TimeoutError:
+            LOG.debug("Auth0 post-submit verification remained inconclusive; applying bounded fallback pause")
+            await self.web_sleep(min_ms = fallback_min_ms, max_ms = fallback_max_ms)
 
     async def fill_login_data_and_send(self) -> None:
         """Auth0 2-step login via m-einloggen-sso.html (server-side redirect, no JS needed).
@@ -1038,57 +1119,39 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         """
         LOG.info("Logging in as [%s]...", self.config.login.username)
 
-        # m-einloggen-sso.html triggers an immediate HTTP 302 to Auth0.
-        # Wait up to 10s for the redirect to complete.
-        for _i in range(10):
-            url = self.page.url if hasattr(self, 'page') and self.page else ''
-            if 'login.kleinanzeigen.de' in url or '/u/login' in url:
-                LOG.info("Auth0 redirect confirmed after %ds: %s", _i, url)
-                break
-            await asyncio.sleep(1)
-        else:
-            LOG.warning("Auth0 redirect not detected after 10s, current URL: %s",
-                        self.page.url if hasattr(self, 'page') and self.page else 'unknown')
+        await self._wait_for_auth0_login_context()
 
         # Step 1: email identifier
-        LOG.info("Auth0 Step 1: entering email...")
+        LOG.debug("Auth0 Step 1: entering email...")
         await self.web_input(By.ID, "username", self.config.login.username)
-        await asyncio.wait_for(self.web_click(By.CSS_SELECTOR, "button[type='submit']"), timeout=10.0)
+        await self.web_click(By.CSS_SELECTOR, "button[type='submit']")
 
         # Step 2: wait for password page then enter password
-        LOG.info("Waiting for Auth0 password page...")
-        for _i in range(15):
-            await asyncio.sleep(1)
-            url = self.page.url if hasattr(self, 'page') and self.page else ''
-            if '/u/login/password' in url:
-                LOG.info("Auth0 password page reached after %ds", _i + 1)
-                break
-            if _i == 14:
-                LOG.warning("Password page not reached after 15s, current URL: %s", url)
+        LOG.debug("Waiting for Auth0 password page...")
+        await self._wait_for_auth0_password_step()
 
-        LOG.info("Auth0 Step 2: entering password...")
+        LOG.debug("Auth0 Step 2: entering password...")
         await self.web_input(By.CSS_SELECTOR, "input[type='password']", self.config.login.password)
         await self.check_and_wait_for_captcha(is_login_page = True)
-        await asyncio.wait_for(self.web_click(By.CSS_SELECTOR, "button[type='submit']"), timeout=10.0)
-        LOG.info("Auth0 login submitted.")
-        await asyncio.sleep(3)
+        await self.web_click(By.CSS_SELECTOR, "button[type='submit']")
+        await self._wait_for_post_auth0_submit_transition()
+        LOG.debug("Auth0 login submitted.")
 
     async def handle_after_login_logic(self) -> None:
-        # All checks wrapped in hard asyncio timeouts to prevent CDP queue hangs (Auth0)
         try:
-            await asyncio.wait_for(self._check_sms_verification(), timeout=20.0)
-        except (TimeoutError, asyncio.TimeoutError):
-            pass
+            await self._check_sms_verification()
+        except TimeoutError:
+            LOG.debug("No SMS verification prompt detected after login")
 
         try:
-            await asyncio.wait_for(self._check_email_verification(), timeout=20.0)
-        except (TimeoutError, asyncio.TimeoutError):
-            pass
+            await self._check_email_verification()
+        except TimeoutError:
+            LOG.debug("No email verification prompt detected after login")
 
         try:
-            LOG.info("Handling GDPR disclaimer...")
-            await asyncio.wait_for(self._click_gdpr_banner(), timeout=20.0)
-        except (TimeoutError, asyncio.TimeoutError):
+            LOG.debug("Handling GDPR disclaimer...")
+            await self._click_gdpr_banner()
+        except TimeoutError:
             LOG.debug("GDPR banner not found or timed out")
 
     async def _check_sms_verification(self) -> None:
@@ -1107,74 +1170,25 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.warning("############################################")
         await ainput(_("Press ENTER when done..."))
 
-    async def _click_gdpr_banner(self) -> None:
-        gdpr_timeout = self._timeout("gdpr_prompt")
+    async def _click_gdpr_banner(self, *, timeout:float | None = None) -> None:
+        gdpr_timeout = self._timeout("gdpr_prompt") if timeout is None else timeout
         await self.web_find(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
         await self.web_click(By.ID, "gdpr-banner-accept")
 
-    async def _auth_probe_login_state(self) -> LoginState:
-        """Probe an auth-required endpoint to classify login state.
-
-        DISABLED: Auth0 migration causes fetch() to block CDP queue for minutes.
-        DOM-based check is sufficient; UNKNOWN triggers login attempt anyway.
-        """
-        return LoginState.UNKNOWN
-
-        url = f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"
-        try:
-            response = await self.web_request(url, valid_response_codes = [200, 401, 403])
-        except (TimeoutError, AssertionError, TypeError):
-            # AssertionError can occur when web_request() fails to parse the response (e.g., unexpected content type)
-            # Treat both timeout and assertion failures as UNKNOWN to avoid false assumptions about login state
-            return LoginState.UNKNOWN
-
-        status_code = response.get("statusCode")
-        if status_code in {401, 403}:
-            return LoginState.LOGGED_OUT
-
-        content = response.get("content", "")
-        if not isinstance(content, str):
-            return LoginState.UNKNOWN
-
-        try:
-            payload = json.loads(content)
-        except json.JSONDecodeError:
-            lowered = content.lower()
-            if "m-einloggen" in lowered or "login-email" in lowered or "login-password" in lowered or "login-form" in lowered:
-                return LoginState.LOGGED_OUT
-            return LoginState.UNKNOWN
-
-        if isinstance(payload, dict) and "ads" in payload:
-            return LoginState.LOGGED_IN
-
-        return LoginState.UNKNOWN
-
-    async def get_login_state(self) -> LoginState:
-        """Determine current login state using layered detection.
+    async def get_login_state(self, *, capture_diagnostics:bool = True) -> LoginState:
+        """Determine current login state using DOM-first detection.
 
         Order:
-        1) DOM-based check via `is_logged_in(include_probe=False)` (preferred - stealthy)
-        2) Server-side auth probe via `_auth_probe_login_state` (fallback - more reliable)
-        3) If still inconclusive, capture diagnostics via
-           `_capture_login_detection_diagnostics_if_enabled` and return `UNKNOWN`
+        1) DOM-based check via `is_logged_in(include_probe=False)`
+        2) If inconclusive, optionally capture diagnostics and return `UNKNOWN`
         """
-        # Prefer DOM-based checks first to minimize bot-like behavior.
-        # The auth probe makes a JSON API request that normal users wouldn't trigger.
+        # Prefer DOM-based checks first to minimize bot-like behavior and avoid
+        # fragile API probing side effects. Server-side auth probing was removed.
         if await self.is_logged_in(include_probe = False):
             return LoginState.LOGGED_IN
 
-        # Fall back to the more reliable server-side auth probe.
-        # SPA/hydration delays can cause DOM-based checks to temporarily miss login indicators.
-        # Auth0 migration may cause fetch to hang → enforce hard timeout
-        try:
-            state = await asyncio.wait_for(self._auth_probe_login_state(), timeout=12.0)
-        except asyncio.TimeoutError:
-            LOG.warning("Auth probe timed out after 12s (Auth0 redirect?), treating as UNKNOWN")
-            state = LoginState.UNKNOWN
-        if state != LoginState.UNKNOWN:
-            return state
-
-        await self._capture_login_detection_diagnostics_if_enabled()
+        if capture_diagnostics:
+            await self._capture_login_detection_diagnostics_if_enabled()
         return LoginState.UNKNOWN
 
     def _diagnostics_output_dir(self) -> Path:
@@ -1287,7 +1301,49 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             login_check_timeout,
             effective_timeout,
         )
+        quick_dom_timeout = self._timeout("quick_dom")
+        tried_logged_out_selectors = _format_login_detection_selectors(_LOGGED_OUT_CTA_SELECTORS)
         tried_login_selectors = _format_login_detection_selectors(_LOGIN_DETECTION_SELECTORS)
+
+        try:
+            user_info, matched_selector = await self.web_text_first_available(
+                _LOGIN_DETECTION_SELECTORS,
+                timeout = quick_dom_timeout,
+                key = "quick_dom",
+                description = "login_detection(quick_logged_in)",
+            )
+            if username in user_info.lower():
+                matched_selector_display = (
+                    f"{_LOGIN_DETECTION_SELECTORS[matched_selector][0].name}={_LOGIN_DETECTION_SELECTORS[matched_selector][1]}"
+                    if 0 <= matched_selector < len(_LOGIN_DETECTION_SELECTORS)
+                    else f"selector_index_{matched_selector}"
+                )
+                LOG.debug("Login detected via login detection selector '%s'", matched_selector_display)
+                return True
+        except TimeoutError:
+            LOG.debug("No login detected via configured login detection selectors (%s)", tried_login_selectors)
+
+        try:
+            cta_text, cta_index = await self.web_text_first_available(
+                _LOGGED_OUT_CTA_SELECTORS,
+                timeout = quick_dom_timeout,
+                key = "quick_dom",
+                description = "login_detection(logged_out_cta)",
+            )
+            if cta_text.strip():
+                matched_selector_display = (
+                    f"{_LOGGED_OUT_CTA_SELECTORS[cta_index][0].name}={_LOGGED_OUT_CTA_SELECTORS[cta_index][1]}"
+                    if 0 <= cta_index < len(_LOGGED_OUT_CTA_SELECTORS)
+                    else f"selector_index_{cta_index}"
+                )
+                LOG.debug("Fast logged-out pre-check matched selector '%s'", matched_selector_display)
+                return False
+        except TimeoutError:
+            LOG.debug(
+                "Fast logged-out pre-check found no login CTA (%s) within %.1fs",
+                tried_logged_out_selectors,
+                quick_dom_timeout,
+            )
 
         try:
             user_info, matched_selector = await self.web_text_first_available(
@@ -1297,29 +1353,21 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 description = "login_detection(selector_group)",
             )
             if username in user_info.lower():
-                matched_selector_label = (
-                    _LOGIN_DETECTION_SELECTOR_LABELS[matched_selector]
-                    if 0 <= matched_selector < len(_LOGIN_DETECTION_SELECTOR_LABELS)
+                matched_selector_display = (
+                    f"{_LOGIN_DETECTION_SELECTORS[matched_selector][0].name}={_LOGIN_DETECTION_SELECTORS[matched_selector][1]}"
+                    if 0 <= matched_selector < len(_LOGIN_DETECTION_SELECTORS)
                     else f"selector_index_{matched_selector}"
                 )
-                LOG.debug("Login detected via login detection selector '%s'", matched_selector_label)
+                LOG.debug("Login detected via login detection selector '%s'", matched_selector_display)
                 return True
         except TimeoutError:
             LOG.debug("Timeout waiting for login detection selector group after %.1fs", effective_timeout)
 
-        if not include_probe:
-            LOG.debug("No login detected via configured login detection selectors (%s)", tried_login_selectors)
+        if include_probe:
+            LOG.debug("No login detected via configured login detection selectors (%s); auth probe is disabled", tried_login_selectors)
             return False
 
-        state = await self._auth_probe_login_state()
-        if state == LoginState.LOGGED_IN:
-            return True
-
-        LOG.debug(
-            "No login detected - DOM login detection selectors (%s) did not confirm login and server probe returned %s",
-            tried_login_selectors,
-            state.name,
-        )
+        LOG.debug("No login detected via configured login detection selectors (%s)", tried_login_selectors)
         return False
 
     async def _fetch_published_ads(self) -> list[dict[str, Any]]:
