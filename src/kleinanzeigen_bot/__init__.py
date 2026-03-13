@@ -1097,19 +1097,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         except TimeoutError:
             LOG.debug("Post-submit transition not detected via URL, checking logged-in selectors")
 
+        login_confirmed = False
         try:
-            await self.web_await(
-                lambda: self.is_logged_in(include_probe = False),
-                timeout = post_submit_timeout,
-                timeout_error_message = (
-                    "Could not confirm login via UI selectors after Auth0 submit within "
-                    f"{post_submit_timeout} seconds"
-                ),
-                apply_multiplier = False,
-            )
-        except TimeoutError:
-            LOG.debug("Auth0 post-submit verification remained inconclusive; applying bounded fallback pause")
-            await self.web_sleep(min_ms = fallback_min_ms, max_ms = fallback_max_ms)
+            login_confirmed = await asyncio.wait_for(self.is_logged_in(include_probe = False), timeout = post_submit_timeout)
+        except (TimeoutError, asyncio.TimeoutError):
+            LOG.debug("Post-submit login verification did not complete within %.1fs", post_submit_timeout)
+
+        if login_confirmed:
+            return
+
+        LOG.debug("Auth0 post-submit verification remained inconclusive; applying bounded fallback pause")
+        await self.web_sleep(min_ms = fallback_min_ms, max_ms = fallback_max_ms)
 
     async def fill_login_data_and_send(self) -> None:
         """Auth0 2-step login via m-einloggen-sso.html (server-side redirect, no JS needed).
@@ -1179,13 +1177,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         """Determine current login state using DOM-first detection.
 
         Order:
-        1) DOM-based check via `is_logged_in(include_probe=False)`
-        2) If inconclusive, optionally capture diagnostics and return `UNKNOWN`
+        1) DOM-based logged-in check via `is_logged_in(include_probe=False)`
+        2) Logged-out CTA check
+        3) If inconclusive, optionally capture diagnostics and return `UNKNOWN`
         """
         # Prefer DOM-based checks first to minimize bot-like behavior and avoid
         # fragile API probing side effects. Server-side auth probing was removed.
         if await self.is_logged_in(include_probe = False):
             return LoginState.LOGGED_IN
+
+        if await self._has_logged_out_cta(log_timeout = False):
+            return LoginState.LOGGED_OUT
 
         if capture_diagnostics:
             await self._capture_login_detection_diagnostics_if_enabled()
@@ -1302,7 +1304,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             effective_timeout,
         )
         quick_dom_timeout = self._timeout("quick_dom")
-        tried_logged_out_selectors = _format_login_detection_selectors(_LOGGED_OUT_CTA_SELECTORS)
         tried_login_selectors = _format_login_detection_selectors(_LOGIN_DETECTION_SELECTORS)
 
         try:
@@ -1324,28 +1325,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.debug("No login detected via configured login detection selectors (%s)", tried_login_selectors)
 
         try:
-            cta_text, cta_index = await self.web_text_first_available(
-                _LOGGED_OUT_CTA_SELECTORS,
-                timeout = quick_dom_timeout,
-                key = "quick_dom",
-                description = "login_detection(logged_out_cta)",
-            )
-            if cta_text.strip():
-                matched_selector_display = (
-                    f"{_LOGGED_OUT_CTA_SELECTORS[cta_index][0].name}={_LOGGED_OUT_CTA_SELECTORS[cta_index][1]}"
-                    if 0 <= cta_index < len(_LOGGED_OUT_CTA_SELECTORS)
-                    else f"selector_index_{cta_index}"
-                )
-                LOG.debug("Fast logged-out pre-check matched selector '%s'", matched_selector_display)
-                return False
-        except TimeoutError:
-            LOG.debug(
-                "Fast logged-out pre-check found no login CTA (%s) within %.1fs",
-                tried_logged_out_selectors,
-                quick_dom_timeout,
-            )
-
-        try:
             user_info, matched_selector = await self.web_text_first_available(
                 _LOGIN_DETECTION_SELECTORS,
                 timeout = login_check_timeout,
@@ -1363,11 +1342,43 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         except TimeoutError:
             LOG.debug("Timeout waiting for login detection selector group after %.1fs", effective_timeout)
 
+        if await self._has_logged_out_cta():
+            return False
+
         if include_probe:
             LOG.debug("No login detected via configured login detection selectors (%s); auth probe is disabled", tried_login_selectors)
             return False
 
         LOG.debug("No login detected via configured login detection selectors (%s)", tried_login_selectors)
+        return False
+
+    async def _has_logged_out_cta(self, *, log_timeout:bool = True) -> bool:
+        quick_dom_timeout = self._timeout("quick_dom")
+        tried_logged_out_selectors = _format_login_detection_selectors(_LOGGED_OUT_CTA_SELECTORS)
+
+        try:
+            cta_text, cta_index = await self.web_text_first_available(
+                _LOGGED_OUT_CTA_SELECTORS,
+                timeout = quick_dom_timeout,
+                key = "quick_dom",
+                description = "login_detection(logged_out_cta)",
+            )
+            if cta_text.strip():
+                matched_selector_display = (
+                    f"{_LOGGED_OUT_CTA_SELECTORS[cta_index][0].name}={_LOGGED_OUT_CTA_SELECTORS[cta_index][1]}"
+                    if 0 <= cta_index < len(_LOGGED_OUT_CTA_SELECTORS)
+                    else f"selector_index_{cta_index}"
+                )
+                LOG.debug("Fast logged-out pre-check matched selector '%s'", matched_selector_display)
+                return True
+        except TimeoutError:
+            if log_timeout:
+                LOG.debug(
+                    "Fast logged-out pre-check found no login CTA (%s) within %.1fs",
+                    tried_logged_out_selectors,
+                    quick_dom_timeout,
+                )
+
         return False
 
     async def _fetch_published_ads(self) -> list[dict[str, Any]]:
