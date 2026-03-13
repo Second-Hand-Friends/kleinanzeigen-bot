@@ -1097,7 +1097,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         try:
             await self.web_await(
-                lambda: "/u/login/password" not in self._current_page_url() and "/u/login/identifier" not in self._current_page_url(),
+                lambda: self._is_valid_post_auth0_destination(self._current_page_url()),
                 timeout = post_submit_timeout,
                 timeout_error_message = f"Auth0 post-submit transition did not complete within {post_submit_timeout} seconds",
                 apply_multiplier = False,
@@ -1109,7 +1109,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         login_confirmed = False
         try:
             login_confirmed = await asyncio.wait_for(self.is_logged_in(include_probe = False), timeout = post_submit_timeout)
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             LOG.debug("Post-submit login verification did not complete within %.1fs", post_submit_timeout)
 
         if login_confirmed:
@@ -1121,11 +1121,28 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         try:
             if await asyncio.wait_for(self.is_logged_in(include_probe = False), timeout = quick_dom_timeout):
                 return
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             LOG.debug("Final post-submit login confirmation did not complete within %.1fs", quick_dom_timeout)
 
         current_url = self._current_page_url()
         raise TimeoutError(_("Auth0 post-submit verification remained inconclusive (url=%s)") % current_url)
+
+    def _is_valid_post_auth0_destination(self, url:str) -> bool:
+        if not url or url in {"unknown", "about:blank"}:
+            return False
+
+        parsed = urllib_parse.urlparse(url)
+        host = (parsed.hostname or "").lower()
+        path = parsed.path.lower()
+
+        if not host.endswith("kleinanzeigen.de"):
+            return False
+        if host == "login.kleinanzeigen.de":
+            return False
+        if path.startswith("/u/login"):
+            return False
+
+        return "error" not in path
 
     async def fill_login_data_and_send(self) -> None:
         """Auth0 2-step login via m-einloggen-sso.html (server-side redirect, no JS needed).
@@ -1418,10 +1435,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             try:
                 response = await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum={page}")
-            except (TimeoutError, TypeError) as ex:
-                # TypeError is handled defensively for malformed/shape-unstable
-                # responses returned during pagination to avoid hard crashes.
+            except TimeoutError as ex:
                 LOG.warning("Pagination request failed on page %s: %s", page, ex)
+                break
+
+            if not isinstance(response, dict):
+                LOG.warning("Unexpected pagination response type on page %s: %s", page, type(response).__name__)
                 break
 
             content = response.get("content", "")
