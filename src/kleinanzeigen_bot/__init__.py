@@ -1006,6 +1006,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if getattr(self, "page", None) is not None:
             LOG.debug("Current page URL after opening homepage: %s", self.page.url)
 
+        await self._dismiss_consent_banner()
+
         state = await self.get_login_state()
         if state == LoginState.LOGGED_IN:
             LOG.info("Already logged in as [%s]. Skipping login.", self.config.login.username)
@@ -1084,6 +1086,21 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         except TimeoutError:
             # GDPR banner not shown within timeout.
             pass
+
+    async def _dismiss_consent_banner(self) -> None:
+        """Dismiss the GDPR/TCF consent banner if it is present.
+
+        This banner can appear on any page navigation (not just after login) and blocks
+        all form interaction until dismissed. Uses a short timeout to avoid slowing down
+        the flow when the banner is already gone.
+        """
+        try:
+            banner_timeout = self._timeout("quick_dom")
+            await self.web_find(By.ID, "gdpr-banner-accept", timeout = banner_timeout)
+            LOG.debug("Consent banner detected, clicking 'Alle akzeptieren'...")
+            await self.web_click(By.ID, "gdpr-banner-accept")
+        except TimeoutError:
+            pass  # Banner not present; nothing to dismiss
 
     async def _auth_probe_login_state(self) -> LoginState:
         """Probe an auth-required endpoint to classify login state.
@@ -1612,6 +1629,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         else:
             LOG.info("Updating ad '%s'...", ad_cfg.title)
             await self.web_open(f"{self.root_url}/p-anzeige-bearbeiten.html?adId={ad_cfg.id}")
+
+        await self._dismiss_consent_banner()
 
         if loggers.is_debug(LOG):
             LOG.debug(" -> effective ad meta:")
