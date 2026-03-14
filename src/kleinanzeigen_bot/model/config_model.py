@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import copy
 from gettext import gettext as _
-from typing import Annotated, Any, Final, Literal
+from typing import Annotated, Any, ClassVar, Final, Literal
 
-from pydantic import AfterValidator, Field, model_validator
+from pydantic import AfterValidator, ConfigDict, Field, model_validator
 from typing_extensions import deprecated
 
 from kleinanzeigen_bot.model.update_check_model import UpdateCheckConfig
@@ -187,6 +187,30 @@ class CaptchaConfig(ContextualModel):
 
 
 class TimeoutConfig(ContextualModel):
+    model_config = ConfigDict(extra = "forbid")
+
+    TIMEOUT_BUCKET_FIELDS:ClassVar[frozenset[str]] = frozenset(
+        {
+            "default",
+            "page_load",
+            "captcha_detection",
+            "sms_verification",
+            "email_verification",
+            "gdpr_prompt",
+            "login_detection",
+            "publishing_result",
+            "publishing_confirmation",
+            "image_upload",
+            "pagination_initial",
+            "pagination_follow_up",
+            "quick_dom",
+            "update_check",
+            "chrome_remote_probe",
+            "chrome_remote_debugging",
+            "chrome_binary_detection",
+        }
+    )
+
     multiplier:float = Field(default = 1.0, ge = 0.1, description = "Global multiplier applied to all timeout values.")
     default:float = Field(default = 5.0, ge = 0.0, description = "Baseline timeout for DOM interactions.")
     page_load:float = Field(default = 15.0, ge = 1.0, description = "Page load timeout for web_open.")
@@ -209,29 +233,35 @@ class TimeoutConfig(ContextualModel):
     retry_max_attempts:int = Field(default = 2, ge = 1, description = "Max retry attempts when retry is enabled.")
     retry_backoff_factor:float = Field(default = 1.5, ge = 1.0, description = "Exponential factor applied per retry attempt.")
 
+    @classmethod
+    def timeout_bucket_keys(cls) -> frozenset[str]:
+        return cls.TIMEOUT_BUCKET_FIELDS
+
     def resolve(self, key:str = "default", override:float | None = None) -> float:
         """
         Return the base timeout (seconds) for the given key without applying modifiers.
         """
+        if key not in self.timeout_bucket_keys():
+            raise ValueError(f"Unknown timeout bucket '{key}'")
+
         if override is not None:
             return float(override)
 
-        if key == "default":
-            return float(self.default)
-
-        attr = getattr(self, key, None)
-        if isinstance(attr, (int, float)):
-            return float(attr)
-
-        return float(self.default)
+        return float(getattr(self, key))
 
     def effective(self, key:str = "default", override:float | None = None, *, attempt:int = 0) -> float:
         """
         Return the effective timeout (seconds) with multiplier/backoff applied.
         """
         base = self.resolve(key, override)
+        return self.effective_from_base(base, attempt = attempt)
+
+    def effective_from_base(self, base_timeout:float, *, attempt:int = 0) -> float:
+        """
+        Apply multiplier/backoff modifiers to an already-resolved base timeout.
+        """
         backoff = self.retry_backoff_factor**attempt if attempt > 0 else 1.0
-        return base * self.multiplier * backoff
+        return float(base_timeout) * self.multiplier * backoff
 
 
 class CaptureOnConfig(ContextualModel):

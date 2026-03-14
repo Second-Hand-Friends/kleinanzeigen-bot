@@ -132,24 +132,24 @@ categories:
 Timeout tuning for various browser operations. Adjust these if you experience slow page loads or recurring timeouts.
 
 ```yaml
-  timeouts:
-    multiplier: 1.0                     # Scale all timeouts (e.g. 2.0 for slower networks)
-    default: 5.0                        # Base timeout for web_find/web_click/etc.
-    page_load: 15.0                     # Timeout for web_open page loads
-    captcha_detection: 2.0              # Timeout for captcha iframe detection
-    sms_verification: 4.0               # Timeout for SMS verification banners
-    email_verification: 4.0             # Timeout for email verification prompts
-    gdpr_prompt: 10.0                   # Timeout when handling GDPR dialogs
+timeouts:
+  multiplier: 1.0                     # Scale all timeouts (e.g. 2.0 for slower networks)
+  default: 5.0                        # Base timeout for web_find/web_click/etc.
+  page_load: 15.0                     # Timeout for web_open page loads
+  captcha_detection: 2.0              # Timeout for captcha iframe detection
+  sms_verification: 4.0               # Timeout for SMS verification banners
+  email_verification: 4.0             # Timeout for email verification prompts
+  gdpr_prompt: 10.0                   # Timeout when handling GDPR dialogs
   login_detection: 10.0               # Timeout for DOM-based login detection (primary method)
   publishing_result: 300.0            # Timeout for publishing status checks
-  publishing_confirmation: 20.0         # Timeout for publish confirmation redirect
+  publishing_confirmation: 20.0       # Timeout for publish confirmation redirect
   image_upload: 30.0                  # Timeout for image upload and server-side processing
   pagination_initial: 10.0            # Timeout for first pagination lookup
   pagination_follow_up: 5.0           # Timeout for subsequent pagination clicks
   quick_dom: 2.0                      # Generic short DOM timeout (shipping dialogs, etc.)
   update_check: 10.0                  # Timeout for GitHub update requests
   chrome_remote_probe: 2.0            # Timeout for local remote-debugging probes
-  chrome_remote_debugging: 5.0         # Timeout for remote debugging API calls
+  chrome_remote_debugging: 5.0        # Timeout for remote debugging API calls
   chrome_binary_detection: 10.0       # Timeout for chrome --version subprocess
   retry_enabled: true                 # Enables DOM retry/backoff when timeouts occur
   retry_max_attempts: 2
@@ -160,7 +160,10 @@ Timeout tuning for various browser operations. Adjust these if you experience sl
 
 - Slow networks or sluggish remote browsers often just need a higher `timeouts.multiplier`
 - For truly problematic selectors, override specific keys directly under `timeouts`
+- Unknown keys under `timeouts` are rejected during config validation (for example `quick_domm`)
 - Keep `retry_enabled` on so DOM lookups are retried with exponential backoff
+
+For maintainer implementation guidance around timeout provenance semantics, see [CONTRIBUTING.md](../CONTRIBUTING.md#timeout-configuration).
 
 For more details on timeout configuration and troubleshooting, see [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md).
 
@@ -330,15 +333,22 @@ Example structure:
 ```json
 [
   {
+    "schema_version": 2,
     "session_id": "abc12345",
     "command": "publish",
     "started_at": "2026-02-07T10:00:00+01:00",
     "ended_at": "2026-02-07T10:04:30+01:00",
     "records": [
       {
+        "timestamp": "2026-02-07T10:00:05+01:00",
         "operation_key": "default",
+        "timeout_source_key": "quick_dom",
+        "timeout_origin": "named_timeout",
+        "timeout_override_sec": null,
         "operation_type": "web_find",
-        "effective_timeout_sec": 5.0,
+        "description": "web_find(ID, submit)",
+        "configured_timeout_sec": 2.0,
+        "effective_timeout_sec": 2.0,
         "actual_duration_sec": 1.2,
         "attempt_index": 0,
         "success": true
@@ -353,7 +363,7 @@ How to read it quickly:
 - Group by `command` and `session_id` first to compare slow vs fast runs
 - Look for high `actual_duration_sec` values near `effective_timeout_sec` and repeated `success: false` entries
 - `attempt_index` is zero-based (`0` first attempt, `1` first retry)
-- Use `operation_key` + `operation_type` to identify which timeout bucket (`default`, `page_load`, etc.) needs tuning
+- For maintainer-level interpretation details of provenance/versioning fields, see [CONTRIBUTING.md](../CONTRIBUTING.md#timeout-configuration)
 - For deeper timeout tuning workflow, see [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md)
 
 > **⚠️ PII Warning:** HTML dumps, JSON payloads, timing data JSON files (for example `timing_data.json`), and log copies may contain PII. Typical examples include account email, ad titles/descriptions, contact info, and prices. Log copies are produced by `capture_log_copy` when diagnostics capture runs, such as `capture_on.publish` or `capture_on.login_detection`. Review or redact these artifacts before sharing them publicly.

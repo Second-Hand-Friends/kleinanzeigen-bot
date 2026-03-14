@@ -563,6 +563,7 @@
       "type": "object"
     },
     "TimeoutConfig": {
+      "additionalProperties": false,
       "properties": {
         "multiplier": {
           "default": 1.0,

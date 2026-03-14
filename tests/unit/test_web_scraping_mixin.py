@@ -1,8 +1,7 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""Unit tests for web_scraping_mixin.py focusing on error handling scenarios.
-"""
+"""Unit tests for web_scraping_mixin.py focusing on error handling scenarios."""
 
 import json
 import logging
@@ -488,6 +487,9 @@ class TestTimeoutAndRetryHelpers:
         assert recorded[0]["operation_type"] == "web_find"
         assert recorded[0]["success"] is True
         assert recorded[0]["attempt_index"] == 0
+        assert recorded[0]["timeout_source_key"] == "default"
+        assert recorded[0]["timeout_origin"] == "operation_key"
+        assert recorded[0]["timeout_override_sec"] is None
 
     @pytest.mark.asyncio
     async def test_run_with_timeout_retries_records_timeout_timing(self, web_scraper:WebScrapingMixin) -> None:
@@ -507,6 +509,137 @@ class TestTimeoutAndRetryHelpers:
         assert all(entry["success"] is False for entry in recorded)
         assert recorded[0]["attempt_index"] == 0
         assert recorded[1]["attempt_index"] == 1
+        assert all(entry["timeout_origin"] == "operation_key" for entry in recorded)
+        assert recorded[1]["effective_timeout"] > recorded[0]["effective_timeout"]
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_uses_timeout_key_for_provenance_and_timeout_math(self, web_scraper:WebScrapingMixin) -> None:
+        recorded:list[dict[str, Any]] = []
+        cast(Any, web_scraper)._timing_collector = RecordingCollector(recorded)
+        web_scraper.config.timeouts.default = 5.0
+        web_scraper.config.timeouts.quick_dom = 1.0
+
+        async def operation(timeout:float) -> str:
+            assert timeout == pytest.approx(1.0)
+            return "ok"
+
+        result = await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)", key = "default", timeout_key = "quick_dom")
+
+        assert result == "ok"
+        assert recorded[0]["key"] == "default"
+        assert recorded[0]["configured_timeout"] == pytest.approx(1.0)
+        assert recorded[0]["timeout_source_key"] == "quick_dom"
+        assert recorded[0]["timeout_origin"] == "named_timeout"
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_normalizes_same_timeout_key(self, web_scraper:WebScrapingMixin) -> None:
+        recorded:list[dict[str, Any]] = []
+        cast(Any, web_scraper)._timing_collector = RecordingCollector(recorded)
+
+        async def operation(_timeout:float) -> str:
+            return "ok"
+
+        await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)", key = "default", timeout_key = "default")
+
+        assert recorded[0]["timeout_source_key"] == "default"
+        assert recorded[0]["timeout_origin"] == "operation_key"
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_records_inline_override_provenance(self, web_scraper:WebScrapingMixin) -> None:
+        recorded:list[dict[str, Any]] = []
+        cast(Any, web_scraper)._timing_collector = RecordingCollector(recorded)
+
+        async def operation(timeout:float) -> str:
+            assert timeout == pytest.approx(0.5)
+            return "ok"
+
+        await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)", override = 0.5)
+
+        assert recorded[0]["timeout_source_key"] == "default"
+        assert recorded[0]["timeout_origin"] == "inline_override"
+        assert recorded[0]["timeout_override_sec"] == pytest.approx(0.5)
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_accepts_override_for_non_bucket_operation_key(self, web_scraper:WebScrapingMixin) -> None:
+        async def operation(timeout:float) -> str:
+            assert timeout == pytest.approx(0.5)
+            return "ok"
+
+        result = await web_scraper._run_with_timeout_retries(operation, description = "custom op", key = "custom_operation", override = 0.5)
+
+        assert result == "ok"
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_delegates_effective_math_to_timeout_config(self, web_scraper:WebScrapingMixin) -> None:
+        web_scraper.config.timeouts.default = 5.0
+        timeout_cfg_cls = type(web_scraper.config.timeouts)
+
+        async def operation(_timeout:float) -> str:
+            return "ok"
+
+        with patch.object(
+            timeout_cfg_cls,
+            "effective_from_base",
+            autospec = True,
+            wraps = timeout_cfg_cls.effective_from_base,
+        ) as effective_from_base:
+            result = await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)")
+
+        assert result == "ok"
+        effective_from_base.assert_called_once()
+        assert effective_from_base.call_args.args[1] == pytest.approx(web_scraper.config.timeouts.default)
+        assert effective_from_base.call_args.kwargs["attempt"] == 0
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_delegates_effective_math_across_retries(self, web_scraper:WebScrapingMixin) -> None:
+        web_scraper.config.timeouts.default = 5.0
+        timeout_cfg_cls = type(web_scraper.config.timeouts)
+        call_count = {"count": 0}
+
+        async def operation(_timeout:float) -> str:
+            call_count["count"] += 1
+            if call_count["count"] == 1:
+                raise TimeoutError("boom")
+            return "ok"
+
+        with patch.object(
+            timeout_cfg_cls,
+            "effective_from_base",
+            autospec = True,
+            wraps = timeout_cfg_cls.effective_from_base,
+        ) as effective_from_base:
+            result = await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)")
+
+        assert result == "ok"
+        assert effective_from_base.call_count == 2
+        assert [call.args[1] for call in effective_from_base.call_args_list] == [pytest.approx(web_scraper.config.timeouts.default)] * 2
+        assert [call.kwargs["attempt"] for call in effective_from_base.call_args_list] == [0, 1]
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_rejects_timeout_key_and_override(self, web_scraper:WebScrapingMixin) -> None:
+        async def operation(_timeout:float) -> str:
+            return "ok"
+
+        with pytest.raises(ValueError, match = "mutually exclusive"):
+            await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)", timeout_key = "quick_dom", override = 0.5)
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_rejects_unknown_timeout_key(self, web_scraper:WebScrapingMixin) -> None:
+        async def operation(_timeout:float) -> str:
+            return "ok"
+
+        with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+            await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)", timeout_key = "quick_domm")
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_rejects_unknown_timeout_key_without_suggestion(self, web_scraper:WebScrapingMixin) -> None:
+        async def operation(_timeout:float) -> str:
+            return "ok"
+
+        with pytest.raises(ValueError, match = r"^Unknown timeout bucket 'zzz'$") as exc_info:
+            await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)", timeout_key = "zzz")
+
+        assert str(exc_info.value) == "Unknown timeout bucket 'zzz'"
 
     @pytest.mark.asyncio
     async def test_run_with_timeout_retries_ignores_collector_failure(self, web_scraper:WebScrapingMixin) -> None:
@@ -585,9 +718,7 @@ class TestTimeoutAndRetryHelpers:
         second_timeout:float | None = None
         found = AsyncMock(spec = Element)
 
-        async def fake_find_once(
-            selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None
-        ) -> Element:
+        async def fake_find_once(selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None) -> Element:
             nonlocal first_timeout, second_timeout
             if selector_value == "first":
                 first_timeout = timeout
@@ -607,6 +738,32 @@ class TestTimeoutAndRetryHelpers:
         assert first_timeout is not None
         assert second_timeout is not None
         assert first_timeout + second_timeout == pytest.approx(2.0)
+
+    @pytest.mark.asyncio
+    async def test_web_find_first_available_uses_timeout_key_for_bucket_math(self, web_scraper:WebScrapingMixin) -> None:
+        recorded:list[dict[str, Any]] = []
+        cast(Any, web_scraper)._timing_collector = RecordingCollector(recorded)
+        web_scraper.config.timeouts.default = 5.0
+        web_scraper.config.timeouts.quick_dom = 1.0
+        found = AsyncMock(spec = Element)
+
+        async def fake_find_once(selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None) -> Element:
+            assert timeout == pytest.approx(1.0)
+            return found
+
+        with patch.object(web_scraper, "_web_find_once", side_effect = fake_find_once):
+            result, index = await web_scraper.web_find_first_available([(By.ID, "only")], timeout_key = "quick_dom")
+
+        assert result is found
+        assert index == 0
+        assert recorded[0]["operation_type"] == "web_find_first_available"
+        assert recorded[0]["timeout_source_key"] == "quick_dom"
+        assert recorded[0]["timeout_origin"] == "named_timeout"
+
+    @pytest.mark.asyncio
+    async def test_web_find_first_available_rejects_unknown_key(self, web_scraper:WebScrapingMixin) -> None:
+        with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+            await web_scraper.web_find_first_available([(By.ID, "only")], key = "quick_domm")
 
     @pytest.mark.asyncio
     async def test_web_find_first_available_exhausts_candidates_once_when_retry_disabled(self, web_scraper:WebScrapingMixin) -> None:
@@ -745,6 +902,7 @@ class TestSelectorTimeoutMessages:
         async def fake_retry(operation:Callable[[float], Awaitable[list[Element]]], **kwargs:Any) -> list[Element]:
             assert kwargs["description"] == "web_find_all(CLASS_NAME, hero)"
             assert kwargs["override"] == 1.5
+            assert kwargs["timeout_key"] is None
             result = await operation(0.42)
             return result
 
@@ -759,6 +917,7 @@ class TestSelectorTimeoutMessages:
         retry_call = retry_mock.await_args_list[0]
         assert retry_call.kwargs["key"] == "default"
         assert retry_call.kwargs["override"] == 1.5
+        assert retry_call.kwargs["timeout_key"] is None
 
         once_call = once_mock.await_args_list[0]
         assert once_call.args[:2] == (By.CLASS_NAME, "hero")
@@ -773,6 +932,106 @@ class TestSelectorTimeoutMessages:
 
         with pytest.raises(AssertionError, match = "Unsupported attribute"):
             await web_scraper.web_check(By.ID, "test-id", cast(Is, object()), timeout = 0.1)
+
+    @pytest.mark.asyncio
+    async def test_web_click_propagates_timeout_key_to_web_find(self, web_scraper:WebScrapingMixin) -> None:
+        element = AsyncMock(spec = Element)
+        web_scraper.web_find = AsyncMock(return_value = element)  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        result = await web_scraper.web_click(By.ID, "test-id", timeout_key = "quick_dom")
+
+        assert result is element
+        web_scraper.web_find.assert_awaited_once_with(By.ID, "test-id", timeout = None, timeout_key = "quick_dom")
+
+    @pytest.mark.asyncio
+    async def test_web_check_propagates_timeout_key_to_web_find(self, web_scraper:WebScrapingMixin) -> None:
+        element = AsyncMock(spec = Element)
+        element.attrs = {}
+        element.apply = AsyncMock(return_value = True)
+        web_scraper.web_find = AsyncMock(return_value = element)  # type: ignore[method-assign]
+
+        result = await web_scraper.web_check(By.ID, "test-id", Is.DISPLAYED, timeout_key = "quick_dom")
+
+        assert result is True
+        web_scraper.web_find.assert_awaited_once_with(By.ID, "test-id", timeout = None, timeout_key = "quick_dom")
+
+    @pytest.mark.asyncio
+    async def test_web_select_uses_timeout_key_for_wait_and_find(self, web_scraper:WebScrapingMixin) -> None:
+        select_elem = AsyncMock(spec = Element)
+        select_elem.apply = AsyncMock()
+        web_scraper.config.timeouts.quick_dom = 1.0
+        web_scraper.web_check = AsyncMock(return_value = True)  # type: ignore[method-assign]
+        web_scraper.web_await = AsyncMock(return_value = True)  # type: ignore[method-assign]
+        web_scraper.web_find = AsyncMock(return_value = select_elem)  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        result = await web_scraper.web_select(By.ID, "select-id", "value", timeout_key = "quick_dom")
+
+        assert result is select_elem
+        web_scraper.web_await.assert_awaited_once()
+        await_args = web_scraper.web_await.await_args
+        assert await_args is not None
+        assert await_args.kwargs["timeout"] == pytest.approx(1.0)
+        web_scraper.web_find.assert_awaited_once_with(By.ID, "select-id", timeout = None, timeout_key = "quick_dom")
+
+    @pytest.mark.asyncio
+    async def test_web_select_rejects_unknown_timeout_key(self, web_scraper:WebScrapingMixin) -> None:
+        with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+            await web_scraper.web_select(By.ID, "select-id", "value", timeout_key = "quick_domm")
+
+    @pytest.mark.asyncio
+    async def test_web_select_combobox_rejects_timeout_key_and_timeout(self, web_scraper:WebScrapingMixin) -> None:
+        with pytest.raises(ValueError, match = "mutually exclusive"):
+            await web_scraper.web_select_combobox(By.ID, "combo-id", "Option", timeout = 0.1, timeout_key = "quick_dom")
+
+    @pytest.mark.asyncio
+    async def test_web_select_combobox_rejects_unknown_timeout_key(self, web_scraper:WebScrapingMixin) -> None:
+        with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+            await web_scraper.web_select_combobox(By.ID, "combo-id", "Option", timeout_key = "quick_domm")
+
+    @pytest.mark.asyncio
+    async def test_web_select_combobox_propagates_timeout_key(self, web_scraper:WebScrapingMixin) -> None:
+        input_field = AsyncMock(spec = Element)
+        input_field.attrs = {"aria-controls": "dropdown-id"}
+        input_field.clear_input = AsyncMock()
+        input_field.send_keys = AsyncMock()
+        dropdown_elem = AsyncMock(spec = Element)
+        dropdown_elem.apply = AsyncMock(return_value = True)
+
+        web_scraper.config.timeouts.quick_dom = 1.0
+        web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        result = await web_scraper.web_select_combobox(By.ID, "combo-id", "Visible Label", timeout_key = "quick_dom")
+
+        assert result is dropdown_elem
+        assert web_scraper.web_find.await_args_list[0].kwargs["timeout"] is None
+        assert web_scraper.web_find.await_args_list[0].kwargs["timeout_key"] == "quick_dom"
+        assert web_scraper.web_find.await_args_list[1].kwargs["timeout"] is None
+        assert web_scraper.web_find.await_args_list[1].kwargs["timeout_key"] == "quick_dom"
+
+    @pytest.mark.asyncio
+    async def test_web_select_combobox_timeout_key_uses_real_web_find_stack(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
+        input_field = AsyncMock(spec = Element)
+        input_field.attrs = {"aria-controls": "dropdown-id"}
+        input_field.clear_input = AsyncMock()
+        input_field.send_keys = AsyncMock()
+
+        dropdown_elem = AsyncMock(spec = Element)
+        dropdown_elem.apply = AsyncMock(return_value = True)
+
+        web_scraper.config.timeouts.quick_dom = 1.0
+        mock_page.query_selector.side_effect = [input_field, dropdown_elem]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        result = await web_scraper.web_select_combobox(By.ID, "combo-id", "Visible Label", timeout_key = "quick_dom")
+
+        assert result is dropdown_elem
+        assert mock_page.query_selector.await_count == 2
+        input_field.clear_input.assert_awaited_once()
+        input_field.send_keys.assert_awaited_once_with("Visible Label")
+        dropdown_elem.apply.assert_awaited_once()
 
 
 class TestWebScrapingSessionManagement:
@@ -1215,6 +1474,7 @@ class TestWebScrapingBrowserConfiguration:
         self, monkeypatch:pytest.MonkeyPatch, caplog:pytest.LogCaptureFixture
     ) -> None:
         """Test non-test runtime without user_data_dir logs fallback diagnostics and default profile usage."""
+
         class DummyConfig:
             def __init__(self, **kwargs:object) -> None:
                 self.browser_args = cast(list[str], kwargs.get("browser_args", []))
@@ -1256,6 +1516,7 @@ class TestWebScrapingBrowserConfiguration:
     @pytest.mark.asyncio
     async def test_create_browser_session_ensures_profile_directory_for_user_data_dir(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test configured user_data_dir creates profile structure and skips non-debug log-level override."""
+
         class DummyConfig:
             def __init__(self, **kwargs:object) -> None:
                 self.browser_args = cast(list[str], kwargs.get("browser_args", []))
@@ -1285,8 +1546,7 @@ class TestWebScrapingBrowserConfiguration:
 
         monkeypatch.setattr(files, "exists", mock_exists)
 
-        with patch.dict(os.environ, {}, clear = True), \
-                patch("kleinanzeigen_bot.utils.web_scraping_mixin.xdg_paths.ensure_directory") as mock_ensure_dir:
+        with patch.dict(os.environ, {}, clear = True), patch("kleinanzeigen_bot.utils.web_scraping_mixin.xdg_paths.ensure_directory") as mock_ensure_dir:
             scraper = WebScrapingMixin()
             scraper.browser_config.binary_location = "/usr/bin/chrome"
             scraper.browser_config.user_data_dir = str(tmp_path / "profile-root")

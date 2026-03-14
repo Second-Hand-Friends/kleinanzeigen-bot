@@ -220,6 +220,36 @@ All Python files must start with SPDX license headers:
 - Use `_timeout()` when you just need the raw configured value (with optional override); use `_effective_timeout()` when you rely on the global multiplier and retry backoff for a given attempt (e.g. inside `_run_with_timeout_retries`).
 - Add a new timeout key only when a recurring workflow has its own timing profile (pagination, captcha detection, publishing confirmations, Chrome probes, etc.). Whenever you add one, extend `TimeoutConfig`, document it in the sample `timeouts:` block in `docs/CONFIGURATION.md`, and explain it in `docs/BROWSER_TROUBLESHOOTING.md`.
 - Encourage users to raise `timeouts.multiplier` when everything is slow, and override existing keys in `config.yaml` before introducing new ones. This keeps the configuration surface minimal.
+- For maintainers extending web-scraping helpers, keep timeout semantics explicit:
+  - Helper call inputs:
+    - `key`: semantic operation label used by the helper call.
+    - `timeout_key`: optional configured timeout bucket selector.
+    - `timeout`: optional numeric one-off override; mutually exclusive with `timeout_key`.
+  - Derived timing output fields:
+    - `operation_key`: emitted from `key` for timing aggregation.
+    - `timeout_source_key`: emitted from the resolved timeout bucket (or grouping key for inline overrides).
+    - `timeout_origin`: derived resolution mode (`operation_key`, `named_timeout`, or `inline_override`); not a helper call parameter.
+  - Example:
+
+    ```python
+    await self.web_find_first_available(
+        selectors,
+        key = "login_detection",
+        timeout_key = "quick_dom",
+    )
+    ```
+
+    Produces timing semantics similar to:
+    - `operation_key = "login_detection"`
+    - `timeout_source_key = "quick_dom"`
+    - `timeout_origin = "named_timeout"`
+
+- Timing diagnostics interpretation for maintainers:
+  - `schema_version` identifies the timing payload shape; missing value indicates a legacy session entry.
+  - Prefer `timeout_source_key` to identify which configured timeout bucket needs tuning; fall back to `operation_key` for legacy sessions.
+  - If `timeout_origin` is `inline_override`, treat `timeout_source_key` as grouping-only rather than a configured timeout bucket.
+  - Missing provenance fields on older sessions are expected legacy shape, not corruption.
+  - For tuning workflow details, see `docs/BROWSER_TROUBLESHOOTING.md`.
 
 #### Examples
 

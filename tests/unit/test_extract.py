@@ -606,7 +606,7 @@ class TestAdExtractorNavigation:
             mock_web_find.assert_has_calls(
                 [
                     call(By.ID, "my-manageitems-adlist"),
-                    call(By.CSS_SELECTOR, ".Pagination", timeout = 10),
+                    call(By.CSS_SELECTOR, ".Pagination", timeout_key = "pagination_initial"),
                     call(By.ID, "my-manageitems-adlist"),
                     call(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = cardbox_mock),
                 ],
@@ -615,7 +615,7 @@ class TestAdExtractorNavigation:
 
             mock_web_find_all.assert_has_calls(
                 [
-                    call(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section_mock),
+                    call(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section_mock, timeout_key = "pagination_initial"),
                     call(By.CLASS_NAME, "cardbox", parent = ad_list_container_mock),
                 ],
                 any_order = False,
@@ -640,20 +640,42 @@ class TestAdExtractorNavigation:
         next_button_call = {"count": 0}
         cardbox_call = {"count": 0}
 
-        async def fake_web_find(selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element:
+        async def fake_web_find(
+            selector_type:By,
+            selector_value:str,
+            *,
+            parent:Element | None = None,
+            timeout:int | float | None = None,
+            timeout_key:str | None = None,
+        ) -> Element:
             if selector_type == By.ID and selector_value == "my-manageitems-adlist":
                 return ad_list_container_mock
             if selector_type == By.CSS_SELECTOR and selector_value == ".Pagination":
+                expected_timeout_key = "pagination_initial" if next_button_call["count"] == 0 else "pagination_follow_up"
+                if timeout_key != expected_timeout_key:
+                    raise AssertionError(f"Unexpected timeout_key for pagination: {timeout_key}; expected {expected_timeout_key}")
+                if timeout is not None:
+                    raise AssertionError(f"Unexpected numeric timeout for pagination: {timeout}")
                 return pagination_section_mock
             if selector_type == By.CSS_SELECTOR and selector_value == "div h3 a.text-onSurface":
                 return link_queue.pop(0)
             raise AssertionError(f"Unexpected selector {selector_type} {selector_value}")
 
         async def fake_web_find_all(
-            selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None
+            selector_type:By,
+            selector_value:str,
+            *,
+            parent:Element | None = None,
+            timeout:int | float | None = None,
+            timeout_key:str | None = None,
         ) -> list[Element]:
             if selector_type == By.CSS_SELECTOR and selector_value == 'button[aria-label="Nächste"]':
                 next_button_call["count"] += 1
+                expected_timeout_key = "pagination_initial" if next_button_call["count"] == 1 else "pagination_follow_up"
+                if timeout_key != expected_timeout_key:
+                    raise AssertionError(f"Unexpected timeout_key for next-button lookup: {timeout_key}; expected {expected_timeout_key}")
+                if timeout is not None:
+                    raise AssertionError(f"Unexpected numeric timeout for next-button lookup: {timeout}")
                 if next_button_call["count"] == 1:
                     return [next_button_enabled]  # initial detection -> multi page
                 if next_button_call["count"] == 2:

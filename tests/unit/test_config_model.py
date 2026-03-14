@@ -1,7 +1,11 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import json
+from pathlib import Path
+
 import pytest
+from pydantic import ValidationError
 
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, TimeoutConfig
 
@@ -79,9 +83,124 @@ def test_timeout_config_resolve_returns_specific_value() -> None:
     assert timeouts.resolve("page_load") == 12.5
 
 
-def test_timeout_config_resolve_falls_back_to_default() -> None:
+def test_timeout_config_bucket_keys_include_named_timeouts_only() -> None:
+    keys = TimeoutConfig.timeout_bucket_keys()
+
+    assert "default" in keys
+    assert "quick_dom" in keys
+    assert "multiplier" not in keys
+    assert "retry_backoff_factor" not in keys
+
+
+def test_timeout_config_bucket_keys_match_explicit_bucket_set() -> None:
+    assert TimeoutConfig.timeout_bucket_keys() == {
+        "default",
+        "page_load",
+        "captcha_detection",
+        "sms_verification",
+        "email_verification",
+        "gdpr_prompt",
+        "login_detection",
+        "publishing_result",
+        "publishing_confirmation",
+        "image_upload",
+        "pagination_initial",
+        "pagination_follow_up",
+        "quick_dom",
+        "update_check",
+        "chrome_remote_probe",
+        "chrome_remote_debugging",
+        "chrome_binary_detection",
+    }
+    assert TimeoutConfig.timeout_bucket_keys() == TimeoutConfig.TIMEOUT_BUCKET_FIELDS
+    assert TimeoutConfig.timeout_bucket_keys().issubset(TimeoutConfig.model_fields.keys())
+
+
+def test_timeout_config_resolve_allows_valid_bucket_with_override() -> None:
+    timeouts = TimeoutConfig(default = 3.0, update_check = 10.0)
+
+    assert timeouts.resolve("update_check", override = 0.25) == pytest.approx(0.25)
+
+
+def test_timeout_config_effective_allows_valid_bucket_with_override() -> None:
+    timeouts = TimeoutConfig(default = 3.0, update_check = 10.0, multiplier = 2.0, retry_backoff_factor = 1.5)
+
+    assert timeouts.effective("update_check", override = 0.25, attempt = 1) == pytest.approx(0.75)
+
+
+@pytest.mark.parametrize(
+    ("key", "override", "attempt"),
+    [
+        ("default", None, 0),
+        ("update_check", None, 2),
+        ("update_check", 0.25, 1),
+        ("update_check", 0.25, -1),
+    ],
+)
+def test_timeout_config_effective_matches_effective_from_base(key:str, override:float | None, attempt:int) -> None:
+    timeouts = TimeoutConfig(default = 3.0, update_check = 10.0, multiplier = 2.0, retry_backoff_factor = 1.5)
+
+    resolved = timeouts.resolve(key, override)
+    assert timeouts.effective(key, override, attempt = attempt) == pytest.approx(timeouts.effective_from_base(resolved, attempt = attempt))
+
+
+def test_timeout_config_rejects_unknown_timeout_fields_in_config() -> None:
+    minimal_cfg = {
+        "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
+        "login": {"username": "dummy", "password": "dummy"},  # noqa: S105
+    }
+
+    with pytest.raises(ValidationError, match = "quick_domm"):
+        Config.model_validate({**minimal_cfg, "timeouts": {"quick_domm": 2.0}})
+
+
+def test_timeout_config_schema_forbids_unknown_fields() -> None:
+    schema_path = Path(__file__).resolve().parents[2] / "schemas" / "config.schema.json"
+    schema = json.loads(schema_path.read_text(encoding = "utf-8"))
+
+    assert schema["$defs"]["TimeoutConfig"]["additionalProperties"] is False
+
+
+def test_timeout_config_resolve_rejects_unknown_key() -> None:
     timeouts = TimeoutConfig(default = 3.0)
-    assert timeouts.resolve("nonexistent_key") == 3.0
+    with pytest.raises(ValueError, match = r"^Unknown timeout bucket 'nonexistent_key'$") as exc_info:
+        timeouts.resolve("nonexistent_key")
+    assert str(exc_info.value) == "Unknown timeout bucket 'nonexistent_key'"
+
+
+def test_timeout_config_effective_rejects_unknown_key() -> None:
+    timeouts = TimeoutConfig(default = 3.0)
+    with pytest.raises(ValueError, match = r"^Unknown timeout bucket 'nonexistent_key'$") as exc_info:
+        timeouts.effective("nonexistent_key")
+    assert str(exc_info.value) == "Unknown timeout bucket 'nonexistent_key'"
+
+
+@pytest.mark.parametrize("invalid_key", ["multiplier", "retry_enabled", "retry_max_attempts", "retry_backoff_factor"])
+def test_timeout_config_resolve_rejects_non_bucket_fields(invalid_key:str) -> None:
+    timeouts = TimeoutConfig(default = 3.0)
+    with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+        timeouts.resolve(invalid_key)
+
+
+@pytest.mark.parametrize("invalid_key", ["multiplier", "retry_enabled", "retry_max_attempts", "retry_backoff_factor"])
+def test_timeout_config_effective_rejects_non_bucket_fields(invalid_key:str) -> None:
+    timeouts = TimeoutConfig(default = 3.0)
+    with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+        timeouts.effective(invalid_key)
+
+
+@pytest.mark.parametrize("invalid_key", ["nonexistent_key", "multiplier", "retry_enabled", "retry_max_attempts", "retry_backoff_factor"])
+def test_timeout_config_resolve_rejects_unknown_keys_even_with_override(invalid_key:str) -> None:
+    timeouts = TimeoutConfig(default = 3.0)
+    with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+        timeouts.resolve(invalid_key, override = 0.25)
+
+
+@pytest.mark.parametrize("invalid_key", ["nonexistent_key", "multiplier", "retry_enabled", "retry_max_attempts", "retry_backoff_factor"])
+def test_timeout_config_effective_rejects_unknown_keys_even_with_override(invalid_key:str) -> None:
+    timeouts = TimeoutConfig(default = 3.0)
+    with pytest.raises(ValueError, match = "Unknown timeout bucket"):
+        timeouts.effective(invalid_key, override = 0.25)
 
 
 def test_diagnostics_pause_requires_capture_validation() -> None:

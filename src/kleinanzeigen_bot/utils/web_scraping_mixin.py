@@ -5,7 +5,7 @@ import asyncio, enum, inspect, json, os, platform, secrets, shutil, subprocess, 
 from collections.abc import Awaitable, Callable, Coroutine, Iterable, Sequence
 from gettext import gettext as _
 from pathlib import Path, PureWindowsPath
-from typing import Any, Final, Optional, cast
+from typing import Any, Final, Literal, NamedTuple, Optional, cast
 
 try:
     from typing import Never  # type: ignore[attr-defined,unused-ignore] # mypy
@@ -42,6 +42,13 @@ _KEY_VALUE_PAIR_SIZE = 2
 _PRIMARY_SELECTOR_BUDGET_RATIO:Final[float] = 0.70
 _BACKUP_SELECTOR_BUDGET_CAP_SECONDS:Final[float] = 0.75
 _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS:Final[float] = 0.25
+
+
+class ResolvedTimeoutRequest(NamedTuple):
+    timeout_source_key:str
+    configured_timeout:float
+    timeout_origin:Literal["operation_key", "named_timeout", "inline_override"]
+    timeout_override_sec:float | None
 
 
 def _resolve_user_data_dir_paths(arg_value:str, config_value:str) -> tuple[Any, Any]:
@@ -190,6 +197,9 @@ class WebScrapingMixin:
         self,
         *,
         key:str,
+        timeout_source_key:str | None,
+        timeout_origin:Literal["operation_key", "named_timeout", "inline_override"] | None,
+        timeout_override_sec:float | None,
         description:str,
         configured_timeout:float,
         effective_timeout:float,
@@ -205,6 +215,9 @@ class WebScrapingMixin:
         try:
             collector.record(
                 key = key,
+                timeout_source_key = timeout_source_key,
+                timeout_origin = timeout_origin,
+                timeout_override_sec = timeout_override_sec,
                 operation_type = operation_type,
                 description = description,
                 configured_timeout = configured_timeout,
@@ -216,25 +229,82 @@ class WebScrapingMixin:
         except Exception as exc:  # noqa: BLE001
             LOG.warning("Timing collector failed for key=%s operation=%s: %s", key, operation_type, exc)
 
+    def _validate_timeout_key(self, timeout_key:str) -> str:
+        if timeout_key in TimeoutConfig.timeout_bucket_keys():
+            return timeout_key
+        raise ValueError(f"Unknown timeout bucket '{timeout_key}'")
+
+    def _resolve_timeout_request(self, *, key:str, override:float | None = None, timeout_key:str | None = None) -> ResolvedTimeoutRequest:
+        # `key` is the semantic operation label; `timeout_key` selects a configured timeout bucket.
+        self._ensure_timeout_inputs_valid(timeout = override, timeout_key = timeout_key)
+
+        if override is not None:
+            return ResolvedTimeoutRequest(
+                timeout_source_key = key,
+                configured_timeout = float(override),
+                timeout_origin = "inline_override",
+                timeout_override_sec = float(override),
+            )
+
+        if timeout_key is not None:
+            timeout_bucket_key = self._validate_timeout_key(timeout_key)
+            return ResolvedTimeoutRequest(
+                timeout_source_key = timeout_bucket_key,
+                configured_timeout = self._timeout(timeout_bucket_key),
+                timeout_origin = "operation_key" if timeout_bucket_key == key else "named_timeout",
+                timeout_override_sec = None,
+            )
+
+        timeout_bucket_key = self._validate_timeout_key(key)
+
+        return ResolvedTimeoutRequest(
+            timeout_source_key = timeout_bucket_key,
+            configured_timeout = self._timeout(timeout_bucket_key),
+            timeout_origin = "operation_key",
+            timeout_override_sec = None,
+        )
+
+    def _ensure_timeout_inputs_valid(self, *, timeout:float | None, timeout_key:str | None) -> None:
+        if timeout is not None and timeout_key is not None:
+            raise ValueError("timeout_key and timeout are mutually exclusive")
+
+    def _resolve_wrapper_wait_timeout(self, *, timeout:float | None, timeout_key:str | None) -> float | None:
+        if timeout is None and timeout_key is None:
+            return None
+
+        # Derive a numeric timeout for web_await while preserving timeout_key for timed DOM lookups.
+        return self._resolve_timeout_request(key = "default", override = timeout, timeout_key = timeout_key).configured_timeout
+
     async def _run_with_timeout_retries(
-        self, operation:Callable[[float], Awaitable[T]], *, description:str, key:str = "default", override:float | None = None
+        self,
+        operation:Callable[[float], Awaitable[T]],
+        *,
+        description:str,
+        key:str = "default",
+        override:float | None = None,
+        timeout_key:str | None = None,
     ) -> T:
         """
         Execute an async callable with retry/backoff handling for TimeoutError.
         """
         attempts = self._timeout_attempts()
-        configured_timeout = self._timeout(key, override)
+        operation_key = key
+        timeout_request = self._resolve_timeout_request(key = operation_key, override = override, timeout_key = timeout_key)
+        timeout_cfg = self._get_timeout_config()
         loop = asyncio.get_running_loop()
 
         for attempt in range(attempts):
-            effective_timeout = self._effective_timeout(key, override, attempt = attempt)
+            effective_timeout = timeout_cfg.effective_from_base(timeout_request.configured_timeout, attempt = attempt)
             attempt_started = loop.time()
             try:
                 result = await operation(effective_timeout)
                 self._record_timing(
-                    key = key,
+                    key = operation_key,
+                    timeout_source_key = timeout_request.timeout_source_key,
+                    timeout_origin = timeout_request.timeout_origin,
+                    timeout_override_sec = timeout_request.timeout_override_sec,
                     description = description,
-                    configured_timeout = configured_timeout,
+                    configured_timeout = timeout_request.configured_timeout,
                     effective_timeout = effective_timeout,
                     actual_duration = loop.time() - attempt_started,
                     attempt_index = attempt,
@@ -243,9 +313,12 @@ class WebScrapingMixin:
                 return result
             except TimeoutError:
                 self._record_timing(
-                    key = key,
+                    key = operation_key,
+                    timeout_source_key = timeout_request.timeout_source_key,
+                    timeout_origin = timeout_request.timeout_origin,
+                    timeout_override_sec = timeout_request.timeout_override_sec,
                     description = description,
-                    configured_timeout = configured_timeout,
+                    configured_timeout = timeout_request.configured_timeout,
                     effective_timeout = effective_timeout,
                     actual_duration = loop.time() - attempt_started,
                     attempt_index = attempt,
@@ -317,10 +390,14 @@ class WebScrapingMixin:
         parent:Element | None = None,
         timeout:int | float | None = None,
         key:str = "default",
+        timeout_key:str | None = None,
         description:str | None = None,
     ) -> tuple[Element, int]:
         """
         Find the first matching selector from an ordered group using a shared timeout budget.
+
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         """
         if not selectors:
             raise ValueError(_("selectors must contain at least one selector"))
@@ -355,15 +432,12 @@ class WebScrapingMixin:
 
             failure_summary = failures[-1] if failures else _("No selector candidates executed.")
             raise TimeoutError(
-                _(
-                    "No HTML element found using selector group after trying %(count)d alternatives within %(timeout)s seconds."
-                    " Last error: %(error)s"
-                )
+                _("No HTML element found using selector group after trying %(count)d alternatives within %(timeout)s seconds. Last error: %(error)s")
                 % {"count": len(selectors), "timeout": effective_timeout, "error": failure_summary}
             )
 
         attempt_description = description or f"web_find_first_available({len(selectors)} selectors)"
-        return await self._run_with_timeout_retries(attempt, description = attempt_description, key = key, override = timeout)
+        return await self._run_with_timeout_retries(attempt, description = attempt_description, key = key, override = timeout, timeout_key = timeout_key)
 
     async def web_text_first_available(
         self,
@@ -372,16 +446,21 @@ class WebScrapingMixin:
         parent:Element | None = None,
         timeout:int | float | None = None,
         key:str = "default",
+        timeout_key:str | None = None,
         description:str | None = None,
     ) -> tuple[str, int]:
         """
         Return visible text from the first selector that resolves from a selector group.
+
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         """
         element, matched_index = await self.web_find_first_available(
             selectors,
             parent = parent,
             timeout = timeout,
             key = key,
+            timeout_key = timeout_key,
             description = description,
         )
         text = await self._extract_visible_text(element)
@@ -787,6 +866,7 @@ class WebScrapingMixin:
                 ]
 
             case "Windows":
+
                 def win_path(*parts:str) -> str:
                     return str(PureWindowsPath(*parts))
 
@@ -863,11 +943,12 @@ class WebScrapingMixin:
             remaining_timeout = max(effective_timeout - elapsed, 0.0)
             await self.page.sleep(min(0.5, remaining_timeout))
 
-    async def web_check(self, selector_type:By, selector_value:str, attr:Is, *, timeout:int | float | None = None) -> bool:
+    async def web_check(self, selector_type:By, selector_value:str, attr:Is, *, timeout:int | float | None = None, timeout_key:str | None = None) -> bool:
         """
         Locates an HTML element and returns a state.
 
-        :param timeout: timeout in seconds
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         :raises TimeoutError: if element could not be found within time
         """
 
@@ -889,7 +970,9 @@ class WebScrapingMixin:
             """),
             )
 
-        elem:Element = await self.web_find(selector_type, selector_value, timeout = timeout)
+        self._ensure_timeout_inputs_valid(timeout = timeout, timeout_key = timeout_key)
+
+        elem:Element = await self.web_find(selector_type, selector_value, timeout = timeout, timeout_key = timeout_key)
 
         match attr:
             case Is.CLICKABLE:
@@ -916,14 +999,16 @@ class WebScrapingMixin:
                 )
         raise AssertionError(_("Unsupported attribute: %s") % attr)
 
-    async def web_click(self, selector_type:By, selector_value:str, *, timeout:int | float | None = None) -> Element:
+    async def web_click(self, selector_type:By, selector_value:str, *, timeout:int | float | None = None, timeout_key:str | None = None) -> Element:
         """
         Locates an HTML element by ID.
 
-        :param timeout: timeout in seconds
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         :raises TimeoutError: if element could not be found within time
         """
-        elem = await self.web_find(selector_type, selector_value, timeout = timeout)
+        self._ensure_timeout_inputs_valid(timeout = timeout, timeout_key = timeout_key)
+        elem = await self.web_find(selector_type, selector_value, timeout = timeout, timeout_key = timeout_key)
         await elem.click()
         await self.web_sleep()
         return elem
@@ -1020,11 +1105,14 @@ class WebScrapingMixin:
         matches = await self.page.xpath(selector_value, timeout = 0)
         return [cast(Element, match) for match in matches if match is not None]
 
-    async def web_find(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element:
+    async def web_find(
+        self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None, timeout_key:str | None = None
+    ) -> Element:
         """
         Locates an HTML element by the given selector type and value.
 
-        :param timeout: timeout in seconds (base value before multiplier/backoff)
+        :param timeout: explicit numeric timeout override in seconds (base value before multiplier/backoff)
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         :raises TimeoutError: if element could not be found within time
         """
 
@@ -1032,14 +1120,17 @@ class WebScrapingMixin:
             return await self._web_find_once(selector_type, selector_value, effective_timeout, parent = parent)
 
         return await self._run_with_timeout_retries(  # noqa: E501
-            attempt, description = f"web_find({selector_type.name}, {selector_value})", key = "default", override = timeout
+            attempt, description = f"web_find({selector_type.name}, {selector_value})", key = "default", override = timeout, timeout_key = timeout_key
         )
 
-    async def web_find_all(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> list[Element]:
+    async def web_find_all(
+        self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None, timeout_key:str | None = None
+    ) -> list[Element]:
         """
         Locates multiple HTML elements by the given selector type and value.
 
-        :param timeout: timeout in seconds (base value before multiplier/backoff)
+        :param timeout: explicit numeric timeout override in seconds (base value before multiplier/backoff)
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         :raises TimeoutError: if element could not be found within time
         """
 
@@ -1047,7 +1138,7 @@ class WebScrapingMixin:
             return await self._web_find_all_once(selector_type, selector_value, effective_timeout, parent = parent)
 
         return await self._run_with_timeout_retries(
-            attempt, description = f"web_find_all({selector_type.name}, {selector_value})", key = "default", override = timeout
+            attempt, description = f"web_find_all({selector_type.name}, {selector_value})", key = "default", override = timeout, timeout_key = timeout_key
         )
 
     async def _web_find_once(self, selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None) -> Element:
@@ -1148,14 +1239,18 @@ class WebScrapingMixin:
 
         raise AssertionError(_("Unsupported selector type: %s") % selector_type)
 
-    async def web_input(self, selector_type:By, selector_value:str, text:str | int, *, timeout:int | float | None = None) -> Element:
+    async def web_input(
+        self, selector_type:By, selector_value:str, text:str | int, *, timeout:int | float | None = None, timeout_key:str | None = None
+    ) -> Element:
         """
         Enters text into an HTML input field.
 
-        :param timeout: timeout in seconds
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         :raises TimeoutError: if element could not be found within time
         """
-        input_field = await self.web_find(selector_type, selector_value, timeout = timeout)
+        self._ensure_timeout_inputs_valid(timeout = timeout, timeout_key = timeout_key)
+        input_field = await self.web_find(selector_type, selector_value, timeout = timeout, timeout_key = timeout_key)
         await input_field.clear_input()
         await input_field.send_keys(str(text))
         await self.web_sleep()
@@ -1181,8 +1276,16 @@ class WebScrapingMixin:
             apply_multiplier = False,
         )
 
-    async def web_text(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> str:
-        element = await self.web_find(selector_type, selector_value, parent = parent, timeout = timeout)
+    async def web_text(
+        self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None, timeout_key:str | None = None
+    ) -> str:
+        """
+        Return visible text of a single matching element.
+
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
+        """
+        element = await self.web_find(selector_type, selector_value, parent = parent, timeout = timeout, timeout_key = timeout_key)
         return await self._extract_visible_text(element)
 
     async def web_sleep(self, min_ms:int = 1_000, max_ms:int = 2_500) -> None:
@@ -1242,10 +1345,14 @@ class WebScrapingMixin:
 
         # Check for pagination controls
         multi_page = False
-        pagination_timeout = self._timeout("pagination_initial")
         try:
-            pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout = pagination_timeout)
-            next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section)
+            pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout_key = "pagination_initial")
+            next_buttons = await self.web_find_all(
+                By.CSS_SELECTOR,
+                'button[aria-label="Nächste"]',
+                parent = pagination_section,
+                timeout_key = "pagination_initial",
+            )
             if next_buttons:
                 enabled_next_buttons = [btn for btn in next_buttons if not btn.attrs.get("disabled")]
                 if enabled_next_buttons:
@@ -1275,11 +1382,15 @@ class WebScrapingMixin:
             if not multi_page:
                 break
 
-            follow_up_timeout = self._timeout("pagination_follow_up")
             try:
-                pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout = follow_up_timeout)
+                pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout_key = "pagination_follow_up")
                 next_button_element = None
-                possible_next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section)
+                possible_next_buttons = await self.web_find_all(
+                    By.CSS_SELECTOR,
+                    'button[aria-label="Nächste"]',
+                    parent = pagination_section,
+                    timeout_key = "pagination_follow_up",
+                )
                 for btn in possible_next_buttons:
                     if not btn.attrs.get("disabled"):
                         next_button_element = btn
@@ -1350,20 +1461,24 @@ class WebScrapingMixin:
                 await self.web_execute(f"window.scrollTo(0, {current_y_pos})")
                 await asyncio.sleep(scroll_length / scroll_speed / 2)  # double speed
 
-    async def web_select(self, selector_type:By, selector_value:str, selected_value:Any, timeout:int | float | None = None) -> Element:
+    async def web_select(
+        self, selector_type:By, selector_value:str, selected_value:Any, timeout:int | float | None = None, *, timeout_key:str | None = None
+    ) -> Element:
         """
         Selects an <option/> of a <select/> HTML element.
 
-        :param timeout: timeout in seconds
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         :raises TimeoutError: if element could not be found within time
         :raises UnexpectedTagNameException: if element is not a <select> element
         """
+        timeout_for_wait = self._resolve_wrapper_wait_timeout(timeout = timeout, timeout_key = timeout_key)
         await self.web_await(
-            lambda: self.web_check(selector_type, selector_value, Is.CLICKABLE),
-            timeout = timeout,
+            lambda: self.web_check(selector_type, selector_value, Is.CLICKABLE, timeout = timeout, timeout_key = timeout_key),
+            timeout = timeout_for_wait,
             timeout_error_message = f"No clickable HTML element with selector: {selector_type}='{selector_value}' found",
         )
-        elem = await self.web_find(selector_type, selector_value, timeout = timeout)
+        elem = await self.web_find(selector_type, selector_value, timeout = timeout, timeout_key = timeout_key)
 
         js_value = json.dumps(selected_value)  # safe escaping for JS
         try:
@@ -1401,19 +1516,22 @@ class WebScrapingMixin:
         await self.web_sleep()
         return elem
 
-    async def web_select_combobox(self, selector_type:By, selector_value:str, selected_value:str | int, timeout:int | float | None = None) -> Element:
+    async def web_select_combobox(
+        self, selector_type:By, selector_value:str, selected_value:str | int, timeout:int | float | None = None, *, timeout_key:str | None = None
+    ) -> Element:
         """
         Selects an option from a text-input combobox by typing the given value to
         filter the dropdown and clicking the first <li> whose visible text matches.
         Returns the dropdown <ul> element on success.
 
-        :param timeout: timeout in seconds
+        :param timeout: explicit numeric timeout override in seconds
+        :param timeout_key: configured timeout bucket key; mutually exclusive with timeout
         :raises TimeoutError: when the input or matching dropdown option cannot be located
         """
-        if timeout is None:
-            timeout = self._timeout("default")
+        # Validate timeout inputs even though combobox selection currently has no wrapper-local wait phase.
+        self._resolve_wrapper_wait_timeout(timeout = timeout, timeout_key = timeout_key)
 
-        input_field = await self.web_find(selector_type, selector_value, timeout = timeout)
+        input_field = await self.web_find(selector_type, selector_value, timeout = timeout, timeout_key = timeout_key)
         await input_field.clear_input()
         await input_field.send_keys(str(selected_value))
         await self.web_sleep()
@@ -1424,7 +1542,7 @@ class WebScrapingMixin:
             LOG.error("Combobox input field does not have 'aria-controls' attribute.")
             raise TimeoutError(_("Combobox missing aria-controls attribute"))
 
-        dropdown_elem = await self.web_find(By.ID, dropdown_id, timeout = timeout)
+        dropdown_elem = await self.web_find(By.ID, dropdown_id, timeout = timeout, timeout_key = timeout_key)
         js_value = json.dumps(selected_value)  # safe escaping for JS
 
         # This selects the correct <li> by visible text inside the dropdown. It includes normalization, i.e. trimming
