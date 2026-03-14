@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import copy, fnmatch, io, json, logging, os, tempfile  # isort: skip
+import asyncio, copy, fnmatch, io, json, logging, os, tempfile  # isort: skip
 from collections.abc import Callable, Generator
 from contextlib import redirect_stdout
 from datetime import timedelta
@@ -442,7 +442,12 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_is_logged_in_returns_true_when_logged_in(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login check returns true when logged in."""
-        with patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("Welcome dummy_user", 0)):
+        with patch.object(
+            test_bot,
+            "web_text_first_available",
+            new_callable = AsyncMock,
+            return_value = ("Welcome dummy_user", 0),
+        ):
             assert await test_bot.is_logged_in() is True
 
     @pytest.mark.asyncio
@@ -460,45 +465,96 @@ class TestKleinanzeigenBotAuthentication:
     async def test_is_logged_in_returns_false_when_not_logged_in(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login check returns false when not logged in."""
         with (
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
             patch.object(
                 test_bot,
-                "web_request",
+                "web_text_first_available",
                 new_callable = AsyncMock,
-                return_value = {"statusCode": 200, "content": "<html><a href='/m-einloggen.html'>login</a></html>"},
+                side_effect = [("nicht-eingeloggt", 0), ("kein user signal", 0)],
             ),
+            patch.object(test_bot, "_has_logged_out_cta", new_callable = AsyncMock, return_value = False),
         ):
             assert await test_bot.is_logged_in() is False
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_uses_selector_group_timeout_key(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify login detection uses selector-group lookup with login_detection timeout key."""
-        with patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("Welcome dummy_user", 0)) as group_text:
-            assert await test_bot.is_logged_in(include_probe = False) is True
-
-        group_text.assert_awaited_once()
-        call_args = group_text.await_args
-        assert call_args is not None
-        assert call_args.args[0] == [(By.CLASS_NAME, "mr-medium"), (By.ID, "user-email")]
-        assert call_args.kwargs["key"] == "login_detection"
-        assert call_args.kwargs["timeout"] == test_bot._timeout("login_detection")
+    async def test_has_logged_out_cta_requires_visible_candidate(self, test_bot:KleinanzeigenBot) -> None:
+        matched_element = MagicMock(spec = Element)
+        with (
+            patch.object(test_bot, "web_find_first_available", new_callable = AsyncMock, return_value = (matched_element, 0)),
+            patch.object(test_bot, "_extract_visible_text", new_callable = AsyncMock, return_value = ""),
+        ):
+            assert await test_bot._has_logged_out_cta() is False
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_logs_selector_label_without_raw_selector_literals(
+    async def test_has_logged_out_cta_accepts_visible_candidate(self, test_bot:KleinanzeigenBot) -> None:
+        matched_element = MagicMock(spec = Element)
+        with (
+            patch.object(test_bot, "web_find_first_available", new_callable = AsyncMock, return_value = (matched_element, 0)),
+            patch.object(test_bot, "_extract_visible_text", new_callable = AsyncMock, return_value = "Einloggen"),
+        ):
+            assert await test_bot._has_logged_out_cta() is True
+
+    @pytest.mark.asyncio
+    async def test_is_logged_in_uses_selector_group_timeout_key(self, test_bot:KleinanzeigenBot) -> None:
+        """Verify login detection uses selector-group lookup with login_detection timeout key."""
+        with patch.object(
+            test_bot,
+            "web_text_first_available",
+            new_callable = AsyncMock,
+            side_effect = [TimeoutError(), ("Welcome dummy_user", 0)],
+        ) as group_text:
+            assert await test_bot.is_logged_in(include_probe = False) is True
+
+        group_text.assert_awaited()
+        assert any(call.kwargs.get("timeout") == test_bot._timeout("login_detection") for call in group_text.await_args_list)
+
+    @pytest.mark.asyncio
+    async def test_is_logged_in_runs_full_selector_group_before_cta_precheck(self, test_bot:KleinanzeigenBot) -> None:
+        """Quick CTA checks must not short-circuit before full logged-in selector checks."""
+        with patch.object(
+            test_bot,
+            "web_text_first_available",
+            new_callable = AsyncMock,
+            side_effect = [TimeoutError(), ("Welcome dummy_user", 0)],
+        ) as group_text:
+            assert await test_bot.is_logged_in(include_probe = False) is True
+
+        group_text.assert_awaited()
+        assert group_text.await_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_is_logged_in_short_circuits_before_cta_check_when_quick_user_signal_matches(self, test_bot:KleinanzeigenBot) -> None:
+        """Logged-in quick pre-check should win even if incidental login links exist elsewhere."""
+        with patch.object(
+            test_bot,
+            "web_text_first_available",
+            new_callable = AsyncMock,
+            return_value = ("angemeldet als: dummy_user", 0),
+        ) as group_text:
+            assert await test_bot.is_logged_in(include_probe = False) is True
+
+        group_text.assert_awaited()
+        assert group_text.await_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_is_logged_in_logs_matched_raw_selector(
         self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
     ) -> None:
-        """Login detection logs should reference stable labels, not raw selector values."""
+        """Login detection logs should show the matched raw selector."""
         caplog.set_level("DEBUG")
 
         with (
             caplog.at_level("DEBUG"),
-            patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("angemeldet als: dummy_user", 1)),
+            patch.object(
+                test_bot,
+                "web_text_first_available",
+                new_callable = AsyncMock,
+                return_value = ("angemeldet als: dummy_user", 0),
+            ),
         ):
             assert await test_bot.is_logged_in(include_probe = False) is True
 
-        assert "Login detected via login detection selector 'user_info_secondary'" in caplog.text
-        for forbidden in (".mr-medium", "#user-email", "mr-medium", "user-email"):
-            assert forbidden not in caplog.text
+        assert "Login detected via login detection selector" in caplog.text
+        assert "CLASS_NAME=mr-medium" in caplog.text
 
     @pytest.mark.asyncio
     async def test_is_logged_in_logs_generic_message_when_selector_group_does_not_match(
@@ -509,78 +565,87 @@ class TestKleinanzeigenBotAuthentication:
 
         with (
             caplog.at_level("DEBUG"),
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
+            patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError()]),
+            patch.object(test_bot, "_has_logged_out_cta", new_callable = AsyncMock, return_value = False),
         ):
             assert await test_bot.is_logged_in(include_probe = False) is False
 
-        assert any(
-            record.message == "No login detected via configured login detection selectors (CLASS_NAME=mr-medium, ID=user-email)"
-            for record in caplog.records
-        )
+        assert "No login detected via configured login detection selectors" in caplog.text
+        assert "CLASS_NAME=mr-medium" in caplog.text
+        assert "ID=user-email" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_logs_raw_selectors_when_probe_reports_logged_out(
+    async def test_is_logged_in_logs_raw_selectors_when_dom_checks_fail_and_probe_disabled(
         self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
     ) -> None:
-        """Probe-based final failure should include the tried raw selectors for debugging."""
+        """Final failure should report selectors and disabled-probe state."""
         caplog.set_level("DEBUG")
 
         with (
             caplog.at_level("DEBUG"),
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
-            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.LOGGED_OUT),
+            patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError()]),
+            patch.object(test_bot, "_has_logged_out_cta", new_callable = AsyncMock, return_value = False),
         ):
             assert await test_bot.is_logged_in() is False
 
-        assert any(
-            record.message == (
-                "No login detected - DOM login detection selectors (CLASS_NAME=mr-medium, ID=user-email) "
-                "did not confirm login and server probe returned LOGGED_OUT"
-            )
-            for record in caplog.records
-        )
+        assert "No login detected via configured login detection selectors" in caplog.text
+        assert "auth probe is disabled" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_get_login_state_prefers_dom_over_auth_probe(self, test_bot:KleinanzeigenBot) -> None:
+    async def test_get_login_state_prefers_dom_checks(self, test_bot:KleinanzeigenBot) -> None:
         with (
-            patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("Welcome dummy_user", 0)) as web_text,
             patch.object(
-                test_bot, "_auth_probe_login_state", new_callable = AsyncMock, side_effect = AssertionError("Probe must not run when DOM is deterministic")
-            ) as probe,
+                test_bot,
+                "web_text_first_available",
+                new_callable = AsyncMock,
+                return_value = ("Welcome dummy_user", 0),
+            ) as web_text,
         ):
             assert await test_bot.get_login_state() == LoginState.LOGGED_IN
             web_text.assert_awaited_once()
-            probe.assert_not_called()
+
+    def test_current_page_url_strips_query_and_fragment(self, test_bot:KleinanzeigenBot) -> None:
+        page = MagicMock()
+        page.url = "https://login.kleinanzeigen.de/u/login/password?state=secret&code=abc#frag"
+        test_bot.page = page
+
+        assert test_bot._current_page_url() == "https://login.kleinanzeigen.de/u/login/password"
+
+    def test_is_valid_post_auth0_destination_filters_invalid_urls(self, test_bot:KleinanzeigenBot) -> None:
+        assert test_bot._is_valid_post_auth0_destination("https://www.kleinanzeigen.de/") is True
+        assert test_bot._is_valid_post_auth0_destination("https://www.kleinanzeigen.de/m-meine-anzeigen.html") is True
+        assert test_bot._is_valid_post_auth0_destination("https://foo.kleinanzeigen.de/") is True
+        assert test_bot._is_valid_post_auth0_destination("unknown") is False
+        assert test_bot._is_valid_post_auth0_destination("about:blank") is False
+        assert test_bot._is_valid_post_auth0_destination("https://evilkleinanzeigen.de/") is False
+        assert test_bot._is_valid_post_auth0_destination("https://kleinanzeigen.de.evil.com/") is False
+        assert test_bot._is_valid_post_auth0_destination("https://login.kleinanzeigen.de/u/login/password") is False
+        assert test_bot._is_valid_post_auth0_destination("https://www.kleinanzeigen.de/login-error-500") is False
 
     @pytest.mark.asyncio
-    async def test_get_login_state_falls_back_to_auth_probe_when_dom_inconclusive(self, test_bot:KleinanzeigenBot) -> None:
+    async def test_get_login_state_returns_unknown_when_dom_checks_are_inconclusive(self, test_bot:KleinanzeigenBot) -> None:
         with (
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError) as web_text,
-            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.LOGGED_IN) as probe,
-        ):
-            assert await test_bot.get_login_state() == LoginState.LOGGED_IN
-            web_text.assert_awaited_once()
-            probe.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_get_login_state_falls_back_to_auth_probe_when_dom_logged_out(self, test_bot:KleinanzeigenBot) -> None:
-        with (
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError) as web_text,
-            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.LOGGED_OUT) as probe,
-        ):
-            assert await test_bot.get_login_state() == LoginState.LOGGED_OUT
-            web_text.assert_awaited_once()
-            probe.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_get_login_state_returns_unknown_when_probe_unknown_and_dom_inconclusive(self, test_bot:KleinanzeigenBot) -> None:
-        with (
-            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN) as probe,
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError) as web_text,
+            patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError()]) as web_text,
+            patch.object(test_bot, "web_find_first_available", side_effect = TimeoutError()) as cta_find,
         ):
             assert await test_bot.get_login_state() == LoginState.UNKNOWN
-            probe.assert_awaited_once()
-            web_text.assert_awaited_once()
+            assert web_text.await_count == 2
+            assert cta_find.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_get_login_state_returns_logged_out_when_cta_detected(self, test_bot:KleinanzeigenBot) -> None:
+        matched_element = MagicMock(spec = Element)
+        with (
+            patch.object(
+                test_bot,
+                "web_text_first_available",
+                side_effect = [TimeoutError(), TimeoutError()],
+            ) as web_text,
+            patch.object(test_bot, "web_find_first_available", new_callable = AsyncMock, return_value = (matched_element, 0)),
+            patch.object(test_bot, "_extract_visible_text", new_callable = AsyncMock, return_value = "Hier einloggen"),
+        ):
+            assert await test_bot.get_login_state() == LoginState.LOGGED_OUT
+            assert web_text.await_count == 2
 
     @pytest.mark.asyncio
     async def test_get_login_state_unknown_captures_diagnostics_when_enabled(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
@@ -592,8 +657,8 @@ class TestKleinanzeigenBotAuthentication:
         test_bot.page = page
 
         with (
-            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN),
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
+            patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError(), TimeoutError(), TimeoutError()]),
+            patch.object(test_bot, "web_find_first_available", side_effect = TimeoutError()),
         ):
             assert await test_bot.get_login_state() == LoginState.UNKNOWN
 
@@ -610,8 +675,8 @@ class TestKleinanzeigenBotAuthentication:
         test_bot.page = page
 
         with (
-            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN),
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
+            patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError(), TimeoutError(), TimeoutError()]),
+            patch.object(test_bot, "web_find_first_available", side_effect = TimeoutError()),
         ):
             assert await test_bot.get_login_state() == LoginState.UNKNOWN
 
@@ -633,8 +698,21 @@ class TestKleinanzeigenBotAuthentication:
         stdin_mock.isatty.return_value = True
 
         with (
-            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN),
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
+            patch.object(
+                test_bot,
+                "web_text_first_available",
+                side_effect = [
+                    TimeoutError(),
+                    TimeoutError(),
+                    TimeoutError(),
+                    TimeoutError(),
+                    TimeoutError(),
+                    TimeoutError(),
+                    TimeoutError(),
+                    TimeoutError(),
+                ],
+            ),
+            patch.object(test_bot, "web_find_first_available", side_effect = TimeoutError()),
             patch("kleinanzeigen_bot.sys.stdin", stdin_mock),
             patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
@@ -661,8 +739,8 @@ class TestKleinanzeigenBotAuthentication:
         stdin_mock.isatty.return_value = False
 
         with (
-            patch.object(test_bot, "_auth_probe_login_state", new_callable = AsyncMock, return_value = LoginState.UNKNOWN),
-            patch.object(test_bot, "web_text_first_available", side_effect = TimeoutError),
+            patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError(), TimeoutError(), TimeoutError()]),
+            patch.object(test_bot, "web_find_first_available", side_effect = TimeoutError()),
             patch("kleinanzeigen_bot.sys.stdin", stdin_mock),
             patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
@@ -676,67 +754,71 @@ class TestKleinanzeigenBotAuthentication:
         with (
             patch.object(test_bot, "web_open") as mock_open,
             patch.object(test_bot, "get_login_state", new_callable = AsyncMock, side_effect = [LoginState.LOGGED_OUT, LoginState.LOGGED_IN]) as mock_logged_in,
-            patch.object(test_bot, "web_find", side_effect = TimeoutError),
-            patch.object(test_bot, "web_input") as mock_input,
-            patch.object(test_bot, "web_click") as mock_click,
+            patch.object(test_bot, "_click_gdpr_banner", new_callable = AsyncMock),
+            patch.object(test_bot, "fill_login_data_and_send", new_callable = AsyncMock) as mock_fill,
+            patch.object(test_bot, "handle_after_login_logic", new_callable = AsyncMock) as mock_after_login,
+            patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
         ):
             await test_bot.login()
 
-            mock_open.assert_called()
-            mock_logged_in.assert_called()
-            mock_input.assert_called()
-            mock_click.assert_called()
+            opened_urls = [call.args[0] for call in mock_open.call_args_list]
+            assert any(url.startswith(test_bot.root_url) for url in opened_urls)
+            assert any(url.endswith("/m-einloggen-sso.html") for url in opened_urls)
+            mock_logged_in.assert_awaited()
+            mock_fill.assert_awaited_once()
+            mock_after_login.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_login_flow_handles_captcha(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that login flow handles captcha correctly."""
+    async def test_login_flow_returns_early_when_already_logged_in(self, test_bot:KleinanzeigenBot) -> None:
+        """Login should return early when state is already LOGGED_IN."""
         with (
-            patch.object(test_bot, "web_open"),
-            patch.object(
-                test_bot,
-                "get_login_state",
-                new_callable = AsyncMock,
-                side_effect = [LoginState.LOGGED_OUT, LoginState.LOGGED_OUT, LoginState.LOGGED_IN],
-            ),
-            patch.object(test_bot, "web_find") as mock_find,
-            patch.object(test_bot, "web_input") as mock_input,
-            patch.object(test_bot, "web_click") as mock_click,
-            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+            patch.object(test_bot, "web_open") as mock_open,
+            patch.object(test_bot, "get_login_state", new_callable = AsyncMock, return_value = LoginState.LOGGED_IN) as mock_state,
+            patch.object(test_bot, "_click_gdpr_banner", new_callable = AsyncMock),
+            patch.object(test_bot, "fill_login_data_and_send", new_callable = AsyncMock) as mock_fill,
+            patch.object(test_bot, "handle_after_login_logic", new_callable = AsyncMock) as mock_after_login,
         ):
-            # Mock the sequence of web_find calls:
-            # 0. Consent banner not found (in _dismiss_consent_banner, before login state check)
-            # First login attempt:
-            # 1. Captcha iframe found (in check_and_wait_for_captcha)
-            # 2. Phone verification not found (in handle_after_login_logic)
-            # 3. Email verification not found (in handle_after_login_logic)
-            # 4. GDPR banner not found (in handle_after_login_logic)
-            # Second login attempt:
-            # 5. Captcha iframe found (in check_and_wait_for_captcha)
-            # 6. Phone verification not found (in handle_after_login_logic)
-            # 7. Email verification not found (in handle_after_login_logic)
-            # 8. GDPR banner not found (in handle_after_login_logic)
-            mock_find.side_effect = [
-                TimeoutError(),  # Consent banner (before login state check)
-                AsyncMock(),  # Captcha iframe (first login)
-                TimeoutError(),  # Phone verification (first login)
-                TimeoutError(),  # Email verification (first login)
-                TimeoutError(),  # GDPR banner (first login)
-                AsyncMock(),  # Captcha iframe (second login)
-                TimeoutError(),  # Phone verification (second login)
-                TimeoutError(),  # Email verification (second login)
-                TimeoutError(),  # GDPR banner (second login)
-            ]
-            mock_ainput.return_value = ""
-            mock_input.return_value = AsyncMock()
-            mock_click.return_value = AsyncMock()
-
             await test_bot.login()
 
-            # Verify the complete flow
-            assert mock_find.call_count == 9  # 1 consent banner + 8 original web_find calls
-            assert mock_ainput.call_count == 2  # Two captcha prompts
-            assert mock_input.call_count == 6  # Two login attempts with username, clear password, and set password
-            assert mock_click.call_count == 2  # Two submit button clicks
+            mock_open.assert_awaited_once()
+            assert mock_open.await_args is not None
+            assert mock_open.await_args.args[0] == test_bot.root_url
+            mock_state.assert_awaited_once()
+            mock_fill.assert_not_called()
+            mock_after_login.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_login_flow_raises_when_state_remains_unknown(self, test_bot:KleinanzeigenBot) -> None:
+        """Post-login UNKNOWN state should fail fast with diagnostics."""
+        with (
+            patch.object(test_bot, "web_open"),
+            patch.object(test_bot, "get_login_state", new_callable = AsyncMock, side_effect = [LoginState.LOGGED_OUT, LoginState.UNKNOWN]) as mock_state,
+            patch.object(test_bot, "_click_gdpr_banner", new_callable = AsyncMock),
+            patch.object(test_bot, "fill_login_data_and_send", new_callable = AsyncMock),
+            patch.object(test_bot, "handle_after_login_logic", new_callable = AsyncMock),
+            patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
+            patch.object(test_bot, "_capture_login_detection_diagnostics_if_enabled", new_callable = AsyncMock) as mock_diagnostics,
+        ):
+            with pytest.raises(AssertionError, match = "Login could not be confirmed"):
+                await test_bot.login()
+
+            mock_diagnostics.assert_awaited_once()
+            mock_state.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_login_flow_raises_when_sso_navigation_times_out(self, test_bot:KleinanzeigenBot) -> None:
+        """SSO navigation timeout should trigger diagnostics and re-raise."""
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock, side_effect = [None, TimeoutError("sso timeout")]),
+            patch.object(test_bot, "get_login_state", new_callable = AsyncMock, return_value = LoginState.LOGGED_OUT) as mock_state,
+            patch.object(test_bot, "_click_gdpr_banner", new_callable = AsyncMock),
+            patch.object(test_bot, "_capture_login_detection_diagnostics_if_enabled", new_callable = AsyncMock) as mock_diagnostics,
+        ):
+            with pytest.raises(TimeoutError, match = "sso timeout"):
+                await test_bot.login()
+
+            mock_diagnostics.assert_awaited_once()
+            mock_state.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_check_and_wait_for_captcha(self, test_bot:KleinanzeigenBot) -> None:
@@ -764,62 +846,142 @@ class TestKleinanzeigenBotAuthentication:
     async def test_fill_login_data_and_send(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login form filling works correctly."""
         with (
+            patch.object(test_bot, "_wait_for_auth0_login_context", new_callable = AsyncMock) as wait_context,
+            patch.object(test_bot, "_wait_for_auth0_password_step", new_callable = AsyncMock) as wait_password,
+            patch.object(test_bot, "_wait_for_post_auth0_submit_transition", new_callable = AsyncMock) as wait_transition,
             patch.object(test_bot, "web_input") as mock_input,
             patch.object(test_bot, "web_click") as mock_click,
             patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock) as mock_captcha,
         ):
-            # Mock successful login form interaction
-            mock_input.return_value = AsyncMock()
-            mock_click.return_value = AsyncMock()
-
             await test_bot.fill_login_data_and_send()
 
+            wait_context.assert_awaited_once()
+            wait_password.assert_awaited_once()
+            wait_transition.assert_awaited_once()
             assert mock_captcha.call_count == 1
-            assert mock_input.call_count == 3  # Username, clear password, set password
-            assert mock_click.call_count == 1  # Submit button
+            assert mock_input.call_count == 2
+            assert mock_click.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_fill_login_data_and_send_logs_generic_start_message(
+        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        with (
+            caplog.at_level("INFO"),
+            patch.object(test_bot, "_wait_for_auth0_login_context", new_callable = AsyncMock),
+            patch.object(test_bot, "_wait_for_auth0_password_step", new_callable = AsyncMock),
+            patch.object(test_bot, "_wait_for_post_auth0_submit_transition", new_callable = AsyncMock),
+            patch.object(test_bot, "web_input"),
+            patch.object(test_bot, "web_click"),
+            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
+        ):
+            await test_bot.fill_login_data_and_send()
+
+        assert "Logging in..." in caplog.text
+        assert test_bot.config.login.username not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_fill_login_data_and_send_fails_when_password_step_missing(self, test_bot:KleinanzeigenBot) -> None:
+        """Missing Auth0 password step should fail fast."""
+        with (
+            patch.object(test_bot, "_wait_for_auth0_login_context", new_callable = AsyncMock),
+            patch.object(test_bot, "_wait_for_auth0_password_step", new_callable = AsyncMock, side_effect = AssertionError("missing password")),
+            patch.object(test_bot, "web_input") as mock_input,
+            patch.object(test_bot, "web_click") as mock_click,
+        ):
+            with pytest.raises(AssertionError, match = "missing password"):
+                await test_bot.fill_login_data_and_send()
+
+            assert mock_input.call_count == 1
+            assert mock_click.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_wait_for_post_auth0_submit_transition_url_branch(self, test_bot:KleinanzeigenBot) -> None:
+        """URL transition success should return without fallback checks."""
+        with (
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True) as mock_wait,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+        ):
+            await test_bot._wait_for_post_auth0_submit_transition()
+
+            mock_wait.assert_awaited_once()
+            mock_sleep.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_wait_for_post_auth0_submit_transition_dom_fallback_branch(self, test_bot:KleinanzeigenBot) -> None:
+        """DOM fallback should run when URL transition is inconclusive."""
+        with (
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]) as mock_wait,
+            patch.object(test_bot, "is_logged_in", new_callable = AsyncMock, return_value = True) as mock_is_logged_in,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+        ):
+            await test_bot._wait_for_post_auth0_submit_transition()
+
+            mock_wait.assert_awaited_once()
+            mock_is_logged_in.assert_awaited_once()
+            mock_sleep.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_wait_for_post_auth0_submit_transition_sleep_fallback_branch(self, test_bot:KleinanzeigenBot) -> None:
+        """Sleep fallback should run when bounded login check times out."""
+        with (
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]) as mock_wait,
+            patch.object(test_bot, "is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError) as mock_is_logged_in,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+        ):
+            with pytest.raises(TimeoutError, match = "Auth0 post-submit verification remained inconclusive"):
+                await test_bot._wait_for_post_auth0_submit_transition()
+
+            mock_wait.assert_awaited_once()
+            assert mock_is_logged_in.await_count == 2
+            mock_sleep.assert_awaited_once()
+            assert mock_sleep.await_args is not None
+            sleep_kwargs = cast(Any, mock_sleep.await_args).kwargs
+            assert sleep_kwargs["min_ms"] < sleep_kwargs["max_ms"]
+
+    @pytest.mark.asyncio
+    async def test_wait_for_post_auth0_submit_transition_sleep_fallback_when_login_not_confirmed(
+        self, test_bot:KleinanzeigenBot
+    ) -> None:
+        """Sleep fallback should run when bounded login check returns False."""
+        with (
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]) as mock_wait,
+            patch.object(test_bot, "is_logged_in", new_callable = AsyncMock, return_value = False) as mock_is_logged_in,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+        ):
+            with pytest.raises(TimeoutError, match = "Auth0 post-submit verification remained inconclusive"):
+                await test_bot._wait_for_post_auth0_submit_transition()
+
+            mock_wait.assert_awaited_once()
+            assert mock_is_logged_in.await_count == 2
+            mock_sleep.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_click_gdpr_banner_uses_quick_dom_timeout_and_passes_click_timeout(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch.object(test_bot, "_timeout", return_value = 1.25) as mock_timeout,
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await test_bot._click_gdpr_banner()
+
+            mock_timeout.assert_called_once_with("quick_dom")
+            mock_find.assert_awaited_once_with(By.ID, "gdpr-banner-accept", timeout = 1.25)
+            mock_click.assert_awaited_once_with(By.ID, "gdpr-banner-accept", timeout = 1.25)
 
     @pytest.mark.asyncio
     async def test_handle_after_login_logic(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that post-login handling works correctly."""
         with (
-            patch.object(test_bot, "web_find") as mock_find,
-            patch.object(test_bot, "web_click") as mock_click,
-            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+            patch.object(test_bot, "_check_sms_verification", new_callable = AsyncMock, side_effect = TimeoutError()) as mock_sms,
+            patch.object(test_bot, "_check_email_verification", new_callable = AsyncMock, side_effect = TimeoutError()) as mock_email,
+            patch.object(test_bot, "_click_gdpr_banner", new_callable = AsyncMock, side_effect = TimeoutError()) as mock_gdpr,
         ):
-            # Test case 1: No special handling needed
-            mock_find.side_effect = [TimeoutError(), TimeoutError(), TimeoutError()]  # No phone verification, no email verification, no GDPR
-            mock_click.return_value = AsyncMock()
-            mock_ainput.return_value = ""
-
             await test_bot.handle_after_login_logic()
 
-            assert mock_find.call_count == 3
-            assert mock_click.call_count == 0
-            assert mock_ainput.call_count == 0
-
-            # Test case 2: Phone verification needed
-            mock_find.reset_mock()
-            mock_click.reset_mock()
-            mock_ainput.reset_mock()
-            mock_find.side_effect = [AsyncMock(), TimeoutError(), TimeoutError()]  # Phone verification found, no email verification, no GDPR
-
-            await test_bot.handle_after_login_logic()
-
-            assert mock_find.call_count == 3
-            assert mock_click.call_count == 0  # No click needed, just wait for user
-            assert mock_ainput.call_count == 1  # Wait for user to complete verification
-
-            # Test case 3: GDPR banner present
-            mock_find.reset_mock()
-            mock_click.reset_mock()
-            mock_ainput.reset_mock()
-            mock_find.side_effect = [TimeoutError(), TimeoutError(), AsyncMock()]  # No phone verification, no email verification, GDPR found
-
-            await test_bot.handle_after_login_logic()
-
-            assert mock_find.call_count == 3
-            assert mock_click.call_count == 2  # Click to accept GDPR and continue
-            assert mock_ainput.call_count == 0
+            mock_sms.assert_awaited_once()
+            mock_email.assert_awaited_once()
+            mock_gdpr.assert_awaited_once()
 
 
 class TestKleinanzeigenBotDiagnostics:
@@ -866,9 +1028,10 @@ class TestKleinanzeigenBotDiagnostics:
         ad_cfg = Ad.model_validate(diagnostics_ad_config)
         ad_cfg_orig = copy.deepcopy(diagnostics_ad_config)
         ad_file = str(tmp_path / "ad_000001_Test.yml")
+        ads_response = {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})}
 
         with (
-            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps({"ads": []})}),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ads_response),
             patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
@@ -907,9 +1070,10 @@ class TestKleinanzeigenBotDiagnostics:
         ad_cfg = Ad.model_validate(diagnostics_ad_config)
         ad_cfg_orig = copy.deepcopy(diagnostics_ad_config)
         ad_file = str(tmp_path / "ad_000001_Test.yml")
+        ads_response = {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})}
 
         with (
-            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps({"ads": []})}),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ads_response),
             patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
@@ -1016,6 +1180,35 @@ class TestKleinanzeigenBotBasics:
             delete_ad_mock.assert_awaited_once_with(ad_cfgs[0][1], [], delete_old_ads_by_title = False)
 
     @pytest.mark.asyncio
+    async def test_publish_ads_uses_millisecond_retry_delay_on_retryable_failure(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """Retry branch should sleep with explicit millisecond delay."""
+        test_bot.page = mock_page
+        test_bot.keep_old_ads = True
+
+        ad_cfg = Ad.model_validate(base_ad_config)
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = "ad.yaml"
+        ads_response = {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})}
+
+        with (
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ads_response),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = [TimeoutError("transient"), None]) as publish_mock,
+            patch.object(test_bot, "_detect_new_published_ad_ids", new_callable = AsyncMock, return_value = set()) as detect_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+        ):
+            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
+            assert publish_mock.await_count == 2
+            detect_mock.assert_awaited_once()
+            sleep_mock.assert_awaited_once_with(2_000)
+
+    @pytest.mark.asyncio
     async def test_publish_ads_aborts_retry_on_duplicate_detection(
         self,
         test_bot:KleinanzeigenBot,
@@ -1045,6 +1238,62 @@ class TestKleinanzeigenBotBasics:
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
             # publish_ad should have been called only once — retry was aborted due to duplicate detection
+            assert publish_mock.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_publish_ads_aborts_retry_when_duplicate_verification_fetch_is_malformed(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """Retry verification must fail closed on malformed published-ads responses."""
+        test_bot.page = mock_page
+
+        ad_cfg = Ad.model_validate(base_ad_config)
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = "ad.yaml"
+
+        fetch_responses = [
+            {"content": json.dumps({"ads": []})},
+            {"content": json.dumps({"ads": []})},
+            [],
+        ]
+
+        with (
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = fetch_responses),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("image upload timeout")) as publish_mock,
+        ):
+            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
+            assert publish_mock.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_publish_ads_aborts_retry_when_duplicate_verification_ads_entries_are_malformed(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """Retry verification must fail closed when strict fetch returns non-dict ad entries."""
+        test_bot.page = mock_page
+
+        ad_cfg = Ad.model_validate(base_ad_config)
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = "ad.yaml"
+
+        fetch_responses = [
+            {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})},
+            {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})},
+            {"content": json.dumps({"ads": [42], "paging": {"pageNum": 1, "last": 1}})},
+        ]
+
+        with (
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = fetch_responses),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("image upload timeout")) as publish_mock,
+        ):
+            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
             assert publish_mock.await_count == 1
 
     def test_get_root_url(self, test_bot:KleinanzeigenBot) -> None:

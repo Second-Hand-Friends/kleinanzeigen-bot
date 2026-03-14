@@ -38,7 +38,10 @@ _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
     (By.ID, "user-email"),
 ]
-_LOGIN_DETECTION_SELECTOR_LABELS:Final[tuple[str, ...]] = ("user_info_primary", "user_info_secondary")
+_LOGGED_OUT_CTA_SELECTORS:Final[list[tuple["By", str]]] = [
+    (By.CSS_SELECTOR, 'a[href*="einloggen"]'),
+    (By.CSS_SELECTOR, 'a[href*="/m-einloggen"]'),
+]
 
 colorama.just_fix_windows_console()
 
@@ -997,95 +1000,203 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             await ainput(_("Press a key to continue..."))
         except TimeoutError:
-            # No captcha detected within timeout.
-            pass
+            page_context = "login page" if is_login_page else "publish flow"
+            LOG.debug("No captcha detected within timeout on %s", page_context)
 
     async def login(self) -> None:
+        sso_navigation_timeout = self._timeout("page_load")
+        pre_login_gdpr_timeout = self._timeout("quick_dom")
+
         LOG.info("Checking if already logged in...")
         await self.web_open(f"{self.root_url}")
-        if getattr(self, "page", None) is not None:
-            LOG.debug("Current page URL after opening homepage: %s", self.page.url)
+        try:
+            await self._click_gdpr_banner(timeout = pre_login_gdpr_timeout)
+        except TimeoutError:
+            LOG.debug("No GDPR banner detected before login")
+
+        state = await self.get_login_state(capture_diagnostics = False)
+        if state == LoginState.LOGGED_IN:
+            LOG.info("Already logged in. Skipping login.")
+            return
+
+        LOG.debug("Navigating to SSO login page (Auth0)...")
+        # m-einloggen-sso.html triggers immediate server-side redirect to Auth0
+        # This avoids waiting for JS on m-einloggen.html which may not execute in headless mode
+        try:
+            await self.web_open(f"{self.root_url}/m-einloggen-sso.html", timeout = sso_navigation_timeout)
+        except TimeoutError:
+            LOG.warning("Timeout navigating to SSO login page after %.1fs", sso_navigation_timeout)
+            await self._capture_login_detection_diagnostics_if_enabled()
+            raise
+
+        self._login_detection_diagnostics_captured = False
+
+        try:
+            await self.fill_login_data_and_send()
+            await self.handle_after_login_logic()
+        except (AssertionError, TimeoutError):
+            # AssertionError is intentionally part of auth-boundary control flow so
+            # diagnostics are captured before the original error is re-raised.
+            await self._capture_login_detection_diagnostics_if_enabled()
+            raise
 
         await self._dismiss_consent_banner()
 
         state = await self.get_login_state()
         if state == LoginState.LOGGED_IN:
-            LOG.info("Already logged in as [%s]. Skipping login.", self.config.login.username)
+            LOG.info("Login confirmed.")
             return
 
-        if state == LoginState.UNKNOWN:
-            LOG.warning("Login state is UNKNOWN - cannot determine if already logged in. Skipping login attempt.")
+        current_url = self._current_page_url()
+        LOG.warning("Login state after attempt is %s (url=%s)", state.name, current_url)
+        await self._capture_login_detection_diagnostics_if_enabled()
+        raise AssertionError(_("Login could not be confirmed after Auth0 flow (state=%s, url=%s)") % (state.name, current_url))
+
+    def _current_page_url(self) -> str:
+        page = getattr(self, "page", None)
+        if page is None:
+            return "unknown"
+        url = getattr(page, "url", None)
+        if not isinstance(url, str) or not url:
+            return "unknown"
+
+        parsed = urllib_parse.urlparse(url)
+        host = parsed.hostname or parsed.netloc.split("@")[-1]
+        netloc = f"{host}:{parsed.port}" if parsed.port is not None and host else host
+        sanitized = urllib_parse.urlunparse((parsed.scheme, netloc, parsed.path, "", "", ""))
+        return sanitized or "unknown"
+
+    async def _wait_for_auth0_login_context(self) -> None:
+        redirect_timeout = self._timeout("login_detection")
+        try:
+            await self.web_await(
+                lambda: "login.kleinanzeigen.de" in self._current_page_url() or "/u/login" in self._current_page_url(),
+                timeout = redirect_timeout,
+                timeout_error_message = f"Auth0 redirect did not start within {redirect_timeout} seconds",
+                apply_multiplier = False,
+            )
+        except TimeoutError as ex:
+            current_url = self._current_page_url()
+            raise AssertionError(_("Auth0 redirect not detected (url=%s)") % current_url) from ex
+
+    async def _wait_for_auth0_password_step(self) -> None:
+        password_step_timeout = self._timeout("login_detection")
+        try:
+            await self.web_await(
+                lambda: "/u/login/password" in self._current_page_url(),
+                timeout = password_step_timeout,
+                timeout_error_message = f"Auth0 password page not reached within {password_step_timeout} seconds",
+                apply_multiplier = False,
+            )
+        except TimeoutError as ex:
+            current_url = self._current_page_url()
+            raise AssertionError(_("Auth0 password step not reached (url=%s)") % current_url) from ex
+
+    async def _wait_for_post_auth0_submit_transition(self) -> None:
+        post_submit_timeout = self._timeout("login_detection")
+        quick_dom_timeout = self._timeout("quick_dom")
+        fallback_max_ms = max(700, int(quick_dom_timeout * 1_000))
+        fallback_min_ms = max(300, fallback_max_ms // 2)
+
+        try:
+            await self.web_await(
+                lambda: self._is_valid_post_auth0_destination(self._current_page_url()),
+                timeout = post_submit_timeout,
+                timeout_error_message = f"Auth0 post-submit transition did not complete within {post_submit_timeout} seconds",
+                apply_multiplier = False,
+            )
+            return
+        except TimeoutError:
+            LOG.debug("Post-submit transition not detected via URL, checking logged-in selectors")
+
+        login_confirmed = False
+        try:
+            login_confirmed = await asyncio.wait_for(self.is_logged_in(include_probe = False), timeout = post_submit_timeout)
+        except (TimeoutError, asyncio.TimeoutError):
+            LOG.debug("Post-submit login verification did not complete within %.1fs", post_submit_timeout)
+
+        if login_confirmed:
             return
 
-        LOG.info("Opening login page...")
-        await self.web_open(f"{self.root_url}/m-einloggen.html?targetUrl=/")
+        LOG.debug("Auth0 post-submit verification remained inconclusive; applying bounded fallback pause")
+        await self.web_sleep(min_ms = fallback_min_ms, max_ms = fallback_max_ms)
 
-        await self.fill_login_data_and_send()
-        await self.handle_after_login_logic()
+        try:
+            if await asyncio.wait_for(self.is_logged_in(include_probe = False), timeout = quick_dom_timeout):
+                return
+        except (TimeoutError, asyncio.TimeoutError):
+            LOG.debug("Final post-submit login confirmation did not complete within %.1fs", quick_dom_timeout)
 
-        # Sometimes a second login is required
-        state = await self.get_login_state()
-        if state == LoginState.UNKNOWN:
-            LOG.warning("Login state is UNKNOWN after first login attempt - cannot determine login status. Aborting login process.")
-            return
+        current_url = self._current_page_url()
+        raise TimeoutError(_("Auth0 post-submit verification remained inconclusive (url=%s)") % current_url)
 
-        if state == LoginState.LOGGED_OUT:
-            LOG.debug("First login attempt did not succeed, trying second login attempt")
-            await self.fill_login_data_and_send()
-            await self.handle_after_login_logic()
+    def _is_valid_post_auth0_destination(self, url:str) -> bool:
+        if not url or url in {"unknown", "about:blank"}:
+            return False
 
-            state = await self.get_login_state()
-            if state == LoginState.LOGGED_IN:
-                LOG.debug("Second login attempt succeeded")
-            else:
-                LOG.warning("Second login attempt also failed - login may not have succeeded")
+        parsed = urllib_parse.urlparse(url)
+        host = (parsed.hostname or "").lower()
+        path = parsed.path.lower()
+
+        if host != "kleinanzeigen.de" and not host.endswith(".kleinanzeigen.de"):
+            return False
+        if host == "login.kleinanzeigen.de":
+            return False
+        if path.startswith("/u/login"):
+            return False
+
+        return "error" not in path
 
     async def fill_login_data_and_send(self) -> None:
-        LOG.info("Logging in as [%s]...", self.config.login.username)
-        await self.web_input(By.ID, "login-email", self.config.login.username)
+        """Auth0 2-step login via m-einloggen-sso.html (server-side redirect, no JS needed).
 
-        # clearing password input in case browser has stored login data set
-        await self.web_input(By.ID, "login-password", "")
-        await self.web_input(By.ID, "login-password", self.config.login.password)
+        Step 1: /u/login/identifier - email
+        Step 2: /u/login/password   - password
+        """
+        LOG.info("Logging in...")
 
+        await self._wait_for_auth0_login_context()
+
+        # Step 1: email identifier
+        LOG.debug("Auth0 Step 1: entering email...")
+        await self.web_input(By.ID, "username", self.config.login.username)
+        await self.web_click(By.CSS_SELECTOR, "button[type='submit']")
+
+        # Step 2: wait for password page then enter password
+        LOG.debug("Waiting for Auth0 password page...")
+        await self._wait_for_auth0_password_step()
+
+        LOG.debug("Auth0 Step 2: entering password...")
+        await self.web_input(By.CSS_SELECTOR, "input[type='password']", self.config.login.password)
         await self.check_and_wait_for_captcha(is_login_page = True)
-
-        await self.web_click(By.CSS_SELECTOR, "form#login-form button[type='submit']")
+        await self.web_click(By.CSS_SELECTOR, "button[type='submit']")
+        await self._wait_for_post_auth0_submit_transition()
+        LOG.debug("Auth0 login submitted.")
 
     async def handle_after_login_logic(self) -> None:
         try:
-            sms_timeout = self._timeout("sms_verification")
-            await self.web_find(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout = sms_timeout)
-            LOG.warning("############################################")
-            LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
-            LOG.warning("############################################")
-            await ainput(_("Press ENTER when done..."))
+            await self._check_sms_verification()
         except TimeoutError:
-            # No SMS verification prompt detected.
-            pass
+            LOG.debug("No SMS verification prompt detected after login")
 
         try:
-            email_timeout = self._timeout("email_verification")
-            await self.web_find(By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout = email_timeout)
-            LOG.warning("############################################")
-            LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
-            LOG.warning("############################################")
-            await ainput(_("Press ENTER when done..."))
+            await self._check_email_verification()
         except TimeoutError:
-            # No email verification prompt detected.
-            pass
+            LOG.debug("No email verification prompt detected after login")
 
         try:
-            LOG.info("Handling GDPR disclaimer...")
-            gdpr_timeout = self._timeout("gdpr_prompt")
-            await self.web_find(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
-            await self.web_click(By.ID, "gdpr-banner-cmp-button")
-            await self.web_click(
-                By.XPATH, "//div[@id='ConsentManagementPage']//*//button//*[contains(., 'Alle ablehnen und fortfahren')]", timeout = gdpr_timeout
-            )
+            LOG.debug("Handling GDPR disclaimer...")
+            await self._click_gdpr_banner()
         except TimeoutError:
-            # GDPR banner not shown within timeout.
-            pass
+            LOG.debug("GDPR banner not found or timed out")
+
+    async def _check_sms_verification(self) -> None:
+        sms_timeout = self._timeout("sms_verification")
+        await self.web_find(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout = sms_timeout)
+        LOG.warning("############################################")
+        LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
+        LOG.warning("############################################")
+        await ainput(_("Press ENTER when done..."))
 
     async def _dismiss_consent_banner(self) -> None:
         """Dismiss the GDPR/TCF consent banner if it is present.
@@ -1100,65 +1211,39 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.debug("Consent banner detected, clicking 'Alle akzeptieren'...")
             await self.web_click(By.ID, "gdpr-banner-accept")
         except TimeoutError:
-            pass  # Banner not present; nothing to dismiss
+            LOG.debug("Consent banner not present; continuing without dismissal")
 
-    async def _auth_probe_login_state(self) -> LoginState:
-        """Probe an auth-required endpoint to classify login state.
+    async def _check_email_verification(self) -> None:
+        email_timeout = self._timeout("email_verification")
+        await self.web_find(By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout = email_timeout)
+        LOG.warning("############################################")
+        LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
+        LOG.warning("############################################")
+        await ainput(_("Press ENTER when done..."))
 
-        The probe is non-mutating (GET request). It is used as a fallback method by
-        get_login_state() when DOM-based checks are inconclusive.
-        """
+    async def _click_gdpr_banner(self, *, timeout:float | None = None) -> None:
+        gdpr_timeout = self._timeout("quick_dom") if timeout is None else timeout
+        await self.web_find(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
+        await self.web_click(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
 
-        url = f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT"
-        try:
-            response = await self.web_request(url, valid_response_codes = [200, 401, 403])
-        except (TimeoutError, AssertionError):
-            # AssertionError can occur when web_request() fails to parse the response (e.g., unexpected content type)
-            # Treat both timeout and assertion failures as UNKNOWN to avoid false assumptions about login state
-            return LoginState.UNKNOWN
-
-        status_code = response.get("statusCode")
-        if status_code in {401, 403}:
-            return LoginState.LOGGED_OUT
-
-        content = response.get("content", "")
-        if not isinstance(content, str):
-            return LoginState.UNKNOWN
-
-        try:
-            payload = json.loads(content)
-        except json.JSONDecodeError:
-            lowered = content.lower()
-            if "m-einloggen" in lowered or "login-email" in lowered or "login-password" in lowered or "login-form" in lowered:
-                return LoginState.LOGGED_OUT
-            return LoginState.UNKNOWN
-
-        if isinstance(payload, dict) and "ads" in payload:
-            return LoginState.LOGGED_IN
-
-        return LoginState.UNKNOWN
-
-    async def get_login_state(self) -> LoginState:
-        """Determine current login state using layered detection.
+    async def get_login_state(self, *, capture_diagnostics:bool = True) -> LoginState:
+        """Determine current login state using DOM - first detection.
 
         Order:
-        1) DOM-based check via `is_logged_in(include_probe=False)` (preferred - stealthy)
-        2) Server-side auth probe via `_auth_probe_login_state` (fallback - more reliable)
-        3) If still inconclusive, capture diagnostics via
-           `_capture_login_detection_diagnostics_if_enabled` and return `UNKNOWN`
+        1) DOM - based logged - in check via `is_logged_in(include_probe=False)`
+        2) Logged - out CTA check
+        3) If inconclusive, optionally capture diagnostics and return `UNKNOWN`
         """
-        # Prefer DOM-based checks first to minimize bot-like behavior.
-        # The auth probe makes a JSON API request that normal users wouldn't trigger.
+        # Prefer DOM-based checks first to minimize bot-like behavior and avoid
+        # fragile API probing side effects. Server-side auth probing was removed.
         if await self.is_logged_in(include_probe = False):
             return LoginState.LOGGED_IN
 
-        # Fall back to the more reliable server-side auth probe.
-        # SPA/hydration delays can cause DOM-based checks to temporarily miss login indicators.
-        state = await self._auth_probe_login_state()
-        if state != LoginState.UNKNOWN:
-            return state
+        if await self._has_logged_out_cta(log_timeout = False):
+            return LoginState.LOGGED_OUT
 
-        await self._capture_login_detection_diagnostics_if_enabled()
+        if capture_diagnostics:
+            await self._capture_login_detection_diagnostics_if_enabled()
         return LoginState.UNKNOWN
 
     def _diagnostics_output_dir(self) -> Path:
@@ -1271,7 +1356,26 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             login_check_timeout,
             effective_timeout,
         )
+        quick_dom_timeout = self._timeout("quick_dom")
         tried_login_selectors = _format_login_detection_selectors(_LOGIN_DETECTION_SELECTORS)
+
+        try:
+            user_info, matched_selector = await self.web_text_first_available(
+                _LOGIN_DETECTION_SELECTORS,
+                timeout = quick_dom_timeout,
+                key = "quick_dom",
+                description = "login_detection(quick_logged_in)",
+            )
+            if username in user_info.lower():
+                matched_selector_display = (
+                    f"{_LOGIN_DETECTION_SELECTORS[matched_selector][0].name}={_LOGIN_DETECTION_SELECTORS[matched_selector][1]}"
+                    if 0 <= matched_selector < len(_LOGIN_DETECTION_SELECTORS)
+                    else f"selector_index_{matched_selector}"
+                )
+                LOG.debug("Login detected via login detection selector '%s'", matched_selector_display)
+                return True
+        except TimeoutError:
+            LOG.debug("No login detected via configured login detection selectors (%s)", tried_login_selectors)
 
         try:
             user_info, matched_selector = await self.web_text_first_available(
@@ -1281,32 +1385,60 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 description = "login_detection(selector_group)",
             )
             if username in user_info.lower():
-                matched_selector_label = (
-                    _LOGIN_DETECTION_SELECTOR_LABELS[matched_selector]
-                    if 0 <= matched_selector < len(_LOGIN_DETECTION_SELECTOR_LABELS)
+                matched_selector_display = (
+                    f"{_LOGIN_DETECTION_SELECTORS[matched_selector][0].name}={_LOGIN_DETECTION_SELECTORS[matched_selector][1]}"
+                    if 0 <= matched_selector < len(_LOGIN_DETECTION_SELECTORS)
                     else f"selector_index_{matched_selector}"
                 )
-                LOG.debug("Login detected via login detection selector '%s'", matched_selector_label)
+                LOG.debug("Login detected via login detection selector '%s'", matched_selector_display)
                 return True
         except TimeoutError:
             LOG.debug("Timeout waiting for login detection selector group after %.1fs", effective_timeout)
 
-        if not include_probe:
-            LOG.debug("No login detected via configured login detection selectors (%s)", tried_login_selectors)
+        if await self._has_logged_out_cta():
             return False
 
-        state = await self._auth_probe_login_state()
-        if state == LoginState.LOGGED_IN:
-            return True
+        if include_probe:
+            LOG.debug("No login detected via configured login detection selectors (%s); auth probe is disabled", tried_login_selectors)
+            return False
 
-        LOG.debug(
-            "No login detected - DOM login detection selectors (%s) did not confirm login and server probe returned %s",
-            tried_login_selectors,
-            state.name,
-        )
+        LOG.debug("No login detected via configured login detection selectors (%s)", tried_login_selectors)
         return False
 
-    async def _fetch_published_ads(self) -> list[dict[str, Any]]:
+    async def _has_logged_out_cta(self, *, log_timeout:bool = True) -> bool:
+        quick_dom_timeout = self._timeout("quick_dom")
+        tried_logged_out_selectors = _format_login_detection_selectors(_LOGGED_OUT_CTA_SELECTORS)
+
+        try:
+            cta_element, cta_index = await self.web_find_first_available(
+                _LOGGED_OUT_CTA_SELECTORS,
+                timeout = quick_dom_timeout,
+                key = "quick_dom",
+                description = "login_detection(logged_out_cta)",
+            )
+            cta_text = await self._extract_visible_text(cta_element)
+            if cta_text.strip():
+                matched_selector_display = (
+                    f"{_LOGGED_OUT_CTA_SELECTORS[cta_index][0].name}={_LOGGED_OUT_CTA_SELECTORS[cta_index][1]}"
+                    if 0 <= cta_index < len(_LOGGED_OUT_CTA_SELECTORS)
+                    else f"selector_index_{cta_index}"
+                )
+                if 0 <= cta_index < len(_LOGGED_OUT_CTA_SELECTORS):
+                    LOG.debug("Fast logged-out pre-check matched selector '%s'", matched_selector_display)
+                    return True
+                LOG.debug("Fast logged-out pre-check got unexpected selector index '%s'; failing closed", cta_index)
+                return False
+        except TimeoutError:
+            if log_timeout:
+                LOG.debug(
+                    "Fast logged-out pre-check found no login CTA (%s) within %.1fs",
+                    tried_logged_out_selectors,
+                    quick_dom_timeout,
+                )
+
+        return False
+
+    async def _fetch_published_ads(self, *, strict:bool = False) -> list[dict[str, Any]]:
         """Fetch all published ads, handling API pagination.
 
         Returns:
@@ -1326,37 +1458,84 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             try:
                 response = await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum={page}")
             except TimeoutError as ex:
-                LOG.warning("Pagination request timed out on page %s: %s", page, ex)
+                if strict:
+                    raise
+                LOG.warning("Pagination request failed on page %s: %s", page, ex)
+                break
+
+            if not isinstance(response, dict):
+                if strict:
+                    raise TypeError(f"Unexpected pagination response type on page {page}: {type(response).__name__}")
+                LOG.warning("Unexpected pagination response type on page %s: %s", page, type(response).__name__)
                 break
 
             content = response.get("content", "")
+            if isinstance(content, bytearray):
+                content = bytes(content)
+            if isinstance(content, bytes):
+                content = content.decode("utf-8", errors = "replace")
+            if not isinstance(content, str):
+                if strict:
+                    raise TypeError(f"Unexpected response content type on page {page}: {type(content).__name__}")
+                LOG.warning("Unexpected response content type on page %s: %s", page, type(content).__name__)
+                break
+
             try:
                 json_data = json.loads(content)
-            except json.JSONDecodeError as ex:
+            except (json.JSONDecodeError, TypeError) as ex:
                 if not content:
+                    if strict:
+                        raise ValueError(f"Empty JSON response content on page {page}") from ex
                     LOG.warning("Empty JSON response content on page %s", page)
                     break
+                if strict:
+                    raise ValueError(f"Failed to parse JSON response on page {page}: {ex}") from ex
                 snippet = content[:SNIPPET_LIMIT] + ("..." if len(content) > SNIPPET_LIMIT else "")
                 LOG.warning("Failed to parse JSON response on page %s: %s (content: %s)", page, ex, snippet)
                 break
 
             if not isinstance(json_data, dict):
+                if strict:
+                    raise TypeError(f"Unexpected JSON payload type on page {page}: {type(json_data).__name__}")
                 snippet = content[:SNIPPET_LIMIT] + ("..." if len(content) > SNIPPET_LIMIT else "")
                 LOG.warning("Unexpected JSON payload on page %s (content: %s)", page, snippet)
                 break
 
             page_ads = json_data.get("ads", [])
             if not isinstance(page_ads, list):
+                if strict:
+                    raise TypeError(f"Unexpected 'ads' type on page {page}: {type(page_ads).__name__}")
                 preview = str(page_ads)
                 if len(preview) > SNIPPET_LIMIT:
                     preview = preview[:SNIPPET_LIMIT] + "..."
                 LOG.warning("Unexpected 'ads' type on page %s: %s value: %s", page, type(page_ads).__name__, preview)
                 break
 
-            ads.extend(page_ads)
+            filtered_page_ads:list[dict[str, Any]] = []
+            rejected_count = 0
+            rejected_preview:str | None = None
+            for entry in page_ads:
+                if isinstance(entry, dict):
+                    filtered_page_ads.append(entry)
+                    continue
+                rejected_count += 1
+                if strict:
+                    raise TypeError(f"Unexpected ad entry type on page {page}: {type(entry).__name__}")
+                if rejected_preview is None:
+                    rejected_preview = repr(entry)
+
+            if rejected_count > 0:
+                preview = rejected_preview or "<none>"
+                if len(preview) > SNIPPET_LIMIT:
+                    preview = preview[:SNIPPET_LIMIT] + "..."
+                LOG.warning("Filtered %s malformed ad entries on page %s (sample: %s)", rejected_count, page, preview)
+
+            ads.extend(filtered_page_ads)
 
             paging = json_data.get("paging")
             if not isinstance(paging, dict):
+                if strict:
+                    raise ValueError(f"Missing or invalid paging info on page {page}: {type(paging).__name__}")
                 LOG.debug("No paging dict found on page %s, assuming single page", page)
                 break
 
@@ -1365,10 +1544,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             total_pages = misc.coerce_page_number(paging.get("last"))
 
             if current_page_num is None:
+                if strict:
+                    raise ValueError(f"Invalid 'pageNum' in paging info: {paging.get('pageNum')}")
                 LOG.warning("Invalid 'pageNum' in paging info: %s, stopping pagination", paging.get("pageNum"))
                 break
 
             if total_pages is None:
+                if strict:
+                    raise ValueError("No pagination info found")
                 LOG.debug("No pagination info found, assuming single page")
                 break
 
@@ -1387,6 +1570,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # Use API's next field for navigation (more robust than our counter)
             next_page = misc.coerce_page_number(paging.get("next"))
             if next_page is None:
+                if strict:
+                    raise ValueError(f"Invalid 'next' page value in paging info: {paging.get('next')}")
                 LOG.warning("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
                 break
             page = next_page
@@ -1554,6 +1739,28 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Check for success messages
         return await self.web_check(By.ID, "checking-done", Is.DISPLAYED) or await self.web_check(By.ID, "not-completed", Is.DISPLAYED)
 
+    async def _detect_new_published_ad_ids(self, ads_before_publish:set[str], ad_title:str) -> set[str] | None:
+        try:
+            current_ads = await self._fetch_published_ads(strict = True)
+            current_ad_ids:set[str] = set()
+            for current_ad in current_ads:
+                if not isinstance(current_ad, dict):
+                    # Keep duplicate-prevention verification fail-closed: malformed entries
+                    # must abort retries rather than risk creating duplicate listings.
+                    entry_length = len(current_ad) if hasattr(current_ad, "__len__") else None
+                    LOG.debug("Malformed ad entry in strict duplicate verification: type=%s length=%s", type(current_ad).__name__, entry_length)
+                    raise TypeError(f"Unexpected ad entry type: {type(current_ad).__name__}")
+                if current_ad.get("id"):
+                    current_ad_ids.add(str(current_ad["id"]))
+        except Exception as ex:  # noqa: BLE001
+            LOG.warning(
+                "Could not verify published ads after failed attempt for '%s': %s -- aborting retries to prevent duplicates.",
+                ad_title,
+                ex,
+            )
+            return None
+        return current_ad_ids - ads_before_publish
+
     async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
         failed_count = 0
@@ -1589,34 +1796,33 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     raise  # Respect task cancellation
                 except (TimeoutError, ProtocolException) as ex:
                     await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
-                    if attempt < max_retries:
-                        # Before retrying, check if the ad was already created despite the error.
-                        # A partially successful submission followed by a retry would create a duplicate listing,
-                        # which violates kleinanzeigen.de terms of service and can lead to account suspension.
-                        try:
-                            current_ads = await self._fetch_published_ads()
-                            current_ad_ids = {str(x["id"]) for x in current_ads if x.get("id")}
-                            new_ad_ids = current_ad_ids - ads_before_publish
-                            if new_ad_ids:
-                                LOG.warning(
-                                    "Attempt %s/%s failed for '%s': %s. "
-                                    "However, a new ad was detected (id: %s) -- aborting retries to prevent duplicates.",
-                                    attempt, max_retries, ad_cfg.title, ex, ", ".join(new_ad_ids)
-                                )
-                                failed_count += 1
-                                break
-                        except Exception as verify_ex:  # noqa: BLE001
-                            LOG.warning(
-                                "Could not verify published ads after failed attempt for '%s': %s -- aborting retries to prevent duplicates.",
-                                ad_cfg.title, verify_ex,
-                            )
-                            failed_count += 1
-                            break
-                        LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
-                        await self.web_sleep(2)  # Wait before retry
-                    else:
+                    if attempt >= max_retries:
                         LOG.error("All %s attempts failed for '%s': %s. Skipping ad.", max_retries, ad_cfg.title, ex)
                         failed_count += 1
+                        continue
+
+                    # Before retrying, check if the ad was already created despite the error.
+                    # A partially successful submission followed by a retry would create a duplicate listing,
+                    # which violates kleinanzeigen.de terms of service and can lead to account suspension.
+                    new_ad_ids = await self._detect_new_published_ad_ids(ads_before_publish, ad_cfg.title)
+                    if new_ad_ids is None:
+                        failed_count += 1
+                        break
+                    if new_ad_ids:
+                        LOG.warning(
+                            "Attempt %s/%s failed for '%s': %s. "
+                            "However, a new ad was detected (id: %s) -- aborting retries to prevent duplicates.",
+                            attempt,
+                            max_retries,
+                            ad_cfg.title,
+                            ex,
+                            ", ".join(new_ad_ids),
+                        )
+                        failed_count += 1
+                        break
+
+                    LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
+                    await self.web_sleep(2_000)  # Wait before retry
 
             # Check publishing result separately (no retry - ad is already submitted)
             if success:
@@ -1640,10 +1846,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[dict[str, Any]], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE
     ) -> None:
         """
-        @param ad_cfg: the effective ad config (i.e. with default values applied etc.)
-        @param ad_cfg_orig: the ad config as present in the YAML file
-        @param published_ads: json list of published ads
-        @param mode: the mode of ad editing, either publishing a new or updating an existing ad
+        @ param ad_cfg: the effective ad config(i.e. with default values applied etc.)
+        @ param ad_cfg_orig: the ad config as present in the YAML file
+        @ param published_ads: json list of published ads
+        @ param mode: the mode of ad editing, either publishing a new or updating an existing ad
         """
 
         if mode == AdUpdateStrategy.REPLACE:
@@ -2256,7 +2462,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def download_ads(self) -> None:
         """
         Determines which download mode was chosen with the arguments, and calls the specified download routine.
-        This downloads either all, only unsaved (new), or specific ads given by ID.
+        This downloads either all, only unsaved(new), or specific ads given by ID.
         """
         # Fetch published ads once from manage-ads JSON to avoid repetitive API calls during extraction
         # Build lookup dict inline and pass directly to extractor (no cache abstraction needed)
@@ -2345,10 +2551,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     def __get_description(self, ad_cfg:Ad, *, with_affixes:bool) -> str:
         """Get the ad description optionally with prefix and suffix applied.
 
-        Precedence (highest to lowest):
-        1. Direct ad-level affixes (description_prefix/suffix)
-        2. Global flattened affixes (ad_defaults.description_prefix/suffix)
-        3. Legacy global nested affixes (ad_defaults.description.prefix/suffix)
+        Precedence(highest to lowest):
+        1. Direct ad - level affixes(description_prefix / suffix)
+        2. Global flattened affixes(ad_defaults.description_prefix / suffix)
+        3. Legacy global nested affixes(ad_defaults.description.prefix / suffix)
 
         Args:
             ad_cfg: The ad configuration dictionary
@@ -2420,8 +2626,8 @@ def main(args:list[str]) -> None:
         print(
             textwrap.dedent(rf"""
          _    _      _                           _                       _           _
-        | | _| | ___(_)_ __   __ _ _ __  _______(_) __ _  ___ _ __      | |__   ___ | |_
-        | |/ / |/ _ \ | '_ \ / _` | '_ \|_  / _ \ |/ _` |/ _ \ '_ \ ____| '_ \ / _ \| __|
+        | | _ | | ___(_)_ __   __ _ _ __  _______(_) __ _  ___ _ __ | |__   ___ | |_
+        | | / / | / _ \ | '_ \ / _` | '_ \|_  / _ \ |/ _` |/ _ \ '_ \ ____| '_ \ / _ \| __|
         |   <| |  __/ | | | | (_| | | | |/ /  __/ | (_| |  __/ | | |____| |_) | (_) | |_
         |_|\_\_|\___|_|_| |_|\__,_|_| |_/___\___|_|\__, |\___|_| |_|    |_.__/ \___/ \__|
                                                    |___/
