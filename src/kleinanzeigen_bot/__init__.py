@@ -1100,7 +1100,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.debug("Consent banner detected, clicking 'Alle akzeptieren'...")
             await self.web_click(By.ID, "gdpr-banner-accept")
         except TimeoutError:
-            pass
+            pass  # Banner not present; nothing to dismiss
 
     async def _auth_probe_login_state(self) -> LoginState:
         """Probe an auth-required endpoint to classify login state.
