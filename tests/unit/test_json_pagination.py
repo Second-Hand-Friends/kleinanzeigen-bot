@@ -256,3 +256,26 @@ class TestJSONPagination:
 
             if result != []:
                 pytest.fail(f"Expected empty list on timeout, got {result}")
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_non_strict_handles_non_string_content_type(self, bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
+        """Non-strict mode should gracefully stop on unexpected non-string content types."""
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.return_value = {"content": None}
+
+            with caplog.at_level("WARNING"):
+                result = await bot._fetch_published_ads(strict = False)
+
+            if result != []:
+                pytest.fail(f"expected empty result on non-string content in non-strict mode, got: {result}")
+            if "Unexpected response content type on page 1: NoneType" not in caplog.text:
+                pytest.fail(f"expected non-string content warning in logs, got: {caplog.text}")
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_strict_raises_on_non_string_content_type(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should fail closed on unexpected non-string content types."""
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.return_value = {"content": None}
+
+            with pytest.raises(TypeError, match = "Unexpected response content type on page 1: NoneType"):
+                await bot._fetch_published_ads(strict = True)

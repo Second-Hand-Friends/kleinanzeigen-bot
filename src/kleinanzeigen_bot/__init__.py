@@ -1470,9 +1470,19 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 break
 
             content = response.get("content", "")
+            if isinstance(content, bytearray):
+                content = bytes(content)
+            if isinstance(content, bytes):
+                content = content.decode("utf-8", errors = "replace")
+            if not isinstance(content, str):
+                if strict:
+                    raise TypeError(f"Unexpected response content type on page {page}: {type(content).__name__}")
+                LOG.warning("Unexpected response content type on page %s: %s", page, type(content).__name__)
+                break
+
             try:
                 json_data = json.loads(content)
-            except json.JSONDecodeError as ex:
+            except (json.JSONDecodeError, TypeError) as ex:
                 if not content:
                     if strict:
                         raise ValueError(f"Empty JSON response content on page {page}") from ex

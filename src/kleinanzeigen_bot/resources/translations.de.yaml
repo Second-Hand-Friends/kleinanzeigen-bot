@@ -39,6 +39,7 @@ kleinanzeigen_bot/__init__.py:
     "Stopping pagination after %s pages to avoid infinite loop": "Stoppe die Seitenaufschaltung nach %s Seiten, um eine Endlosschleife zu vermeiden"
     "Pagination request failed on page %s: %s": "Seitenabfrage auf Seite %s fehlgeschlagen: %s"
     "Unexpected pagination response type on page %s: %s": "Unerwarteter Typ der Paginierungsantwort auf Seite %s: %s"
+    "Unexpected response content type on page %s: %s": "Unerwarteter Antwortinhalt-Typ auf Seite %s: %s"
     "Unexpected JSON payload on page %s (content: %s)": "Unerwartete JSON-Antwort auf Seite %s (Inhalt: %s)"
     "Unexpected 'ads' type on page %s: %s value: %s": "Unerwarteter 'ads'-Typ auf Seite %s: %s Wert: %s"
     "Filtered %s malformed ad entries on page %s (sample: %s)": "%s fehlerhafte Anzeigen-Einträge auf Seite %s gefiltert (Beispiel: %s)"
