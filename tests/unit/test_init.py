@@ -475,6 +475,23 @@ class TestKleinanzeigenBotAuthentication:
             assert await test_bot.is_logged_in() is False
 
     @pytest.mark.asyncio
+    async def test_has_logged_out_cta_requires_visible_candidate(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("Einloggen", 0)),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
+        ):
+            assert await test_bot._has_logged_out_cta() is False
+
+    @pytest.mark.asyncio
+    async def test_has_logged_out_cta_accepts_visible_candidate(self, test_bot:KleinanzeigenBot) -> None:
+        test_bot.page = MagicMock()
+        with (
+            patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("Einloggen", 0)),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+        ):
+            assert await test_bot._has_logged_out_cta() is True
+
+    @pytest.mark.asyncio
     async def test_is_logged_in_uses_selector_group_timeout_key(self, test_bot:KleinanzeigenBot) -> None:
         """Verify login detection uses selector-group lookup with login_detection timeout key."""
         with patch.object(
@@ -609,11 +626,15 @@ class TestKleinanzeigenBotAuthentication:
 
     @pytest.mark.asyncio
     async def test_get_login_state_returns_logged_out_when_cta_detected(self, test_bot:KleinanzeigenBot) -> None:
-        with patch.object(
-            test_bot,
-            "web_text_first_available",
-            side_effect = [TimeoutError(), TimeoutError(), ("Hier einloggen", 0), ("Hier einloggen", 0)],
-        ) as web_text:
+        test_bot.page = MagicMock()
+        with (
+            patch.object(
+                test_bot,
+                "web_text_first_available",
+                side_effect = [TimeoutError(), TimeoutError(), ("Hier einloggen", 0), ("Hier einloggen", 0)],
+            ) as web_text,
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+        ):
             assert await test_bot.get_login_state() == LoginState.LOGGED_OUT
             assert web_text.await_count == 4
 
@@ -1173,6 +1194,34 @@ class TestKleinanzeigenBotBasics:
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
             # publish_ad should have been called only once — retry was aborted due to duplicate detection
+            assert publish_mock.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_publish_ads_aborts_retry_when_duplicate_verification_fetch_is_malformed(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """Retry verification must fail closed on malformed published-ads responses."""
+        test_bot.page = mock_page
+
+        ad_cfg = Ad.model_validate(base_ad_config)
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = "ad.yaml"
+
+        fetch_responses = [
+            {"content": json.dumps({"ads": []})},
+            {"content": json.dumps({"ads": []})},
+            [],
+        ]
+
+        with (
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = fetch_responses),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("image upload timeout")) as publish_mock,
+        ):
+            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
             assert publish_mock.await_count == 1
 
     def test_get_root_url(self, test_bot:KleinanzeigenBot) -> None:

@@ -1421,6 +1421,16 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     if 0 <= cta_index < len(_LOGGED_OUT_CTA_SELECTORS)
                     else f"selector_index_{cta_index}"
                 )
+                if 0 <= cta_index < len(_LOGGED_OUT_CTA_SELECTORS):
+                    selector_type, selector_value = _LOGGED_OUT_CTA_SELECTORS[cta_index]
+                    if getattr(self, "page", None) is None:
+                        LOG.debug("Fast logged-out pre-check skipped display validation because no page is available")
+                        return False
+                    if await self.web_check(selector_type, selector_value, Is.DISPLAYED, timeout = quick_dom_timeout):
+                        LOG.debug("Fast logged-out pre-check matched selector '%s'", matched_selector_display)
+                        return True
+                    LOG.debug("Fast logged-out pre-check ignored non-displayed selector '%s'", matched_selector_display)
+                    return False
                 LOG.debug("Fast logged-out pre-check matched selector '%s'", matched_selector_display)
                 return True
         except TimeoutError:
@@ -1433,7 +1443,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return False
 
-    async def _fetch_published_ads(self) -> list[dict[str, Any]]:
+    async def _fetch_published_ads(self, *, strict:bool = False) -> list[dict[str, Any]]:
         """Fetch all published ads, handling API pagination.
 
         Returns:
@@ -1453,10 +1463,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             try:
                 response = await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum={page}")
             except TimeoutError as ex:
+                if strict:
+                    raise
                 LOG.warning("Pagination request failed on page %s: %s", page, ex)
                 break
 
             if not isinstance(response, dict):
+                if strict:
+                    raise TypeError(f"Unexpected pagination response type on page {page}: {type(response).__name__}")
                 LOG.warning("Unexpected pagination response type on page %s: %s", page, type(response).__name__)
                 break
 
@@ -1465,19 +1479,27 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 json_data = json.loads(content)
             except json.JSONDecodeError as ex:
                 if not content:
+                    if strict:
+                        raise ValueError(f"Empty JSON response content on page {page}") from ex
                     LOG.warning("Empty JSON response content on page %s", page)
                     break
+                if strict:
+                    raise ValueError(f"Failed to parse JSON response on page {page}: {ex}") from ex
                 snippet = content[:SNIPPET_LIMIT] + ("..." if len(content) > SNIPPET_LIMIT else "")
                 LOG.warning("Failed to parse JSON response on page %s: %s (content: %s)", page, ex, snippet)
                 break
 
             if not isinstance(json_data, dict):
+                if strict:
+                    raise TypeError(f"Unexpected JSON payload type on page {page}: {type(json_data).__name__}")
                 snippet = content[:SNIPPET_LIMIT] + ("..." if len(content) > SNIPPET_LIMIT else "")
                 LOG.warning("Unexpected JSON payload on page %s (content: %s)", page, snippet)
                 break
 
             page_ads = json_data.get("ads", [])
             if not isinstance(page_ads, list):
+                if strict:
+                    raise TypeError(f"Unexpected 'ads' type on page {page}: {type(page_ads).__name__}")
                 preview = str(page_ads)
                 if len(preview) > SNIPPET_LIMIT:
                     preview = preview[:SNIPPET_LIMIT] + "..."
@@ -1496,10 +1518,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             total_pages = misc.coerce_page_number(paging.get("last"))
 
             if current_page_num is None:
+                if strict:
+                    raise ValueError(f"Invalid 'pageNum' in paging info: {paging.get('pageNum')}")
                 LOG.warning("Invalid 'pageNum' in paging info: %s, stopping pagination", paging.get("pageNum"))
                 break
 
             if total_pages is None:
+                if strict:
+                    raise ValueError("No pagination info found")
                 LOG.debug("No pagination info found, assuming single page")
                 break
 
@@ -1518,6 +1544,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # Use API's next field for navigation (more robust than our counter)
             next_page = misc.coerce_page_number(paging.get("next"))
             if next_page is None:
+                if strict:
+                    raise ValueError(f"Invalid 'next' page value in paging info: {paging.get('next')}")
                 LOG.warning("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
                 break
             page = next_page
@@ -1687,7 +1715,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def _detect_new_published_ad_ids(self, ads_before_publish:set[str], ad_title:str) -> set[str] | None:
         try:
-            current_ads = await self._fetch_published_ads()
+            current_ads = await self._fetch_published_ads(strict = True)
         except Exception as ex:  # noqa: BLE001
             LOG.warning(
                 "Could not verify published ads after failed attempt for '%s': %s -- aborting retries to prevent duplicates.",
