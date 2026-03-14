@@ -188,6 +188,17 @@ class TestJSONPagination:
             mock_request.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_fetch_published_ads_strict_raises_on_missing_paging_dict(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should fail closed when paging metadata is missing."""
+        response_data = {"ads": [{"id": 1}, {"id": 2}]}
+
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.return_value = {"content": json.dumps(response_data)}
+
+            with pytest.raises(ValueError, match = "Missing or invalid paging info on page 1: NoneType"):
+                await bot._fetch_published_ads(strict = True)
+
+    @pytest.mark.asyncio
     async def test_fetch_published_ads_non_integer_paging_values(self, bot:KleinanzeigenBot) -> None:
         """Test handling of non-integer paging values."""
         response_data = {"ads": [{"id": 1}], "paging": {"pageNum": "invalid", "last": "also-invalid"}}
