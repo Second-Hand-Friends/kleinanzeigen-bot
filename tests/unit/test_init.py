@@ -17,7 +17,7 @@ from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, DiagnosticsConfig, PublishingConfig
 from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
-from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element, Is
+from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
 @pytest.fixture
@@ -469,38 +469,29 @@ class TestKleinanzeigenBotAuthentication:
                 test_bot,
                 "web_text_first_available",
                 new_callable = AsyncMock,
-                side_effect = [("nicht-eingeloggt", 0), ("kein user signal", 0), ("Hier einloggen", 0)],
+                side_effect = [("nicht-eingeloggt", 0), ("kein user signal", 0)],
             ),
+            patch.object(test_bot, "_has_logged_out_cta", new_callable = AsyncMock, return_value = False),
         ):
             assert await test_bot.is_logged_in() is False
 
     @pytest.mark.asyncio
     async def test_has_logged_out_cta_requires_visible_candidate(self, test_bot:KleinanzeigenBot) -> None:
-        test_bot.page = MagicMock()
+        matched_element = MagicMock(spec = Element)
         with (
-            patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("Einloggen", 0)),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False) as mock_web_check,
+            patch.object(test_bot, "web_find_first_available", new_callable = AsyncMock, return_value = (matched_element, 0)),
+            patch.object(test_bot, "_extract_visible_text", new_callable = AsyncMock, return_value = ""),
         ):
             assert await test_bot._has_logged_out_cta() is False
-            mock_web_check.assert_awaited_once()
-            assert mock_web_check.await_args is not None
-            assert mock_web_check.await_args.args[0] is By.CSS_SELECTOR
-            assert mock_web_check.await_args.args[1] == 'a[href*="einloggen"]'
-            assert mock_web_check.await_args.args[2] is Is.DISPLAYED
 
     @pytest.mark.asyncio
     async def test_has_logged_out_cta_accepts_visible_candidate(self, test_bot:KleinanzeigenBot) -> None:
-        test_bot.page = MagicMock()
+        matched_element = MagicMock(spec = Element)
         with (
-            patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("Einloggen", 0)),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True) as mock_web_check,
+            patch.object(test_bot, "web_find_first_available", new_callable = AsyncMock, return_value = (matched_element, 0)),
+            patch.object(test_bot, "_extract_visible_text", new_callable = AsyncMock, return_value = "Einloggen"),
         ):
             assert await test_bot._has_logged_out_cta() is True
-            mock_web_check.assert_awaited_once()
-            assert mock_web_check.await_args is not None
-            assert mock_web_check.await_args.args[0] is By.CSS_SELECTOR
-            assert mock_web_check.await_args.args[1] == 'a[href*="einloggen"]'
-            assert mock_web_check.await_args.args[2] is Is.DISPLAYED
 
     @pytest.mark.asyncio
     async def test_is_logged_in_uses_selector_group_timeout_key(self, test_bot:KleinanzeigenBot) -> None:
@@ -574,7 +565,8 @@ class TestKleinanzeigenBotAuthentication:
 
         with (
             caplog.at_level("DEBUG"),
-            patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError(), TimeoutError()]),
+            patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError()]),
+            patch.object(test_bot, "_has_logged_out_cta", new_callable = AsyncMock, return_value = False),
         ):
             assert await test_bot.is_logged_in(include_probe = False) is False
 
@@ -591,7 +583,8 @@ class TestKleinanzeigenBotAuthentication:
 
         with (
             caplog.at_level("DEBUG"),
-            patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError(), TimeoutError()]),
+            patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError()]),
+            patch.object(test_bot, "_has_logged_out_cta", new_callable = AsyncMock, return_value = False),
         ):
             assert await test_bot.is_logged_in() is False
 
@@ -631,23 +624,28 @@ class TestKleinanzeigenBotAuthentication:
 
     @pytest.mark.asyncio
     async def test_get_login_state_returns_unknown_when_dom_checks_are_inconclusive(self, test_bot:KleinanzeigenBot) -> None:
-        with patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError(), TimeoutError(), TimeoutError()]) as web_text:
+        with (
+            patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError()]) as web_text,
+            patch.object(test_bot, "web_find_first_available", side_effect = TimeoutError()) as cta_find,
+        ):
             assert await test_bot.get_login_state() == LoginState.UNKNOWN
-            assert web_text.await_count == 4
+            assert web_text.await_count == 2
+            assert cta_find.await_count == 2
 
     @pytest.mark.asyncio
     async def test_get_login_state_returns_logged_out_when_cta_detected(self, test_bot:KleinanzeigenBot) -> None:
-        test_bot.page = MagicMock()
+        matched_element = MagicMock(spec = Element)
         with (
             patch.object(
                 test_bot,
                 "web_text_first_available",
-                side_effect = [TimeoutError(), TimeoutError(), ("Hier einloggen", 0), ("Hier einloggen", 0)],
+                side_effect = [TimeoutError(), TimeoutError()],
             ) as web_text,
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "web_find_first_available", new_callable = AsyncMock, return_value = (matched_element, 0)),
+            patch.object(test_bot, "_extract_visible_text", new_callable = AsyncMock, return_value = "Hier einloggen"),
         ):
             assert await test_bot.get_login_state() == LoginState.LOGGED_OUT
-            assert web_text.await_count == 4
+            assert web_text.await_count == 2
 
     @pytest.mark.asyncio
     async def test_get_login_state_unknown_captures_diagnostics_when_enabled(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
@@ -660,6 +658,7 @@ class TestKleinanzeigenBotAuthentication:
 
         with (
             patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError(), TimeoutError(), TimeoutError()]),
+            patch.object(test_bot, "web_find_first_available", side_effect = TimeoutError()),
         ):
             assert await test_bot.get_login_state() == LoginState.UNKNOWN
 
@@ -677,6 +676,7 @@ class TestKleinanzeigenBotAuthentication:
 
         with (
             patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError(), TimeoutError(), TimeoutError()]),
+            patch.object(test_bot, "web_find_first_available", side_effect = TimeoutError()),
         ):
             assert await test_bot.get_login_state() == LoginState.UNKNOWN
 
@@ -712,6 +712,7 @@ class TestKleinanzeigenBotAuthentication:
                     TimeoutError(),
                 ],
             ),
+            patch.object(test_bot, "web_find_first_available", side_effect = TimeoutError()),
             patch("kleinanzeigen_bot.sys.stdin", stdin_mock),
             patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
@@ -739,6 +740,7 @@ class TestKleinanzeigenBotAuthentication:
 
         with (
             patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError(), TimeoutError(), TimeoutError()]),
+            patch.object(test_bot, "web_find_first_available", side_effect = TimeoutError()),
             patch("kleinanzeigen_bot.sys.stdin", stdin_mock),
             patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
         ):

@@ -1410,12 +1410,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         tried_logged_out_selectors = _format_login_detection_selectors(_LOGGED_OUT_CTA_SELECTORS)
 
         try:
-            cta_text, cta_index = await self.web_text_first_available(
+            cta_element, cta_index = await self.web_find_first_available(
                 _LOGGED_OUT_CTA_SELECTORS,
                 timeout = quick_dom_timeout,
                 key = "quick_dom",
                 description = "login_detection(logged_out_cta)",
             )
+            cta_text = await self._extract_visible_text(cta_element)
             if cta_text.strip():
                 matched_selector_display = (
                     f"{_LOGGED_OUT_CTA_SELECTORS[cta_index][0].name}={_LOGGED_OUT_CTA_SELECTORS[cta_index][1]}"
@@ -1423,15 +1424,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     else f"selector_index_{cta_index}"
                 )
                 if 0 <= cta_index < len(_LOGGED_OUT_CTA_SELECTORS):
-                    selector_type, selector_value = _LOGGED_OUT_CTA_SELECTORS[cta_index]
-                    if getattr(self, "page", None) is None:
-                        LOG.debug("Fast logged-out pre-check skipped display validation because no page is available")
-                        return False
-                    if await self.web_check(selector_type, selector_value, Is.DISPLAYED, timeout = quick_dom_timeout):
-                        LOG.debug("Fast logged-out pre-check matched selector '%s'", matched_selector_display)
-                        return True
-                    LOG.debug("Fast logged-out pre-check ignored non-displayed selector '%s'", matched_selector_display)
-                    return False
+                    LOG.debug("Fast logged-out pre-check matched selector '%s'", matched_selector_display)
+                    return True
                 LOG.debug("Fast logged-out pre-check got unexpected selector index '%s'; failing closed", cta_index)
                 return False
         except TimeoutError:
@@ -1507,7 +1501,26 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.warning("Unexpected 'ads' type on page %s: %s value: %s", page, type(page_ads).__name__, preview)
                 break
 
-            ads.extend(page_ads)
+            filtered_page_ads:list[dict[str, Any]] = []
+            rejected_count = 0
+            rejected_preview:str | None = None
+            for entry in page_ads:
+                if isinstance(entry, dict):
+                    filtered_page_ads.append(entry)
+                    continue
+                rejected_count += 1
+                if strict:
+                    raise TypeError(f"Unexpected ad entry type on page {page}: {type(entry).__name__}")
+                if rejected_preview is None:
+                    rejected_preview = repr(entry)
+
+            if rejected_count > 0:
+                preview = rejected_preview or "<none>"
+                if len(preview) > SNIPPET_LIMIT:
+                    preview = preview[:SNIPPET_LIMIT] + "..."
+                LOG.warning("Filtered %s malformed ad entries on page %s (sample: %s)", rejected_count, page, preview)
+
+            ads.extend(filtered_page_ads)
 
             paging = json_data.get("paging")
             if not isinstance(paging, dict):

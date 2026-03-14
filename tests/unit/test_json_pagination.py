@@ -220,6 +220,33 @@ class TestJSONPagination:
                 pytest.fail(f"expected empty list when 'ads' is not a list, got: {result}")
 
     @pytest.mark.asyncio
+    async def test_fetch_published_ads_strict_rejects_non_dict_entries(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should reject malformed entries inside ads list."""
+        response_data = {"ads": [42, {"id": 1}], "paging": {"pageNum": 1, "last": 1}}
+
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.return_value = {"content": json.dumps(response_data)}
+
+            with pytest.raises(TypeError, match = "Unexpected ad entry type on page 1: int"):
+                await bot._fetch_published_ads(strict = True)
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_non_strict_filters_non_dict_entries(self, bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
+        """Non-strict mode should filter malformed entries and continue."""
+        response_data = {"ads": [42, {"id": 1}, "broken"], "paging": {"pageNum": 1, "last": 1}}
+
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.return_value = {"content": json.dumps(response_data)}
+
+            with caplog.at_level("WARNING"):
+                result = await bot._fetch_published_ads(strict = False)
+
+            if result != [{"id": 1}]:
+                pytest.fail(f"expected malformed entries to be filtered out, got: {result}")
+            if "Filtered 2 malformed ad entries on page 1" not in caplog.text:
+                pytest.fail(f"expected malformed-entry warning in logs, got: {caplog.text}")
+
+    @pytest.mark.asyncio
     async def test_fetch_published_ads_timeout(self, bot:KleinanzeigenBot) -> None:
         """Test handling of timeout during pagination."""
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
