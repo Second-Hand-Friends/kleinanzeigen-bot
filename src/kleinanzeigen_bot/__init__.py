@@ -1560,7 +1560,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             try:
                 pre_publish_ads = await self._fetch_published_ads()
                 ads_before_publish:set[str] = {str(x["id"]) for x in pre_publish_ads if x.get("id")}
-            except Exception:  # noqa: BLE001
+            except Exception as ex:  # noqa: BLE001
+                LOG.warning("Could not fetch fresh published-ads baseline for '%s': %s. Falling back to initial snapshot.", ad_cfg.title, ex)
                 ads_before_publish = {str(x["id"]) for x in published_ads if x.get("id")}
             for attempt in range(1, max_retries + 1):
                 try:
@@ -1587,8 +1588,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                                 )
                                 failed_count += 1
                                 break
-                        except Exception:  # noqa: BLE001
-                            LOG.warning("Could not verify published ads after failed attempt -- aborting retries to prevent duplicates.")
+                        except Exception as verify_ex:  # noqa: BLE001
+                            LOG.warning(
+                                "Could not verify published ads after failed attempt for '%s': %s -- aborting retries to prevent duplicates.",
+                                ad_cfg.title, verify_ex,
+                            )
                             failed_count += 1
                             break
                         LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
