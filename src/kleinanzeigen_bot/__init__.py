@@ -1821,7 +1821,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         break
 
                     LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
-                    await self.web_sleep(2)  # Wait before retry
+                    await self.web_sleep(2_000)  # Wait before retry
 
             # Check publishing result separately (no retry - ad is already submitted)
             if success:

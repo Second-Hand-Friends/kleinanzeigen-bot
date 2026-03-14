@@ -1180,6 +1180,35 @@ class TestKleinanzeigenBotBasics:
             delete_ad_mock.assert_awaited_once_with(ad_cfgs[0][1], [], delete_old_ads_by_title = False)
 
     @pytest.mark.asyncio
+    async def test_publish_ads_uses_millisecond_retry_delay_on_retryable_failure(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """Retry branch should sleep with explicit millisecond delay."""
+        test_bot.page = mock_page
+        test_bot.keep_old_ads = True
+
+        ad_cfg = Ad.model_validate(base_ad_config)
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = "ad.yaml"
+        ads_response = {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})}
+
+        with (
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ads_response),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = [TimeoutError("transient"), None]) as publish_mock,
+            patch.object(test_bot, "_detect_new_published_ad_ids", new_callable = AsyncMock, return_value = set()) as detect_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+        ):
+            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
+            assert publish_mock.await_count == 2
+            detect_mock.assert_awaited_once()
+            sleep_mock.assert_awaited_once_with(2_000)
+
+    @pytest.mark.asyncio
     async def test_publish_ads_aborts_retry_on_duplicate_detection(
         self,
         test_bot:KleinanzeigenBot,
