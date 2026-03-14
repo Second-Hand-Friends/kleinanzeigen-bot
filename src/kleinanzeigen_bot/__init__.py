@@ -1535,7 +1535,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             paging = json_data.get("paging")
             if not isinstance(paging, dict):
                 if strict:
-                    raise ValueError(f"Missing or invalid paging info on page {page}: {type(paging).__name__}")
+                    raise ValueError(_("Missing or invalid paging info on page %s: %s") % (page, type(paging).__name__))
                 LOG.debug("No paging dict found on page %s, assuming single page", page)
                 break
 

@@ -1028,9 +1028,10 @@ class TestKleinanzeigenBotDiagnostics:
         ad_cfg = Ad.model_validate(diagnostics_ad_config)
         ad_cfg_orig = copy.deepcopy(diagnostics_ad_config)
         ad_file = str(tmp_path / "ad_000001_Test.yml")
+        ads_response = {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})}
 
         with (
-            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps({"ads": []})}),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ads_response),
             patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
@@ -1069,9 +1070,10 @@ class TestKleinanzeigenBotDiagnostics:
         ad_cfg = Ad.model_validate(diagnostics_ad_config)
         ad_cfg_orig = copy.deepcopy(diagnostics_ad_config)
         ad_file = str(tmp_path / "ad_000001_Test.yml")
+        ads_response = {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})}
 
         with (
-            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps({"ads": []})}),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ads_response),
             patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])

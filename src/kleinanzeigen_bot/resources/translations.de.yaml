@@ -47,6 +47,7 @@ kleinanzeigen_bot/__init__.py:
     "No ads found on page %s, stopping pagination": "Keine Anzeigen auf Seite %s gefunden, beende Paginierung"
     "Invalid 'next' page value in paging info: %s, stopping pagination": "Ungültiger 'next'-Seitenwert in Paginierungsinfo: %s, beende Paginierung"
     "Invalid 'pageNum' in paging info: %s, stopping pagination": "Ungültiger 'pageNum'-Wert in Paginierungsinfo: %s, beende Paginierung"
+    "Missing or invalid paging info on page %s: %s": "Fehlende oder ungültige Paginierungsinfo auf Seite %s: %s"
 
   __check_ad_changed:
     "Hash comparison for [%s]:": "Hash-Vergleich für [%s]:"
