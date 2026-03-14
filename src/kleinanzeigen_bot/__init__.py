@@ -1000,7 +1000,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             await ainput(_("Press a key to continue..."))
         except TimeoutError:
-            LOG.debug("No captcha detected within timeout on login page")
+            page_context = "login page" if is_login_page else "publish flow"
+            LOG.debug("No captcha detected within timeout on %s", page_context)
 
     async def login(self) -> None:
         sso_navigation_timeout = self._timeout("page_load")
@@ -1431,8 +1432,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         return True
                     LOG.debug("Fast logged-out pre-check ignored non-displayed selector '%s'", matched_selector_display)
                     return False
-                LOG.debug("Fast logged-out pre-check matched selector '%s'", matched_selector_display)
-                return True
+                LOG.debug("Fast logged-out pre-check got unexpected selector index '%s'; failing closed", cta_index)
+                return False
         except TimeoutError:
             if log_timeout:
                 LOG.debug(
@@ -1716,6 +1717,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def _detect_new_published_ad_ids(self, ads_before_publish:set[str], ad_title:str) -> set[str] | None:
         try:
             current_ads = await self._fetch_published_ads(strict = True)
+            current_ad_ids:set[str] = set()
+            for current_ad in current_ads:
+                if not isinstance(current_ad, dict):
+                    # Keep duplicate-prevention verification fail-closed: malformed entries
+                    # must abort retries rather than risk creating duplicate listings.
+                    LOG.debug("Malformed ad entry in strict duplicate verification: type=%s value=%s", type(current_ad).__name__, repr(current_ad)[:100])
+                    raise TypeError(f"Unexpected ad entry type: {type(current_ad).__name__}")
+                if current_ad.get("id"):
+                    current_ad_ids.add(str(current_ad["id"]))
         except Exception as ex:  # noqa: BLE001
             LOG.warning(
                 "Could not verify published ads after failed attempt for '%s': %s -- aborting retries to prevent duplicates.",
@@ -1723,8 +1733,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 ex,
             )
             return None
-
-        current_ad_ids = {str(x["id"]) for x in current_ads if x.get("id")}
         return current_ad_ids - ads_before_publish
 
     async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:

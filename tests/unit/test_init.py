@@ -17,7 +17,7 @@ from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, DiagnosticsConfig, PublishingConfig
 from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
-from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
+from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element, Is
 
 
 @pytest.fixture
@@ -476,20 +476,31 @@ class TestKleinanzeigenBotAuthentication:
 
     @pytest.mark.asyncio
     async def test_has_logged_out_cta_requires_visible_candidate(self, test_bot:KleinanzeigenBot) -> None:
+        test_bot.page = MagicMock()
         with (
             patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("Einloggen", 0)),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False) as mock_web_check,
         ):
             assert await test_bot._has_logged_out_cta() is False
+            mock_web_check.assert_awaited_once()
+            assert mock_web_check.await_args is not None
+            assert mock_web_check.await_args.args[0] is By.CSS_SELECTOR
+            assert mock_web_check.await_args.args[1] == 'a[href*="einloggen"]'
+            assert mock_web_check.await_args.args[2] is Is.DISPLAYED
 
     @pytest.mark.asyncio
     async def test_has_logged_out_cta_accepts_visible_candidate(self, test_bot:KleinanzeigenBot) -> None:
         test_bot.page = MagicMock()
         with (
             patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, return_value = ("Einloggen", 0)),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True) as mock_web_check,
         ):
             assert await test_bot._has_logged_out_cta() is True
+            mock_web_check.assert_awaited_once()
+            assert mock_web_check.await_args is not None
+            assert mock_web_check.await_args.args[0] is By.CSS_SELECTOR
+            assert mock_web_check.await_args.args[1] == 'a[href*="einloggen"]'
+            assert mock_web_check.await_args.args[2] is Is.DISPLAYED
 
     @pytest.mark.asyncio
     async def test_is_logged_in_uses_selector_group_timeout_key(self, test_bot:KleinanzeigenBot) -> None:
@@ -1214,6 +1225,34 @@ class TestKleinanzeigenBotBasics:
             {"content": json.dumps({"ads": []})},
             {"content": json.dumps({"ads": []})},
             [],
+        ]
+
+        with (
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = fetch_responses),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("image upload timeout")) as publish_mock,
+        ):
+            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
+            assert publish_mock.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_publish_ads_aborts_retry_when_duplicate_verification_ads_entries_are_malformed(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """Retry verification must fail closed when strict fetch returns non-dict ad entries."""
+        test_bot.page = mock_page
+
+        ad_cfg = Ad.model_validate(base_ad_config)
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = "ad.yaml"
+
+        fetch_responses = [
+            {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})},
+            {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})},
+            {"content": json.dumps({"ads": [42], "paging": {"pageNum": 1, "last": 1}})},
         ]
 
         with (
