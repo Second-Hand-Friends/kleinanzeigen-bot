@@ -1022,7 +1022,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # m-einloggen-sso.html triggers immediate server-side redirect to Auth0
         # This avoids waiting for JS on m-einloggen.html which may not execute in headless mode
         try:
-            await asyncio.wait_for(self.web_open(f"{self.root_url}/m-einloggen-sso.html"), timeout = sso_navigation_timeout)
+            await self.web_open(f"{self.root_url}/m-einloggen-sso.html", timeout = sso_navigation_timeout)
         except TimeoutError:
             LOG.warning("Timeout navigating to SSO login page after %.1fs", sso_navigation_timeout)
             await self._capture_login_detection_diagnostics_if_enabled()
@@ -1038,6 +1038,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # diagnostics are captured before the original error is re-raised.
             await self._capture_login_detection_diagnostics_if_enabled()
             raise
+
+        await self._dismiss_consent_banner()
 
         state = await self.get_login_state()
         if state == LoginState.LOGGED_IN:
@@ -1135,7 +1137,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         host = (parsed.hostname or "").lower()
         path = parsed.path.lower()
 
-        if not host.endswith("kleinanzeigen.de"):
+        if host != "kleinanzeigen.de" and not host.endswith(".kleinanzeigen.de"):
             return False
         if host == "login.kleinanzeigen.de":
             return False
@@ -1195,6 +1197,21 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.warning("############################################")
         await ainput(_("Press ENTER when done..."))
 
+    async def _dismiss_consent_banner(self) -> None:
+        """Dismiss the GDPR/TCF consent banner if it is present.
+
+        This banner can appear on any page navigation (not just after login) and blocks
+        all form interaction until dismissed. Uses a short timeout to avoid slowing down
+        the flow when the banner is already gone.
+        """
+        try:
+            banner_timeout = self._timeout("quick_dom")
+            await self.web_find(By.ID, "gdpr-banner-accept", timeout = banner_timeout)
+            LOG.debug("Consent banner detected, clicking 'Alle akzeptieren'...")
+            await self.web_click(By.ID, "gdpr-banner-accept")
+        except TimeoutError:
+            LOG.debug("Consent banner not present; continuing without dismissal")
+
     async def _check_email_verification(self) -> None:
         email_timeout = self._timeout("email_verification")
         await self.web_find(By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout = email_timeout)
@@ -1209,11 +1226,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         await self.web_click(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
 
     async def get_login_state(self, *, capture_diagnostics:bool = True) -> LoginState:
-        """Determine current login state using DOM-first detection.
+        """Determine current login state using DOM - first detection.
 
         Order:
-        1) DOM-based logged-in check via `is_logged_in(include_probe=False)`
-        2) Logged-out CTA check
+        1) DOM - based logged - in check via `is_logged_in(include_probe=False)`
+        2) Logged - out CTA check
         3) If inconclusive, optionally capture diagnostics and return `UNKNOWN`
         """
         # Prefer DOM-based checks first to minimize bot-like behavior and avoid
@@ -1668,6 +1685,20 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Check for success messages
         return await self.web_check(By.ID, "checking-done", Is.DISPLAYED) or await self.web_check(By.ID, "not-completed", Is.DISPLAYED)
 
+    async def _detect_new_published_ad_ids(self, ads_before_publish:set[str], ad_title:str) -> set[str] | None:
+        try:
+            current_ads = await self._fetch_published_ads()
+        except Exception as ex:  # noqa: BLE001
+            LOG.warning(
+                "Could not verify published ads after failed attempt for '%s': %s -- aborting retries to prevent duplicates.",
+                ad_title,
+                ex,
+            )
+            return None
+
+        current_ad_ids = {str(x["id"]) for x in current_ads if x.get("id")}
+        return current_ad_ids - ads_before_publish
+
     async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
         failed_count = 0
@@ -1686,6 +1717,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             success = False
 
             # Retry loop only for publish_ad (before submission completes)
+            # Fetch a fresh baseline right before the retry loop to avoid stale state
+            # from earlier successful publishes in multi-ad runs (see #874)
+            try:
+                pre_publish_ads = await self._fetch_published_ads()
+                ads_before_publish:set[str] = {str(x["id"]) for x in pre_publish_ads if x.get("id")}
+            except Exception as ex:  # noqa: BLE001
+                LOG.warning("Could not fetch fresh published-ads baseline for '%s': %s. Falling back to initial snapshot.", ad_cfg.title, ex)
+                ads_before_publish = {str(x["id"]) for x in published_ads if x.get("id")}
             for attempt in range(1, max_retries + 1):
                 try:
                     await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.REPLACE)
@@ -1695,12 +1734,33 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     raise  # Respect task cancellation
                 except (TimeoutError, ProtocolException) as ex:
                     await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
-                    if attempt < max_retries:
-                        LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
-                        await self.web_sleep(2)  # Wait before retry
-                    else:
+                    if attempt >= max_retries:
                         LOG.error("All %s attempts failed for '%s': %s. Skipping ad.", max_retries, ad_cfg.title, ex)
                         failed_count += 1
+                        continue
+
+                    # Before retrying, check if the ad was already created despite the error.
+                    # A partially successful submission followed by a retry would create a duplicate listing,
+                    # which violates kleinanzeigen.de terms of service and can lead to account suspension.
+                    new_ad_ids = await self._detect_new_published_ad_ids(ads_before_publish, ad_cfg.title)
+                    if new_ad_ids is None:
+                        failed_count += 1
+                        break
+                    if new_ad_ids:
+                        LOG.warning(
+                            "Attempt %s/%s failed for '%s': %s. "
+                            "However, a new ad was detected (id: %s) -- aborting retries to prevent duplicates.",
+                            attempt,
+                            max_retries,
+                            ad_cfg.title,
+                            ex,
+                            ", ".join(new_ad_ids),
+                        )
+                        failed_count += 1
+                        break
+
+                    LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
+                    await self.web_sleep(2)  # Wait before retry
 
             # Check publishing result separately (no retry - ad is already submitted)
             if success:
@@ -1724,10 +1784,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[dict[str, Any]], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE
     ) -> None:
         """
-        @param ad_cfg: the effective ad config (i.e. with default values applied etc.)
-        @param ad_cfg_orig: the ad config as present in the YAML file
-        @param published_ads: json list of published ads
-        @param mode: the mode of ad editing, either publishing a new or updating an existing ad
+        @ param ad_cfg: the effective ad config(i.e. with default values applied etc.)
+        @ param ad_cfg_orig: the ad config as present in the YAML file
+        @ param published_ads: json list of published ads
+        @ param mode: the mode of ad editing, either publishing a new or updating an existing ad
         """
 
         if mode == AdUpdateStrategy.REPLACE:
@@ -1743,6 +1803,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         else:
             LOG.info("Updating ad '%s'...", ad_cfg.title)
             await self.web_open(f"{self.root_url}/p-anzeige-bearbeiten.html?adId={ad_cfg.id}")
+
+        await self._dismiss_consent_banner()
 
         if loggers.is_debug(LOG):
             LOG.debug(" -> effective ad meta:")
@@ -2164,11 +2226,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             await self.__set_shipping_options(ad_cfg, mode)
         else:
             special_shipping_selector = '//select[contains(@id, ".versand_s")]'
-            if await self.web_check(By.XPATH, special_shipping_selector, Is.DISPLAYED):
-                # try to set special attribute selector (then we have a commercial account)
+            is_commercial_shipping = False
+            try:
+                has_commercial_selector = await self.web_check(By.XPATH, special_shipping_selector, Is.DISPLAYED, timeout = short_timeout)
+            except TimeoutError:
+                # Element does not exist in DOM (non-commercial account or UI change); fall through to dialog-based shipping.
+                has_commercial_selector = False
+            if has_commercial_selector:
                 shipping_value = "ja" if ad_cfg.shipping_type == "SHIPPING" else "nein"
                 await self.web_select(By.XPATH, special_shipping_selector, shipping_value)
-            else:
+                is_commercial_shipping = True
+            if not is_commercial_shipping:
                 try:
                     # no options. only costs. Set custom shipping cost
                     await self.web_click(By.XPATH, '//button//span[contains(., "Versandmethoden auswählen")]')
@@ -2332,7 +2400,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def download_ads(self) -> None:
         """
         Determines which download mode was chosen with the arguments, and calls the specified download routine.
-        This downloads either all, only unsaved (new), or specific ads given by ID.
+        This downloads either all, only unsaved(new), or specific ads given by ID.
         """
         # Fetch published ads once from manage-ads JSON to avoid repetitive API calls during extraction
         # Build lookup dict inline and pass directly to extractor (no cache abstraction needed)
@@ -2421,10 +2489,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     def __get_description(self, ad_cfg:Ad, *, with_affixes:bool) -> str:
         """Get the ad description optionally with prefix and suffix applied.
 
-        Precedence (highest to lowest):
-        1. Direct ad-level affixes (description_prefix/suffix)
-        2. Global flattened affixes (ad_defaults.description_prefix/suffix)
-        3. Legacy global nested affixes (ad_defaults.description.prefix/suffix)
+        Precedence(highest to lowest):
+        1. Direct ad - level affixes(description_prefix / suffix)
+        2. Global flattened affixes(ad_defaults.description_prefix / suffix)
+        3. Legacy global nested affixes(ad_defaults.description.prefix / suffix)
 
         Args:
             ad_cfg: The ad configuration dictionary
@@ -2496,8 +2564,8 @@ def main(args:list[str]) -> None:
         print(
             textwrap.dedent(rf"""
          _    _      _                           _                       _           _
-        | | _| | ___(_)_ __   __ _ _ __  _______(_) __ _  ___ _ __      | |__   ___ | |_
-        | |/ / |/ _ \ | '_ \ / _` | '_ \|_  / _ \ |/ _` |/ _ \ '_ \ ____| '_ \ / _ \| __|
+        | | _ | | ___(_)_ __   __ _ _ __  _______(_) __ _  ___ _ __ | |__   ___ | |_
+        | | / / | / _ \ | '_ \ / _` | '_ \|_  / _ \ |/ _` |/ _ \ '_ \ ____| '_ \ / _ \| __|
         |   <| |  __/ | | | | (_| | | | |/ /  __/ | (_| |  __/ | | |____| |_) | (_) | |_
         |_|\_\_|\___|_|_| |_|\__,_|_| |_/___\___|_|\__, |\___|_| |_|    |_.__/ \___/ \__|
                                                    |___/

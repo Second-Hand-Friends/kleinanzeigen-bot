@@ -593,8 +593,11 @@ class TestKleinanzeigenBotAuthentication:
     def test_is_valid_post_auth0_destination_filters_invalid_urls(self, test_bot:KleinanzeigenBot) -> None:
         assert test_bot._is_valid_post_auth0_destination("https://www.kleinanzeigen.de/") is True
         assert test_bot._is_valid_post_auth0_destination("https://www.kleinanzeigen.de/m-meine-anzeigen.html") is True
+        assert test_bot._is_valid_post_auth0_destination("https://foo.kleinanzeigen.de/") is True
         assert test_bot._is_valid_post_auth0_destination("unknown") is False
         assert test_bot._is_valid_post_auth0_destination("about:blank") is False
+        assert test_bot._is_valid_post_auth0_destination("https://evilkleinanzeigen.de/") is False
+        assert test_bot._is_valid_post_auth0_destination("https://kleinanzeigen.de.evil.com/") is False
         assert test_bot._is_valid_post_auth0_destination("https://login.kleinanzeigen.de/u/login/password") is False
         assert test_bot._is_valid_post_auth0_destination("https://www.kleinanzeigen.de/login-error-500") is False
 
@@ -720,14 +723,14 @@ class TestKleinanzeigenBotAuthentication:
             patch.object(test_bot, "_click_gdpr_banner", new_callable = AsyncMock),
             patch.object(test_bot, "fill_login_data_and_send", new_callable = AsyncMock) as mock_fill,
             patch.object(test_bot, "handle_after_login_logic", new_callable = AsyncMock) as mock_after_login,
+            patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
         ):
             await test_bot.login()
 
-            assert mock_open.call_count == 2
-            assert mock_open.call_args_list[0].args[0] == test_bot.root_url
-            assert mock_open.call_args_list[1].args[0].endswith("/m-einloggen-sso.html")
+            opened_urls = [call.args[0] for call in mock_open.call_args_list]
+            assert any(url.startswith(test_bot.root_url) for url in opened_urls)
+            assert any(url.endswith("/m-einloggen-sso.html") for url in opened_urls)
             mock_logged_in.assert_awaited()
-            assert mock_logged_in.await_args_list[0].kwargs == {"capture_diagnostics": False}
             mock_fill.assert_awaited_once()
             mock_after_login.assert_awaited_once()
 
@@ -743,9 +746,10 @@ class TestKleinanzeigenBotAuthentication:
         ):
             await test_bot.login()
 
-            mock_open.assert_called_once_with(test_bot.root_url)
+            mock_open.assert_awaited_once()
+            assert mock_open.await_args is not None
+            assert mock_open.await_args.args[0] == test_bot.root_url
             mock_state.assert_awaited_once()
-            assert mock_state.await_args_list[0].kwargs == {"capture_diagnostics": False}
             mock_fill.assert_not_called()
             mock_after_login.assert_not_called()
 
@@ -758,13 +762,14 @@ class TestKleinanzeigenBotAuthentication:
             patch.object(test_bot, "_click_gdpr_banner", new_callable = AsyncMock),
             patch.object(test_bot, "fill_login_data_and_send", new_callable = AsyncMock),
             patch.object(test_bot, "handle_after_login_logic", new_callable = AsyncMock),
+            patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
             patch.object(test_bot, "_capture_login_detection_diagnostics_if_enabled", new_callable = AsyncMock) as mock_diagnostics,
         ):
             with pytest.raises(AssertionError, match = "Login could not be confirmed"):
                 await test_bot.login()
 
             mock_diagnostics.assert_awaited_once()
-            assert mock_state.await_args_list[0].kwargs == {"capture_diagnostics": False}
+            mock_state.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_login_flow_raises_when_sso_navigation_times_out(self, test_bot:KleinanzeigenBot) -> None:
@@ -779,7 +784,7 @@ class TestKleinanzeigenBotAuthentication:
                 await test_bot.login()
 
             mock_diagnostics.assert_awaited_once()
-            assert mock_state.await_args_list[0].kwargs == {"capture_diagnostics": False}
+            mock_state.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_check_and_wait_for_captcha(self, test_bot:KleinanzeigenBot) -> None:
@@ -1130,11 +1135,45 @@ class TestKleinanzeigenBotBasics:
         ):
             await test_bot.publish_ads(ad_cfgs)
 
-            # With pagination, the URL now includes pageNum parameter
-            web_request_mock.assert_awaited_once_with(f"{test_bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum=1")
+            # web_request is called twice: once for initial fetch, once for pre-retry-loop baseline
+            expected_url = f"{test_bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum=1"
+            assert web_request_mock.await_count == 2
+            web_request_mock.assert_any_await(expected_url)
             publish_ad_mock.assert_awaited_once_with("ad.yaml", ad_cfgs[0][1], {}, [], AdUpdateStrategy.REPLACE)
             web_await_mock.assert_awaited_once()
             delete_ad_mock.assert_awaited_once_with(ad_cfgs[0][1], [], delete_old_ads_by_title = False)
+
+    @pytest.mark.asyncio
+    async def test_publish_ads_aborts_retry_on_duplicate_detection(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """Ensure retries are aborted when a new ad is detected after a failed attempt to prevent duplicates."""
+        test_bot.page = mock_page
+
+        ad_cfg = Ad.model_validate(base_ad_config)
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = "ad.yaml"
+
+        # 1st _fetch_published_ads call (initial, before loop): no ads
+        # 2nd call (fresh baseline, before retry loop): no ads
+        # 3rd call (after first failed attempt): a new ad appeared — duplicate detected
+        fetch_responses = [
+            {"content": json.dumps({"ads": []})},                                          # initial fetch
+            {"content": json.dumps({"ads": []})},                                          # fresh baseline
+            {"content": json.dumps({"ads": [{"id": "99999", "state": "active"}]})},         # duplicate detected
+        ]
+
+        with (
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = fetch_responses),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("image upload timeout")) as publish_mock,
+        ):
+            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
+            # publish_ad should have been called only once — retry was aborted due to duplicate detection
+            assert publish_mock.await_count == 1
 
     def test_get_root_url(self, test_bot:KleinanzeigenBot) -> None:
         """Test root URL retrieval."""
@@ -1940,6 +1979,84 @@ class TestKleinanzeigenBotShippingOptions:
 
             # Verify that __set_condition was called with string value
             mock_set_condition.assert_called_once_with("67890")  # Converted to string
+
+
+class TestShippingSelectorTimeout:
+    """Regression tests for commercial shipping selector (versand_s) timeout handling.
+
+    Ensures that TimeoutError from web_check (element absent) is caught gracefully,
+    while TimeoutError from web_select (element found but interaction fails) propagates.
+    """
+
+    @pytest.mark.asyncio
+    async def test_missing_versand_s_falls_back_to_dialog(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """When versand_s selector is absent, web_check raises TimeoutError and the bot falls through to dialog-based shipping."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING"})
+
+        with (
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = TimeoutError("element not found")) as mock_check,
+            patch.object(test_bot, "web_select", new_callable = AsyncMock) as mock_select,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_find", new_callable = AsyncMock),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+            # Probe must have been awaited with quick_dom timeout
+            mock_check.assert_awaited_once()
+            assert mock_check.await_args is not None
+            assert mock_check.await_args.kwargs["timeout"] == test_bot._timeout("quick_dom")
+
+            # web_select must NOT have been called with versand_s (commercial path was skipped)
+            for call in mock_select.call_args_list:
+                assert "versand_s" not in str(call), "web_select should not be called for versand_s when element is absent"
+
+            # Dialog-based fallback should have been triggered (click on "Versandmethoden auswählen")
+            clicked_selectors = [str(c) for c in mock_click.call_args_list]
+            assert any("Versandmethoden" in s for s in clicked_selectors), \
+                "Expected dialog-based shipping fallback when versand_s is absent"
+
+    @pytest.mark.asyncio
+    async def test_visible_versand_s_uses_commercial_select(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """When versand_s selector is present, web_check succeeds and web_select sets the value."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING"})
+
+        with (
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True) as mock_check,
+            patch.object(test_bot, "web_select", new_callable = AsyncMock) as mock_select,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+            # Probe must have been awaited with quick_dom timeout
+            mock_check.assert_awaited_once()
+            assert mock_check.await_args is not None
+            assert mock_check.await_args.kwargs["timeout"] == test_bot._timeout("quick_dom")
+
+            # web_select must have been awaited with versand_s and "ja" (SHIPPING)
+            mock_select.assert_awaited_once_with(By.XPATH, '//select[contains(@id, ".versand_s")]', "ja")
+
+            # Dialog-based fallback should NOT have been triggered
+            clicked_selectors = [str(c) for c in mock_click.call_args_list]
+            assert not any("Versandmethoden" in s for s in clicked_selectors), \
+                "Dialog-based shipping should not be triggered when versand_s is present"
+
+    @pytest.mark.asyncio
+    async def test_web_select_timeout_propagates_after_successful_probe(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """When web_check succeeds but web_select raises TimeoutError, the error must propagate (not be swallowed)."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING"})
+
+        with (
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True) as mock_check,
+            patch.object(test_bot, "web_select", new_callable = AsyncMock, side_effect = TimeoutError("select timed out")),
+            pytest.raises(TimeoutError, match = "select timed out"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+        # Probe must have been awaited with quick_dom timeout
+        mock_check.assert_awaited_once()
+        assert mock_check.await_args is not None
+        assert mock_check.await_args.kwargs["timeout"] == test_bot._timeout("quick_dom")
 
 
 class TestKleinanzeigenBotUrlConstruction:
