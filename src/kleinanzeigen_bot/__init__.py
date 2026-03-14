@@ -1555,7 +1555,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             success = False
 
             # Retry loop only for publish_ad (before submission completes)
-            ads_before_publish:set[str] = {x["id"] for x in published_ads if x.get("id")}
+            # Fetch a fresh baseline right before the retry loop to avoid stale state
+            # from earlier successful publishes in multi-ad runs (see #874)
+            try:
+                pre_publish_ads = await self._fetch_published_ads()
+                ads_before_publish:set[str] = {str(x["id"]) for x in pre_publish_ads if x.get("id")}
+            except Exception:  # noqa: BLE001
+                ads_before_publish = {str(x["id"]) for x in published_ads if x.get("id")}
             for attempt in range(1, max_retries + 1):
                 try:
                     await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.REPLACE)
@@ -1571,7 +1577,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         # which violates kleinanzeigen.de terms of service and can lead to account suspension.
                         try:
                             current_ads = await self._fetch_published_ads()
-                            current_ad_ids = {x["id"] for x in current_ads if x.get("id")}
+                            current_ad_ids = {str(x["id"]) for x in current_ads if x.get("id")}
                             new_ad_ids = current_ad_ids - ads_before_publish
                             if new_ad_ids:
                                 LOG.warning(
