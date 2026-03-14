@@ -1582,13 +1582,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                             if new_ad_ids:
                                 LOG.warning(
                                     "Attempt %s/%s failed for '%s': %s. "
-                                    "However, a new ad was detected (id: %s) — aborting retries to prevent duplicates.",
+                                    "However, a new ad was detected (id: %s) -- aborting retries to prevent duplicates.",
                                     attempt, max_retries, ad_cfg.title, ex, ", ".join(new_ad_ids)
                                 )
                                 failed_count += 1
                                 break
                         except Exception:  # noqa: BLE001
-                            LOG.warning("Could not verify published ads after failed attempt — aborting retries to prevent duplicates.")
+                            LOG.warning("Could not verify published ads after failed attempt -- aborting retries to prevent duplicates.")
                             failed_count += 1
                             break
                         LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
