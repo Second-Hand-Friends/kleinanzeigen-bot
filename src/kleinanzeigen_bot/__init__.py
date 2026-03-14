@@ -1747,7 +1747,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if not isinstance(current_ad, dict):
                     # Keep duplicate-prevention verification fail-closed: malformed entries
                     # must abort retries rather than risk creating duplicate listings.
-                    LOG.debug("Malformed ad entry in strict duplicate verification: type=%s value=%s", type(current_ad).__name__, repr(current_ad)[:100])
+                    entry_length = len(current_ad) if hasattr(current_ad, "__len__") else None
+                    LOG.debug("Malformed ad entry in strict duplicate verification: type=%s length=%s", type(current_ad).__name__, entry_length)
                     raise TypeError(f"Unexpected ad entry type: {type(current_ad).__name__}")
                 if current_ad.get("id"):
                     current_ad_ids.add(str(current_ad["id"]))
