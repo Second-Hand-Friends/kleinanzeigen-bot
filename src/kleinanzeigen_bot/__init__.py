@@ -17,7 +17,7 @@ from wcmatch import glob
 from . import extract, resources
 from ._version import __version__
 from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, Contact, calculate_auto_price, calculate_auto_price_with_trace
-from .model.config_model import Config
+from .model.config_model import DEFAULT_DOWNLOAD_DIR, Config
 from .update_checker import UpdateChecker
 from .utils import diagnostics, dicts, error_handlers, loggers, misc, xdg_paths
 from .utils.exceptions import CaptchaEncountered
@@ -85,9 +85,7 @@ def _repost_cycle_ready(
         return False
 
     if eligible_cycles <= applied_cycles:
-        LOG.info(
-            "Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts", ad_file_relative, applied_cycles, eligible_cycles
-        )
+        LOG.info("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts", ad_file_relative, applied_cycles, eligible_cycles)
         return False
 
     return True
@@ -333,6 +331,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     def _update_check_state_path(self) -> Path:
         return self._workspace_or_raise().state_dir / "update_check_state.json"
 
+    def _resolve_download_dir(self) -> Path:
+        workspace = self._workspace_or_raise()
+        configured_dir = self.config.download.dir
+        trimmed_dir = configured_dir.strip() if configured_dir is not None else ""
+        if not trimmed_dir or trimmed_dir == DEFAULT_DOWNLOAD_DIR:
+            return workspace.download_dir
+        return Path(abspath(trimmed_dir, relative_to = str(Path(self.config_file_path).parent))).resolve()
+
     def _resolve_workspace(self) -> None:
         """
         Resolve workspace paths after CLI args are parsed.
@@ -438,8 +444,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
                     if not self._is_valid_ads_selector({"all", "new", "due", "changed"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, due, changed, or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error(
+                                'Invalid --ads selector: "%s". Use keyword(s) from {all,new,due,changed} or comma-separated numeric IDs.',
+                                self.ads_selector,
+                            )
                             sys.exit(2)
                         self.ads_selector = "due"
 
@@ -457,8 +465,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
                     if not self._is_valid_ads_selector({"all", "changed"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, changed, or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error(
+                                'Invalid --ads selector: "%s". Use keyword(s) from {all,changed} or comma-separated numeric IDs.',
+                                self.ads_selector,
+                            )
                             sys.exit(2)
                         self.ads_selector = "changed"
 
@@ -494,8 +504,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     # Default to all ads if no selector provided, but reject invalid values
                     if not self._is_valid_ads_selector({"all"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error(
+                                'Invalid --ads selector: "%s". Use keyword(s) from {all} or comma-separated numeric IDs.',
+                                self.ads_selector,
+                            )
                             sys.exit(2)
                         LOG.info("Extending all ads within 8-day window...")
                         self.ads_selector = "all"
@@ -513,8 +525,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     # ad IDs depends on selector
                     if not self._is_valid_ads_selector({"all", "new"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error(
+                                'Invalid --ads selector: "%s". Use keyword(s) from {all,new} or comma-separated numeric IDs.',
+                                self.ads_selector,
+                            )
                             sys.exit(2)
                         self.ads_selector = "new"
                     self.load_config()
@@ -1392,6 +1406,21 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             page = next_page
 
         return ads
+
+    def _resolve_download_ad_activity(self, ad_id:int, published_ads_by_id:dict[int, dict[str, Any]]) -> tuple[bool, bool]:
+        """Resolve downloaded ad activity and ownership for numeric selectors.
+
+        Returns:
+            tuple[bool, bool]:
+                active value and ownership (True own / False foreign).
+        """
+        published_ad = published_ads_by_id.get(ad_id)
+        if published_ad is None:
+            # Intentional simplification: a missing ID is treated as foreign.
+            # We explicitly do not model a third "missing but maybe own" state here.
+            return False, False
+
+        return published_ad.get("state") == "active", True
 
     async def delete_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
@@ -2272,9 +2301,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.warning("Skipping ad with non-numeric id: %s", published_ad.get("id"))
         LOG.info("Loaded %s published ads.", len(published_ads_by_id))
 
-        workspace = self._workspace_or_raise()
-        xdg_paths.ensure_directory(workspace.download_dir, "downloaded ads directory")
-        ad_extractor = extract.AdExtractor(self.browser, self.config, workspace.download_dir, published_ads_by_id = published_ads_by_id)
+        download_dir = self._resolve_download_dir()
+        xdg_paths.ensure_directory(download_dir, "downloaded ads directory")
+        LOG.info("Ads download directory: %s", download_dir)
+        ad_extractor = extract.AdExtractor(self.browser, self.config, download_dir, published_ads_by_id = published_ads_by_id)
 
         # Normalize comma-separated keyword selectors; set deduplication collapses "new,new" → {"new"}
         selector_tokens = {s.strip() for s in self.ads_selector.split(",")}
@@ -2337,7 +2367,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             for ad_id in ids:  # call download routine for every id
                 exists = await ad_extractor.navigate_to_ad_page(ad_id)
                 if exists:
-                    await ad_extractor.download_ad(ad_id)
+                    resolved_active, ownership = self._resolve_download_ad_activity(ad_id, published_ads_by_id)
+                    if not ownership:
+                        LOG.warning("Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.", ad_id)
+
+                    await ad_extractor.download_ad(ad_id, active = resolved_active)
                     LOG.info("Downloaded ad with id %d", ad_id)
                 else:
                     LOG.error("The page with the id %d does not exist!", ad_id)

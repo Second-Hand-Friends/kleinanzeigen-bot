@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import asyncio
 from gettext import gettext as _
+from string import Formatter
 
 import json, mimetypes, re, shutil  # isort: skip
 import urllib.error as urllib_error
@@ -26,6 +27,9 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 _BREADCRUMB_MIN_DEPTH:Final[int] = 2
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
+_MAX_FILENAME_COMPONENT_LENGTH:Final[int] = 255
+# Stem is character-count bounded (not byte-count bounded) and reserves room for image suffixes like "__img1234.jpeg".
+_DOWNLOAD_STEM_SUFFIX_BUDGET:Final[int] = len("__img9999.jpeg")
 
 
 class AdExtractor(WebScrapingMixin):
@@ -46,26 +50,168 @@ class AdExtractor(WebScrapingMixin):
         self.download_dir:Path = download_dir
         self.published_ads_by_id:dict[int, dict[str, Any]] = published_ads_by_id or {}
 
-    async def download_ad(self, ad_id:int) -> None:
+    def _render_download_name_with_budget(self, template:str, ad_id:int, title:str, max_length:int) -> str:
+        """Render download names with readable title truncation while preserving id placeholders.
+
+        Rules:
+        - keep fixed template parts (literals and `{id}`) intact when possible,
+        - spend remaining budget on `{title}` placeholders from left to right,
+        - first `{title}` gets priority; repeated titles are truncated later.
+
+        Notes:
+        - if fixed literals are too long, truncate literals before dropping `{id}` content,
+        - literals are preserved as-authored where space permits, so truncating later `{title}` values may leave trailing separators.
+        """
+        sanitized_title = misc.sanitize_folder_name(title, max_length)
+        parsed_template = list(Formatter().parse(template))
+        id_value = str(ad_id)
+
+        fixed_name = template.format(id = ad_id, title = "").strip()
+        remaining_title_budget = max(0, max_length - len(fixed_name))
+        remaining_id_placeholders = sum(1 for _literal, field_name_part, _format_spec, _conversion in parsed_template if field_name_part == "id")
+
+        parts:list[str] = []
+        current_length = 0
+        for literal_text, field_name_part, _format_spec, _conversion in parsed_template:
+            reserved_for_future_ids = remaining_id_placeholders * len(id_value)
+            remaining_length = max_length - current_length
+            literal_length = min(len(literal_text), max(0, remaining_length - reserved_for_future_ids))
+            parts.append(literal_text[:literal_length])
+            current_length += literal_length
+
+            if field_name_part is None:
+                continue
+
+            if field_name_part == "id":
+                remaining_length = max_length - current_length
+                id_part = id_value[:remaining_length]
+                parts.append(id_part)
+                current_length += len(id_part)
+                remaining_id_placeholders -= 1
+                continue
+
+            if field_name_part == "title":
+                reserved_for_future_ids = remaining_id_placeholders * len(id_value)
+                remaining_length = max_length - current_length
+                title_part_length = min(len(sanitized_title), remaining_title_budget, max(0, remaining_length - reserved_for_future_ids))
+                parts.append(sanitized_title[:title_part_length])
+                current_length += title_part_length
+                remaining_title_budget -= title_part_length
+
+        rendered_name = "".join(parts).strip()
+        return misc.sanitize_folder_name(rendered_name, max_length)
+
+    def _render_download_ad_file_stem(self, ad_id:int, title:str) -> str:
+        """Render ad file stem while reserving suffix budget for downloaded image names."""
+        max_stem_length = _MAX_FILENAME_COMPONENT_LENGTH - _DOWNLOAD_STEM_SUFFIX_BUDGET
+        return self._render_download_name_with_budget(self.config.download.ad_file_name_template, ad_id, title, max_stem_length)
+
+    def _render_download_folder_name(self, ad_id:int, title:str) -> str:
+        """Render download folder name using folder_name_max_length as the total cap."""
+        return self._render_download_name_with_budget(self.config.download.folder_name_template, ad_id, title, self.config.download.folder_name_max_length)
+
+    async def download_ad(self, ad_id:int, *, active:bool | None = None) -> None:
         """
         Downloads an ad to a specific location, specified by config and ad ID.
         NOTE: Requires that the driver session currently is on the ad page.
 
         :param ad_id: the ad ID
+        :param active: Optional active state override for downloaded ad config
         """
 
         download_dir = self.download_dir
         LOG.info("Using download directory: %s", download_dir)
 
-        # Extract ad info and determine final directory path
-        ad_cfg, final_dir = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id)
+        # Extract ad info into a staging directory and determine final target directory
+        ad_cfg, staging_dir, final_dir, ad_file_stem = await self._extract_ad_page_info_with_staging_directory_handling(
+            download_dir,
+            ad_id,
+            active = active,
+        )
 
         # Save the ad configuration file (offload to executor to avoid blocking the event loop)
-        ad_file_path = str(Path(final_dir) / f"ad_{ad_id}.yaml")
+        ad_file_path = str(Path(staging_dir) / f"{ad_file_stem}.yaml")
         header_string = (
             "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
         )
-        await asyncio.get_running_loop().run_in_executor(None, lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(mode = "json"), header = header_string))
+        loop = asyncio.get_running_loop()
+        backup_dir = final_dir.with_name(f".bak-{ad_file_stem}")
+
+        if backup_dir == final_dir:
+            raise RuntimeError(
+                _("Internal backup directory collision for ad %(ad_id)s: %(backup)s matches final directory %(final)s. Adjust download templates.")
+                % {"ad_id": ad_id, "backup": backup_dir, "final": final_dir}
+            )
+        if await files.exists(backup_dir):
+            raise RuntimeError(
+                _("Stale backup directory exists for ad %(ad_id)s: %(backup)s. Remove it manually and retry.") % {"ad_id": ad_id, "backup": backup_dir}
+            )
+
+        try:
+            await loop.run_in_executor(None, lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(mode = "json"), header = header_string))
+
+            if await files.exists(final_dir):
+                await loop.run_in_executor(None, final_dir.rename, backup_dir)
+
+            await loop.run_in_executor(None, staging_dir.rename, final_dir)
+
+            if await files.exists(backup_dir):
+                try:
+                    await loop.run_in_executor(None, shutil.rmtree, str(backup_dir))
+                except OSError as exc:
+                    LOG.warning("Could not remove backup directory %s: %s", backup_dir, exc)
+        except Exception:
+            if await files.exists(backup_dir) and not await files.exists(final_dir):
+                await loop.run_in_executor(None, backup_dir.rename, final_dir)
+            if await files.exists(staging_dir):
+                await loop.run_in_executor(None, shutil.rmtree, str(staging_dir))
+            raise
+
+    async def _extract_ad_page_info_with_staging_directory_handling(
+        self, relative_directory:Path, ad_id:int, *, active:bool | None = None
+    ) -> tuple[AdPartial, Path, Path, str]:
+        """Extract ad information into a staging directory and return final target metadata."""
+        title = await self._extract_title_from_ad_page()
+        LOG.info('Extracting title from ad %s: "%s"', ad_id, title)
+        ad_file_stem = self._render_download_ad_file_stem(ad_id, title)
+        final_dir = relative_directory / self._render_download_folder_name(ad_id, title)
+        temp_dir = relative_directory / ad_file_stem
+        current_ad_yaml = final_dir / f"{ad_file_stem}.yaml"
+        folder_template_uses_id = any(
+            field_name_part == "id"
+            for _literal_text, field_name_part, _format_spec, _conversion in Formatter().parse(self.config.download.folder_name_template)
+        )
+
+        if await files.exists(final_dir):
+            if not (folder_template_uses_id or await files.exists(current_ad_yaml)):
+                raise RuntimeError(
+                    _("Directory %(final)s already exists but does not contain %(yaml)s. Move or remove it manually, or adjust download templates, then retry.")
+                    % {"final": final_dir, "yaml": current_ad_yaml.name}
+                )
+        elif await files.exists(temp_dir) and not self.config.download.rename_existing_folders:
+            final_dir = temp_dir
+            LOG.info("Using existing folder for ad %s at %s.", ad_id, final_dir)
+
+        staging_dir = relative_directory / f".tmp-{ad_file_stem}"
+        if staging_dir == final_dir:
+            raise RuntimeError(
+                _("Internal staging directory collision for ad %(ad_id)s: %(staging)s matches final directory %(final)s. Adjust download templates.")
+                % {"ad_id": ad_id, "staging": staging_dir, "final": final_dir}
+            )
+        loop = asyncio.get_running_loop()
+        if await files.exists(staging_dir):
+            raise RuntimeError(
+                _("Stale staging directory exists for ad %(ad_id)s: %(staging)s. Remove it manually and retry.") % {"ad_id": ad_id, "staging": staging_dir}
+            )
+
+        await loop.run_in_executor(None, staging_dir.mkdir)
+        try:
+            ad_cfg = await self._extract_ad_page_info(str(staging_dir), ad_id, ad_file_stem, active = active)
+        except Exception:
+            if await files.exists(staging_dir):
+                await loop.run_in_executor(None, shutil.rmtree, str(staging_dir))
+            raise
+        return ad_cfg, staging_dir, final_dir, ad_file_stem
 
     @staticmethod
     def _download_and_save_image_sync(url:str, directory:str, filename_prefix:str, img_nr:int) -> str | None:
@@ -83,12 +229,12 @@ class AdExtractor(WebScrapingMixin):
             LOG.warning("Failed to download image %s: %s", url, e)
             return None
 
-    async def _download_images_from_ad_page(self, directory:str, ad_id:int) -> list[str]:
+    async def _download_images_from_ad_page(self, directory:str, ad_file_stem:str) -> list[str]:
         """
         Downloads all images of an ad.
 
         :param directory: the path of the directory created for this ad
-        :param ad_id: the ID of the ad to download the images from
+        :param ad_file_stem: the rendered filename stem shared by the ad config and images
         :return: the relative paths for all downloaded images
         """
 
@@ -102,7 +248,7 @@ class AdExtractor(WebScrapingMixin):
             n_images = len(images)
             LOG.info("Found %s.", i18n.pluralize("image", n_images))
 
-            img_fn_prefix = "ad_" + str(ad_id) + "__img"
+            img_fn_prefix = f"{ad_file_stem}__img"
             img_nr = 1
             dl_counter = 0
 
@@ -242,16 +388,18 @@ class AdExtractor(WebScrapingMixin):
         """
         return await self.web_text(By.ID, "viewad-title")
 
-    async def _extract_ad_page_info(self, directory:str, ad_id:int) -> AdPartial:
+    async def _extract_ad_page_info(self, directory:str, ad_id:int, ad_file_stem:str, *, active:bool | None = None) -> AdPartial:
         """
         Extracts ad information and downloads images to the specified directory.
         NOTE: Requires that the driver session currently is on the ad page.
 
         :param directory: the directory to download images to
         :param ad_id: the ad ID
+        :param ad_file_stem: the rendered filename stem shared by the ad config and images
+        :param active: Optional active state override for downloaded ad config
         :return: an AdPartial object containing the ad information
         """
-        info:dict[str, Any] = {"active": True}
+        info:dict[str, Any] = {"active": True if active is None else active}
 
         # Extract title first (needed for directory creation)
         title = await self._extract_title_from_ad_page()
@@ -300,7 +448,7 @@ class AdExtractor(WebScrapingMixin):
         info["price"], info["price_type"] = await self._extract_pricing_info_from_ad_page()
         info["shipping_type"], info["shipping_costs"], info["shipping_options"] = await self._extract_shipping_info_from_ad_page()
         info["sell_directly"] = await self._extract_sell_directly_from_ad_page()
-        info["images"] = await self._download_images_from_ad_page(directory, ad_id)
+        info["images"] = await self._download_images_from_ad_page(directory, ad_file_stem)
         info["contact"] = await self._extract_contact_from_ad_page()
         info["id"] = ad_id
 
@@ -323,13 +471,16 @@ class AdExtractor(WebScrapingMixin):
 
         return ad_cfg
 
-    async def _extract_ad_page_info_with_directory_handling(self, relative_directory:Path, ad_id:int) -> tuple[AdPartial, Path]:
+    async def _extract_ad_page_info_with_directory_handling(
+        self, relative_directory:Path, ad_id:int, *, active:bool | None = None
+    ) -> tuple[AdPartial, Path, str]:
         """
         Extracts ad information and handles directory creation/renaming.
 
         :param relative_directory: Base directory for downloads
         :param ad_id: The ad ID
-        :return: AdPartial with directory information
+        :param active: Optional active state override for downloaded ad config
+        :return: AdPartial with directory information and rendered ad file stem
         """
         # First, extract basic info to get the title
         info:dict[str, Any] = {"active": True}
@@ -340,20 +491,40 @@ class AdExtractor(WebScrapingMixin):
         LOG.info('Extracting title from ad %s: "%s"', ad_id, title)
 
         # Determine the final directory path
-        sanitized_title = misc.sanitize_folder_name(title, self.config.download.folder_name_max_length)
-        final_dir = relative_directory / f"ad_{ad_id}_{sanitized_title}"
-        temp_dir = relative_directory / f"ad_{ad_id}"
+        ad_file_stem = self._render_download_ad_file_stem(ad_id, title)
+        final_dir = relative_directory / self._render_download_folder_name(ad_id, title)
+        temp_dir = relative_directory / ad_file_stem
+        current_ad_yaml = final_dir / f"{ad_file_stem}.yaml"
+        folder_template_uses_id = "{id}" in self.config.download.folder_name_template
 
         loop = asyncio.get_running_loop()
 
         # Handle existing directories
         if await files.exists(final_dir):
-            # If the folder with title already exists, delete it
-            LOG.info("Deleting current folder of ad %s...", ad_id)
-            LOG.debug("Removing directory tree: %s", final_dir)
-            await loop.run_in_executor(None, shutil.rmtree, str(final_dir))
+            if folder_template_uses_id or await files.exists(current_ad_yaml):
+                # If the folder already contains the current ad file, replace it.
+                LOG.info("Deleting current folder of ad %s...", ad_id)
+                LOG.debug("Removing directory tree: %s", final_dir)
+                await loop.run_in_executor(None, shutil.rmtree, str(final_dir))
+            else:
+                LOG.warning(
+                    "Directory %s already exists but does not contain %s. Using fallback directory %s to avoid overwriting another ad.",
+                    final_dir,
+                    current_ad_yaml.name,
+                    temp_dir,
+                )
+                final_dir = temp_dir
 
-        if await files.exists(temp_dir):
+        if final_dir == temp_dir:
+            if await files.exists(final_dir):
+                LOG.info("Deleting current folder of ad %s...", ad_id)
+                LOG.debug("Removing directory tree: %s", final_dir)
+                await loop.run_in_executor(None, shutil.rmtree, str(final_dir))
+
+            LOG.debug("Creating new directory: %s", final_dir)
+            await loop.run_in_executor(None, final_dir.mkdir)
+            LOG.info("New directory for ad created at %s.", final_dir)
+        elif await files.exists(temp_dir):
             if self.config.download.rename_existing_folders:
                 # Rename the old folder to the new name with title
                 LOG.info("Renaming folder from %s to %s for ad %s...", temp_dir.name, final_dir.name, ad_id)
@@ -370,9 +541,9 @@ class AdExtractor(WebScrapingMixin):
             LOG.info("New directory for ad created at %s.", final_dir)
 
         # Now extract complete ad info (including images) to the final directory
-        ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id)
+        ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id, ad_file_stem, active = active)
 
-        return ad_cfg, final_dir
+        return ad_cfg, final_dir, ad_file_stem
 
     async def _extract_category_from_ad_page(self) -> str:
         """

@@ -233,6 +233,7 @@ kleinanzeigen_bot/__init__.py:
     "Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...": "Attributfeld '%s' scheint eine Combobox zu sein (d.h. Texteingabefeld mit Dropdown-Filter)..."
 
   download_ads:
+    "Ads download directory: %s": "Anzeigen-Download-Verzeichnis: %s"
     "Fetching published ads...": "Lade veröffentlichte Anzeigen..."
     "Loaded %s published ads.": "%s veröffentlichte Anzeigen geladen."
     "Scanning your ad overview...": "Scanne Anzeigenübersicht..."
@@ -246,16 +247,17 @@ kleinanzeigen_bot/__init__.py:
     "%s were downloaded from your profile.": "%s wurden aus Ihrem Profil heruntergeladen."
     "new ad": "neue Anzeige"
     "Starting download of ad(s) with the id(s):": "Starte Download der Anzeige(n) mit den ID(s):"
+    "Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.": "Anzeigen-ID %d ist nicht in Ihren veröffentlichten Profilanzeigen. Speichere die heruntergeladene Anzeige als inaktiv."
     "Downloaded ad with id %d": "Anzeige mit der ID %d heruntergeladen"
     "The page with the id %d does not exist!": "Die Seite mit der ID %d existiert nicht!"
 
   run:
     "DONE: No configuration errors found.": "FERTIG: Keine Konfigurationsfehler gefunden."
     "DONE: No active ads found.": "FERTIG: Keine aktiven Anzeigen gefunden."
-    "Invalid --ads selector: \"%s\". Valid values: all, new, due, changed, or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all, new, due, changed oder kommagetrennte numerische IDs."
-    "Invalid --ads selector: \"%s\". Valid values: all, changed, or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all, changed oder kommagetrennte numerische IDs."
-    "Invalid --ads selector: \"%s\". Valid values: all, new, or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all, new oder kommagetrennte numerische IDs."
-    "Invalid --ads selector: \"%s\". Valid values: all or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
+    "Invalid --ads selector: \"%s\". Use keyword(s) from {all,new,due,changed} or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Verwende Schlüsselwort(e) aus {all,new,due,changed} oder kommagetrennte numerische IDs."
+    "Invalid --ads selector: \"%s\". Use keyword(s) from {all,changed} or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Verwende Schlüsselwort(e) aus {all,changed} oder kommagetrennte numerische IDs."
+    "Invalid --ads selector: \"%s\". Use keyword(s) from {all,new} or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Verwende Schlüsselwort(e) aus {all,new} oder kommagetrennte numerische IDs."
+    "Invalid --ads selector: \"%s\". Use keyword(s) from {all} or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Verwende Schlüsselwort(e) aus {all} oder kommagetrennte numerische IDs."
     "DONE: No new/outdated ads found.": "FERTIG: Keine neuen/veralteten Anzeigen gefunden."
     "DONE: No ads to delete found.": "FERTIG: Keine zu löschenden Anzeigen gefunden."
     "DONE: No changed ads found.": "FERTIG: Keine geänderten Anzeigen gefunden."
@@ -283,6 +285,10 @@ kleinanzeigen_bot/extract.py:
 #################################################
   download_ad:
     "Using download directory: %s": "Verwende Download-Verzeichnis: %s"
+    "Could not remove backup directory %s: %s": "Konnte Sicherungsverzeichnis %s nicht entfernen: %s"
+    ? "Internal backup directory collision for ad %(ad_id)s: %(backup)s matches final directory %(final)s. Adjust download templates."
+    : "Interner Sicherungsverzeichnis-Konflikt für Anzeige %(ad_id)s: %(backup)s entspricht dem finalen Verzeichnis %(final)s. Passe die Download-Vorlagen an."
+    "Stale backup directory exists for ad %(ad_id)s: %(backup)s. Remove it manually and retry.": "Veraltetes Sicherungsverzeichnis für Anzeige %(ad_id)s vorhanden: %(backup)s. Entferne es manuell und versuche es erneut."
 
   _download_and_save_image_sync:
     "Failed to download image %s: %s": "Fehler beim Herunterladen des Bildes %s: %s"
@@ -313,9 +319,19 @@ kleinanzeigen_bot/extract.py:
   _extract_ad_page_info_with_directory_handling:
     "Extracting title from ad %s: \"%s\"": "Extrahiere Titel aus Anzeige %s: \"%s\""
     "Deleting current folder of ad %s...": "Lösche aktuellen Ordner der Anzeige %s..."
+    "Directory %s already exists but does not contain %s. Using fallback directory %s to avoid overwriting another ad.": "Verzeichnis %s existiert bereits, enthält aber %s nicht. Verwende Ausweichverzeichnis %s, um das Überschreiben einer anderen Anzeige zu vermeiden."
     "New directory for ad created at %s.": "Neues Verzeichnis für Anzeige erstellt unter %s."
     "Renaming folder from %s to %s for ad %s...": "Benenne Ordner von %s zu %s für Anzeige %s um..."
     "Using existing folder for ad %s at %s.": "Verwende bestehenden Ordner für Anzeige %s unter %s."
+
+  _extract_ad_page_info_with_staging_directory_handling:
+    "Extracting title from ad %s: \"%s\"": "Extrahiere Titel aus Anzeige %s: \"%s\""
+    "Using existing folder for ad %s at %s.": "Verwende bestehenden Ordner für Anzeige %s unter %s."
+    ? "Internal staging directory collision for ad %(ad_id)s: %(staging)s matches final directory %(final)s. Adjust download templates."
+    : "Interner Staging-Verzeichnis-Konflikt für Anzeige %(ad_id)s: %(staging)s entspricht dem finalen Verzeichnis %(final)s. Passe die Download-Vorlagen an."
+    "Stale staging directory exists for ad %(ad_id)s: %(staging)s. Remove it manually and retry.": "Veraltetes Staging-Verzeichnis für Anzeige %(ad_id)s vorhanden: %(staging)s. Entferne es manuell und versuche es erneut."
+    ? "Directory %(final)s already exists but does not contain %(yaml)s. Move or remove it manually, or adjust download templates, then retry."
+    : "Verzeichnis %(final)s existiert bereits, enthält aber %(yaml)s nicht. Verschiebe oder entferne es manuell oder passe die Download-Vorlagen an und versuche es erneut."
 
   _extract_contact_from_ad_page:
     "No street given in the contact.": "Keine Straße in den Kontaktdaten angegeben."
@@ -653,6 +669,18 @@ kleinanzeigen_bot/model/config_model.py:
     "Deprecated: 'publish_error_capture' is replaced by 'capture_on.publish'. Please update your config.": "Veraltet: 'publish_error_capture' wurde durch 'capture_on.publish' ersetzt. Bitte aktualisieren Sie Ihre Konfiguration."
   _validate_glob_pattern:
     "must be a non-empty, non-blank glob pattern": "muss ein nicht-leeres Glob-Muster sein"
+  _validate_download_template:
+    "%s must be a non-empty template": "%s muss eine nicht-leere Vorlage sein"
+    "%s must not contain path separators": "%s darf keine Pfadtrenner enthalten"
+    "%s contains invalid template syntax: %s": "%s enthält eine ungültige Vorlagensyntax: %s"
+    "%s contains an empty placeholder": "%s enthält einen leeren Platzhalter"
+    "%s placeholders must not use conversion flags": "%s Platzhalter dürfen keine Konvertierungskennzeichen verwenden"
+    "%s placeholders must not use format specifiers": "%s Platzhalter dürfen keine Formatangaben verwenden"
+    "%s only supports placeholders: %s": "%s unterstützt nur Platzhalter: %s"
+    "%s must include placeholder(s): %s": "%s muss Platzhalter enthalten: %s"
+    "%s must include at least one placeholder: %s": "%s muss mindestens einen Platzhalter enthalten: %s"
+  _validate_dir:
+    "download.dir must be a non-empty path": "download.dir muss ein nicht-leerer Pfad sein"
   _validate_pause_requires_capture:
     "pause_on_login_detection_failure requires capture_on.login_detection to be enabled": "pause_on_login_detection_failure erfordert, dass capture_on.login_detection aktiviert ist"
 

@@ -75,12 +75,17 @@ Valid file extensions: `.json`, `.yaml`, `.yml`
 
 ### ad_files
 
-Glob (wildcard) patterns to select ad configuration files. If relative paths are specified, they are relative to this configuration file.
+Glob (wildcard) patterns to select ad configuration files.
 
 ```yaml
 ad_files:
   - "./**/ad_*.{json,yml,yaml}"
 ```
+
+- Relative `ad_files` patterns are resolved relative to `config.yaml`.
+- Absolute `ad_files` paths or glob patterns are not recommended and may behave differently across platforms.
+- For portable configurations, prefer relative patterns.
+- For the full ad YAML field reference (auto price reduction, description affixes, shipping options), see [AD_CONFIGURATION.md](./AD_CONFIGURATION.md).
 
 ### ad_defaults
 
@@ -170,11 +175,49 @@ Download configuration for the `download` command.
 
 ```yaml
 download:
+  dir: "downloaded-ads"  # default literal keeps workspace-mode download-folder behavior
+                        # custom relative paths are resolved relative to config.yaml
   include_all_matching_shipping_options: false  # if true, all shipping options matching the package size will be included
   excluded_shipping_options: []  # list of shipping options to exclude, e.g. ['DHL_2', 'DHL_5']
-  folder_name_max_length: 100  # maximum length for folder names when downloading ads (default: 100)
+  folder_name_max_length: 100  # maximum length for downloaded folder names (default: 100)
+  folder_name_template: "ad_{id}_{title}"  # folder naming template; placeholders: {id}, {title}
+  ad_file_name_template: "ad_{id}"  # base name for <base>.yaml and image prefixes; placeholders: {id}, {title}; must include {id}
   rename_existing_folders: false  # if true, rename existing folders without titles to include titles (default: false)
 ```
+
+#### Template configuration
+
+- `download.dir` sets where `download` writes files.
+- `download.folder_name_template` controls newly created download folder names. Supported placeholders: `{id}`, `{title}`.
+- `download.folder_name_template` must include at least one placeholder (`{id}` or `{title}`), otherwise validation fails with "must include at least one placeholder".
+- `download.folder_name_max_length` limits folder-name rendering only.
+- `download.ad_file_name_template` controls the shared file stem for downloaded files.
+- Downloaded files use this stem for `<base>.yaml` and image files `<base>__imgN.<ext>`.
+- `download.ad_file_name_template` supports `{id}` and `{title}`; `{id}` is required.
+- `rename_existing_folders` controls whether legacy folders are renamed to include titles.
+- Title parts may be shortened so rendered stems keep room for `{id}` and image suffixes.
+
+Examples:
+
+- `folder_name_template: "ad_{id}_{title}"` with `id = 1234`, `title = "Summer Sale"` -> `ad_1234_Summer Sale`
+- `folder_name_template: "{title}"` with `title = "Road Bike / XL"` -> `Road Bike  XL`
+- `ad_file_name_template: "ad_{id}"` with `id = 1234` -> `ad_1234`
+- `ad_file_name_template: "ad_{id}_{title}"` with `id = 1234`, `title = "Road Bike / XL"` -> `ad_1234_Road Bike  XL`
+
+#### Advanced / troubleshooting
+
+##### Advanced behavior / Path resolution
+
+- `download.dir` controls only where `download` writes ads. It does not change `publish`; `publish` still uses `ad_files`.
+- Leaving `download.dir` at the default literal `downloaded-ads` keeps workspace-mode behavior (portable workspace download folder in portable mode, XDG config workspace download folder in XDG mode). See [Installation Modes](#installation-modes).
+- Custom relative `download.dir` values are resolved relative to `config.yaml`, not the current shell working directory.
+- `ad_files` is a glob pattern resolved relative to `config.yaml`. If you customize `download.ad_file_name_template`, ensure `ad_files` still matches the downloaded `<base>.yaml` filenames.
+- To share one directory tree for `download` and `publish`, point `download.dir` to that shared path and set `ad_files` to a glob that matches files inside that same tree.
+- **Warning:** If `download.dir` and `ad_files` (including the default `downloaded-ads` tree) point to the same location, re-downloading can overwrite `<base>.yaml` and refresh image/folder contents. Keep manually edited publish ads in a separate folder, or protect them with backups/version control.
+- Stem length enforcement uses character counts (not filesystem byte counts).
+- `rename_existing_folders` detects legacy folders from the rendered ad file stem, so changing `download.ad_file_name_template` can change reuse/rename behavior.
+
+`{title}` output is sanitized for filesystem safety. Keep `{id}` in `ad_file_name_template` to reduce collision risk when long or similar titles are truncated to the same prefix. If you need more entropy, prefer templates like `{id}-{title}` and keep your `ad_files` glob aligned with the resulting `<base>.yaml` filenames.
 
 ### publishing
 

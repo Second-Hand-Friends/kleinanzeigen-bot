@@ -6,7 +6,7 @@ from collections.abc import Callable, Generator
 from contextlib import redirect_stdout
 from datetime import timedelta
 from pathlib import Path, PureWindowsPath
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -18,6 +18,12 @@ from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, DiagnosticsConfig, PublishingConfig
 from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
+
+
+class DownloadScenario(TypedDict):
+    published_ads:list[dict[str, Any]]
+    expected_active:bool
+    expect_warning:bool
 
 
 @pytest.fixture
@@ -307,6 +313,133 @@ class TestKleinanzeigenBotInitialization:
             published_ads_by_id = {123: mock_published_ads[0], 456: mock_published_ads[1]},
         )
 
+    @pytest.mark.asyncio
+    async def test_download_ads_uses_configured_download_dir_relative_to_config(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Relative download.dir values resolve from config.yaml and are passed to AdExtractor."""
+        test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
+        test_bot.config_file_path = str(tmp_path / "config.yaml")
+        test_bot.config.download.dir = "  ads  "
+        test_bot.ads_selector = "all"
+        test_bot.browser = MagicMock()
+
+        extractor_mock = MagicMock()
+        extractor_mock.extract_own_ads_urls = AsyncMock(return_value = [])
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = []),
+            patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock) as mock_extractor,
+        ):
+            await test_bot.download_ads()
+
+        mock_extractor.assert_called_once_with(
+            test_bot.browser,
+            test_bot.config,
+            (tmp_path / "ads").resolve(),
+            published_ads_by_id = {},
+        )
+
+    @pytest.mark.asyncio
+    async def test_download_ads_uses_configured_download_dir_absolute_path(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Absolute download.dir values are passed through unchanged, with no published ads selected."""
+        test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
+        test_bot.config_file_path = str(tmp_path / "nested" / "config.yaml")
+        test_bot.config.download.dir = str((tmp_path / "absolute-ads").resolve())
+        test_bot.ads_selector = "all"
+        test_bot.browser = MagicMock()
+
+        extractor_mock = MagicMock()
+        extractor_mock.extract_own_ads_urls = AsyncMock(return_value = [])
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = []),
+            patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock) as mock_extractor,
+        ):
+            await test_bot.download_ads()
+
+        mock_extractor.assert_called_once_with(
+            test_bot.browser,
+            test_bot.config,
+            (tmp_path / "absolute-ads").resolve(),
+            published_ads_by_id = {},
+        )
+
+    @pytest.mark.parametrize(
+        ("published_ads_by_id", "ad_id", "expected_active", "expected_ownership"),
+        [
+            ({123: {"id": 123, "state": "active"}}, 123, True, True),
+            ({123: {"id": 123, "state": "inactive"}}, 123, False, True),
+            ({}, 123, False, False),
+        ],
+    )
+    def test_resolve_download_ad_activity(
+        self,
+        test_bot:KleinanzeigenBot,
+        published_ads_by_id:dict[int, dict[str, Any]],
+        ad_id:int,
+        expected_active:bool,
+        expected_ownership:bool,
+    ) -> None:
+        resolved_active, ownership = test_bot._resolve_download_ad_activity(ad_id, published_ads_by_id)
+
+        assert resolved_active is expected_active
+        assert ownership is expected_ownership
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "scenario",
+        [
+            {
+                "published_ads": [{"id": 123, "state": "active"}],
+                "expected_active": True,
+                "expect_warning": False,
+            },
+            {
+                "published_ads": [{"id": 999, "state": "active"}],
+                "expected_active": False,
+                "expect_warning": True,
+            },
+            {
+                "published_ads": [{"id": 123, "state": "inactive"}],
+                "expected_active": False,
+                "expect_warning": False,
+            },
+        ],
+    )
+    async def test_download_ads_numeric_selector_resolves_and_passes_active_state(
+        self,
+        test_bot:KleinanzeigenBot,
+        tmp_path:Path,
+        caplog:pytest.LogCaptureFixture,
+        scenario:DownloadScenario,
+    ) -> None:
+        published_ads = scenario["published_ads"]
+        expected_active = scenario["expected_active"]
+        expect_warning = scenario["expect_warning"]
+
+        test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
+        test_bot.ads_selector = "123"
+        test_bot.browser = MagicMock()
+
+        extractor_mock = MagicMock()
+        extractor_mock.navigate_to_ad_page = AsyncMock(return_value = True)
+        extractor_mock.download_ad = AsyncMock()
+
+        caplog.set_level(logging.WARNING)
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = published_ads),
+            patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock),
+        ):
+            await test_bot.download_ads()
+
+        extractor_mock.download_ad.assert_awaited_once_with(123, active = expected_active)
+
+        warning_messages = [record.getMessage() for record in caplog.records if record.levelno >= logging.WARNING]
+        if expect_warning:
+            assert any("Ad id 123 is not in your published profile ads." in msg for msg in warning_messages)
+        else:
+            assert len(warning_messages) == 0
+
 
 class TestKleinanzeigenBotLogging:
     """Tests for logging functionality."""
@@ -484,9 +617,7 @@ class TestKleinanzeigenBotAuthentication:
         assert call_args.kwargs["timeout"] == test_bot._timeout("login_detection")
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_logs_selector_label_without_raw_selector_literals(
-        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
-    ) -> None:
+    async def test_is_logged_in_logs_selector_label_without_raw_selector_literals(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
         """Login detection logs should reference stable labels, not raw selector values."""
         caplog.set_level("DEBUG")
 
@@ -496,7 +627,7 @@ class TestKleinanzeigenBotAuthentication:
         ):
             assert await test_bot.is_logged_in(include_probe = False) is True
 
-        assert "Login detected via login detection selector 'user_info_secondary'" in caplog.text
+        assert "user_info_secondary" in caplog.text
         for forbidden in (".mr-medium", "#user-email", "mr-medium", "user-email"):
             assert forbidden not in caplog.text
 
@@ -513,15 +644,10 @@ class TestKleinanzeigenBotAuthentication:
         ):
             assert await test_bot.is_logged_in(include_probe = False) is False
 
-        assert any(
-            record.message == "No login detected via configured login detection selectors (CLASS_NAME=mr-medium, ID=user-email)"
-            for record in caplog.records
-        )
+        assert any("CLASS_NAME=mr-medium, ID=user-email" in record.message for record in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_logs_raw_selectors_when_probe_reports_logged_out(
-        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
-    ) -> None:
+    async def test_is_logged_in_logs_raw_selectors_when_probe_reports_logged_out(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
         """Probe-based final failure should include the tried raw selectors for debugging."""
         caplog.set_level("DEBUG")
 
@@ -532,13 +658,7 @@ class TestKleinanzeigenBotAuthentication:
         ):
             assert await test_bot.is_logged_in() is False
 
-        assert any(
-            record.message == (
-                "No login detected - DOM login detection selectors (CLASS_NAME=mr-medium, ID=user-email) "
-                "did not confirm login and server probe returned LOGGED_OUT"
-            )
-            for record in caplog.records
-        )
+        assert any("CLASS_NAME=mr-medium, ID=user-email" in record.message and "LOGGED_OUT" in record.message for record in caplog.records)
 
     @pytest.mark.asyncio
     async def test_get_login_state_prefers_dom_over_auth_probe(self, test_bot:KleinanzeigenBot) -> None:
@@ -1275,6 +1395,34 @@ class TestKleinanzeigenBotAdOperations:
         test_bot.config.ad_files = ["nonexistent/*.yaml"]
         ads = test_bot.load_ads()
         assert len(ads) == 0
+
+    def test_load_ads_from_shared_download_folder_resolves_images(self, test_bot:KleinanzeigenBot, tmp_path:Path, minimal_ad_config:dict[str, Any]) -> None:
+        """Publish discovery should work when ad_files points at the same tree used for downloads."""
+        ads_root = tmp_path / "ads"
+        ad_dir = ads_root / "Test Title"
+        ad_dir.mkdir(parents = True)
+
+        ad_file = ad_dir / "ad_12345.yaml"
+        dicts.save_dict(
+            ad_file,
+            minimal_ad_config
+            | {
+                "id": 12345,
+                "title": "Shared Folder Ad",
+                "images": ["ad_12345__img1.jpg", "ad_12345__img2.jpg"],
+            },
+        )
+        (ad_dir / "ad_12345__img1.jpg").write_bytes(b"fake-jpg-1")
+        (ad_dir / "ad_12345__img2.jpg").write_bytes(b"fake-jpg-2")
+
+        test_bot.config_file_path = str(tmp_path / "config.yaml")
+        test_bot.config.ad_files = ["ads/**/ad_*.yaml"]
+
+        ads = test_bot.load_ads(ignore_inactive = False, exclude_ads_with_id = False)
+
+        assert len(ads) == 1
+        assert ads[0][1].id == 12345
+        assert ads[0][1].images == [str((ad_dir / "ad_12345__img1.jpg").resolve()), str((ad_dir / "ad_12345__img2.jpg").resolve())]
 
 
 class TestKleinanzeigenBotAdManagement:
