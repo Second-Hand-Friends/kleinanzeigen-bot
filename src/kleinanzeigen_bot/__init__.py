@@ -1572,6 +1572,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             success = False
 
             # Retry loop only for publish_ad (before submission completes)
+            # Fetch a fresh baseline right before the retry loop to avoid stale state
+            # from earlier successful publishes in multi-ad runs (see #874)
+            try:
+                pre_publish_ads = await self._fetch_published_ads()
+                ads_before_publish:set[str] = {str(x["id"]) for x in pre_publish_ads if x.get("id")}
+            except Exception as ex:  # noqa: BLE001
+                LOG.warning("Could not fetch fresh published-ads baseline for '%s': %s. Falling back to initial snapshot.", ad_cfg.title, ex)
+                ads_before_publish = {str(x["id"]) for x in published_ads if x.get("id")}
             for attempt in range(1, max_retries + 1):
                 try:
                     await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.REPLACE)
@@ -1582,6 +1590,28 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 except (TimeoutError, ProtocolException) as ex:
                     await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
                     if attempt < max_retries:
+                        # Before retrying, check if the ad was already created despite the error.
+                        # A partially successful submission followed by a retry would create a duplicate listing,
+                        # which violates kleinanzeigen.de terms of service and can lead to account suspension.
+                        try:
+                            current_ads = await self._fetch_published_ads()
+                            current_ad_ids = {str(x["id"]) for x in current_ads if x.get("id")}
+                            new_ad_ids = current_ad_ids - ads_before_publish
+                            if new_ad_ids:
+                                LOG.warning(
+                                    "Attempt %s/%s failed for '%s': %s. "
+                                    "However, a new ad was detected (id: %s) -- aborting retries to prevent duplicates.",
+                                    attempt, max_retries, ad_cfg.title, ex, ", ".join(new_ad_ids)
+                                )
+                                failed_count += 1
+                                break
+                        except Exception as verify_ex:  # noqa: BLE001
+                            LOG.warning(
+                                "Could not verify published ads after failed attempt for '%s': %s -- aborting retries to prevent duplicates.",
+                                ad_cfg.title, verify_ex,
+                            )
+                            failed_count += 1
+                            break
                         LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
                         await self.web_sleep(2)  # Wait before retry
                     else:

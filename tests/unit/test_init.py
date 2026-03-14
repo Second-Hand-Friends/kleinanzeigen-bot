@@ -1007,11 +1007,45 @@ class TestKleinanzeigenBotBasics:
         ):
             await test_bot.publish_ads(ad_cfgs)
 
-            # With pagination, the URL now includes pageNum parameter
-            web_request_mock.assert_awaited_once_with(f"{test_bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum=1")
+            # web_request is called twice: once for initial fetch, once for pre-retry-loop baseline
+            expected_url = f"{test_bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum=1"
+            assert web_request_mock.await_count == 2
+            web_request_mock.assert_any_await(expected_url)
             publish_ad_mock.assert_awaited_once_with("ad.yaml", ad_cfgs[0][1], {}, [], AdUpdateStrategy.REPLACE)
             web_await_mock.assert_awaited_once()
             delete_ad_mock.assert_awaited_once_with(ad_cfgs[0][1], [], delete_old_ads_by_title = False)
+
+    @pytest.mark.asyncio
+    async def test_publish_ads_aborts_retry_on_duplicate_detection(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """Ensure retries are aborted when a new ad is detected after a failed attempt to prevent duplicates."""
+        test_bot.page = mock_page
+
+        ad_cfg = Ad.model_validate(base_ad_config)
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = "ad.yaml"
+
+        # 1st _fetch_published_ads call (initial, before loop): no ads
+        # 2nd call (fresh baseline, before retry loop): no ads
+        # 3rd call (after first failed attempt): a new ad appeared — duplicate detected
+        fetch_responses = [
+            {"content": json.dumps({"ads": []})},                                          # initial fetch
+            {"content": json.dumps({"ads": []})},                                          # fresh baseline
+            {"content": json.dumps({"ads": [{"id": "99999", "state": "active"}]})},         # duplicate detected
+        ]
+
+        with (
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = fetch_responses),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("image upload timeout")) as publish_mock,
+        ):
+            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
+            # publish_ad should have been called only once — retry was aborted due to duplicate detection
+            assert publish_mock.await_count == 1
 
     def test_get_root_url(self, test_bot:KleinanzeigenBot) -> None:
         """Test root URL retrieval."""
