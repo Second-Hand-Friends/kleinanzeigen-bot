@@ -94,7 +94,7 @@ class TestJSONPagination:
     async def test_fetch_published_ads_single_page_no_paging(self, bot:KleinanzeigenBot) -> None:
         """Test fetching ads from single page with no paging info."""
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
-            mock_request.return_value = {"content": '{"ads": [{"id": 1, "title": "Ad 1"}, {"id": 2, "title": "Ad 2"}]}'}
+            mock_request.return_value = {"content": '{"ads": [{"id": 1, "state": "active", "title": "Ad 1"}, {"id": 2, "state": "active", "title": "Ad 2"}]}'}
 
             result = await bot._fetch_published_ads()
 
@@ -109,7 +109,7 @@ class TestJSONPagination:
     @pytest.mark.asyncio
     async def test_fetch_published_ads_single_page_with_paging(self, bot:KleinanzeigenBot) -> None:
         """Test fetching ads from single page with paging info showing 1/1."""
-        response_data = {"ads": [{"id": 1, "title": "Ad 1"}], "paging": {"pageNum": 1, "last": 1}}
+        response_data = {"ads": [{"id": 1, "state": "active", "title": "Ad 1"}], "paging": {"pageNum": 1, "last": 1}}
 
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": json.dumps(response_data)}
@@ -125,9 +125,9 @@ class TestJSONPagination:
     @pytest.mark.asyncio
     async def test_fetch_published_ads_multi_page(self, bot:KleinanzeigenBot) -> None:
         """Test fetching ads from multiple pages (3 pages, 2 ads each)."""
-        page1_data = {"ads": [{"id": 1}, {"id": 2}], "paging": {"pageNum": 1, "last": 3, "next": 2}}
-        page2_data = {"ads": [{"id": 3}, {"id": 4}], "paging": {"pageNum": 2, "last": 3, "next": 3}}
-        page3_data = {"ads": [{"id": 5}, {"id": 6}], "paging": {"pageNum": 3, "last": 3}}
+        page1_data = {"ads": [{"id": 1, "state": "active"}, {"id": 2, "state": "active"}], "paging": {"pageNum": 1, "last": 3, "next": 2}}
+        page2_data = {"ads": [{"id": 3, "state": "active"}, {"id": 4, "state": "active"}], "paging": {"pageNum": 2, "last": 3, "next": 3}}
+        page3_data = {"ads": [{"id": 5, "state": "active"}, {"id": 6, "state": "active"}], "paging": {"pageNum": 3, "last": 3}}
 
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.side_effect = [
@@ -176,7 +176,7 @@ class TestJSONPagination:
     @pytest.mark.asyncio
     async def test_fetch_published_ads_missing_paging_dict(self, bot:KleinanzeigenBot) -> None:
         """Test handling of missing paging dict."""
-        response_data = {"ads": [{"id": 1}, {"id": 2}]}
+        response_data = {"ads": [{"id": 1, "state": "active"}, {"id": 2, "state": "active"}]}
 
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": json.dumps(response_data)}
@@ -190,7 +190,7 @@ class TestJSONPagination:
     @pytest.mark.asyncio
     async def test_fetch_published_ads_non_integer_paging_values(self, bot:KleinanzeigenBot) -> None:
         """Test handling of non-integer paging values."""
-        response_data = {"ads": [{"id": 1}], "paging": {"pageNum": "invalid", "last": "also-invalid"}}
+        response_data = {"ads": [{"id": 1, "state": "active"}], "paging": {"pageNum": "invalid", "last": "also-invalid"}}
 
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": json.dumps(response_data)}
@@ -222,7 +222,7 @@ class TestJSONPagination:
     @pytest.mark.asyncio
     async def test_fetch_published_ads_filters_non_dict_entries(self, bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
         """Malformed entries should be filtered and logged."""
-        response_data = {"ads": [42, {"id": 1}, "broken"], "paging": {"pageNum": 1, "last": 1}}
+        response_data = {"ads": [42, {"id": 1, "state": "active"}, "broken"], "paging": {"pageNum": 1, "last": 1}}
 
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": json.dumps(response_data)}
@@ -230,9 +230,37 @@ class TestJSONPagination:
             with caplog.at_level("WARNING"):
                 result = await bot._fetch_published_ads()
 
-            if result != [{"id": 1}]:
+            if result != [{"id": 1, "state": "active"}]:
                 pytest.fail(f"expected malformed entries to be filtered out, got: {result}")
             if "Filtered 2 malformed ad entries on page 1" not in caplog.text:
+                pytest.fail(f"expected malformed-entry warning in logs, got: {caplog.text}")
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_filters_dict_entries_missing_required_keys(
+        self,
+        bot:KleinanzeigenBot,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Dict entries without required id/state keys should be rejected."""
+        response_data = {
+            "ads": [
+                {"id": 1},
+                {"state": "active"},
+                {"title": "missing both"},
+                {"id": 2, "state": "paused"},
+            ],
+            "paging": {"pageNum": 1, "last": 1},
+        }
+
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.return_value = {"content": json.dumps(response_data)}
+
+            with caplog.at_level("WARNING"):
+                result = await bot._fetch_published_ads()
+
+            if result != [{"id": 2, "state": "paused"}]:
+                pytest.fail(f"expected only entries with id and state to remain, got: {result}")
+            if "Filtered 3 malformed ad entries on page 1" not in caplog.text:
                 pytest.fail(f"expected malformed-entry warning in logs, got: {caplog.text}")
 
     @pytest.mark.asyncio

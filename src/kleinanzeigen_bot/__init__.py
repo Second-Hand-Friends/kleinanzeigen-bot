@@ -1501,7 +1501,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             rejected_count = 0
             rejected_preview:str | None = None
             for entry in page_ads:
-                if isinstance(entry, dict):
+                if isinstance(entry, dict) and "id" in entry and "state" in entry:
                     filtered_page_ads.append(entry)
                     continue
                 rejected_count += 1
@@ -1913,9 +1913,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # submit
         #############################
-        submission_attempted = False
         try:
-            submission_attempted = True
             try:
                 await self.web_click(By.ID, "pstad-submit")
             except TimeoutError:
@@ -1951,9 +1949,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             confirmation_timeout = self._timeout("publishing_confirmation")
             await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = confirmation_timeout)
         except (TimeoutError, ProtocolException) as ex:
-            if submission_attempted:
-                raise PublishSubmissionUncertainError("submission may have succeeded before failure") from ex
-            raise
+            raise PublishSubmissionUncertainError("submission may have succeeded before failure") from ex
 
         # extract the ad id from the URL's query parameter
         current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(self.page.url).query)
