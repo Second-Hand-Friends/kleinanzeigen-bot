@@ -37,9 +37,12 @@ kleinanzeigen_bot/__init__.py:
     "Empty JSON response content on page %s": "Leerer JSON-Antwortinhalt auf Seite %s"
     "Failed to parse JSON response on page %s: %s (content: %s)": "Fehler beim Parsen der JSON-Antwort auf Seite %s: %s (Inhalt: %s)"
     "Stopping pagination after %s pages to avoid infinite loop": "Stoppe die Seitenaufschaltung nach %s Seiten, um eine Endlosschleife zu vermeiden"
-    "Pagination request timed out on page %s: %s": "Zeitueberschreitung bei der Seitenabfrage auf Seite %s: %s"
+    "Pagination request failed on page %s: %s": "Seitenabfrage auf Seite %s fehlgeschlagen: %s"
+    "Unexpected pagination response type on page %s: %s": "Unerwarteter Typ der Paginierungsantwort auf Seite %s: %s"
+    "Unexpected response content type on page %s: %s": "Unerwarteter Antwortinhalt-Typ auf Seite %s: %s"
     "Unexpected JSON payload on page %s (content: %s)": "Unerwartete JSON-Antwort auf Seite %s (Inhalt: %s)"
     "Unexpected 'ads' type on page %s: %s value: %s": "Unerwarteter 'ads'-Typ auf Seite %s: %s Wert: %s"
+    "Filtered %s malformed ad entries on page %s (sample: %s)": "%s fehlerhafte Anzeigen-Einträge auf Seite %s gefiltert (Beispiel: %s)"
     "Reached last page %s of %s, stopping pagination": "Letzte Seite %s von %s erreicht, beende Paginierung"
     "No ads found on page %s, stopping pagination": "Keine Anzeigen auf Seite %s gefunden, beende Paginierung"
     "Invalid 'next' page value in paging info: %s, stopping pagination": "Ungültiger 'next'-Seitenwert in Paginierungsinfo: %s, beende Paginierung"
@@ -86,14 +89,36 @@ kleinanzeigen_bot/__init__.py:
 
   login:
     "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
-    "Current page URL after opening homepage: %s": "Aktuelle Seiten-URL nach dem Öffnen der Startseite: %s"
-    "Already logged in as [%s]. Skipping login.": "Bereits eingeloggt als [%s]. Überspringe Anmeldung."
-    "Opening login page...": "Öffne Anmeldeseite..."
-    "Login state is UNKNOWN - cannot determine if already logged in. Skipping login attempt.": "Login-Status ist UNKNOWN - kann nicht bestimmt werden, ob bereits eingeloggt ist. Überspringe Anmeldeversuch."
-    "Login state is UNKNOWN after first login attempt - cannot determine login status. Aborting login process.": "Login-Status ist UNKNOWN nach dem ersten Anmeldeversuch - kann Login-Status nicht bestimmen. Breche Anmeldeprozess ab."
-    "First login attempt did not succeed, trying second login attempt": "Erster Anmeldeversuch war nicht erfolgreich, versuche zweiten Anmeldeversuch"
-    "Second login attempt succeeded": "Zweiter Anmeldeversuch erfolgreich"
-    "Second login attempt also failed - login may not have succeeded": "Zweiter Anmeldeversuch ebenfalls fehlgeschlagen - Anmeldung möglicherweise nicht erfolgreich"
+    "Already logged in. Skipping login.": "Bereits eingeloggt. Überspringe Anmeldung."
+    "Navigating to SSO login page (Auth0)...": "Navigiere zur SSO-Anmeldeseite (Auth0)..."
+    "Timeout navigating to SSO login page after %.1fs": "Zeitüberschreitung beim Navigieren zur SSO-Anmeldeseite nach %.1fs"
+    "Login confirmed.": "Anmeldung bestätigt."
+    "Login state after attempt is %s (url=%s)": "Login-Status nach dem Versuch ist %s (URL=%s)"
+    "Login could not be confirmed after Auth0 flow (state=%s, url=%s)": "Anmeldung nach Auth0-Flow konnte nicht bestätigt werden (Status=%s, URL=%s)"
+
+  _wait_for_auth0_login_context:
+    "Auth0 redirect not detected (url=%s)": "Auth0-Weiterleitung nicht erkannt (URL=%s)"
+
+  _wait_for_auth0_password_step:
+    "Auth0 password step not reached (url=%s)": "Auth0-Passwortschritt nicht erreicht (URL=%s)"
+
+  _wait_for_post_auth0_submit_transition:
+    "Auth0 post-submit verification remained inconclusive (url=%s)": "Auth0-Verifikation nach Absenden blieb unklar (URL=%s)"
+
+  fill_login_data_and_send:
+    "Logging in...": "Anmeldung..."
+    "Auth0 Step 1: entering email...": "Auth0 Schritt 1: E-Mail wird eingegeben..."
+    "Waiting for Auth0 password page...": "Warte auf Auth0-Passwortseite..."
+    "Auth0 Step 2: entering password...": "Auth0 Schritt 2: Passwort wird eingegeben..."
+    "Auth0 login submitted.": "Auth0-Anmeldung abgesendet."
+
+  _check_sms_verification:
+    "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
+    "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
+
+  _check_email_verification:
+    "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
+    "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
 
   is_logged_in:
     "Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)": "Starte Login-Erkennung (Timeout: %.1fs Basis, %.1fs effektiv mit Multiplikator/Backoff)"
@@ -101,8 +126,6 @@ kleinanzeigen_bot/__init__.py:
     "Timeout waiting for login detection selector group after %.1fs": "Timeout beim Warten auf die Login-Erkennungs-Selektorgruppe nach %.1fs"
 
   handle_after_login_logic:
-    "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
-    "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
     "Handling GDPR disclaimer...": "Verarbeite DSGVO-Hinweis..."
 
   delete_ads:
@@ -156,11 +179,14 @@ kleinanzeigen_bot/__init__.py:
     "Attempt %s/%s failed for '%s': %s. Retrying...": "Versuch %s/%s fehlgeschlagen für '%s': %s. Erneuter Versuch..."
     "Attempt %s/%s failed for '%s': %s. However, a new ad was detected (id: %s) -- aborting retries to prevent duplicates.": "Versuch %s/%s fehlgeschlagen für '%s': %s. Jedoch wurde eine neue Anzeige erkannt (ID: %s) -- Wiederholungen werden abgebrochen, um Duplikate zu vermeiden."
     "Could not fetch fresh published-ads baseline for '%s': %s. Falling back to initial snapshot.": "Konnte keine aktuelle Anzeigen-Baseline für '%s' abrufen: %s. Verwende initialen Snapshot."
-    "Could not verify published ads after failed attempt for '%s': %s -- aborting retries to prevent duplicates.": "Veröffentlichte Anzeigen konnten nach fehlgeschlagenem Versuch für '%s' nicht geprüft werden: %s -- Wiederholungen werden abgebrochen, um Duplikate zu vermeiden."
     "All %s attempts failed for '%s': %s. Skipping ad.": "Alle %s Versuche fehlgeschlagen für '%s': %s. Überspringe Anzeige."
     "DONE: (Re-)published %s (%s failed after retries)": "FERTIG: %s (erneut) veröffentlicht (%s fehlgeschlagen nach Wiederholungen)"
     "DONE: (Re-)published %s": "FERTIG: %s (erneut) veröffentlicht"
     "ad": "Anzeige"
+
+  _detect_new_published_ad_ids:
+    "Could not verify published ads after failed attempt for '%s': %s -- aborting retries to prevent duplicates.": "Veröffentlichte Anzeigen konnten nach fehlgeschlagenem Versuch für '%s' nicht geprüft werden: %s -- Wiederholungen werden abgebrochen, um Duplikate zu vermeiden."
+
   apply_auto_price_reduction:
     "Auto price reduction is enabled for [%s] but no price is configured.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber es wurde kein Preis konfiguriert."
     "Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber min_price entspricht dem Preis (%s) - es werden keine Reduktionen auftreten."
@@ -263,9 +289,6 @@ kleinanzeigen_bot/__init__.py:
     "DONE: No ads found to extend.": "FERTIG: Keine Anzeigen zum Verlängern gefunden."
     "Unknown command: %s": "Unbekannter Befehl: %s"
     "Timing collector flush failed: %s": "Zeitmessdaten konnten nicht gespeichert werden: %s"
-
-  fill_login_data_and_send:
-    "Logging in as [%s]...": "Anmeldung als [%s]..."
 
   __set_shipping:
     "Unable to close shipping dialog!": "Versanddialog konnte nicht geschlossen werden!"

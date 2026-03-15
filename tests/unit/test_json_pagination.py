@@ -188,6 +188,17 @@ class TestJSONPagination:
             mock_request.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_fetch_published_ads_strict_raises_on_missing_paging_dict(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should fail closed when paging metadata is missing."""
+        response_data = {"ads": [{"id": 1}, {"id": 2}]}
+
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.return_value = {"content": json.dumps(response_data)}
+
+            with pytest.raises(ValueError, match = "Missing or invalid paging info on page 1: NoneType"):
+                await bot._fetch_published_ads(strict = True)
+
+    @pytest.mark.asyncio
     async def test_fetch_published_ads_non_integer_paging_values(self, bot:KleinanzeigenBot) -> None:
         """Test handling of non-integer paging values."""
         response_data = {"ads": [{"id": 1}], "paging": {"pageNum": "invalid", "last": "also-invalid"}}
@@ -220,6 +231,33 @@ class TestJSONPagination:
                 pytest.fail(f"expected empty list when 'ads' is not a list, got: {result}")
 
     @pytest.mark.asyncio
+    async def test_fetch_published_ads_strict_rejects_non_dict_entries(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should reject malformed entries inside ads list."""
+        response_data = {"ads": [42, {"id": 1}], "paging": {"pageNum": 1, "last": 1}}
+
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.return_value = {"content": json.dumps(response_data)}
+
+            with pytest.raises(TypeError, match = "Unexpected ad entry type on page 1: int"):
+                await bot._fetch_published_ads(strict = True)
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_non_strict_filters_non_dict_entries(self, bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
+        """Non-strict mode should filter malformed entries and continue."""
+        response_data = {"ads": [42, {"id": 1}, "broken"], "paging": {"pageNum": 1, "last": 1}}
+
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.return_value = {"content": json.dumps(response_data)}
+
+            with caplog.at_level("WARNING"):
+                result = await bot._fetch_published_ads(strict = False)
+
+            if result != [{"id": 1}]:
+                pytest.fail(f"expected malformed entries to be filtered out, got: {result}")
+            if "Filtered 2 malformed ad entries on page 1" not in caplog.text:
+                pytest.fail(f"expected malformed-entry warning in logs, got: {caplog.text}")
+
+    @pytest.mark.asyncio
     async def test_fetch_published_ads_timeout(self, bot:KleinanzeigenBot) -> None:
         """Test handling of timeout during pagination."""
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
@@ -229,3 +267,26 @@ class TestJSONPagination:
 
             if result != []:
                 pytest.fail(f"Expected empty list on timeout, got {result}")
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_non_strict_handles_non_string_content_type(self, bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
+        """Non-strict mode should gracefully stop on unexpected non-string content types."""
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.return_value = {"content": None}
+
+            with caplog.at_level("WARNING"):
+                result = await bot._fetch_published_ads(strict = False)
+
+            if result != []:
+                pytest.fail(f"expected empty result on non-string content in non-strict mode, got: {result}")
+            if "Unexpected response content type on page 1: NoneType" not in caplog.text:
+                pytest.fail(f"expected non-string content warning in logs, got: {caplog.text}")
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_strict_raises_on_non_string_content_type(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should fail closed on unexpected non-string content types."""
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.return_value = {"content": None}
+
+            with pytest.raises(TypeError, match = "Unexpected response content type on page 1: NoneType"):
+                await bot._fetch_published_ads(strict = True)
