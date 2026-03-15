@@ -10,6 +10,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from nodriver.core.connection import ProtocolException
 from pydantic import ValidationError
 
 from kleinanzeigen_bot import LOG, PUBLISH_MAX_RETRIES, AdUpdateStrategy, KleinanzeigenBot, LoginState, misc
@@ -17,6 +18,7 @@ from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, DiagnosticsConfig, PublishingConfig
 from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
+from kleinanzeigen_bot.utils.exceptions import PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
@@ -1171,10 +1173,9 @@ class TestKleinanzeigenBotBasics:
         ):
             await test_bot.publish_ads(ad_cfgs)
 
-            # web_request is called twice: once for initial fetch, once for pre-retry-loop baseline
+            # web_request is called once for initial published-ads snapshot
             expected_url = f"{test_bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum=1"
-            assert web_request_mock.await_count == 2
-            web_request_mock.assert_any_await(expected_url)
+            web_request_mock.assert_awaited_once_with(expected_url)
             publish_ad_mock.assert_awaited_once_with("ad.yaml", ad_cfgs[0][1], {}, [], AdUpdateStrategy.REPLACE)
             web_await_mock.assert_awaited_once()
             delete_ad_mock.assert_awaited_once_with(ad_cfgs[0][1], [], delete_old_ads_by_title = False)
@@ -1198,103 +1199,136 @@ class TestKleinanzeigenBotBasics:
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ads_response),
             patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = [TimeoutError("transient"), None]) as publish_mock,
-            patch.object(test_bot, "_detect_new_published_ad_ids", new_callable = AsyncMock, return_value = set()) as detect_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
             assert publish_mock.await_count == 2
-            detect_mock.assert_awaited_once()
             sleep_mock.assert_awaited_once_with(2_000)
 
     @pytest.mark.asyncio
-    async def test_publish_ads_aborts_retry_on_duplicate_detection(
+    async def test_publish_ads_does_not_retry_when_submission_state_is_uncertain(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
         mock_page:MagicMock,
     ) -> None:
-        """Ensure retries are aborted when a new ad is detected after a failed attempt to prevent duplicates."""
+        """Post-submit uncertainty must fail closed and skip retries."""
         test_bot.page = mock_page
+        test_bot.keep_old_ads = True
 
         ad_cfg = Ad.model_validate(base_ad_config)
         ad_cfg_orig = copy.deepcopy(base_ad_config)
         ad_file = "ad.yaml"
 
-        # 1st _fetch_published_ads call (initial, before loop): no ads
-        # 2nd call (fresh baseline, before retry loop): no ads
-        # 3rd call (after first failed attempt): a new ad appeared — duplicate detected
-        fetch_responses = [
-            {"content": json.dumps({"ads": []})},                                          # initial fetch
-            {"content": json.dumps({"ads": []})},                                          # fresh baseline
-            {"content": json.dumps({"ads": [{"id": "99999", "state": "active"}]})},         # duplicate detected
-        ]
-
         with (
-            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = fetch_responses),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("image upload timeout")) as publish_mock,
+            patch.object(
+                test_bot,
+                "web_request",
+                new_callable = AsyncMock,
+                return_value = {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})},
+            ),
+            patch.object(
+                test_bot,
+                "publish_ad",
+                new_callable = AsyncMock,
+                side_effect = PublishSubmissionUncertainError("submission may have succeeded before failure"),
+            ) as publish_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
-            # publish_ad should have been called only once — retry was aborted due to duplicate detection
             assert publish_mock.await_count == 1
+            sleep_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_publish_ads_aborts_retry_when_duplicate_verification_fetch_is_malformed(
+    async def test_publish_ad_keeps_pre_submit_timeouts_retryable(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
-        mock_page:MagicMock,
     ) -> None:
-        """Retry verification must fail closed on malformed published-ads responses."""
-        test_bot.page = mock_page
-
-        ad_cfg = Ad.model_validate(base_ad_config)
+        """Timeouts before submit boundary should remain plain retryable failures."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"id": 12345, "shipping_type": "NOT_APPLICABLE", "price_type": "NOT_APPLICABLE"})
         ad_cfg_orig = copy.deepcopy(base_ad_config)
-        ad_file = "ad.yaml"
-
-        fetch_responses = [
-            {"content": json.dumps({"ads": []})},
-            {"content": json.dumps({"ads": []})},
-            [],
-        ]
 
         with (
-            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = fetch_responses),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("image upload timeout")) as publish_mock,
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_category", new_callable = AsyncMock, side_effect = TimeoutError("image upload timeout")),
+            pytest.raises(TimeoutError, match = "image upload timeout"),
         ):
-            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
-
-            assert publish_mock.await_count == 1
+            await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
 
     @pytest.mark.asyncio
-    async def test_publish_ads_aborts_retry_when_duplicate_verification_ads_entries_are_malformed(
+    async def test_publish_ad_marks_post_submit_timeout_as_uncertain(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
         mock_page:MagicMock,
     ) -> None:
-        """Retry verification must fail closed when strict fetch returns non-dict ad entries."""
+        """Timeouts after submit click should be converted to non-retryable uncertainty."""
         test_bot.page = mock_page
-
-        ad_cfg = Ad.model_validate(base_ad_config)
+        ad_cfg = Ad.model_validate(base_ad_config | {"id": 12345, "shipping_type": "NOT_APPLICABLE", "price_type": "NOT_APPLICABLE"})
         ad_cfg_orig = copy.deepcopy(base_ad_config)
-        ad_file = "ad.yaml"
 
-        fetch_responses = [
-            {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})},
-            {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})},
-            {"content": json.dumps({"ads": [42], "paging": {"pageNum": 1, "last": 1}})},
-        ]
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            if selector_type == By.ID and selector_value == "myftr-shppngcrt-frm":
+                raise TimeoutError("no payment form")
+            return MagicMock()
 
         with (
-            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = fetch_responses),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("image upload timeout")) as publish_mock,
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_category", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_special_attributes", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_contact_fields", new_callable = AsyncMock),
+            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = TimeoutError("confirmation timeout")),
+            pytest.raises(PublishSubmissionUncertainError, match = "submission may have succeeded before failure"),
         ):
-            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+            await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
 
-            assert publish_mock.await_count == 1
+    @pytest.mark.asyncio
+    async def test_publish_ad_marks_post_submit_protocol_exception_as_uncertain(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """Protocol exceptions after submit click should be converted to uncertainty."""
+        test_bot.page = mock_page
+        ad_cfg = Ad.model_validate(base_ad_config | {"id": 12345, "shipping_type": "NOT_APPLICABLE", "price_type": "NOT_APPLICABLE"})
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            if selector_type == By.ID and selector_value == "myftr-shppngcrt-frm":
+                raise TimeoutError("no payment form")
+            return MagicMock()
+
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_category", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_special_attributes", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_contact_fields", new_callable = AsyncMock),
+            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = ProtocolException(MagicMock(), "connection lost", 0)),
+            pytest.raises(PublishSubmissionUncertainError, match = "submission may have succeeded before failure"),
+        ):
+            await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
 
     def test_get_root_url(self, test_bot:KleinanzeigenBot) -> None:
         """Test root URL retrieval."""

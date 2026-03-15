@@ -177,15 +177,14 @@ kleinanzeigen_bot/__init__.py:
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
     " -> Could not confirm publishing for '%s', but ad may be online": " -> Veröffentlichung für '%s' konnte nicht bestätigt werden, aber Anzeige ist möglicherweise online"
     "Attempt %s/%s failed for '%s': %s. Retrying...": "Versuch %s/%s fehlgeschlagen für '%s': %s. Erneuter Versuch..."
-    "Attempt %s/%s failed for '%s': %s. However, a new ad was detected (id: %s) -- aborting retries to prevent duplicates.": "Versuch %s/%s fehlgeschlagen für '%s': %s. Jedoch wurde eine neue Anzeige erkannt (ID: %s) -- Wiederholungen werden abgebrochen, um Duplikate zu vermeiden."
-    "Could not fetch fresh published-ads baseline for '%s': %s. Falling back to initial snapshot.": "Konnte keine aktuelle Anzeigen-Baseline für '%s' abrufen: %s. Verwende initialen Snapshot."
+    "Attempt %s/%s for '%s' reached submit boundary but failed: %s. Not retrying to prevent duplicate listings.": "Versuch %s/%s für '%s' hat die Submit-Grenze erreicht, ist aber fehlgeschlagen: %s. Kein erneuter Versuch, um doppelte Anzeigen zu vermeiden."
+    "Manual recovery required for '%s'. Check 'Meine Anzeigen' to confirm whether the ad was posted.": "Manuelle Wiederherstellung für '%s' erforderlich. Prüfen Sie in 'Meine Anzeigen', ob die Anzeige veröffentlicht wurde."
+    ? "If posted, sync local state with 'kleinanzeigen-bot download --ads=new' or 'kleinanzeigen-bot download --ads=<id>'; otherwise rerun publish for this ad."
+    : "Falls veröffentlicht, lokalen Stand mit 'kleinanzeigen-bot download --ads=new' oder 'kleinanzeigen-bot download --ads=<id>' synchronisieren; andernfalls Veröffentlichung für diese Anzeige erneut starten."
     "All %s attempts failed for '%s': %s. Skipping ad.": "Alle %s Versuche fehlgeschlagen für '%s': %s. Überspringe Anzeige."
     "DONE: (Re-)published %s (%s failed after retries)": "FERTIG: %s (erneut) veröffentlicht (%s fehlgeschlagen nach Wiederholungen)"
     "DONE: (Re-)published %s": "FERTIG: %s (erneut) veröffentlicht"
     "ad": "Anzeige"
-
-  _detect_new_published_ad_ids:
-    "Could not verify published ads after failed attempt for '%s': %s -- aborting retries to prevent duplicates.": "Veröffentlichte Anzeigen konnten nach fehlgeschlagenem Versuch für '%s' nicht geprüft werden: %s -- Wiederholungen werden abgebrochen, um Duplikate zu vermeiden."
 
   apply_auto_price_reduction:
     "Auto price reduction is enabled for [%s] but no price is configured.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber es wurde kein Preis konfiguriert."
