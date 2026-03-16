@@ -20,7 +20,7 @@ from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, Contact, calc
 from .model.config_model import Config
 from .update_checker import UpdateChecker
 from .utils import diagnostics, dicts, error_handlers, loggers, misc, xdg_paths
-from .utils.exceptions import CaptchaEncountered
+from .utils.exceptions import CaptchaEncountered, PublishSubmissionUncertainError
 from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
 from .utils.misc import ainput, ensure, is_frozen
@@ -1438,7 +1438,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return False
 
-    async def _fetch_published_ads(self, *, strict:bool = False) -> list[dict[str, Any]]:
+    async def _fetch_published_ads(self) -> list[dict[str, Any]]:
         """Fetch all published ads, handling API pagination.
 
         Returns:
@@ -1458,14 +1458,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             try:
                 response = await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum={page}")
             except TimeoutError as ex:
-                if strict:
-                    raise
                 LOG.warning("Pagination request failed on page %s: %s", page, ex)
                 break
 
             if not isinstance(response, dict):
-                if strict:
-                    raise TypeError(f"Unexpected pagination response type on page {page}: {type(response).__name__}")
                 LOG.warning("Unexpected pagination response type on page %s: %s", page, type(response).__name__)
                 break
 
@@ -1475,8 +1471,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             if isinstance(content, bytes):
                 content = content.decode("utf-8", errors = "replace")
             if not isinstance(content, str):
-                if strict:
-                    raise TypeError(f"Unexpected response content type on page {page}: {type(content).__name__}")
                 LOG.warning("Unexpected response content type on page %s: %s", page, type(content).__name__)
                 break
 
@@ -1484,27 +1478,19 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 json_data = json.loads(content)
             except (json.JSONDecodeError, TypeError) as ex:
                 if not content:
-                    if strict:
-                        raise ValueError(f"Empty JSON response content on page {page}") from ex
                     LOG.warning("Empty JSON response content on page %s", page)
                     break
-                if strict:
-                    raise ValueError(f"Failed to parse JSON response on page {page}: {ex}") from ex
                 snippet = content[:SNIPPET_LIMIT] + ("..." if len(content) > SNIPPET_LIMIT else "")
                 LOG.warning("Failed to parse JSON response on page %s: %s (content: %s)", page, ex, snippet)
                 break
 
             if not isinstance(json_data, dict):
-                if strict:
-                    raise TypeError(f"Unexpected JSON payload type on page {page}: {type(json_data).__name__}")
                 snippet = content[:SNIPPET_LIMIT] + ("..." if len(content) > SNIPPET_LIMIT else "")
                 LOG.warning("Unexpected JSON payload on page %s (content: %s)", page, snippet)
                 break
 
             page_ads = json_data.get("ads", [])
             if not isinstance(page_ads, list):
-                if strict:
-                    raise TypeError(f"Unexpected 'ads' type on page {page}: {type(page_ads).__name__}")
                 preview = str(page_ads)
                 if len(preview) > SNIPPET_LIMIT:
                     preview = preview[:SNIPPET_LIMIT] + "..."
@@ -1515,12 +1501,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             rejected_count = 0
             rejected_preview:str | None = None
             for entry in page_ads:
-                if isinstance(entry, dict):
+                if isinstance(entry, dict) and "id" in entry and "state" in entry:
                     filtered_page_ads.append(entry)
                     continue
                 rejected_count += 1
-                if strict:
-                    raise TypeError(f"Unexpected ad entry type on page {page}: {type(entry).__name__}")
                 if rejected_preview is None:
                     rejected_preview = repr(entry)
 
@@ -1534,8 +1518,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             paging = json_data.get("paging")
             if not isinstance(paging, dict):
-                if strict:
-                    raise ValueError(f"Missing or invalid paging info on page {page}: {type(paging).__name__}")
                 LOG.debug("No paging dict found on page %s, assuming single page", page)
                 break
 
@@ -1544,14 +1526,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             total_pages = misc.coerce_page_number(paging.get("last"))
 
             if current_page_num is None:
-                if strict:
-                    raise ValueError(f"Invalid 'pageNum' in paging info: {paging.get('pageNum')}")
                 LOG.warning("Invalid 'pageNum' in paging info: %s, stopping pagination", paging.get("pageNum"))
                 break
 
             if total_pages is None:
-                if strict:
-                    raise ValueError("No pagination info found")
                 LOG.debug("No pagination info found, assuming single page")
                 break
 
@@ -1570,8 +1548,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # Use API's next field for navigation (more robust than our counter)
             next_page = misc.coerce_page_number(paging.get("next"))
             if next_page is None:
-                if strict:
-                    raise ValueError(f"Invalid 'next' page value in paging info: {paging.get('next')}")
                 LOG.warning("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
                 break
             page = next_page
@@ -1739,28 +1715,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Check for success messages
         return await self.web_check(By.ID, "checking-done", Is.DISPLAYED) or await self.web_check(By.ID, "not-completed", Is.DISPLAYED)
 
-    async def _detect_new_published_ad_ids(self, ads_before_publish:set[str], ad_title:str) -> set[str] | None:
-        try:
-            current_ads = await self._fetch_published_ads(strict = True)
-            current_ad_ids:set[str] = set()
-            for current_ad in current_ads:
-                if not isinstance(current_ad, dict):
-                    # Keep duplicate-prevention verification fail-closed: malformed entries
-                    # must abort retries rather than risk creating duplicate listings.
-                    entry_length = len(current_ad) if hasattr(current_ad, "__len__") else None
-                    LOG.debug("Malformed ad entry in strict duplicate verification: type=%s length=%s", type(current_ad).__name__, entry_length)
-                    raise TypeError(f"Unexpected ad entry type: {type(current_ad).__name__}")
-                if current_ad.get("id"):
-                    current_ad_ids.add(str(current_ad["id"]))
-        except Exception as ex:  # noqa: BLE001
-            LOG.warning(
-                "Could not verify published ads after failed attempt for '%s': %s -- aborting retries to prevent duplicates.",
-                ad_title,
-                ex,
-            )
-            return None
-        return current_ad_ids - ads_before_publish
-
     async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
         failed_count = 0
@@ -1778,15 +1732,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             count += 1
             success = False
 
-            # Retry loop only for publish_ad (before submission completes)
-            # Fetch a fresh baseline right before the retry loop to avoid stale state
-            # from earlier successful publishes in multi-ad runs (see #874)
-            try:
-                pre_publish_ads = await self._fetch_published_ads()
-                ads_before_publish:set[str] = {str(x["id"]) for x in pre_publish_ads if x.get("id")}
-            except Exception as ex:  # noqa: BLE001
-                LOG.warning("Could not fetch fresh published-ads baseline for '%s': %s. Falling back to initial snapshot.", ad_cfg.title, ex)
-                ads_before_publish = {str(x["id"]) for x in published_ads if x.get("id")}
             for attempt in range(1, max_retries + 1):
                 try:
                     await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.REPLACE)
@@ -1794,32 +1739,28 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     break  # Publish succeeded, exit retry loop
                 except asyncio.CancelledError:
                     raise  # Respect task cancellation
+                except PublishSubmissionUncertainError as ex:
+                    await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
+                    LOG.warning(
+                        "Attempt %s/%s for '%s' reached submit boundary but failed: %s. Not retrying to prevent duplicate listings.",
+                        attempt,
+                        max_retries,
+                        ad_cfg.title,
+                        ex,
+                    )
+                    LOG.warning("Manual recovery required for '%s'. Check 'Meine Anzeigen' to confirm whether the ad was posted.", ad_cfg.title)
+                    LOG.warning(
+                        "If posted, sync local state with 'kleinanzeigen-bot download --ads=new' or 'kleinanzeigen-bot download --ads=<id>'; "
+                        "otherwise rerun publish for this ad."
+                    )
+                    failed_count += 1
+                    break
                 except (TimeoutError, ProtocolException) as ex:
                     await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
                     if attempt >= max_retries:
                         LOG.error("All %s attempts failed for '%s': %s. Skipping ad.", max_retries, ad_cfg.title, ex)
                         failed_count += 1
                         continue
-
-                    # Before retrying, check if the ad was already created despite the error.
-                    # A partially successful submission followed by a retry would create a duplicate listing,
-                    # which violates kleinanzeigen.de terms of service and can lead to account suspension.
-                    new_ad_ids = await self._detect_new_published_ad_ids(ads_before_publish, ad_cfg.title)
-                    if new_ad_ids is None:
-                        failed_count += 1
-                        break
-                    if new_ad_ids:
-                        LOG.warning(
-                            "Attempt %s/%s failed for '%s': %s. "
-                            "However, a new ad was detected (id: %s) -- aborting retries to prevent duplicates.",
-                            attempt,
-                            max_retries,
-                            ad_cfg.title,
-                            ex,
-                            ", ".join(new_ad_ids),
-                        )
-                        failed_count += 1
-                        break
 
                     LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
                     await self.web_sleep(2_000)  # Wait before retry
@@ -1973,39 +1914,42 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # submit
         #############################
         try:
-            await self.web_click(By.ID, "pstad-submit")
-        except TimeoutError:
-            # https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/40
-            await self.web_click(By.XPATH, "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')]")
-            await self.web_click(By.ID, "imprint-guidance-submit")
+            try:
+                await self.web_click(By.ID, "pstad-submit")
+            except TimeoutError:
+                # https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/40
+                await self.web_click(By.XPATH, "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')]")
+                await self.web_click(By.ID, "imprint-guidance-submit")
 
-        # check for no image question
-        try:
-            image_hint_xpath = '//button[contains(., "Ohne Bild veröffentlichen")]'
-            if not ad_cfg.images and await self.web_check(By.XPATH, image_hint_xpath, Is.DISPLAYED):
-                await self.web_click(By.XPATH, image_hint_xpath)
-        except TimeoutError:
-            # Image hint not shown; continue publish flow.
-            pass  # nosec
+            # check for no image question
+            try:
+                image_hint_xpath = '//button[contains(., "Ohne Bild veröffentlichen")]'
+                if not ad_cfg.images and await self.web_check(By.XPATH, image_hint_xpath, Is.DISPLAYED):
+                    await self.web_click(By.XPATH, image_hint_xpath)
+            except TimeoutError:
+                # Image hint not shown; continue publish flow.
+                pass  # nosec
 
-        #############################
-        # wait for payment form if commercial account is used
-        #############################
-        try:
-            short_timeout = self._timeout("quick_dom")
-            await self.web_find(By.ID, "myftr-shppngcrt-frm", timeout = short_timeout)
+            #############################
+            # wait for payment form if commercial account is used
+            #############################
+            try:
+                short_timeout = self._timeout("quick_dom")
+                await self.web_find(By.ID, "myftr-shppngcrt-frm", timeout = short_timeout)
 
-            LOG.warning("############################################")
-            LOG.warning("# Payment form detected! Please proceed with payment.")
-            LOG.warning("############################################")
-            await self.web_scroll_page_down()
-            await ainput(_("Press a key to continue..."))
-        except TimeoutError:
-            # Payment form not present.
-            pass
+                LOG.warning("############################################")
+                LOG.warning("# Payment form detected! Please proceed with payment.")
+                LOG.warning("############################################")
+                await self.web_scroll_page_down()
+                await ainput(_("Press a key to continue..."))
+            except TimeoutError:
+                # Payment form not present.
+                pass
 
-        confirmation_timeout = self._timeout("publishing_confirmation")
-        await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = confirmation_timeout)
+            confirmation_timeout = self._timeout("publishing_confirmation")
+            await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = confirmation_timeout)
+        except (TimeoutError, ProtocolException) as ex:
+            raise PublishSubmissionUncertainError("submission may have succeeded before failure") from ex
 
         # extract the ad id from the URL's query parameter
         current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(self.page.url).query)

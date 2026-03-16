@@ -14,3 +14,10 @@ class CaptchaEncountered(KleinanzeigenBotError):
     def __init__(self, restart_delay:timedelta) -> None:
         super().__init__()
         self.restart_delay = restart_delay
+
+
+class PublishSubmissionUncertainError(KleinanzeigenBotError):
+    """Raised when publish submission may have reached the server state boundary."""
+
+    def __init__(self, reason:str) -> None:
+        super().__init__(reason)
