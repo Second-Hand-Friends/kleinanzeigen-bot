@@ -58,7 +58,7 @@ async def capture_diagnostics(
 
     Args:
         output_dir: The output directory for diagnostics artifacts
-        base_prefix: Base filename prefix (e.g., 'login_detection_unknown', 'publish_error')
+        base_prefix: Base filename prefix (e.g., 'login_detection_inconclusive', 'publish_error')
         attempt: Optional attempt number for retry operations
         subject: Optional subject identifier (e.g., ad token)
         page: Optional page object with save_screenshot and get_content methods

@@ -4,6 +4,7 @@
 import atexit, asyncio, enum, json, os, re, signal, sys, textwrap  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
+from dataclasses import dataclass
 from datetime import datetime
 from gettext import gettext as _
 from pathlib import Path
@@ -55,10 +56,29 @@ class AdUpdateStrategy(enum.Enum):
     MODIFY = enum.auto()
 
 
-class LoginState(enum.Enum):
-    LOGGED_IN = enum.auto()
-    LOGGED_OUT = enum.auto()
-    UNKNOWN = enum.auto()
+class LoginDetectionReason(enum.Enum):
+    USER_INFO_MATCH = enum.auto()
+    CTA_MATCH = enum.auto()
+    SELECTOR_TIMEOUT = enum.auto()
+
+
+@dataclass(frozen = True)
+class LoginDetectionResult:
+    """Login detection result.
+
+    Invariants:
+    - is_logged_in=True only with USER_INFO_MATCH
+    - is_logged_in=False with CTA_MATCH or SELECTOR_TIMEOUT
+    """
+
+    is_logged_in:bool
+    reason:LoginDetectionReason
+
+    def __post_init__(self) -> None:
+        if self.is_logged_in and self.reason != LoginDetectionReason.USER_INFO_MATCH:
+            raise ValueError("is_logged_in=True requires reason=USER_INFO_MATCH")
+        if not self.is_logged_in and self.reason == LoginDetectionReason.USER_INFO_MATCH:
+            raise ValueError("is_logged_in=False requires reason=CTA_MATCH or SELECTOR_TIMEOUT")
 
 
 def _repost_cycle_ready(
@@ -1014,8 +1034,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         except TimeoutError:
             LOG.debug("No GDPR banner detected before login")
 
-        state = await self.get_login_state(capture_diagnostics = False)
-        if state == LoginState.LOGGED_IN:
+        detection_result = await self.get_login_state(capture_diagnostics = False)
+        if detection_result.is_logged_in:
             LOG.info("Already logged in. Skipping login.")
             return
 
@@ -1042,15 +1062,19 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         await self._dismiss_consent_banner()
 
-        state = await self.get_login_state()
-        if state == LoginState.LOGGED_IN:
+        detection_result = await self.get_login_state()
+        if detection_result.is_logged_in:
             LOG.info("Login confirmed.")
             return
 
         current_url = self._current_page_url()
-        LOG.warning("Login state after attempt is %s (url=%s)", state.name, current_url)
+        LOG.debug("Login detection reason after attempt is %s", detection_result.reason.name)
+        LOG.warning("Login could not be confirmed after Auth0 flow (url=%s)", current_url)
         await self._capture_login_detection_diagnostics_if_enabled()
-        raise AssertionError(_("Login could not be confirmed after Auth0 flow (state=%s, url=%s)") % (state.name, current_url))
+        raise AssertionError(
+            _("Login could not be confirmed after Auth0 flow (reason=%s, url=%s)")
+            % (detection_result.reason.name, current_url)
+        )
 
     def _current_page_url(self) -> str:
         page = getattr(self, "page", None)
@@ -1226,25 +1250,25 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         await self.web_find(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
         await self.web_click(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
 
-    async def get_login_state(self, *, capture_diagnostics:bool = True) -> LoginState:
-        """Determine current login state using DOM - first detection.
+    async def get_login_state(self, *, capture_diagnostics:bool = True) -> LoginDetectionResult:
+        """Determine login status using DOM-first detection and return result with reason.
 
         Order:
-        1) DOM - based logged - in check via `is_logged_in(include_probe=False)`
-        2) Logged - out CTA check
-        3) If inconclusive, optionally capture diagnostics and return `UNKNOWN`
+        1) DOM-based logged-in check via `is_logged_in(include_probe=False)`
+        2) Logged-out CTA check
+        3) If inconclusive, optionally capture diagnostics and return a timeout reason
         """
         # Prefer DOM-based checks first to minimize bot-like behavior and avoid
         # fragile API probing side effects. Server-side auth probing was removed.
         if await self.is_logged_in(include_probe = False):
-            return LoginState.LOGGED_IN
+            return LoginDetectionResult(is_logged_in = True, reason = LoginDetectionReason.USER_INFO_MATCH)
 
         if await self._has_logged_out_cta(log_timeout = False):
-            return LoginState.LOGGED_OUT
+            return LoginDetectionResult(is_logged_in = False, reason = LoginDetectionReason.CTA_MATCH)
 
         if capture_diagnostics:
             await self._capture_login_detection_diagnostics_if_enabled()
-        return LoginState.UNKNOWN
+        return LoginDetectionResult(is_logged_in = False, reason = LoginDetectionReason.SELECTOR_TIMEOUT)
 
     def _diagnostics_output_dir(self) -> Path:
         diagnostics = getattr(self.config, "diagnostics", None)
@@ -1272,20 +1296,20 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         try:
             await diagnostics.capture_diagnostics(
                 output_dir = self._diagnostics_output_dir(),
-                base_prefix = "login_detection_unknown",
+                base_prefix = "login_detection_inconclusive",
                 page = page,
             )
         except Exception as exc:  # noqa: BLE001
             LOG.debug(
                 "Login diagnostics capture failed (output_dir=%s, base_prefix=%s): %s",
                 self._diagnostics_output_dir(),
-                "login_detection_unknown",
+                "login_detection_inconclusive",
                 exc,
             )
 
         if cfg.pause_on_login_detection_failure and getattr(sys.stdin, "isatty", lambda: False)():
             LOG.warning("############################################")
-            LOG.warning("# Login detection returned UNKNOWN. Browser is paused for manual inspection.")
+            LOG.warning("# Login detection remained inconclusive. Browser is paused for manual inspection.")
             LOG.warning("############################################")
             await ainput(_("Press a key to continue..."))
 
@@ -1405,6 +1429,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.debug("No login detected via configured login detection selectors (%s)", tried_login_selectors)
         return False
 
+    # NOTE: Treats any matched CTA selector with non-empty text as logged-out evidence.
+    # Does NOT verify visibility (hidden/footer/off-canvas links could theoretically match).
+    # PR #870 verified these selectors work correctly in practice.
+    # If false positives occur, harden by adding web_check(Is.DISPLAYED) on cta_element.
+    # See issue #876.
     async def _has_logged_out_cta(self, *, log_timeout:bool = True) -> bool:
         quick_dom_timeout = self._timeout("quick_dom")
         tried_logged_out_selectors = _format_login_detection_selectors(_LOGGED_OUT_CTA_SELECTORS)
