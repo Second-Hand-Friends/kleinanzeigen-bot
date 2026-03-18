@@ -540,9 +540,7 @@ class TestKleinanzeigenBotAuthentication:
         assert group_text.await_count >= 1
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_logs_matched_raw_selector(
-        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
-    ) -> None:
+    async def test_is_logged_in_logs_matched_raw_selector(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
         """Login detection logs should show the matched raw selector."""
         caplog.set_level("DEBUG")
 
@@ -638,7 +636,7 @@ class TestKleinanzeigenBotAuthentication:
             assert result.is_logged_in is False
             assert result.reason == LoginDetectionReason.SELECTOR_TIMEOUT
             assert web_text.await_count == 2
-            assert cta_find.await_count == 2
+            assert cta_find.await_count == 1
 
     @pytest.mark.asyncio
     async def test_get_login_state_returns_logged_out_when_cta_detected(self, test_bot:KleinanzeigenBot) -> None:
@@ -656,6 +654,17 @@ class TestKleinanzeigenBotAuthentication:
             assert result.is_logged_in is False
             assert result.reason == LoginDetectionReason.CTA_MATCH
             assert web_text.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_get_login_state_checks_logged_out_cta_only_once(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch.object(test_bot, "_has_logged_in_marker", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "_has_logged_out_cta", new_callable = AsyncMock, return_value = False) as cta_check,
+        ):
+            result = await test_bot.get_login_state(capture_diagnostics = False)
+            assert result.is_logged_in is False
+            assert result.reason == LoginDetectionReason.SELECTOR_TIMEOUT
+            cta_check.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_get_login_state_selector_timeout_captures_diagnostics_when_enabled(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
@@ -846,7 +855,33 @@ class TestKleinanzeigenBotAuthentication:
                 await test_bot.login()
 
             mock_diagnostics.assert_awaited_once()
+            assert mock_diagnostics.await_args is not None
+            assert mock_diagnostics.await_args.kwargs.get("base_prefix") == "login_detection_selector_timeout"
             mock_state.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_capture_login_detection_diagnostics_honors_capture_log_copy(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate(
+            {
+                "capture_on": {"login_detection": True},
+                "capture_log_copy": True,
+                "output_dir": str(tmp_path),
+            }
+        )
+        test_bot.log_file_path = str(tmp_path / "bot.log")
+        test_bot._login_detection_diagnostics_captured = False
+
+        page = MagicMock()
+        test_bot.page = page
+
+        with patch("kleinanzeigen_bot.diagnostics.capture_diagnostics", new_callable = AsyncMock) as mock_capture:
+            await test_bot._capture_login_detection_diagnostics_if_enabled(base_prefix = "login_detection_test")
+
+            mock_capture.assert_awaited_once()
+            assert mock_capture.await_args is not None
+            assert mock_capture.await_args.kwargs.get("base_prefix") == "login_detection_test"
+            assert mock_capture.await_args.kwargs.get("copy_log") is True
+            assert mock_capture.await_args.kwargs.get("log_file_path") == test_bot.log_file_path
 
     def test_login_detection_result_accepts_logged_in_user_info_match(self) -> None:
         result = LoginDetectionResult(is_logged_in = True, reason = LoginDetectionReason.USER_INFO_MATCH)
@@ -880,6 +915,8 @@ class TestKleinanzeigenBotAuthentication:
                 await test_bot.login()
 
             mock_diagnostics.assert_awaited_once()
+            assert mock_diagnostics.await_args is not None
+            assert mock_diagnostics.await_args.kwargs.get("base_prefix") == "login_detection_sso_navigation_timeout"
             mock_state.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -925,9 +962,7 @@ class TestKleinanzeigenBotAuthentication:
             assert mock_click.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_fill_login_data_and_send_logs_generic_start_message(
-        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
-    ) -> None:
+    async def test_fill_login_data_and_send_logs_generic_start_message(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
         with (
             caplog.at_level("INFO"),
             patch.object(test_bot, "_wait_for_auth0_login_context", new_callable = AsyncMock),
@@ -1002,9 +1037,7 @@ class TestKleinanzeigenBotAuthentication:
             assert sleep_kwargs["min_ms"] < sleep_kwargs["max_ms"]
 
     @pytest.mark.asyncio
-    async def test_wait_for_post_auth0_submit_transition_sleep_fallback_when_login_not_confirmed(
-        self, test_bot:KleinanzeigenBot
-    ) -> None:
+    async def test_wait_for_post_auth0_submit_transition_sleep_fallback_when_login_not_confirmed(self, test_bot:KleinanzeigenBot) -> None:
         """Sleep fallback should run when bounded login check returns False."""
         with (
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]) as mock_wait,
@@ -1288,9 +1321,9 @@ class TestKleinanzeigenBotBasics:
         # 2nd call (fresh baseline, before retry loop): no ads
         # 3rd call (after first failed attempt): a new ad appeared — duplicate detected
         fetch_responses = [
-            {"content": json.dumps({"ads": []})},                                          # initial fetch
-            {"content": json.dumps({"ads": []})},                                          # fresh baseline
-            {"content": json.dumps({"ads": [{"id": "99999", "state": "active"}]})},         # duplicate detected
+            {"content": json.dumps({"ads": []})},  # initial fetch
+            {"content": json.dumps({"ads": []})},  # fresh baseline
+            {"content": json.dumps({"ads": [{"id": "99999", "state": "active"}]})},  # duplicate detected
         ]
 
         with (
@@ -2196,8 +2229,7 @@ class TestShippingSelectorTimeout:
 
             # Dialog-based fallback should have been triggered (click on "Versandmethoden auswählen")
             clicked_selectors = [str(c) for c in mock_click.call_args_list]
-            assert any("Versandmethoden" in s for s in clicked_selectors), \
-                "Expected dialog-based shipping fallback when versand_s is absent"
+            assert any("Versandmethoden" in s for s in clicked_selectors), "Expected dialog-based shipping fallback when versand_s is absent"
 
     @pytest.mark.asyncio
     async def test_visible_versand_s_uses_commercial_select(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
@@ -2221,8 +2253,7 @@ class TestShippingSelectorTimeout:
 
             # Dialog-based fallback should NOT have been triggered
             clicked_selectors = [str(c) for c in mock_click.call_args_list]
-            assert not any("Versandmethoden" in s for s in clicked_selectors), \
-                "Dialog-based shipping should not be triggered when versand_s is present"
+            assert not any("Versandmethoden" in s for s in clicked_selectors), "Dialog-based shipping should not be triggered when versand_s is present"
 
     @pytest.mark.asyncio
     async def test_web_select_timeout_propagates_after_successful_probe(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:

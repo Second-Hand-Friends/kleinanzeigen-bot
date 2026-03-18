@@ -108,9 +108,7 @@ def _repost_cycle_ready(
         return False
 
     if eligible_cycles <= applied_cycles:
-        LOG.info(
-            "Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts", ad_file_relative, applied_cycles, eligible_cycles
-        )
+        LOG.info("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts", ad_file_relative, applied_cycles, eligible_cycles)
         return False
 
     return True
@@ -461,8 +459,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
                     if not self._is_valid_ads_selector({"all", "new", "due", "changed"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, due, changed, or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, due, changed, or comma-separated numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         self.ads_selector = "due"
 
@@ -480,8 +477,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
                     if not self._is_valid_ads_selector({"all", "changed"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, changed, or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all, changed, or comma-separated numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         self.ads_selector = "changed"
 
@@ -517,8 +513,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     # Default to all ads if no selector provided, but reject invalid values
                     if not self._is_valid_ads_selector({"all"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all or comma-separated numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         LOG.info("Extending all ads within 8-day window...")
                         self.ads_selector = "all"
@@ -536,8 +531,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     # ad IDs depends on selector
                     if not self._is_valid_ads_selector({"all", "new"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, or comma-separated numeric IDs.',
-                                self.ads_selector)
+                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, or comma-separated numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         self.ads_selector = "new"
                     self.load_config()
@@ -1046,7 +1040,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             await self.web_open(f"{self.root_url}/m-einloggen-sso.html", timeout = sso_navigation_timeout)
         except TimeoutError:
             LOG.warning("Timeout navigating to SSO login page after %.1fs", sso_navigation_timeout)
-            await self._capture_login_detection_diagnostics_if_enabled()
+            await self._capture_login_detection_diagnostics_if_enabled(
+                base_prefix = "login_detection_sso_navigation_timeout",
+                pause_banner_message = "# SSO navigation timed out. Browser is paused for manual inspection.",
+            )
             raise
 
         self._login_detection_diagnostics_captured = False
@@ -1057,7 +1054,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         except (AssertionError, TimeoutError):
             # AssertionError is intentionally part of auth-boundary control flow so
             # diagnostics are captured before the original error is re-raised.
-            await self._capture_login_detection_diagnostics_if_enabled()
+            await self._capture_login_detection_diagnostics_if_enabled(
+                base_prefix = "login_detection_auth0_flow_failure",
+                pause_banner_message = "# Auth0 login flow failed. Browser is paused for manual inspection.",
+            )
             raise
 
         await self._dismiss_consent_banner()
@@ -1070,11 +1070,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         current_url = self._current_page_url()
         LOG.debug("Login detection reason after attempt is %s", detection_result.reason.name)
         LOG.warning("Login could not be confirmed after Auth0 flow (url=%s)", current_url)
-        await self._capture_login_detection_diagnostics_if_enabled()
-        raise AssertionError(
-            _("Login could not be confirmed after Auth0 flow (reason=%s, url=%s)")
-            % (detection_result.reason.name, current_url)
+        await self._capture_login_detection_diagnostics_if_enabled(
+            base_prefix = f"login_detection_{detection_result.reason.name.lower()}",
+            pause_banner_message = "# Login confirmation failed after Auth0 flow. Browser is paused for manual inspection.",
         )
+        raise AssertionError(_("Login could not be confirmed after Auth0 flow (reason=%s, url=%s)") % (detection_result.reason.name, current_url))
 
     def _current_page_url(self) -> str:
         page = getattr(self, "page", None)
@@ -1254,20 +1254,23 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         """Determine login status using DOM-first detection and return result with reason.
 
         Order:
-        1) DOM-based logged-in check via `is_logged_in(include_probe=False)`
+        1) DOM-based logged-in marker check
         2) Logged-out CTA check
         3) If inconclusive, optionally capture diagnostics and return a timeout reason
         """
         # Prefer DOM-based checks first to minimize bot-like behavior and avoid
         # fragile API probing side effects. Server-side auth probing was removed.
-        if await self.is_logged_in(include_probe = False):
+        if await self._has_logged_in_marker():
             return LoginDetectionResult(is_logged_in = True, reason = LoginDetectionReason.USER_INFO_MATCH)
 
         if await self._has_logged_out_cta(log_timeout = False):
             return LoginDetectionResult(is_logged_in = False, reason = LoginDetectionReason.CTA_MATCH)
 
         if capture_diagnostics:
-            await self._capture_login_detection_diagnostics_if_enabled()
+            await self._capture_login_detection_diagnostics_if_enabled(
+                base_prefix = "login_detection_selector_timeout",
+                pause_banner_message = "# Login detection remained inconclusive. Browser is paused for manual inspection.",
+            )
         return LoginDetectionResult(is_logged_in = False, reason = LoginDetectionReason.SELECTOR_TIMEOUT)
 
     def _diagnostics_output_dir(self) -> Path:
@@ -1279,7 +1282,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         xdg_paths.ensure_directory(workspace.diagnostics_dir, "diagnostics directory")
         return workspace.diagnostics_dir
 
-    async def _capture_login_detection_diagnostics_if_enabled(self) -> None:
+    async def _capture_login_detection_diagnostics_if_enabled(
+        self,
+        *,
+        base_prefix:str = "login_detection_inconclusive",
+        pause_banner_message:str = "# Login detection remained inconclusive. Browser is paused for manual inspection.",
+    ) -> None:
         cfg = getattr(self.config, "diagnostics", None)
         if cfg is None or not cfg.capture_on.login_detection:
             return
@@ -1296,20 +1304,22 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         try:
             await diagnostics.capture_diagnostics(
                 output_dir = self._diagnostics_output_dir(),
-                base_prefix = "login_detection_inconclusive",
+                base_prefix = base_prefix,
                 page = page,
+                log_file_path = self.log_file_path,
+                copy_log = cfg.capture_log_copy,
             )
         except Exception as exc:  # noqa: BLE001
             LOG.debug(
                 "Login diagnostics capture failed (output_dir=%s, base_prefix=%s): %s",
                 self._diagnostics_output_dir(),
-                "login_detection_inconclusive",
+                base_prefix,
                 exc,
             )
 
         if cfg.pause_on_login_detection_failure and getattr(sys.stdin, "isatty", lambda: False)():
             LOG.warning("############################################")
-            LOG.warning("# Login detection remained inconclusive. Browser is paused for manual inspection.")
+            LOG.warning(pause_banner_message)
             LOG.warning("############################################")
             await ainput(_("Press a key to continue..."))
 
@@ -1367,7 +1377,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         except Exception as error:  # noqa: BLE001
             LOG.warning("Diagnostics capture failed during publish error handling: %s", error)
 
-    async def is_logged_in(self, *, include_probe:bool = True) -> bool:
+    async def _has_logged_in_marker(self) -> bool:
         # Use login_detection timeout (10s default) instead of default (5s)
         # to allow sufficient time for client-side JavaScript rendering after page load.
         # This is especially important for older sessions (20+ days) that require
@@ -1419,8 +1429,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         except TimeoutError:
             LOG.debug("Timeout waiting for login detection selector group after %.1fs", effective_timeout)
 
-        if await self._has_logged_out_cta():
-            return False
+        return False
+
+    async def is_logged_in(self, *, include_probe:bool = True) -> bool:
+        if await self._has_logged_in_marker():
+            return True
+
+        tried_login_selectors = _format_login_detection_selectors(_LOGIN_DETECTION_SELECTORS)
 
         if include_probe:
             LOG.debug("No login detected via configured login detection selectors (%s); auth probe is disabled", tried_login_selectors)
@@ -1839,8 +1854,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         break
                     if new_ad_ids:
                         LOG.warning(
-                            "Attempt %s/%s failed for '%s': %s. "
-                            "However, a new ad was detected (id: %s) -- aborting retries to prevent duplicates.",
+                            "Attempt %s/%s failed for '%s': %s. However, a new ad was detected (id: %s) -- aborting retries to prevent duplicates.",
                             attempt,
                             max_retries,
                             ad_cfg.title,

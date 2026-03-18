@@ -297,7 +297,8 @@ The bot uses a layered DOM-first approach to detect login status:
 
 2. **Logged-out CTA check**: Looks for login call-to-action links if logged-in markers are not found
 
-   - If login CTA selectors are matched with visible text, detection result is logged out (`CTA_MATCH`)
+   - If login CTA selectors are matched with non-empty extracted text, detection result is logged out (`CTA_MATCH`)
+   - Note: `_has_logged_out_cta()` does not explicitly verify visibility, so hidden/footer/off-canvas elements could theoretically match.
 
 3. **Inconclusive fallback**:
 

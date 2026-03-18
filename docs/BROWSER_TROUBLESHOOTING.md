@@ -107,8 +107,8 @@ The bot uses a layered **DOM-based check** to detect login status:
 2. **Logged-out CTA check**: Looks for login call-to-action links when logged-in markers are not found
 
    - Looks for selectors like `a[href*="einloggen"]`
-   - If found with visible text, detection result is logged out (`CTA_MATCH`)
-   - `CTA_MATCH` means a logged-out CTA/link was detected and treated as logged out; this reason appears in debug logs and failed-login assertion context. If unexpected, inspect page layout for public CTA links matching configured selectors.
+   - If selectors match with non-empty extracted text, detection result is logged out (`CTA_MATCH`)
+   - `CTA_MATCH` means a logged-out CTA selector matched with non-empty text; this reason appears in debug logs and failed-login assertion context. Visibility is not explicitly verified in `_has_logged_out_cta()`, so hidden/footer/off-canvas elements could theoretically match. If unexpected, inspect all matching elements, including non-visible ones.
 
 3. **Inconclusive detection**: If neither path yields evidence, result is not logged in with reason `SELECTOR_TIMEOUT`
 
