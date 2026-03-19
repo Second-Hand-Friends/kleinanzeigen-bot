@@ -285,8 +285,10 @@ class TestKleinanzeigenBotInitialization:
 
     @pytest.mark.asyncio
     async def test_download_ads_passes_download_dir_and_published_ads(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-        """Ensure download_ads wires download_dir and published_ads_by_id into AdExtractor."""
-        test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
+        """Ensure download_ads wires resolved download_dir and published_ads_by_id into AdExtractor."""
+        config_file = tmp_path / "config.yaml"
+        test_bot.workspace = xdg_paths.Workspace.for_config(config_file, "kleinanzeigen-bot")
+        test_bot.config_file_path = str(config_file)
         test_bot.ads_selector = "all"
         test_bot.browser = MagicMock()
 
@@ -308,6 +310,53 @@ class TestKleinanzeigenBotInitialization:
             test_bot.workspace.download_dir,
             published_ads_by_id = {123: mock_published_ads[0], 456: mock_published_ads[1]},
         )
+
+    def test_resolve_download_dir_uses_workspace_default_for_literal_default(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        config_file = tmp_path / "config.yaml"
+        test_bot.workspace = xdg_paths.Workspace.for_config(config_file, "kleinanzeigen-bot")
+        test_bot.config_file_path = str(config_file)
+        test_bot.browser = cast(Any, None)
+
+        assert test_bot._resolve_download_dir() == test_bot.workspace.download_dir
+
+    def test_resolve_download_dir_uses_config_relative_path(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        config_file = tmp_path / "config.yaml"
+        test_bot.workspace = xdg_paths.Workspace.for_config(config_file, "kleinanzeigen-bot")
+        test_bot.config_file_path = str(config_file)
+        test_bot.browser = cast(Any, None)
+        test_bot.config.download.dir = "./my-ads"
+
+        assert test_bot._resolve_download_dir() == (tmp_path / "my-ads").resolve()
+
+    def test_resolve_download_dir_uses_absolute_path(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        config_file = tmp_path / "config.yaml"
+        test_bot.workspace = xdg_paths.Workspace.for_config(config_file, "kleinanzeigen-bot")
+        test_bot.config_file_path = str(config_file)
+        test_bot.browser = cast(Any, None)
+        test_bot.config.download.dir = str((tmp_path / "absolute-target").resolve())
+
+        assert test_bot._resolve_download_dir() == (tmp_path / "absolute-target").resolve()
+
+    @pytest.mark.asyncio
+    async def test_download_ads_uses_configured_relative_download_dir(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        config_file = tmp_path / "config.yaml"
+        test_bot.workspace = xdg_paths.Workspace.for_config(config_file, "kleinanzeigen-bot")
+        test_bot.config_file_path = str(config_file)
+        test_bot.config.download.dir = "./ads"
+        test_bot.ads_selector = "all"
+        test_bot.browser = MagicMock()
+
+        extractor_mock = MagicMock()
+        extractor_mock.extract_own_ads_urls = AsyncMock(return_value = [])
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = []),
+            patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock) as mock_extractor,
+        ):
+            await test_bot.download_ads()
+
+        mock_extractor.assert_called_once()
+        assert mock_extractor.call_args.args[2] == (tmp_path / "ads").resolve()
 
 
 class TestKleinanzeigenBotLogging:
