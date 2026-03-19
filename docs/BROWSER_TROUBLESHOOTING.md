@@ -93,9 +93,7 @@ The bot will also provide specific instructions on how to fix your configuration
 - More common with profiles unused for 20+ days
 
 **How login detection works:**
-The bot checks your login status using page elements only (DOM-first, no server-side auth probe).
-
-The bot uses a layered **DOM-based check** to detect login status:
+The bot checks login status using a layered, DOM-first check (page elements only; no server-side auth probe):
 
 1. **DOM check (preferred - stealthy)**: Checks for user profile elements in the page
 

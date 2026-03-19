@@ -1323,7 +1323,14 @@ class TestKleinanzeigenBotBasics:
         fetch_responses = [
             {"content": json.dumps({"ads": []})},  # initial fetch
             {"content": json.dumps({"ads": []})},  # fresh baseline
-            {"content": json.dumps({"ads": [{"id": "99999", "state": "active"}]})},  # duplicate detected
+            {
+                "content": json.dumps(
+                    {
+                        "ads": [{"id": "99999", "state": "active"}],
+                        "paging": {"pageNum": 1, "last": 1},
+                    }
+                )
+            },  # duplicate detected
         ]
 
         with (
