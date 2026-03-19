@@ -306,7 +306,7 @@ class AdExtractor(WebScrapingMixin):
 
         try:  # try different locations known for creation date element
             creation_date = await self.web_text(By.XPATH, "/html/body/div[1]/div[2]/div/section[2]/section/section/article/div[3]/div[2]/div[2]/div[1]/span")
-        except TimeoutError:
+        except (AttributeError, TimeoutError):
             creation_date = await self.web_text(By.CSS_SELECTOR, "#viewad-extra-info > div:nth-child(1) > span:nth-child(2)")
 
         # convert creation date to ISO format
