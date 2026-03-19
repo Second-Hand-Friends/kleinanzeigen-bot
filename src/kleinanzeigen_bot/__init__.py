@@ -1302,8 +1302,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self._login_detection_diagnostics_captured = True
 
         try:
+            output_dir = self._diagnostics_output_dir()
+        except Exception as exc:  # noqa: BLE001
+            LOG.debug("Login diagnostics capture skipped (base_prefix=%s): %s", base_prefix, exc)
+            return
+
+        try:
             await diagnostics.capture_diagnostics(
-                output_dir = self._diagnostics_output_dir(),
+                output_dir = output_dir,
                 base_prefix = base_prefix,
                 page = page,
                 log_file_path = self.log_file_path,
@@ -1312,7 +1318,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         except Exception as exc:  # noqa: BLE001
             LOG.debug(
                 "Login diagnostics capture failed (output_dir=%s, base_prefix=%s): %s",
-                self._diagnostics_output_dir(),
+                output_dir,
                 base_prefix,
                 exc,
             )
