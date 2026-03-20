@@ -18,6 +18,7 @@ from kleinanzeigen_bot.utils.pydantics import ContextualModel
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 _MAX_PERCENTAGE:Final[int] = 100
+DEFAULT_DOWNLOAD_DIR:Final[str] = "downloaded-ads"
 
 
 class AutoPriceReductionConfig(ContextualModel):
@@ -116,6 +117,15 @@ class AdDefaults(ContextualModel):
 
 
 class DownloadConfig(ContextualModel):
+    dir:str = Field(
+        default = DEFAULT_DOWNLOAD_DIR,
+        description = (
+            "directory where downloaded ads are written. "
+            "The default literal 'downloaded-ads' uses workspace-specific resolution; "
+            "custom relative paths are resolved against the config file location"
+        ),
+        examples = ['"downloaded-ads"', '"./ads"'],
+    )
     include_all_matching_shipping_options:bool = Field(
         default = False,
         description = "if true, all shipping options matching the package size will be included",
@@ -135,6 +145,13 @@ class DownloadConfig(ContextualModel):
         default = False,
         description = "if true, rename existing folders without titles to include titles (default: false)",
     )
+
+    @model_validator(mode = "after")
+    def _validate_dir(self) -> "DownloadConfig":
+        self.dir = self.dir.strip()
+        if not self.dir:
+            raise ValueError(_("download.dir must be a non-empty path"))
+        return self
 
 
 class BrowserConfig(ContextualModel):

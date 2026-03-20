@@ -114,6 +114,12 @@ categories: {}
 # ################################################################################
 download:
 
+  # directory where downloaded ads are written. The default literal 'downloaded-ads' uses workspace-specific resolution; custom relative paths are resolved against the config file location
+  # Examples (choose one):
+  #   • "downloaded-ads"
+  #   • "./ads"
+  dir: downloaded-ads
+
   # if true, all shipping options matching the package size will be included
   include_all_matching_shipping_options: false
 

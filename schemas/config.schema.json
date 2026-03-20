@@ -468,6 +468,16 @@
     },
     "DownloadConfig": {
       "properties": {
+        "dir": {
+          "default": "downloaded-ads",
+          "description": "directory where downloaded ads are written. The default literal 'downloaded-ads' uses workspace-specific resolution; custom relative paths are resolved against the config file location",
+          "examples": [
+            "\"downloaded-ads\"",
+            "\"./ads\""
+          ],
+          "title": "Dir",
+          "type": "string"
+        },
         "include_all_matching_shipping_options": {
           "default": false,
           "description": "if true, all shipping options matching the package size will be included",

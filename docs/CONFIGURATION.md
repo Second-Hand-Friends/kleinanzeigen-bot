@@ -170,11 +170,18 @@ Download configuration for the `download` command.
 
 ```yaml
 download:
+  dir: "downloaded-ads"  # default literal keeps workspace-mode download-folder behavior
+                        # custom relative paths are resolved relative to config.yaml
   include_all_matching_shipping_options: false  # if true, all shipping options matching the package size will be included
   excluded_shipping_options: []  # list of shipping options to exclude, e.g. ['DHL_2', 'DHL_5']
   folder_name_max_length: 100  # maximum length for folder names when downloading ads (default: 100)
   rename_existing_folders: false  # if true, rename existing folders without titles to include titles (default: false)
 ```
+
+- `download.dir` controls where `download` writes ad files.
+- Leaving `download.dir` at the default literal `downloaded-ads` keeps workspace-mode behavior (portable workspace folder in portable mode, XDG workspace folder in XDG mode).
+- Custom relative `download.dir` values are resolved relative to `config.yaml`, not the current shell working directory.
+- Absolute `download.dir` values are used as-is.
 
 ### publishing
 

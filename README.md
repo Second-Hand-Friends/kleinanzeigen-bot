@@ -333,6 +333,10 @@ Full documentation including timeout tuning, browser settings, ad defaults, diag
 
 Each ad is defined in a separate YAML/JSON file (default pattern: `ad_*.yaml`). These files specify the title, description, price, category, images, and other ad-specific settings.
 
+The `publish` workflow reads files matched by the `ad_files` glob pattern. The `download` workflow writes files into `download.dir` (default: the literal `downloaded-ads/` directory in the workspace root).
+
+In XDG mode, the bare default `downloaded-ads/` stays in the workspace default download location. If you want a config-relative shared tree, set `download.dir` to `./downloaded-ads` and ensure the `ad_files` glob pattern matches files inside that tree.
+
 **Quick example (`ad_laptop.yaml`):**
 
 ```yaml
