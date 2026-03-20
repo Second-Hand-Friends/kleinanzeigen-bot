@@ -884,6 +884,49 @@ class TestKleinanzeigenBotAuthentication:
             assert mock_capture.await_args.kwargs.get("base_prefix") == "login_detection_test"
             assert mock_capture.await_args.kwargs.get("copy_log") is True
             assert mock_capture.await_args.kwargs.get("log_file_path") == test_bot.log_file_path
+            assert test_bot._login_detection_diagnostics_captured is True
+
+    @pytest.mark.asyncio
+    async def test_capture_login_detection_diagnostics_does_not_mark_captured_on_output_dir_error(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate(
+            {
+                "capture_on": {"login_detection": True},
+                "capture_log_copy": True,
+                "output_dir": str(tmp_path),
+            }
+        )
+        test_bot._login_detection_diagnostics_captured = False
+        test_bot.page = MagicMock()
+
+        with (
+            patch.object(test_bot, "_diagnostics_output_dir", side_effect = RuntimeError("dir error")),
+            patch("kleinanzeigen_bot.diagnostics.capture_diagnostics", new_callable = AsyncMock) as mock_capture,
+        ):
+            await test_bot._capture_login_detection_diagnostics_if_enabled(base_prefix = "login_detection_test")
+
+            mock_capture.assert_not_awaited()
+            assert test_bot._login_detection_diagnostics_captured is False
+
+    @pytest.mark.asyncio
+    async def test_capture_login_detection_diagnostics_does_not_mark_captured_on_capture_error(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate(
+            {
+                "capture_on": {"login_detection": True},
+                "capture_log_copy": True,
+                "output_dir": str(tmp_path),
+            }
+        )
+        test_bot._login_detection_diagnostics_captured = False
+        test_bot.page = MagicMock()
+
+        with patch(
+            "kleinanzeigen_bot.diagnostics.capture_diagnostics",
+            new_callable = AsyncMock,
+            side_effect = RuntimeError("capture error"),
+        ):
+            await test_bot._capture_login_detection_diagnostics_if_enabled(base_prefix = "login_detection_test")
+
+            assert test_bot._login_detection_diagnostics_captured is False
 
     def test_login_detection_result_accepts_logged_in_user_info_match(self) -> None:
         result = LoginDetectionResult(is_logged_in = True, reason = LoginDetectionReason.USER_INFO_MATCH)
@@ -898,6 +941,14 @@ class TestKleinanzeigenBotAuthentication:
     def test_login_detection_result_rejects_invalid_logged_out_user_info_match(self) -> None:
         with pytest.raises(ValueError, match = "CTA_MATCH or SELECTOR_TIMEOUT"):
             LoginDetectionResult(is_logged_in = False, reason = LoginDetectionReason.USER_INFO_MATCH)
+
+    def test_login_detection_result_rejects_non_bool_is_logged_in(self) -> None:
+        with pytest.raises(TypeError, match = "is_logged_in must be a bool"):
+            LoginDetectionResult(is_logged_in = "yes", reason = LoginDetectionReason.CTA_MATCH)  # type: ignore[arg-type]
+
+    def test_login_detection_result_rejects_non_enum_reason(self) -> None:
+        with pytest.raises(TypeError, match = "reason must be a LoginDetectionReason"):
+            LoginDetectionResult(is_logged_in = False, reason = "bogus")  # type: ignore[arg-type]
 
     @pytest.mark.asyncio
     async def test_login_flow_raises_when_sso_navigation_times_out(self, test_bot:KleinanzeigenBot) -> None:

@@ -75,6 +75,10 @@ class LoginDetectionResult:
     reason:LoginDetectionReason
 
     def __post_init__(self) -> None:
+        if not isinstance(self.is_logged_in, bool):
+            raise TypeError("is_logged_in must be a bool")
+        if not isinstance(self.reason, LoginDetectionReason):
+            raise TypeError("reason must be a LoginDetectionReason")
         if self.is_logged_in and self.reason != LoginDetectionReason.USER_INFO_MATCH:
             raise ValueError("is_logged_in=True requires reason=USER_INFO_MATCH")
         if not self.is_logged_in and self.reason == LoginDetectionReason.USER_INFO_MATCH:
@@ -1299,8 +1303,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if page is None:
             return
 
-        self._login_detection_diagnostics_captured = True
-
         try:
             output_dir = self._diagnostics_output_dir()
         except Exception as exc:  # noqa: BLE001
@@ -1322,6 +1324,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 base_prefix,
                 exc,
             )
+            return
+
+        self._login_detection_diagnostics_captured = True
 
         if cfg.pause_on_login_detection_failure and getattr(sys.stdin, "isatty", lambda: False)():
             LOG.warning("############################################")
