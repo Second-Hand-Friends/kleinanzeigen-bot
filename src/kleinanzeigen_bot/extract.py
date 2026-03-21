@@ -79,13 +79,12 @@ class AdExtractor(WebScrapingMixin):
                 remaining_id_placeholders -= 1
                 continue
 
-            if field_name_part == "title":
-                reserved_for_future_ids = remaining_id_placeholders * len(id_value)
-                remaining_length = max_length - current_length
-                title_part_length = min(len(sanitized_title), remaining_title_budget, max(0, remaining_length - reserved_for_future_ids))
-                parts.append(sanitized_title[:title_part_length])
-                current_length += title_part_length
-                remaining_title_budget -= title_part_length
+            reserved_for_future_ids = remaining_id_placeholders * len(id_value)
+            remaining_length = max_length - current_length
+            title_part_length = min(len(sanitized_title), remaining_title_budget, max(0, remaining_length - reserved_for_future_ids))
+            parts.append(sanitized_title[:title_part_length])
+            current_length += title_part_length
+            remaining_title_budget -= title_part_length
 
         rendered_name = "".join(parts).strip()
         return misc.sanitize_folder_name(rendered_name, max_length)

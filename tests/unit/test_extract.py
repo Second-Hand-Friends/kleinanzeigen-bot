@@ -1670,3 +1670,21 @@ class TestAdExtractorDownload:
         rendered = extractor._render_download_name_with_budget("prefix", 12345, "Any Title", 6)
 
         assert rendered == "prefix"
+
+    def test_render_download_name_with_budget_handles_zero_title_budget(self, extractor:extract_module.AdExtractor) -> None:
+        rendered = extractor._render_download_name_with_budget("{id}_{title}", 12345, "Any Title", 5)
+
+        assert rendered == "12345"
+
+    def test_render_download_name_with_budget_handles_title_before_id(self, extractor:extract_module.AdExtractor) -> None:
+        rendered = extractor._render_download_name_with_budget("{title}_{id}", 12345, "Any Title", 20)
+
+        assert rendered.endswith("_12345")
+
+    def test_render_download_folder_name_preserves_first_title_when_repeated(self, extractor:extract_module.AdExtractor) -> None:
+        extractor.config.download.folder_name_max_length = 10
+        extractor.config.download.folder_name_template = "{title}_{title}"
+
+        folder_name = extractor._render_download_folder_name(12345, "abcdef")
+
+        assert folder_name == "abcdef_abc"
