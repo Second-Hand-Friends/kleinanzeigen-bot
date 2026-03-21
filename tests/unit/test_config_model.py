@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import pytest
 
+from kleinanzeigen_bot.model import config_model
 from kleinanzeigen_bot.model.config_model import DEFAULT_DOWNLOAD_DIR, AdDefaults, Config, TimeoutConfig
 
 
@@ -247,6 +248,16 @@ def test_download_config_rejects_empty_placeholder() -> None:
                 "download": {"folder_name_template": "ad_{}"},
                 "login": {"username": "dummy", "password": "dummy"},
             }
+        )
+
+
+def test_validate_download_template_rejects_literal_only_when_no_required_fields() -> None:
+    with pytest.raises(ValueError, match = r"TestField must include at least one placeholder: \{id\}, \{title\}"):
+        config_model._validate_download_template(
+            "literal_only",
+            allowed_fields = frozenset({"id", "title"}),
+            required_fields = frozenset(),
+            field_name = "TestField",
         )
 
 
