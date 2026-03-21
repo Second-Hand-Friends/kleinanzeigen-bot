@@ -98,7 +98,7 @@ def test_download_config_accepts_custom_dir_and_templates() -> None:
         {
             "download": {
                 "dir": "  ./ads  ",
-                "folder_name_template": "  {title}  ",
+                "folder_name_template": "  listing_{id}_{title}  ",
                 "ad_file_name_template": "  listing_{id}_{title}  ",
             },
             "login": {"username": "dummy", "password": "dummy"},
@@ -106,7 +106,7 @@ def test_download_config_accepts_custom_dir_and_templates() -> None:
     )
 
     assert cfg.download.dir == "./ads"
-    assert cfg.download.folder_name_template == "{title}"
+    assert cfg.download.folder_name_template == "listing_{id}_{title}"
     assert cfg.download.ad_file_name_template == "listing_{id}_{title}"
 
 
@@ -141,10 +141,20 @@ def test_download_config_rejects_blank_folder_name_template() -> None:
 
 
 def test_download_config_rejects_literal_only_folder_name_template() -> None:
-    with pytest.raises(ValueError, match = r"download\.folder_name_template must include at least one placeholder: \{id\}, \{title\}"):
+    with pytest.raises(ValueError, match = r"download\.folder_name_template must include placeholder\(s\): \{id\}"):
         Config.model_validate(
             {
                 "download": {"folder_name_template": "ads"},
+                "login": {"username": "dummy", "password": "dummy"},
+            }
+        )
+
+
+def test_download_config_rejects_title_only_folder_name_template() -> None:
+    with pytest.raises(ValueError, match = r"download\.folder_name_template must include placeholder\(s\): \{id\}"):
+        Config.model_validate(
+            {
+                "download": {"folder_name_template": "{title}"},
                 "login": {"username": "dummy", "password": "dummy"},
             }
         )

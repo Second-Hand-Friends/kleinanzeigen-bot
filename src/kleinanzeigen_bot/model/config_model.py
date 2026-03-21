@@ -150,9 +150,9 @@ class DownloadConfig(ContextualModel):
         description = (
             "folder naming template for downloaded ad directories. "
             "Allowed placeholders: {id}, {title}. "
-            "Template must include at least one placeholder"
+            "Template must include {id}"
         ),
-        examples = ['"ad_{id}_{title}"', '"{title}"', '"listing_{id}_{title}"'],
+        examples = ['"ad_{id}_{title}"', '"listing_{id}_{title}"', '"{id}"'],
     )
     ad_file_name_template:str = Field(
         default = "ad_{id}",
@@ -183,7 +183,7 @@ class DownloadConfig(ContextualModel):
         self.folder_name_template = _validate_download_template(
             self.folder_name_template,
             allowed_fields = _FOLDER_TEMPLATE_ALLOWED_FIELDS,
-            required_fields = frozenset(),
+            required_fields = frozenset({"id"}),
             field_name = f"{_FIELD_NAME_PREFIX}folder_name_template",
         )
         self.ad_file_name_template = _validate_download_template(

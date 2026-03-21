@@ -507,11 +507,11 @@
         },
         "folder_name_template": {
           "default": "ad_{id}_{title}",
-          "description": "folder naming template for downloaded ad directories. Allowed placeholders: {id}, {title}. Template must include at least one placeholder",
+          "description": "folder naming template for downloaded ad directories. Allowed placeholders: {id}, {title}. Template must include {id}",
           "examples": [
             "\"ad_{id}_{title}\"",
-            "\"{title}\"",
-            "\"listing_{id}_{title}\""
+            "\"listing_{id}_{title}\"",
+            "\"{id}\""
           ],
           "title": "Folder Name Template",
           "type": "string"
