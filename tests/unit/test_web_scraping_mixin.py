@@ -843,6 +843,26 @@ class TestWebScrapingSessionManagement:
         mock_proc.assert_called_once()
         stop_mock.assert_called_once()
 
+    def test_close_browser_session_skips_killing_stopped_children(self) -> None:
+        """Stopped child processes should not be force-killed."""
+        scraper = WebScrapingMixin()
+        scraper.browser = MagicMock()
+        scraper.browser._process_pid = 456
+        stop_mock = scraper.browser.stop = MagicMock()
+        scraper.page = MagicMock(spec = Page)
+
+        with patch("psutil.Process") as mock_proc:
+            mock_child = MagicMock()
+            mock_child.is_running.return_value = False
+            mock_proc.return_value.children.return_value = [mock_child]
+            scraper.close_browser_session()
+
+        mock_proc.assert_called_once_with(456)
+        stop_mock.assert_called_once()
+        mock_child.kill.assert_not_called()
+        assert scraper.browser is None
+        assert scraper.page is None
+
     def test_close_browser_session_stops_before_force_killing_children(self) -> None:
         """Browser stop should run before force-killing child processes."""
         scraper = WebScrapingMixin()
