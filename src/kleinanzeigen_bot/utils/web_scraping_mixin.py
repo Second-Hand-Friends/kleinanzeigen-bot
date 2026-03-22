@@ -759,12 +759,17 @@ class WebScrapingMixin:
         if self.browser:
             LOG.debug("Closing Browser session...")
             self.page = None  # pyright: ignore[reportAttributeAccessIssue]
-            browser_process = psutil.Process(self.browser._process_pid)  # noqa: SLF001 Private member accessed
-            browser_children:list[psutil.Process] = browser_process.children()
+            # Safely read private nodriver PID. In tests/mocked sessions this can be non-int,
+            # and in externally managed browser sessions it can be None.
+            browser_pid = getattr(self.browser, "_process_pid", None)
+            # Let nodriver perform graceful shutdown first; only force-kill leftovers afterwards.
             self.browser.stop()
-            for p in browser_children:
-                if p.is_running():
-                    p.kill()  # terminate orphaned browser processes
+            if isinstance(browser_pid, int) and browser_pid > 0:
+                browser_process = psutil.Process(browser_pid)
+                browser_children:list[psutil.Process] = browser_process.children()
+                for p in browser_children:
+                    if p.is_running():
+                        p.kill()  # terminate orphaned browser processes
             self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
 
     def _cleanup_session_resources(self) -> None:
