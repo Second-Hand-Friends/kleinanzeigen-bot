@@ -1072,7 +1072,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         await self._dismiss_consent_banner()
 
-        detection_result = await self.get_login_state()
+        detection_result = await self.get_login_state(capture_diagnostics = False)
         if detection_result.is_logged_in:
             LOG.info("Login confirmed.")
             return

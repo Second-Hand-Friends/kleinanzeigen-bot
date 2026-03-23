@@ -905,6 +905,8 @@ class TestKleinanzeigenBotAuthentication:
             assert mock_diagnostics.await_args is not None
             assert mock_diagnostics.await_args.kwargs.get("base_prefix") == "login_detection_selector_timeout"
             mock_state.assert_awaited()
+            assert mock_state.await_count == 2
+            assert mock_state.await_args_list[1].kwargs.get("capture_diagnostics") is False
 
     @pytest.mark.asyncio
     async def test_capture_login_detection_diagnostics_honors_capture_log_copy(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
