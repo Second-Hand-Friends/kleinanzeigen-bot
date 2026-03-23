@@ -26,6 +26,25 @@ def _read_text_file(path:Path) -> str:
     return path.read_text(encoding = "utf-8")
 
 
+def _create_test_ad_partial(**overrides:Any) -> AdPartial:
+    """Create a valid AdPartial payload for extract staging/rollback tests."""
+    payload:dict[str, Any] = {
+        "title": "Test Advertisement Title",
+        "description": "Test Description",
+        "category": "Dienstleistungen",
+        "price": 100,
+        "images": [],
+        "contact": {
+            "name": "Test User",
+            "street": "Test Street 123",
+            "zipcode": "12345",
+            "location": "Test City",
+        },
+    }
+    payload.update(overrides)
+    return AdPartial.model_validate(payload)
+
+
 class _DimensionsDict(TypedDict):
     ad_attributes:str
 
@@ -1244,16 +1263,7 @@ class TestAdExtractorDownload:
             patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
         ):
             mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "price": 100,
-                        "images": [],
-                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-                    }
-                ),
+                _create_test_ad_partial(),
                 staging_dir,
                 final_dir,
                 "ad_12345",
@@ -1285,15 +1295,7 @@ class TestAdExtractorDownload:
 
         with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
             mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "created_on": "2026-03-08T00:00:00+01:00",
-                        "updated_on": "2026-03-09T01:02:03+01:00",
-                    }
-                ),
+                _create_test_ad_partial(created_on = "2026-03-08T00:00:00+01:00", updated_on = "2026-03-09T01:02:03+01:00"),
                 staging_dir,
                 final_dir,
                 "ad_12345",
@@ -1629,16 +1631,7 @@ class TestAdExtractorDownload:
             patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
         ):
             mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "price": 100,
-                        "images": [],
-                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-                    }
-                ),
+                _create_test_ad_partial(),
                 staging_dir,
                 final_dir,
                 ad_file_stem,
@@ -1666,16 +1659,7 @@ class TestAdExtractorDownload:
 
         with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
             mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "price": 100,
-                        "images": [],
-                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-                    }
-                ),
+                _create_test_ad_partial(),
                 staging_dir,
                 final_dir,
                 "ad_12345",
@@ -1706,16 +1690,7 @@ class TestAdExtractorDownload:
             patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True, side_effect = OSError("write failed")),
         ):
             mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "price": 100,
-                        "images": [],
-                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-                    }
-                ),
+                _create_test_ad_partial(),
                 staging_dir,
                 final_dir,
                 "ad_12345",
@@ -1747,16 +1722,7 @@ class TestAdExtractorDownload:
             patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True, side_effect = OSError("write failed")),
         ):
             mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "price": 100,
-                        "images": [],
-                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-                    }
-                ),
+                _create_test_ad_partial(),
                 staging_dir,
                 final_dir,
                 "ad_12345",
@@ -1787,16 +1753,7 @@ class TestAdExtractorDownload:
             patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True) as mock_rmtree,
         ):
             mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "price": 100,
-                        "images": [],
-                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-                    }
-                ),
+                _create_test_ad_partial(),
                 staging_dir,
                 final_dir,
                 "ad_12345",
@@ -1807,45 +1764,79 @@ class TestAdExtractorDownload:
 
         mock_rmtree.assert_not_called()
 
+    @pytest.mark.parametrize(
+        ("cleanup_target", "expected_warning"),
+        [
+            pytest.param("staging", "Could not remove staging directory", id = "staging"),
+            pytest.param("backup", "Could not remove backup directory", id = "backup"),
+        ],
+    )
     @pytest.mark.asyncio
-    async def test_download_ad_logs_warning_when_staging_cleanup_fails(
+    async def test_download_ad_logs_warning_when_cleanup_fails(
         self,
         extractor:extract_module.AdExtractor,
         tmp_path:Path,
         caplog:pytest.LogCaptureFixture,
+        cleanup_target:str,
+        expected_warning:str,
     ) -> None:
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
         staging_dir = download_base / ".tmp-ad_12345"
+        backup_dir = download_base / ".bak-ad_12345"
+        final_yaml = final_dir / "ad_12345.yaml"
 
         extractor.download_dir = download_base
+        final_dir.mkdir(parents = True)
         staging_dir.mkdir(parents = True)
 
-        with (
-            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
-            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True, side_effect = OSError("write failed")),
-            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = OSError("busy")),
-        ):
-            mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "price": 100,
-                        "images": [],
-                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-                    }
-                ),
-                staging_dir,
-                final_dir,
-                "ad_12345",
-            )
+        def rmtree_side_effect(path:str | Path, *_args:object, **_kwargs:object) -> None:
+            normalized_path = Path(path)
+            if cleanup_target == "backup" and normalized_path == backup_dir:
+                raise OSError("busy")
+            if cleanup_target == "staging" and normalized_path == staging_dir:
+                raise OSError("busy")
+            # Any other cleanup target would be unexpected for this scenario.
+            raise AssertionError(f"Unexpected rmtree path: {path}")
 
-            with caplog.at_level("WARNING"), pytest.raises(OSError, match = "write failed"):
+        if cleanup_target == "staging":
+            with (
+                patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+                patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True, side_effect = OSError("write failed")),
+                patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
+                caplog.at_level("WARNING"),
+            ):
+                mock_extract_with_dir.return_value = (
+                    _create_test_ad_partial(),
+                    staging_dir,
+                    final_dir,
+                    "ad_12345",
+                )
+                with pytest.raises(OSError, match = "write failed"):
+                    await extractor.download_ad(12345)
+        else:
+            with (
+                patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+                patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
+                caplog.at_level("WARNING"),
+            ):
+                mock_extract_with_dir.return_value = (
+                    _create_test_ad_partial(),
+                    staging_dir,
+                    final_dir,
+                    "ad_12345",
+                )
                 await extractor.download_ad(12345)
 
-        assert any("Could not remove staging directory" in message for message in caplog.messages)
+        if cleanup_target == "backup":
+            assert final_dir.exists()
+            assert final_yaml.exists()
+            assert backup_dir.exists()
+            assert not staging_dir.exists()
+        else:
+            assert staging_dir.exists()
+
+        assert any(expected_warning in message for message in caplog.messages)
 
     @pytest.mark.asyncio
     async def test_download_ad_restores_final_dir_when_swap_rename_fails(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
@@ -1873,16 +1864,7 @@ class TestAdExtractorDownload:
             patch.object(Path, "rename", autospec = True, side_effect = rename_side_effect),
         ):
             mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "price": 100,
-                        "images": [],
-                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-                    }
-                ),
+                _create_test_ad_partial(),
                 staging_dir,
                 final_dir,
                 "ad_12345",
@@ -1912,16 +1894,7 @@ class TestAdExtractorDownload:
 
         with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
             mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "price": 100,
-                        "images": [],
-                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-                    }
-                ),
+                _create_test_ad_partial(),
                 staging_dir,
                 final_dir,
                 "ad_12345",
@@ -1954,16 +1927,7 @@ class TestAdExtractorDownload:
 
         with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
             mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "price": 100,
-                        "images": [],
-                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-                    }
-                ),
+                _create_test_ad_partial(),
                 staging_dir,
                 final_dir,
                 "ad_12345",
@@ -1976,60 +1940,6 @@ class TestAdExtractorDownload:
         assert backup_dir.exists()
         assert backup_file.exists()
         assert not staging_dir.exists()
-
-    @pytest.mark.asyncio
-    async def test_download_ad_logs_warning_when_backup_cleanup_fails(
-        self,
-        extractor:extract_module.AdExtractor,
-        tmp_path:Path,
-        caplog:pytest.LogCaptureFixture,
-    ) -> None:
-        download_base = tmp_path / "downloaded-ads"
-        final_dir = download_base / "ad_12345_Test Advertisement Title"
-        staging_dir = download_base / ".tmp-ad_12345"
-        backup_dir = download_base / ".bak-ad_12345"
-        final_yaml = final_dir / "ad_12345.yaml"
-
-        extractor.download_dir = download_base
-        final_dir.mkdir(parents = True)
-        staging_dir.mkdir(parents = True)
-
-        def rmtree_side_effect(path:str | Path, *_args:object, **_kwargs:object) -> None:
-            normalized_path = Path(path)
-            if normalized_path == backup_dir:
-                raise OSError("busy")
-            if normalized_path in {staging_dir, final_dir}:
-                return
-            raise AssertionError(f"Unexpected rmtree path: {path}")
-
-        with (
-            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
-            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
-        ):
-            mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "price": 100,
-                        "images": [],
-                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-                    }
-                ),
-                staging_dir,
-                final_dir,
-                "ad_12345",
-            )
-
-            with caplog.at_level("WARNING"):
-                await extractor.download_ad(12345)
-
-        assert final_dir.exists()
-        assert final_yaml.exists()
-        assert backup_dir.exists()
-        assert not staging_dir.exists()
-        assert any("Could not remove backup directory" in message for message in caplog.messages)
 
     @pytest.mark.asyncio
     async def test_download_ad_logs_restore_error_when_backup_restore_fails(
@@ -2064,16 +1974,7 @@ class TestAdExtractorDownload:
             patch.object(Path, "rename", autospec = True, side_effect = rename_side_effect),
         ):
             mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "price": 100,
-                        "images": [],
-                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-                    }
-                ),
+                _create_test_ad_partial(),
                 staging_dir,
                 final_dir,
                 "ad_12345",
@@ -2121,16 +2022,7 @@ class TestAdExtractorDownload:
         stale_file = stale_staging_dir / "stale.txt"
         stale_file.write_text("stale")
 
-        ad_cfg = AdPartial.model_validate(
-            {
-                "title": "Test Title",
-                "description": "Test Description",
-                "category": "Dienstleistungen",
-                "price": 100,
-                "images": [],
-                "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-            }
-        )
+        ad_cfg = _create_test_ad_partial(title = "Test Title")
 
         with (
             patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
@@ -2153,16 +2045,7 @@ class TestAdExtractorDownload:
         stale_staging_dir = base_dir / ".tmp-ad_12345"
         stale_staging_dir.mkdir()
 
-        ad_cfg = AdPartial.model_validate(
-            {
-                "title": "Test Title",
-                "description": "Test Description",
-                "category": "Dienstleistungen",
-                "price": 100,
-                "images": [],
-                "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-            }
-        )
+        ad_cfg = _create_test_ad_partial(title = "Test Title")
 
         original_rmtree = shutil.rmtree
 
@@ -2193,16 +2076,7 @@ class TestAdExtractorDownload:
         legacy_dir.mkdir()
         final_dir.mkdir()
 
-        ad_cfg = AdPartial.model_validate(
-            {
-                "title": "Test Title",
-                "description": "Test Description",
-                "category": "Dienstleistungen",
-                "price": 100,
-                "images": [],
-                "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-            }
-        )
+        ad_cfg = _create_test_ad_partial(title = "Test Title")
 
         extractor.config.download.rename_existing_folders = True
 
