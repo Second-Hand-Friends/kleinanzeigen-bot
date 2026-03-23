@@ -29,6 +29,8 @@ _BREADCRUMB_MIN_DEPTH:Final[int] = 2
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
 _MAX_FILENAME_COMPONENT_LENGTH:Final[int] = 255
 _DOWNLOAD_STEM_SUFFIX_BUDGET:Final[int] = len("__img9999.jpeg")
+_STAGING_DIR_PREFIX:Final[str] = ".tmp-"
+_BACKUP_DIR_PREFIX:Final[str] = ".bak-"
 
 
 class AdExtractor(WebScrapingMixin):
@@ -107,15 +109,49 @@ class AdExtractor(WebScrapingMixin):
         download_dir = self.download_dir
         LOG.info("Using download directory: %s", download_dir)
 
-        # Extract ad info and determine final directory path
-        ad_cfg, final_dir, ad_file_stem = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id)
+        # Extract ad info into a staging directory and determine final target directory
+        ad_cfg, staging_dir, final_dir, ad_file_stem = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id)
 
-        # Save the ad configuration file (offload to executor to avoid blocking the event loop)
-        ad_file_path = str(Path(final_dir) / f"{ad_file_stem}.yaml")
+        # Save the ad configuration file to staging first (offload to executor to avoid blocking the event loop)
+        ad_file_path = str(staging_dir / f"{ad_file_stem}.yaml")
         header_string = (
             "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
         )
-        await asyncio.get_running_loop().run_in_executor(None, lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(mode = "json"), header = header_string))
+
+        loop = asyncio.get_running_loop()
+        backup_dir = final_dir.with_name(f"{_BACKUP_DIR_PREFIX}{ad_file_stem}")
+        backup_created_by_us = False
+        try:
+            await loop.run_in_executor(None, lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(mode = "json"), header = header_string))
+
+            if await files.exists(backup_dir):
+                raise FileExistsError(_("Backup directory %s already exists. Aborting download for ad %s to avoid data loss.") % (backup_dir, ad_id))
+
+            if await files.exists(final_dir):
+                await loop.run_in_executor(None, final_dir.rename, backup_dir)
+                backup_created_by_us = True
+
+            await loop.run_in_executor(None, staging_dir.rename, final_dir)
+
+            if await files.exists(backup_dir):
+                try:
+                    await loop.run_in_executor(None, shutil.rmtree, str(backup_dir))
+                except OSError as ex:
+                    LOG.warning("Could not remove backup directory %s: %s", backup_dir, ex)
+        except Exception:
+            # Broad catch is intentional: run rollback/cleanup for operational failures, then re-raise.
+            # asyncio.CancelledError is a BaseException and is therefore not caught here.
+            if backup_created_by_us and await files.exists(backup_dir) and not await files.exists(final_dir):
+                try:
+                    await loop.run_in_executor(None, backup_dir.rename, final_dir)
+                except OSError as restore_ex:
+                    LOG.error("Failed to restore backup directory %s to %s after download failure: %s", backup_dir, final_dir, restore_ex)
+            if await files.exists(staging_dir):
+                try:
+                    await loop.run_in_executor(None, shutil.rmtree, str(staging_dir))
+                except OSError as cleanup_ex:
+                    LOG.warning("Could not remove staging directory %s: %s", staging_dir, cleanup_ex)
+            raise
 
     @staticmethod
     def _download_and_save_image_sync(url:str, directory:str, filename_prefix:str, img_nr:int) -> str | None:
@@ -374,56 +410,62 @@ class AdExtractor(WebScrapingMixin):
 
         return ad_cfg
 
-    async def _extract_ad_page_info_with_directory_handling(self, relative_directory:Path, ad_id:int) -> tuple[AdPartial, Path, str]:
+    async def _extract_ad_page_info_with_directory_handling(self, relative_directory:Path, ad_id:int) -> tuple[AdPartial, Path, Path, str]:
         """
         Extracts ad information and handles directory creation/renaming.
 
         :param relative_directory: Base directory for downloads
         :param ad_id: The ad ID
-        :return: AdPartial with directory information and rendered ad file stem
+        :return: AdPartial with staging/final directory information and rendered ad file stem
         """
-        # First, extract basic info to get the title
-        info:dict[str, Any] = {"active": True}
-
-        # extract basic info
-        info["type"] = "OFFER" if "s-anzeige" in self.page.url else "WANTED"
         title = await self._extract_title_from_ad_page()
         LOG.info('Extracting title from ad %s: "%s"', ad_id, title)
 
         # Determine the final directory path
         ad_file_stem = self._render_download_ad_file_stem(ad_id, title)
         final_dir = relative_directory / self._render_download_folder_name(ad_id, title)
-        temp_dir = relative_directory / f"ad_{ad_id}"
+        legacy_dir = relative_directory / f"ad_{ad_id}"
+        staging_dir = relative_directory / f"{_STAGING_DIR_PREFIX}{ad_file_stem}"
 
         loop = asyncio.get_running_loop()
 
-        # Handle existing directories
-        if await files.exists(final_dir):
-            # If the folder with title already exists, delete it
-            LOG.info("Deleting current folder of ad %s...", ad_id)
-            LOG.debug("Removing directory tree: %s", final_dir)
-            await loop.run_in_executor(None, shutil.rmtree, str(final_dir))
-
-        if await files.exists(temp_dir):
+        if await files.exists(legacy_dir):
             if self.config.download.rename_existing_folders:
                 # Rename the old folder to the new name with title
-                LOG.info("Renaming folder from %s to %s for ad %s...", temp_dir.name, final_dir.name, ad_id)
-                LOG.debug("Renaming: %s -> %s", temp_dir, final_dir)
-                await loop.run_in_executor(None, temp_dir.rename, final_dir)
+                if not await files.exists(final_dir):
+                    LOG.info("Renaming folder from %s to %s for ad %s...", legacy_dir.name, final_dir.name, ad_id)
+                    LOG.debug("Renaming: %s -> %s", legacy_dir, final_dir)
+                    await loop.run_in_executor(None, legacy_dir.rename, final_dir)
             else:
                 # Use the existing folder without renaming
-                final_dir = temp_dir
+                final_dir = legacy_dir
                 LOG.info("Using existing folder for ad %s at %s.", ad_id, final_dir)
-        else:
-            # Create new directory with title
-            LOG.debug("Creating new directory: %s", final_dir)
-            await loop.run_in_executor(None, final_dir.mkdir)
-            LOG.info("New directory for ad created at %s.", final_dir)
 
-        # Now extract complete ad info (including images) to the final directory
-        ad_cfg = await self._extract_ad_page_info(str(final_dir), ad_id, ad_file_stem)
+        if await files.exists(staging_dir):
+            LOG.info("Removing stale staging directory: %s", staging_dir)
+            try:
+                await loop.run_in_executor(None, shutil.rmtree, str(staging_dir))
+            except OSError as cleanup_ex:
+                LOG.warning("Could not remove stale staging directory %s: %s", staging_dir, cleanup_ex)
+                if await files.exists(staging_dir):
+                    raise OSError(
+                        _("Could not remove stale staging directory %s. Aborting extraction to avoid using a dirty staging directory.") % staging_dir
+                    ) from cleanup_ex
 
-        return ad_cfg, final_dir, ad_file_stem
+        await loop.run_in_executor(None, lambda: staging_dir.mkdir(exist_ok = True))
+        LOG.info("New directory for ad created at %s.", staging_dir)
+
+        try:
+            ad_cfg = await self._extract_ad_page_info(str(staging_dir), ad_id, ad_file_stem)
+        except Exception:
+            if await files.exists(staging_dir):
+                try:
+                    await loop.run_in_executor(None, shutil.rmtree, str(staging_dir))
+                except OSError as cleanup_ex:
+                    LOG.warning("Could not remove staging directory %s: %s", staging_dir, cleanup_ex)
+            raise
+
+        return ad_cfg, staging_dir, final_dir, ad_file_stem
 
     async def _extract_category_from_ad_page(self) -> str:
         """
