@@ -324,7 +324,7 @@ jobs:
 
 
     - name: Publish unit-test coverage
-      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.0.0
+      uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5.0.0
       # https://github.com/codecov/codecov-action
       with:
         slug: ${{ github.repository }}
@@ -337,7 +337,7 @@ jobs:
 
 
     - name: Publish integration-test coverage
-      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.0.0
+      uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5.0.0
       # https://github.com/codecov/codecov-action
       with:
         slug: ${{ github.repository }}
@@ -350,7 +350,7 @@ jobs:
 
 
     - name: Publish smoke-test coverage
-      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.0.0
+      uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5.0.0
       # https://github.com/codecov/codecov-action
       with:
         slug: ${{ github.repository }}
