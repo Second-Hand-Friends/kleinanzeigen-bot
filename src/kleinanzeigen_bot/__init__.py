@@ -1306,8 +1306,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return
 
         page = getattr(self, "page", None)
-        if page is None:
-            return
 
         try:
             output_dir = self._diagnostics_output_dir()

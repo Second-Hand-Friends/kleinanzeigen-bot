@@ -932,6 +932,29 @@ class TestKleinanzeigenBotAuthentication:
             assert test_bot._login_detection_diagnostics_captured is True
 
     @pytest.mark.asyncio
+    async def test_capture_login_detection_diagnostics_with_no_page_still_invokes_capture(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate(
+            {
+                "capture_on": {"login_detection": True},
+                "capture_log_copy": True,
+                "output_dir": str(tmp_path),
+            }
+        )
+        test_bot.log_file_path = str(tmp_path / "bot.log")
+        test_bot._login_detection_diagnostics_captured = False
+        test_bot.page = cast(Any, None)
+
+        with patch("kleinanzeigen_bot.diagnostics.capture_diagnostics", new_callable = AsyncMock) as mock_capture:
+            await test_bot._capture_login_detection_diagnostics_if_enabled(base_prefix = "login_detection_test")
+
+            mock_capture.assert_awaited_once()
+            assert mock_capture.await_args is not None
+            assert mock_capture.await_args.kwargs.get("page") is None
+            assert mock_capture.await_args.kwargs.get("copy_log") is True
+            assert mock_capture.await_args.kwargs.get("log_file_path") == test_bot.log_file_path
+            assert test_bot._login_detection_diagnostics_captured is True
+
+    @pytest.mark.asyncio
     async def test_capture_login_detection_diagnostics_does_not_mark_captured_on_output_dir_error(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
         test_bot.config.diagnostics = DiagnosticsConfig.model_validate(
             {
