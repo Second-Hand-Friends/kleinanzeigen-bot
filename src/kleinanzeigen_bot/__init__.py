@@ -1903,12 +1903,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # (needed for MODIFY because we don't know which changed,
         #  and for REPLACE retries where stale thumbnails may remain)
         #############################
-        img_items = await self.web_find_all(By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)")
-        if img_items:
-            LOG.info(" -> removing %d existing image thumbnail(s) before upload...", len(img_items))
-            for element in img_items:
-                btn = await self.web_find(By.CSS_SELECTOR, "button.pictureupload-thumbnails-remove", parent = element)
-                await btn.click()
+        try:
+            img_items = await self.web_find_all(
+                By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout = self._timeout("quick_dom")
+            )
+            if img_items:
+                LOG.info(" -> removing %d existing image thumbnail(s) before upload...", len(img_items))
+                for element in img_items:
+                    btn = await self.web_find(By.CSS_SELECTOR, "button.pictureupload-thumbnails-remove", parent = element)
+                    await btn.click()
+        except TimeoutError:
+            pass  # no existing thumbnails on page — expected for fresh REPLACE forms
 
         #############################
         # upload images
