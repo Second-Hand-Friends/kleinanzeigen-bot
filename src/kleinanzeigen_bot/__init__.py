@@ -1029,6 +1029,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.debug("No captcha detected within timeout on %s", page_context)
 
     async def login(self) -> None:
+        self._login_detection_diagnostics_captured = False
         sso_navigation_timeout = self._timeout("page_load")
         pre_login_gdpr_timeout = self._timeout("quick_dom")
 
@@ -1056,8 +1057,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 pause_banner_message = "# SSO navigation timed out. Browser is paused for manual inspection.",
             )
             raise
-
-        self._login_detection_diagnostics_captured = False
 
         try:
             await self.fill_login_data_and_send()

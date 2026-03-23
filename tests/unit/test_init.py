@@ -1002,6 +1002,8 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_login_flow_raises_when_sso_navigation_times_out(self, test_bot:KleinanzeigenBot) -> None:
         """SSO navigation timeout should trigger diagnostics and re-raise."""
+        test_bot._login_detection_diagnostics_captured = True
+
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock, side_effect = [None, TimeoutError("sso timeout")]),
             patch.object(
