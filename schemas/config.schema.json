@@ -499,11 +499,33 @@
         },
         "folder_name_max_length": {
           "default": 100,
-          "description": "maximum length for folder names when downloading ads (default: 100)",
+          "description": "maximum length for downloaded folder names (default: 100). does not limit downloaded file base names",
           "maximum": 255,
           "minimum": 10,
           "title": "Folder Name Max Length",
           "type": "integer"
+        },
+        "folder_name_template": {
+          "default": "ad_{id}_{title}",
+          "description": "folder naming template for downloaded ad directories. Allowed placeholders: {id}, {title}. Template must include {id}",
+          "examples": [
+            "\"ad_{id}_{title}\"",
+            "\"listing_{id}_{title}\"",
+            "\"{id}\""
+          ],
+          "title": "Folder Name Template",
+          "type": "string"
+        },
+        "ad_file_name_template": {
+          "default": "ad_{id}",
+          "description": "base name template for downloaded ad files. The bot writes the ad config as <base>.yaml and downloaded images as <base>__imgN.<ext>. Supported placeholders: {id}, {title}. Template must include {id}. Long titles may be truncated to keep filename limits",
+          "examples": [
+            "\"ad_{id}\"",
+            "\"listing_{id}\"",
+            "\"listing_{id}_{title}\""
+          ],
+          "title": "Ad File Name Template",
+          "type": "string"
         },
         "rename_existing_folders": {
           "default": false,
