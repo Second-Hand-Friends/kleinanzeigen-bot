@@ -843,6 +843,86 @@ class TestWebScrapingSessionManagement:
         mock_proc.assert_called_once()
         stop_mock.assert_called_once()
 
+    def test_close_browser_session_skips_killing_stopped_children(self) -> None:
+        """Stopped child processes should not be force-killed."""
+        scraper = WebScrapingMixin()
+        scraper.browser = MagicMock()
+        scraper.browser._process_pid = 456
+        stop_mock = scraper.browser.stop = MagicMock()
+        scraper.page = MagicMock(spec = Page)
+
+        with patch("psutil.Process") as mock_proc:
+            mock_child = MagicMock()
+            mock_child.is_running.return_value = False
+            mock_proc.return_value.children.return_value = [mock_child]
+            scraper.close_browser_session()
+
+        mock_proc.assert_called_once_with(456)
+        stop_mock.assert_called_once()
+        mock_child.kill.assert_not_called()
+        assert scraper.browser is None
+        assert scraper.page is None
+
+    def test_close_browser_session_stops_before_force_killing_children(self) -> None:
+        """Browser stop should run before force-killing child processes."""
+        scraper = WebScrapingMixin()
+        scraper.browser = MagicMock()
+        scraper.browser._process_pid = 321
+        stopped = {"value": False}
+
+        def mark_stopped() -> None:
+            stopped["value"] = True
+
+        stop_mock = scraper.browser.stop = MagicMock(side_effect = mark_stopped)
+        scraper.page = MagicMock(spec = Page)
+
+        with patch("psutil.Process") as mock_proc:
+            mock_child = MagicMock()
+            mock_child.is_running.return_value = True
+
+            def assert_stop_happened() -> None:
+                assert stopped["value"]
+
+            mock_child.kill.side_effect = assert_stop_happened
+            mock_proc.return_value.children.return_value = [mock_child]
+
+            scraper.close_browser_session()
+
+        stop_mock.assert_called_once()
+        mock_child.kill.assert_called_once()
+
+    def test_close_browser_session_skips_psutil_when_pid_is_none(self) -> None:
+        """When _process_pid is None, psutil.Process should not be called but stop() should."""
+        scraper = WebScrapingMixin()
+        scraper.browser = MagicMock()
+        scraper.browser._process_pid = None
+        stop_mock = scraper.browser.stop = MagicMock()
+        scraper.page = MagicMock(spec = Page)
+
+        with patch("psutil.Process") as mock_proc:
+            scraper.close_browser_session()
+
+        mock_proc.assert_not_called()
+        stop_mock.assert_called_once()
+        assert scraper.browser is None
+        assert scraper.page is None
+
+    def test_close_browser_session_skips_psutil_when_pid_is_non_int(self) -> None:
+        """When _process_pid is non-integer (e.g., MagicMock), psutil.Process should not be called."""
+        scraper = WebScrapingMixin()
+        scraper.browser = MagicMock()
+        scraper.browser._process_pid = MagicMock()  # Simulate mock object in tests
+        stop_mock = scraper.browser.stop = MagicMock()
+        scraper.page = MagicMock(spec = Page)
+
+        with patch("psutil.Process") as mock_proc:
+            scraper.close_browser_session()
+
+        mock_proc.assert_not_called()
+        stop_mock.assert_called_once()
+        assert scraper.browser is None
+        assert scraper.page is None
+
     def test_get_compatible_browser_raises_on_unknown_os(self) -> None:
         """Test get_compatible_browser raises AssertionError on unknown OS."""
         scraper = WebScrapingMixin()
