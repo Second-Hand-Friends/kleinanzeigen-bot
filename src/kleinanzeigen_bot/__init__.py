@@ -1145,7 +1145,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         login_confirmed = False
         try:
-            login_confirmed = await asyncio.wait_for(self.is_logged_in(include_probe = False), timeout = post_submit_timeout)
+            login_confirmed = await asyncio.wait_for(self.is_logged_in(), timeout = post_submit_timeout)
         except (TimeoutError, asyncio.TimeoutError):
             LOG.debug("Post-submit login verification did not complete within %.1fs", post_submit_timeout)
 
@@ -1156,7 +1156,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         await self.web_sleep(min_ms = fallback_min_ms, max_ms = fallback_max_ms)
 
         try:
-            if await asyncio.wait_for(self.is_logged_in(include_probe = False), timeout = quick_dom_timeout):
+            if await asyncio.wait_for(self.is_logged_in(), timeout = quick_dom_timeout):
                 return
         except (TimeoutError, asyncio.TimeoutError):
             LOG.debug("Final post-submit login confirmation did not complete within %.1fs", quick_dom_timeout)
@@ -1448,15 +1448,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return False
 
-    async def is_logged_in(self, *, include_probe:bool = True) -> bool:
+    async def is_logged_in(self) -> bool:
         if await self._has_logged_in_marker():
             return True
 
         tried_login_selectors = _format_login_detection_selectors(_LOGIN_DETECTION_SELECTORS)
-
-        if include_probe:
-            LOG.debug("No login detected via configured login detection selectors (%s); auth probe is disabled", tried_login_selectors)
-            return False
 
         LOG.debug("No login detected via configured login detection selectors (%s)", tried_login_selectors)
         return False

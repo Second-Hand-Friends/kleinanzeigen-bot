@@ -557,7 +557,7 @@ class TestKleinanzeigenBotAuthentication:
             new_callable = AsyncMock,
             side_effect = [TimeoutError(), ("Welcome dummy_user", 0)],
         ) as group_text:
-            assert await test_bot.is_logged_in(include_probe = False) is True
+            assert await test_bot.is_logged_in() is True
 
         group_text.assert_awaited()
         assert any(call.kwargs.get("timeout") == test_bot._timeout("login_detection") for call in group_text.await_args_list)
@@ -571,7 +571,7 @@ class TestKleinanzeigenBotAuthentication:
             new_callable = AsyncMock,
             side_effect = [TimeoutError(), ("Welcome dummy_user", 0)],
         ) as group_text:
-            assert await test_bot.is_logged_in(include_probe = False) is True
+            assert await test_bot.is_logged_in() is True
 
         group_text.assert_awaited()
         assert group_text.await_count >= 1
@@ -585,7 +585,7 @@ class TestKleinanzeigenBotAuthentication:
             new_callable = AsyncMock,
             return_value = ("angemeldet als: dummy_user", 0),
         ) as group_text:
-            assert await test_bot.is_logged_in(include_probe = False) is True
+            assert await test_bot.is_logged_in() is True
 
         group_text.assert_awaited()
         assert group_text.await_count >= 1
@@ -604,7 +604,7 @@ class TestKleinanzeigenBotAuthentication:
                 return_value = ("angemeldet als: dummy_user", 0),
             ),
         ):
-            assert await test_bot.is_logged_in(include_probe = False) is True
+            assert await test_bot.is_logged_in() is True
 
         assert "Login detected via login detection selector" in caplog.text
         assert "CLASS_NAME=mr-medium" in caplog.text
@@ -621,28 +621,24 @@ class TestKleinanzeigenBotAuthentication:
             patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError()]),
             patch.object(test_bot, "_has_logged_out_cta", new_callable = AsyncMock, return_value = False),
         ):
-            assert await test_bot.is_logged_in(include_probe = False) is False
+            assert await test_bot.is_logged_in() is False
 
         assert "No login detected via configured login detection selectors" in caplog.text
         assert "CLASS_NAME=mr-medium" in caplog.text
         assert "ID=user-email" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_logs_raw_selectors_when_dom_checks_fail_and_probe_disabled(
-        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture
-    ) -> None:
-        """Final failure should report selectors and disabled-probe state."""
+    async def test_is_logged_in_logs_raw_selectors_when_dom_checks_fail(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
+        """Final failure should report tried selectors."""
         caplog.set_level("DEBUG")
 
         with (
             caplog.at_level("DEBUG"),
             patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError()]),
-            patch.object(test_bot, "_has_logged_out_cta", new_callable = AsyncMock, return_value = False),
         ):
             assert await test_bot.is_logged_in() is False
 
         assert "No login detected via configured login detection selectors" in caplog.text
-        assert "auth probe is disabled" in caplog.text
 
     @pytest.mark.asyncio
     async def test_get_login_state_prefers_dom_checks(self, test_bot:KleinanzeigenBot) -> None:
@@ -1002,8 +998,6 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_login_flow_raises_when_sso_navigation_times_out(self, test_bot:KleinanzeigenBot) -> None:
         """SSO navigation timeout should trigger diagnostics and re-raise."""
-        test_bot._login_detection_diagnostics_captured = True
-
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock, side_effect = [None, TimeoutError("sso timeout")]),
             patch.object(
