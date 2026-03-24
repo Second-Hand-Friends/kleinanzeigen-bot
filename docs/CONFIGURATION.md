@@ -281,7 +281,7 @@ Diagnostics configuration for troubleshooting login detection issues and publish
 ```yaml
 diagnostics:
   capture_on:
-    login_detection: false      # Capture screenshot + HTML when login state is UNKNOWN
+    login_detection: false      # Capture screenshot + HTML when login detection is inconclusive
     publish: false             # Capture screenshot + HTML + JSON on each failed publish attempt (timeouts/protocol errors)
   capture_log_copy: false       # Copy entire bot log file when diagnostics are captured (may duplicate log content)
   pause_on_login_detection_failure: false  # Pause for manual inspection (interactive only)
@@ -300,7 +300,7 @@ Old diagnostics keys have been renamed/moved. Update configs and CI/automation a
 
 **Login Detection Behavior:**
 
-The bot uses a layered approach to detect login state, prioritizing stealth over reliability:
+The bot uses a layered DOM-first approach to detect login status:
 
 1. **DOM check (primary method - preferred for stealth)**: Checks for user profile elements
 
@@ -309,16 +309,18 @@ The bot uses a layered approach to detect login state, prioritizing stealth over
    - Uses `login_detection` timeout (default: 10.0 seconds)
    - Minimizes bot-like behavior by avoiding JSON API requests
 
-2. **Auth probe fallback (more reliable)**: Sends a GET request to `{root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT`
+2. **Logged-out CTA check**: Looks for login call-to-action links if logged-in markers are not found
 
-   - Returns `LOGGED_IN` if response is HTTP 200 with valid JSON containing `"ads"` key
-   - Returns `LOGGED_OUT` if response is HTTP 401/403 or HTML contains login markers
-   - Returns `UNKNOWN` on timeouts, assertion failures, or unexpected response bodies
-   - Only used when DOM check is inconclusive (UNKNOWN or timed out)
+   - If login CTA selectors are matched with non-empty extracted text, detection result is logged out (`CTA_MATCH`)
+   - Note: `_has_logged_out_cta()` does not explicitly verify visibility, so hidden/footer/off-canvas elements could theoretically match.
+
+3. **Inconclusive fallback**:
+
+   - If neither logged-in markers nor logged-out CTA are detected, result is not logged in with reason `SELECTOR_TIMEOUT`
 
 **Optional diagnostics:**
 
-- Enable `capture_on.login_detection` to capture screenshots and HTML dumps when state is `UNKNOWN`
+- Enable `capture_on.login_detection` to capture screenshots and HTML dumps when login detection is inconclusive (`SELECTOR_TIMEOUT`, meaning expected selectors did not appear before timeout)
 - Enable `capture_on.publish` to capture screenshots, HTML dumps, and JSON payloads for each failed publish attempt (e.g., attempts 1–3).
 - Enable `capture_log_copy` to copy the entire bot log file when a diagnostic event triggers (e.g., `capture_on.publish` or `capture_on.login_detection`):
   - If multiple diagnostics trigger in the same run, the log will be copied multiple times

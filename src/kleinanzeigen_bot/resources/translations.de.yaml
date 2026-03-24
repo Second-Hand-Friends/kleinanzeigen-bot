@@ -81,7 +81,6 @@ kleinanzeigen_bot/__init__.py:
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
 
   _capture_login_detection_diagnostics_if_enabled:
-    "# Login detection returned UNKNOWN. Browser is paused for manual inspection.": "# Login-Erkennung ergab UNKNOWN. Browser ist zur manuellen Prüfung angehalten."
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
 
   _capture_publish_error_diagnostics_if_enabled:
@@ -93,8 +92,8 @@ kleinanzeigen_bot/__init__.py:
     "Navigating to SSO login page (Auth0)...": "Navigiere zur SSO-Anmeldeseite (Auth0)..."
     "Timeout navigating to SSO login page after %.1fs": "Zeitüberschreitung beim Navigieren zur SSO-Anmeldeseite nach %.1fs"
     "Login confirmed.": "Anmeldung bestätigt."
-    "Login state after attempt is %s (url=%s)": "Login-Status nach dem Versuch ist %s (URL=%s)"
-    "Login could not be confirmed after Auth0 flow (state=%s, url=%s)": "Anmeldung nach Auth0-Flow konnte nicht bestätigt werden (Status=%s, URL=%s)"
+    "Login could not be confirmed after Auth0 flow (url=%s)": "Anmeldung nach Auth0-Flow konnte nicht bestätigt werden (URL=%s)"
+    "Login could not be confirmed after Auth0 flow (reason=%s, url=%s)": "Anmeldung nach Auth0-Flow konnte nicht bestätigt werden (Grund=%s, URL=%s)"
 
   _wait_for_auth0_login_context:
     "Auth0 redirect not detected (url=%s)": "Auth0-Weiterleitung nicht erkannt (URL=%s)"
@@ -120,7 +119,7 @@ kleinanzeigen_bot/__init__.py:
     "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
     "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
 
-  is_logged_in:
+  _has_logged_in_marker:
     "Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)": "Starte Login-Erkennung (Timeout: %.1fs Basis, %.1fs effektiv mit Multiplikator/Backoff)"
     "Login detected via login detection selector '%s'": "Login erkannt über Login-Erkennungs-Selektor '%s'"
     "Timeout waiting for login detection selector group after %.1fs": "Timeout beim Warten auf die Login-Erkennungs-Selektorgruppe nach %.1fs"

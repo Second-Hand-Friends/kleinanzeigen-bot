@@ -93,9 +93,7 @@ The bot will also provide specific instructions on how to fix your configuration
 - More common with profiles unused for 20+ days
 
 **How login detection works:**
-The bot checks your login status using page elements first (to minimize bot-like behavior), with a fallback to a server-side request if needed.
-
-The bot uses a **DOM-based check** as the primary method to detect login state:
+The bot checks login status using a layered, DOM-first check (page elements only; no server-side auth probe):
 
 1. **DOM check (preferred - stealthy)**: Checks for user profile elements in the page
 
@@ -104,14 +102,17 @@ The bot uses a **DOM-based check** as the primary method to detect login state:
    - Uses the `login_detection` timeout (default: 10.0 seconds with effective timeout with retry/backoff)
    - Minimizes bot detection by avoiding JSON API requests that normal users wouldn't trigger
 
-2. **Auth probe fallback (more reliable)**: Sends a GET request to `{root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT`
+2. **Logged-out CTA check**: Looks for login call-to-action links when logged-in markers are not found
 
-   - Returns `LOGGED_IN` if the response is HTTP 200 with valid JSON containing `"ads"` key
-   - Returns `LOGGED_OUT` if response is HTTP 401/403 or HTML contains login markers
-   - Returns `UNKNOWN` on timeouts, assertion failures, or unexpected response bodies
-   - Only used when DOM check is inconclusive (UNKNOWN or timed out)
+   - Looks for selectors like `a[href*="einloggen"]`
+   - If selectors match with non-empty extracted text, detection result is logged out (`CTA_MATCH`)
+   - `CTA_MATCH` means a logged-out CTA selector matched with non-empty text; this reason appears in debug logs and failed-login assertion context. Visibility is not explicitly verified in `_has_logged_out_cta()`, so hidden/footer/off-canvas elements could theoretically match. If unexpected, inspect all matching elements, including non-visible ones.
 
-3. **Diagnostics capture**: If the state remains `UNKNOWN` and `diagnostics.login_detection_capture` is enabled
+3. **Inconclusive detection**: If neither path yields evidence, result is not logged in with reason `SELECTOR_TIMEOUT`
+
+   - `SELECTOR_TIMEOUT` means expected logged-in/logged-out selectors did not appear within timeout; this reason appears in debug logs and failed-login assertion context. If frequent, increase `timeouts.login_detection` or validate selectors.
+
+4. **Diagnostics capture**: If detection remains inconclusive and `diagnostics.capture_on.login_detection` is enabled
 
    - Captures a screenshot and HTML dump for troubleshooting
    - Pauses for manual inspection if `diagnostics.pause_on_login_detection_failure` is enabled and running in an interactive terminal
@@ -139,10 +140,13 @@ timeouts:
 
 # Enable diagnostics when troubleshooting login detection issues
 diagnostics:
-  login_detection_capture: true  # Capture artifacts on UNKNOWN state
+  capture_on:
+    login_detection: true  # Capture artifacts on inconclusive detection
   pause_on_login_detection_failure: true  # Pause for inspection (interactive only)
   output_dir: "./diagnostics"  # Custom output directory (optional)
 ```
+
+> **Migration note:** The legacy key `diagnostics.login_detection_capture` is no longer used. Switch to `diagnostics.capture_on.login_detection` as shown above. If you keep using the old key, login-detection diagnostics will not be triggered.
 
 ## Common Issues and Solutions
 
