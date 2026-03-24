@@ -1946,14 +1946,24 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         await self.__set_contact_fields(ad_cfg.contact)
 
-        if mode == AdUpdateStrategy.MODIFY:
-            #############################
-            # delete previous images because we don't know which have changed
-            #############################
-            img_items = await self.web_find_all(By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)")
+        #############################
+        # delete previous images to ensure a clean slate
+        # (needed for MODIFY because we don't know which changed,
+        #  and for REPLACE retries where stale thumbnails may remain)
+        #############################
+        try:
+            img_items = await self.web_find_all(
+                By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout = self._timeout("quick_dom")
+            )
+        except TimeoutError:
+            img_items = []  # no existing thumbnails — expected for fresh REPLACE forms
+
+        if img_items:
+            LOG.info(" -> removing %d existing image thumbnail(s) before upload...", len(img_items))
             for element in img_items:
                 btn = await self.web_find(By.CSS_SELECTOR, "button.pictureupload-thumbnails-remove", parent = element)
                 await btn.click()
+                await self.web_sleep(300, 500)
 
         #############################
         # upload images
