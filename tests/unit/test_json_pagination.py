@@ -10,6 +10,7 @@ import pytest
 
 from kleinanzeigen_bot import KleinanzeigenBot
 from kleinanzeigen_bot.utils import misc
+from kleinanzeigen_bot.utils.exceptions import PublishedAdsFetchIncompleteError
 
 
 @pytest.mark.unit
@@ -273,6 +274,15 @@ class TestJSONPagination:
 
             if result != []:
                 pytest.fail(f"Expected empty list on timeout, got {result}")
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_strict_raises_on_timeout(self, bot:KleinanzeigenBot) -> None:
+        """Strict fetch should raise when pagination cannot be completed."""
+        with (
+            patch.object(bot, "web_request", new_callable = AsyncMock, side_effect = TimeoutError("timeout")),
+            pytest.raises(PublishedAdsFetchIncompleteError, match = "Pagination request failed on page 1"),
+        ):
+            await bot._fetch_published_ads(strict = True)
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_handles_non_string_content_type(self, bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
