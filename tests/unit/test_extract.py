@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import json  # isort: skip
 import asyncio
+import shutil
 from gettext import gettext as _
 from pathlib import Path
 from typing import Any, Final, TypedDict
@@ -23,6 +24,25 @@ SCHEMA_PATH:Final[Path] = Path(__file__).resolve().parents[2] / "schemas" / "ad.
 
 def _read_text_file(path:Path) -> str:
     return path.read_text(encoding = "utf-8")
+
+
+def _create_test_ad_partial(**overrides:Any) -> AdPartial:
+    """Create a valid AdPartial payload for extract staging/rollback tests."""
+    payload:dict[str, Any] = {
+        "title": "Test Advertisement Title",
+        "description": "Test Description",
+        "category": "Dienstleistungen",
+        "price": 100,
+        "images": [],
+        "contact": {
+            "name": "Test User",
+            "street": "Test Street 123",
+            "zipcode": "12345",
+            "location": "Test City",
+        },
+    }
+    payload.update(overrides)
+    return AdPartial.model_validate(payload)
 
 
 class _DimensionsDict(TypedDict):
@@ -1233,25 +1253,19 @@ class TestAdExtractorDownload:
         # Use tmp_path for OS-agnostic path handling
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
-        yaml_path = final_dir / "ad_12345.yaml"
+        staging_dir = download_base / ".tmp-ad_12345"
+        staging_yaml_path = staging_dir / "ad_12345.yaml"
         extractor.download_dir = download_base
+        staging_dir.mkdir(parents = True)
 
         with (
             patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict,
             patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
         ):
             mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "price": 100,
-                        "images": [],
-                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-                    }
-                ),
-                str(final_dir),
+                _create_test_ad_partial(),
+                staging_dir,
+                final_dir,
                 "ad_12345",
             )
 
@@ -1264,28 +1278,25 @@ class TestAdExtractorDownload:
             # Verify saved to correct location with correct data
             actual_call = mock_save_dict.call_args
             actual_path = Path(actual_call[0][0])
-            assert actual_path == yaml_path
+            assert actual_path == staging_yaml_path
             assert actual_call[0][1] == mock_extract_with_dir.return_value[0].model_dump(mode = "json")
+            assert final_dir.exists()
+            assert not staging_dir.exists()
 
     @pytest.mark.asyncio
     async def test_download_ad_writes_schema_compliant_yaml(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
         """Test that downloaded ad YAML validates against ad.schema.json."""
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
         yaml_path = final_dir / "ad_12345.yaml"
         extractor.download_dir = download_base
+        staging_dir.mkdir(parents = True)
 
         with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
             mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "created_on": "2026-03-08T00:00:00+01:00",
-                        "updated_on": "2026-03-09T01:02:03+01:00",
-                    }
-                ),
+                _create_test_ad_partial(created_on = "2026-03-08T00:00:00+01:00", updated_on = "2026-03-09T01:02:03+01:00"),
+                staging_dir,
                 final_dir,
                 "ad_12345",
             )
@@ -1334,7 +1345,7 @@ class TestAdExtractorDownload:
     @pytest.mark.asyncio
     # pylint: disable=protected-access
     async def test_extract_ad_page_info_with_directory_handling_final_dir_exists(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
-        """Test directory handling when final_dir already exists - it should be deleted."""
+        """Test directory handling when final_dir already exists - extraction should stage."""
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
 
@@ -1384,12 +1395,12 @@ class TestAdExtractorDownload:
                 ),
             ),
         ):
-            ad_cfg, result_dir, _ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+            ad_cfg, staging_dir, final_dir_result, _ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
-            # Verify the old directory was deleted and recreated
-            assert result_dir == final_dir
-            assert result_dir.exists()
-            assert not old_file.exists()  # Old file should be gone
+            assert final_dir_result == final_dir
+            assert final_dir_result.exists()
+            assert old_file.exists()
+            assert staging_dir.exists()
             assert ad_cfg.title == "Test Title"
 
     @pytest.mark.asyncio
@@ -1448,7 +1459,7 @@ class TestAdExtractorDownload:
                 ),
             ),
         ):
-            ad_cfg, result_dir, _ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+            ad_cfg, staging_dir, result_dir, _ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
             # Verify the directory was renamed from temp_dir to final_dir
             final_dir = base_dir / "ad_12345_Test Title"
@@ -1456,6 +1467,7 @@ class TestAdExtractorDownload:
             assert result_dir.exists()
             assert not temp_dir.exists()  # Old temp dir should be gone
             assert (result_dir / "existing_image.jpg").exists()  # File should be preserved
+            assert staging_dir.exists()
             assert ad_cfg.title == "Test Title"
 
     @pytest.mark.asyncio
@@ -1514,12 +1526,13 @@ class TestAdExtractorDownload:
                 ),
             ),
         ):
-            ad_cfg, result_dir, _ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+            ad_cfg, staging_dir, result_dir, _ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
             # Verify the existing temp_dir was used (not renamed)
             assert result_dir == temp_dir
             assert result_dir.exists()
             assert (result_dir / "existing_image.jpg").exists()  # File should be preserved
+            assert staging_dir.exists()
             assert ad_cfg.title == "Test Title"
 
     @pytest.mark.asyncio
@@ -1577,16 +1590,16 @@ class TestAdExtractorDownload:
                 ),
             ),
         ):
-            ad_cfg, result_dir, _ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+            ad_cfg, staging_dir, _result_dir, _ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
             # Verify directory was created with NFC-normalized name
-            assert result_dir.exists()
+            assert staging_dir.exists()
             assert ad_cfg.title == title_with_umlauts
 
             # Test saving YAML file to the Unicode directory path
             # Before fix: Failed on Linux/Windows due to NFC/NFD mismatch
             # After fix: Both directory and file use NFC normalization
-            ad_file_path = Path(result_dir) / "ad_12345.yaml"
+            ad_file_path = Path(staging_dir) / "ad_12345.yaml"
 
             from kleinanzeigen_bot.utils import dicts  # noqa: PLC0415
 
@@ -1606,26 +1619,20 @@ class TestAdExtractorDownload:
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "listing_12345_Test Advertisement Title"
         ad_file_stem = "listing_12345_Test Advertisement Title"
-        yaml_path = final_dir / f"{ad_file_stem}.yaml"
+        staging_dir = download_base / f".tmp-{ad_file_stem}"
+        yaml_path = staging_dir / f"{ad_file_stem}.yaml"
         extractor.download_dir = download_base
         extractor.config.download.folder_name_template = "listing_{id}_{title}"
         extractor.config.download.ad_file_name_template = "listing_{id}_{title}"
+        staging_dir.mkdir(parents = True)
 
         with (
             patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict,
             patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
         ):
             mock_extract_with_dir.return_value = (
-                AdPartial.model_validate(
-                    {
-                        "title": "Test Advertisement Title",
-                        "description": "Test Description",
-                        "category": "Dienstleistungen",
-                        "price": 100,
-                        "images": [],
-                        "contact": {"name": "Test User", "street": "Test Street 123", "zipcode": "12345", "location": "Test City"},
-                    }
-                ),
+                _create_test_ad_partial(),
+                staging_dir,
                 final_dir,
                 ad_file_stem,
             )
@@ -1635,6 +1642,547 @@ class TestAdExtractorDownload:
             mock_extract_with_dir.assert_called_once()
             mock_save_dict.assert_called_once()
             assert Path(mock_save_dict.call_args[0][0]) == yaml_path
+
+    @pytest.mark.asyncio
+    async def test_download_ad_replaces_final_dir_after_staging_success(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+        backup_dir = download_base / ".bak-ad_12345"
+        old_file = final_dir / "old_file.txt"
+        final_yaml = final_dir / "ad_12345.yaml"
+
+        extractor.download_dir = download_base
+        final_dir.mkdir(parents = True)
+        old_file.write_text("old content")
+        staging_dir.mkdir(parents = True)
+        original_rename = Path.rename
+
+        with (
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+            patch.object(Path, "rename", autospec = True, side_effect = original_rename) as mock_rename,
+        ):
+            mock_extract_with_dir.return_value = (
+                _create_test_ad_partial(),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            await extractor.download_ad(12345)
+
+        assert final_dir.exists()
+        assert final_yaml.exists()
+        assert not old_file.exists()
+        assert not backup_dir.exists()
+        assert not staging_dir.exists()
+        assert mock_rename.call_args_list == [
+            call(final_dir, backup_dir),
+            call(staging_dir, final_dir),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_download_ad_preserves_final_dir_when_yaml_write_fails(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+        backup_dir = download_base / ".bak-ad_12345"
+        old_file = final_dir / "old_file.txt"
+
+        extractor.download_dir = download_base
+        final_dir.mkdir(parents = True)
+        old_file.write_text("old content")
+        staging_dir.mkdir(parents = True)
+
+        with (
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True, side_effect = OSError("write failed")),
+            patch.object(Path, "rename", autospec = True) as mock_rename,
+        ):
+            mock_extract_with_dir.return_value = (
+                _create_test_ad_partial(),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            with pytest.raises(OSError, match = "write failed"):
+                await extractor.download_ad(12345)
+
+        assert final_dir.exists()
+        assert old_file.exists()
+        assert not backup_dir.exists()
+        assert not staging_dir.exists()
+        mock_rename.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_download_ad_cleans_staging_when_yaml_write_fails_without_existing_final_dir(
+        self,
+        extractor:extract_module.AdExtractor,
+        tmp_path:Path,
+    ) -> None:
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+        backup_dir = download_base / ".bak-ad_12345"
+
+        extractor.download_dir = download_base
+        staging_dir.mkdir(parents = True)
+
+        with (
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True, side_effect = OSError("write failed")),
+            patch.object(Path, "rename", autospec = True) as mock_rename,
+        ):
+            mock_extract_with_dir.return_value = (
+                _create_test_ad_partial(),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            with pytest.raises(OSError, match = "write failed"):
+                await extractor.download_ad(12345)
+
+        assert not final_dir.exists()
+        assert not backup_dir.exists()
+        assert not staging_dir.exists()
+        mock_rename.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_download_ad_skips_staging_cleanup_when_staging_dir_is_missing(
+        self,
+        extractor:extract_module.AdExtractor,
+        tmp_path:Path,
+    ) -> None:
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+
+        extractor.download_dir = download_base
+
+        with (
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True, side_effect = OSError("write failed")),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True) as mock_rmtree,
+        ):
+            mock_extract_with_dir.return_value = (
+                _create_test_ad_partial(),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            with pytest.raises(OSError, match = "write failed"):
+                await extractor.download_ad(12345)
+
+        mock_rmtree.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("cleanup_target", "expected_warning"),
+        [
+            pytest.param("staging", "Could not remove staging directory", id = "staging"),
+            pytest.param("backup", "Could not remove backup directory", id = "backup"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_download_ad_logs_warning_when_cleanup_fails(
+        self,
+        extractor:extract_module.AdExtractor,
+        tmp_path:Path,
+        caplog:pytest.LogCaptureFixture,
+        cleanup_target:str,
+        expected_warning:str,
+    ) -> None:
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+        backup_dir = download_base / ".bak-ad_12345"
+        final_yaml = final_dir / "ad_12345.yaml"
+
+        extractor.download_dir = download_base
+        final_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents = True)
+
+        def rmtree_side_effect(path:str | Path, *_args:object, **_kwargs:object) -> None:
+            normalized_path = Path(path)
+            if cleanup_target == "backup" and normalized_path == backup_dir:
+                raise OSError("busy")
+            if cleanup_target == "staging" and normalized_path == staging_dir:
+                raise OSError("busy")
+            # Any other cleanup target would be unexpected for this scenario.
+            raise AssertionError(f"Unexpected rmtree path: {path}")
+
+        if cleanup_target == "staging":
+            with (
+                patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+                patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True, side_effect = OSError("write failed")),
+                patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
+                caplog.at_level("WARNING"),
+            ):
+                mock_extract_with_dir.return_value = (
+                    _create_test_ad_partial(),
+                    staging_dir,
+                    final_dir,
+                    "ad_12345",
+                )
+                with pytest.raises(OSError, match = "write failed"):
+                    await extractor.download_ad(12345)
+        else:
+            with (
+                patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+                patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
+                caplog.at_level("WARNING"),
+            ):
+                mock_extract_with_dir.return_value = (
+                    _create_test_ad_partial(),
+                    staging_dir,
+                    final_dir,
+                    "ad_12345",
+                )
+                await extractor.download_ad(12345)
+
+        if cleanup_target == "backup":
+            assert final_dir.exists()
+            assert final_yaml.exists()
+            assert backup_dir.exists()
+            assert not staging_dir.exists()
+        else:
+            assert staging_dir.exists()
+
+        assert any(expected_warning in message for message in caplog.messages)
+
+    @pytest.mark.asyncio
+    async def test_download_ad_restores_final_dir_when_swap_rename_fails(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+        backup_dir = download_base / ".bak-ad_12345"
+        old_file = final_dir / "old_file.txt"
+
+        extractor.download_dir = download_base
+        final_dir.mkdir(parents = True)
+        old_file.write_text("old content")
+        staging_dir.mkdir(parents = True)
+
+        original_rename = Path.rename
+        rename_calls:list[tuple[Path, Path]] = []
+
+        def rename_side_effect(path_obj:Path, target:Path) -> Path:
+            rename_calls.append((path_obj, target))
+            if path_obj == staging_dir and target == final_dir:
+                raise OSError("rename failed")
+            return original_rename(path_obj, target)
+
+        with (
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True),
+            patch.object(Path, "rename", autospec = True, side_effect = rename_side_effect),
+        ):
+            mock_extract_with_dir.return_value = (
+                _create_test_ad_partial(),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            with pytest.raises(OSError, match = "rename failed"):
+                await extractor.download_ad(12345)
+
+        assert final_dir.exists()
+        assert old_file.exists()
+        assert not staging_dir.exists()
+        assert not backup_dir.exists()
+        assert rename_calls == [
+            (final_dir, backup_dir),
+            (staging_dir, final_dir),
+            (backup_dir, final_dir),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_download_ad_fails_when_backup_dir_already_exists(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+        backup_dir = download_base / ".bak-ad_12345"
+        old_file = final_dir / "old_file.txt"
+
+        extractor.download_dir = download_base
+        final_dir.mkdir(parents = True)
+        old_file.write_text("old content")
+        staging_dir.mkdir(parents = True)
+        backup_dir.mkdir(parents = True)
+
+        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
+            mock_extract_with_dir.return_value = (
+                _create_test_ad_partial(),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            with pytest.raises(FileExistsError):
+                await extractor.download_ad(12345)
+
+        assert final_dir.exists()
+        assert old_file.exists()
+        assert backup_dir.exists()
+        assert not staging_dir.exists()
+
+    @pytest.mark.asyncio
+    async def test_download_ad_does_not_restore_preexisting_backup_when_final_dir_missing(
+        self,
+        extractor:extract_module.AdExtractor,
+        tmp_path:Path,
+    ) -> None:
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+        backup_dir = download_base / ".bak-ad_12345"
+        backup_file = backup_dir / "old_file.txt"
+
+        extractor.download_dir = download_base
+        staging_dir.mkdir(parents = True)
+        backup_dir.mkdir(parents = True)
+        backup_file.write_text("old content")
+
+        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
+            mock_extract_with_dir.return_value = (
+                _create_test_ad_partial(),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            with pytest.raises(FileExistsError):
+                await extractor.download_ad(12345)
+
+        assert not final_dir.exists()
+        assert backup_dir.exists()
+        assert backup_file.exists()
+        assert not staging_dir.exists()
+
+    @pytest.mark.asyncio
+    async def test_download_ad_logs_restore_error_when_backup_restore_fails(
+        self,
+        extractor:extract_module.AdExtractor,
+        tmp_path:Path,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+        backup_dir = download_base / ".bak-ad_12345"
+        old_file = final_dir / "old_file.txt"
+
+        extractor.download_dir = download_base
+        final_dir.mkdir(parents = True)
+        old_file.write_text("old content")
+        staging_dir.mkdir(parents = True)
+
+        original_rename = Path.rename
+
+        def rename_side_effect(path_obj:Path, target:Path) -> Path:
+            if path_obj == staging_dir and target == final_dir:
+                raise OSError("staging rename failed")
+            if path_obj == backup_dir and target == final_dir:
+                raise OSError("backup restore failed")
+            return original_rename(path_obj, target)
+
+        with (
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True),
+            patch.object(Path, "rename", autospec = True, side_effect = rename_side_effect),
+        ):
+            mock_extract_with_dir.return_value = (
+                _create_test_ad_partial(),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            with caplog.at_level("ERROR"), pytest.raises(OSError, match = "staging rename failed"):
+                await extractor.download_ad(12345)
+
+        assert not final_dir.exists()
+        assert backup_dir.exists()
+        assert not staging_dir.exists()
+        assert any("Failed to restore backup directory" in message for message in caplog.messages)
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_ad_page_info_with_directory_handling_cleans_staging_on_failure(
+        self,
+        extractor:extract_module.AdExtractor,
+        tmp_path:Path,
+    ) -> None:
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        expected_staging_dir = base_dir / ".tmp-ad_12345"
+
+        with (
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
+            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock, side_effect = RuntimeError("extract failed")),
+            pytest.raises(RuntimeError, match = "extract failed"),
+        ):
+            await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+        assert not expected_staging_dir.exists()
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_ad_page_info_with_directory_handling_removes_stale_staging_dir(
+        self,
+        extractor:extract_module.AdExtractor,
+        tmp_path:Path,
+    ) -> None:
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        stale_staging_dir = base_dir / ".tmp-ad_12345"
+        stale_staging_dir.mkdir()
+        stale_file = stale_staging_dir / "stale.txt"
+        stale_file.write_text("stale")
+
+        ad_cfg = _create_test_ad_partial(title = "Test Title")
+
+        with (
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
+            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock, return_value = ad_cfg),
+        ):
+            _cfg, staging_dir, _final_dir, _ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+        assert staging_dir.exists()
+        assert not stale_file.exists()
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_ad_page_info_with_directory_handling_continues_when_stale_cleanup_raises_but_dir_is_gone(
+        self,
+        extractor:extract_module.AdExtractor,
+        tmp_path:Path,
+    ) -> None:
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        stale_staging_dir = base_dir / ".tmp-ad_12345"
+        stale_staging_dir.mkdir()
+
+        ad_cfg = _create_test_ad_partial(title = "Test Title")
+
+        original_rmtree = shutil.rmtree
+
+        def rmtree_side_effect(path:str, *_args:object, **_kwargs:object) -> None:
+            original_rmtree(path)
+            raise OSError("cleanup race")
+
+        with (
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
+            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock, return_value = ad_cfg),
+        ):
+            _cfg, staging_dir, _final_dir, _ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+        assert staging_dir.exists()
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_ad_page_info_with_directory_handling_skips_legacy_rename_when_final_dir_exists(
+        self,
+        extractor:extract_module.AdExtractor,
+        tmp_path:Path,
+    ) -> None:
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        legacy_dir = base_dir / "ad_12345"
+        final_dir = base_dir / "ad_12345_Test Title"
+        legacy_dir.mkdir()
+        final_dir.mkdir()
+
+        ad_cfg = _create_test_ad_partial(title = "Test Title")
+
+        extractor.config.download.rename_existing_folders = True
+
+        with (
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
+            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock, return_value = ad_cfg),
+        ):
+            _cfg, staging_dir, result_dir, _ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+        assert result_dir == final_dir
+        assert legacy_dir.exists()
+        assert final_dir.exists()
+        assert staging_dir.exists()
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_ad_page_info_with_directory_handling_aborts_when_stale_staging_cleanup_fails(
+        self,
+        extractor:extract_module.AdExtractor,
+        tmp_path:Path,
+    ) -> None:
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        stale_staging_dir = base_dir / ".tmp-ad_12345"
+        stale_staging_dir.mkdir()
+
+        with (
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = OSError("busy")),
+            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock) as mock_extract,
+            pytest.raises(OSError, match = "Could not remove stale staging directory"),
+        ):
+            await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+        mock_extract.assert_not_called()
+        assert stale_staging_dir.exists()
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_ad_page_info_with_directory_handling_logs_warning_when_failure_cleanup_fails(
+        self,
+        extractor:extract_module.AdExtractor,
+        tmp_path:Path,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+
+        with (
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
+            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock, side_effect = RuntimeError("extract failed")),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = OSError("busy")),
+            caplog.at_level("WARNING"),
+            pytest.raises(RuntimeError, match = "extract failed"),
+        ):
+            await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+        assert any("Could not remove staging directory" in message for message in caplog.messages)
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_ad_page_info_with_directory_handling_skips_failure_cleanup_when_staging_is_missing(
+        self,
+        extractor:extract_module.AdExtractor,
+        tmp_path:Path,
+    ) -> None:
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        expected_staging_dir = base_dir / ".tmp-ad_12345"
+
+        async def failing_extract(*_args:object, **_kwargs:object) -> None:
+            if expected_staging_dir.exists():
+                expected_staging_dir.rmdir()
+            raise RuntimeError("extract failed")
+
+        with (
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
+            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock, side_effect = failing_extract),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True) as mock_rmtree,
+            pytest.raises(RuntimeError, match = "extract failed"),
+        ):
+            await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+        # only stale cleanup (if any) should be attempted; failure cleanup branch skips when staging is already gone
+        assert all(Path(call.args[0]) != expected_staging_dir for call in mock_rmtree.call_args_list)
 
     @pytest.mark.asyncio
     async def test_download_images_use_provided_ad_file_stem(self, extractor:extract_module.AdExtractor) -> None:

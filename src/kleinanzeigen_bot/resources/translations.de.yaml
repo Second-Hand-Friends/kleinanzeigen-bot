@@ -306,6 +306,10 @@ kleinanzeigen_bot/extract.py:
 #################################################
   download_ad:
     "Using download directory: %s": "Verwende Download-Verzeichnis: %s"
+    "Backup directory %s already exists. Aborting download for ad %s to avoid data loss.": "Sicherungsverzeichnis %s existiert bereits. Download für Anzeige %s wird abgebrochen, um Datenverlust zu vermeiden."
+    "Could not remove backup directory %s: %s": "Konnte Sicherungsverzeichnis %s nicht entfernen: %s"
+    "Failed to restore backup directory %s to %s after download failure: %s": "Konnte Sicherungsverzeichnis %s nach %s nach einem Download-Fehler nicht wiederherstellen: %s"
+    "Could not remove staging directory %s: %s": "Konnte Staging-Verzeichnis %s nicht entfernen: %s"
 
   _download_and_save_image_sync:
     "Failed to download image %s: %s": "Fehler beim Herunterladen des Bildes %s: %s"
@@ -335,10 +339,13 @@ kleinanzeigen_bot/extract.py:
 
   _extract_ad_page_info_with_directory_handling:
     "Extracting title from ad %s: \"%s\"": "Extrahiere Titel aus Anzeige %s: \"%s\""
-    "Deleting current folder of ad %s...": "Lösche aktuellen Ordner der Anzeige %s..."
+    "Removing stale staging directory: %s": "Entferne veraltetes Staging-Verzeichnis: %s"
+    "Could not remove stale staging directory %s: %s": "Konnte veraltetes Staging-Verzeichnis %s nicht entfernen: %s"
+    "Could not remove stale staging directory %s. Aborting extraction to avoid using a dirty staging directory.": "Konnte veraltetes Staging-Verzeichnis %s nicht entfernen. Extraktion wird abgebrochen, um kein verunreinigtes Staging-Verzeichnis zu verwenden."
     "New directory for ad created at %s.": "Neues Verzeichnis für Anzeige erstellt unter %s."
     "Renaming folder from %s to %s for ad %s...": "Benenne Ordner von %s zu %s für Anzeige %s um..."
     "Using existing folder for ad %s at %s.": "Verwende bestehenden Ordner für Anzeige %s unter %s."
+    "Could not remove staging directory %s: %s": "Konnte Staging-Verzeichnis %s nicht entfernen: %s"
 
   _extract_contact_from_ad_page:
     "No street given in the contact.": "Keine Straße in den Kontaktdaten angegeben."
