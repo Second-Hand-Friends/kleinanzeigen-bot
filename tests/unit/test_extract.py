@@ -2251,12 +2251,71 @@ class TestAdExtractorDownload:
     def test_render_download_name_with_budget_handles_title_before_id(self, extractor:extract_module.AdExtractor) -> None:
         rendered = extractor._render_download_name_with_budget("{title}_{id}", 12345, "Any Title", 20)
 
+        assert "12345" in rendered
         assert rendered.endswith("_12345")
+        assert len(rendered) <= 20
 
-    def test_render_download_folder_name_preserves_first_title_when_repeated(self, extractor:extract_module.AdExtractor) -> None:
-        extractor.config.download.folder_name_max_length = 10
-        extractor.config.download.folder_name_template = "{title}_{title}"
 
-        folder_name = extractor._render_download_folder_name(12345, "abcdef")
+class TestRenderDownloadNameWithBudgetWarnings:
+    """Tests for truncation warnings in download name rendering."""
 
-        assert folder_name == "abcdef_abc"
+    def test_no_warning_when_everything_fits(self, test_extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
+        """No warning when all placeholders fit within budget."""
+        with caplog.at_level("WARNING"):
+            rendered = test_extractor._render_download_name_with_budget("{id}_{title}", 12345, "Short", 50)
+
+        assert "12345" in rendered
+        assert "Short" in rendered
+        assert "truncated" not in caplog.text.lower()
+
+    def test_warns_when_id_truncated(self, test_extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
+        """Warning emitted when {id} is truncated."""
+        with caplog.at_level("WARNING"):
+            rendered = test_extractor._render_download_name_with_budget("{id}", 12345678901234567890, "", 5)
+
+        assert rendered == "12345"
+        assert "12345678901234567890" not in rendered
+        assert len(rendered) <= 5
+        assert "truncated {id}" in caplog.text
+
+    def test_warns_when_title_truncated(self, test_extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
+        """Warning emitted when {title} is truncated."""
+        with caplog.at_level("WARNING"):
+            rendered = test_extractor._render_download_name_with_budget("{id}_{title}", 12345, "Very Long Title Here", 12)
+
+        assert "12345" in rendered
+        assert "truncated {title}" in caplog.text
+
+    def test_id_protected_over_literals(self, test_extractor:extract_module.AdExtractor) -> None:
+        """{id} is protected over literal text with tight budget."""
+        rendered = test_extractor._render_download_name_with_budget("LONGPREFIX_{id}", 12345, "", 10)
+
+        # Literal should be truncated to keep full id.
+        assert rendered.endswith("12345")
+        assert "12345" in rendered
+        assert len(rendered) <= 10
+
+    def test_title_truncated_to_reserve_id_space(self, test_extractor:extract_module.AdExtractor) -> None:
+        """{title} is truncated to reserve space for {id}."""
+        rendered = test_extractor._render_download_name_with_budget("{title}_{id}", 12345, "Very Long Title", 18)
+
+        assert rendered.endswith("12345")
+        assert "12345" in rendered
+        assert "Very Long Title" not in rendered
+        assert len(rendered) <= 18
+
+    def test_title_before_id_with_tight_budget_preserves_full_id(self, test_extractor:extract_module.AdExtractor) -> None:
+        """When budget is tight, {title} is truncated before {id}."""
+        rendered = test_extractor._render_download_name_with_budget("{title}_{id}", 12345, "Any Title", 14)
+
+        assert rendered.endswith("12345")
+        assert "12345" in rendered
+        assert len(rendered) <= 14
+
+    def test_literals_truncated_first(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Literal text is truncated before {id} or {title}."""
+        rendered = test_extractor._render_download_name_with_budget("PREFIX_{id}_{title}", 12345, "Hello", 15)
+
+        assert "12345" in rendered
+        # PREFIX may be truncated, but id and title should be preserved as much as possible
+        assert len(rendered) <= 15

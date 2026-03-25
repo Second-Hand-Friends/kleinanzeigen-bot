@@ -134,14 +134,14 @@ download:
   # maximum length for downloaded folder names (default: 100). does not limit downloaded file base names
   folder_name_max_length: 100
 
-  # folder naming template for downloaded ad directories. Allowed placeholders: {id}, {title}. Template must include {id}
+  # folder naming template for downloaded ad directories. Allowed placeholders: {id}, {title}. Each placeholder may appear at most once. Template must include {id}
   # Examples (choose one):
   #   • "ad_{id}_{title}"
   #   • "listing_{id}_{title}"
   #   • "{id}"
   folder_name_template: ad_{id}_{title}
 
-  # base name template for downloaded ad files. The bot writes the ad config as <base>.yaml and downloaded images as <base>__imgN.<ext>. Supported placeholders: {id}, {title}. Template must include {id}. Long titles may be truncated to keep filename limits
+  # base name template for downloaded ad files. The bot writes the ad config as <base>.yaml and downloaded images as <base>__imgN.<ext>. Supported placeholders: {id}, {title}. Each placeholder may appear at most once. Template must include {id}. Long titles may be truncated to keep filename limits
   # Examples (choose one):
   #   • "ad_{id}"
   #   • "listing_{id}"

@@ -251,6 +251,50 @@ def test_download_config_rejects_empty_placeholder() -> None:
         )
 
 
+def test_download_config_rejects_repeated_id_in_folder_template() -> None:
+    """Template with repeated {id} should be rejected."""
+    with pytest.raises(ValueError, match = r"download\.folder_name_template may contain at most one \{id\} placeholder"):
+        Config.model_validate(
+            {
+                "download": {"folder_name_template": "{id}_{id}"},
+                "login": {"username": "dummy", "password": "dummy"},
+            }
+        )
+
+
+def test_download_config_rejects_repeated_title_in_folder_template() -> None:
+    """Template with repeated {title} should be rejected."""
+    with pytest.raises(ValueError, match = r"download\.folder_name_template may contain at most one \{title\} placeholder"):
+        Config.model_validate(
+            {
+                "download": {"folder_name_template": "{id}_{title}_{title}"},
+                "login": {"username": "dummy", "password": "dummy"},
+            }
+        )
+
+
+def test_download_config_rejects_repeated_id_in_ad_file_template() -> None:
+    """Ad file template with repeated {id} should be rejected."""
+    with pytest.raises(ValueError, match = r"download\.ad_file_name_template may contain at most one \{id\} placeholder"):
+        Config.model_validate(
+            {
+                "download": {"ad_file_name_template": "{id}_{id}"},
+                "login": {"username": "dummy", "password": "dummy"},
+            }
+        )
+
+
+def test_download_config_rejects_repeated_title_in_ad_file_template() -> None:
+    """Ad file template with repeated {title} should be rejected."""
+    with pytest.raises(ValueError, match = r"download\.ad_file_name_template may contain at most one \{title\} placeholder"):
+        Config.model_validate(
+            {
+                "download": {"ad_file_name_template": "{id}_{title}_{title}"},
+                "login": {"username": "dummy", "password": "dummy"},
+            }
+        )
+
+
 def test_validate_download_template_rejects_literal_only_when_no_required_fields() -> None:
     with pytest.raises(ValueError, match = r"TestField must include at least one placeholder: \{id\}, \{title\}"):
         config_model._validate_download_template(

@@ -20,8 +20,7 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 _MAX_PERCENTAGE:Final[int] = 100
 _FIELD_NAME_PREFIX:Final[str] = "download."
-_FOLDER_TEMPLATE_ALLOWED_FIELDS:Final[frozenset[str]] = frozenset({"id", "title"})
-_AD_FILE_TEMPLATE_ALLOWED_FIELDS:Final[frozenset[str]] = frozenset({"id", "title"})
+_DOWNLOAD_TEMPLATE_ALLOWED_FIELDS:Final[frozenset[str]] = frozenset({"id", "title"})
 DEFAULT_DOWNLOAD_DIR:Final[str] = "downloaded-ads"
 
 
@@ -150,6 +149,7 @@ class DownloadConfig(ContextualModel):
         description = (
             "folder naming template for downloaded ad directories. "
             "Allowed placeholders: {id}, {title}. "
+            "Each placeholder may appear at most once. "
             "Template must include {id}"
         ),
         examples = ['"ad_{id}_{title}"', '"listing_{id}_{title}"', '"{id}"'],
@@ -160,6 +160,7 @@ class DownloadConfig(ContextualModel):
             "base name template for downloaded ad files. "
             "The bot writes the ad config as <base>.yaml and downloaded images as <base>__imgN.<ext>. "
             "Supported placeholders: {id}, {title}. "
+            "Each placeholder may appear at most once. "
             "Template must include {id}. "
             "Long titles may be truncated to keep filename limits"
         ),
@@ -182,13 +183,13 @@ class DownloadConfig(ContextualModel):
     def _validate_templates(self) -> "DownloadConfig":
         self.folder_name_template = _validate_download_template(
             self.folder_name_template,
-            allowed_fields = _FOLDER_TEMPLATE_ALLOWED_FIELDS,
+            allowed_fields = _DOWNLOAD_TEMPLATE_ALLOWED_FIELDS,
             required_fields = frozenset({"id"}),
             field_name = f"{_FIELD_NAME_PREFIX}folder_name_template",
         )
         self.ad_file_name_template = _validate_download_template(
             self.ad_file_name_template,
-            allowed_fields = _AD_FILE_TEMPLATE_ALLOWED_FIELDS,
+            allowed_fields = _DOWNLOAD_TEMPLATE_ALLOWED_FIELDS,
             required_fields = frozenset({"id"}),
             field_name = f"{_FIELD_NAME_PREFIX}ad_file_name_template",
         )
@@ -387,6 +388,7 @@ def _validate_download_template(
 
     formatter = Formatter()
     used_fields:set[str] = set()
+    field_counts:dict[str, int] = {}
     try:
         parsed = list(formatter.parse(trimmed_template))
     except ValueError as exc:
@@ -405,6 +407,12 @@ def _validate_download_template(
             allowed = ", ".join(sorted(f"{{{name}}}" for name in allowed_fields))
             raise ValueError(_("%s only supports placeholders: %s") % (field_name, allowed))
         used_fields.add(field_name_part)
+        field_counts[field_name_part] = field_counts.get(field_name_part, 0) + 1
+
+    # Reject repeated placeholders - each placeholder may appear at most once
+    for field, count in field_counts.items():
+        if count > 1:
+            raise ValueError(_("%s may contain at most one {%s} placeholder") % (field_name, field))
 
     missing_fields = required_fields - used_fields
     if missing_fields:
