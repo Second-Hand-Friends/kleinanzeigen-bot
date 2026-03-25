@@ -1522,7 +1522,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         def _handle_incomplete_fetch(template:str, *args:Any, cause:Exception | None = None) -> None:
             if strict:
-                raise PublishedAdsFetchIncompleteError(template % args) from cause
+                raise PublishedAdsFetchIncompleteError(_(template) % args) from cause
 
         while True:
             # Safety check: don't paginate beyond reasonable limit
