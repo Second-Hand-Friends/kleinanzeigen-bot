@@ -1596,6 +1596,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if len(preview) > SNIPPET_LIMIT:
                     preview = preview[:SNIPPET_LIMIT] + "..."
                 LOG.warning("Filtered %s malformed ad entries on page %s (sample: %s)", rejected_count, page, preview)
+                _handle_incomplete_fetch("Filtered %s malformed ad entries on page %s (sample: %s)", rejected_count, page, preview)
 
             ads.extend(filtered_page_ads)
 
