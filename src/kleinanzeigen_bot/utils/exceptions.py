@@ -21,3 +21,7 @@ class PublishSubmissionUncertainError(KleinanzeigenBotError):
 
     def __init__(self, reason:str) -> None:
         super().__init__(reason)
+
+
+class PublishedAdsFetchIncompleteError(KleinanzeigenBotError):
+    """Raised when published ads cannot be fetched completely for ownership-critical operations."""

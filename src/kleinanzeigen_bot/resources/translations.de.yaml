@@ -272,6 +272,7 @@ kleinanzeigen_bot/__init__.py:
     "%s were downloaded from your profile.": "%s wurden aus Ihrem Profil heruntergeladen."
     "new ad": "neue Anzeige"
     "Starting download of ad(s) with the id(s):": "Starte Download der Anzeige(n) mit den ID(s):"
+    "Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.": "Anzeigen-ID %d ist nicht in Ihren veröffentlichten Profilanzeigen. Speichere die heruntergeladene Anzeige als inaktiv."
     "Downloaded ad with id %d": "Anzeige mit der ID %d heruntergeladen"
     "The page with the id %d does not exist!": "Die Seite mit der ID %d existiert nicht!"
 

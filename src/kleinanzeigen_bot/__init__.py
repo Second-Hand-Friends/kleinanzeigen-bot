@@ -21,7 +21,7 @@ from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, Contact, calc
 from .model.config_model import DEFAULT_DOWNLOAD_DIR, Config
 from .update_checker import UpdateChecker
 from .utils import diagnostics, dicts, error_handlers, loggers, misc, xdg_paths
-from .utils.exceptions import CaptchaEncountered, PublishSubmissionUncertainError
+from .utils.exceptions import CaptchaEncountered, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
 from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
 from .utils.misc import ainput, ensure, is_frozen
@@ -364,6 +364,19 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if trimmed_dir == DEFAULT_DOWNLOAD_DIR:
             return workspace.download_dir
         return Path(abspath(trimmed_dir, relative_to = str(Path(self.config_file_path).parent))).resolve()
+
+    def _resolve_download_ad_activity(self, ad_id:int, published_ads_by_id:dict[int, dict[str, Any]]) -> tuple[bool, bool]:
+        """Resolve downloaded ad activity and ownership for numeric selectors.
+
+        Returns:
+            tuple[bool, bool]:
+                active value and ownership (True own / False foreign).
+        """
+        published_ad = published_ads_by_id.get(ad_id)
+        if published_ad is None:
+            return False, False
+
+        return published_ad.get("state") == "active", True
 
     def _resolve_workspace(self) -> None:
         """
@@ -1493,8 +1506,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return False
 
-    async def _fetch_published_ads(self) -> list[dict[str, Any]]:
+    async def _fetch_published_ads(self, *, strict:bool = False) -> list[dict[str, Any]]:
         """Fetch all published ads, handling API pagination.
+
+        Args:
+            strict: If True, raise PublishedAdsFetchIncompleteError when pagination data is incomplete.
 
         Returns:
             List of all published ads across all pages.
@@ -1504,20 +1520,27 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         MAX_PAGE_LIMIT:Final[int] = 100
         SNIPPET_LIMIT:Final[int] = 500
 
+        def _handle_incomplete_fetch(template:str, *args:Any, cause:Exception | None = None) -> None:
+            if strict:
+                raise PublishedAdsFetchIncompleteError(_(template) % args) from cause
+
         while True:
             # Safety check: don't paginate beyond reasonable limit
             if page > MAX_PAGE_LIMIT:
                 LOG.warning("Stopping pagination after %s pages to avoid infinite loop", MAX_PAGE_LIMIT)
+                _handle_incomplete_fetch("Stopping pagination after %s pages to avoid infinite loop", MAX_PAGE_LIMIT)
                 break
 
             try:
                 response = await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum={page}")
             except TimeoutError as ex:
                 LOG.warning("Pagination request failed on page %s: %s", page, ex)
+                _handle_incomplete_fetch("Pagination request failed on page %s: %s", page, ex, cause = ex)
                 break
 
             if not isinstance(response, dict):
                 LOG.warning("Unexpected pagination response type on page %s: %s", page, type(response).__name__)
+                _handle_incomplete_fetch("Unexpected pagination response type on page %s: %s", page, type(response).__name__)
                 break
 
             content = response.get("content", "")
@@ -1527,6 +1550,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 content = content.decode("utf-8", errors = "replace")
             if not isinstance(content, str):
                 LOG.warning("Unexpected response content type on page %s: %s", page, type(content).__name__)
+                _handle_incomplete_fetch("Unexpected response content type on page %s: %s", page, type(content).__name__)
                 break
 
             try:
@@ -1534,14 +1558,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             except (json.JSONDecodeError, TypeError) as ex:
                 if not content:
                     LOG.warning("Empty JSON response content on page %s", page)
+                    _handle_incomplete_fetch("Empty JSON response content on page %s", page, cause = ex)
                     break
                 snippet = content[:SNIPPET_LIMIT] + ("..." if len(content) > SNIPPET_LIMIT else "")
                 LOG.warning("Failed to parse JSON response on page %s: %s (content: %s)", page, ex, snippet)
+                _handle_incomplete_fetch("Failed to parse JSON response on page %s: %s (content: %s)", page, ex, snippet, cause = ex)
                 break
 
             if not isinstance(json_data, dict):
                 snippet = content[:SNIPPET_LIMIT] + ("..." if len(content) > SNIPPET_LIMIT else "")
                 LOG.warning("Unexpected JSON payload on page %s (content: %s)", page, snippet)
+                _handle_incomplete_fetch("Unexpected JSON payload on page %s (content: %s)", page, snippet)
                 break
 
             page_ads = json_data.get("ads", [])
@@ -1550,6 +1577,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if len(preview) > SNIPPET_LIMIT:
                     preview = preview[:SNIPPET_LIMIT] + "..."
                 LOG.warning("Unexpected 'ads' type on page %s: %s value: %s", page, type(page_ads).__name__, preview)
+                _handle_incomplete_fetch("Unexpected 'ads' type on page %s: %s value: %s", page, type(page_ads).__name__, preview)
                 break
 
             filtered_page_ads:list[dict[str, Any]] = []
@@ -1568,6 +1596,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if len(preview) > SNIPPET_LIMIT:
                     preview = preview[:SNIPPET_LIMIT] + "..."
                 LOG.warning("Filtered %s malformed ad entries on page %s (sample: %s)", rejected_count, page, preview)
+                _handle_incomplete_fetch("Filtered %s malformed ad entries on page %s (sample: %s)", rejected_count, page, preview)
 
             ads.extend(filtered_page_ads)
 
@@ -1582,6 +1611,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             if current_page_num is None:
                 LOG.warning("Invalid 'pageNum' in paging info: %s, stopping pagination", paging.get("pageNum"))
+                _handle_incomplete_fetch("Invalid 'pageNum' in paging info: %s, stopping pagination", paging.get("pageNum"))
                 break
 
             if total_pages is None:
@@ -1604,6 +1634,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             next_page = misc.coerce_page_number(paging.get("next"))
             if next_page is None:
                 LOG.warning("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
+                _handle_incomplete_fetch("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
                 break
             page = next_page
 
@@ -2473,10 +2504,19 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         Determines which download mode was chosen with the arguments, and calls the specified download routine.
         This downloads either all, only unsaved(new), or specific ads given by ID.
         """
+        # Normalize comma-separated keyword selectors; set deduplication collapses "new,new" → {"new"}
+        selector_tokens = {s.strip() for s in self.ads_selector.split(",")}
+        if "all" in selector_tokens:
+            effective_selector = "all"
+        elif len(selector_tokens) == 1:
+            effective_selector = next(iter(selector_tokens))  # e.g. "new,new" → "new"
+        else:
+            effective_selector = self.ads_selector  # numeric IDs: "123,456" — unchanged
+
         # Fetch published ads once from manage-ads JSON to avoid repetitive API calls during extraction
         # Build lookup dict inline and pass directly to extractor (no cache abstraction needed)
         LOG.info("Fetching published ads...")
-        published_ads = await self._fetch_published_ads()
+        published_ads = await self._fetch_published_ads(strict = bool(_NUMERIC_IDS_RE.match(effective_selector)))
         published_ads_by_id:dict[int, dict[str, Any]] = {}
         for published_ad in published_ads:
             try:
@@ -2491,15 +2531,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         xdg_paths.ensure_directory(download_dir, "downloaded ads directory")
         LOG.info("Ads download directory: %s", download_dir)
         ad_extractor = extract.AdExtractor(self.browser, self.config, download_dir, published_ads_by_id = published_ads_by_id)
-
-        # Normalize comma-separated keyword selectors; set deduplication collapses "new,new" → {"new"}
-        selector_tokens = {s.strip() for s in self.ads_selector.split(",")}
-        if "all" in selector_tokens:
-            effective_selector = "all"
-        elif len(selector_tokens) == 1:
-            effective_selector = next(iter(selector_tokens))  # e.g. "new,new" → "new"
-        else:
-            effective_selector = self.ads_selector  # numeric IDs: "123,456" — unchanged
 
         if effective_selector in {"all", "new"}:  # explore ads overview for these two modes
             LOG.info("Scanning your ad overview...")
@@ -2553,7 +2584,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             for ad_id in ids:  # call download routine for every id
                 exists = await ad_extractor.navigate_to_ad_page(ad_id)
                 if exists:
-                    await ad_extractor.download_ad(ad_id)
+                    resolved_active, ownership = self._resolve_download_ad_activity(ad_id, published_ads_by_id)
+                    if not ownership:
+                        LOG.warning("Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.", ad_id)
+
+                    await ad_extractor.download_ad(ad_id, active = resolved_active)
                     LOG.info("Downloaded ad with id %d", ad_id)
                 else:
                     LOG.error("The page with the id %d does not exist!", ad_id)

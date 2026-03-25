@@ -1284,6 +1284,30 @@ class TestAdExtractorDownload:
             assert not staging_dir.exists()
 
     @pytest.mark.asyncio
+    async def test_download_ad_passes_active_override(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+        """Test that download_ad forwards the active override to extraction."""
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+        extractor.download_dir = download_base
+        staging_dir.mkdir(parents = True)
+
+        with (
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True),
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+        ):
+            mock_extract_with_dir.return_value = (
+                _create_test_ad_partial(active = False),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            await extractor.download_ad(12345, active = False)
+
+            mock_extract_with_dir.assert_awaited_once_with(download_base, 12345, active_override = False)
+
+    @pytest.mark.asyncio
     async def test_download_ad_writes_schema_compliant_yaml(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
         """Test that downloaded ad YAML validates against ad.schema.json."""
         download_base = tmp_path / "downloaded-ads"

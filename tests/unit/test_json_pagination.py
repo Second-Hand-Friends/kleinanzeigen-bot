@@ -10,6 +10,7 @@ import pytest
 
 from kleinanzeigen_bot import KleinanzeigenBot
 from kleinanzeigen_bot.utils import misc
+from kleinanzeigen_bot.utils.exceptions import PublishedAdsFetchIncompleteError
 
 
 @pytest.mark.unit
@@ -264,6 +265,18 @@ class TestJSONPagination:
                 pytest.fail(f"expected malformed-entry warning in logs, got: {caplog.text}")
 
     @pytest.mark.asyncio
+    async def test_fetch_published_ads_strict_raises_on_malformed_entries(self, bot:KleinanzeigenBot) -> None:
+        """Strict fetch should raise when malformed entries are detected."""
+        response_data = {"ads": [42, {"id": 1, "state": "active"}, "broken"], "paging": {"pageNum": 1, "last": 1}}
+        mock_request = AsyncMock(return_value = {"content": json.dumps(response_data)})
+
+        with (
+            patch.object(bot, "web_request", mock_request),
+            pytest.raises(PublishedAdsFetchIncompleteError, match = "Filtered 2 malformed ad entries on page 1"),
+        ):
+            await bot._fetch_published_ads(strict = True)
+
+    @pytest.mark.asyncio
     async def test_fetch_published_ads_timeout(self, bot:KleinanzeigenBot) -> None:
         """Test handling of timeout during pagination."""
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
@@ -273,6 +286,15 @@ class TestJSONPagination:
 
             if result != []:
                 pytest.fail(f"Expected empty list on timeout, got {result}")
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_strict_raises_on_timeout(self, bot:KleinanzeigenBot) -> None:
+        """Strict fetch should raise when pagination cannot be completed."""
+        with (
+            patch.object(bot, "web_request", new_callable = AsyncMock, side_effect = TimeoutError("timeout")),
+            pytest.raises(PublishedAdsFetchIncompleteError, match = "Pagination request failed on page 1"),
+        ):
+            await bot._fetch_published_ads(strict = True)
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_handles_non_string_content_type(self, bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
