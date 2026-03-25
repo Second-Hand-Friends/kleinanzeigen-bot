@@ -207,6 +207,7 @@ kleinanzeigen_bot/__init__.py:
     " -> SUCCESS: ad updated with ID %s": " -> ERFOLG: Anzeige mit ID %s aktualisiert"
     " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
+    " -> removing %d existing image thumbnail(s) before upload...": " -> Entferne %d vorhandene Bild-Miniaturansicht(en) vor dem Hochladen..."
 
   update_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
