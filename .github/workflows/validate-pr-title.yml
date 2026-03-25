@@ -33,13 +33,11 @@ jobs:
             enh
             feat
             refact
+            refactor
             revert
             perf
             style
             test
-          scopes: |
-            deps
-            i18n
           requireScope: false
 
       - name: "Label PR"
