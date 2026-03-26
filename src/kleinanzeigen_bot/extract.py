@@ -55,14 +55,9 @@ class AdExtractor(WebScrapingMixin):
         self.published_ads_by_id:dict[int, dict[str, Any]] = published_ads_by_id or {}
 
     @staticmethod
-    def _reserved_for_pending_placeholders(*, has_id:bool, has_title:bool, id_rendered:bool, title_rendered:bool, id_value:str, sanitized_title:str) -> int:
-        """Return reserved budget for high-priority placeholders not rendered yet."""
-        reserved = 0
-        if has_id and not id_rendered:
-            reserved += len(id_value)
-        if has_title and not title_rendered:
-            reserved += len(sanitized_title)
-        return reserved
+    def _reserved_for_pending_placeholders(*, has_id:bool, id_rendered:bool, id_value:str) -> int:
+        """Return reserved budget for pending high-priority placeholders."""
+        return len(id_value) if has_id and not id_rendered else 0
 
     @staticmethod
     def _truncate_log_snippet(value:str, *, max_length:int = _LOG_SNIPPET_LIMIT) -> str:
@@ -114,8 +109,8 @@ class AdExtractor(WebScrapingMixin):
 
         Priority order (highest to lowest):
         1. {id} placeholder - protected, only truncated as last resort
-        2. {title} placeholder - truncated as needed after {id} fits
-        3. Literal text - truncated first
+        2. Literal text - preserved after {id} and before {title}
+        3. {title} placeholder - truncated first under budget pressure
 
         Emits warnings if {id} or {title} placeholders are truncated.
 
@@ -135,9 +130,7 @@ class AdExtractor(WebScrapingMixin):
         id_value = str(ad_id)
 
         has_id = any(field == "id" for _, field, _, _ in parsed_template if field)
-        has_title = any(field == "title" for _, field, _, _ in parsed_template if field)
         id_rendered = False
-        title_rendered = False
 
         parts:list[str] = []
         current_length = 0
@@ -145,17 +138,14 @@ class AdExtractor(WebScrapingMixin):
         id_truncated = False
         title_truncated = False
 
-        for literal_text, field_name_part, _format_spec, _conversion in parsed_template:
-            # Literal text is lowest priority.
-            # Reserve budget for not-yet-rendered higher-priority placeholders.
+        for index, (literal_text, field_name_part, _format_spec, _conversion) in enumerate(parsed_template):
+            # Literal text has higher priority than title, but lower than id.
+            # Reserve budget only for not-yet-rendered id placeholders.
             remaining_length = max_length - current_length
             reserved_for_priority = self._reserved_for_pending_placeholders(
                 has_id = has_id,
-                has_title = has_title,
                 id_rendered = id_rendered,
-                title_rendered = title_rendered,
                 id_value = id_value,
-                sanitized_title = sanitized_title,
             )
             literal_length = min(len(literal_text), max(0, remaining_length - reserved_for_priority))
             parts.append(literal_text[:literal_length])
@@ -177,13 +167,13 @@ class AdExtractor(WebScrapingMixin):
                 continue
 
             if field_name_part == "title":
-                # {title} has second-highest priority; still reserve space for {id} if not rendered yet.
+                # {title} is lowest priority; reserve budget for pending id and future literals first.
                 reserved_for_id = len(id_value) if has_id and not id_rendered else 0
-                available_for_title = max(0, remaining_length - reserved_for_id)
+                reserved_for_future_literals = sum(len(future_literal) for future_literal, _field, _fmt, _conv in parsed_template[index + 1:])
+                available_for_title = max(0, remaining_length - reserved_for_id - reserved_for_future_literals)
                 title_part = sanitized_title[:available_for_title]
                 parts.append(title_part)
                 current_length += len(title_part)
-                title_rendered = True
                 if len(title_part) < len(sanitized_title):
                     title_truncated = True
                 continue

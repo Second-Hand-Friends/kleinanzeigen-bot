@@ -201,10 +201,12 @@ Invalid templates (rejected at startup):
 - `{id}_{id}_duplicate` (repeated `{id}`)
 - `{title}_{title}_{id}` (repeated `{title}`)
 
-Tight-budget example (priority: `{id}` > `{title}` > literals):
+Tight-budget example (priority: `{id}` > literals > `{title}`):
 - Template: `PREFIX_{id}_{title}`
 - Input: `id=12345`, `title="Very Long Title"`, `max_length=15`
-- Result: `12345Very Long` (literal prefix and separator are dropped before truncating `{id}`)
+- Result: `PREFIX_12345_Ve` (literals are preserved and `{title}` is truncated first)
+
+If the configured budget is smaller than the `{id}` length itself, `{id}` is truncated as a last resort and a warning is logged.
 
 ### publishing
 

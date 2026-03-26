@@ -2278,6 +2278,46 @@ class TestRenderDownloadNameWithBudgetWarnings:
 
         assert result == ".."
 
+    def test_truncate_log_snippet_returns_empty_for_zero_max_length(self) -> None:
+        """Zero max_length returns empty string."""
+        result = extract_module.AdExtractor._truncate_log_snippet("any value", max_length = 0)
+
+        assert not result
+
+    def test_truncate_log_snippet_returns_empty_for_negative_max_length(self) -> None:
+        """Negative max_length returns empty string."""
+        result = extract_module.AdExtractor._truncate_log_snippet("any value", max_length = -1)
+
+        assert not result
+
+    def test_truncate_log_snippet_returns_exact_ellipsis_at_limit_three(self) -> None:
+        """When max_length equals ellipsis length, return exact ellipsis."""
+        result = extract_module.AdExtractor._truncate_log_snippet("long value here", max_length = 3)
+
+        assert result == "..."
+
+    def test_render_download_name_with_title_only_template(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Template with only {title} placeholder (no {id}) renders correctly."""
+        rendered = test_extractor._render_download_name_with_budget("{title}", 12345, "My Item Title", 50)
+
+        assert rendered == "My Item Title"
+        assert "12345" not in rendered
+
+    def test_render_download_name_with_title_only_truncated(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Template with only {title} truncates when budget is tight."""
+        rendered = test_extractor._render_download_name_with_budget("{title}", 12345, "Very Long Title Here", 10)
+
+        assert len(rendered) <= 10
+        # Title is truncated to fit budget via sanitize_folder_name
+        assert rendered == "Very Long"
+
+    def test_render_download_name_ignores_unknown_placeholder(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Unknown placeholders are ignored (defensive fallback)."""
+        rendered = test_extractor._render_download_name_with_budget("prefix_{unknown}_suffix", 12345, "Title", 50)
+
+        # Unknown placeholder is skipped, only literals remain
+        assert rendered == "prefix__suffix"
+
     def test_no_warning_when_everything_fits(self, test_extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
         """No warning when all placeholders fit within budget."""
         with caplog.at_level("WARNING"):
@@ -2309,35 +2349,62 @@ class TestRenderDownloadNameWithBudgetWarnings:
         """{id} is protected over literal text with tight budget."""
         rendered = test_extractor._render_download_name_with_budget("LONGPREFIX_{id}", 12345, "", 10)
 
-        # Literal should be truncated to keep full id.
+        # Exact output: "LONGPREFIX_" (12 chars) truncated to 5, id=12345 (5 chars) preserved
+        # Priority: {id} > literals → result = "LONGP" + "12345" = 10 chars
+        assert rendered == "LONGP12345"
         assert rendered.endswith("12345")
         assert "12345" in rendered
         assert len(rendered) <= 10
 
     def test_title_truncated_to_reserve_id_space(self, test_extractor:extract_module.AdExtractor) -> None:
-        """{title} is truncated to reserve space for {id}."""
+        """{title} is truncated to reserve space for {id} and literals."""
         rendered = test_extractor._render_download_name_with_budget("{title}_{id}", 12345, "Very Long Title", 18)
 
-        assert rendered.endswith("12345")
+        assert rendered.endswith("_12345")
         assert "12345" in rendered
         assert "Very Long Title" not in rendered
         assert len(rendered) <= 18
 
     def test_title_before_id_with_tight_budget_preserves_full_id(self, test_extractor:extract_module.AdExtractor) -> None:
-        """When budget is tight, {title} is truncated before {id}."""
+        """When budget is tight, {title} is truncated before {id} and separators."""
         rendered = test_extractor._render_download_name_with_budget("{title}_{id}", 12345, "Any Title", 14)
 
-        assert rendered.endswith("12345")
+        assert rendered.endswith("_12345")
         assert "12345" in rendered
         assert len(rendered) <= 14
 
-    def test_literals_truncated_first(self, test_extractor:extract_module.AdExtractor) -> None:
-        """Literal text is truncated before {id} or {title}."""
+    def test_literals_preserved_before_title(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Literal text is preserved before {title} under budget pressure."""
+        # Budget calculation: PREFIX_ (7) + 12345 (5) + _ (1) = 13 chars reserved for id+literals
+        # Remaining budget for title: 15 - 13 = 2 chars → "Hello" truncated to "He"
         rendered = test_extractor._render_download_name_with_budget("PREFIX_{id}_{title}", 12345, "Hello", 15)
 
-        assert "12345" in rendered
-        # PREFIX may be truncated, but id and title should be preserved as much as possible
+        assert rendered.startswith("PREFIX_12345_")
+        assert rendered == "PREFIX_12345_He"
         assert len(rendered) <= 15
+
+    def test_suffix_literal_preserved_with_tight_budget(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Suffix literal survives when {title} truncates first under tight budget."""
+        # Priority: {id} > literals > {title}
+        # Budget 18: id=12345 (5) + _ (1) + _SUFFIX (7) = 13 chars for id+suffix literals
+        # Remaining for title: 18 - 13 = 5 chars → "Any Title" truncated to "Any T"
+        rendered = test_extractor._render_download_name_with_budget("{id}_{title}_SUFFIX", 12345, "Any Title", 18)
+
+        assert "12345" in rendered
+        assert rendered.endswith("_SUFFIX")
+        assert len(rendered) <= 18
+
+    def test_title_truncates_before_suffix_and_id(self, test_extractor:extract_module.AdExtractor) -> None:
+        """When {title} precedes suffix literal and {id}, title truncates to preserve both."""
+        # Priority: {id} > literals > {title}
+        # Budget 20: id=12345 (5) + _SUFFIX_ (8) = 13 chars for id+suffix literals
+        # Remaining for title: 20 - 13 = 7 chars → "Very Long Title" truncated to "Very Lo"
+        rendered = test_extractor._render_download_name_with_budget("{title}_SUFFIX_{id}", 12345, "Very Long Title", 20)
+
+        assert "12345" in rendered
+        assert "_SUFFIX_" in rendered
+        assert rendered.endswith("_12345")
+        assert len(rendered) <= 20
 
     def test_warns_when_both_id_and_title_truncated(self, test_extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
         """Warnings are emitted when both placeholders are truncated."""
