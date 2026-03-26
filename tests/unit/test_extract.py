@@ -2259,6 +2259,25 @@ class TestAdExtractorDownload:
 class TestRenderDownloadNameWithBudgetWarnings:
     """Tests for truncation warnings in download name rendering."""
 
+    def test_truncate_log_snippet_returns_value_when_within_limit(self) -> None:
+        """Values within max_length are returned unchanged."""
+        result = extract_module.AdExtractor._truncate_log_snippet("short", max_length = 10)
+
+        assert result == "short"
+
+    def test_truncate_log_snippet_truncates_and_respects_limit(self) -> None:
+        """Values over max_length are truncated and final length stays within the cap."""
+        result = extract_module.AdExtractor._truncate_log_snippet("x" * 150, max_length = 20)
+
+        assert result == ("x" * 17) + "..."
+        assert len(result) == 20
+
+    def test_truncate_log_snippet_handles_small_limits(self) -> None:
+        """Small limits return a shortened ellipsis-only preview."""
+        result = extract_module.AdExtractor._truncate_log_snippet("abcdef", max_length = 2)
+
+        assert result == ".."
+
     def test_no_warning_when_everything_fits(self, test_extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
         """No warning when all placeholders fit within budget."""
         with caplog.at_level("WARNING"):
@@ -2319,3 +2338,12 @@ class TestRenderDownloadNameWithBudgetWarnings:
         assert "12345" in rendered
         # PREFIX may be truncated, but id and title should be preserved as much as possible
         assert len(rendered) <= 15
+
+    def test_warns_when_both_id_and_title_truncated(self, test_extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
+        """Warnings are emitted when both placeholders are truncated."""
+        with caplog.at_level("WARNING"):
+            rendered = test_extractor._render_download_name_with_budget("{title}_{id}", 12345678901234567890, "Very Long Title Here", 15)
+
+        assert len(rendered) <= 15
+        assert "truncated {id}" in caplog.text
+        assert "truncated {title}" in caplog.text

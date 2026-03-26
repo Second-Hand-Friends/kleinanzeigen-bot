@@ -185,12 +185,26 @@ download:
 - Custom relative `download.dir` values are resolved relative to `config.yaml`, not the current shell working directory.
 - Absolute `download.dir` values are used as-is.
 - `download.folder_name_template` controls downloaded ad folder names and supports `{id}` and `{title}` placeholders.
-- `download.folder_name_template` allows each placeholder to appear at most once.
+- `download.folder_name_template`: each placeholder may appear at most once.
 - `download.folder_name_template` must include `{id}` so downloads from different ads cannot collide and overwrite each other.
 - `download.ad_file_name_template` controls the downloaded YAML file stem and image prefix; images are saved as `<stem>__imgN.<ext>`.
-- `download.ad_file_name_template` allows each placeholder to appear at most once.
+- `download.ad_file_name_template`: each placeholder may appear at most once.
 - `download.ad_file_name_template` must include `{id}` so downloaded filenames remain stable and unique.
 - `download.folder_name_max_length` limits folder names only; downloaded file stems use a separate filename budget.
+
+Valid templates:
+- `ad_{id}_{title}`
+- `{id}_listing`
+- `{title}_{id}`
+
+Invalid templates (rejected at startup):
+- `{id}_{id}_duplicate` (repeated `{id}`)
+- `{title}_{title}_{id}` (repeated `{title}`)
+
+Tight-budget example (priority: `{id}` > `{title}` > literals):
+- Template: `PREFIX_{id}_{title}`
+- Input: `id=12345`, `title="Very Long Title"`, `max_length=15`
+- Result: `12345Very Long` (literal prefix and separator are dropped before truncating `{id}`)
 
 ### publishing
 

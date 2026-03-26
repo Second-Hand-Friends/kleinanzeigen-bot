@@ -32,6 +32,8 @@ _DOWNLOAD_STEM_SUFFIX_BUDGET:Final[int] = len("__img9999.jpeg")
 _STAGING_DIR_PREFIX:Final[str] = ".tmp-"
 _BACKUP_DIR_PREFIX:Final[str] = ".bak-"
 _LOG_SNIPPET_LIMIT:Final[int] = 120
+_ELLIPSIS:Final[str] = "..."
+_ELLIPSIS_LEN:Final[int] = len(_ELLIPSIS)
 
 
 class AdExtractor(WebScrapingMixin):
@@ -65,9 +67,13 @@ class AdExtractor(WebScrapingMixin):
     @staticmethod
     def _truncate_log_snippet(value:str, *, max_length:int = _LOG_SNIPPET_LIMIT) -> str:
         """Return a concise preview for log output."""
+        if max_length <= 0:
+            return ""
         if len(value) <= max_length:
             return value
-        return value[:max_length] + "..."
+        if max_length <= _ELLIPSIS_LEN:
+            return _ELLIPSIS[:max_length]
+        return value[: max_length - _ELLIPSIS_LEN] + _ELLIPSIS
 
     @staticmethod
     def _log_download_name_truncation(
@@ -136,7 +142,6 @@ class AdExtractor(WebScrapingMixin):
         parts:list[str] = []
         current_length = 0
 
-        sanitized_title_for_logging = sanitized_title
         id_truncated = False
         title_truncated = False
 
@@ -192,7 +197,7 @@ class AdExtractor(WebScrapingMixin):
                 template = template,
                 max_length = max_length,
                 id_value = id_value,
-                title_value = sanitized_title_for_logging,
+                title_value = sanitized_title,
                 rendered = result,
                 id_truncated = id_truncated,
                 title_truncated = title_truncated,
