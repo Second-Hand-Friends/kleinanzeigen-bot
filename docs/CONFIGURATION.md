@@ -175,8 +175,8 @@ download:
   include_all_matching_shipping_options: false  # if true, all shipping options matching the package size will be included
   excluded_shipping_options: []  # list of shipping options to exclude, e.g. ['DHL_2', 'DHL_5']
   folder_name_max_length: 100  # maximum length for downloaded folder names (default: 100)
-  folder_name_template: "ad_{id}_{title}"  # placeholders: {id}, {title}; must include {id}
-  ad_file_name_template: "ad_{id}"  # placeholders: {id}, {title}; must include {id}
+  folder_name_template: "ad_{id}_{title}"  # placeholders: {id}, {title}; each placeholder may appear at most once; must include {id}
+  ad_file_name_template: "ad_{id}"  # placeholders: {id}, {title}; each placeholder may appear at most once; must include {id}
   rename_existing_folders: false  # if true, rename existing folders without titles to include titles (default: false)
 ```
 
@@ -185,10 +185,28 @@ download:
 - Custom relative `download.dir` values are resolved relative to `config.yaml`, not the current shell working directory.
 - Absolute `download.dir` values are used as-is.
 - `download.folder_name_template` controls downloaded ad folder names and supports `{id}` and `{title}` placeholders.
+- `download.folder_name_template`: each placeholder may appear at most once.
 - `download.folder_name_template` must include `{id}` so downloads from different ads cannot collide and overwrite each other.
 - `download.ad_file_name_template` controls the downloaded YAML file stem and image prefix; images are saved as `<stem>__imgN.<ext>`.
+- `download.ad_file_name_template`: each placeholder may appear at most once.
 - `download.ad_file_name_template` must include `{id}` so downloaded filenames remain stable and unique.
 - `download.folder_name_max_length` limits folder names only; downloaded file stems use a separate filename budget.
+
+Valid templates:
+- `ad_{id}_{title}`
+- `{id}_listing`
+- `{title}_{id}`
+
+Invalid templates (rejected at startup):
+- `{id}_{id}_duplicate` (repeated `{id}`)
+- `{title}_{title}_{id}` (repeated `{title}`)
+
+Tight-budget example (priority: `{id}` > literals > `{title}`):
+- Template: `PREFIX_{id}_{title}`
+- Input: `id=12345`, `title="Very Long Title"`, `max_length=15`
+- Result: `PREFIX_12345_Ve` (literals are preserved and `{title}` is truncated first)
+
+If the configured budget is smaller than the `{id}` length itself, `{id}` is truncated as a last resort and a warning is logged.
 
 ### publishing
 

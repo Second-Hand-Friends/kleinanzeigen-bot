@@ -320,6 +320,10 @@ kleinanzeigen_bot/extract.py:
     "Downloaded %s.": "%s heruntergeladen."
     "No image area found. Continuing without downloading images.": "Keine Bildbereiche gefunden. Fahre ohne Bilder-Download fort."
 
+  _log_download_name_truncation:
+    "Download name truncated {id} placeholder: template='%s', max_length=%d, id='%s', rendered='%s'": "Download-Name hat {id} Platzhalter gekürzt: Vorlage='%s', max_length=%d, id='%s', gerendert='%s'"
+    "Download name truncated {title} placeholder: template='%s', max_length=%d, title='%s', rendered='%s'": "Download-Name hat {title} Platzhalter gekürzt: Vorlage='%s', max_length=%d, titel='%s', gerendert='%s'"
+
   extract_ad_id_from_ad_url:
     "Failed to extract ad ID from URL '%s': %s": "Fehler beim Extrahieren der Anzeigen-ID aus der URL '%s': %s"
 
@@ -696,6 +700,7 @@ kleinanzeigen_bot/model/config_model.py:
     "%s only supports placeholders: %s": "%s unterstützt nur Platzhalter: %s"
     "%s must include placeholder(s): %s": "%s muss Platzhalter enthalten: %s"
     "%s must include at least one placeholder: %s": "%s muss mindestens einen Platzhalter enthalten: %s"
+    "%s may contain at most one {%s} placeholder": "%s darf höchstens einen {%s} Platzhalter enthalten"
   _validate_pause_requires_capture:
     "pause_on_login_detection_failure requires capture_on.login_detection to be enabled": "pause_on_login_detection_failure erfordert, dass capture_on.login_detection aktiviert ist"
 
