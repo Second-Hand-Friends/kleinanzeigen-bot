@@ -841,7 +841,7 @@ class TestAdExtractorContent:
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
         test_extractor.page = page_mock
 
-        for config, raw_description, _expected_description in description_test_cases:
+        for config, raw_description, expected_description in description_test_cases:
             test_extractor.config = test_bot_config.with_values(config)
 
             with patch.multiple(
@@ -850,7 +850,7 @@ class TestAdExtractorContent:
                     side_effect = [
                         "Test Title",  # Title (wrapper's initial extraction)
                         "Test Title",  # Title (core extraction's call)
-                        raw_description,  # Raw description (without affixes)
+                        expected_description,  # Description with affixes (as it appears on web)
                         "03.02.2025",  # Creation date
                     ]
                 ),
