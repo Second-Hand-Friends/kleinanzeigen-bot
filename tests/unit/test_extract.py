@@ -841,7 +841,7 @@ class TestAdExtractorContent:
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
         test_extractor.page = page_mock
 
-        for config, raw_description, expected_description in description_test_cases:
+        for config, expected_raw, web_description_with_affixes in description_test_cases:
             test_extractor.config = test_bot_config.with_values(config)
 
             with patch.multiple(
@@ -850,7 +850,7 @@ class TestAdExtractorContent:
                     side_effect = [
                         "Test Title",  # Title (wrapper's initial extraction)
                         "Test Title",  # Title (core extraction's call)
-                        expected_description,  # Description with affixes (as it appears on web)
+                        web_description_with_affixes,  # Description with affixes (as it appears on web)
                         "03.02.2025",  # Creation date
                     ]
                 ),
@@ -864,7 +864,7 @@ class TestAdExtractorContent:
                 _extract_contact_from_ad_page = AsyncMock(return_value = {}),
             ):
                 ad_cfg, _staging_dir, _final_dir, _ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
-                assert ad_cfg.description == raw_description
+                assert ad_cfg.description == expected_raw
 
     @pytest.mark.asyncio
     async def test_extract_description_with_affixes_timeout(self, test_extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
