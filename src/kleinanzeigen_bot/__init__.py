@@ -30,16 +30,16 @@ from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
-LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
+LOG: Final[loggers.Logger] = loggers.get_logger(__name__)
 LOG.setLevel(loggers.INFO)
 
-PUBLISH_MAX_RETRIES:Final[int] = 3
-_NUMERIC_IDS_RE:Final[re.Pattern[str]] = re.compile(r"^\d+(,\d+)*$")
-_LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
+PUBLISH_MAX_RETRIES: Final[int] = 3
+_NUMERIC_IDS_RE: Final[re.Pattern[str]] = re.compile(r"^\d+(,\d+)*$")
+_LOGIN_DETECTION_SELECTORS: Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
     (By.ID, "user-email"),
 ]
-_LOGGED_OUT_CTA_SELECTORS:Final[list[tuple["By", str]]] = [
+_LOGGED_OUT_CTA_SELECTORS: Final[list[tuple["By", str]]] = [
     (By.CSS_SELECTOR, 'a[href*="einloggen"]'),
     (By.CSS_SELECTOR, 'a[href*="/m-einloggen"]'),
 ]
@@ -47,7 +47,7 @@ _LOGGED_OUT_CTA_SELECTORS:Final[list[tuple["By", str]]] = [
 colorama.just_fix_windows_console()
 
 
-def _format_login_detection_selectors(selectors:Sequence[tuple["By", str]]) -> str:
+def _format_login_detection_selectors(selectors: Sequence[tuple["By", str]]) -> str:
     return ", ".join(f"{selector_type.name}={selector_value}" for selector_type, selector_value in selectors)
 
 
@@ -62,7 +62,7 @@ class LoginDetectionReason(enum.Enum):
     SELECTOR_TIMEOUT = enum.auto()
 
 
-@dataclass(frozen = True)
+@dataclass(frozen=True)
 class LoginDetectionResult:
     """Login detection result.
 
@@ -71,8 +71,8 @@ class LoginDetectionResult:
     - is_logged_in=False with CTA_MATCH or SELECTOR_TIMEOUT
     """
 
-    is_logged_in:bool
-    reason:LoginDetectionReason
+    is_logged_in: bool
+    reason: LoginDetectionReason
 
     def __post_init__(self) -> None:
         if not isinstance(self.is_logged_in, bool):
@@ -86,9 +86,9 @@ class LoginDetectionResult:
 
 
 def _repost_cycle_ready(
-    ad_cfg:Ad,
-    ad_file_relative:str,
-    repost_state:tuple[int, int, int, int] | None = None,
+    ad_cfg: Ad,
+    ad_file_relative: str,
+    repost_state: tuple[int, int, int, int] | None = None,
 ) -> bool:
     """
     Check if the repost cycle delay has been satisfied.
@@ -119,9 +119,9 @@ def _repost_cycle_ready(
 
 
 def _day_delay_elapsed(
-    ad_cfg:Ad,
-    ad_file_relative:str,
-    day_delay_state:tuple[bool, int | None, datetime | None] | None = None,
+    ad_cfg: Ad,
+    ad_file_relative: str,
+    day_delay_state: tuple[bool, int | None, datetime | None] | None = None,
 ) -> bool:
     """
     Check if the day delay has elapsed since the ad was last published.
@@ -148,7 +148,7 @@ def _day_delay_elapsed(
     return True
 
 
-def _repost_delay_state(ad_cfg:Ad) -> tuple[int, int, int, int]:
+def _repost_delay_state(ad_cfg: Ad) -> tuple[int, int, int, int]:
     """Return repost-delay state tuple.
 
     Returns:
@@ -162,7 +162,7 @@ def _repost_delay_state(ad_cfg:Ad) -> tuple[int, int, int, int]:
     return total_reposts, delay_reposts, applied_cycles, eligible_cycles
 
 
-def _day_delay_state(ad_cfg:Ad) -> tuple[bool, int | None, datetime | None]:
+def _day_delay_state(ad_cfg: Ad) -> tuple[bool, int | None, datetime | None]:
     """Return day-delay state tuple.
 
     Returns:
@@ -185,7 +185,7 @@ def _day_delay_state(ad_cfg:Ad) -> tuple[bool, int | None, datetime | None]:
     return elapsed_days >= delay_days, elapsed_days, reference
 
 
-def _relative_ad_path(ad_file:str, config_file_path:str) -> str:
+def _relative_ad_path(ad_file: str, config_file_path: str) -> str:
     """Compute an ad file path relative to the config directory, falling back to the absolute path."""
     try:
         return str(Path(ad_file).relative_to(Path(config_file_path).parent))
@@ -193,7 +193,7 @@ def _relative_ad_path(ad_file:str, config_file_path:str) -> str:
         return ad_file
 
 
-def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
+def apply_auto_price_reduction(ad_cfg: Ad, _ad_cfg_orig: dict[str, Any], ad_file_relative: str) -> None:
     """
     Apply automatic price reduction to an ad based on repost count and configuration.
 
@@ -223,9 +223,9 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
     _, elapsed_days, reference = day_delay_state
     delay_days = ad_cfg.auto_price_reduction.delay_days
     elapsed_display = "missing" if elapsed_days is None else str(elapsed_days)
-    reference_display = "missing" if reference is None else reference.isoformat(timespec = "seconds")
+    reference_display = "missing" if reference is None else reference.isoformat(timespec="seconds")
 
-    if not _repost_cycle_ready(ad_cfg, ad_file_relative, repost_state = repost_state):
+    if not _repost_cycle_ready(ad_cfg, ad_file_relative, repost_state=repost_state):
         next_repost = delay_reposts + 1 if total_reposts <= delay_reposts else delay_reposts + applied_cycles + 1
         LOG.debug(
             "Auto price reduction decision for [%s]: skipped (repost delay). next reduction earliest at repost >= %s and day delay %s/%s days."
@@ -241,7 +241,7 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
         )
         return
 
-    if not _day_delay_elapsed(ad_cfg, ad_file_relative, day_delay_state = day_delay_state):
+    if not _day_delay_elapsed(ad_cfg, ad_file_relative, day_delay_state=day_delay_state):
         LOG.debug(
             "Auto price reduction decision for [%s]: skipped (day delay). next reduction earliest when elapsed_days >= %s."
             " elapsed_days=%s repost_count=%s eligible_cycles=%s applied_cycles=%s reference=%s",
@@ -268,9 +268,9 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
 
     if loggers.is_debug(LOG):
         effective_price, reduction_steps, price_floor = calculate_auto_price_with_trace(
-            base_price = base_price,
-            auto_price_reduction = ad_cfg.auto_price_reduction,
-            target_reduction_cycle = next_cycle,
+            base_price=base_price,
+            auto_price_reduction=ad_cfg.auto_price_reduction,
+            target_reduction_cycle=next_cycle,
         )
         LOG.debug(
             "Auto price reduction trace for [%s]: strategy=%s amount=%s floor=%s target_cycle=%s base_price=%s",
@@ -291,7 +291,7 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
                 step.floor_applied,
             )
     else:
-        effective_price = calculate_auto_price(base_price = base_price, auto_price_reduction = ad_cfg.auto_price_reduction, target_reduction_cycle = next_cycle)
+        effective_price = calculate_auto_price(base_price=base_price, auto_price_reduction=ad_cfg.auto_price_reduction, target_reduction_cycle=next_cycle)
 
     if effective_price is None:
         return
@@ -318,27 +318,27 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         self.root_url = "https://www.kleinanzeigen.de"
 
-        self.config:Config
+        self.config: Config
         self.config_file_path = abspath("config.yaml")
-        self.workspace:xdg_paths.Workspace | None = None
-        self._config_arg:str | None = None
-        self._workspace_mode_arg:xdg_paths.InstallationMode | None = None
+        self.workspace: xdg_paths.Workspace | None = None
+        self._config_arg: str | None = None
+        self._workspace_mode_arg: xdg_paths.InstallationMode | None = None
 
-        self.categories:dict[str, str] = {}
+        self.categories: dict[str, str] = {}
 
-        self.file_log:loggers.LogFileHandle | None = None
+        self.file_log: loggers.LogFileHandle | None = None
         self._log_basename = os.path.splitext(os.path.basename(sys.executable))[0] if is_frozen() else self.__module__
-        self.log_file_path:str | None = abspath(f"{self._log_basename}.log")
-        self._logfile_arg:str | None = None
-        self._logfile_explicitly_provided:bool = False
+        self.log_file_path: str | None = abspath(f"{self._log_basename}.log")
+        self._logfile_arg: str | None = None
+        self._logfile_explicitly_provided: bool = False
 
         self.command = "help"
         self.ads_selector = "due"
-        self._ads_selector_explicit:bool = False
+        self._ads_selector_explicit: bool = False
         self.keep_old_ads = False
 
-        self._login_detection_diagnostics_captured:bool = False
-        self._timing_collector:TimingCollector | None = None
+        self._login_detection_diagnostics_captured: bool = False
+        self._timing_collector: TimingCollector | None = None
 
     def __del__(self) -> None:
         if self.file_log:
@@ -363,9 +363,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         trimmed_dir = self.config.download.dir.strip()
         if trimmed_dir == DEFAULT_DOWNLOAD_DIR:
             return workspace.download_dir
-        return Path(abspath(trimmed_dir, relative_to = str(Path(self.config_file_path).parent))).resolve()
+        return Path(abspath(trimmed_dir, relative_to=str(Path(self.config_file_path).parent))).resolve()
 
-    def _resolve_download_ad_activity(self, ad_id:int, published_ads_by_id:dict[int, dict[str, Any]]) -> tuple[bool, bool]:
+    def _resolve_download_ad_activity(self, ad_id: int, published_ads_by_id: dict[int, dict[str, Any]]) -> tuple[bool, bool]:
         """Resolve downloaded ad activity and ownership for numeric selectors.
 
         Returns:
@@ -399,11 +399,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         try:
             self.workspace = xdg_paths.resolve_workspace(
-                config_arg = effective_config_arg,
-                logfile_arg = self._logfile_arg,
-                workspace_mode = effective_workspace_mode,
-                logfile_explicitly_provided = self._logfile_explicitly_provided,
-                log_basename = self._log_basename,
+                config_arg=effective_config_arg,
+                logfile_arg=self._logfile_arg,
+                workspace_mode=effective_workspace_mode,
+                logfile_explicitly_provided=self._logfile_explicitly_provided,
+                log_basename=self._log_basename,
             )
         except ValueError as exc:
             LOG.error(str(exc))
@@ -424,7 +424,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.debug("Browser profile: %s", self.workspace.browser_profile_dir)
             LOG.debug("Diagnostics dir: %s", self.workspace.diagnostics_dir)
 
-    async def run(self, args:list[str]) -> None:
+    async def run(self, args: list[str]) -> None:
         self.parse_args(args)
         self._resolve_workspace()
         try:
@@ -449,7 +449,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
                     self.ads_selector = "all"
-                    if ads := self.load_ads(exclude_ads_with_id = False):
+                    if ads := self.load_ads(exclude_ads_with_id=False):
                         for ad_file, ad_cfg, ad_cfg_orig in ads:
                             ad_file_relative = _relative_ad_path(ad_file, self.config_file_path)
                             apply_auto_price_reduction(ad_cfg, ad_cfg_orig, ad_file_relative)
@@ -460,7 +460,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     self.configure_file_logging()
                     self.load_config()
                     checker = UpdateChecker(self.config, self._update_check_state_path)
-                    checker.check_for_updates(skip_interval_check = True)
+                    checker.check_for_updates(skip_interval_check=True)
                 case "update-content-hash":
                     self.configure_file_logging()
                     self.load_config()
@@ -468,7 +468,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
                     self.ads_selector = "all"
-                    if ads := self.load_ads(exclude_ads_with_id = False):
+                    if ads := self.load_ads(exclude_ads_with_id=False):
                         self.update_content_hashes(ads)
                     else:
                         LOG.info("############################################")
@@ -699,7 +699,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 )
             )
 
-    def _is_valid_ads_selector(self, valid_keywords:set[str]) -> bool:
+    def _is_valid_ads_selector(self, valid_keywords: set[str]) -> bool:
         """Check if the current ads_selector is valid for the given set of keyword selectors.
 
         Accepts a single keyword, a comma-separated list of keywords, or a comma-separated
@@ -711,7 +711,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             or bool(_NUMERIC_IDS_RE.match(self.ads_selector))
         )
 
-    def parse_args(self, args:list[str]) -> None:
+    def parse_args(self, args: list[str]) -> None:
         try:
             options, arguments = getopt.gnu_getopt(
                 args[1:],
@@ -798,8 +798,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         dicts.save_commented_model(
             self.config_file_path,
             default_config,
-            header = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json",
-            exclude = {
+            header="# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json",
+            exclude={
                 "ad_defaults": {"description"},
             },
         )
@@ -810,7 +810,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             self.create_default_config()
 
         config_yaml = dicts.load_dict_if_exists(self.config_file_path, _("config"))
-        self.config = Config.model_validate(config_yaml, strict = True, context = self.config_file_path)
+        self.config = Config.model_validate(config_yaml, strict=True, context=self.config_file_path)
 
         timing_enabled = self.config.diagnostics.timing_collection
         if timing_enabled and self.workspace:
@@ -838,15 +838,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # populate browser_config object used by WebScrapingMixin
         self.browser_config.arguments = self.config.browser.arguments
         self.browser_config.binary_location = self.config.browser.binary_location
-        self.browser_config.extensions = [abspath(item, relative_to = self.config_file_path) for item in self.config.browser.extensions]
+        self.browser_config.extensions = [abspath(item, relative_to=self.config_file_path) for item in self.config.browser.extensions]
         self.browser_config.use_private_window = self.config.browser.use_private_window
         if self.config.browser.user_data_dir:
-            self.browser_config.user_data_dir = abspath(self.config.browser.user_data_dir, relative_to = self.config_file_path)
+            self.browser_config.user_data_dir = abspath(self.config.browser.user_data_dir, relative_to=self.config_file_path)
         elif self.workspace:
             self.browser_config.user_data_dir = str(self.workspace.browser_profile_dir)
         self.browser_config.profile_name = self.config.browser.profile_name
 
-    def __check_ad_republication(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
+    def __check_ad_republication(self, ad_cfg: Ad, ad_file_relative: str) -> bool:
         """
         Check if an ad needs to be republished based on republication interval.
         Note:  This method does not check for content changes. Use __check_ad_changed for that.
@@ -877,7 +877,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return True
 
-    def __check_ad_changed(self, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> bool:
+    def __check_ad_changed(self, ad_cfg: Ad, ad_cfg_orig: dict[str, Any], ad_file_relative: str) -> bool:
         """
         Check if an ad has been changed since last publication.
 
@@ -904,7 +904,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return False
 
-    def load_ads(self, *, ignore_inactive:bool = True, exclude_ads_with_id:bool = True) -> list[tuple[str, Ad, dict[str, Any]]]:
+    def load_ads(self, *, ignore_inactive: bool = True, exclude_ads_with_id: bool = True) -> list[tuple[str, Ad, dict[str, Any]]]:
         """
         Load and validate all ad config files, optionally filtering out inactive or already-published ads.
 
@@ -920,12 +920,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         """
         LOG.info("Searching for ad config files...")
 
-        ad_files:dict[str, str] = {}
+        ad_files: dict[str, str] = {}
         data_root_dir = os.path.dirname(self.config_file_path)
         for file_pattern in self.config.ad_files:
-            for ad_file in glob.glob(file_pattern, root_dir = data_root_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
+            for ad_file in glob.glob(file_pattern, root_dir=data_root_dir, flags=glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
                 if not str(ad_file).endswith("ad_fields.yaml"):
-                    ad_files[abspath(ad_file, relative_to = data_root_dir)] = ad_file
+                    ad_files[abspath(ad_file, relative_to=data_root_dir)] = ad_file
         LOG.info(" -> found %s", pluralize("ad config file", ad_files))
         if not ad_files:
             return []
@@ -942,8 +942,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         ads = []
         for ad_file, ad_file_relative in sorted(ad_files.items()):
-            ad_cfg_orig:dict[str, Any] = dicts.load_dict(ad_file, "ad")
-            ad_cfg:Ad = self.load_ad(ad_cfg_orig)
+            ad_cfg_orig: dict[str, Any] = dicts.load_dict(ad_file, "ad")
+            ad_cfg: Ad = self.load_ad(ad_cfg_orig)
 
             if ignore_inactive and not ad_cfg.active:
                 LOG.info(" -> SKIPPED: inactive ad [%s]", ad_file_relative)
@@ -980,8 +980,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if not should_include:
                     continue
 
-            ensure(self.__get_description(ad_cfg, with_affixes = False), f"-> property [description] not specified @ [{ad_file}]")
-            self.__get_description(ad_cfg, with_affixes = True)  # validates complete description
+            ensure(self.__get_description(ad_cfg, with_affixes=False), f"-> property [description] not specified @ [{ad_file}]")
+            self.__get_description(ad_cfg, with_affixes=True)  # validates complete description
 
             if ad_cfg.category:
                 resolved_category_id = self.categories.get(ad_cfg.category)
@@ -1000,13 +1000,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 ad_dir = os.path.dirname(ad_file)
                 for image_pattern in ad_cfg.images:
                     pattern_images = set()
-                    for image_file in glob.glob(image_pattern, root_dir = ad_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
+                    for image_file in glob.glob(image_pattern, root_dir=ad_dir, flags=glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
                         _, image_file_ext = os.path.splitext(image_file)
                         ensure(image_file_ext.lower() in {".gif", ".jpg", ".jpeg", ".png"}, f"Unsupported image file type [{image_file}]")
                         if os.path.isabs(image_file):
                             pattern_images.add(image_file)
                         else:
-                            pattern_images.add(abspath(image_file, relative_to = ad_file))
+                            pattern_images.add(abspath(image_file, relative_to=ad_file))
                     images.extend(sorted(pattern_images))
                 ensure(images or not ad_cfg.images, f"No images found for given file patterns {ad_cfg.images} at {ad_dir}")
                 ad_cfg.images = list(dict.fromkeys(images))
@@ -1017,13 +1017,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.info("Loaded %s", pluralize("ad", ads))
         return ads
 
-    def load_ad(self, ad_cfg_orig:dict[str, Any]) -> Ad:
+    def load_ad(self, ad_cfg_orig: dict[str, Any]) -> Ad:
         return AdPartial.model_validate(ad_cfg_orig).to_ad(self.config.ad_defaults)
 
-    async def check_and_wait_for_captcha(self, *, is_login_page:bool = True) -> None:
+    async def check_and_wait_for_captcha(self, *, is_login_page: bool = True) -> None:
         try:
             captcha_timeout = self._timeout("captcha_detection")
-            await self.web_find(By.CSS_SELECTOR, "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']", timeout = captcha_timeout)
+            await self.web_find(By.CSS_SELECTOR, "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']", timeout=captcha_timeout)
 
             if not is_login_page and self.config.captcha.auto_restart:
                 LOG.warning("Captcha recognized - auto-restart enabled, abort run...")
@@ -1049,11 +1049,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.info("Checking if already logged in...")
         await self.web_open(f"{self.root_url}")
         try:
-            await self._click_gdpr_banner(timeout = pre_login_gdpr_timeout)
+            await self._click_gdpr_banner(timeout=pre_login_gdpr_timeout)
         except TimeoutError:
             LOG.debug("No GDPR banner detected before login")
 
-        detection_result = await self.get_login_state(capture_diagnostics = False)
+        detection_result = await self.get_login_state(capture_diagnostics=False)
         if detection_result.is_logged_in:
             LOG.info("Already logged in. Skipping login.")
             return
@@ -1062,12 +1062,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # m-einloggen-sso.html triggers immediate server-side redirect to Auth0
         # This avoids waiting for JS on m-einloggen.html which may not execute in headless mode
         try:
-            await self.web_open(f"{self.root_url}/m-einloggen-sso.html", timeout = sso_navigation_timeout)
+            await self.web_open(f"{self.root_url}/m-einloggen-sso.html", timeout=sso_navigation_timeout)
         except TimeoutError:
             LOG.warning("Timeout navigating to SSO login page after %.1fs", sso_navigation_timeout)
             await self._capture_login_detection_diagnostics_if_enabled(
-                base_prefix = "login_detection_sso_navigation_timeout",
-                pause_banner_message = "# SSO navigation timed out. Browser is paused for manual inspection.",
+                base_prefix="login_detection_sso_navigation_timeout",
+                pause_banner_message="# SSO navigation timed out. Browser is paused for manual inspection.",
             )
             raise
 
@@ -1078,14 +1078,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # AssertionError is intentionally part of auth-boundary control flow so
             # diagnostics are captured before the original error is re-raised.
             await self._capture_login_detection_diagnostics_if_enabled(
-                base_prefix = "login_detection_auth0_flow_failure",
-                pause_banner_message = "# Auth0 login flow failed. Browser is paused for manual inspection.",
+                base_prefix="login_detection_auth0_flow_failure",
+                pause_banner_message="# Auth0 login flow failed. Browser is paused for manual inspection.",
             )
             raise
 
         await self._dismiss_consent_banner()
 
-        detection_result = await self.get_login_state(capture_diagnostics = False)
+        detection_result = await self.get_login_state(capture_diagnostics=False)
         if detection_result.is_logged_in:
             LOG.info("Login confirmed.")
             return
@@ -1094,8 +1094,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.debug("Login detection reason after attempt is %s", detection_result.reason.name)
         LOG.warning("Login could not be confirmed after Auth0 flow (url=%s)", current_url)
         await self._capture_login_detection_diagnostics_if_enabled(
-            base_prefix = f"login_detection_{detection_result.reason.name.lower()}",
-            pause_banner_message = "# Login confirmation failed after Auth0 flow. Browser is paused for manual inspection.",
+            base_prefix=f"login_detection_{detection_result.reason.name.lower()}",
+            pause_banner_message="# Login confirmation failed after Auth0 flow. Browser is paused for manual inspection.",
         )
         raise AssertionError(_("Login could not be confirmed after Auth0 flow (reason=%s, url=%s)") % (detection_result.reason.name, current_url))
 
@@ -1118,9 +1118,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         try:
             await self.web_await(
                 lambda: "login.kleinanzeigen.de" in self._current_page_url() or "/u/login" in self._current_page_url(),
-                timeout = redirect_timeout,
-                timeout_error_message = f"Auth0 redirect did not start within {redirect_timeout} seconds",
-                apply_multiplier = False,
+                timeout=redirect_timeout,
+                timeout_error_message=f"Auth0 redirect did not start within {redirect_timeout} seconds",
+                apply_multiplier=False,
             )
         except TimeoutError as ex:
             current_url = self._current_page_url()
@@ -1131,9 +1131,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         try:
             await self.web_await(
                 lambda: "/u/login/password" in self._current_page_url(),
-                timeout = password_step_timeout,
-                timeout_error_message = f"Auth0 password page not reached within {password_step_timeout} seconds",
-                apply_multiplier = False,
+                timeout=password_step_timeout,
+                timeout_error_message=f"Auth0 password page not reached within {password_step_timeout} seconds",
+                apply_multiplier=False,
             )
         except TimeoutError as ex:
             current_url = self._current_page_url()
@@ -1148,9 +1148,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         try:
             await self.web_await(
                 lambda: self._is_valid_post_auth0_destination(self._current_page_url()),
-                timeout = post_submit_timeout,
-                timeout_error_message = f"Auth0 post-submit transition did not complete within {post_submit_timeout} seconds",
-                apply_multiplier = False,
+                timeout=post_submit_timeout,
+                timeout_error_message=f"Auth0 post-submit transition did not complete within {post_submit_timeout} seconds",
+                apply_multiplier=False,
             )
             return
         except TimeoutError:
@@ -1158,7 +1158,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         login_confirmed = False
         try:
-            login_confirmed = await asyncio.wait_for(self.is_logged_in(), timeout = post_submit_timeout)
+            login_confirmed = await asyncio.wait_for(self.is_logged_in(), timeout=post_submit_timeout)
         except (TimeoutError, asyncio.TimeoutError):
             LOG.debug("Post-submit login verification did not complete within %.1fs", post_submit_timeout)
 
@@ -1166,10 +1166,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return
 
         LOG.debug("Auth0 post-submit verification remained inconclusive; applying bounded fallback pause")
-        await self.web_sleep(min_ms = fallback_min_ms, max_ms = fallback_max_ms)
+        await self.web_sleep(min_ms=fallback_min_ms, max_ms=fallback_max_ms)
 
         try:
-            if await asyncio.wait_for(self.is_logged_in(), timeout = quick_dom_timeout):
+            if await asyncio.wait_for(self.is_logged_in(), timeout=quick_dom_timeout):
                 return
         except (TimeoutError, asyncio.TimeoutError):
             LOG.debug("Final post-submit login confirmation did not complete within %.1fs", quick_dom_timeout)
@@ -1177,7 +1177,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         current_url = self._current_page_url()
         raise TimeoutError(_("Auth0 post-submit verification remained inconclusive (url=%s)") % current_url)
 
-    def _is_valid_post_auth0_destination(self, url:str) -> bool:
+    def _is_valid_post_auth0_destination(self, url: str) -> bool:
         if not url or url in {"unknown", "about:blank"}:
             return False
 
@@ -1215,7 +1215,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         LOG.debug("Auth0 Step 2: entering password...")
         await self.web_input(By.CSS_SELECTOR, "input[type='password']", self.config.login.password)
-        await self.check_and_wait_for_captcha(is_login_page = True)
+        await self.check_and_wait_for_captcha(is_login_page=True)
         await self.web_click(By.CSS_SELECTOR, "button[type='submit']")
         await self._wait_for_post_auth0_submit_transition()
         LOG.debug("Auth0 login submitted.")
@@ -1239,7 +1239,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def _check_sms_verification(self) -> None:
         sms_timeout = self._timeout("sms_verification")
-        await self.web_find(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout = sms_timeout)
+        await self.web_find(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout=sms_timeout)
         LOG.warning("############################################")
         LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
         LOG.warning("############################################")
@@ -1254,7 +1254,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         """
         try:
             banner_timeout = self._timeout("quick_dom")
-            await self.web_find(By.ID, "gdpr-banner-accept", timeout = banner_timeout)
+            await self.web_find(By.ID, "gdpr-banner-accept", timeout=banner_timeout)
             LOG.debug("Consent banner detected, clicking 'Alle akzeptieren'...")
             await self.web_click(By.ID, "gdpr-banner-accept")
         except TimeoutError:
@@ -1262,18 +1262,18 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def _check_email_verification(self) -> None:
         email_timeout = self._timeout("email_verification")
-        await self.web_find(By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout = email_timeout)
+        await self.web_find(By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout=email_timeout)
         LOG.warning("############################################")
         LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
         LOG.warning("############################################")
         await ainput(_("Press ENTER when done..."))
 
-    async def _click_gdpr_banner(self, *, timeout:float | None = None) -> None:
+    async def _click_gdpr_banner(self, *, timeout: float | None = None) -> None:
         gdpr_timeout = self._timeout("quick_dom") if timeout is None else timeout
-        await self.web_find(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
-        await self.web_click(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
+        await self.web_find(By.ID, "gdpr-banner-accept", timeout=gdpr_timeout)
+        await self.web_click(By.ID, "gdpr-banner-accept", timeout=gdpr_timeout)
 
-    async def get_login_state(self, *, capture_diagnostics:bool = True) -> LoginDetectionResult:
+    async def get_login_state(self, *, capture_diagnostics: bool = True) -> LoginDetectionResult:
         """Determine login status using DOM-first detection and return result with reason.
 
         Order:
@@ -1284,22 +1284,22 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Prefer DOM-based checks first to minimize bot-like behavior and avoid
         # fragile API probing side effects. Server-side auth probing was removed.
         if await self._has_logged_in_marker():
-            return LoginDetectionResult(is_logged_in = True, reason = LoginDetectionReason.USER_INFO_MATCH)
+            return LoginDetectionResult(is_logged_in=True, reason=LoginDetectionReason.USER_INFO_MATCH)
 
-        if await self._has_logged_out_cta(log_timeout = False):
-            return LoginDetectionResult(is_logged_in = False, reason = LoginDetectionReason.CTA_MATCH)
+        if await self._has_logged_out_cta(log_timeout=False):
+            return LoginDetectionResult(is_logged_in=False, reason=LoginDetectionReason.CTA_MATCH)
 
         if capture_diagnostics:
             await self._capture_login_detection_diagnostics_if_enabled(
-                base_prefix = "login_detection_selector_timeout",
-                pause_banner_message = "# Login detection remained inconclusive. Browser is paused for manual inspection.",
+                base_prefix="login_detection_selector_timeout",
+                pause_banner_message="# Login detection remained inconclusive. Browser is paused for manual inspection.",
             )
-        return LoginDetectionResult(is_logged_in = False, reason = LoginDetectionReason.SELECTOR_TIMEOUT)
+        return LoginDetectionResult(is_logged_in=False, reason=LoginDetectionReason.SELECTOR_TIMEOUT)
 
     def _diagnostics_output_dir(self) -> Path:
         diagnostics = getattr(self.config, "diagnostics", None)
         if diagnostics is not None and diagnostics.output_dir and diagnostics.output_dir.strip():
-            return Path(abspath(diagnostics.output_dir, relative_to = self.config_file_path)).resolve()
+            return Path(abspath(diagnostics.output_dir, relative_to=self.config_file_path)).resolve()
 
         workspace = self._workspace_or_raise()
         xdg_paths.ensure_directory(workspace.diagnostics_dir, "diagnostics directory")
@@ -1308,8 +1308,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def _capture_login_detection_diagnostics_if_enabled(
         self,
         *,
-        base_prefix:str = "login_detection_inconclusive",
-        pause_banner_message:str = "# Login detection remained inconclusive. Browser is paused for manual inspection.",
+        base_prefix: str = "login_detection_inconclusive",
+        pause_banner_message: str = "# Login detection remained inconclusive. Browser is paused for manual inspection.",
     ) -> None:
         cfg = getattr(self.config, "diagnostics", None)
         if cfg is None or not cfg.capture_on.login_detection:
@@ -1328,11 +1328,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         try:
             await diagnostics.capture_diagnostics(
-                output_dir = output_dir,
-                base_prefix = base_prefix,
-                page = page,
-                log_file_path = self.log_file_path,
-                copy_log = cfg.capture_log_copy,
+                output_dir=output_dir,
+                base_prefix=base_prefix,
+                page=page,
+                log_file_path=self.log_file_path,
+                copy_log=cfg.capture_log_copy,
             )
         except Exception as exc:  # noqa: BLE001
             LOG.debug(
@@ -1353,11 +1353,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def _capture_publish_error_diagnostics_if_enabled(
         self,
-        ad_cfg:Ad,
-        ad_cfg_orig:dict[str, Any],
-        ad_file:str,
-        attempt:int,
-        exc:Exception,
+        ad_cfg: Ad,
+        ad_cfg_orig: dict[str, Any],
+        ad_file: str,
+        attempt: int,
+        exc: Exception,
     ) -> None:
         """Capture publish failure diagnostics when enabled and a page is available.
 
@@ -1377,7 +1377,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         ad_file_stem = Path(ad_file).stem
 
         json_payload = {
-            "timestamp": misc.now().isoformat(timespec = "seconds"),
+            "timestamp": misc.now().isoformat(timespec="seconds"),
             "attempt": attempt,
             "page_url": getattr(page, "url", None),
             "exception": {
@@ -1387,20 +1387,20 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             },
             "ad_file": ad_file,
             "ad_title": ad_cfg.title,
-            "ad_config_effective": ad_cfg.model_dump(mode = "json"),
+            "ad_config_effective": ad_cfg.model_dump(mode="json"),
             "ad_config_original": ad_cfg_orig,
         }
 
         try:
             await diagnostics.capture_diagnostics(
-                output_dir = self._diagnostics_output_dir(),
-                base_prefix = "publish_error",
-                attempt = attempt,
-                subject = ad_file_stem,
-                page = page,
-                json_payload = json_payload,
-                log_file_path = self.log_file_path,
-                copy_log = cfg.capture_log_copy,
+                output_dir=self._diagnostics_output_dir(),
+                base_prefix="publish_error",
+                attempt=attempt,
+                subject=ad_file_stem,
+                page=page,
+                json_payload=json_payload,
+                log_file_path=self.log_file_path,
+                copy_log=cfg.capture_log_copy,
             )
         except Exception as error:  # noqa: BLE001
             LOG.warning("Diagnostics capture failed during publish error handling: %s", error)
@@ -1424,9 +1424,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         try:
             user_info, matched_selector = await self.web_text_first_available(
                 _LOGIN_DETECTION_SELECTORS,
-                timeout = quick_dom_timeout,
-                key = "quick_dom",
-                description = "login_detection(quick_logged_in)",
+                timeout=quick_dom_timeout,
+                key="quick_dom",
+                description="login_detection(quick_logged_in)",
             )
             if username in user_info.lower():
                 matched_selector_display = (
@@ -1442,9 +1442,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         try:
             user_info, matched_selector = await self.web_text_first_available(
                 _LOGIN_DETECTION_SELECTORS,
-                timeout = login_check_timeout,
-                key = "login_detection",
-                description = "login_detection(selector_group)",
+                timeout=login_check_timeout,
+                key="login_detection",
+                description="login_detection(selector_group)",
             )
             if username in user_info.lower():
                 matched_selector_display = (
@@ -1473,16 +1473,16 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     # PR #870 verified these selectors work correctly in practice.
     # If false positives occur, harden by adding web_check(Is.DISPLAYED) on cta_element.
     # See issue #876.
-    async def _has_logged_out_cta(self, *, log_timeout:bool = True) -> bool:
+    async def _has_logged_out_cta(self, *, log_timeout: bool = True) -> bool:
         quick_dom_timeout = self._timeout("quick_dom")
         tried_logged_out_selectors = _format_login_detection_selectors(_LOGGED_OUT_CTA_SELECTORS)
 
         try:
             cta_element, cta_index = await self.web_find_first_available(
                 _LOGGED_OUT_CTA_SELECTORS,
-                timeout = quick_dom_timeout,
-                key = "quick_dom",
-                description = "login_detection(logged_out_cta)",
+                timeout=quick_dom_timeout,
+                key="quick_dom",
+                description="login_detection(logged_out_cta)",
             )
             cta_text = await self._extract_visible_text(cta_element)
             if cta_text.strip():
@@ -1506,7 +1506,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return False
 
-    async def _fetch_published_ads(self, *, strict:bool = False) -> list[dict[str, Any]]:
+    async def _fetch_published_ads(self, *, strict: bool = False) -> list[dict[str, Any]]:
         """Fetch all published ads, handling API pagination.
 
         Args:
@@ -1515,12 +1515,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         Returns:
             List of all published ads across all pages.
         """
-        ads:list[dict[str, Any]] = []
+        ads: list[dict[str, Any]] = []
         page = 1
-        MAX_PAGE_LIMIT:Final[int] = 100
-        SNIPPET_LIMIT:Final[int] = 500
+        MAX_PAGE_LIMIT: Final[int] = 100
+        SNIPPET_LIMIT: Final[int] = 500
 
-        def _handle_incomplete_fetch(template:str, *args:Any, cause:Exception | None = None) -> None:
+        def _handle_incomplete_fetch(template: str, *args: Any, cause: Exception | None = None) -> None:
             if strict:
                 raise PublishedAdsFetchIncompleteError(_(template) % args) from cause
 
@@ -1535,7 +1535,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 response = await self.web_request(f"{self.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum={page}")
             except TimeoutError as ex:
                 LOG.warning("Pagination request failed on page %s: %s", page, ex)
-                _handle_incomplete_fetch("Pagination request failed on page %s: %s", page, ex, cause = ex)
+                _handle_incomplete_fetch("Pagination request failed on page %s: %s", page, ex, cause=ex)
                 break
 
             if not isinstance(response, dict):
@@ -1547,7 +1547,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             if isinstance(content, bytearray):
                 content = bytes(content)
             if isinstance(content, bytes):
-                content = content.decode("utf-8", errors = "replace")
+                content = content.decode("utf-8", errors="replace")
             if not isinstance(content, str):
                 LOG.warning("Unexpected response content type on page %s: %s", page, type(content).__name__)
                 _handle_incomplete_fetch("Unexpected response content type on page %s: %s", page, type(content).__name__)
@@ -1558,11 +1558,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             except (json.JSONDecodeError, TypeError) as ex:
                 if not content:
                     LOG.warning("Empty JSON response content on page %s", page)
-                    _handle_incomplete_fetch("Empty JSON response content on page %s", page, cause = ex)
+                    _handle_incomplete_fetch("Empty JSON response content on page %s", page, cause=ex)
                     break
                 snippet = content[:SNIPPET_LIMIT] + ("..." if len(content) > SNIPPET_LIMIT else "")
                 LOG.warning("Failed to parse JSON response on page %s: %s (content: %s)", page, ex, snippet)
-                _handle_incomplete_fetch("Failed to parse JSON response on page %s: %s (content: %s)", page, ex, snippet, cause = ex)
+                _handle_incomplete_fetch("Failed to parse JSON response on page %s: %s (content: %s)", page, ex, snippet, cause=ex)
                 break
 
             if not isinstance(json_data, dict):
@@ -1580,9 +1580,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 _handle_incomplete_fetch("Unexpected 'ads' type on page %s: %s value: %s", page, type(page_ads).__name__, preview)
                 break
 
-            filtered_page_ads:list[dict[str, Any]] = []
+            filtered_page_ads: list[dict[str, Any]] = []
             rejected_count = 0
-            rejected_preview:str | None = None
+            rejected_preview: str | None = None
             for entry in page_ads:
                 if isinstance(entry, dict) and "id" in entry and "state" in entry:
                     filtered_page_ads.append(entry)
@@ -1640,7 +1640,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return ads
 
-    async def delete_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
+    async def delete_ads(self, ad_cfgs: list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
 
         published_ads = await self._fetch_published_ads()
@@ -1648,14 +1648,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         for ad_file, ad_cfg, _ad_cfg_orig in ad_cfgs:
             count += 1
             LOG.info("Processing %s/%s: '%s' from [%s]...", count, len(ad_cfgs), ad_cfg.title, ad_file)
-            await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title)
+            await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title=self.config.publishing.delete_old_ads_by_title)
             await self.web_sleep()
 
         LOG.info("############################################")
         LOG.info("DONE: Deleted %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    async def delete_ad(self, ad_cfg:Ad, published_ads:list[dict[str, Any]], *, delete_old_ads_by_title:bool) -> bool:
+    async def delete_ad(self, ad_cfg: Ad, published_ads: list[dict[str, Any]], *, delete_old_ads_by_title: bool) -> bool:
         LOG.info("Deleting ad '%s' if already present...", ad_cfg.title)
 
         await self.web_open(f"{self.root_url}/m-meine-anzeigen.html")
@@ -1670,21 +1670,21 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if ad_cfg.id == published_ad_id or ad_cfg.title == published_ad_title:
                     LOG.info(" -> deleting %s '%s'...", published_ad_id, published_ad_title)
                     await self.web_request(
-                        url = f"{self.root_url}/m-anzeigen-loeschen.json?ids={published_ad_id}", method = "POST", headers = {"x-csrf-token": str(csrf_token)}
+                        url=f"{self.root_url}/m-anzeigen-loeschen.json?ids={published_ad_id}", method="POST", headers={"x-csrf-token": str(csrf_token)}
                     )
         elif ad_cfg.id:
             await self.web_request(
-                url = f"{self.root_url}/m-anzeigen-loeschen.json?ids={ad_cfg.id}",
-                method = "POST",
-                headers = {"x-csrf-token": str(csrf_token)},
-                valid_response_codes = [200, 404],
+                url=f"{self.root_url}/m-anzeigen-loeschen.json?ids={ad_cfg.id}",
+                method="POST",
+                headers={"x-csrf-token": str(csrf_token)},
+                valid_response_codes=[200, 404],
             )
 
         await self.web_sleep()
         ad_cfg.id = None
         return True
 
-    async def extend_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
+    async def extend_ads(self, ad_cfgs: list[tuple[str, Ad, dict[str, Any]]]) -> None:
         """Extends ads that are close to expiry."""
         # Fetch currently published ads from API
         published_ads = await self._fetch_published_ads()
@@ -1734,7 +1734,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         # Process extensions
         success_count = 0
-        for idx, (ad_file, ad_cfg, ad_cfg_orig, _published_ad) in enumerate(ads_to_extend, start = 1):
+        for idx, (ad_file, ad_cfg, ad_cfg_orig, _published_ad) in enumerate(ads_to_extend, start=1):
             LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ads_to_extend), ad_cfg.title, ad_file)
             if await self.extend_ad(ad_file, ad_cfg, ad_cfg_orig):
                 success_count += 1
@@ -1744,7 +1744,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.info("DONE: Extended %s", pluralize("ad", success_count))
         LOG.info("############################################")
 
-    async def extend_ad(self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any]) -> bool:
+    async def extend_ad(self, ad_file: str, ad_cfg: Ad, ad_cfg_orig: dict[str, Any]) -> bool:
         """Extends a single ad listing."""
         LOG.info("Extending ad '%s' (ID: %s)...", ad_cfg.title, ad_cfg.id)
 
@@ -1752,10 +1752,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # Navigate to ad management page and find extend button across all pages
             extend_button_xpath = f'//li[@data-adid="{ad_cfg.id}"]//button[contains(., "Verlängern")]'
 
-            async def find_and_click_extend_button(page_num:int) -> bool:
+            async def find_and_click_extend_button(page_num: int) -> bool:
                 """Try to find and click extend button on current page."""
                 try:
-                    extend_button = await self.web_find(By.XPATH, extend_button_xpath, timeout = self._timeout("quick_dom"))
+                    extend_button = await self.web_find(By.XPATH, extend_button_xpath, timeout=self._timeout("quick_dom"))
                     LOG.info("Found extend button on page %s", page_num)
                     await extend_button.click()
                     return True  # Success - stop pagination
@@ -1763,7 +1763,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     LOG.debug("Extend button not found on page %s", page_num)
                     return False  # Continue to next page
 
-            success = await self._navigate_paginated_ad_overview(find_and_click_extend_button, page_url = f"{self.root_url}/m-meine-anzeigen.html")
+            success = await self._navigate_paginated_ad_overview(find_and_click_extend_button, page_url=f"{self.root_url}/m-meine-anzeigen.html")
 
             if not success:
                 LOG.error(" -> FAILED: Could not find extend button for ad ID %s", ad_cfg.id)
@@ -1777,14 +1777,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # Simply close the dialog with the X button (aria-label="Schließen")
             try:
                 dialog_close_timeout = self._timeout("quick_dom")
-                await self.web_click(By.CSS_SELECTOR, 'button[aria-label="Schließen"]', timeout = dialog_close_timeout)
+                await self.web_click(By.CSS_SELECTOR, 'button[aria-label="Schließen"]', timeout=dialog_close_timeout)
                 LOG.debug(" -> Closed confirmation dialog")
             except TimeoutError:
                 LOG.warning(" -> No confirmation dialog found, extension may have completed directly")
 
             # Update metadata in YAML file
             # Update updated_on to track when ad was extended
-            ad_cfg_orig["updated_on"] = misc.now().isoformat(timespec = "seconds")
+            ad_cfg_orig["updated_on"] = misc.now().isoformat(timespec="seconds")
             dicts.save_dict(ad_file, ad_cfg_orig)
 
             LOG.info(" -> SUCCESS: ad extended with ID %s", ad_cfg.id)
@@ -1801,7 +1801,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Check for success messages
         return await self.web_check(By.ID, "checking-done", Is.DISPLAYED) or await self.web_check(By.ID, "not-completed", Is.DISPLAYED)
 
-    async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
+    async def publish_ads(self, ad_cfgs: list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
         failed_count = 0
         max_retries = PUBLISH_MAX_RETRIES
@@ -1855,12 +1855,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             if success:
                 try:
                     publish_timeout = self._timeout("publishing_result")
-                    await self.web_await(self.__check_publishing_result, timeout = publish_timeout)
+                    await self.web_await(self.__check_publishing_result, timeout=publish_timeout)
                 except TimeoutError:
                     LOG.warning(" -> Could not confirm publishing for '%s', but ad may be online", ad_cfg.title)
 
             if success and self.config.publishing.delete_old_ads == "AFTER_PUBLISH" and not self.keep_old_ads:
-                await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = False)
+                await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title=False)
 
         LOG.info("############################################")
         if failed_count > 0:
@@ -1870,18 +1870,26 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.info("############################################")
 
     async def publish_ad(
-        self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[dict[str, Any]], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE
+        self, ad_file: str, ad_cfg: Ad, ad_cfg_orig: dict[str, Any], published_ads: list[dict[str, Any]], mode: AdUpdateStrategy = AdUpdateStrategy.REPLACE
     ) -> None:
-        """
-        @ param ad_cfg: the effective ad config(i.e. with default values applied etc.)
-        @ param ad_cfg_orig: the ad config as present in the YAML file
-        @ param published_ads: json list of published ads
-        @ param mode: the mode of ad editing, either publishing a new or updating an existing ad
+        """Publish or update an ad on Kleinanzeigen.
+
+        Args:
+            ad_file: Path to the ad configuration YAML file.
+            ad_cfg: The effective ad configuration with default values applied.
+            ad_cfg_orig: The original ad configuration as present in the YAML file.
+            published_ads: List of published ads from the API, used for deduplication
+                and old ad deletion.
+            mode: The ad editing strategy. REPLACE creates a new ad (full republish),
+                MODIFY updates an existing ad in-place.
+
+        Returns:
+            None
         """
 
         if mode == AdUpdateStrategy.REPLACE:
             if self.config.publishing.delete_old_ads == "BEFORE_PUBLISH" and not self.keep_old_ads:
-                await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title)
+                await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title=self.config.publishing.delete_old_ads_by_title)
 
             # Apply auto price reduction only for REPLACE operations (actual reposts)
             # This ensures price reductions only happen on republish, not on UPDATE
@@ -1967,12 +1975,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 elif not await self.web_check(By.ID, "radio-buy-now-no", Is.SELECTED):
                     await self.web_click(By.ID, "radio-buy-now-no")
         except TimeoutError as ex:
-            LOG.debug(ex, exc_info = True)
+            LOG.debug(ex, exc_info=True)
 
         #############################
         # set description
         #############################
-        description = self.__get_description(ad_cfg, with_affixes = True)
+        description = self.__get_description(ad_cfg, with_affixes=True)
         await self.web_execute("document.querySelector('#pstad-descrptn').value = `" + description.replace("`", "'") + "`")
 
         await self.__set_contact_fields(ad_cfg.contact)
@@ -1983,16 +1991,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #  and for REPLACE retries where stale thumbnails may remain)
         #############################
         try:
-            img_items = await self.web_find_all(
-                By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout = self._timeout("quick_dom")
-            )
+            img_items = await self.web_find_all(By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout=self._timeout("quick_dom"))
         except TimeoutError:
             img_items = []  # no existing thumbnails — expected for fresh REPLACE forms
 
         if img_items:
             LOG.info(" -> removing %d existing image thumbnail(s) before upload...", len(img_items))
             for element in img_items:
-                btn = await self.web_find(By.CSS_SELECTOR, "button.pictureupload-thumbnails-remove", parent = element)
+                btn = await self.web_find(By.CSS_SELECTOR, "button.pictureupload-thumbnails-remove", parent=element)
                 await btn.click()
                 await self.web_sleep(300, 500)
 
@@ -2004,7 +2010,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # wait for captcha
         #############################
-        await self.check_and_wait_for_captcha(is_login_page = False)
+        await self.check_and_wait_for_captcha(is_login_page=False)
 
         #############################
         # submit
@@ -2031,7 +2037,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             #############################
             try:
                 short_timeout = self._timeout("quick_dom")
-                await self.web_find(By.ID, "myftr-shppngcrt-frm", timeout = short_timeout)
+                await self.web_find(By.ID, "myftr-shppngcrt-frm", timeout=short_timeout)
 
                 LOG.warning("############################################")
                 LOG.warning("# Payment form detected! Please proceed with payment.")
@@ -2043,7 +2049,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 pass
 
             confirmation_timeout = self._timeout("publishing_confirmation")
-            await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = confirmation_timeout)
+            await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout=confirmation_timeout)
         except (TimeoutError, ProtocolException) as ex:
             raise PublishSubmissionUncertainError("submission may have succeeded before failure") from ex
 
@@ -2055,7 +2061,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Update content hash after successful publication
         # Calculate hash on original config to ensure consistent comparison on restart
         ad_cfg_orig["content_hash"] = AdPartial.model_validate(ad_cfg_orig).update_content_hash().content_hash
-        ad_cfg_orig["updated_on"] = misc.now().isoformat(timespec = "seconds")
+        ad_cfg_orig["updated_on"] = misc.now().isoformat(timespec="seconds")
         if not ad_cfg.created_on and not ad_cfg.id:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
 
@@ -2082,7 +2088,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         dicts.save_dict(ad_file, ad_cfg_orig)
 
-    async def __set_contact_fields(self, contact:Contact) -> None:
+    async def __set_contact_fields(self, contact: Contact) -> None:
         #############################
         # set contact zipcode
         #############################
@@ -2167,7 +2173,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     )
                 )
 
-    async def update_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
+    async def update_ads(self, ad_cfgs: list[tuple[str, Ad, dict[str, Any]]]) -> None:
         """
         Updates a list of ads.
         The list gets filtered, so that only already published ads will be updated.
@@ -2199,25 +2205,25 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.MODIFY)
             publish_timeout = self._timeout("publishing_result")
-            await self.web_await(self.__check_publishing_result, timeout = publish_timeout)
+            await self.web_await(self.__check_publishing_result, timeout=publish_timeout)
 
         LOG.info("############################################")
         LOG.info("DONE: updated %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    async def __set_condition(self, condition_value:str) -> None:
+    async def __set_condition(self, condition_value: str) -> None:
         try:
             # Open condition dialog
             await self.web_click(By.XPATH, '//*[@id="j-post-listing-frontend-conditions"]//button[@aria-haspopup="true"]')
         except TimeoutError:
-            LOG.debug("Unable to open condition dialog and select condition [%s]", condition_value, exc_info = True)
+            LOG.debug("Unable to open condition dialog and select condition [%s]", condition_value, exc_info=True)
             return
 
         try:
             # Click radio button
             await self.web_click(By.ID, f"radio-button-{condition_value}")
         except TimeoutError:
-            LOG.debug("Unable to select condition [%s]", condition_value, exc_info = True)
+            LOG.debug("Unable to select condition [%s]", condition_value, exc_info=True)
 
         try:
             # Click accept button
@@ -2225,7 +2231,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close condition dialog!")) from ex
 
-    async def __set_category(self, category:str | None, ad_file:str) -> None:
+    async def __set_category(self, category: str | None, ad_file: str) -> None:
         # click on something to trigger automatic category detection
         await self.web_click(By.ID, "pstad-descrptn")
 
@@ -2248,7 +2254,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         else:
             ensure(is_category_auto_selected, f"No category specified in [{ad_file}] and automatic category detection failed")
 
-    async def __set_special_attributes(self, ad_cfg:Ad) -> None:
+    async def __set_special_attributes(self, ad_cfg: Ad) -> None:
         if not ad_cfg.special_attributes:
             return
 
@@ -2283,7 +2289,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
 
             try:
-                elem_id:str = str(special_attr_elem.attrs.id)
+                elem_id: str = str(special_attr_elem.attrs.id)
                 if special_attr_elem.local_name == "select":
                     LOG.debug("Attribute field '%s' seems to be a select...", special_attribute_key)
                     await self.web_select(By.ID, elem_id, special_attribute_value_str)
@@ -2301,26 +2307,26 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
             LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
 
-    async def __set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
+    async def __set_shipping(self, ad_cfg: Ad, mode: AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         short_timeout = self._timeout("quick_dom")
         if ad_cfg.shipping_type == "PICKUP":
             try:
                 await self.web_click(By.ID, "radio-pickup")
             except TimeoutError as ex:
-                LOG.debug(ex, exc_info = True)
+                LOG.debug(ex, exc_info=True)
         elif ad_cfg.shipping_options:
             await self.web_click(By.XPATH, '//button//span[contains(., "Versandmethoden auswählen")]')
 
             if mode == AdUpdateStrategy.MODIFY:
                 try:
                     # when "Andere Versandmethoden" is not available, go back and start over new
-                    await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
+                    await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]', timeout=short_timeout)
                 except TimeoutError:
                     await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
 
                     # in some categories we need to go another dialog back
                     try:
-                        await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
+                        await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]', timeout=short_timeout)
                     except TimeoutError:
                         await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
 
@@ -2330,7 +2336,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             special_shipping_selector = '//select[contains(@id, ".versand_s")]'
             is_commercial_shipping = False
             try:
-                has_commercial_selector = await self.web_check(By.XPATH, special_shipping_selector, Is.DISPLAYED, timeout = short_timeout)
+                has_commercial_selector = await self.web_check(By.XPATH, special_shipping_selector, Is.DISPLAYED, timeout=short_timeout)
             except TimeoutError:
                 # Element does not exist in DOM (non-commercial account or UI change); fall through to dialog-based shipping.
                 has_commercial_selector = False
@@ -2352,7 +2358,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     try:
                         # only click on "Individueller Versand" when "IndividualShippingInput" is not available, otherwise its already checked
                         # (important for mode = UPDATE)
-                        await self.web_find(By.XPATH, '//input[contains(@placeholder, "Versandkosten (optional)")]', timeout = short_timeout)
+                        await self.web_find(By.XPATH, '//input[contains(@placeholder, "Versandkosten (optional)")]', timeout=short_timeout)
                     except TimeoutError:
                         # Input not visible yet; click the individual shipping option.
                         await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
@@ -2363,10 +2369,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         )
                     await self.web_click(By.XPATH, '//dialog//button[contains(., "Fertig")]')
                 except TimeoutError as ex:
-                    LOG.debug(ex, exc_info = True)
+                    LOG.debug(ex, exc_info=True)
                     raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 
-    async def __set_shipping_options(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
+    async def __set_shipping_options(self, ad_cfg: Ad, mode: AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         if not ad_cfg.shipping_options:
             return
 
@@ -2386,7 +2392,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         except KeyError as ex:
             raise KeyError(f"Unknown shipping option(s), please refer to the documentation/README: {ad_cfg.shipping_options}") from ex
 
-        shipping_sizes, shipping_selector, shipping_packages = zip(*mapped_shipping_options, strict = False)
+        shipping_sizes, shipping_selector, shipping_packages = zip(*mapped_shipping_options, strict=False)
 
         try:
             (shipping_size,) = set(shipping_sizes)
@@ -2442,19 +2448,19 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 for shipping_package in to_be_clicked_shipping_packages:
                     await self.web_click(By.XPATH, f'//dialog//input[contains(@data-testid, "{shipping_package}")]')
         except TimeoutError as ex:
-            LOG.debug(ex, exc_info = True)
+            LOG.debug(ex, exc_info=True)
         try:
             # Click apply button
             await self.web_click(By.XPATH, '//dialog//button[contains(., "Fertig")]')
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 
-    async def __upload_images(self, ad_cfg:Ad) -> None:
+    async def __upload_images(self, ad_cfg: Ad) -> None:
         if not ad_cfg.images:
             return
 
         LOG.info(" -> found %s", pluralize("image", ad_cfg.images))
-        image_upload:Element = await self.web_find(By.CSS_SELECTOR, "input[type=file]")
+        image_upload: Element = await self.web_find(By.CSS_SELECTOR, "input[type=file]")
 
         for image in ad_cfg.images:
             LOG.info(" -> uploading image [%s]", image)
@@ -2470,7 +2476,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 thumbnails = await self.web_find_all(
                     By.CSS_SELECTOR,
                     "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)",
-                    timeout = self._timeout("quick_dom"),  # Fast timeout for polling
+                    timeout=self._timeout("quick_dom"),  # Fast timeout for polling
                 )
                 current_count = len(thumbnails)
                 if current_count < expected_count:
@@ -2481,12 +2487,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 return False
 
         try:
-            await self.web_await(check_thumbnails_uploaded, timeout = self._timeout("image_upload"), timeout_error_message = _("Image upload timeout exceeded"))
+            await self.web_await(check_thumbnails_uploaded, timeout=self._timeout("image_upload"), timeout_error_message=_("Image upload timeout exceeded"))
         except TimeoutError as ex:
             # Get current count for better error message
             try:
                 thumbnails = await self.web_find_all(
-                    By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout = self._timeout("quick_dom")
+                    By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout=self._timeout("quick_dom")
                 )
                 current_count = len(thumbnails)
             except TimeoutError:
@@ -2516,8 +2522,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Fetch published ads once from manage-ads JSON to avoid repetitive API calls during extraction
         # Build lookup dict inline and pass directly to extractor (no cache abstraction needed)
         LOG.info("Fetching published ads...")
-        published_ads = await self._fetch_published_ads(strict = bool(_NUMERIC_IDS_RE.match(effective_selector)))
-        published_ads_by_id:dict[int, dict[str, Any]] = {}
+        published_ads = await self._fetch_published_ads(strict=bool(_NUMERIC_IDS_RE.match(effective_selector)))
+        published_ads_by_id: dict[int, dict[str, Any]] = {}
         for published_ad in published_ads:
             try:
                 ad_id = published_ad.get("id")
@@ -2530,7 +2536,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         download_dir = self._resolve_download_dir()
         xdg_paths.ensure_directory(download_dir, "downloaded ads directory")
         LOG.info("Ads download directory: %s", download_dir)
-        ad_extractor = extract.AdExtractor(self.browser, self.config, download_dir, published_ads_by_id = published_ads_by_id)
+        ad_extractor = extract.AdExtractor(self.browser, self.config, download_dir, published_ads_by_id=published_ads_by_id)
 
         if effective_selector in {"all", "new"}:  # explore ads overview for these two modes
             LOG.info("Scanning your ad overview...")
@@ -2552,7 +2558,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             elif effective_selector == "new":  # download only unsaved ads
                 # check which ads already saved
                 saved_ad_ids = []
-                ads = self.load_ads(ignore_inactive = False, exclude_ads_with_id = False)  # do not skip because of existing IDs
+                ads = self.load_ads(ignore_inactive=False, exclude_ads_with_id=False)  # do not skip because of existing IDs
                 for ad in ads:
                     saved_ad_id = ad[1].id
                     if saved_ad_id is None:
@@ -2588,12 +2594,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     if not ownership:
                         LOG.warning("Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.", ad_id)
 
-                    await ad_extractor.download_ad(ad_id, active = resolved_active)
+                    await ad_extractor.download_ad(ad_id, active=resolved_active)
                     LOG.info("Downloaded ad with id %d", ad_id)
                 else:
                     LOG.error("The page with the id %d does not exist!", ad_id)
 
-    def __get_description(self, ad_cfg:Ad, *, with_affixes:bool) -> str:
+    def __get_description(self, ad_cfg: Ad, *, with_affixes: bool) -> str:
         """Get the ad description optionally with prefix and suffix applied.
 
         Precedence(highest to lowest):
@@ -2645,7 +2651,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return final_description
 
-    def update_content_hashes(self, ads:list[tuple[str, Ad, dict[str, Any]]]) -> None:
+    def update_content_hashes(self, ads: list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
 
         for ad_file, ad_cfg, ad_cfg_orig in ads:
@@ -2666,7 +2672,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 #############################
 
 
-def main(args:list[str]) -> None:
+def main(args: list[str]) -> None:
     if "version" not in args:
         print(
             textwrap.dedent(rf"""
@@ -2679,7 +2685,7 @@ def main(args:list[str]) -> None:
                                  https://github.com/Second-Hand-Friends/kleinanzeigen-bot
                                  Version: {__version__}
         """)[1:],
-            flush = True,
+            flush=True,
         )  # [1:] removes the first empty blank line
 
     loggers.configure_console_logging()
