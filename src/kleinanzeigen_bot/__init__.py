@@ -1875,11 +1875,19 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def publish_ad(
         self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[dict[str, Any]], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE
     ) -> None:
-        """
-        @ param ad_cfg: the effective ad config(i.e. with default values applied etc.)
-        @ param ad_cfg_orig: the ad config as present in the YAML file
-        @ param published_ads: json list of published ads
-        @ param mode: the mode of ad editing, either publishing a new or updating an existing ad
+        """Publish or update an ad on Kleinanzeigen.
+
+        Args:
+            ad_file: Path to the ad configuration YAML file.
+            ad_cfg: The effective ad configuration with default values applied.
+            ad_cfg_orig: The original ad configuration as present in the YAML file.
+            published_ads: List of published ads from the API, used for deduplication
+                and old ad deletion.
+            mode: The ad editing strategy. REPLACE creates a new ad (full republish),
+                MODIFY updates an existing ad in-place.
+
+        Returns:
+            None
         """
 
         if mode == AdUpdateStrategy.REPLACE:
