@@ -1991,7 +1991,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #  and for REPLACE retries where stale thumbnails may remain)
         #############################
         try:
-            img_items = await self.web_find_all(By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout = self._timeout("quick_dom"))
+            img_items = await self.web_find_all(
+                By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout = self._timeout("quick_dom")
+            )
         except TimeoutError:
             img_items = []  # no existing thumbnails — expected for fresh REPLACE forms
 
