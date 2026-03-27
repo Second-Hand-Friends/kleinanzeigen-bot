@@ -1884,7 +1884,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # For PICKUP/other types: always opt out of buy-now if the radio exists
                 try:
                     short_check = self._timeout("quick_dom")
-                    if not await self.web_check(By.ID, "radio-buy-now-no", Is.SELECTED):
+                    if not await self.web_check(By.ID, "radio-buy-now-no", Is.SELECTED, timeout = short_check):
                         await self.web_click(By.ID, "radio-buy-now-no", timeout = short_check)
                 except TimeoutError:
                     pass  # nosec
