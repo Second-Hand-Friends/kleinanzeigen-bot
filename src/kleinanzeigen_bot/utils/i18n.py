@@ -170,6 +170,7 @@ def pluralize(noun:str, count:int | Sized, *, prefix_with_count:bool = True) -> 
             "Attribute": "Attribute",
             "Bild": "Bilder",
             "Feld": "Felder",
+            "Anzeigen-URL": "Anzeigen-URLs",  # Acronyms take 's' in German
         }
         if noun in irregular_plurals:
             return f"{prefix}{irregular_plurals[noun]}"
