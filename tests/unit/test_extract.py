@@ -830,23 +830,27 @@ class TestAdExtractorContent:
 
     @pytest.mark.asyncio
     async def test_extract_description_with_affixes(
-        self, test_extractor:extract_module.AdExtractor, description_test_cases:list[tuple[dict[str, Any], str, str]], test_bot_config:Config
+        self, test_extractor:extract_module.AdExtractor, description_test_cases:list[tuple[dict[str, Any], str, str]], test_bot_config:Config, tmp_path:Path
     ) -> None:
         """Test extraction of description with various prefix/suffix configurations."""
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+
         # Mock the page
         page_mock = MagicMock()
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
         test_extractor.page = page_mock
 
-        for config, raw_description, _expected_description in description_test_cases:
+        for config, expected_raw, web_description_with_affixes in description_test_cases:
             test_extractor.config = test_bot_config.with_values(config)
 
             with patch.multiple(
                 test_extractor,
                 web_text = AsyncMock(
                     side_effect = [
-                        "Test Title",  # Title
-                        raw_description,  # Raw description (without affixes)
+                        "Test Title",  # Title (wrapper's initial extraction)
+                        "Test Title",  # Title (core extraction's call)
+                        web_description_with_affixes,  # Description with affixes (as it appears on web)
                         "03.02.2025",  # Creation date
                     ]
                 ),
@@ -859,45 +863,50 @@ class TestAdExtractorContent:
                 _download_images_from_ad_page = AsyncMock(return_value = []),
                 _extract_contact_from_ad_page = AsyncMock(return_value = {}),
             ):
-                info = await test_extractor._extract_ad_page_info("/some/dir", 12345, "ad_12345")
-                assert info.description == raw_description
+                ad_cfg, _staging_dir, _final_dir, _ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+                assert ad_cfg.description == expected_raw
 
     @pytest.mark.asyncio
-    async def test_extract_description_with_affixes_timeout(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_description_with_affixes_timeout(self, test_extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
         """Test handling of timeout when extracting description."""
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+
         # Mock the page
         page_mock = MagicMock()
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
         test_extractor.page = page_mock
 
-        with patch.multiple(
-            test_extractor,
-            web_text = AsyncMock(
-                side_effect = [
-                    "Test Title",  # Title succeeds
-                    TimeoutError("Timeout"),  # Description times out
-                    "03.02.2025",  # Date succeeds
-                ]
+        with (
+            patch.multiple(
+                test_extractor,
+                web_text = AsyncMock(
+                    side_effect = [
+                        "Test Title",  # Title (wrapper's initial extraction)
+                        "Test Title",  # Title (core extraction's call)
+                        TimeoutError("Timeout"),  # Description times out
+                        "03.02.2025",  # Date succeeds (not reached)
+                    ]
+                ),
+                web_execute = AsyncMock(return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
+                _extract_category_from_ad_page = AsyncMock(return_value = "160"),
+                _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
+                _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
+                _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
+                _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
+                _download_images_from_ad_page = AsyncMock(return_value = []),
+                _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
             ),
-            web_execute = AsyncMock(return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
-            _extract_category_from_ad_page = AsyncMock(return_value = "160"),
-            _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
-            _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
-            _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
-            _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
-            _download_images_from_ad_page = AsyncMock(return_value = []),
-            _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+            pytest.raises(TimeoutError),
         ):
-            try:
-                info = await test_extractor._extract_ad_page_info("/some/dir", 12345, "ad_12345")
-                assert not info.description
-            except TimeoutError:
-                # This is also acceptable - depends on how we want to handle timeouts
-                pass
+            await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
     @pytest.mark.asyncio
-    async def test_extract_description_with_affixes_no_affixes(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_description_with_affixes_no_affixes(self, test_extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
         """Test extraction of description without any affixes in config."""
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+
         # Mock the page
         page_mock = MagicMock()
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
@@ -908,7 +917,8 @@ class TestAdExtractorContent:
             test_extractor,
             web_text = AsyncMock(
                 side_effect = [
-                    "Test Title",  # Title
+                    "Test Title",  # Title (wrapper's initial extraction)
+                    "Test Title",  # Title (core extraction's call)
                     raw_description,  # Description without affixes
                     "03.02.2025",  # Creation date
                 ]
@@ -922,8 +932,8 @@ class TestAdExtractorContent:
             _download_images_from_ad_page = AsyncMock(return_value = []),
             _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
         ):
-            info = await test_extractor._extract_ad_page_info("/some/dir", 12345, "ad_12345")
-            assert info.description == raw_description
+            ad_cfg, _staging_dir, _final_dir, _ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+            assert ad_cfg.description == raw_description
 
     @pytest.mark.asyncio
     async def test_extract_sell_directly_data_hit_true(self, test_extractor:extract_module.AdExtractor) -> None:
