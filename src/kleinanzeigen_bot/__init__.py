@@ -382,10 +382,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         return Path(abspath(trimmed_dir, relative_to = str(Path(self.config_file_path).parent))).resolve()
 
     def _resolve_download_ad_activity(self, ad_id:int, published_ads_by_id:dict[int, dict[str, Any]]) -> ResolvedAdState:
-        """Resolve downloaded ad activity and ownership for numeric selectors.
+        """Resolve downloaded ad activity and ownership for download selectors.
 
         Looks up the ad in the published profile and determines its activity state
-        and ownership status.
+        and ownership status. Used by "all", "new", and numeric ID selectors.
 
         Args:
             ad_id: The ad ID to look up in the published profile.
@@ -396,10 +396,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             ResolvedAdState with:
             - active=True if ad exists and state=="active", otherwise False
             - owned=True if ad exists in published_ads_by_id, otherwise False
-
-        Note:
-            For "all"/"new" selectors, owned is typically True since these selectors
-            only return the user's own ads from the overview page.
         """
         published_ad = published_ads_by_id.get(ad_id)
         if published_ad is None:
