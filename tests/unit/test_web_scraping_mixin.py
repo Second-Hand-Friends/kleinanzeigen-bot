@@ -843,6 +843,22 @@ class TestWebScrapingSessionManagement:
         mock_proc.assert_called_once()
         stop_mock.assert_called_once()
 
+    def test_close_browser_session_handles_parent_process_disappearing_after_stop(self) -> None:
+        """A browser that exits during stop() should still leave shutdown state clean."""
+        scraper = WebScrapingMixin()
+        scraper.browser = MagicMock()
+        scraper.browser._process_pid = 777
+        stop_mock = scraper.browser.stop = MagicMock()
+        scraper.page = MagicMock(spec = Page)
+
+        with patch("psutil.Process", side_effect = psutil.NoSuchProcess(777)) as mock_proc:
+            scraper.close_browser_session()
+
+        mock_proc.assert_called_once_with(777)
+        stop_mock.assert_called_once()
+        assert scraper.browser is None
+        assert scraper.page is None
+
     def test_close_browser_session_skips_killing_stopped_children(self) -> None:
         """Stopped child processes should not be force-killed."""
         scraper = WebScrapingMixin()
@@ -1681,8 +1697,10 @@ class TestWebScrapingBrowserConfiguration:
 
         with patch("psutil.Process") as mock_proc:
             mock_proc.side_effect = psutil.NoSuchProcess(12345)
-            with pytest.raises(psutil.NoSuchProcess):
-                scraper.close_browser_session()
+            scraper.close_browser_session()
+
+        assert scraper.browser is None
+        assert scraper.page is None
 
         # Create a new mock browser for the second session
         mock_browser2 = make_mock_browser()
@@ -1697,7 +1715,8 @@ class TestWebScrapingBrowserConfiguration:
             self.page = mock_page2  # type: ignore[unused-ignore,reportAttributeAccessIssue]  # Assigning mock page for test
 
         monkeypatch.setattr(WebScrapingMixin, "create_browser_session", mock_create_session2)
-        await scraper.create_browser_session()
+        # Pyright does not track monkeypatch's dynamic method replacement precisely here.
+        await cast(Callable[[], Awaitable[None]], scraper.create_browser_session)()
         print("[DEBUG] scraper.page after session creation:", scraper.page)
         assert scraper.browser is not None
         assert scraper.page is not None

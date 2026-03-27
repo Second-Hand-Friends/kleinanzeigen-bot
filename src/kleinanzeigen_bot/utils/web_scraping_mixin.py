@@ -756,21 +756,40 @@ class WebScrapingMixin:
         LOG.info("=== End Diagnostics ===")
 
     def close_browser_session(self) -> None:
-        if self.browser:
-            LOG.debug("Closing Browser session...")
-            self.page = None  # pyright: ignore[reportAttributeAccessIssue]
-            # Safely read private nodriver PID. In tests/mocked sessions this can be non-int,
-            # and in externally managed browser sessions it can be None.
-            browser_pid = getattr(self.browser, "_process_pid", None)
-            # Let nodriver perform graceful shutdown first; only force-kill leftovers afterwards.
-            self.browser.stop()
-            if isinstance(browser_pid, int) and browser_pid > 0:
-                browser_process = psutil.Process(browser_pid)
-                browser_children:list[psutil.Process] = browser_process.children()
-                for p in browser_children:
-                    if p.is_running():
-                        p.kill()  # terminate orphaned browser processes
+        if not self.browser:
+            return
+
+        LOG.debug("Closing Browser session...")
+        browser = self.browser
+        self.page = None  # pyright: ignore[reportAttributeAccessIssue]
+        # Safely read private nodriver PID. In tests/mocked sessions this can be non-int,
+        # and in externally managed browser sessions it can be None.
+        browser_pid = getattr(browser, "_process_pid", None)
+        # Let nodriver perform graceful shutdown first; only force-kill leftovers afterwards.
+        try:
+            browser.stop()
+            self._kill_orphaned_browser_children(browser_pid)
+        finally:
             self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
+
+    def _kill_orphaned_browser_children(self, browser_pid:int | None) -> None:
+        if not isinstance(browser_pid, int) or browser_pid <= 0:
+            return
+
+        try:
+            browser_process = psutil.Process(browser_pid)
+            browser_children:list[psutil.Process] = browser_process.children()
+        except psutil.NoSuchProcess:
+            # nodriver can terminate the browser before we inspect its process tree.
+            return
+
+        for child in browser_children:
+            try:
+                if child.is_running():
+                    child.kill()  # terminate orphaned browser processes
+            except psutil.NoSuchProcess:
+                # Child already exited while we were cleaning up leftovers.
+                continue
 
     def _cleanup_session_resources(self) -> None:
         """Clean up any resources that were created during session setup."""
