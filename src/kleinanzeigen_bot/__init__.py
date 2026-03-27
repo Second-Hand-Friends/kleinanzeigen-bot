@@ -95,7 +95,7 @@ class ResolvedAdState(NamedTuple):
         active: Whether the ad should be saved as active (True) or inactive (False).
             Only ads with state="active" in the published profile are marked as active.
         owned: Whether the ad belongs to the current user (True) or is foreign (False).
-            For "all"/"new" selectors this is always True; for numeric IDs it may be False.
+            For "all"/"new" selectors this is typically True; for numeric IDs it may be False.
     """
     active:bool
     owned:bool
@@ -398,7 +398,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             - owned=True if ad exists in published_ads_by_id, otherwise False
 
         Note:
-            For "all"/"new" selectors, owned is always True since these selectors
+            For "all"/"new" selectors, owned is typically True since these selectors
             only return the user's own ads from the overview page.
         """
         published_ad = published_ads_by_id.get(ad_id)
