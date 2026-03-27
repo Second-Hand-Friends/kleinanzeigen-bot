@@ -483,7 +483,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
                     if not self._is_valid_ads_selector({"all", "new", "due", "changed"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, due, changed, or comma-separated numeric IDs.', self.ads_selector)
+                            LOG.error(
+                                'Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, new, due, changed) or numeric IDs.',
+                                self.ads_selector,
+                            )
                             sys.exit(2)
                         self.ads_selector = "due"
 
@@ -501,7 +504,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
                     if not self._is_valid_ads_selector({"all", "changed"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, changed, or comma-separated numeric IDs.', self.ads_selector)
+                            LOG.error('Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, changed) or numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         self.ads_selector = "changed"
 
@@ -555,7 +558,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     # ad IDs depends on selector
                     if not self._is_valid_ads_selector({"all", "new"}):
                         if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all, new, or comma-separated numeric IDs.', self.ads_selector)
+                            LOG.error('Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, new) or numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         self.ads_selector = "new"
                     self.load_config()
@@ -1984,7 +1987,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         try:
             img_items = await self.web_find_all(
-                By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout = self._timeout("quick_dom")
+                By.CSS_SELECTOR,
+                "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)",
+                timeout = self._timeout("quick_dom"),
             )
         except TimeoutError:
             img_items = []  # no existing thumbnails — expected for fresh REPLACE forms

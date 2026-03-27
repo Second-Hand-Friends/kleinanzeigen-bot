@@ -279,9 +279,9 @@ kleinanzeigen_bot/__init__.py:
   run:
     "DONE: No configuration errors found.": "FERTIG: Keine Konfigurationsfehler gefunden."
     "DONE: No active ads found.": "FERTIG: Keine aktiven Anzeigen gefunden."
-    "Invalid --ads selector: \"%s\". Valid values: all, new, due, changed, or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all, new, due, changed oder kommagetrennte numerische IDs."
-    "Invalid --ads selector: \"%s\". Valid values: all, changed, or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all, changed oder kommagetrennte numerische IDs."
-    "Invalid --ads selector: \"%s\". Valid values: all, new, or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all, new oder kommagetrennte numerische IDs."
+    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new, due, changed) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new, due, changed) oder numerische IDs."
+    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, changed) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, changed) oder numerische IDs."
+    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new) oder numerische IDs."
     "Invalid --ads selector: \"%s\". Valid values: all or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
     "DONE: No new/outdated ads found.": "FERTIG: Keine neuen/veralteten Anzeigen gefunden."
     "DONE: No ads to delete found.": "FERTIG: Keine zu löschenden Anzeigen gefunden."
