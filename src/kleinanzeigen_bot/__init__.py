@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from gettext import gettext as _
 from pathlib import Path
-from typing import Any, Final, Sequence, cast
+from typing import Any, Final, NamedTuple, Sequence, cast
 
 import certifi, colorama, nodriver  # isort: skip
 from nodriver.core.connection import ProtocolException
@@ -83,6 +83,22 @@ class LoginDetectionResult:
             raise ValueError("is_logged_in=True requires reason=USER_INFO_MATCH")
         if not self.is_logged_in and self.reason == LoginDetectionReason.USER_INFO_MATCH:
             raise ValueError("is_logged_in=False requires reason=CTA_MATCH or SELECTOR_TIMEOUT")
+
+
+class ResolvedAdState(NamedTuple):
+    """Resolution result for ad download state.
+
+    Used by _resolve_download_ad_activity to return both the activity state
+    and ownership status of an ad being downloaded.
+
+    Attributes:
+        active: Whether the ad should be saved as active (True) or inactive (False).
+            Only ads with state="active" in the published profile are marked as active.
+        owned: Whether the ad belongs to the current user (True) or is foreign (False).
+            For "all"/"new" selectors this is typically True; for numeric IDs it may be False.
+    """
+    active:bool
+    owned:bool
 
 
 def _repost_cycle_ready(
@@ -365,18 +381,73 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return workspace.download_dir
         return Path(abspath(trimmed_dir, relative_to = str(Path(self.config_file_path).parent))).resolve()
 
-    def _resolve_download_ad_activity(self, ad_id:int, published_ads_by_id:dict[int, dict[str, Any]]) -> tuple[bool, bool]:
-        """Resolve downloaded ad activity and ownership for numeric selectors.
+    def _resolve_download_ad_activity(self, ad_id:int, published_ads_by_id:dict[int, dict[str, Any]]) -> ResolvedAdState:
+        """Resolve downloaded ad activity and ownership for download selectors.
+
+        Looks up the ad in the published profile and determines its activity state
+        and ownership status. Used by "all", "new", and numeric ID selectors.
+
+        Args:
+            ad_id: The ad ID to look up in the published profile.
+            published_ads_by_id: Dict mapping ad IDs to published ad data from the
+                Kleinanzeigen API. Contains only the current user's own ads.
 
         Returns:
-            tuple[bool, bool]:
-                active value and ownership (True own / False foreign).
+            ResolvedAdState with:
+            - active=True if ad exists and state=="active", otherwise False
+            - owned=True if ad exists in published_ads_by_id, otherwise False
         """
         published_ad = published_ads_by_id.get(ad_id)
         if published_ad is None:
-            return False, False
+            return ResolvedAdState(active = False, owned = False)
 
-        return published_ad.get("state") == "active", True
+        return ResolvedAdState(
+            active = published_ad.get("state") == "active",
+            owned = True
+        )
+
+    async def _download_ad_with_resolved_state(
+        self,
+        ad_extractor:extract.AdExtractor,
+        ad_id:int,
+        published_ads_by_id:dict[int, dict[str, Any]]
+    ) -> None:
+        """Download an ad with proper active state resolution and logging.
+
+        Resolves the ad's activity state from the published profile, logs appropriately
+        based on the resolution result, and initiates the download with the resolved state.
+
+        This method centralizes the resolution + logging + download logic used by
+        the "all" and "new" selectors.
+
+        Args:
+            ad_extractor: The AdExtractor instance to use for downloading.
+            ad_id: The ad ID to download.
+            published_ads_by_id: Dict mapping ad IDs to published ad data from API.
+
+        Note:
+            The numeric selector does NOT use this helper because it has different
+            warning message semantics (foreign ads are expected, not anomalies).
+        """
+        resolved = self._resolve_download_ad_activity(ad_id, published_ads_by_id)
+
+        if not resolved.owned:
+            # Ad not in user's published profile - unexpected for "all"/"new" selectors
+            # since these only list the user's own ads from the overview page
+            LOG.warning(
+                "Ad %d found in overview but not in published profile. Saving as inactive.",
+                ad_id
+            )
+        elif not resolved.active:
+            # Ad is in published profile but not in active state (paused, inactive, etc.)
+            published_ad = published_ads_by_id.get(ad_id, {})
+            LOG.debug(
+                "Ad %d has state '%s'. Saving as inactive.",
+                ad_id,
+                published_ad.get("state", "unknown")
+            )
+
+        await ad_extractor.download_ad(ad_id, active = resolved.active)
 
     def _resolve_workspace(self) -> None:
         """
@@ -2558,15 +2629,19 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             own_ad_urls = await ad_extractor.extract_own_ads_urls()
             LOG.info("%s found.", pluralize("ad", len(own_ad_urls)))
 
-            if effective_selector == "all":  # download all of your adds
+            if effective_selector == "all":  # download all of your ads
                 LOG.info("Starting download of all ads...")
 
                 success_count = 0
                 # call download function for each ad page
-                for add_url in own_ad_urls:
-                    ad_id = ad_extractor.extract_ad_id_from_ad_url(add_url)
-                    if await ad_extractor.navigate_to_ad_page(add_url):
-                        await ad_extractor.download_ad(ad_id)
+                for ad_url in own_ad_urls:
+                    ad_id = ad_extractor.extract_ad_id_from_ad_url(ad_url)
+                    if ad_id == -1:
+                        # Skip ads with invalid URLs (warning already logged by extract_ad_id_from_ad_url)
+                        continue
+
+                    if await ad_extractor.navigate_to_ad_page(ad_url):
+                        await self._download_ad_with_resolved_state(ad_extractor, ad_id, published_ads_by_id)
                         success_count += 1
                 LOG.info("%d of %d ads were downloaded from your profile.", success_count, len(own_ad_urls))
 
@@ -2587,13 +2662,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.info("Starting download of not yet downloaded ads...")
                 new_count = 0
                 for ad_url, ad_id in ad_id_by_url.items():
+                    # Skip ads with invalid URLs (warning already logged by extract_ad_id_from_ad_url)
+                    if ad_id == -1:
+                        continue
+
                     # check if ad with ID already saved
                     if ad_id in saved_ad_ids:
                         LOG.info("The ad with id %d has already been saved.", ad_id)
                         continue
 
                     if await ad_extractor.navigate_to_ad_page(ad_url):
-                        await ad_extractor.download_ad(ad_id)
+                        await self._download_ad_with_resolved_state(ad_extractor, ad_id, published_ads_by_id)
                         new_count += 1
                 LOG.info("%s were downloaded from your profile.", pluralize("new ad", new_count))
 
@@ -2605,11 +2684,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             for ad_id in ids:  # call download routine for every id
                 exists = await ad_extractor.navigate_to_ad_page(ad_id)
                 if exists:
-                    resolved_active, ownership = self._resolve_download_ad_activity(ad_id, published_ads_by_id)
-                    if not ownership:
+                    resolved = self._resolve_download_ad_activity(ad_id, published_ads_by_id)
+                    if not resolved.owned:
+                        # Foreign ad - expected for numeric IDs (can download any public ad)
                         LOG.warning("Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.", ad_id)
 
-                    await ad_extractor.download_ad(ad_id, active = resolved_active)
+                    await ad_extractor.download_ad(ad_id, active = resolved.active)
                     LOG.info("Downloaded ad with id %d", ad_id)
                 else:
                     LOG.error("The page with the id %d does not exist!", ad_id)
