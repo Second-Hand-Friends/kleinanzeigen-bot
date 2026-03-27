@@ -3,10 +3,10 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import asyncio, copy, fnmatch, io, json, logging, os, tempfile  # isort: skip
 from collections.abc import Callable, Generator
-from contextlib import redirect_stdout
+from contextlib import contextmanager, redirect_stdout
 from datetime import timedelta
 from pathlib import Path, PureWindowsPath
-from typing import Any, cast
+from typing import Any, Awaitable, Iterator, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -2889,3 +2889,153 @@ class TestPriceReductionPersistence:
         ad_cfg_orig = _apply_price_reduction_persistence(None)
 
         assert "price_reduction_count" not in ad_cfg_orig
+
+
+class TestBuyNowRadioTimeout:
+    """Regression tests for buy-now radio button timeout handling with PICKUP shipping.
+
+    Ensures that TimeoutError from web_check (radio absent) is caught gracefully,
+    while the correct timeout value (quick_dom) is used for both web_check and web_click.
+    """
+
+    @contextmanager
+    def _mock_publish_ad_dependencies(
+        self,
+        test_bot:KleinanzeigenBot,
+        mock_page:MagicMock,
+        check_side_effect:Callable[[By, str, Any, Any], Awaitable[bool]],
+    ) -> Iterator[tuple[MagicMock, MagicMock]]:
+        """Context manager that mocks all publish_ad dependencies for buy-now radio tests.
+
+        Args:
+            test_bot: The bot instance to patch methods on.
+            mock_page: Mock page object to assign to test_bot.page.
+            check_side_effect: Async function defining web_check behavior for radio-buy-now-no.
+
+        Yields:
+            Tuple of (mock_check, mock_click) for assertions in the test.
+        """
+        test_bot.page = mock_page
+        test_bot.page.url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            if selector_type == By.ID and selector_value == "myftr-shppngcrt-frm":
+                raise TimeoutError("no payment form")
+            return MagicMock()
+
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_category", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_special_attributes", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_shipping", new_callable = AsyncMock),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = check_side_effect) as mock_check,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock),
+            patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_contact_fields", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
+        ):
+            yield mock_check, mock_click
+
+    def _assert_quick_dom_timeout_for_buy_now_check(self, mock_check:MagicMock, test_bot:KleinanzeigenBot) -> None:
+        """Assert that web_check was called with quick_dom timeout for radio-buy-now-no."""
+        buy_now_check_calls = [
+            c for c in mock_check.call_args_list
+            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "radio-buy-now-no"
+        ]
+        assert len(buy_now_check_calls) == 1, "web_check should be called once for radio-buy-now-no"
+        assert buy_now_check_calls[0].kwargs["timeout"] == test_bot._timeout("quick_dom")
+
+    @pytest.mark.asyncio
+    async def test_missing_buy_now_radio_swallowed_gracefully(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+        tmp_path:Path,
+    ) -> None:
+        """When radio-buy-now-no is absent, web_check raises TimeoutError which must be swallowed."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP", "price_type": "FIXED", "price": 100})
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = str(tmp_path / "ad.yaml")
+
+        async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
+            if selector_type == By.ID and selector_value == "radio-buy-now-no":
+                raise TimeoutError("radio not found")
+            return False
+
+        with self._mock_publish_ad_dependencies(test_bot, mock_page, check_side_effect) as (mock_check, mock_click):
+            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+
+        self._assert_quick_dom_timeout_for_buy_now_check(mock_check, test_bot)
+
+        # web_click must NOT have been called for radio-buy-now-no (TimeoutError was swallowed)
+        buy_now_click_calls = [
+            c for c in mock_click.call_args_list
+            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "radio-buy-now-no"
+        ]
+        assert len(buy_now_click_calls) == 0, "web_click should not be called when TimeoutError occurs"
+
+    @pytest.mark.asyncio
+    async def test_visible_buy_now_radio_uses_quick_dom_timeout(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+        tmp_path:Path,
+    ) -> None:
+        """When radio-buy-now-no is present but not selected, it must be clicked with quick_dom timeout."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP", "price_type": "FIXED", "price": 100})
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = str(tmp_path / "ad.yaml")
+
+        async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
+            # Return False for radio-buy-now-no (exists but not selected)
+            return selector_type != By.ID or selector_value != "radio-buy-now-no"
+
+        with self._mock_publish_ad_dependencies(test_bot, mock_page, check_side_effect) as (mock_check, mock_click):
+            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+
+        self._assert_quick_dom_timeout_for_buy_now_check(mock_check, test_bot)
+
+        # web_click must have been called with quick_dom timeout
+        buy_now_click_calls = [
+            c for c in mock_click.call_args_list
+            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "radio-buy-now-no"
+        ]
+        assert len(buy_now_click_calls) == 1, "web_click should be called once"
+        assert buy_now_click_calls[0].kwargs["timeout"] == test_bot._timeout("quick_dom")
+
+    @pytest.mark.asyncio
+    async def test_already_selected_buy_now_radio_skips_click(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+        tmp_path:Path,
+    ) -> None:
+        """When radio-buy-now-no is already selected, web_click should not be called."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP", "price_type": "FIXED", "price": 100})
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = str(tmp_path / "ad.yaml")
+
+        async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
+            # Return True for radio-buy-now-no (already selected)
+            return selector_type == By.ID and selector_value == "radio-buy-now-no"
+
+        with self._mock_publish_ad_dependencies(test_bot, mock_page, check_side_effect) as (mock_check, mock_click):
+            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+
+        self._assert_quick_dom_timeout_for_buy_now_check(mock_check, test_bot)
+
+        # web_click must NOT have been called (already selected)
+        buy_now_click_calls = [
+            c for c in mock_click.call_args_list
+            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "radio-buy-now-no"
+        ]
+        assert len(buy_now_click_calls) == 0, "web_click should not be called when already selected"
