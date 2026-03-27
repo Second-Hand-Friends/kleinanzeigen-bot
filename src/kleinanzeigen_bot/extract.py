@@ -566,7 +566,8 @@ class AdExtractor(WebScrapingMixin):
                     ) from cleanup_ex
 
         await loop.run_in_executor(None, lambda: staging_dir.mkdir(exist_ok = True))
-        LOG.info("New directory for ad created at %s.", staging_dir)
+        LOG.debug("Staging directory for ad: %s", staging_dir)
+        LOG.info("Downloading ad to: %s", final_dir)
 
         try:
             ad_cfg = await self._extract_ad_page_info(str(staging_dir), ad_id, ad_file_stem, active_override = active_override)
