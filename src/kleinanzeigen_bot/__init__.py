@@ -1708,6 +1708,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     _handle_incomplete_fetch("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
                 else:
                     LOG.debug("No 'next' in paging on page %s, assuming last page", page)
+                    _handle_incomplete_fetch("No 'next' in paging on page %s, assuming last page", page)
                 break
             page = next_page
 
@@ -2365,12 +2366,16 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 expected_parts = [part for part in category.split("/") if part]
                 expected_slug = next((part for part in reversed(expected_parts) if not part.isdigit()), "")
                 expected_ids = {part for part in expected_parts if part.isdigit()}
+                expected_leaf_id = expected_parts[-1] if expected_parts and expected_parts[-1].isdigit() else None
+                is_numeric_only_category = bool(expected_parts) and all(part.isdigit() for part in expected_parts)
 
                 normalized_category_text = normalize_category_fragment(current_category_text)
                 normalized_expected_slug = normalize_category_fragment(expected_slug)
                 has_slug_match = bool(normalized_expected_slug and normalized_expected_slug in normalized_category_text)
                 current_ids = set(re.findall(r"\d+", current_category_text))
-                has_id_match = bool(expected_ids and expected_ids.issubset(current_ids))
+                has_full_id_match = bool(expected_ids and expected_ids.issubset(current_ids))
+                has_leaf_only_id_match = bool(is_numeric_only_category and expected_leaf_id and current_ids == {expected_leaf_id})
+                has_id_match = has_full_id_match or has_leaf_only_id_match
 
                 if current_category_text.strip() and (has_slug_match or has_id_match):
                     return
@@ -2648,10 +2653,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             except TimeoutError as marker_timeout:
                 # Marker lookup can still timeout after overall upload timeout; preserve thumbnail-derived count for error reporting.
                 LOG.debug("Hidden image marker lookup unavailable while building upload timeout context", exc_info = marker_timeout)
-            raise TimeoutError(
-                _("Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d processed images.")
-                % {"expected": expected_count, "found": current_count}
-            ) from ex
+            if current_count == 1:
+                timeout_message = _("Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d processed image.")
+            else:
+                timeout_message = _("Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d processed images.")
+
+            raise TimeoutError(timeout_message % {"expected": expected_count, "found": current_count}) from ex
 
         LOG.info(" -> all images uploaded successfully")
 

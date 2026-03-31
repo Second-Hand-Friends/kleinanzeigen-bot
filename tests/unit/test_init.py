@@ -3621,6 +3621,47 @@ class TestPublishDomSelectorFallbacks:
         mock_open.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_set_category_numeric_only_retains_selection_when_leaf_id_matches(self, test_bot:KleinanzeigenBot) -> None:
+        """Numeric-only category fallback should pass when breadcrumb path indicates matching leaf id."""
+
+        async def click_side_effect(selector_type:By, selector_value:str, **_:Any) -> None:
+            if selector_type == By.XPATH and "Wähle deine Kategorie" in selector_value:
+                raise TimeoutError("change link missing")
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, return_value = "Ausgewählte Kategorie: 176"),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_open", new_callable = AsyncMock) as mock_open,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_category")("161/176", "ad.yaml")
+
+        mock_find.assert_not_called()
+        mock_open.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_set_category_numeric_only_raises_when_leaf_id_mismatches(self, test_bot:KleinanzeigenBot) -> None:
+        """Numeric-only category fallback should still fail when breadcrumb leaf id differs."""
+
+        async def click_side_effect(selector_type:By, selector_value:str, **_:Any) -> None:
+            if selector_type == By.XPATH and "Wähle deine Kategorie" in selector_value:
+                raise TimeoutError("change link missing")
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, return_value = "Ausgewählte Kategorie: 177"),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_open", new_callable = AsyncMock) as mock_open,
+            pytest.raises(TimeoutError, match = "change link missing"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_category")("161/176", "ad.yaml")
+
+        mock_find.assert_not_called()
+        mock_open.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_set_contact_location_exact_dropdown_match(
         self,
         test_bot:KleinanzeigenBot,
@@ -3743,6 +3784,45 @@ class TestImageUploadFallbacks:
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = mock_web_await_raise),
-            pytest.raises(TimeoutError, match = r"Expected 1, found 1 processed images"),
+            pytest.raises(TimeoutError, match = r"Expected 1, found 1 processed image"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)
+
+    @pytest.mark.asyncio
+    async def test_upload_images_timeout_uses_plural_when_multiple_markers_found(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+    ) -> None:
+        """Timeout message should use plural wording when more than one image was processed."""
+        image_path = tmp_path / "image1.jpg"
+        image_path.write_bytes(b"")
+        ad_cfg = Ad.model_validate(base_ad_config | {"images": [str(image_path), str(image_path)]})
+
+        file_input = MagicMock()
+        file_input.send_file = AsyncMock()
+
+        hidden_marker_1 = MagicMock()
+        hidden_marker_1.attrs.value = "https://img.example.com/stored-1.jpg"
+        hidden_marker_2 = MagicMock()
+        hidden_marker_2.attrs.value = "https://img.example.com/stored-2.jpg"
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[MagicMock]:
+            if selector_value == "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)":
+                return []
+            if selector_value == "input[name^='adImages'][name$='.url']":
+                return [hidden_marker_1, hidden_marker_2]
+            return []
+
+        async def mock_web_await_raise(*_:Any, **__:Any) -> None:
+            raise TimeoutError("Image upload timeout exceeded")
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = file_input),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = mock_web_await_raise),
+            pytest.raises(TimeoutError, match = r"Expected 2, found 2 processed images"),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)
