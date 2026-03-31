@@ -2110,9 +2110,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 await self.web_click(By.XPATH, submit_button_xpath)
                 try:
                     await self.web_click(By.ID, "imprint-guidance-submit")
-                except TimeoutError:
+                except TimeoutError as imprint_error:
                     # imprint guidance submit button not present on all page variants
-                    pass  # nosec
+                    LOG.debug("Imprint guidance submit not found, continuing publish flow", exc_info = imprint_error)
 
             # check for no image question
             try:
@@ -2258,7 +2258,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             target = location.strip()
             for option in options:
                 opt_text = option.text.strip()
-                option_value = getattr(getattr(option, "attrs", object()), "value", None)
+                option_attrs = getattr(option, "attrs", None)
+                if option_attrs is None:
+                    continue
+                option_value = option_attrs.get("value") if hasattr(option_attrs, "get") else getattr(option_attrs, "value", None)
                 if not option_value:
                     continue
                 if opt_text == target:

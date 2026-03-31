@@ -3408,6 +3408,15 @@ class TestBuyNowRadioTimeout:
 class TestPublishDomSelectorFallbacks:
     """Regression tests for publish flow selector fallbacks after DOM changes."""
 
+    @staticmethod
+    def _make_dropdown_option(text:str, value:str) -> MagicMock:
+        option = MagicMock()
+        option.text = text
+        option.attrs = MagicMock()
+        option.attrs.value = value
+        option.attrs.get.return_value = value
+        return option
+
     @pytest.mark.asyncio
     async def test_publish_ad_uses_new_dom_fallback_selectors(
         self,
@@ -3548,17 +3557,10 @@ class TestPublishDomSelectorFallbacks:
         test_bot:KleinanzeigenBot,
     ) -> None:
         """When ad-city input times out, exact dropdown option match should succeed."""
-
-        def make_option(text:str, value:str) -> MagicMock:
-            opt = MagicMock()
-            opt.text = text
-            opt.attrs.value = value
-            return opt
-
         options = [
-            make_option("Berlin", "berlin"),
-            make_option("Hamburg", "hamburg"),
-            make_option("München", "muenchen"),
+            self._make_dropdown_option("Berlin", "berlin"),
+            self._make_dropdown_option("Hamburg", "hamburg"),
+            self._make_dropdown_option("München", "muenchen"),
         ]
 
         with (
@@ -3577,17 +3579,10 @@ class TestPublishDomSelectorFallbacks:
         test_bot:KleinanzeigenBot,
     ) -> None:
         """When ad-city input times out, 'zip - city' pattern dropdown match should succeed."""
-
-        def make_option(text:str, value:str) -> MagicMock:
-            opt = MagicMock()
-            opt.text = text
-            opt.attrs.value = value
-            return opt
-
         options = [
-            make_option("20095 - Hamburg", "20095-hamburg"),
-            make_option("10115 - Berlin", "10115-berlin"),
-            make_option("80331 - München", "80331-muenchen"),
+            self._make_dropdown_option("20095 - Hamburg", "20095-hamburg"),
+            self._make_dropdown_option("10115 - Berlin", "10115-berlin"),
+            self._make_dropdown_option("80331 - München", "80331-muenchen"),
         ]
 
         with (
