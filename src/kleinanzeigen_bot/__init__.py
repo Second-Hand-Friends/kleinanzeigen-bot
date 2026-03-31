@@ -2063,7 +2063,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # set description
         #############################
         description = self.__get_description(ad_cfg, with_affixes = True)
-        await self.web_execute("document.querySelector('#ad-description,#pstad-descrptn').value = `" + description.replace("`", "'") + "`")
+        await self.web_input(By.CSS_SELECTOR, "#ad-description, #pstad-descrptn", description)
 
         await self.__set_contact_fields(ad_cfg.contact)
 
@@ -2108,11 +2108,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/40
                 submit_button_xpath = "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')] | //button[contains(., 'Anzeige aufgeben')]"
                 await self.web_click(By.XPATH, submit_button_xpath)
-                try:
-                    await self.web_click(By.ID, "imprint-guidance-submit")
-                except TimeoutError as imprint_error:
-                    # imprint guidance submit button not present on all page variants
-                    LOG.debug("Imprint guidance submit not found, continuing publish flow", exc_info = imprint_error)
+
+            try:
+                await self.web_click(By.ID, "imprint-guidance-submit")
+            except TimeoutError as imprint_error:
+                # imprint guidance submit button not present on all page variants
+                LOG.debug("Imprint guidance submit not found, continuing publish flow", exc_info = imprint_error)
 
             # check for no image question
             try:
@@ -2353,9 +2354,25 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 current_category_text = ""
                 try:
                     current_category_text = await self.web_text(By.ID, "postad-category-path") or ""
-                except TimeoutError:
-                    pass
-                if current_category_text.strip():
+                except TimeoutError as category_text_error:
+                    LOG.debug("Unable to read current category path while category change control is missing", exc_info = category_text_error)
+
+                def normalize_category_fragment(value:str) -> str:
+                    normalized = value.casefold()
+                    normalized = normalized.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+                    return re.sub(r"[^a-z0-9]+", "", normalized)
+
+                expected_parts = [part for part in category.split("/") if part]
+                expected_slug = next((part for part in reversed(expected_parts) if not part.isdigit()), "")
+                expected_ids = {part for part in expected_parts if part.isdigit()}
+
+                normalized_category_text = normalize_category_fragment(current_category_text)
+                normalized_expected_slug = normalize_category_fragment(expected_slug)
+                has_slug_match = bool(normalized_expected_slug and normalized_expected_slug in normalized_category_text)
+                current_ids = set(re.findall(r"\d+", current_category_text))
+                has_id_match = bool(expected_ids and expected_ids.issubset(current_ids))
+
+                if current_category_text.strip() and (has_slug_match or has_id_match):
                     return
                 raise change_error
             await self.web_find(By.ID, "postad-step1-sbmt")
@@ -2606,8 +2623,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 )
                 processed_markers = [marker for marker in markers if str(getattr(marker.attrs, "value", "") or "").strip()]
                 current_count = max(current_count, len(processed_markers))
-            except TimeoutError:
-                pass
+            except TimeoutError as marker_timeout:
+                # Hidden upload markers are optional and often appear after thumbnails; keep thumbnail-derived count.
+                LOG.debug("Hidden image marker lookup not available during upload polling", exc_info = marker_timeout)
 
             if current_count < expected_count:
                 LOG.debug(" -> %d of %d images processed", current_count, expected_count)
@@ -2627,8 +2645,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 markers = await self.web_find_all(By.CSS_SELECTOR, image_marker_selector, timeout = self._timeout("quick_dom"))
                 processed_markers = [marker for marker in markers if str(getattr(marker.attrs, "value", "") or "").strip()]
                 current_count = max(current_count, len(processed_markers))
-            except TimeoutError:
-                pass
+            except TimeoutError as marker_timeout:
+                # Marker lookup can still timeout after overall upload timeout; preserve thumbnail-derived count for error reporting.
+                LOG.debug("Hidden image marker lookup unavailable while building upload timeout context", exc_info = marker_timeout)
             raise TimeoutError(
                 _("Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d processed images.")
                 % {"expected": expected_count, "found": current_count}

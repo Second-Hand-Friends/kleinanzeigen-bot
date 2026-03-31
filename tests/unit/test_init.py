@@ -3451,7 +3451,6 @@ class TestPublishDomSelectorFallbacks:
             patch.object(test_bot, "_KleinanzeigenBot__set_contact_fields", new_callable = AsyncMock),
             patch.object(test_bot, "web_select", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock) as mock_execute,
             patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect) as mock_click,
             patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
@@ -3467,15 +3466,65 @@ class TestPublishDomSelectorFallbacks:
             "input#ad-price-amount, input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price",
             str(ad_cfg.price),
         )
-        assert any(
-            "document.querySelector('#ad-description,#pstad-descrptn').value" in str(call.args[0])
-            for call in mock_execute.await_args_list
-        )
+        mock_input.assert_any_await(By.CSS_SELECTOR, "#ad-description, #pstad-descrptn", ad_cfg.description)
         mock_click.assert_any_await(By.CSS_SELECTOR, "#pstad-submit, #postad-publish button[type='submit']")
         mock_click.assert_any_await(
             By.XPATH,
             "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')] | //button[contains(., 'Anzeige aufgeben')]",
         )
+        mock_click.assert_any_await(By.ID, "imprint-guidance-submit")
+
+    @pytest.mark.asyncio
+    async def test_publish_ad_attempts_imprint_submit_after_primary_submit(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+    ) -> None:
+        """Imprint guidance submit should be attempted even when primary submit selector works."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "NOT_APPLICABLE", "price_type": "FIXED", "price": 100})
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = str(tmp_path / "ad.yaml")
+        test_bot.keep_old_ads = True
+
+        test_bot.page = MagicMock()
+        test_bot.page.url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+
+        async def click_side_effect(selector_type:By, selector_value:str, **_:Any) -> None:
+            if selector_type == By.ID and selector_value == "imprint-guidance-submit":
+                raise TimeoutError("optional imprint submit not present")
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            if selector_type == By.ID and selector_value == "myftr-shppngcrt-frm":
+                raise TimeoutError("payment form absent")
+            return MagicMock()
+
+        submit_button_xpath = "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')] | //button[contains(., 'Anzeige aufgeben')]"
+
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_category", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_special_attributes", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_contact_fields", new_callable = AsyncMock),
+            patch.object(test_bot, "web_select", new_callable = AsyncMock),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect) as mock_click,
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
+        ):
+            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+
+        mock_click.assert_any_await(By.CSS_SELECTOR, "#pstad-submit, #postad-publish button[type='submit']")
+        mock_click.assert_any_await(By.ID, "imprint-guidance-submit")
+        fallback_calls = [
+            call for call in mock_click.await_args_list
+            if len(call.args) >= 2 and call.args[0] == By.XPATH and call.args[1] == submit_button_xpath
+        ]
+        assert not fallback_calls, "Fallback submit XPath should not be used when primary submit selector succeeds"
 
     @pytest.mark.asyncio
     async def test_set_contact_fields_uses_new_contact_selectors(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
@@ -3530,8 +3579,8 @@ class TestPublishDomSelectorFallbacks:
         )
 
     @pytest.mark.asyncio
-    async def test_set_category_retains_selection_when_change_control_missing(self, test_bot:KleinanzeigenBot) -> None:
-        """Missing change control with existing category text should not raise."""
+    async def test_set_category_retains_selection_when_change_control_missing_and_text_matches(self, test_bot:KleinanzeigenBot) -> None:
+        """Missing change control should only pass when current category text matches requested category."""
 
         async def click_side_effect(selector_type:By, selector_value:str, **_:Any) -> None:
             if selector_type == By.XPATH and "Wähle deine Kategorie" in selector_value:
@@ -3539,7 +3588,7 @@ class TestPublishDomSelectorFallbacks:
 
         with (
             patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect) as mock_click,
-            patch.object(test_bot, "web_text", new_callable = AsyncMock, return_value = "Haushalt > Geräte"),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, return_value = "Haushalt > Haushaltskleingeräte"),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
             patch.object(test_bot, "web_open", new_callable = AsyncMock) as mock_open,
@@ -3547,6 +3596,27 @@ class TestPublishDomSelectorFallbacks:
             await getattr(test_bot, "_KleinanzeigenBot__set_category")("161/176/haushaltskleingeraete", "ad.yaml")
 
         mock_click.assert_any_await(By.CSS_SELECTOR, "#ad-description, #pstad-descrptn")
+        mock_find.assert_not_called()
+        mock_open.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_set_category_raises_when_change_control_missing_and_text_mismatches(self, test_bot:KleinanzeigenBot) -> None:
+        """Missing change control should raise when category text does not match requested category."""
+
+        async def click_side_effect(selector_type:By, selector_value:str, **_:Any) -> None:
+            if selector_type == By.XPATH and "Wähle deine Kategorie" in selector_value:
+                raise TimeoutError("change link missing")
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, return_value = "Auto, Rad & Boot > Reifen"),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_open", new_callable = AsyncMock) as mock_open,
+            pytest.raises(TimeoutError, match = "change link missing"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_category")("161/176/haushaltskleingeraete", "ad.yaml")
+
         mock_find.assert_not_called()
         mock_open.assert_not_called()
 

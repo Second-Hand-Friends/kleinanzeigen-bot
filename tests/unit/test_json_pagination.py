@@ -328,6 +328,9 @@ class TestJSONPagination:
                 pytest.fail(f"Expected ids [1, 2, 3] but got {[ad['id'] for ad in result]}")
             if mock_request.call_count != 2:
                 pytest.fail(f"Expected 2 web_request calls but got {mock_request.call_count}")
+            requested_pages = [int(call.args[0].rsplit("pageNum=", maxsplit = 1)[1]) for call in mock_request.await_args_list]
+            if requested_pages != [1, 2]:
+                pytest.fail(f"Expected page requests [1, 2] but got {requested_pages}")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_single_page_no_last_no_next(self, bot:KleinanzeigenBot) -> None:
