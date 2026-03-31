@@ -1688,12 +1688,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 _handle_incomplete_fetch("Invalid 'pageNum' in paging info: %s, stopping pagination", paging.get("pageNum"))
                 break
 
-            if total_pages is None:
-                LOG.debug("No pagination info found, assuming single page")
-                break
-
-            # Stop if reached last page
-            if current_page_num >= total_pages:
+            # Stop if reached last page (only when API provides 'last')
+            if total_pages is not None and current_page_num >= total_pages:
                 LOG.info("Reached last page %s of %s, stopping pagination", current_page_num, total_pages)
                 break
 
@@ -1707,8 +1703,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # Use API's next field for navigation (more robust than our counter)
             next_page = misc.coerce_page_number(paging.get("next"))
             if next_page is None:
-                LOG.warning("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
-                _handle_incomplete_fetch("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
+                if total_pages is not None:
+                    LOG.warning("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
+                    _handle_incomplete_fetch("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
+                else:
+                    LOG.debug("No 'next' in paging on page %s, assuming last page", page)
                 break
             page = next_page
 
@@ -1992,7 +1991,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # set title
         #############################
-        await self.web_input(By.ID, "postad-title", ad_cfg.title)
+        await self.web_input(By.CSS_SELECTOR, "#ad-title, #postad-title", ad_cfg.title)
 
         #############################
         # set special attributes
@@ -2028,14 +2027,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # Price type selector not present on this page variant.
                 pass
             if ad_cfg.price:
+                price_input_selector = "input#ad-price-amount, input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price"
                 if mode == AdUpdateStrategy.MODIFY:
                     # Clear the price field first to prevent concatenation of old and new values
                     # This is needed because some input fields don't clear properly with just clear_input()
-                    price_field = await self.web_find(By.CSS_SELECTOR, "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price")
+                    price_field = await self.web_find(By.CSS_SELECTOR, price_input_selector)
                     await price_field.clear_input()
                     await price_field.send_keys("")  # Ensure field is completely empty
                     await self.web_sleep(500)  # Brief pause to ensure clearing is complete
-                await self.web_input(By.CSS_SELECTOR, "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price", str(ad_cfg.price))
+                await self.web_input(By.CSS_SELECTOR, price_input_selector, str(ad_cfg.price))
 
         #############################
         # set sell_directly
@@ -2063,7 +2063,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # set description
         #############################
         description = self.__get_description(ad_cfg, with_affixes = True)
-        await self.web_execute("document.querySelector('#pstad-descrptn').value = `" + description.replace("`", "'") + "`")
+        await self.web_execute("document.querySelector('#ad-description,#pstad-descrptn').value = `" + description.replace("`", "'") + "`")
 
         await self.__set_contact_fields(ad_cfg.contact)
 
@@ -2103,11 +2103,16 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         try:
             try:
-                await self.web_click(By.ID, "pstad-submit")
+                await self.web_click(By.CSS_SELECTOR, "#pstad-submit, #postad-publish button[type='submit']")
             except TimeoutError:
                 # https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/40
-                await self.web_click(By.XPATH, "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')]")
-                await self.web_click(By.ID, "imprint-guidance-submit")
+                submit_button_xpath = "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')] | //button[contains(., 'Anzeige aufgeben')]"
+                await self.web_click(By.XPATH, submit_button_xpath)
+                try:
+                    await self.web_click(By.ID, "imprint-guidance-submit")
+                except TimeoutError:
+                    # imprint guidance submit button not present on all page variants
+                    pass  # nosec
 
             # check for no image question
             try:
@@ -2181,7 +2186,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if contact.zipcode:
             zipcode_set = True
             try:
-                zip_field = await self.web_find(By.ID, "pstad-zip")
+                zip_field = await self.web_find(By.CSS_SELECTOR, "#ad-zip-code, #pstad-zip")
                 if zip_field is None:
                     raise TimeoutError("ZIP input not found")
                 await zip_field.clear_input()
@@ -2189,41 +2194,23 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # fall back to standard input below
                 pass
             try:
-                await self.web_input(By.ID, "pstad-zip", contact.zipcode)
+                await self.web_input(By.CSS_SELECTOR, "#ad-zip-code, #pstad-zip", contact.zipcode)
             except TimeoutError:
                 LOG.warning("Could not set contact zipcode: %s", contact.zipcode)
                 zipcode_set = False
             # Set city if location is specified
             if contact.location and zipcode_set:
-                try:
-                    options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
-
-                    found = False
-                    for option in options:
-                        opt_text = option.text.strip()
-                        target = contact.location.strip()
-                        if opt_text == target:
-                            await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
-                            found = True
-                            break
-                        if " - " in opt_text and opt_text.split(" - ", 1)[1] == target:
-                            await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
-                            found = True
-                            break
-                    if not found:
-                        LOG.warning("No city dropdown option matched location: %s", contact.location)
-                except TimeoutError:
-                    LOG.warning("Could not set contact location: %s", contact.location)
+                await self.__set_contact_location(contact.location)
 
         #############################
         # set contact street
         #############################
         if contact.street:
             try:
-                if await self.web_check(By.ID, "pstad-street", Is.DISABLED):
-                    await self.web_click(By.ID, "addressVisibility")
+                if await self.web_check(By.CSS_SELECTOR, "#ad-street, #pstad-street", Is.DISABLED):
+                    await self.web_click(By.CSS_SELECTOR, "#ad-address-visibility, #addressVisibility")
                     await self.web_sleep()
-                await self.web_input(By.ID, "pstad-street", contact.street)
+                await self.web_input(By.CSS_SELECTOR, "#ad-street, #pstad-street", contact.street)
             except TimeoutError:
                 LOG.warning("Could not set contact street.")
 
@@ -2232,8 +2219,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         if contact.name:
             try:
-                if not await self.web_check(By.ID, "postad-contactname", Is.READONLY):
-                    await self.web_input(By.ID, "postad-contactname", contact.name)
+                if not await self.web_check(By.CSS_SELECTOR, "#ad-name, #postad-contactname", Is.READONLY):
+                    await self.web_input(By.CSS_SELECTOR, "#ad-name, #postad-contactname", contact.name)
             except TimeoutError:
                 LOG.warning("Could not set contact name.")
 
@@ -2258,6 +2245,28 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         "commercial accounts may still support phone numbers."
                     )
                 )
+
+    async def __set_contact_location(self, location:str) -> None:
+        try:
+            await self.web_input(By.ID, "ad-city", location)
+            return
+        except TimeoutError:
+            pass
+
+        try:
+            options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
+            target = location.strip()
+            for option in options:
+                opt_text = option.text.strip()
+                if opt_text == target:
+                    await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
+                    return
+                if " - " in opt_text and opt_text.split(" - ", 1)[1] == target:
+                    await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
+                    return
+            LOG.warning("No city dropdown option matched location: %s", location)
+        except TimeoutError:
+            LOG.warning("Could not set contact location: %s", location)
 
     async def update_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         """
@@ -2319,7 +2328,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def __set_category(self, category:str | None, ad_file:str) -> None:
         # click on something to trigger automatic category detection
-        await self.web_click(By.ID, "pstad-descrptn")
+        await self.web_click(By.CSS_SELECTOR, "#ad-description, #pstad-descrptn")
 
         is_category_auto_selected = False
         try:
@@ -2331,7 +2340,18 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         if category:
             await self.web_sleep()  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
-            await self.web_click(By.ID, "pstad-lnk-chngeCtgry")
+            category_change_xpath = "//*[@id='pstad-lnk-chngeCtgry'] | //a[contains(.,'Wähle deine Kategorie')] | //button[contains(.,'Wähle deine Kategorie')]"
+            try:
+                await self.web_click(By.XPATH, category_change_xpath)
+            except TimeoutError as change_error:
+                current_category_text = ""
+                try:
+                    current_category_text = await self.web_text(By.ID, "postad-category-path") or ""
+                except TimeoutError:
+                    pass
+                if current_category_text.strip():
+                    return
+                raise change_error
             await self.web_find(By.ID, "postad-step1-sbmt")
 
             category_url = f"{self.root_url}/p-kategorie-aendern.html#?path={category}"
@@ -2557,35 +2577,54 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         expected_count = len(ad_cfg.images)
         LOG.info(" -> waiting for %s to be processed...", pluralize("image", ad_cfg.images))
 
-        async def check_thumbnails_uploaded() -> bool:
+        thumbnail_selector = "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)"
+        image_marker_selector = "input[name^='adImages'][name$='.url']"
+
+        async def check_images_uploaded() -> bool:
+            current_count = 0
             try:
                 thumbnails = await self.web_find_all(
                     By.CSS_SELECTOR,
-                    "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)",
+                    thumbnail_selector,
                     timeout = self._timeout("quick_dom"),  # Fast timeout for polling
                 )
                 current_count = len(thumbnails)
-                if current_count < expected_count:
-                    LOG.debug(" -> %d of %d images processed", current_count, expected_count)
-                return current_count == expected_count
             except TimeoutError:
-                # No thumbnails found yet, continue polling
-                return False
+                current_count = 0
+
+            try:
+                markers = await self.web_find_all(
+                    By.CSS_SELECTOR,
+                    image_marker_selector,
+                    timeout = self._timeout("quick_dom"),
+                )
+                processed_markers = [marker for marker in markers if str(getattr(marker.attrs, "value", "") or "").strip()]
+                current_count = max(current_count, len(processed_markers))
+            except TimeoutError:
+                pass
+
+            if current_count < expected_count:
+                LOG.debug(" -> %d of %d images processed", current_count, expected_count)
+            return current_count >= expected_count
 
         try:
-            await self.web_await(check_thumbnails_uploaded, timeout = self._timeout("image_upload"), timeout_error_message = _("Image upload timeout exceeded"))
+            await self.web_await(check_images_uploaded, timeout = self._timeout("image_upload"), timeout_error_message = _("Image upload timeout exceeded"))
         except TimeoutError as ex:
             # Get current count for better error message
             try:
-                thumbnails = await self.web_find_all(
-                    By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout = self._timeout("quick_dom")
-                )
+                thumbnails = await self.web_find_all(By.CSS_SELECTOR, thumbnail_selector, timeout = self._timeout("quick_dom"))
                 current_count = len(thumbnails)
             except TimeoutError:
                 # Still no thumbnails after full timeout
                 current_count = 0
+            try:
+                markers = await self.web_find_all(By.CSS_SELECTOR, image_marker_selector, timeout = self._timeout("quick_dom"))
+                processed_markers = [marker for marker in markers if str(getattr(marker.attrs, "value", "") or "").strip()]
+                current_count = max(current_count, len(processed_markers))
+            except TimeoutError:
+                pass
             raise TimeoutError(
-                _("Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d thumbnails.")
+                _("Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d processed images.")
                 % {"expected": expected_count, "found": current_count}
             ) from ex
 

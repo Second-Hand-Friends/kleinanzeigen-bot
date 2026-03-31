@@ -3403,3 +3403,282 @@ class TestBuyNowRadioTimeout:
             if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "radio-buy-now-no"
         ]
         assert len(buy_now_click_calls) == 0, "web_click should not be called when already selected"
+
+
+class TestPublishDomSelectorFallbacks:
+    """Regression tests for publish flow selector fallbacks after DOM changes."""
+
+    @pytest.mark.asyncio
+    async def test_publish_ad_uses_new_dom_fallback_selectors(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+    ) -> None:
+        """Publish flow should use updated CSS selectors and submit fallbacks."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "NOT_APPLICABLE", "price_type": "FIXED", "price": 100})
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = str(tmp_path / "ad.yaml")
+        test_bot.keep_old_ads = True
+
+        test_bot.page = MagicMock()
+        test_bot.page.url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+
+        async def click_side_effect(selector_type:By, selector_value:str, **_:Any) -> None:
+            if selector_type == By.CSS_SELECTOR and selector_value == "#pstad-submit, #postad-publish button[type='submit']":
+                raise TimeoutError("submit selector not found")
+            if selector_type == By.ID and selector_value == "imprint-guidance-submit":
+                raise TimeoutError("optional imprint submit not present")
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            if selector_type == By.ID and selector_value == "myftr-shppngcrt-frm":
+                raise TimeoutError("payment form absent")
+            return MagicMock()
+
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_category", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_special_attributes", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_contact_fields", new_callable = AsyncMock),
+            patch.object(test_bot, "web_select", new_callable = AsyncMock),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock) as mock_execute,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect) as mock_click,
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
+        ):
+            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+
+        mock_input.assert_any_await(By.CSS_SELECTOR, "#ad-title, #postad-title", ad_cfg.title)
+        mock_input.assert_any_await(
+            By.CSS_SELECTOR,
+            "input#ad-price-amount, input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price",
+            str(ad_cfg.price),
+        )
+        assert any(
+            "document.querySelector('#ad-description,#pstad-descrptn').value" in str(call.args[0])
+            for call in mock_execute.await_args_list
+        )
+        mock_click.assert_any_await(By.CSS_SELECTOR, "#pstad-submit, #postad-publish button[type='submit']")
+        mock_click.assert_any_await(
+            By.XPATH,
+            "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')] | //button[contains(., 'Anzeige aufgeben')]",
+        )
+
+    @pytest.mark.asyncio
+    async def test_set_contact_fields_uses_new_contact_selectors(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """Contact fields should use migrated IDs with fallback selectors."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "contact": {
+                    "name": "Jens",
+                    "zipcode": "27321",
+                    "location": "Thedinghausen",
+                    "street": "Musterweg",
+                    "phone": "",
+                }
+            }
+        )
+
+        zip_field = MagicMock()
+        zip_field.clear_input = AsyncMock()
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = zip_field),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = [True, False]),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_fields")(ad_cfg.contact)
+
+        mock_input.assert_any_await(By.CSS_SELECTOR, "#ad-zip-code, #pstad-zip", "27321")
+        mock_input.assert_any_await(By.ID, "ad-city", "Thedinghausen")
+        mock_input.assert_any_await(By.CSS_SELECTOR, "#ad-street, #pstad-street", "Musterweg")
+        mock_input.assert_any_await(By.CSS_SELECTOR, "#ad-name, #postad-contactname", "Jens")
+        mock_click.assert_any_await(By.CSS_SELECTOR, "#ad-address-visibility, #addressVisibility")
+
+    @pytest.mark.asyncio
+    async def test_set_category_uses_new_trigger_and_change_fallback(self, test_bot:KleinanzeigenBot) -> None:
+        """Category setup should trigger from description fallback and use new change fallback XPath."""
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, return_value = "some category"),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_category")("161/176/haushaltskleingeraete", "ad.yaml")
+
+        mock_click.assert_any_await(By.CSS_SELECTOR, "#ad-description, #pstad-descrptn")
+        mock_click.assert_any_await(
+            By.XPATH,
+            "//*[@id='pstad-lnk-chngeCtgry'] | //a[contains(.,'Wähle deine Kategorie')] | //button[contains(.,'Wähle deine Kategorie')]",
+        )
+
+    @pytest.mark.asyncio
+    async def test_set_category_retains_selection_when_change_control_missing(self, test_bot:KleinanzeigenBot) -> None:
+        """Missing change control with existing category text should not raise."""
+
+        async def click_side_effect(selector_type:By, selector_value:str, **_:Any) -> None:
+            if selector_type == By.XPATH and "Wähle deine Kategorie" in selector_value:
+                raise TimeoutError("change link missing")
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect) as mock_click,
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, return_value = "Haushalt > Geräte"),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_open", new_callable = AsyncMock) as mock_open,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_category")("161/176/haushaltskleingeraete", "ad.yaml")
+
+        mock_click.assert_any_await(By.CSS_SELECTOR, "#ad-description, #pstad-descrptn")
+        mock_find.assert_not_called()
+        mock_open.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_set_contact_location_exact_dropdown_match(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """When ad-city input times out, exact dropdown option match should succeed."""
+
+        def make_option(text:str, value:str) -> MagicMock:
+            opt = MagicMock()
+            opt.text = text
+            opt.attrs.value = value
+            return opt
+
+        options = [
+            make_option("Berlin", "berlin"),
+            make_option("Hamburg", "hamburg"),
+            make_option("München", "muenchen"),
+        ]
+
+        with (
+            patch.object(test_bot, "web_input", new_callable = AsyncMock, side_effect = TimeoutError("ad-city not found")),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = options) as mock_find_all,
+            patch.object(test_bot, "web_select", new_callable = AsyncMock) as mock_select,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_location")("Hamburg")
+
+        mock_find_all.assert_awaited_once_with(By.CSS_SELECTOR, "#pstad-citychsr option")
+        mock_select.assert_awaited_once_with(By.ID, "pstad-citychsr", "hamburg")
+
+    @pytest.mark.asyncio
+    async def test_set_contact_location_zip_city_dropdown_match(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """When ad-city input times out, 'zip - city' pattern dropdown match should succeed."""
+
+        def make_option(text:str, value:str) -> MagicMock:
+            opt = MagicMock()
+            opt.text = text
+            opt.attrs.value = value
+            return opt
+
+        options = [
+            make_option("20095 - Hamburg", "20095-hamburg"),
+            make_option("10115 - Berlin", "10115-berlin"),
+            make_option("80331 - München", "80331-muenchen"),
+        ]
+
+        with (
+            patch.object(test_bot, "web_input", new_callable = AsyncMock, side_effect = TimeoutError("ad-city not found")),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = options) as mock_find_all,
+            patch.object(test_bot, "web_select", new_callable = AsyncMock) as mock_select,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_location")("Hamburg")
+
+        mock_find_all.assert_awaited_once_with(By.CSS_SELECTOR, "#pstad-citychsr option")
+        mock_select.assert_awaited_once_with(By.ID, "pstad-citychsr", "20095-hamburg")
+
+
+class TestImageUploadFallbacks:
+    """Tests for image upload completion detection using hidden form inputs."""
+
+    @pytest.mark.asyncio
+    async def test_upload_images_succeeds_when_hidden_inputs_populated(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+    ) -> None:
+        """Hidden adImages inputs should satisfy upload completion without thumbnails."""
+        image_path = tmp_path / "image1.jpg"
+        image_path.write_bytes(b"")
+        ad_cfg = Ad.model_validate(base_ad_config | {"images": [str(image_path)]})
+
+        file_input = MagicMock()
+        file_input.send_file = AsyncMock()
+
+        hidden_input = MagicMock()
+        hidden_input.attrs.value = "https://example.com/image1.jpg"
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[MagicMock]:
+            if selector_value == "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)":
+                raise TimeoutError("no thumbnails yet")
+            if selector_value == "input[name^='adImages'][name$='.url']":
+                return [hidden_input]
+            return []
+
+        async def mock_web_await(condition:Callable[[], Awaitable[bool]], **_:Any) -> bool:
+            if not await condition():
+                raise TimeoutError("condition not met")
+            return True
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = file_input),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = mock_web_await) as mock_await,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)
+
+        file_input.send_file.assert_awaited_once_with(str(image_path))
+        mock_await.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_upload_images_timeout_includes_hidden_marker_count(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+    ) -> None:
+        """Timeout error message should reflect max(thumbnails, hidden markers) processed count."""
+        image_path = tmp_path / "image1.jpg"
+        image_path.write_bytes(b"")
+        ad_cfg = Ad.model_validate(base_ad_config | {"images": [str(image_path)]})
+
+        file_input = MagicMock()
+        file_input.send_file = AsyncMock()
+
+        # Simulate: 0 thumbnails but 1 hidden marker with a populated URL value
+        hidden_marker = MagicMock()
+        hidden_marker.attrs.value = "https://img.example.com/stored.jpg"
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[MagicMock]:
+            if selector_value == "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)":
+                return []  # no thumbnails yet
+            if selector_value == "input[name^='adImages'][name$='.url']":
+                return [hidden_marker]
+            return []
+
+        async def mock_web_await_raise(*_:Any, **__:Any) -> None:
+            raise TimeoutError("Image upload timeout exceeded")
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = file_input),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = mock_web_await_raise),
+            pytest.raises(TimeoutError, match = r"Expected 1, found 1 processed images"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)

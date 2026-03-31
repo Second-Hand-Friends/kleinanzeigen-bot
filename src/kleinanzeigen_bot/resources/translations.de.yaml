@@ -224,11 +224,13 @@ kleinanzeigen_bot/__init__.py:
   __set_contact_fields:
     "Could not set contact street.": "Kontaktstraße konnte nicht gesetzt werden."
     "Could not set contact name.": "Kontaktname konnte nicht gesetzt werden."
-    "Could not set contact location: %s": "Kontaktort konnte nicht gesetzt werden: %s"
     "Could not set contact zipcode: %s": "Kontakt-PLZ konnte nicht gesetzt werden: %s"
-    "No city dropdown option matched location: %s": "Kein Eintrag im Orts-Dropdown passte zum Ort: %s"
     ? "Phone number field not present on page. This is expected for many private accounts; commercial accounts may still support phone numbers."
     : "Telefonnummernfeld auf der Seite nicht vorhanden. Dies ist bei vielen privaten Konten zu erwarten; gewerbliche Konten unterstützen Telefonnummern möglicherweise weiterhin."
+
+  __set_contact_location:
+    "Could not set contact location: %s": "Kontaktort konnte nicht gesetzt werden: %s"
+    "No city dropdown option matched location: %s": "Kein Eintrag im Orts-Dropdown passte zum Ort: %s"
 
   __upload_images:
     " -> found %s": "-> %s gefunden"
@@ -237,9 +239,9 @@ kleinanzeigen_bot/__init__.py:
     " -> waiting for %s to be processed...": " -> Warte auf Verarbeitung von %s..."
     " -> all images uploaded successfully": " -> Alle Bilder erfolgreich hochgeladen"
     "Image upload timeout exceeded": "Zeitüberschreitung beim Hochladen der Bilder"
-    "Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d thumbnails.": "Nicht alle Bilder wurden innerhalb der Zeitüberschreitung hochgeladen. Erwartet: %(expected)d, gefunden: %(found)d Miniaturansichten."
+    "Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d processed images.": "Nicht alle Bilder wurden rechtzeitig hochgeladen. Erwartet: %(expected)d, verarbeitet: %(found)d Bilder."
 
-  check_thumbnails_uploaded:
+  check_images_uploaded:
     " -> %d of %d images processed": " -> %d von %d Bildern verarbeitet"
 
   __check_ad_republication:
