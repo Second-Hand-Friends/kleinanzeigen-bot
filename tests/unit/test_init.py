@@ -3784,7 +3784,7 @@ class TestImageUploadFallbacks:
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = mock_web_await_raise),
-            pytest.raises(TimeoutError, match = r"Expected 1, found 1 processed image"),
+            pytest.raises(TimeoutError, match = r"Expected 1, found 1 processed image\.$"),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)
 
@@ -3823,6 +3823,6 @@ class TestImageUploadFallbacks:
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = mock_web_await_raise),
-            pytest.raises(TimeoutError, match = r"Expected 2, found 2 processed images"),
+            pytest.raises(TimeoutError, match = r"Expected 2, found 2 processed images\.$"),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)
