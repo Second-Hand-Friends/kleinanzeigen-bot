@@ -2248,16 +2248,139 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     )
                 )
 
-    async def __set_contact_location(self, location:str) -> None:
+    @staticmethod
+    def __location_matches_target(target:str, candidate:str | None) -> bool:
+        if not candidate:
+            return False
+
+        normalized_target = " ".join(target.split()).casefold()
+        normalized_candidate = " ".join(candidate.split()).casefold()
+        if not normalized_target or not normalized_candidate:
+            return False
+
+        if normalized_target == normalized_candidate:
+            return True
+
+        target_city = normalized_target.rsplit(" - ", maxsplit = 1)[-1]
+        candidate_city = normalized_candidate.rsplit(" - ", maxsplit = 1)[-1]
+        return target_city == candidate_city
+
+    @staticmethod
+    def __location_city_fragment(location:str) -> str:
+        normalized_location = " ".join(location.split())
+        if not normalized_location:
+            return ""
+        return normalized_location.rsplit(" - ", maxsplit = 1)[-1]
+
+    async def __read_city_selection_text(self) -> str | None:
+        short_timeout = self._timeout("quick_dom")
         try:
-            await self.web_input(By.ID, "ad-city", location)
-            return
+            city_element = await self.web_find(By.ID, "ad-city", timeout = short_timeout)
+        except TimeoutError:
+            return None
+
+        if city_element.local_name == "input":
+            attrs = getattr(city_element, "attrs", None)
+            if attrs is None:
+                return None
+            value = attrs.get("value") if hasattr(attrs, "get") else getattr(attrs, "value", None)
+            if isinstance(value, str) and value.strip():
+                return value
+            return None
+
+        try:
+            selected_text = await self.web_text(By.ID, "ad-city-selected-option", timeout = short_timeout)
+            if selected_text:
+                return selected_text
         except TimeoutError:
             pass
 
         try:
+            selected_text = await self.web_text(By.ID, "ad-city", timeout = short_timeout)
+            if selected_text:
+                return selected_text
+        except TimeoutError:
+            pass
+        return None
+
+    async def __select_city_combobox_option_exact(self, target:str) -> bool:
+        await self.web_click(By.ID, "ad-city")
+
+        option_selector = "[role='option'], li[aria-selected='true'], li[aria-selected='false'], button[aria-selected='true'], button[aria-selected='false']"
+        try:
+            candidates = await self.web_find_all(By.CSS_SELECTOR, option_selector, timeout = self._timeout("quick_dom"))
+        except TimeoutError:
+            return False
+
+        def normalize(value:str) -> str:
+            return " ".join(value.split()).casefold()
+
+        target_norm = normalize(target)
+        target_city = target_norm.rsplit(" - ", maxsplit = 1)[-1]
+
+        exact_match = next((elem for elem in candidates if normalize(elem.text or "") == target_norm), None)
+        city_match = next(
+            (
+                elem
+                for elem in candidates
+                if normalize(elem.text or "") and normalize(elem.text or "").rsplit(" - ", maxsplit = 1)[-1] == target_city
+            ),
+            None,
+        )
+
+        match = exact_match or city_match
+        if match is None:
+            return False
+
+        await match.click()
+
+        selected_city = await self.__read_city_selection_text()
+        return self.__location_matches_target(target, selected_city)
+
+    async def __set_contact_location(self, location:str) -> None:
+        target = location.strip()
+        if not target:
+            return
+        target_city = self.__location_city_fragment(target)
+
+        short_timeout = self._timeout("quick_dom")
+        city_tag = ""
+        city_is_read_only = False
+        try:
+            city_element = await self.web_find(By.ID, "ad-city", timeout = short_timeout)
+            if city_element is not None:
+                city_tag = city_element.local_name
+                if city_tag == "input":
+                    try:
+                        city_is_read_only = await self.web_check(By.ID, "ad-city", Is.READONLY, timeout = short_timeout)
+                    except TimeoutError:
+                        city_is_read_only = False
+        except TimeoutError:
+            city_tag = ""
+
+        if city_tag == "button" or (city_tag == "input" and city_is_read_only):
+            selected_city = await self.__read_city_selection_text()
+            if self.__location_matches_target(target, selected_city):
+                return
+
+            try:
+                if await self.__select_city_combobox_option_exact(target):
+                    return
+                LOG.warning("No exact city combobox option matched location: %s", location)
+            except TimeoutError:
+                # Fall back to legacy dropdown handling below.
+                pass
+        elif city_tag == "input":
+            try:
+                await self.web_input(By.ID, "ad-city", target_city or target)
+                selected_city = await self.__read_city_selection_text()
+                if self.__location_matches_target(target, selected_city):
+                    return
+            except TimeoutError:
+                pass
+
+        try:
             options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
-            target = location.strip()
             for option in options:
                 opt_text = option.text.strip()
                 option_attrs = getattr(option, "attrs", None)
@@ -2266,10 +2389,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 option_value = option_attrs.get("value") if hasattr(option_attrs, "get") else getattr(option_attrs, "value", None)
                 if not option_value:
                     continue
-                if opt_text == target:
-                    await self.web_select(By.ID, "pstad-citychsr", option_value)
-                    return
-                if " - " in opt_text and opt_text.split(" - ", 1)[1] == target:
+                if self.__location_matches_target(target, opt_text):
                     await self.web_select(By.ID, "pstad-citychsr", option_value)
                     return
             LOG.warning("No city dropdown option matched location: %s", location)

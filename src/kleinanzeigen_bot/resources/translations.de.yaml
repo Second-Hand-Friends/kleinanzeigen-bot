@@ -230,6 +230,7 @@ kleinanzeigen_bot/__init__.py:
 
   __set_contact_location:
     "Could not set contact location: %s": "Kontaktort konnte nicht gesetzt werden: %s"
+    "No exact city combobox option matched location: %s": "Keine exakte Ortsoption in der Kombobox passte zum Ort: %s"
     "No city dropdown option matched location: %s": "Kein Eintrag im Orts-Dropdown passte zum Ort: %s"
 
   __upload_images:
