@@ -2258,11 +2258,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             target = location.strip()
             for option in options:
                 opt_text = option.text.strip()
+                option_value = getattr(getattr(option, "attrs", object()), "value", None)
+                if not option_value:
+                    continue
                 if opt_text == target:
-                    await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
+                    await self.web_select(By.ID, "pstad-citychsr", option_value)
                     return
                 if " - " in opt_text and opt_text.split(" - ", 1)[1] == target:
-                    await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
+                    await self.web_select(By.ID, "pstad-citychsr", option_value)
                     return
             LOG.warning("No city dropdown option matched location: %s", location)
         except TimeoutError:
