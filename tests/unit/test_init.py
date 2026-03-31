@@ -3408,8 +3408,7 @@ class TestBuyNowRadioTimeout:
 class TestPublishDomSelectorFallbacks:
     """Regression tests for publish flow selector fallbacks after DOM changes."""
 
-    @staticmethod
-    def _make_dropdown_option(text:str, value:str) -> MagicMock:
+    def _make_dropdown_option(self, text:str, value:str) -> MagicMock:
         option = MagicMock()
         option.text = text
         option.attrs = MagicMock()
