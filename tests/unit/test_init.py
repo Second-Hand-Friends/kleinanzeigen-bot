@@ -3652,7 +3652,7 @@ class TestImageUploadFallbacks:
         base_ad_config:dict[str, Any],
         tmp_path:Path,
     ) -> None:
-        """Timeout error message should reflect max(thumbnails, hidden markers) processed count."""
+        """Mocked TimeoutError should include processed count from hidden markers (1 marker, 0 thumbnails)."""
         image_path = tmp_path / "image1.jpg"
         image_path.write_bytes(b"")
         ad_cfg = Ad.model_validate(base_ad_config | {"images": [str(image_path)]})
