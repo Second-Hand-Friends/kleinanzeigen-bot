@@ -2319,11 +2319,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if category:
             await self.web_sleep()  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
             await self.web_click(By.XPATH, "//a[contains(., 'Kategorie')] | //button[contains(., 'Kategorie')]")
-            await self.web_find(By.XPATH, "//button[@type='submit']")
+            await self.web_find(By.XPATH, "//button[contains(., 'Weiter')]")
 
             category_url = f"{self.root_url}/p-kategorie-aendern.html#?path={category}"
             await self.web_open(category_url)
-            await self.web_click(By.XPATH, "//button[@type='submit']")
+            await self.web_click(By.XPATH, "//button[contains(., 'Weiter')]")
         else:
             ensure(is_category_auto_selected, f"No category specified in [{ad_file}] and automatic category detection failed")
 
