@@ -2607,7 +2607,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         # Fetch published ads once from manage-ads JSON to avoid repetitive API calls during extraction
         # Build lookup dict inline and pass directly to extractor (no cache abstraction needed)
-        LOG.info("Fetching published ads...")
+        LOG.info("Fetching ad metadata (status, expiry dates)...")
         published_ads = await self._fetch_published_ads(strict = bool(_NUMERIC_IDS_RE.match(effective_selector)))
         published_ads_by_id:dict[int, dict[str, Any]] = {}
         for published_ad in published_ads:
@@ -2617,7 +2617,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     published_ads_by_id[int(ad_id)] = published_ad
             except (ValueError, TypeError):
                 LOG.warning("Skipping ad with non-numeric id: %s", published_ad.get("id"))
-        LOG.info("Loaded %s published ads.", len(published_ads_by_id))
+        LOG.info("Loaded metadata for %s published ads.", len(published_ads_by_id))
 
         download_dir = self._resolve_download_dir()
         xdg_paths.ensure_directory(download_dir, "downloaded ads directory")
@@ -2625,9 +2625,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         ad_extractor = extract.AdExtractor(self.browser, self.config, download_dir, published_ads_by_id = published_ads_by_id)
 
         if effective_selector in {"all", "new"}:  # explore ads overview for these two modes
-            LOG.info("Scanning your ad overview...")
+            LOG.info("Scanning ad overview for navigation URLs...")
             own_ad_urls = await ad_extractor.extract_own_ads_urls()
-            LOG.info("%s found.", pluralize("ad", len(own_ad_urls)))
+            LOG.info("Found %s.", pluralize("ad URL", len(own_ad_urls)))
 
             if effective_selector == "all":  # download all of your ads
                 LOG.info("Starting download of all ads...")
