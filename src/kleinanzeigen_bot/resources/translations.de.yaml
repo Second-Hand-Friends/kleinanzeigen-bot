@@ -228,8 +228,12 @@ kleinanzeigen_bot/__init__.py:
     ? "Phone number field not present on page. This is expected for many private accounts; commercial accounts may still support phone numbers."
     : "Telefonnummernfeld auf der Seite nicht vorhanden. Dies ist bei vielen privaten Konten zu erwarten; gewerbliche Konten unterstützen Telefonnummern möglicherweise weiterhin."
 
+  __select_city_combobox_option_exact:
+    "City combobox options did not load within %.1fs for selector [%s]: %s": "Ortsoptionen der Kombobox wurden innerhalb von %.1fs für Selektor [%s] nicht geladen: %s"
+
   __set_contact_location:
     "Could not set contact location: %s": "Kontaktort konnte nicht gesetzt werden: %s"
+    "City combobox options unavailable; falling back to legacy dropdown for location: %s": "Ortsoptionen der Kombobox nicht verfügbar; falle für Ort auf das Legacy-Dropdown zurück: %s"
     "No exact city combobox option matched location: %s": "Keine exakte Ortsoption in der Kombobox passte zum Ort: %s"
     "No city dropdown option matched location: %s": "Kein Eintrag im Orts-Dropdown passte zum Ort: %s"
 

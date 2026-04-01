@@ -97,6 +97,7 @@ class ResolvedAdState(NamedTuple):
         owned: Whether the ad belongs to the current user (True) or is foreign (False).
             For "all"/"new" selectors this is typically True; for numeric IDs it may be False.
     """
+
     active:bool
     owned:bool
 
@@ -401,17 +402,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if published_ad is None:
             return ResolvedAdState(active = False, owned = False)
 
-        return ResolvedAdState(
-            active = published_ad.get("state") == "active",
-            owned = True
-        )
+        return ResolvedAdState(active = published_ad.get("state") == "active", owned = True)
 
-    async def _download_ad_with_resolved_state(
-        self,
-        ad_extractor:extract.AdExtractor,
-        ad_id:int,
-        published_ads_by_id:dict[int, dict[str, Any]]
-    ) -> None:
+    async def _download_ad_with_resolved_state(self, ad_extractor:extract.AdExtractor, ad_id:int, published_ads_by_id:dict[int, dict[str, Any]]) -> None:
         """Download an ad with proper active state resolution and logging.
 
         Resolves the ad's activity state from the published profile, logs appropriately
@@ -434,18 +427,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if not resolved.owned:
             # Ad not in user's published profile - unexpected for "all"/"new" selectors
             # since these only list the user's own ads from the overview page
-            LOG.warning(
-                "Ad %d found in overview but not in published profile. Saving as inactive.",
-                ad_id
-            )
+            LOG.warning("Ad %d found in overview but not in published profile. Saving as inactive.", ad_id)
         elif not resolved.active:
             # Ad is in published profile but not in active state (paused, inactive, etc.)
             published_ad = published_ads_by_id.get(ad_id, {})
-            LOG.debug(
-                "Ad %d has state '%s'. Saving as inactive.",
-                ad_id,
-                published_ad.get("state", "unknown")
-            )
+            LOG.debug("Ad %d has state '%s'. Saving as inactive.", ad_id, published_ad.get("state", "unknown"))
 
         await ad_extractor.download_ad(ad_id, active = resolved.active)
 
@@ -2113,7 +2099,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 await self.web_click(By.XPATH, submit_button_xpath)
 
             try:
-                await self.web_click(By.ID, "imprint-guidance-submit")
+                await self.web_click(By.ID, "imprint-guidance-submit", timeout = self._timeout("quick_dom"))
             except TimeoutError as imprint_error:
                 # imprint guidance submit button not present on all page variants
                 LOG.debug("Imprint guidance submit not found, continuing publish flow: %s", imprint_error)
@@ -2304,14 +2290,21 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.debug("ad-city text not available, returning no city selection text")
         return None
 
-    async def __select_city_combobox_option_exact(self, target:str) -> bool:
+    async def __select_city_combobox_option_exact(self, target:str) -> bool | None:
         await self.web_click(By.ID, "ad-city")
 
         option_selector = "[role='option'], li[aria-selected='true'], li[aria-selected='false'], button[aria-selected='true'], button[aria-selected='false']"
+        quick_dom_timeout = self._timeout("quick_dom")
         try:
-            candidates = await self.web_find_all(By.CSS_SELECTOR, option_selector, timeout = self._timeout("quick_dom"))
-        except TimeoutError:
-            return False
+            candidates = await self.web_find_all(By.CSS_SELECTOR, option_selector, timeout = quick_dom_timeout)
+        except TimeoutError as ex:
+            LOG.warning(
+                "City combobox options did not load within %.1fs for selector [%s]: %s",
+                quick_dom_timeout,
+                option_selector,
+                ex,
+            )
+            return None
 
         def normalize(value:str) -> str:
             return " ".join(value.split()).casefold()
@@ -2321,11 +2314,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         exact_match = next((elem for elem in candidates if normalize(elem.text or "") == target_norm), None)
         city_match = next(
-            (
-                elem
-                for elem in candidates
-                if normalize(elem.text or "") and normalize(elem.text or "").rsplit(" - ", maxsplit = 1)[-1] == target_city
-            ),
+            (elem for elem in candidates if normalize(elem.text or "") and normalize(elem.text or "").rsplit(" - ", maxsplit = 1)[-1] == target_city),
             None,
         )
 
@@ -2339,6 +2328,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         return self.__location_matches_target(target, selected_city)
 
     async def __set_contact_location(self, location:str) -> None:
+        """Set city using prioritized UI variants with graceful fallbacks.
+
+        Precedence is selected button/combobox (exact match), combobox warning fallback, readonly/editable ad-city input, then legacy dropdown options.
+        Any TimeoutError on a higher-priority path triggers the next fallback path.
+        """
         target = location.strip()
         if not target:
             return
@@ -2365,9 +2359,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 return
 
             try:
-                if await self.__select_city_combobox_option_exact(target):
+                combobox_match = await self.__select_city_combobox_option_exact(target)
+                if combobox_match:
                     return
-                LOG.warning("No exact city combobox option matched location: %s", location)
+                if combobox_match is None:
+                    LOG.warning("City combobox options unavailable; falling back to legacy dropdown for location: %s", location)
+                else:
+                    LOG.warning("No exact city combobox option matched location: %s", location)
             except TimeoutError:
                 # Fall back to legacy dropdown handling below.
                 pass

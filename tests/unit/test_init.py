@@ -362,13 +362,16 @@ class TestKleinanzeigenBotInitialization:
         mock_extractor.assert_called_once()
         assert mock_extractor.call_args.args[2] == (tmp_path / "ads").resolve()
 
-    @pytest.mark.parametrize(("published_ads_by_id", "ad_id", "expected_active", "expected_owned"), [
-        ({123: {"id": 123, "state": "active"}}, 123, True, True),
-        ({123: {"id": 123, "state": "inactive"}}, 123, False, True),
-        ({123: {"id": 123, "state": "paused"}}, 123, False, True),
-        ({123: {"id": 123}}, 123, False, True),  # Missing "state" key - treated as inactive
-        ({}, 123, False, False),
-    ])
+    @pytest.mark.parametrize(
+        ("published_ads_by_id", "ad_id", "expected_active", "expected_owned"),
+        [
+            ({123: {"id": 123, "state": "active"}}, 123, True, True),
+            ({123: {"id": 123, "state": "inactive"}}, 123, False, True),
+            ({123: {"id": 123, "state": "paused"}}, 123, False, True),
+            ({123: {"id": 123}}, 123, False, True),  # Missing "state" key - treated as inactive
+            ({}, 123, False, False),
+        ],
+    )
     def test_resolve_download_ad_activity(
         self,
         test_bot:KleinanzeigenBot,
@@ -632,7 +635,12 @@ class TestKleinanzeigenBotInitialization:
 
         # Mock load_ads to return the saved_ad_ids
         saved_ads:list[tuple[str, MagicMock, dict[str, Any]]] = [
-            (f"ad_{ad_id}.yaml", MagicMock(spec = Ad, id = ad_id), {}) for ad_id in scenario["saved_ad_ids"]
+            (
+                f"ad_{ad_id}.yaml",
+                MagicMock(spec = Ad, id = ad_id),
+                {},
+            )
+            for ad_id in scenario["saved_ad_ids"]
         ]
 
         with (
@@ -3332,8 +3340,7 @@ class TestBuyNowRadioTimeout:
     def _assert_quick_dom_timeout_for_buy_now_check(self, mock_check:MagicMock, test_bot:KleinanzeigenBot) -> None:
         """Assert that web_check was called with quick_dom timeout for buy-now opt-out selector."""
         buy_now_check_calls = [
-            c for c in mock_check.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
+            c for c in mock_check.call_args_list if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
         ]
         assert len(buy_now_check_calls) == 1, "web_check should be called once for buy-now opt-out selector"
         assert buy_now_check_calls[0].kwargs["timeout"] == test_bot._timeout("quick_dom")
@@ -3363,8 +3370,7 @@ class TestBuyNowRadioTimeout:
 
         # web_click must NOT have been called for buy-now opt-out selector (TimeoutError was swallowed)
         buy_now_click_calls = [
-            c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
+            c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
         ]
         assert len(buy_now_click_calls) == 0, "web_click should not be called when TimeoutError occurs"
 
@@ -3392,8 +3398,7 @@ class TestBuyNowRadioTimeout:
 
         # web_click must have been called with quick_dom timeout
         buy_now_click_calls = [
-            c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
+            c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
         ]
         assert len(buy_now_click_calls) == 1, "web_click should be called once"
         assert buy_now_click_calls[0].kwargs["timeout"] == test_bot._timeout("quick_dom")
@@ -3422,8 +3427,7 @@ class TestBuyNowRadioTimeout:
 
         # web_click must NOT have been called (already selected)
         buy_now_click_calls = [
-            c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
+            c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
         ]
         assert len(buy_now_click_calls) == 0, "web_click should not be called when already selected"
 
@@ -3455,16 +3459,10 @@ class TestBuyNowRadioTimeout:
         with self._mock_publish_ad_dependencies(test_bot, mock_page, check_side_effect) as (mock_check, mock_click):
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
 
-        yes_check_calls = [
-            c for c in mock_check.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_YES_SELECTOR
-        ]
+        yes_check_calls = [c for c in mock_check.call_args_list if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_YES_SELECTOR]
         assert len(yes_check_calls) == 1, "web_check should be called once for buy-now yes selector"
 
-        yes_click_calls = [
-            c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_YES_SELECTOR
-        ]
+        yes_click_calls = [c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_YES_SELECTOR]
         assert len(yes_click_calls) == 1, "web_click should be called once for buy-now yes selector"
 
     @pytest.mark.asyncio
@@ -3495,23 +3493,18 @@ class TestBuyNowRadioTimeout:
         with self._mock_publish_ad_dependencies(test_bot, mock_page, check_side_effect) as (mock_check, mock_click):
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
 
-        no_check_calls = [
-            c for c in mock_check.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
-        ]
+        no_check_calls = [c for c in mock_check.call_args_list if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR]
         assert len(no_check_calls) == 1, "web_check should be called once for buy-now no selector"
 
-        no_click_calls = [
-            c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
-        ]
+        no_click_calls = [c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR]
         assert len(no_click_calls) == 1, "web_click should be called once for buy-now no selector"
 
 
 class TestPublishDomSelectorFallbacks:
     """Regression tests for publish flow selector fallbacks after DOM changes."""
 
-    def _make_dropdown_option(self, text:str, value:str) -> MagicMock:
+    @staticmethod
+    def _make_dropdown_option(text:str, value:str) -> MagicMock:
         option = MagicMock()
         option.text = text
         option.attrs = MagicMock()
@@ -3576,7 +3569,7 @@ class TestPublishDomSelectorFallbacks:
             By.XPATH,
             "(//fieldset[@id='postad-publish']//button | //button)[normalize-space(.)='Anzeige aufgeben']",
         )
-        mock_click.assert_any_await(By.ID, "imprint-guidance-submit")
+        mock_click.assert_any_await(By.ID, "imprint-guidance-submit", timeout = test_bot._timeout("quick_dom"))
 
     @pytest.mark.asyncio
     async def test_publish_ad_attempts_imprint_submit_after_primary_submit(
@@ -3623,10 +3616,9 @@ class TestPublishDomSelectorFallbacks:
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
 
         mock_click.assert_any_await(By.CSS_SELECTOR, "#pstad-submit, #postad-publish button[type='submit']")
-        mock_click.assert_any_await(By.ID, "imprint-guidance-submit")
+        mock_click.assert_any_await(By.ID, "imprint-guidance-submit", timeout = test_bot._timeout("quick_dom"))
         fallback_calls = [
-            call for call in mock_click.await_args_list
-            if len(call.args) >= 2 and call.args[0] == By.XPATH and call.args[1] == submit_button_xpath
+            call for call in mock_click.await_args_list if len(call.args) >= 2 and call.args[0] == By.XPATH and call.args[1] == submit_button_xpath
         ]
         assert not fallback_calls, "Fallback submit XPath should not be used when primary submit selector succeeds"
 
@@ -3895,6 +3887,23 @@ class TestPublishDomSelectorFallbacks:
         )
         mock_input.assert_not_called()
         option_two.click.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_select_city_combobox_option_exact_returns_none_when_options_timeout(
+        self,
+        test_bot:KleinanzeigenBot,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Timeout loading combobox options should return None so callers can distinguish unavailable options."""
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError("options did not load")),
+            caplog.at_level(logging.WARNING),
+        ):
+            result = await getattr(test_bot, "_KleinanzeigenBot__select_city_combobox_option_exact")("Example State - Targettown")
+
+        assert result is None
+        assert "City combobox options did not load within" in caplog.text
 
     @pytest.mark.asyncio
     async def test_read_city_selection_text_input_empty_value_falls_back_to_selected_option(
