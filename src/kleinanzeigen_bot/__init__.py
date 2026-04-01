@@ -2028,9 +2028,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 try:
                     await self.web_click(By.ID, "ad-price-type")
                     await self.web_click(By.ID, f"ad-price-type-menu-option-{option_idx}")
-                except TimeoutError:
-                    # Price type selector not present on this page variant.
-                    pass
+                except TimeoutError as ex:
+                    raise TimeoutError(_("Failed to set price type '%s'") % price_type) from ex
             if ad_cfg.price:
                 if mode == AdUpdateStrategy.MODIFY:
                     # Clear the price field first to prevent concatenation of old and new values
@@ -2067,7 +2066,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # set description
         #############################
         description = self.__get_description(ad_cfg, with_affixes = True)
-        await self.web_execute("document.querySelector('#ad-description').value = `" + description.replace("`", "'") + "`")
+        await self.web_execute("document.querySelector('#ad-description').value = " + json.dumps(description))
 
         await self.__set_contact_fields(ad_cfg.contact)
 
