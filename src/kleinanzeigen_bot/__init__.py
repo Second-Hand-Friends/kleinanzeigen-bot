@@ -1688,12 +1688,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 _handle_incomplete_fetch("Invalid 'pageNum' in paging info: %s, stopping pagination", paging.get("pageNum"))
                 break
 
-            if total_pages is None:
-                LOG.debug("No pagination info found, assuming single page")
-                break
-
-            # Stop if reached last page
-            if current_page_num >= total_pages:
+            # Stop if reached last page (only when API provides 'last')
+            if total_pages is not None and current_page_num >= total_pages:
                 LOG.info("Reached last page %s of %s, stopping pagination", current_page_num, total_pages)
                 break
 
@@ -1707,8 +1703,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # Use API's next field for navigation (more robust than our counter)
             next_page = misc.coerce_page_number(paging.get("next"))
             if next_page is None:
-                LOG.warning("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
-                _handle_incomplete_fetch("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
+                if total_pages is not None:
+                    LOG.warning("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
+                    _handle_incomplete_fetch("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
+                else:
+                    LOG.debug("No 'next' in paging on page %s, assuming last page", page)
+                    _handle_incomplete_fetch("No 'next' in paging on page %s, assuming last page", page)
                 break
             page = next_page
 

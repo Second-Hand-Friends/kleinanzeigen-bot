@@ -309,3 +309,60 @@ class TestJSONPagination:
                 pytest.fail(f"expected empty result on non-string content, got: {result}")
             if "Unexpected response content type on page 1: NoneType" not in caplog.text:
                 pytest.fail(f"expected non-string content warning in logs, got: {caplog.text}")
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_multi_page_without_last_field(self, bot:KleinanzeigenBot) -> None:
+        """Pagination should continue using 'next' when 'last' is absent (issue #917)."""
+        page1 = {"ads": [{"id": 1, "state": "active"}, {"id": 2, "state": "active"}], "paging": {"pageNum": 1, "pageSize": 25, "numFound": 3, "next": 2}}
+        page2 = {"ads": [{"id": 3, "state": "active"}], "paging": {"pageNum": 2, "pageSize": 25, "numFound": 3}}
+
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.side_effect = [
+                {"content": json.dumps(page1)},
+                {"content": json.dumps(page2)},
+            ]
+
+            result = await bot._fetch_published_ads()
+
+            if [ad["id"] for ad in result] != [1, 2, 3]:
+                pytest.fail(f"Expected ids [1, 2, 3] but got {[ad['id'] for ad in result]}")
+            if mock_request.call_count != 2:
+                pytest.fail(f"Expected 2 web_request calls but got {mock_request.call_count}")
+            requested_pages = [int(call.args[0].rsplit("pageNum=", maxsplit = 1)[1]) for call in mock_request.await_args_list]
+            if requested_pages != [1, 2]:
+                pytest.fail(f"Expected page requests [1, 2] but got {requested_pages}")
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_single_page_no_last_no_next(self, bot:KleinanzeigenBot) -> None:
+        """Paging dict with pageNum=1 but no 'last' and no 'next' should return ads and stop cleanly."""
+        response_data = {
+            "ads": [{"id": 10, "state": "active"}, {"id": 20, "state": "active"}],
+            "paging": {"pageNum": 1},
+        }
+
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.return_value = {"content": json.dumps(response_data)}
+
+            result = await bot._fetch_published_ads()
+
+            if len(result) != 2:
+                pytest.fail(f"Expected 2 ads, got {len(result)}")
+            if [ad["id"] for ad in result] != [10, 20]:
+                pytest.fail(f"Expected ids [10, 20] but got {[ad['id'] for ad in result]}")
+            mock_request.assert_awaited_once_with(
+                f"{bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum=1",
+            )
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_single_page_no_last_no_next_strict_raises(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should fail when paging omits both 'last' and 'next'."""
+        response_data = {
+            "ads": [{"id": 10, "state": "active"}],
+            "paging": {"pageNum": 1},
+        }
+
+        with (
+            patch.object(bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps(response_data)}),
+            pytest.raises(PublishedAdsFetchIncompleteError, match = r"No 'next' in paging on page 1"),
+        ):
+            await bot._fetch_published_ads(strict = True)
