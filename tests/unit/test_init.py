@@ -2630,7 +2630,7 @@ class TestKleinanzeigenBotShippingOptions:
                     return shipping_form_elem
                 if selector_type == By.ID and selector_value.startswith("radio-button-"):
                     return shipping_size_radio
-                if selector_value == "postad-category-path":
+                if selector_value == "ad-category-path":
                     return category_path_elem
                 return None
 
