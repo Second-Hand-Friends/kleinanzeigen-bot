@@ -1982,7 +1982,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             YAML().dump(ad_cfg.model_dump(), sys.stdout)
 
         if ad_cfg.type == "WANTED":
-            await self.web_click(By.ID, "adType2")
+            await self.web_click(By.ID, "ad-type-WANTED")
 
         #############################
         # set category (before title to avoid form reset clearing title)
@@ -1992,7 +1992,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # set title
         #############################
-        await self.web_input(By.ID, "postad-title", ad_cfg.title)
+        await self.web_input(By.ID, "ad-title", ad_cfg.title)
 
         #############################
         # set special attributes
@@ -2022,20 +2022,24 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         price_type = ad_cfg.price_type
         if price_type != "NOT_APPLICABLE":
-            try:
-                await self.web_select(By.CSS_SELECTOR, "select#price-type-react, select#micro-frontend-price-type, select#priceType", price_type)
-            except TimeoutError:
-                # Price type selector not present on this page variant.
-                pass
+            price_type_options = {"FIXED": 0, "NEGOTIABLE": 1, "GIVE_AWAY": 2}
+            option_idx = price_type_options.get(price_type)
+            if option_idx is not None:
+                try:
+                    await self.web_click(By.ID, "ad-price-type")
+                    await self.web_click(By.ID, f"ad-price-type-menu-option-{option_idx}")
+                except TimeoutError:
+                    # Price type selector not present on this page variant.
+                    pass
             if ad_cfg.price:
                 if mode == AdUpdateStrategy.MODIFY:
                     # Clear the price field first to prevent concatenation of old and new values
                     # This is needed because some input fields don't clear properly with just clear_input()
-                    price_field = await self.web_find(By.CSS_SELECTOR, "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price")
+                    price_field = await self.web_find(By.ID, "ad-price-amount")
                     await price_field.clear_input()
                     await price_field.send_keys("")  # Ensure field is completely empty
                     await self.web_sleep(500)  # Brief pause to ensure clearing is complete
-                await self.web_input(By.CSS_SELECTOR, "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price", str(ad_cfg.price))
+                await self.web_input(By.ID, "ad-price-amount", str(ad_cfg.price))
 
         #############################
         # set sell_directly
@@ -2063,7 +2067,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # set description
         #############################
         description = self.__get_description(ad_cfg, with_affixes = True)
-        await self.web_execute("document.querySelector('#pstad-descrptn').value = `" + description.replace("`", "'") + "`")
+        await self.web_execute("document.querySelector('#ad-description').value = `" + description.replace("`", "'") + "`")
 
         await self.__set_contact_fields(ad_cfg.contact)
 
@@ -2102,12 +2106,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # submit
         #############################
         try:
+            await self.web_click(By.XPATH, "//button[contains(., 'Anzeige aufgeben')]")
             try:
-                await self.web_click(By.ID, "pstad-submit")
-            except TimeoutError:
-                # https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/40
-                await self.web_click(By.XPATH, "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')]")
                 await self.web_click(By.ID, "imprint-guidance-submit")
+            except TimeoutError:
+                pass  # nosec
 
             # check for no image question
             try:
@@ -2181,7 +2184,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if contact.zipcode:
             zipcode_set = True
             try:
-                zip_field = await self.web_find(By.ID, "pstad-zip")
+                zip_field = await self.web_find(By.ID, "ad-zip-code")
                 if zip_field is None:
                     raise TimeoutError("ZIP input not found")
                 await zip_field.clear_input()
@@ -2189,29 +2192,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # fall back to standard input below
                 pass
             try:
-                await self.web_input(By.ID, "pstad-zip", contact.zipcode)
+                await self.web_input(By.ID, "ad-zip-code", contact.zipcode)
             except TimeoutError:
                 LOG.warning("Could not set contact zipcode: %s", contact.zipcode)
                 zipcode_set = False
             # Set city if location is specified
             if contact.location and zipcode_set:
                 try:
-                    options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
-
-                    found = False
-                    for option in options:
-                        opt_text = option.text.strip()
-                        target = contact.location.strip()
-                        if opt_text == target:
-                            await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
-                            found = True
-                            break
-                        if " - " in opt_text and opt_text.split(" - ", 1)[1] == target:
-                            await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
-                            found = True
-                            break
-                    if not found:
-                        LOG.warning("No city dropdown option matched location: %s", contact.location)
+                    await self.web_input(By.ID, "ad-city", contact.location)
                 except TimeoutError:
                     LOG.warning("Could not set contact location: %s", contact.location)
 
@@ -2220,10 +2208,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         if contact.street:
             try:
-                if await self.web_check(By.ID, "pstad-street", Is.DISABLED):
-                    await self.web_click(By.ID, "addressVisibility")
+                if await self.web_check(By.ID, "ad-street", Is.DISABLED):
+                    await self.web_click(By.ID, "ad-address-visibility")
                     await self.web_sleep()
-                await self.web_input(By.ID, "pstad-street", contact.street)
+                await self.web_input(By.ID, "ad-street", contact.street)
             except TimeoutError:
                 LOG.warning("Could not set contact street.")
 
@@ -2232,8 +2220,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         if contact.name:
             try:
-                if not await self.web_check(By.ID, "postad-contactname", Is.READONLY):
-                    await self.web_input(By.ID, "postad-contactname", contact.name)
+                if not await self.web_check(By.ID, "ad-name", Is.READONLY):
+                    await self.web_input(By.ID, "ad-name", contact.name)
             except TimeoutError:
                 LOG.warning("Could not set contact name.")
 
@@ -2242,15 +2230,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         if contact.phone:
             try:
-                if await self.web_check(By.ID, "postad-phonenumber", Is.DISPLAYED):
+                if await self.web_check(By.ID, "ad-phone", Is.DISPLAYED):
                     try:
-                        if await self.web_check(By.ID, "postad-phonenumber", Is.DISABLED):
-                            await self.web_click(By.ID, "phoneNumberVisibility")
+                        if await self.web_check(By.ID, "ad-phone", Is.DISABLED):
+                            await self.web_click(By.ID, "ad-phone-visibility")
                             await self.web_sleep()
                     except TimeoutError:
                         # ignore
                         pass
-                    await self.web_input(By.ID, "postad-phonenumber", contact.phone)
+                    await self.web_input(By.ID, "ad-phone", contact.phone)
             except TimeoutError:
                 LOG.warning(
                     _(
@@ -2319,11 +2307,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def __set_category(self, category:str | None, ad_file:str) -> None:
         # click on something to trigger automatic category detection
-        await self.web_click(By.ID, "pstad-descrptn")
+        await self.web_click(By.ID, "ad-description")
 
         is_category_auto_selected = False
         try:
-            if await self.web_text(By.ID, "postad-category-path"):
+            if await self.web_text(By.ID, "ad-category-path"):
                 is_category_auto_selected = True
         except TimeoutError:
             # Category auto-selection indicator not available within timeout.
@@ -2331,12 +2319,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         if category:
             await self.web_sleep()  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
-            await self.web_click(By.ID, "pstad-lnk-chngeCtgry")
-            await self.web_find(By.ID, "postad-step1-sbmt")
+            await self.web_click(By.XPATH, "//a[contains(., 'Kategorie')] | //button[contains(., 'Kategorie')]")
+            await self.web_find(By.XPATH, "//button[@type='submit']")
 
             category_url = f"{self.root_url}/p-kategorie-aendern.html#?path={category}"
             await self.web_open(category_url)
-            await self.web_click(By.XPATH, "//*[@id='postad-step1-sbmt']/button")
+            await self.web_click(By.XPATH, "//button[@type='submit']")
         else:
             ensure(is_category_auto_selected, f"No category specified in [{ad_file}] and automatic category detection failed")
 
