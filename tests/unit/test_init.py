@@ -2910,6 +2910,26 @@ class TestShippingSelectorTimeout:
         assert mock_check.await_args is not None
         assert mock_check.await_args.kwargs["timeout"] == test_bot._timeout("quick_dom")
 
+    @pytest.mark.asyncio
+    async def test_pickup_uses_new_shipping_radio_selector(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """PICKUP shipping should target the new ad-shipping-enabled-no selector with legacy fallback."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
+
+        with patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click:
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+        mock_click.assert_awaited_once_with(By.CSS_SELECTOR, "#ad-shipping-enabled-no, #radio-pickup")
+
+    @pytest.mark.asyncio
+    async def test_pickup_selector_timeout_is_swallowed(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """Timeout when pickup selector is absent should be swallowed to keep publish flow resilient."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
+
+        with patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = TimeoutError("selector missing")) as mock_click:
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+        mock_click.assert_awaited_once_with(By.CSS_SELECTOR, "#ad-shipping-enabled-no, #radio-pickup")
+
 
 class TestKleinanzeigenBotUrlConstruction:
     """Tests for URL construction functionality."""
@@ -3256,11 +3276,14 @@ class TestPriceReductionPersistence:
 
 
 class TestBuyNowRadioTimeout:
-    """Regression tests for buy-now radio button timeout handling with PICKUP shipping.
+    """Regression tests for buy-now radio selector timeout handling with PICKUP shipping.
 
-    Ensures that TimeoutError from web_check (radio absent) is caught gracefully,
+    Ensures that TimeoutError from web_check (selector absent) is caught gracefully,
     while the correct timeout value (quick_dom) is used for both web_check and web_click.
     """
+
+    BUY_NOW_YES_SELECTOR = "#ad-buy-now-true, #radio-buy-now-yes"
+    BUY_NOW_NO_SELECTOR = "#ad-buy-now-false, #radio-buy-now-no"
 
     @contextmanager
     def _mock_publish_ad_dependencies(
@@ -3274,7 +3297,7 @@ class TestBuyNowRadioTimeout:
         Args:
             test_bot: The bot instance to patch methods on.
             mock_page: Mock page object to assign to test_bot.page.
-            check_side_effect: Async function defining web_check behavior for radio-buy-now-no.
+            check_side_effect: Async function defining web_check behavior for buy-now opt-out selector.
 
         Yields:
             Tuple of (mock_check, mock_click) for assertions in the test.
@@ -3307,12 +3330,12 @@ class TestBuyNowRadioTimeout:
             yield mock_check, mock_click
 
     def _assert_quick_dom_timeout_for_buy_now_check(self, mock_check:MagicMock, test_bot:KleinanzeigenBot) -> None:
-        """Assert that web_check was called with quick_dom timeout for radio-buy-now-no."""
+        """Assert that web_check was called with quick_dom timeout for buy-now opt-out selector."""
         buy_now_check_calls = [
             c for c in mock_check.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "radio-buy-now-no"
+            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
         ]
-        assert len(buy_now_check_calls) == 1, "web_check should be called once for radio-buy-now-no"
+        assert len(buy_now_check_calls) == 1, "web_check should be called once for buy-now opt-out selector"
         assert buy_now_check_calls[0].kwargs["timeout"] == test_bot._timeout("quick_dom")
 
     @pytest.mark.asyncio
@@ -3323,13 +3346,13 @@ class TestBuyNowRadioTimeout:
         mock_page:MagicMock,
         tmp_path:Path,
     ) -> None:
-        """When radio-buy-now-no is absent, web_check raises TimeoutError which must be swallowed."""
+        """When buy-now opt-out selector is absent, web_check raises TimeoutError which must be swallowed."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP", "price_type": "FIXED", "price": 100})
         ad_cfg_orig = copy.deepcopy(base_ad_config)
         ad_file = str(tmp_path / "ad.yaml")
 
         async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
-            if selector_type == By.ID and selector_value == "radio-buy-now-no":
+            if selector_type == By.CSS_SELECTOR and selector_value == self.BUY_NOW_NO_SELECTOR:
                 raise TimeoutError("radio not found")
             return False
 
@@ -3338,10 +3361,10 @@ class TestBuyNowRadioTimeout:
 
         self._assert_quick_dom_timeout_for_buy_now_check(mock_check, test_bot)
 
-        # web_click must NOT have been called for radio-buy-now-no (TimeoutError was swallowed)
+        # web_click must NOT have been called for buy-now opt-out selector (TimeoutError was swallowed)
         buy_now_click_calls = [
             c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "radio-buy-now-no"
+            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
         ]
         assert len(buy_now_click_calls) == 0, "web_click should not be called when TimeoutError occurs"
 
@@ -3353,14 +3376,14 @@ class TestBuyNowRadioTimeout:
         mock_page:MagicMock,
         tmp_path:Path,
     ) -> None:
-        """When radio-buy-now-no is present but not selected, it must be clicked with quick_dom timeout."""
+        """When buy-now opt-out selector is present but not selected, it must be clicked with quick_dom timeout."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP", "price_type": "FIXED", "price": 100})
         ad_cfg_orig = copy.deepcopy(base_ad_config)
         ad_file = str(tmp_path / "ad.yaml")
 
         async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
-            # Return False for radio-buy-now-no (exists but not selected)
-            return selector_type != By.ID or selector_value != "radio-buy-now-no"
+            # Return False for buy-now opt-out selector (exists but not selected)
+            return selector_type != By.CSS_SELECTOR or selector_value != self.BUY_NOW_NO_SELECTOR
 
         with self._mock_publish_ad_dependencies(test_bot, mock_page, check_side_effect) as (mock_check, mock_click):
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
@@ -3370,7 +3393,7 @@ class TestBuyNowRadioTimeout:
         # web_click must have been called with quick_dom timeout
         buy_now_click_calls = [
             c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "radio-buy-now-no"
+            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
         ]
         assert len(buy_now_click_calls) == 1, "web_click should be called once"
         assert buy_now_click_calls[0].kwargs["timeout"] == test_bot._timeout("quick_dom")
@@ -3383,14 +3406,14 @@ class TestBuyNowRadioTimeout:
         mock_page:MagicMock,
         tmp_path:Path,
     ) -> None:
-        """When radio-buy-now-no is already selected, web_click should not be called."""
+        """When buy-now opt-out selector is already selected, web_click should not be called."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP", "price_type": "FIXED", "price": 100})
         ad_cfg_orig = copy.deepcopy(base_ad_config)
         ad_file = str(tmp_path / "ad.yaml")
 
         async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
-            # Return True for radio-buy-now-no (already selected)
-            return selector_type == By.ID and selector_value == "radio-buy-now-no"
+            # Return True for buy-now opt-out selector (already selected)
+            return selector_type == By.CSS_SELECTOR and selector_value == self.BUY_NOW_NO_SELECTOR
 
         with self._mock_publish_ad_dependencies(test_bot, mock_page, check_side_effect) as (mock_check, mock_click):
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
@@ -3400,9 +3423,89 @@ class TestBuyNowRadioTimeout:
         # web_click must NOT have been called (already selected)
         buy_now_click_calls = [
             c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "radio-buy-now-no"
+            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
         ]
         assert len(buy_now_click_calls) == 0, "web_click should not be called when already selected"
+
+    @pytest.mark.asyncio
+    async def test_shipping_sell_directly_true_uses_buy_now_yes_selector(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+        tmp_path:Path,
+    ) -> None:
+        """SHIPPING + sell_directly=true should check/click buy-now yes selector."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "shipping_type": "SHIPPING",
+                "shipping_options": ["DHL_5"],
+                "sell_directly": True,
+                "price_type": "FIXED",
+                "price": 100,
+            }
+        )
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = str(tmp_path / "ad.yaml")
+
+        async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
+            return not (selector_type == By.CSS_SELECTOR and selector_value == self.BUY_NOW_YES_SELECTOR)
+
+        with self._mock_publish_ad_dependencies(test_bot, mock_page, check_side_effect) as (mock_check, mock_click):
+            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+
+        yes_check_calls = [
+            c for c in mock_check.call_args_list
+            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_YES_SELECTOR
+        ]
+        assert len(yes_check_calls) == 1, "web_check should be called once for buy-now yes selector"
+
+        yes_click_calls = [
+            c for c in mock_click.call_args_list
+            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_YES_SELECTOR
+        ]
+        assert len(yes_click_calls) == 1, "web_click should be called once for buy-now yes selector"
+
+    @pytest.mark.asyncio
+    async def test_shipping_sell_directly_false_uses_buy_now_no_selector(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+        tmp_path:Path,
+    ) -> None:
+        """SHIPPING + sell_directly=false should check/click buy-now no selector."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "shipping_type": "SHIPPING",
+                "shipping_options": ["DHL_5"],
+                "sell_directly": False,
+                "price_type": "FIXED",
+                "price": 100,
+            }
+        )
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = str(tmp_path / "ad.yaml")
+
+        async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
+            return not (selector_type == By.CSS_SELECTOR and selector_value == self.BUY_NOW_NO_SELECTOR)
+
+        with self._mock_publish_ad_dependencies(test_bot, mock_page, check_side_effect) as (mock_check, mock_click):
+            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+
+        no_check_calls = [
+            c for c in mock_check.call_args_list
+            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
+        ]
+        assert len(no_check_calls) == 1, "web_check should be called once for buy-now no selector"
+
+        no_click_calls = [
+            c for c in mock_click.call_args_list
+            if len(c.args) >= 2 and c.args[0] == By.CSS_SELECTOR and c.args[1] == self.BUY_NOW_NO_SELECTOR
+        ]
+        assert len(no_click_calls) == 1, "web_click should be called once for buy-now no selector"
 
 
 class TestPublishDomSelectorFallbacks:

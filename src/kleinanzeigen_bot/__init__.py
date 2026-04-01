@@ -2042,19 +2042,21 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # set sell_directly
         #############################
         sell_directly = ad_cfg.sell_directly
+        buy_now_yes_selector = "#ad-buy-now-true, #radio-buy-now-yes"
+        buy_now_no_selector = "#ad-buy-now-false, #radio-buy-now-no"
         try:
             if ad_cfg.shipping_type == "SHIPPING":
                 if sell_directly and ad_cfg.shipping_options and price_type in {"FIXED", "NEGOTIABLE"}:
-                    if not await self.web_check(By.ID, "radio-buy-now-yes", Is.SELECTED):
-                        await self.web_click(By.ID, "radio-buy-now-yes")
-                elif not await self.web_check(By.ID, "radio-buy-now-no", Is.SELECTED):
-                    await self.web_click(By.ID, "radio-buy-now-no")
+                    if not await self.web_check(By.CSS_SELECTOR, buy_now_yes_selector, Is.SELECTED):
+                        await self.web_click(By.CSS_SELECTOR, buy_now_yes_selector)
+                elif not await self.web_check(By.CSS_SELECTOR, buy_now_no_selector, Is.SELECTED):
+                    await self.web_click(By.CSS_SELECTOR, buy_now_no_selector)
             else:
                 # For PICKUP/other types: always opt out of buy-now if the radio exists
                 try:
                     short_check = self._timeout("quick_dom")
-                    if not await self.web_check(By.ID, "radio-buy-now-no", Is.SELECTED, timeout = short_check):
-                        await self.web_click(By.ID, "radio-buy-now-no", timeout = short_check)
+                    if not await self.web_check(By.CSS_SELECTOR, buy_now_no_selector, Is.SELECTED, timeout = short_check):
+                        await self.web_click(By.CSS_SELECTOR, buy_now_no_selector, timeout = short_check)
                 except TimeoutError:
                     pass  # nosec
         except TimeoutError as ex:
@@ -2565,7 +2567,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         short_timeout = self._timeout("quick_dom")
         if ad_cfg.shipping_type == "PICKUP":
             try:
-                await self.web_click(By.ID, "radio-pickup")
+                await self.web_click(By.CSS_SELECTOR, "#ad-shipping-enabled-no, #radio-pickup")
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg.shipping_options:
