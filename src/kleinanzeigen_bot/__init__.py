@@ -1992,7 +1992,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # set title
         #############################
-        await self.web_input(By.ID, "postad-title", ad_cfg.title)
+        await self.web_input(By.CSS_SELECTOR, "#ad-title, #postad-title", ad_cfg.title)
 
         #############################
         # set special attributes
@@ -2028,14 +2028,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # Price type selector not present on this page variant.
                 pass
             if ad_cfg.price:
+                price_input_selector = "input#ad-price-amount, input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price"
                 if mode == AdUpdateStrategy.MODIFY:
                     # Clear the price field first to prevent concatenation of old and new values
                     # This is needed because some input fields don't clear properly with just clear_input()
-                    price_field = await self.web_find(By.CSS_SELECTOR, "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price")
+                    price_field = await self.web_find(By.CSS_SELECTOR, price_input_selector)
                     await price_field.clear_input()
                     await price_field.send_keys("")  # Ensure field is completely empty
                     await self.web_sleep(500)  # Brief pause to ensure clearing is complete
-                await self.web_input(By.CSS_SELECTOR, "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price", str(ad_cfg.price))
+                await self.web_input(By.CSS_SELECTOR, price_input_selector, str(ad_cfg.price))
 
         #############################
         # set sell_directly
@@ -2063,7 +2064,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # set description
         #############################
         description = self.__get_description(ad_cfg, with_affixes = True)
-        await self.web_execute("document.querySelector('#pstad-descrptn').value = `" + description.replace("`", "'") + "`")
+        await self.web_input(By.CSS_SELECTOR, "#ad-description, #pstad-descrptn", description)
 
         await self.__set_contact_fields(ad_cfg.contact)
 
@@ -2103,11 +2104,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         try:
             try:
-                await self.web_click(By.ID, "pstad-submit")
+                await self.web_click(By.CSS_SELECTOR, "#pstad-submit, #postad-publish button[type='submit']")
             except TimeoutError:
                 # https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/40
-                await self.web_click(By.XPATH, "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')]")
+                submit_button_xpath = "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')] | //button[contains(., 'Anzeige aufgeben')]"
+                await self.web_click(By.XPATH, submit_button_xpath)
+
+            try:
                 await self.web_click(By.ID, "imprint-guidance-submit")
+            except TimeoutError as imprint_error:
+                # imprint guidance submit button not present on all page variants
+                LOG.debug("Imprint guidance submit not found, continuing publish flow", exc_info = imprint_error)
 
             # check for no image question
             try:
@@ -2181,7 +2188,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if contact.zipcode:
             zipcode_set = True
             try:
-                zip_field = await self.web_find(By.ID, "pstad-zip")
+                zip_field = await self.web_find(By.CSS_SELECTOR, "#ad-zip-code, #pstad-zip")
                 if zip_field is None:
                     raise TimeoutError("ZIP input not found")
                 await zip_field.clear_input()
@@ -2189,41 +2196,23 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # fall back to standard input below
                 pass
             try:
-                await self.web_input(By.ID, "pstad-zip", contact.zipcode)
+                await self.web_input(By.CSS_SELECTOR, "#ad-zip-code, #pstad-zip", contact.zipcode)
             except TimeoutError:
                 LOG.warning("Could not set contact zipcode: %s", contact.zipcode)
                 zipcode_set = False
             # Set city if location is specified
             if contact.location and zipcode_set:
-                try:
-                    options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
-
-                    found = False
-                    for option in options:
-                        opt_text = option.text.strip()
-                        target = contact.location.strip()
-                        if opt_text == target:
-                            await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
-                            found = True
-                            break
-                        if " - " in opt_text and opt_text.split(" - ", 1)[1] == target:
-                            await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
-                            found = True
-                            break
-                    if not found:
-                        LOG.warning("No city dropdown option matched location: %s", contact.location)
-                except TimeoutError:
-                    LOG.warning("Could not set contact location: %s", contact.location)
+                await self.__set_contact_location(contact.location)
 
         #############################
         # set contact street
         #############################
         if contact.street:
             try:
-                if await self.web_check(By.ID, "pstad-street", Is.DISABLED):
-                    await self.web_click(By.ID, "addressVisibility")
+                if await self.web_check(By.CSS_SELECTOR, "#ad-street, #pstad-street", Is.DISABLED):
+                    await self.web_click(By.CSS_SELECTOR, "#ad-address-visibility, #addressVisibility")
                     await self.web_sleep()
-                await self.web_input(By.ID, "pstad-street", contact.street)
+                await self.web_input(By.CSS_SELECTOR, "#ad-street, #pstad-street", contact.street)
             except TimeoutError:
                 LOG.warning("Could not set contact street.")
 
@@ -2232,8 +2221,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         if contact.name:
             try:
-                if not await self.web_check(By.ID, "postad-contactname", Is.READONLY):
-                    await self.web_input(By.ID, "postad-contactname", contact.name)
+                if not await self.web_check(By.CSS_SELECTOR, "#ad-name, #postad-contactname", Is.READONLY):
+                    await self.web_input(By.CSS_SELECTOR, "#ad-name, #postad-contactname", contact.name)
             except TimeoutError:
                 LOG.warning("Could not set contact name.")
 
@@ -2258,6 +2247,154 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         "commercial accounts may still support phone numbers."
                     )
                 )
+
+    @staticmethod
+    def __location_matches_target(target:str, candidate:str | None) -> bool:
+        if not candidate:
+            return False
+
+        normalized_target = " ".join(target.split()).casefold()
+        normalized_candidate = " ".join(candidate.split()).casefold()
+        if not normalized_target or not normalized_candidate:
+            return False
+
+        if normalized_target == normalized_candidate:
+            return True
+
+        target_city = normalized_target.rsplit(" - ", maxsplit = 1)[-1]
+        candidate_city = normalized_candidate.rsplit(" - ", maxsplit = 1)[-1]
+        return target_city == candidate_city
+
+    @staticmethod
+    def __location_city_fragment(location:str) -> str:
+        normalized_location = " ".join(location.split())
+        if not normalized_location:
+            return ""
+        return normalized_location.rsplit(" - ", maxsplit = 1)[-1]
+
+    async def __read_city_selection_text(self) -> str | None:
+        short_timeout = self._timeout("quick_dom")
+        try:
+            city_element = await self.web_find(By.ID, "ad-city", timeout = short_timeout)
+        except TimeoutError:
+            return None
+
+        if city_element.local_name == "input":
+            attrs = getattr(city_element, "attrs", None)
+            if attrs is None:
+                return None
+            value = attrs.get("value") if hasattr(attrs, "get") else getattr(attrs, "value", None)
+            if isinstance(value, str) and value.strip():
+                return value
+            return None
+
+        try:
+            selected_text = await self.web_text(By.ID, "ad-city-selected-option", timeout = short_timeout)
+            if selected_text:
+                return selected_text
+        except TimeoutError:
+            pass
+
+        try:
+            selected_text = await self.web_text(By.ID, "ad-city", timeout = short_timeout)
+            if selected_text:
+                return selected_text
+        except TimeoutError:
+            pass
+        return None
+
+    async def __select_city_combobox_option_exact(self, target:str) -> bool:
+        await self.web_click(By.ID, "ad-city")
+
+        option_selector = "[role='option'], li[aria-selected='true'], li[aria-selected='false'], button[aria-selected='true'], button[aria-selected='false']"
+        try:
+            candidates = await self.web_find_all(By.CSS_SELECTOR, option_selector, timeout = self._timeout("quick_dom"))
+        except TimeoutError:
+            return False
+
+        def normalize(value:str) -> str:
+            return " ".join(value.split()).casefold()
+
+        target_norm = normalize(target)
+        target_city = target_norm.rsplit(" - ", maxsplit = 1)[-1]
+
+        exact_match = next((elem for elem in candidates if normalize(elem.text or "") == target_norm), None)
+        city_match = next(
+            (
+                elem
+                for elem in candidates
+                if normalize(elem.text or "") and normalize(elem.text or "").rsplit(" - ", maxsplit = 1)[-1] == target_city
+            ),
+            None,
+        )
+
+        match = exact_match or city_match
+        if match is None:
+            return False
+
+        await match.click()
+
+        selected_city = await self.__read_city_selection_text()
+        return self.__location_matches_target(target, selected_city)
+
+    async def __set_contact_location(self, location:str) -> None:
+        target = location.strip()
+        if not target:
+            return
+        target_city = self.__location_city_fragment(target)
+
+        short_timeout = self._timeout("quick_dom")
+        city_tag = ""
+        city_is_read_only = False
+        try:
+            city_element = await self.web_find(By.ID, "ad-city", timeout = short_timeout)
+            if city_element is not None:
+                city_tag = city_element.local_name
+                if city_tag == "input":
+                    try:
+                        city_is_read_only = await self.web_check(By.ID, "ad-city", Is.READONLY, timeout = short_timeout)
+                    except TimeoutError:
+                        city_is_read_only = False
+        except TimeoutError:
+            city_tag = ""
+
+        if city_tag == "button" or (city_tag == "input" and city_is_read_only):
+            selected_city = await self.__read_city_selection_text()
+            if self.__location_matches_target(target, selected_city):
+                return
+
+            try:
+                if await self.__select_city_combobox_option_exact(target):
+                    return
+                LOG.warning("No exact city combobox option matched location: %s", location)
+            except TimeoutError:
+                # Fall back to legacy dropdown handling below.
+                pass
+        elif city_tag == "input":
+            try:
+                await self.web_input(By.ID, "ad-city", target_city or target)
+                selected_city = await self.__read_city_selection_text()
+                if self.__location_matches_target(target, selected_city):
+                    return
+            except TimeoutError:
+                pass
+
+        try:
+            options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
+            for option in options:
+                opt_text = option.text.strip()
+                option_attrs = getattr(option, "attrs", None)
+                if option_attrs is None:
+                    continue
+                option_value = option_attrs.get("value") if hasattr(option_attrs, "get") else getattr(option_attrs, "value", None)
+                if not option_value:
+                    continue
+                if self.__location_matches_target(target, opt_text):
+                    await self.web_select(By.ID, "pstad-citychsr", option_value)
+                    return
+            LOG.warning("No city dropdown option matched location: %s", location)
+        except TimeoutError:
+            LOG.warning("Could not set contact location: %s", location)
 
     async def update_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         """
@@ -2319,7 +2456,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def __set_category(self, category:str | None, ad_file:str) -> None:
         # click on something to trigger automatic category detection
-        await self.web_click(By.ID, "pstad-descrptn")
+        await self.web_click(By.CSS_SELECTOR, "#ad-description, #pstad-descrptn")
 
         is_category_auto_selected = False
         try:
@@ -2331,7 +2468,38 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         if category:
             await self.web_sleep()  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
-            await self.web_click(By.ID, "pstad-lnk-chngeCtgry")
+            category_change_xpath = "//*[@id='pstad-lnk-chngeCtgry'] | //a[contains(.,'Wähle deine Kategorie')] | //button[contains(.,'Wähle deine Kategorie')]"
+            try:
+                await self.web_click(By.XPATH, category_change_xpath)
+            except TimeoutError as change_error:
+                current_category_text = ""
+                try:
+                    current_category_text = await self.web_text(By.ID, "postad-category-path") or ""
+                except TimeoutError as category_text_error:
+                    LOG.debug("Unable to read current category path while category change control is missing", exc_info = category_text_error)
+
+                def normalize_category_fragment(value:str) -> str:
+                    normalized = value.casefold()
+                    normalized = normalized.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+                    return re.sub(r"[^a-z0-9]+", "", normalized)
+
+                expected_parts = [part for part in category.split("/") if part]
+                expected_slug = next((part for part in reversed(expected_parts) if not part.isdigit()), "")
+                expected_ids = {part for part in expected_parts if part.isdigit()}
+                expected_leaf_id = expected_parts[-1] if expected_parts and expected_parts[-1].isdigit() else None
+                is_numeric_only_category = bool(expected_parts) and all(part.isdigit() for part in expected_parts)
+
+                normalized_category_text = normalize_category_fragment(current_category_text)
+                normalized_expected_slug = normalize_category_fragment(expected_slug)
+                has_slug_match = bool(normalized_expected_slug and normalized_expected_slug in normalized_category_text)
+                current_ids = set(re.findall(r"\d+", current_category_text))
+                has_full_id_match = bool(expected_ids and expected_ids.issubset(current_ids))
+                has_leaf_only_id_match = bool(is_numeric_only_category and expected_leaf_id and current_ids == {expected_leaf_id})
+                has_id_match = has_full_id_match or has_leaf_only_id_match
+
+                if current_category_text.strip() and (has_slug_match or has_id_match):
+                    return
+                raise change_error
             await self.web_find(By.ID, "postad-step1-sbmt")
 
             category_url = f"{self.root_url}/p-kategorie-aendern.html#?path={category}"
