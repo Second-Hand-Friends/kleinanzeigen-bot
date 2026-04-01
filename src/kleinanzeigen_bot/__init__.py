@@ -2116,7 +2116,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 await self.web_click(By.ID, "imprint-guidance-submit")
             except TimeoutError as imprint_error:
                 # imprint guidance submit button not present on all page variants
-                LOG.debug("Imprint guidance submit not found, continuing publish flow", exc_info = imprint_error)
+                LOG.debug("Imprint guidance submit not found, continuing publish flow: %s", imprint_error)
 
             # check for no image question
             try:
