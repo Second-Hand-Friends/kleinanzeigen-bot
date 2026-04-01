@@ -2725,36 +2725,40 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Wait for all images to be processed and thumbnails to appear
         expected_count = len(ad_cfg.images)
         LOG.info(" -> waiting for %s to be processed...", pluralize("image", ad_cfg.images))
+        thumbnail_selector = "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)"
+        hidden_marker_selector = "input[name^='adImages'][name$='.url']"
+
+        async def count_processed_images() -> int:
+            thumbnail_count = 0
+            marker_count = 0
+
+            try:
+                thumbnails = await self.web_find_all(By.CSS_SELECTOR, thumbnail_selector, timeout = self._timeout("quick_dom"))
+                thumbnail_count = len(thumbnails)
+            except TimeoutError:
+                thumbnail_count = 0
+
+            try:
+                markers = await self.web_find_all(By.CSS_SELECTOR, hidden_marker_selector, timeout = self._timeout("quick_dom"))
+                marker_count = sum(1 for marker in markers if str(getattr(marker.attrs, "value", "") or "").strip())
+            except TimeoutError:
+                marker_count = 0
+
+            return max(thumbnail_count, marker_count)
 
         async def check_thumbnails_uploaded() -> bool:
-            try:
-                thumbnails = await self.web_find_all(
-                    By.CSS_SELECTOR,
-                    "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)",
-                    timeout = self._timeout("quick_dom"),  # Fast timeout for polling
-                )
-                current_count = len(thumbnails)
-                if current_count < expected_count:
-                    LOG.debug(" -> %d of %d images processed", current_count, expected_count)
-                return current_count == expected_count
-            except TimeoutError:
-                # No thumbnails found yet, continue polling
-                return False
+            current_count = await count_processed_images()
+            if current_count < expected_count:
+                LOG.debug(" -> %d of %d images processed", current_count, expected_count)
+            return current_count >= expected_count
 
         try:
             await self.web_await(check_thumbnails_uploaded, timeout = self._timeout("image_upload"), timeout_error_message = _("Image upload timeout exceeded"))
         except TimeoutError as ex:
             # Get current count for better error message
-            try:
-                thumbnails = await self.web_find_all(
-                    By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout = self._timeout("quick_dom")
-                )
-                current_count = len(thumbnails)
-            except TimeoutError:
-                # Still no thumbnails after full timeout
-                current_count = 0
+            current_count = await count_processed_images()
             raise TimeoutError(
-                _("Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d thumbnails.")
+                _("Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d processed images.")
                 % {"expected": expected_count, "found": current_count}
             ) from ex
 

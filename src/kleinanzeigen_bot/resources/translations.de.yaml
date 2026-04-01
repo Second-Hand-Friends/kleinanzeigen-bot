@@ -240,7 +240,7 @@ kleinanzeigen_bot/__init__.py:
     " -> waiting for %s to be processed...": " -> Warte auf Verarbeitung von %s..."
     " -> all images uploaded successfully": " -> Alle Bilder erfolgreich hochgeladen"
     "Image upload timeout exceeded": "Zeitüberschreitung beim Hochladen der Bilder"
-    "Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d thumbnails.": "Nicht alle Bilder wurden innerhalb der Zeitüberschreitung hochgeladen. Erwartet: %(expected)d, gefunden: %(found)d Miniaturansichten."
+    "Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d processed images.": "Nicht alle Bilder wurden innerhalb der Zeitüberschreitung hochgeladen. Erwartet: %(expected)d, verarbeitet: %(found)d Bilder."
 
   check_thumbnails_uploaded:
     " -> %d of %d images processed": " -> %d von %d Bildern verarbeitet"
