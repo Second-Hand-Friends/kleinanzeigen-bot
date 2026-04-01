@@ -2030,7 +2030,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     await self.web_click(By.ID, f"ad-price-type-menu-option-{option_idx}")
                 except TimeoutError as ex:
                     raise TimeoutError(_("Failed to set price type '%s'") % price_type) from ex
-            if ad_cfg.price:
+            if ad_cfg.price is not None:
                 if mode == AdUpdateStrategy.MODIFY:
                     # Clear the price field first to prevent concatenation of old and new values
                     # This is needed because some input fields don't clear properly with just clear_input()
