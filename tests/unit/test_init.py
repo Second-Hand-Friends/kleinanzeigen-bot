@@ -3895,3 +3895,69 @@ class TestPublishDomSelectorFallbacks:
         )
         mock_input.assert_not_called()
         option_two.click.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_read_city_selection_text_input_empty_value_falls_back_to_selected_option(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """Empty ad-city input value should fall through to ad-city-selected-option text."""
+        city_input = MagicMock()
+        city_input.local_name = "input"
+        city_input.attrs = {"value": ""}
+
+        async def text_side_effect(selector_type:By, selector_value:str, **_:Any) -> str:
+            if selector_type == By.ID and selector_value == "ad-city-selected-option":
+                return "Example State - Targettown"
+            return ""
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
+        ):
+            result = await getattr(test_bot, "_KleinanzeigenBot__read_city_selection_text")()
+
+        assert result == "Example State - Targettown"
+
+    @pytest.mark.asyncio
+    async def test_read_city_selection_text_input_empty_value_falls_back_to_ad_city_text(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """When selected-option lookup times out, ad-city text fallback should still be attempted."""
+        city_input = MagicMock()
+        city_input.local_name = "input"
+        city_input.attrs = {"value": ""}
+
+        async def text_side_effect(selector_type:By, selector_value:str, **_:Any) -> str:
+            if selector_type == By.ID and selector_value == "ad-city-selected-option":
+                raise TimeoutError("selected option not found")
+            if selector_type == By.ID and selector_value == "ad-city":
+                return "Example State - Targettown"
+            return ""
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
+        ):
+            result = await getattr(test_bot, "_KleinanzeigenBot__read_city_selection_text")()
+
+        assert result == "Example State - Targettown"
+
+    @pytest.mark.asyncio
+    async def test_read_city_selection_text_input_empty_value_returns_none_when_all_fallbacks_fail(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """Empty ad-city input should return None only after both text fallbacks fail."""
+        city_input = MagicMock()
+        city_input.local_name = "input"
+        city_input.attrs = {"value": ""}
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, side_effect = TimeoutError("fallback not found")),
+        ):
+            result = await getattr(test_bot, "_KleinanzeigenBot__read_city_selection_text")()
+
+        assert result is None

@@ -2283,12 +2283,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         if city_element.local_name == "input":
             attrs = getattr(city_element, "attrs", None)
-            if attrs is None:
-                return None
-            value = attrs.get("value") if hasattr(attrs, "get") else getattr(attrs, "value", None)
-            if isinstance(value, str) and value.strip():
-                return value
-            return None
+            if attrs is not None:
+                value = attrs.get("value") if hasattr(attrs, "get") else getattr(attrs, "value", None)
+                if isinstance(value, str) and value.strip():
+                    return value
+            LOG.debug("ad-city input value is empty, trying text-based city selection fallbacks")
 
         try:
             selected_text = await self.web_text(By.ID, "ad-city-selected-option", timeout = short_timeout)
