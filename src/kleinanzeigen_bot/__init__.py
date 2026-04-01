@@ -2109,7 +2109,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 await self.web_click(By.CSS_SELECTOR, "#pstad-submit, #postad-publish button[type='submit']")
             except TimeoutError:
                 # https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/40
-                submit_button_xpath = "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')] | //button[contains(., 'Anzeige aufgeben')]"
+                submit_button_xpath = "(//fieldset[@id='postad-publish']//button | //button)[normalize-space(.)='Anzeige aufgeben']"
                 await self.web_click(By.XPATH, submit_button_xpath)
 
             try:
@@ -2295,14 +2295,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             if selected_text:
                 return selected_text
         except TimeoutError:
-            pass
+            LOG.debug("ad-city-selected-option text not available, trying ad-city fallback")
 
         try:
             selected_text = await self.web_text(By.ID, "ad-city", timeout = short_timeout)
             if selected_text:
                 return selected_text
         except TimeoutError:
-            pass
+            LOG.debug("ad-city text not available, returning no city selection text")
         return None
 
     async def __select_city_combobox_option_exact(self, target:str) -> bool:
@@ -2379,7 +2379,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if self.__location_matches_target(target, selected_city):
                     return
             except TimeoutError:
-                pass
+                LOG.debug("City input verification timed out, falling back to dropdown selector")
 
         try:
             options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")

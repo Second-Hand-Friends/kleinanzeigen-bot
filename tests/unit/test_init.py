@@ -3574,7 +3574,7 @@ class TestPublishDomSelectorFallbacks:
         mock_click.assert_any_await(By.CSS_SELECTOR, "#pstad-submit, #postad-publish button[type='submit']")
         mock_click.assert_any_await(
             By.XPATH,
-            "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')] | //button[contains(., 'Anzeige aufgeben')]",
+            "(//fieldset[@id='postad-publish']//button | //button)[normalize-space(.)='Anzeige aufgeben']",
         )
         mock_click.assert_any_await(By.ID, "imprint-guidance-submit")
 
@@ -3603,7 +3603,7 @@ class TestPublishDomSelectorFallbacks:
                 raise TimeoutError("payment form absent")
             return MagicMock()
 
-        submit_button_xpath = "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')] | //button[contains(., 'Anzeige aufgeben')]"
+        submit_button_xpath = "(//fieldset[@id='postad-publish']//button | //button)[normalize-space(.)='Anzeige aufgeben']"
 
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
@@ -3888,6 +3888,10 @@ class TestPublishDomSelectorFallbacks:
             await getattr(test_bot, "_KleinanzeigenBot__set_contact_location")("Example State - Targettown")
 
         mock_click.assert_awaited_once_with(By.ID, "ad-city")
-        mock_find_all.assert_awaited_once()
+        mock_find_all.assert_awaited_once_with(
+            By.CSS_SELECTOR,
+            "[role='option'], li[aria-selected='true'], li[aria-selected='false'], button[aria-selected='true'], button[aria-selected='false']",
+            timeout = test_bot._timeout("quick_dom"),
+        )
         mock_input.assert_not_called()
         option_two.click.assert_awaited_once()
