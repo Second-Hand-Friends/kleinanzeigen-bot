@@ -2370,9 +2370,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # Trying to find element by ID instead cause sometimes there is NO name attribute...
                 try:
                     special_attr_elem = await self.web_find(By.ID, special_attribute_key)
-                except TimeoutError as ex:
-                    LOG.debug("Attribute field '%s' could not be found.", special_attribute_key)
-                    raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
+                except TimeoutError:
+                    # New site dropped Solr type suffixes (_s, _i, _b, etc.) from element IDs — try without suffix
+                    stripped_key = re.sub(r'_[a-z]+$', '', special_attribute_key)
+                    if stripped_key == special_attribute_key:
+                        LOG.debug("Attribute field '%s' could not be found.", special_attribute_key)
+                        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
+                    try:
+                        special_attr_elem = await self.web_find(By.ID, stripped_key)
+                    except TimeoutError as ex:
+                        LOG.debug("Attribute field '%s' could not be found.", special_attribute_key)
+                        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
 
             try:
                 elem_id:str = str(special_attr_elem.attrs.id)
@@ -2382,6 +2390,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 elif special_attr_elem.attrs.type == "checkbox":
                     LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
                     await self.web_click(By.ID, elem_id)
+                elif special_attr_elem.local_name == "button" and special_attr_elem.attrs.get("role") == "combobox":
+                    LOG.debug("Attribute field '%s' seems to be a button combobox (click-to-open dropdown)...", special_attribute_key)
+                    await self.__select_button_combobox(elem_id, special_attribute_value_str)
                 elif special_attr_elem.attrs.type == "text" and special_attr_elem.attrs.get("role") == "combobox":
                     LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
                     await self.web_select_combobox(By.ID, elem_id, special_attribute_value_str)
@@ -2392,6 +2403,43 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.debug("Failed to set attribute field '%s' via known input types.", special_attribute_key)
                 raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
             LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
+
+    async def __select_button_combobox(self, elem_id:str, value:str) -> None:
+        """Select an option from a <button role="combobox"> dropdown by its API value.
+
+        Clicks the button to open the listbox, reads the options data from the React fiber
+        (which maps API values to display labels), and clicks the matching option.
+        """
+        await self.web_click(By.ID, elem_id)
+        listbox_id = f"{elem_id}-menu"
+        await self.web_find(By.ID, listbox_id)
+        js_btn_id = json.dumps(elem_id)
+        js_listbox_id = json.dumps(listbox_id)
+        js_value = json.dumps(value)
+        ok = await self.web_execute(f"""(function() {{
+            const listbox = document.getElementById({js_listbox_id});
+            if (!listbox) return false;
+            const liOptions = Array.from(listbox.querySelectorAll('[role="option"]'));
+            const btnEl = document.getElementById({js_btn_id});
+            if (!btnEl) return false;
+            const fiberKey = Object.keys(btnEl).find(k => k.startsWith('__reactFiber'));
+            let fiber = fiberKey ? btnEl[fiberKey] : null;
+            for (let i = 0; i < 20 && fiber; i++, fiber = fiber.return) {{
+                if (fiber.memoizedProps && fiber.memoizedProps.options) {{
+                    const optionsData = fiber.memoizedProps.options;
+                    for (let j = 0; j < optionsData.length; j++) {{
+                        if (optionsData[j].value === {js_value} && liOptions[j]) {{
+                            liOptions[j].click();
+                            return true;
+                        }}
+                    }}
+                    return false;
+                }}
+            }}
+            return false;
+        }})()""")
+        if not ok:
+            raise TimeoutError(_("Option '%(value)s' not found in button combobox '%(id)s'") % {"value": value, "id": elem_id})
 
     async def __set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         short_timeout = self._timeout("quick_dom")
