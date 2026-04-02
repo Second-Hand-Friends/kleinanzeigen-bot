@@ -133,7 +133,7 @@ def save_dict(filepath:str | Path, content:dict[str, Any], *, header:str | None 
     # Create parent directory if needed
     filepath.parent.mkdir(parents = True, exist_ok = True)
 
-    LOG.info("Saving [%s]...", filepath)
+    LOG.debug("Saving [%s]...", filepath)
     with open(filepath, "w", encoding = "utf-8") as file:
         if header:
             file.write(header)
@@ -350,7 +350,7 @@ def save_commented_model(
     filepath = Path(unicodedata.normalize("NFC", str(filepath)))
     filepath.parent.mkdir(parents = True, exist_ok = True)
 
-    LOG.info("Saving [%s]...", filepath)
+    LOG.debug("Saving [%s]...", filepath)
 
     # Convert to commented structure directly from model (preserves metadata)
     commented_data = model_to_commented_yaml(model_instance, exclude = exclude)
