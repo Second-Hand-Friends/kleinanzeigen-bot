@@ -362,13 +362,16 @@ class TestKleinanzeigenBotInitialization:
         mock_extractor.assert_called_once()
         assert mock_extractor.call_args.args[2] == (tmp_path / "ads").resolve()
 
-    @pytest.mark.parametrize(("published_ads_by_id", "ad_id", "expected_active", "expected_owned"), [
-        ({123: {"id": 123, "state": "active"}}, 123, True, True),
-        ({123: {"id": 123, "state": "inactive"}}, 123, False, True),
-        ({123: {"id": 123, "state": "paused"}}, 123, False, True),
-        ({123: {"id": 123}}, 123, False, True),  # Missing "state" key - treated as inactive
-        ({}, 123, False, False),
-    ])
+    @pytest.mark.parametrize(
+        ("published_ads_by_id", "ad_id", "expected_active", "expected_owned"),
+        [
+            ({123: {"id": 123, "state": "active"}}, 123, True, True),
+            ({123: {"id": 123, "state": "inactive"}}, 123, False, True),
+            ({123: {"id": 123, "state": "paused"}}, 123, False, True),
+            ({123: {"id": 123}}, 123, False, True),  # Missing "state" key - treated as inactive
+            ({}, 123, False, False),
+        ],
+    )
     def test_resolve_download_ad_activity(
         self,
         test_bot:KleinanzeigenBot,
@@ -631,9 +634,7 @@ class TestKleinanzeigenBotInitialization:
         extractor_mock.download_ad = AsyncMock()
 
         # Mock load_ads to return the saved_ad_ids
-        saved_ads:list[tuple[str, MagicMock, dict[str, Any]]] = [
-            (f"ad_{ad_id}.yaml", MagicMock(spec = Ad, id = ad_id), {}) for ad_id in scenario["saved_ad_ids"]
-        ]
+        saved_ads:list[tuple[str, MagicMock, dict[str, Any]]] = [(f"ad_{ad_id}.yaml", MagicMock(spec = Ad, id = ad_id), {}) for ad_id in scenario["saved_ad_ids"]]
 
         with (
             patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = scenario["published_ads"]) as mock_fetch_published_ads,
@@ -3322,10 +3323,7 @@ class TestBuyNowRadioTimeout:
 
     def _assert_quick_dom_timeout_for_buy_now_check(self, mock_check:MagicMock, test_bot:KleinanzeigenBot) -> None:
         """Assert that web_check was called with quick_dom timeout for ad-buy-now-false."""
-        buy_now_check_calls = [
-            c for c in mock_check.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"
-        ]
+        buy_now_check_calls = [c for c in mock_check.call_args_list if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"]
         assert len(buy_now_check_calls) == 1, "web_check should be called once for ad-buy-now-false"
         assert buy_now_check_calls[0].kwargs["timeout"] == test_bot._timeout("quick_dom")
 
@@ -3353,10 +3351,7 @@ class TestBuyNowRadioTimeout:
         self._assert_quick_dom_timeout_for_buy_now_check(mock_check, test_bot)
 
         # web_click must NOT have been called for ad-buy-now-false (TimeoutError was swallowed)
-        buy_now_click_calls = [
-            c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"
-        ]
+        buy_now_click_calls = [c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"]
         assert len(buy_now_click_calls) == 0, "web_click should not be called when TimeoutError occurs"
 
     @pytest.mark.asyncio
@@ -3382,10 +3377,7 @@ class TestBuyNowRadioTimeout:
         self._assert_quick_dom_timeout_for_buy_now_check(mock_check, test_bot)
 
         # web_click must have been called with quick_dom timeout
-        buy_now_click_calls = [
-            c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"
-        ]
+        buy_now_click_calls = [c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"]
         assert len(buy_now_click_calls) == 1, "web_click should be called once"
         assert buy_now_click_calls[0].kwargs["timeout"] == test_bot._timeout("quick_dom")
 
@@ -3412,10 +3404,7 @@ class TestBuyNowRadioTimeout:
         self._assert_quick_dom_timeout_for_buy_now_check(mock_check, test_bot)
 
         # web_click must NOT have been called (already selected)
-        buy_now_click_calls = [
-            c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"
-        ]
+        buy_now_click_calls = [c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"]
         assert len(buy_now_click_calls) == 0, "web_click should not be called when already selected"
 
 
@@ -3617,9 +3606,10 @@ class TestImageUploadProcessedMarkerFallback:
         ("thumbnail_count", "post_marker_count"),
         [
             (2, 1),
+            (2, 0),
             (1, 3),
         ],
-        ids = ["thumbnails_win", "marker_delta_wins"],
+        ids = ["thumbnails_win", "marker_delta_negative", "marker_delta_wins"],
     )
     async def test_upload_images_uses_max_of_thumbnail_count_and_marker_delta(
         self,
@@ -3650,6 +3640,8 @@ class TestImageUploadProcessedMarkerFallback:
                 # so find_all_side_effect must exercise thumbnail_count as the completion path.
                 if post_marker_count == 1:
                     return [stale_marker]
+                if post_marker_count == 0:
+                    return []  # marker delta becomes negative (0 - baseline 1) and is clamped to 0
                 return [self._build_marker(f"https://img.example/{i}.jpg") for i in range(post_marker_count)]
             return []
 
