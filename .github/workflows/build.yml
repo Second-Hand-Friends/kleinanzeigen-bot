@@ -152,10 +152,8 @@ jobs:
 
     - name: Check with pip-audit
       # until https://github.com/astral-sh/ruff/issues/8277
-      # TODO: Remove CVE-2026-4539 ignore once fixed (see https://github.com/pygments/pygments/issues/3058)
-      # CVE-2026-4539: Low-severity ReDoS in AdlLexer (local-only, no upstream fix available)
       run:
-        pdm run pip-audit --progress-spinner off --skip-editable --verbose --ignore-vuln CVE-2026-4539
+        pdm run pip-audit --progress-spinner off --skip-editable --verbose
 
 
     - name: Check with ruff
