@@ -1266,15 +1266,18 @@ class WebScrapingMixin:
 
         # Check for pagination controls
         multi_page = False
+        next_page_selector = 'button[aria-label="Nächste"]'
         pagination_timeout = self._timeout("pagination_initial")
         try:
-            pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout = pagination_timeout)
-            next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section)
-            if next_buttons:
-                enabled_next_buttons = [btn for btn in next_buttons if not btn.attrs.get("disabled")]
-                if enabled_next_buttons:
-                    multi_page = True
-                    LOG.info("Multiple ad pages detected.")
+            next_buttons = await self.web_find_all(By.CSS_SELECTOR, next_page_selector, timeout = pagination_timeout)
+            enabled_next_buttons = [
+                btn
+                for btn in next_buttons
+                if not btn.attrs.get("disabled") and str(btn.attrs.get("aria-disabled", "")).lower() != "true"
+            ]
+            if enabled_next_buttons:
+                multi_page = True
+                LOG.info("Multiple ad pages detected.")
         except TimeoutError:
             LOG.info("No pagination controls found. Assuming single page.")
 
@@ -1301,12 +1304,11 @@ class WebScrapingMixin:
 
             follow_up_timeout = self._timeout("pagination_follow_up")
             try:
-                pagination_section = await self.web_find(By.CSS_SELECTOR, ".Pagination", timeout = follow_up_timeout)
+                possible_next_buttons = await self.web_find_all(By.CSS_SELECTOR, next_page_selector, timeout = follow_up_timeout)
                 next_button_element = None
-                possible_next_buttons = await self.web_find_all(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section)
-                for btn in possible_next_buttons:
-                    if not btn.attrs.get("disabled"):
-                        next_button_element = btn
+                for button in possible_next_buttons:
+                    if not button.attrs.get("disabled") and str(button.attrs.get("aria-disabled", "")).lower() != "true":
+                        next_button_element = button
                         break
 
                 if next_button_element:
@@ -1315,7 +1317,7 @@ class WebScrapingMixin:
                     await self.web_sleep(3000, 4000)
                     current_page += 1
                 else:
-                    LOG.info("Last page reached (no enabled 'Naechste' button found).")
+                    LOG.info("Last page reached (next button is disabled).")
                     break
             except TimeoutError:
                 LOG.info("No pagination controls found. Assuming last page.")
