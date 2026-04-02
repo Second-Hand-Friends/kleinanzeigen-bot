@@ -1992,7 +1992,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # set title
         #############################
-        await self.web_input(By.ID, "ad-title", ad_cfg.title)
+        await self.__react_input("ad-title", ad_cfg.title)
 
         #############################
         # set special attributes
@@ -2031,14 +2031,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 except TimeoutError as ex:
                     raise TimeoutError(_("Failed to set price type '%s'") % price_type) from ex
             if ad_cfg.price is not None:
-                if mode == AdUpdateStrategy.MODIFY:
-                    # Clear the price field first to prevent concatenation of old and new values
-                    # This is needed because some input fields don't clear properly with just clear_input()
-                    price_field = await self.web_find(By.ID, "ad-price-amount")
-                    await price_field.clear_input()
-                    await price_field.send_keys("")  # Ensure field is completely empty
-                    await self.web_sleep(500)  # Brief pause to ensure clearing is complete
-                await self.web_input(By.ID, "ad-price-amount", str(ad_cfg.price))
+                await self.__react_input("ad-price-amount", str(ad_cfg.price))
 
         #############################
         # set sell_directly
@@ -2047,16 +2040,16 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         try:
             if ad_cfg.shipping_type == "SHIPPING":
                 if sell_directly and ad_cfg.shipping_options and price_type in {"FIXED", "NEGOTIABLE"}:
-                    if not await self.web_check(By.ID, "radio-buy-now-yes", Is.SELECTED):
-                        await self.web_click(By.ID, "radio-buy-now-yes")
-                elif not await self.web_check(By.ID, "radio-buy-now-no", Is.SELECTED):
-                    await self.web_click(By.ID, "radio-buy-now-no")
+                    if not await self.web_check(By.ID, "ad-buy-now-true", Is.SELECTED):
+                        await self.web_click(By.ID, "ad-buy-now-true")
+                elif not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED):
+                    await self.web_click(By.ID, "ad-buy-now-false")
             else:
                 # For PICKUP/other types: always opt out of buy-now if the radio exists
                 try:
                     short_check = self._timeout("quick_dom")
-                    if not await self.web_check(By.ID, "radio-buy-now-no", Is.SELECTED, timeout = short_check):
-                        await self.web_click(By.ID, "radio-buy-now-no", timeout = short_check)
+                    if not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = short_check):
+                        await self.web_click(By.ID, "ad-buy-now-false", timeout = short_check)
                 except TimeoutError:
                     pass  # nosec
         except TimeoutError as ex:
@@ -2184,6 +2177,21 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         dicts.save_dict(ad_file, ad_cfg_orig)
 
+    async def __react_input(self, element_id:str, value:str) -> None:
+        """Sets a React-controlled input value using the native setter to trigger onChange."""
+        await self.web_execute(
+            "(function(id,v){"
+            "var el=document.getElementById(id);"
+            "if(!el)return;"
+            "var tag=el.tagName.toLowerCase();"
+            "var proto=tag==='textarea'?window.HTMLTextAreaElement:window.HTMLInputElement;"
+            "var setter=Object.getOwnPropertyDescriptor(proto.prototype,'value').set;"
+            "setter.call(el,v);"
+            "el.dispatchEvent(new Event('input',{bubbles:true}));"
+            "el.dispatchEvent(new Event('change',{bubbles:true}));"
+            "})('" + element_id + "'," + json.dumps(value) + ")"
+        )
+
     async def __set_contact_fields(self, contact:Contact) -> None:
         #############################
         # set contact zipcode
@@ -2191,23 +2199,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if contact.zipcode:
             zipcode_set = True
             try:
-                zip_field = await self.web_find(By.ID, "ad-zip-code")
-                if zip_field is None:
-                    raise TimeoutError("ZIP input not found")
-                await zip_field.clear_input()
-            except TimeoutError:
-                # fall back to standard input below
-                pass
-            try:
-                await self.web_input(By.ID, "ad-zip-code", contact.zipcode)
-            except TimeoutError:
+                await self.__react_input("ad-zip-code", contact.zipcode)
+            except Exception:
                 LOG.warning("Could not set contact zipcode: %s", contact.zipcode)
                 zipcode_set = False
-            # Set city if location is specified
             if contact.location and zipcode_set:
                 try:
-                    await self.web_input(By.ID, "ad-city", contact.location)
-                except TimeoutError:
+                    await self.__react_input("ad-city", contact.location)
+                except Exception:
                     LOG.warning("Could not set contact location: %s", contact.location)
 
         #############################
@@ -2218,7 +2217,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if await self.web_check(By.ID, "ad-street", Is.DISABLED):
                     await self.web_click(By.ID, "ad-address-visibility")
                     await self.web_sleep()
-                await self.web_input(By.ID, "ad-street", contact.street)
+                await self.__react_input("ad-street", contact.street)
             except TimeoutError:
                 LOG.warning("Could not set contact street.")
 
@@ -2228,7 +2227,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if contact.name:
             try:
                 if not await self.web_check(By.ID, "ad-name", Is.READONLY):
-                    await self.web_input(By.ID, "ad-name", contact.name)
+                    await self.__react_input("ad-name", contact.name)
             except TimeoutError:
                 LOG.warning("Could not set contact name.")
 
@@ -2245,7 +2244,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     except TimeoutError:
                         # ignore
                         pass
-                    await self.web_input(By.ID, "ad-phone", contact.phone)
+                    await self.__react_input("ad-phone", contact.phone)
             except TimeoutError:
                 LOG.warning(
                     _(
@@ -2392,7 +2391,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         short_timeout = self._timeout("quick_dom")
         if ad_cfg.shipping_type == "PICKUP":
             try:
-                await self.web_click(By.ID, "radio-pickup")
+                await self.web_click(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg.shipping_options:
