@@ -1988,6 +1988,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # set category (before title to avoid form reset clearing title)
         #############################
         await self.__set_category(ad_cfg.category, ad_file)
+        await self.web_sleep()  # wait for category-dependent fields to render before setting attributes
 
         #############################
         # set special attributes
@@ -2106,7 +2107,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # submit
         #############################
         try:
-            await self.web_click(By.XPATH, "//button[contains(., 'Anzeige aufgeben')]")
+            # Edit page uses 'Änderungen speichern'; publish page uses 'Anzeige aufgeben'
+            await self.web_click(By.XPATH, "//button[contains(., 'Anzeige aufgeben') or contains(., 'Änderungen speichern')]")
             try:
                 await self.web_click(By.ID, "imprint-guidance-submit")
             except TimeoutError:
@@ -2203,17 +2205,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # set contact zipcode
         #############################
         if contact.zipcode:
-            zipcode_set = True
             try:
                 await self.__react_input("ad-zip-code", contact.zipcode)
-            except Exception:
-                LOG.warning("Could not set contact zipcode: %s", contact.zipcode)
-                zipcode_set = False
-            if contact.location and zipcode_set:
-                try:
-                    await self.__react_input("ad-city", contact.location)
-                except Exception:
-                    LOG.warning("Could not set contact location: %s", contact.location)
+            except Exception as ex:  # noqa: BLE001
+                LOG.warning("Could not set contact zipcode: %s (%s)", contact.zipcode, ex)
+        if contact.location:
+            try:
+                await self.__react_input("ad-city", contact.location)
+            except Exception as ex:  # noqa: BLE001
+                LOG.warning("Could not set contact location: %s (%s)", contact.location, ex)
 
         #############################
         # set contact street
@@ -2372,10 +2372,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     special_attr_elem = await self.web_find(By.ID, special_attribute_key)
                 except TimeoutError:
                     # New site dropped Solr type suffixes (_s, _i, _b, etc.) from element IDs — try without suffix
-                    stripped_key = re.sub(r'_[a-z]+$', '', special_attribute_key)
+                    stripped_key = re.sub(r"_[a-z]+$", "", special_attribute_key)
                     if stripped_key == special_attribute_key:
                         LOG.debug("Attribute field '%s' could not be found.", special_attribute_key)
-                        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
+                        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from None
                     try:
                         special_attr_elem = await self.web_find(By.ID, stripped_key)
                     except TimeoutError as ex:
@@ -2449,12 +2449,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg.shipping_options:
-            # Ensure shipping is enabled before opening the dialog
+            # Ensure shipping is enabled before opening the dialog (may already be selected)
             try:
                 await self.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
                 await self.web_sleep(500, 800)
             except TimeoutError:
-                pass
+                pass  # nosec — already selected or not present; proceed to open options dialog
             await self.web_click(By.ID, "ad-shipping-options")
 
             if mode == AdUpdateStrategy.MODIFY:
@@ -2486,12 +2486,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 is_commercial_shipping = True
             if not is_commercial_shipping:
                 try:
-                    # Ensure shipping is enabled before opening the dialog
+                    # Ensure shipping is enabled before opening the dialog (may already be selected)
                     try:
                         await self.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
                         await self.web_sleep(500, 800)
                     except TimeoutError:
-                        pass
+                        pass  # nosec — already selected or not present; proceed to open options dialog
                     # no options. only costs. Set custom shipping cost
                     await self.web_click(By.ID, "ad-shipping-options")
                     try:
