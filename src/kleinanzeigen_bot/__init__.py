@@ -1990,11 +1990,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         await self.__set_category(ad_cfg.category, ad_file)
 
         #############################
-        # set title
-        #############################
-        await self.__react_input("ad-title", ad_cfg.title)
-
-        #############################
         # set special attributes
         #############################
         await self.__set_special_attributes(ad_cfg)
@@ -2103,6 +2098,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         await self.check_and_wait_for_captcha(is_login_page = False)
 
         #############################
+        # set title (right before submit to prevent React re-render clearing it)
+        #############################
+        await self.__react_input("ad-title", ad_cfg.title)
+
+        #############################
         # submit
         #############################
         try:
@@ -2138,12 +2138,18 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 pass
 
             confirmation_timeout = self._timeout("publishing_confirmation")
-            await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = confirmation_timeout)
+
+            async def _check_confirmation_url() -> bool:
+                url = str(await self.web_execute("window.location.href"))
+                return "p-anzeige-aufgeben-bestaetigung.html?adId=" in url
+
+            await self.web_await(_check_confirmation_url, timeout = confirmation_timeout)
         except (TimeoutError, ProtocolException) as ex:
             raise PublishSubmissionUncertainError("submission may have succeeded before failure") from ex
 
-        # extract the ad id from the URL's query parameter
-        current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(self.page.url).query)
+        # extract the ad id from the URL's query parameter (use JS for fresh URL, not stale self.page.url)
+        current_url = str(await self.web_execute("window.location.href"))
+        current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(current_url).query)
         ad_id = int(current_url_query_params.get("adId", [])[0])
         ad_cfg_orig["id"] = ad_id
 
@@ -2307,7 +2313,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         try:
             # Click accept button
-            await self.web_click(By.XPATH, '//dialog//button[.//span[text()="Bestätigen"]]')
+            await self.web_click(By.XPATH, '//*[self::dialog or @role="dialog"]//button[.//span[text()="Bestätigen"]]')
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close condition dialog!")) from ex
 
@@ -2395,22 +2401,28 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg.shipping_options:
-            await self.web_click(By.XPATH, '//button//span[contains(., "Versandmethoden auswählen")]')
+            # Ensure shipping is enabled before opening the dialog
+            try:
+                await self.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
+                await self.web_sleep(500, 800)
+            except TimeoutError:
+                pass
+            await self.web_click(By.ID, "ad-shipping-options")
 
             if mode == AdUpdateStrategy.MODIFY:
                 try:
                     # when "Andere Versandmethoden" is not available, go back and start over new
-                    await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
+                    await self.web_find(By.XPATH, '//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
                 except TimeoutError:
-                    await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
+                    await self.web_click(By.XPATH, '//button[contains(., "Zurück")]')
 
                     # in some categories we need to go another dialog back
                     try:
-                        await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
+                        await self.web_find(By.XPATH, '//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
                     except TimeoutError:
-                        await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
+                        await self.web_click(By.XPATH, '//button[contains(., "Zurück")]')
 
-            await self.web_click(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]')
+            await self.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
             await self.__set_shipping_options(ad_cfg, mode)
         else:
             special_shipping_selector = '//select[contains(@id, ".versand_s")]'
@@ -2426,11 +2438,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 is_commercial_shipping = True
             if not is_commercial_shipping:
                 try:
+                    # Ensure shipping is enabled before opening the dialog
+                    try:
+                        await self.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
+                        await self.web_sleep(500, 800)
+                    except TimeoutError:
+                        pass
                     # no options. only costs. Set custom shipping cost
                     await self.web_click(By.ID, "ad-shipping-options")
                     try:
                         # when "Andere Versandmethoden" is not available, then we are already on the individual page
-                        await self.web_click(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]')
+                        await self.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
                     except TimeoutError:
                         # Dialog option not present; already on the individual shipping page.
                         pass
@@ -2447,7 +2465,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         await self.web_input(
                             By.ID, "ad-individual-shipping-price", str.replace(str(ad_cfg.shipping_costs), ".", ",")
                         )
-                    await self.web_click(By.XPATH, '//dialog//button[contains(., "Fertig")]')
+                    await self.web_click(By.XPATH, '//button[contains(., "Fertig")]')
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
                     raise TimeoutError(_("Unable to close shipping dialog!")) from ex
@@ -2495,7 +2513,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 await self.web_click(By.ID, f"radio-button-{shipping_radio_selector}")
                 to_be_clicked_shipping_packages = list(shipping_packages)
 
-            await self.web_click(By.XPATH, '//dialog//button[contains(., "Weiter")]')
+            await self.web_click(By.XPATH, '//*[self::dialog or @role="dialog"]//button[contains(., "Weiter")]')
 
             if mode == AdUpdateStrategy.MODIFY:
                 # in update mode we cannot rely on any information and have to (de-)select every package
@@ -2506,7 +2524,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.debug("Processing %d packages for size '%s'", len(selected_size_shipping_packages), shipping_size)
 
                 for shipping_package in selected_size_shipping_packages:
-                    shipping_package_xpath = f'//dialog//input[contains(@data-testid, "{shipping_package}")]'
+                    shipping_package_xpath = f'//*[self::dialog or @role="dialog"]//input[contains(@data-testid, "{shipping_package}")]'
                     shipping_package_checkbox = await self.web_find(By.XPATH, shipping_package_xpath)
                     shipping_package_checkbox_is_checked = hasattr(shipping_package_checkbox.attrs, "checked")
 
@@ -2526,12 +2544,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         await self.web_click(By.XPATH, shipping_package_xpath)
             else:
                 for shipping_package in to_be_clicked_shipping_packages:
-                    await self.web_click(By.XPATH, f'//dialog//input[contains(@data-testid, "{shipping_package}")]')
+                    await self.web_click(By.XPATH, f'//*[self::dialog or @role="dialog"]//input[contains(@data-testid, "{shipping_package}")]')
         except TimeoutError as ex:
             LOG.debug(ex, exc_info = True)
         try:
             # Click apply button
-            await self.web_click(By.XPATH, '//dialog//button[contains(., "Fertig")]')
+            await self.web_click(By.XPATH, '//*[self::dialog or @role="dialog"]//button[contains(., "Fertig")]')
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 
