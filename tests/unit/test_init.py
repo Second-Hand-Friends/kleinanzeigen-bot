@@ -3417,3 +3417,91 @@ class TestBuyNowRadioTimeout:
             if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"
         ]
         assert len(buy_now_click_calls) == 0, "web_click should not be called when already selected"
+
+
+class TestImageUploadProcessedMarkerFallback:
+    """Regression tests for image upload completion detection via hidden marker inputs."""
+
+    @pytest.mark.asyncio
+    async def test_upload_images_succeeds_with_hidden_markers_when_thumbnails_absent(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+    ) -> None:
+        """Hidden adImages markers should satisfy completion when thumbnail list is missing."""
+        image_a = tmp_path / "img_a.jpg"
+        image_b = tmp_path / "img_b.jpg"
+        image_a.write_bytes(b"")
+        image_b.write_bytes(b"")
+        ad_cfg = Ad.model_validate(base_ad_config | {"images": [str(image_a), str(image_b)]})
+
+        file_input = MagicMock()
+        file_input.send_file = AsyncMock()
+
+        marker_a = MagicMock()
+        marker_a.attrs.value = "https://img.example/a.jpg"
+        marker_b = MagicMock()
+        marker_b.attrs.value = "https://img.example/b.jpg"
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[MagicMock]:
+            if selector_type == By.CSS_SELECTOR and selector_value == "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)":
+                raise TimeoutError("no thumbnails")
+            if selector_type == By.CSS_SELECTOR and selector_value == "input[name^='adImages'][name$='.url']":
+                return [marker_a, marker_b]
+            return []
+
+        async def await_side_effect(condition:Callable[[], Awaitable[bool]], **_:Any) -> bool:
+            if await condition():
+                return True
+            raise TimeoutError("condition did not pass")
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = file_input),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_side_effect),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)
+
+        file_input.send_file.assert_any_await(str(image_a))
+        file_input.send_file.assert_any_await(str(image_b))
+
+    @pytest.mark.asyncio
+    async def test_upload_images_timeout_reports_processed_marker_count(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+    ) -> None:
+        """Timeout message should include processed count derived from hidden markers."""
+        image_a = tmp_path / "img_a.jpg"
+        image_b = tmp_path / "img_b.jpg"
+        image_a.write_bytes(b"")
+        image_b.write_bytes(b"")
+        ad_cfg = Ad.model_validate(base_ad_config | {"images": [str(image_a), str(image_b)]})
+
+        file_input = MagicMock()
+        file_input.send_file = AsyncMock()
+
+        marker_a = MagicMock()
+        marker_a.attrs.value = "https://img.example/a.jpg"
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[MagicMock]:
+            if selector_type == By.CSS_SELECTOR and selector_value == "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)":
+                raise TimeoutError("no thumbnails")
+            if selector_type == By.CSS_SELECTOR and selector_value == "input[name^='adImages'][name$='.url']":
+                return [marker_a]
+            return []
+
+        async def await_timeout(*_:Any, **__:Any) -> None:
+            raise TimeoutError("Image upload timeout exceeded")
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = file_input),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_timeout),
+            pytest.raises(TimeoutError, match = r"Expected 2, found 1 processed images\.$"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)
