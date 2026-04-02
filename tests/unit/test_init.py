@@ -2591,6 +2591,8 @@ class TestKleinanzeigenBotShippingOptions:
         async def mock_web_execute(script:str) -> Any:
             if script == "document.body.scrollHeight":
                 return 0  # Return integer to prevent scrolling loop
+            if "window.location.href" in script:
+                return test_bot.page.url  # Return confirmation URL for ad_id extraction
             return None
 
         # Create mock elements
@@ -2630,7 +2632,7 @@ class TestKleinanzeigenBotShippingOptions:
                     return shipping_form_elem
                 if selector_type == By.ID and selector_value.startswith("radio-button-"):
                     return shipping_size_radio
-                if selector_value == "postad-category-path":
+                if selector_value == "ad-category-path":
                     return category_path_elem
                 return None
 
@@ -2725,6 +2727,12 @@ class TestKleinanzeigenBotShippingOptions:
         with patch("kleinanzeigen_bot.apply_auto_price_reduction") as mock_apply:
             # Mock other dependencies
             mock_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
+
+            async def mock_web_execute_price_reduction(script:str) -> Any:
+                if "window.location.href" in script:
+                    return "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+                return mock_response
+
             with (
                 patch.object(test_bot, "web_find", new_callable = AsyncMock),
                 patch.object(test_bot, "web_input", new_callable = AsyncMock),
@@ -2734,7 +2742,7 @@ class TestKleinanzeigenBotShippingOptions:
                 patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
                 patch.object(test_bot, "web_await", new_callable = AsyncMock),
                 patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-                patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = mock_response),
+                patch.object(test_bot, "web_execute", side_effect = mock_web_execute_price_reduction),
                 patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = mock_response),
                 patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
                 patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
@@ -2853,6 +2861,7 @@ class TestShippingSelectorTimeout:
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
 
@@ -3274,7 +3283,7 @@ class TestBuyNowRadioTimeout:
         Args:
             test_bot: The bot instance to patch methods on.
             mock_page: Mock page object to assign to test_bot.page.
-            check_side_effect: Async function defining web_check behavior for radio-buy-now-no.
+            check_side_effect: Async function defining web_check behavior for ad-buy-now-false.
 
         Yields:
             Tuple of (mock_check, mock_click) for assertions in the test.
@@ -3287,6 +3296,11 @@ class TestBuyNowRadioTimeout:
                 raise TimeoutError("no payment form")
             return MagicMock()
 
+        async def execute_side_effect(script:str) -> Any:
+            if "window.location.href" in script:
+                return test_bot.page.url
+            return None
+
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
@@ -3296,7 +3310,7 @@ class TestBuyNowRadioTimeout:
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
             patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = check_side_effect) as mock_check,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", side_effect = execute_side_effect),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(test_bot, "_KleinanzeigenBot__set_contact_fields", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
@@ -3307,12 +3321,12 @@ class TestBuyNowRadioTimeout:
             yield mock_check, mock_click
 
     def _assert_quick_dom_timeout_for_buy_now_check(self, mock_check:MagicMock, test_bot:KleinanzeigenBot) -> None:
-        """Assert that web_check was called with quick_dom timeout for radio-buy-now-no."""
+        """Assert that web_check was called with quick_dom timeout for ad-buy-now-false."""
         buy_now_check_calls = [
             c for c in mock_check.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "radio-buy-now-no"
+            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"
         ]
-        assert len(buy_now_check_calls) == 1, "web_check should be called once for radio-buy-now-no"
+        assert len(buy_now_check_calls) == 1, "web_check should be called once for ad-buy-now-false"
         assert buy_now_check_calls[0].kwargs["timeout"] == test_bot._timeout("quick_dom")
 
     @pytest.mark.asyncio
@@ -3323,13 +3337,13 @@ class TestBuyNowRadioTimeout:
         mock_page:MagicMock,
         tmp_path:Path,
     ) -> None:
-        """When radio-buy-now-no is absent, web_check raises TimeoutError which must be swallowed."""
+        """When ad-buy-now-false is absent, web_check raises TimeoutError which must be swallowed."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP", "price_type": "FIXED", "price": 100})
         ad_cfg_orig = copy.deepcopy(base_ad_config)
         ad_file = str(tmp_path / "ad.yaml")
 
         async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
-            if selector_type == By.ID and selector_value == "radio-buy-now-no":
+            if selector_type == By.ID and selector_value == "ad-buy-now-false":
                 raise TimeoutError("radio not found")
             return False
 
@@ -3338,10 +3352,10 @@ class TestBuyNowRadioTimeout:
 
         self._assert_quick_dom_timeout_for_buy_now_check(mock_check, test_bot)
 
-        # web_click must NOT have been called for radio-buy-now-no (TimeoutError was swallowed)
+        # web_click must NOT have been called for ad-buy-now-false (TimeoutError was swallowed)
         buy_now_click_calls = [
             c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "radio-buy-now-no"
+            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"
         ]
         assert len(buy_now_click_calls) == 0, "web_click should not be called when TimeoutError occurs"
 
@@ -3353,14 +3367,14 @@ class TestBuyNowRadioTimeout:
         mock_page:MagicMock,
         tmp_path:Path,
     ) -> None:
-        """When radio-buy-now-no is present but not selected, it must be clicked with quick_dom timeout."""
+        """When ad-buy-now-false is present but not selected, it must be clicked with quick_dom timeout."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP", "price_type": "FIXED", "price": 100})
         ad_cfg_orig = copy.deepcopy(base_ad_config)
         ad_file = str(tmp_path / "ad.yaml")
 
         async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
-            # Return False for radio-buy-now-no (exists but not selected)
-            return selector_type != By.ID or selector_value != "radio-buy-now-no"
+            # Return False for ad-buy-now-false (exists but not selected)
+            return selector_type != By.ID or selector_value != "ad-buy-now-false"
 
         with self._mock_publish_ad_dependencies(test_bot, mock_page, check_side_effect) as (mock_check, mock_click):
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
@@ -3370,7 +3384,7 @@ class TestBuyNowRadioTimeout:
         # web_click must have been called with quick_dom timeout
         buy_now_click_calls = [
             c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "radio-buy-now-no"
+            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"
         ]
         assert len(buy_now_click_calls) == 1, "web_click should be called once"
         assert buy_now_click_calls[0].kwargs["timeout"] == test_bot._timeout("quick_dom")
@@ -3383,14 +3397,14 @@ class TestBuyNowRadioTimeout:
         mock_page:MagicMock,
         tmp_path:Path,
     ) -> None:
-        """When radio-buy-now-no is already selected, web_click should not be called."""
+        """When ad-buy-now-false is already selected, web_click should not be called."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP", "price_type": "FIXED", "price": 100})
         ad_cfg_orig = copy.deepcopy(base_ad_config)
         ad_file = str(tmp_path / "ad.yaml")
 
         async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
-            # Return True for radio-buy-now-no (already selected)
-            return selector_type == By.ID and selector_value == "radio-buy-now-no"
+            # Return True for ad-buy-now-false (already selected)
+            return selector_type == By.ID and selector_value == "ad-buy-now-false"
 
         with self._mock_publish_ad_dependencies(test_bot, mock_page, check_side_effect) as (mock_check, mock_click):
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
@@ -3400,6 +3414,94 @@ class TestBuyNowRadioTimeout:
         # web_click must NOT have been called (already selected)
         buy_now_click_calls = [
             c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "radio-buy-now-no"
+            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"
         ]
         assert len(buy_now_click_calls) == 0, "web_click should not be called when already selected"
+
+
+class TestImageUploadProcessedMarkerFallback:
+    """Regression tests for image upload completion detection via hidden marker inputs."""
+
+    @pytest.mark.asyncio
+    async def test_upload_images_succeeds_with_hidden_markers_when_thumbnails_absent(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+    ) -> None:
+        """Hidden adImages markers should satisfy completion when thumbnail list is missing."""
+        image_a = tmp_path / "img_a.jpg"
+        image_b = tmp_path / "img_b.jpg"
+        image_a.write_bytes(b"")
+        image_b.write_bytes(b"")
+        ad_cfg = Ad.model_validate(base_ad_config | {"images": [str(image_a), str(image_b)]})
+
+        file_input = MagicMock()
+        file_input.send_file = AsyncMock()
+
+        marker_a = MagicMock()
+        marker_a.attrs.value = "https://img.example/a.jpg"
+        marker_b = MagicMock()
+        marker_b.attrs.value = "https://img.example/b.jpg"
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[MagicMock]:
+            if selector_type == By.CSS_SELECTOR and selector_value == "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)":
+                raise TimeoutError("no thumbnails")
+            if selector_type == By.CSS_SELECTOR and selector_value == "input[name^='adImages'][name$='.url']":
+                return [marker_a, marker_b]
+            return []
+
+        async def await_side_effect(condition:Callable[[], Awaitable[bool]], **_:Any) -> bool:
+            if await condition():
+                return True
+            raise TimeoutError("condition did not pass")
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = file_input),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_side_effect),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)
+
+        file_input.send_file.assert_any_await(str(image_a))
+        file_input.send_file.assert_any_await(str(image_b))
+
+    @pytest.mark.asyncio
+    async def test_upload_images_timeout_reports_processed_marker_count(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+    ) -> None:
+        """Timeout message should include processed count derived from hidden markers."""
+        image_a = tmp_path / "img_a.jpg"
+        image_b = tmp_path / "img_b.jpg"
+        image_a.write_bytes(b"")
+        image_b.write_bytes(b"")
+        ad_cfg = Ad.model_validate(base_ad_config | {"images": [str(image_a), str(image_b)]})
+
+        file_input = MagicMock()
+        file_input.send_file = AsyncMock()
+
+        marker_a = MagicMock()
+        marker_a.attrs.value = "https://img.example/a.jpg"
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[MagicMock]:
+            if selector_type == By.CSS_SELECTOR and selector_value == "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)":
+                raise TimeoutError("no thumbnails")
+            if selector_type == By.CSS_SELECTOR and selector_value == "input[name^='adImages'][name$='.url']":
+                return [marker_a]
+            return []
+
+        async def await_timeout(*_:Any, **__:Any) -> None:
+            raise TimeoutError("Image upload timeout exceeded")
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = file_input),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_timeout),
+            pytest.raises(TimeoutError, match = r"Expected 2, found 1 processed images\.$"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)

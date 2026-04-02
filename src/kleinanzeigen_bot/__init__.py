@@ -1982,17 +1982,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             YAML().dump(ad_cfg.model_dump(), sys.stdout)
 
         if ad_cfg.type == "WANTED":
-            await self.web_click(By.ID, "adType2")
+            await self.web_click(By.ID, "ad-type-WANTED")
 
         #############################
         # set category (before title to avoid form reset clearing title)
         #############################
         await self.__set_category(ad_cfg.category, ad_file)
-
-        #############################
-        # set title
-        #############################
-        await self.web_input(By.ID, "postad-title", ad_cfg.title)
+        await self.web_sleep()  # wait for category-dependent fields to render before setting attributes
 
         #############################
         # set special attributes
@@ -2022,20 +2018,16 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         price_type = ad_cfg.price_type
         if price_type != "NOT_APPLICABLE":
-            try:
-                await self.web_select(By.CSS_SELECTOR, "select#price-type-react, select#micro-frontend-price-type, select#priceType", price_type)
-            except TimeoutError:
-                # Price type selector not present on this page variant.
-                pass
-            if ad_cfg.price:
-                if mode == AdUpdateStrategy.MODIFY:
-                    # Clear the price field first to prevent concatenation of old and new values
-                    # This is needed because some input fields don't clear properly with just clear_input()
-                    price_field = await self.web_find(By.CSS_SELECTOR, "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price")
-                    await price_field.clear_input()
-                    await price_field.send_keys("")  # Ensure field is completely empty
-                    await self.web_sleep(500)  # Brief pause to ensure clearing is complete
-                await self.web_input(By.CSS_SELECTOR, "input#post-ad-frontend-price, input#micro-frontend-price, input#pstad-price", str(ad_cfg.price))
+            price_type_options = {"FIXED": 0, "NEGOTIABLE": 1, "GIVE_AWAY": 2}
+            option_idx = price_type_options.get(price_type)
+            if option_idx is not None:
+                try:
+                    await self.web_click(By.ID, "ad-price-type")
+                    await self.web_click(By.ID, f"ad-price-type-menu-option-{option_idx}")
+                except TimeoutError as ex:
+                    raise TimeoutError(_("Failed to set price type '%s'") % price_type) from ex
+            if ad_cfg.price is not None:
+                await self.__react_input("ad-price-amount", str(ad_cfg.price))
 
         #############################
         # set sell_directly
@@ -2044,16 +2036,16 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         try:
             if ad_cfg.shipping_type == "SHIPPING":
                 if sell_directly and ad_cfg.shipping_options and price_type in {"FIXED", "NEGOTIABLE"}:
-                    if not await self.web_check(By.ID, "radio-buy-now-yes", Is.SELECTED):
-                        await self.web_click(By.ID, "radio-buy-now-yes")
-                elif not await self.web_check(By.ID, "radio-buy-now-no", Is.SELECTED):
-                    await self.web_click(By.ID, "radio-buy-now-no")
+                    if not await self.web_check(By.ID, "ad-buy-now-true", Is.SELECTED):
+                        await self.web_click(By.ID, "ad-buy-now-true")
+                elif not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED):
+                    await self.web_click(By.ID, "ad-buy-now-false")
             else:
                 # For PICKUP/other types: always opt out of buy-now if the radio exists
                 try:
                     short_check = self._timeout("quick_dom")
-                    if not await self.web_check(By.ID, "radio-buy-now-no", Is.SELECTED, timeout = short_check):
-                        await self.web_click(By.ID, "radio-buy-now-no", timeout = short_check)
+                    if not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = short_check):
+                        await self.web_click(By.ID, "ad-buy-now-false", timeout = short_check)
                 except TimeoutError:
                     pass  # nosec
         except TimeoutError as ex:
@@ -2063,7 +2055,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # set description
         #############################
         description = self.__get_description(ad_cfg, with_affixes = True)
-        await self.web_execute("document.querySelector('#pstad-descrptn').value = `" + description.replace("`", "'") + "`")
+        await self.__react_input("ad-description", description)
 
         await self.__set_contact_fields(ad_cfg.contact)
 
@@ -2099,15 +2091,23 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         await self.check_and_wait_for_captcha(is_login_page = False)
 
         #############################
+        # set title (right before submit to prevent React re-render clearing it)
+        #############################
+        await self.__react_input("ad-title", ad_cfg.title)
+
+        #############################
         # submit
         #############################
+        # Click is retryable — no submission can have occurred before this point.
+        # Edit page uses 'Änderungen speichern'; publish page uses 'Anzeige aufgeben'
+        await self.web_click(By.XPATH, "//button[contains(., 'Anzeige aufgeben') or contains(., 'Änderungen speichern')]")
+
+        # Everything after the first click is uncertain: the ad may already have been submitted.
         try:
             try:
-                await self.web_click(By.ID, "pstad-submit")
+                await self.web_click(By.ID, "imprint-guidance-submit", timeout = self._timeout("quick_dom"))
             except TimeoutError:
-                # https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/40
-                await self.web_click(By.XPATH, "//fieldset[@id='postad-publish']//*[contains(., 'Anzeige aufgeben')]")
-                await self.web_click(By.ID, "imprint-guidance-submit")
+                pass  # nosec — imprint overlay not shown
 
             # check for no image question
             try:
@@ -2115,8 +2115,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if not ad_cfg.images and await self.web_check(By.XPATH, image_hint_xpath, Is.DISPLAYED):
                     await self.web_click(By.XPATH, image_hint_xpath)
             except TimeoutError:
-                # Image hint not shown; continue publish flow.
-                pass  # nosec
+                pass  # nosec — image hint not shown
 
             #############################
             # wait for payment form if commercial account is used
@@ -2135,12 +2134,18 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 pass
 
             confirmation_timeout = self._timeout("publishing_confirmation")
-            await self.web_await(lambda: "p-anzeige-aufgeben-bestaetigung.html?adId=" in self.page.url, timeout = confirmation_timeout)
+
+            async def _check_confirmation_url() -> bool:
+                url = str(await self.web_execute("window.location.href"))
+                return "p-anzeige-aufgeben-bestaetigung.html?adId=" in url
+
+            await self.web_await(_check_confirmation_url, timeout = confirmation_timeout)
         except (TimeoutError, ProtocolException) as ex:
             raise PublishSubmissionUncertainError("submission may have succeeded before failure") from ex
 
-        # extract the ad id from the URL's query parameter
-        current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(self.page.url).query)
+        # extract the ad id from the URL's query parameter (use JS for fresh URL, not stale self.page.url)
+        current_url = str(await self.web_execute("window.location.href"))
+        current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(current_url).query)
         ad_id = int(current_url_query_params.get("adId", [])[0])
         ad_cfg_orig["id"] = ad_id
 
@@ -2174,56 +2179,48 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         dicts.save_dict(ad_file, ad_cfg_orig)
 
+    async def __react_input(self, element_id:str, value:str) -> None:
+        """Sets a React-controlled input value using the native setter to trigger onChange."""
+        await self.web_find(By.ID, element_id)  # raises TimeoutError if element is absent
+        js_element_id = json.dumps(element_id)
+        js_value = json.dumps(value)
+        await self.web_execute(
+            f"(function(id,v){{"
+            "var el=document.getElementById(id);"
+            "if(!el)return;"
+            "var tag=el.tagName.toLowerCase();"
+            "var proto=tag==='textarea'?window.HTMLTextAreaElement:window.HTMLInputElement;"
+            "var setter=Object.getOwnPropertyDescriptor(proto.prototype,'value').set;"
+            "setter.call(el,v);"
+            "el.dispatchEvent(new Event('input',{bubbles:true}));"
+            "el.dispatchEvent(new Event('change',{bubbles:true}));"
+            f"}})({js_element_id},{js_value})"
+        )
+
     async def __set_contact_fields(self, contact:Contact) -> None:
         #############################
         # set contact zipcode
         #############################
         if contact.zipcode:
-            zipcode_set = True
             try:
-                zip_field = await self.web_find(By.ID, "pstad-zip")
-                if zip_field is None:
-                    raise TimeoutError("ZIP input not found")
-                await zip_field.clear_input()
-            except TimeoutError:
-                # fall back to standard input below
-                pass
+                await self.__react_input("ad-zip-code", str(contact.zipcode))
+            except TimeoutError as ex:
+                LOG.warning("Could not set contact zipcode: %s (%s)", contact.zipcode, ex)
+        if contact.location:
             try:
-                await self.web_input(By.ID, "pstad-zip", contact.zipcode)
-            except TimeoutError:
-                LOG.warning("Could not set contact zipcode: %s", contact.zipcode)
-                zipcode_set = False
-            # Set city if location is specified
-            if contact.location and zipcode_set:
-                try:
-                    options = await self.web_find_all(By.CSS_SELECTOR, "#pstad-citychsr option")
-
-                    found = False
-                    for option in options:
-                        opt_text = option.text.strip()
-                        target = contact.location.strip()
-                        if opt_text == target:
-                            await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
-                            found = True
-                            break
-                        if " - " in opt_text and opt_text.split(" - ", 1)[1] == target:
-                            await self.web_select(By.ID, "pstad-citychsr", option.attrs.value)
-                            found = True
-                            break
-                    if not found:
-                        LOG.warning("No city dropdown option matched location: %s", contact.location)
-                except TimeoutError:
-                    LOG.warning("Could not set contact location: %s", contact.location)
+                await self.__react_input("ad-city", contact.location)
+            except TimeoutError as ex:
+                LOG.warning("Could not set contact location: %s (%s)", contact.location, ex)
 
         #############################
         # set contact street
         #############################
         if contact.street:
             try:
-                if await self.web_check(By.ID, "pstad-street", Is.DISABLED):
-                    await self.web_click(By.ID, "addressVisibility")
+                if await self.web_check(By.ID, "ad-street", Is.DISABLED):
+                    await self.web_click(By.ID, "ad-address-visibility")
                     await self.web_sleep()
-                await self.web_input(By.ID, "pstad-street", contact.street)
+                await self.__react_input("ad-street", contact.street)
             except TimeoutError:
                 LOG.warning("Could not set contact street.")
 
@@ -2232,8 +2229,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         if contact.name:
             try:
-                if not await self.web_check(By.ID, "postad-contactname", Is.READONLY):
-                    await self.web_input(By.ID, "postad-contactname", contact.name)
+                if not await self.web_check(By.ID, "ad-name", Is.READONLY):
+                    await self.__react_input("ad-name", contact.name)
             except TimeoutError:
                 LOG.warning("Could not set contact name.")
 
@@ -2242,15 +2239,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         if contact.phone:
             try:
-                if await self.web_check(By.ID, "postad-phonenumber", Is.DISPLAYED):
+                if await self.web_check(By.ID, "ad-phone", Is.DISPLAYED):
                     try:
-                        if await self.web_check(By.ID, "postad-phonenumber", Is.DISABLED):
-                            await self.web_click(By.ID, "phoneNumberVisibility")
+                        if await self.web_check(By.ID, "ad-phone", Is.DISABLED):
+                            await self.web_click(By.ID, "ad-phone-visibility")
                             await self.web_sleep()
                     except TimeoutError:
                         # ignore
                         pass
-                    await self.web_input(By.ID, "postad-phonenumber", contact.phone)
+                    await self.__react_input("ad-phone", contact.phone)
             except TimeoutError:
                 LOG.warning(
                     _(
@@ -2313,17 +2310,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         try:
             # Click accept button
-            await self.web_click(By.XPATH, '//dialog//button[.//span[text()="Bestätigen"]]')
+            await self.web_click(By.XPATH, '//*[self::dialog or @role="dialog"]//button[.//span[text()="Bestätigen"]]')
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close condition dialog!")) from ex
 
     async def __set_category(self, category:str | None, ad_file:str) -> None:
         # click on something to trigger automatic category detection
-        await self.web_click(By.ID, "pstad-descrptn")
+        await self.web_click(By.ID, "ad-description")
 
         is_category_auto_selected = False
         try:
-            if await self.web_text(By.ID, "postad-category-path"):
+            if await self.web_text(By.ID, "ad-category-path"):
                 is_category_auto_selected = True
         except TimeoutError:
             # Category auto-selection indicator not available within timeout.
@@ -2331,12 +2328,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         if category:
             await self.web_sleep()  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
-            await self.web_click(By.ID, "pstad-lnk-chngeCtgry")
-            await self.web_find(By.ID, "postad-step1-sbmt")
+            await self.web_click(By.XPATH, "//a[contains(., 'Kategorie')] | //button[contains(., 'Kategorie')]")
+            await self.web_find(By.XPATH, "//button[contains(., 'Weiter')]")
 
             category_url = f"{self.root_url}/p-kategorie-aendern.html#?path={category}"
             await self.web_open(category_url)
-            await self.web_click(By.XPATH, "//*[@id='postad-step1-sbmt']/button")
+            await self.web_click(By.XPATH, "//button[contains(., 'Weiter')]")
         else:
             ensure(is_category_auto_selected, f"No category specified in [{ad_file}] and automatic category detection failed")
 
@@ -2370,9 +2367,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # Trying to find element by ID instead cause sometimes there is NO name attribute...
                 try:
                     special_attr_elem = await self.web_find(By.ID, special_attribute_key)
-                except TimeoutError as ex:
-                    LOG.debug("Attribute field '%s' could not be found.", special_attribute_key)
-                    raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
+                except TimeoutError:
+                    # New site dropped Solr type suffixes (_s, _i, _b, etc.) from element IDs — try without suffix
+                    stripped_key = re.sub(r"_[a-z]+$", "", special_attribute_key)
+                    if stripped_key == special_attribute_key:
+                        LOG.debug("Attribute field '%s' could not be found.", special_attribute_key)
+                        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from None
+                    try:
+                        special_attr_elem = await self.web_find(By.ID, stripped_key)
+                    except TimeoutError as ex:
+                        LOG.debug("Attribute field '%s' could not be found.", special_attribute_key)
+                        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
 
             try:
                 elem_id:str = str(special_attr_elem.attrs.id)
@@ -2382,6 +2387,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 elif special_attr_elem.attrs.type == "checkbox":
                     LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
                     await self.web_click(By.ID, elem_id)
+                elif special_attr_elem.local_name == "button" and special_attr_elem.attrs.get("role") == "combobox":
+                    LOG.debug("Attribute field '%s' seems to be a button combobox (click-to-open dropdown)...", special_attribute_key)
+                    await self.__select_button_combobox(elem_id, special_attribute_value_str)
                 elif special_attr_elem.attrs.type == "text" and special_attr_elem.attrs.get("role") == "combobox":
                     LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
                     await self.web_select_combobox(By.ID, elem_id, special_attribute_value_str)
@@ -2393,30 +2401,73 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
             LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
 
+    async def __select_button_combobox(self, elem_id:str, value:str) -> None:
+        """Select an option from a <button role="combobox"> dropdown by its API value.
+
+        Clicks the button to open the listbox, reads the options data from the React fiber
+        (which maps API values to display labels), and clicks the matching option.
+        """
+        await self.web_click(By.ID, elem_id)
+        listbox_id = f"{elem_id}-menu"
+        await self.web_find(By.ID, listbox_id)
+        js_btn_id = json.dumps(elem_id)
+        js_listbox_id = json.dumps(listbox_id)
+        js_value = json.dumps(value)
+        ok = await self.web_execute(f"""(function() {{
+            const listbox = document.getElementById({js_listbox_id});
+            if (!listbox) return false;
+            const liOptions = Array.from(listbox.querySelectorAll('[role="option"]'));
+            const btnEl = document.getElementById({js_btn_id});
+            if (!btnEl) return false;
+            const fiberKey = Object.keys(btnEl).find(k => k.startsWith('__reactFiber'));
+            let fiber = fiberKey ? btnEl[fiberKey] : null;
+            for (let i = 0; i < 20 && fiber; i++, fiber = fiber.return) {{
+                if (fiber.memoizedProps && fiber.memoizedProps.options) {{
+                    const optionsData = fiber.memoizedProps.options;
+                    for (let j = 0; j < optionsData.length; j++) {{
+                        if (optionsData[j].value === {js_value} && liOptions[j]) {{
+                            liOptions[j].click();
+                            return true;
+                        }}
+                    }}
+                    return false;
+                }}
+            }}
+            return false;
+        }})()""")
+        if not ok:
+            raise TimeoutError(_("Option '%(value)s' not found in button combobox '%(id)s'") % {"value": value, "id": elem_id})
+
     async def __set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         short_timeout = self._timeout("quick_dom")
         if ad_cfg.shipping_type == "PICKUP":
             try:
-                await self.web_click(By.ID, "radio-pickup")
+                await self.web_click(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
         elif ad_cfg.shipping_options:
-            await self.web_click(By.XPATH, '//button//span[contains(., "Versandmethoden auswählen")]')
+            # Ensure shipping is enabled before opening the dialog (may already be selected)
+            try:
+                await self.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
+                await self.web_sleep(500, 800)
+            except TimeoutError as ex:
+                LOG.debug("Shipping enabled toggle not found before options dialog: %s", ex)
+            await self.web_click(By.ID, "ad-shipping-options")
 
             if mode == AdUpdateStrategy.MODIFY:
                 try:
                     # when "Andere Versandmethoden" is not available, go back and start over new
-                    await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
+                    await self.web_find(By.XPATH, '//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
                 except TimeoutError:
-                    await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
+                    await self.web_click(By.XPATH, '//button[contains(., "Zurück")]')
 
                     # in some categories we need to go another dialog back
                     try:
-                        await self.web_find(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
+                        await self.web_find(By.XPATH, '//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
                     except TimeoutError:
-                        await self.web_click(By.XPATH, '//dialog//button[contains(., "Zurück")]')
+                        await self.web_click(By.XPATH, '//button[contains(., "Zurück")]')
 
-            await self.web_click(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]')
+            await self.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
             await self.__set_shipping_options(ad_cfg, mode)
         else:
             special_shipping_selector = '//select[contains(@id, ".versand_s")]'
@@ -2432,28 +2483,34 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 is_commercial_shipping = True
             if not is_commercial_shipping:
                 try:
+                    # Ensure shipping is enabled before opening the dialog (may already be selected)
+                    try:
+                        await self.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
+                        await self.web_sleep(500, 800)
+                    except TimeoutError as ex:
+                        LOG.debug("Shipping enabled toggle not found before options dialog: %s", ex)
                     # no options. only costs. Set custom shipping cost
-                    await self.web_click(By.XPATH, '//button//span[contains(., "Versandmethoden auswählen")]')
+                    await self.web_click(By.ID, "ad-shipping-options")
                     try:
                         # when "Andere Versandmethoden" is not available, then we are already on the individual page
-                        await self.web_click(By.XPATH, '//dialog//button[contains(., "Andere Versandmethoden")]')
+                        await self.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
                     except TimeoutError:
                         # Dialog option not present; already on the individual shipping page.
                         pass
 
                     try:
-                        # only click on "Individueller Versand" when "IndividualShippingInput" is not available, otherwise its already checked
+                        # only click on "Individueller Versand" when the price input is not available, otherwise its already checked
                         # (important for mode = UPDATE)
-                        await self.web_find(By.XPATH, '//input[contains(@placeholder, "Versandkosten (optional)")]', timeout = short_timeout)
+                        await self.web_find(By.ID, "ad-individual-shipping-price", timeout = short_timeout)
                     except TimeoutError:
                         # Input not visible yet; click the individual shipping option.
-                        await self.web_click(By.XPATH, '//*[contains(@id, "INDIVIDUAL") and contains(@data-testid, "Individueller Versand")]')
+                        await self.web_click(By.ID, "ad-individual-shipping-checkbox-control")
 
                     if ad_cfg.shipping_costs is not None:
                         await self.web_input(
-                            By.XPATH, '//input[contains(@placeholder, "Versandkosten (optional)")]', str.replace(str(ad_cfg.shipping_costs), ".", ",")
+                            By.ID, "ad-individual-shipping-price", str.replace(str(ad_cfg.shipping_costs), ".", ",")
                         )
-                    await self.web_click(By.XPATH, '//dialog//button[contains(., "Fertig")]')
+                    await self.web_click(By.XPATH, '//button[contains(., "Fertig")]')
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
                     raise TimeoutError(_("Unable to close shipping dialog!")) from ex
@@ -2501,7 +2558,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 await self.web_click(By.ID, f"radio-button-{shipping_radio_selector}")
                 to_be_clicked_shipping_packages = list(shipping_packages)
 
-            await self.web_click(By.XPATH, '//dialog//button[contains(., "Weiter")]')
+            await self.web_click(By.XPATH, '//*[self::dialog or @role="dialog"]//button[contains(., "Weiter")]')
 
             if mode == AdUpdateStrategy.MODIFY:
                 # in update mode we cannot rely on any information and have to (de-)select every package
@@ -2512,7 +2569,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.debug("Processing %d packages for size '%s'", len(selected_size_shipping_packages), shipping_size)
 
                 for shipping_package in selected_size_shipping_packages:
-                    shipping_package_xpath = f'//dialog//input[contains(@data-testid, "{shipping_package}")]'
+                    shipping_package_xpath = f'//*[self::dialog or @role="dialog"]//input[contains(@data-testid, "{shipping_package}")]'
                     shipping_package_checkbox = await self.web_find(By.XPATH, shipping_package_xpath)
                     shipping_package_checkbox_is_checked = hasattr(shipping_package_checkbox.attrs, "checked")
 
@@ -2532,12 +2589,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         await self.web_click(By.XPATH, shipping_package_xpath)
             else:
                 for shipping_package in to_be_clicked_shipping_packages:
-                    await self.web_click(By.XPATH, f'//dialog//input[contains(@data-testid, "{shipping_package}")]')
+                    await self.web_click(By.XPATH, f'//*[self::dialog or @role="dialog"]//input[contains(@data-testid, "{shipping_package}")]')
         except TimeoutError as ex:
             LOG.debug(ex, exc_info = True)
         try:
             # Click apply button
-            await self.web_click(By.XPATH, '//dialog//button[contains(., "Fertig")]')
+            await self.web_click(By.XPATH, '//*[self::dialog or @role="dialog"]//button[contains(., "Fertig")]')
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 
@@ -2556,36 +2613,40 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Wait for all images to be processed and thumbnails to appear
         expected_count = len(ad_cfg.images)
         LOG.info(" -> waiting for %s to be processed...", pluralize("image", ad_cfg.images))
+        thumbnail_selector = "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)"
+        hidden_marker_selector = "input[name^='adImages'][name$='.url']"
+
+        async def count_processed_images() -> int:
+            thumbnail_count = 0
+            marker_count = 0
+
+            try:
+                thumbnails = await self.web_find_all(By.CSS_SELECTOR, thumbnail_selector, timeout = self._timeout("quick_dom"))
+                thumbnail_count = len(thumbnails)
+            except TimeoutError:
+                thumbnail_count = 0
+
+            try:
+                markers = await self.web_find_all(By.CSS_SELECTOR, hidden_marker_selector, timeout = self._timeout("quick_dom"))
+                marker_count = sum(1 for marker in markers if str(getattr(marker.attrs, "value", "") or "").strip())
+            except TimeoutError:
+                marker_count = 0
+
+            return max(thumbnail_count, marker_count)
 
         async def check_thumbnails_uploaded() -> bool:
-            try:
-                thumbnails = await self.web_find_all(
-                    By.CSS_SELECTOR,
-                    "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)",
-                    timeout = self._timeout("quick_dom"),  # Fast timeout for polling
-                )
-                current_count = len(thumbnails)
-                if current_count < expected_count:
-                    LOG.debug(" -> %d of %d images processed", current_count, expected_count)
-                return current_count == expected_count
-            except TimeoutError:
-                # No thumbnails found yet, continue polling
-                return False
+            current_count = await count_processed_images()
+            if current_count < expected_count:
+                LOG.debug(" -> %d of %d images processed", current_count, expected_count)
+            return current_count >= expected_count
 
         try:
             await self.web_await(check_thumbnails_uploaded, timeout = self._timeout("image_upload"), timeout_error_message = _("Image upload timeout exceeded"))
         except TimeoutError as ex:
             # Get current count for better error message
-            try:
-                thumbnails = await self.web_find_all(
-                    By.CSS_SELECTOR, "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)", timeout = self._timeout("quick_dom")
-                )
-                current_count = len(thumbnails)
-            except TimeoutError:
-                # Still no thumbnails after full timeout
-                current_count = 0
+            current_count = await count_processed_images()
             raise TimeoutError(
-                _("Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d thumbnails.")
+                _("Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d processed images.")
                 % {"expected": expected_count, "found": current_count}
             ) from ex
 

@@ -200,6 +200,7 @@ kleinanzeigen_bot/__init__.py:
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
     "Updating ad '%s'...": "Aktualisiere Anzeige '%s'..."
+    "Failed to set price type '%s'": "Fehler beim Setzen des Preistyps '%s'"
     "Failed to set shipping attribute for type '%s'!": "Fehler beim setzen des Versandattributs für den Typ '%s'!"
     "Shipping step skipped - reason: NOT_APPLICABLE": "Versandschritt übersprungen: Versand nicht anwendbar (Status = NOT_APPLICABLE)"
     "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
@@ -224,9 +225,8 @@ kleinanzeigen_bot/__init__.py:
   __set_contact_fields:
     "Could not set contact street.": "Kontaktstraße konnte nicht gesetzt werden."
     "Could not set contact name.": "Kontaktname konnte nicht gesetzt werden."
-    "Could not set contact location: %s": "Kontaktort konnte nicht gesetzt werden: %s"
-    "Could not set contact zipcode: %s": "Kontakt-PLZ konnte nicht gesetzt werden: %s"
-    "No city dropdown option matched location: %s": "Kein Eintrag im Orts-Dropdown passte zum Ort: %s"
+    "Could not set contact location: %s (%s)": "Kontaktort konnte nicht gesetzt werden: %s (%s)"
+    "Could not set contact zipcode: %s (%s)": "Kontakt-PLZ konnte nicht gesetzt werden: %s (%s)"
     ? "Phone number field not present on page. This is expected for many private accounts; commercial accounts may still support phone numbers."
     : "Telefonnummernfeld auf der Seite nicht vorhanden. Dies ist bei vielen privaten Konten zu erwarten; gewerbliche Konten unterstützen Telefonnummern möglicherweise weiterhin."
 
@@ -237,13 +237,16 @@ kleinanzeigen_bot/__init__.py:
     " -> waiting for %s to be processed...": " -> Warte auf Verarbeitung von %s..."
     " -> all images uploaded successfully": " -> Alle Bilder erfolgreich hochgeladen"
     "Image upload timeout exceeded": "Zeitüberschreitung beim Hochladen der Bilder"
-    "Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d thumbnails.": "Nicht alle Bilder wurden innerhalb der Zeitüberschreitung hochgeladen. Erwartet: %(expected)d, gefunden: %(found)d Miniaturansichten."
+    "Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d processed images.": "Nicht alle Bilder wurden innerhalb der Zeitüberschreitung hochgeladen. Erwartet: %(expected)d, gefunden: %(found)d verarbeitete Bilder."
 
   check_thumbnails_uploaded:
     " -> %d of %d images processed": " -> %d von %d Bildern verarbeitet"
 
   __check_ad_republication:
     " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days": " -> ÜBERSPRUNGEN: Anzeige [%s] wurde zuletzt vor %d Tagen veröffentlicht. Erneute Veröffentlichung ist erst nach %s Tagen erforderlich"
+
+  __select_button_combobox:
+    "Option '%(value)s' not found in button combobox '%(id)s'": "Option '%(value)s' nicht in Button-Combobox '%(id)s' gefunden"
 
   __set_special_attributes:
     "Found %i special attributes": "%i spezielle Attribute gefunden"
