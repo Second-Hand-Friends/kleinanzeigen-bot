@@ -746,6 +746,59 @@ class TestAdExtractorNavigation:
         next_button_enabled.click.assert_awaited()  # triggered once during navigation
 
     @pytest.mark.asyncio
+    async def test_extract_own_ads_urls_stops_when_second_page_contains_only_seen_refs(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Pagination should stop when page 2 only contains refs already seen on page 1."""
+        ad_list_container_mock = MagicMock()
+        cardbox_page_one = MagicMock()
+        cardbox_page_two = MagicMock()
+
+        link_page_one = MagicMock(attrs = {"href": "/s-anzeige/repeat/111"})
+        link_page_two = MagicMock(attrs = {"href": "/s-anzeige/repeat/111"})
+
+        next_button_enabled = AsyncMock()
+        next_button_enabled.attrs = {}
+        disabled_button = MagicMock()
+        disabled_button.attrs = {"disabled": True}
+
+        link_queue = [link_page_one, link_page_two]
+        next_button_call = {"count": 0}
+        cardbox_call = {"count": 0}
+
+        async def fake_web_find(selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element:
+            if selector_type == By.ID and selector_value == "my-manageitems-adlist":
+                return ad_list_container_mock
+            if selector_type == By.CSS_SELECTOR and selector_value == "div h3 a.text-onSurface":
+                return link_queue.pop(0)
+            raise AssertionError(f"Unexpected selector {selector_type} {selector_value}")
+
+        async def fake_web_find_all(
+            selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None
+        ) -> list[Element]:
+            if selector_type == By.CSS_SELECTOR and selector_value == 'button[aria-label="Nächste"]':
+                next_button_call["count"] += 1
+                if next_button_call["count"] == 1:
+                    return [next_button_enabled]  # initial detection -> multi page
+                if next_button_call["count"] == 2:
+                    return [disabled_button, next_button_enabled]  # navigation on page 1
+                return [disabled_button]  # after navigating, stop
+            if selector_type == By.CLASS_NAME and selector_value == "cardbox":
+                cardbox_call["count"] += 1
+                return [cardbox_page_one] if cardbox_call["count"] == 1 else [cardbox_page_two]
+            raise AssertionError(f"Unexpected find_all selector {selector_type} {selector_value}")
+
+        with (
+            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_find", new_callable = AsyncMock, side_effect = fake_web_find),
+            patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, side_effect = fake_web_find_all),
+        ):
+            refs = await test_extractor.extract_own_ads_urls()
+
+        assert refs == ["/s-anzeige/repeat/111"]
+        next_button_enabled.click.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_extract_own_ads_urls_timeout_in_callback(self, test_extractor:extract_module.AdExtractor) -> None:
         """Test that TimeoutError in extract_page_refs callback stops pagination."""
         with (

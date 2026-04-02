@@ -1267,7 +1267,7 @@ class WebScrapingMixin:
         next_page_selector = 'button[aria-label="Nächste"]'
 
         def is_enabled_next_button(button:Element) -> bool:
-            return not button.attrs.get("disabled") and str(button.attrs.get("aria-disabled", "")).lower() != "true"
+            return button.attrs.get("disabled") is None and str(button.attrs.get("aria-disabled", "")).lower() != "true"
 
         pagination_timeout = self._timeout("pagination_initial")
         try:
