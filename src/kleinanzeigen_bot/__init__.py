@@ -2079,6 +2079,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 btn = await self.web_find(By.CSS_SELECTOR, "button.pictureupload-thumbnails-remove", parent = element)
                 await btn.click()
                 await self.web_sleep(300, 500)
+            # Let async DOM updates settle before capturing hidden-marker baseline
+            await self.web_sleep(200, 350)
 
         #############################
         # upload images
@@ -2604,6 +2606,18 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         LOG.info(" -> found %s", pluralize("image", ad_cfg.images))
         image_upload:Element = await self.web_find(By.CSS_SELECTOR, "input[type=file]")
+        hidden_marker_selector = "input[name^='adImages'][name$='.url']"
+
+        # Capture marker baseline before this upload attempt to avoid counting stale values
+        baseline_marker_count = 0
+        try:
+            baseline_markers = await self.web_find_all(By.CSS_SELECTOR, hidden_marker_selector, timeout = self._timeout("quick_dom"))
+            baseline_marker_count = sum(1 for marker in baseline_markers if str(getattr(marker.attrs, "value", "") or "").strip())
+        except TimeoutError:
+            baseline_marker_count = 0
+
+        if baseline_marker_count:
+            LOG.debug(" -> detected %d pre-existing image marker(s) before upload", baseline_marker_count)
 
         for image in ad_cfg.images:
             LOG.info(" -> uploading image [%s]", image)
@@ -2614,7 +2628,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         expected_count = len(ad_cfg.images)
         LOG.info(" -> waiting for %s to be processed...", pluralize("image", ad_cfg.images))
         thumbnail_selector = "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)"
-        hidden_marker_selector = "input[name^='adImages'][name$='.url']"
 
         async def count_processed_images() -> int:
             thumbnail_count = 0
@@ -2632,7 +2645,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             except TimeoutError:
                 marker_count = 0
 
-            return max(thumbnail_count, marker_count)
+            effective_marker_count = max(0, marker_count - baseline_marker_count)
+            return max(thumbnail_count, effective_marker_count)
 
         async def check_thumbnails_uploaded() -> bool:
             current_count = await count_processed_images()
