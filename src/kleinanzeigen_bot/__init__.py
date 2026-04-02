@@ -2693,18 +2693,23 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             if effective_selector == "all":  # download all of your ads
                 LOG.info("Starting download of all ads...")
 
-                success_count = 0
-                # call download function for each ad page
+                valid_ad_refs:list[tuple[str, int]] = []
                 for ad_url in own_ad_urls:
                     ad_id = ad_extractor.extract_ad_id_from_ad_url(ad_url)
                     if ad_id == -1:
                         # Skip ads with invalid URLs (warning already logged by extract_ad_id_from_ad_url)
                         continue
+                    valid_ad_refs.append((ad_url, ad_id))
+
+                success_count = 0
+                # call download function for each ad page
+                for idx, (ad_url, ad_id) in enumerate(valid_ad_refs, start = 1):
+                    LOG.info("Downloading %d/%d ads...", idx, len(valid_ad_refs))
 
                     if await ad_extractor.navigate_to_ad_page(ad_url):
                         await self._download_ad_with_resolved_state(ad_extractor, ad_id, published_ads_by_id)
                         success_count += 1
-                LOG.info("%d of %d ads were downloaded from your profile.", success_count, len(own_ad_urls))
+                LOG.info("%d of %d ads were downloaded from your profile.", success_count, len(valid_ad_refs))
 
             elif effective_selector == "new":  # download only unsaved ads
                 # check which ads already saved
@@ -2721,7 +2726,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 ad_id_by_url = {url: ad_extractor.extract_ad_id_from_ad_url(url) for url in own_ad_urls}
 
                 LOG.info("Starting download of not yet downloaded ads...")
-                new_count = 0
+                ads_to_download:list[tuple[str, int]] = []
                 for ad_url, ad_id in ad_id_by_url.items():
                     # Skip ads with invalid URLs (warning already logged by extract_ad_id_from_ad_url)
                     if ad_id == -1:
@@ -2731,6 +2736,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     if ad_id in saved_ad_ids:
                         LOG.info("The ad with id %d has already been saved.", ad_id)
                         continue
+                    ads_to_download.append((ad_url, ad_id))
+
+                new_count = 0
+                for idx, (ad_url, ad_id) in enumerate(ads_to_download, start = 1):
+                    LOG.info("Downloading %d/%d ads...", idx, len(ads_to_download))
 
                     if await ad_extractor.navigate_to_ad_page(ad_url):
                         await self._download_ad_with_resolved_state(ad_extractor, ad_id, published_ads_by_id)
@@ -2742,7 +2752,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.info("Starting download of ad(s) with the id(s):")
             LOG.info(" | ".join([str(ad_id) for ad_id in ids]))
 
-            for ad_id in ids:  # call download routine for every id
+            for idx, ad_id in enumerate(ids, start = 1):  # call download routine for every id
+                LOG.info("Downloading %d/%d ads...", idx, len(ids))
                 exists = await ad_extractor.navigate_to_ad_page(ad_id)
                 if exists:
                     resolved = self._resolve_download_ad_activity(ad_id, published_ads_by_id)

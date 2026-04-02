@@ -268,6 +268,7 @@ kleinanzeigen_bot/__init__.py:
     "Found %s.": "%s gefunden."
     "ad URL": "Anzeigen-URL"
     "Starting download of all ads...": "Starte den Download aller Anzeigen..."
+    "Downloading %d/%d ads...": "Lade Anzeige %d/%d herunter..."
     "%d of %d ads were downloaded from your profile.": "%d von %d Anzeigen wurden aus Ihrem Profil heruntergeladen."
     "Starting download of not yet downloaded ads...": "Starte den Download noch nicht heruntergeladener Anzeigen..."
     "Skipping ad with non-numeric id: %s": "Überspringe Anzeige mit nicht-numerischer ID: %s"
@@ -313,6 +314,7 @@ kleinanzeigen_bot/extract.py:
 #################################################
   download_ad:
     "Using download directory: %s": "Verwende Download-Verzeichnis: %s"
+    "Saved ad config to: %s": "Anzeigen-Konfiguration gespeichert in: %s"
     "Backup directory %s already exists. Aborting download for ad %s to avoid data loss.": "Sicherungsverzeichnis %s existiert bereits. Download für Anzeige %s wird abgebrochen, um Datenverlust zu vermeiden."
     "Could not remove backup directory %s: %s": "Konnte Sicherungsverzeichnis %s nicht entfernen: %s"
     "Failed to restore backup directory %s to %s after download failure: %s": "Konnte Sicherungsverzeichnis %s nach %s nach einem Download-Fehler nicht wiederherstellen: %s"

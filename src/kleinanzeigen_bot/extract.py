@@ -225,6 +225,7 @@ class AdExtractor(WebScrapingMixin):
 
         loop = asyncio.get_running_loop()
         backup_dir = final_dir.with_name(f"{_BACKUP_DIR_PREFIX}{ad_file_stem}")
+        final_yaml_path = final_dir / f"{ad_file_stem}.yaml"
         backup_created_by_us = False
         try:
             await loop.run_in_executor(None, lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(mode = "json"), header = header_string))
@@ -237,6 +238,7 @@ class AdExtractor(WebScrapingMixin):
                 backup_created_by_us = True
 
             await loop.run_in_executor(None, staging_dir.rename, final_dir)
+            LOG.info("Saved ad config to: %s", final_yaml_path)
 
             if await files.exists(backup_dir):
                 try:
