@@ -2202,12 +2202,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if contact.zipcode:
             try:
                 await self.__react_input("ad-zip-code", str(contact.zipcode))
-            except Exception as ex:  # noqa: BLE001
+            except TimeoutError as ex:
                 LOG.warning("Could not set contact zipcode: %s (%s)", contact.zipcode, ex)
         if contact.location:
             try:
                 await self.__react_input("ad-city", contact.location)
-            except Exception as ex:  # noqa: BLE001
+            except TimeoutError as ex:
                 LOG.warning("Could not set contact location: %s (%s)", contact.location, ex)
 
         #############################
