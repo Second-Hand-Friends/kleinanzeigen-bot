@@ -355,10 +355,7 @@ class WebScrapingMixin:
 
             failure_summary = failures[-1] if failures else _("No selector candidates executed.")
             raise TimeoutError(
-                _(
-                    "No HTML element found using selector group after trying %(count)d alternatives within %(timeout)s seconds."
-                    " Last error: %(error)s"
-                )
+                _("No HTML element found using selector group after trying %(count)d alternatives within %(timeout)s seconds. Last error: %(error)s")
                 % {"count": len(selectors), "timeout": effective_timeout, "error": failure_summary}
             )
 
@@ -811,6 +808,7 @@ class WebScrapingMixin:
                 ]
 
             case "Windows":
+
                 def win_path(*parts:str) -> str:
                     return str(PureWindowsPath(*parts))
 
@@ -1267,14 +1265,14 @@ class WebScrapingMixin:
         # Check for pagination controls
         multi_page = False
         next_page_selector = 'button[aria-label="Nächste"]'
+
+        def is_enabled_next_button(button:Element) -> bool:
+            return not button.attrs.get("disabled") and str(button.attrs.get("aria-disabled", "")).lower() != "true"
+
         pagination_timeout = self._timeout("pagination_initial")
         try:
             next_buttons = await self.web_find_all(By.CSS_SELECTOR, next_page_selector, timeout = pagination_timeout)
-            enabled_next_buttons = [
-                btn
-                for btn in next_buttons
-                if not btn.attrs.get("disabled") and str(btn.attrs.get("aria-disabled", "")).lower() != "true"
-            ]
+            enabled_next_buttons = [btn for btn in next_buttons if is_enabled_next_button(btn)]
             if enabled_next_buttons:
                 multi_page = True
                 LOG.info("Multiple ad pages detected.")
@@ -1307,7 +1305,7 @@ class WebScrapingMixin:
                 possible_next_buttons = await self.web_find_all(By.CSS_SELECTOR, next_page_selector, timeout = follow_up_timeout)
                 next_button_element = None
                 for button in possible_next_buttons:
-                    if not button.attrs.get("disabled") and str(button.attrs.get("aria-disabled", "")).lower() != "true":
+                    if is_enabled_next_button(button):
                         next_button_element = button
                         break
 

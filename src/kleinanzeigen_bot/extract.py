@@ -376,8 +376,9 @@ class AdExtractor(WebScrapingMixin):
                             len(list_items),
                             page_num,
                         )
+                unique_page_refs = list(dict.fromkeys(page_refs))
                 existing_refs = set(refs)
-                new_page_refs = [ref for ref in page_refs if ref not in existing_refs]
+                new_page_refs = [ref for ref in unique_page_refs if ref not in existing_refs]
                 if page_refs and not new_page_refs:
                     LOG.warning(
                         "No new ad refs found on page %s. Likely reloaded the same page. Stopping pagination.",
