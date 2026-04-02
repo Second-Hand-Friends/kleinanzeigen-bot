@@ -225,8 +225,8 @@ kleinanzeigen_bot/__init__.py:
   __set_contact_fields:
     "Could not set contact street.": "Kontaktstraße konnte nicht gesetzt werden."
     "Could not set contact name.": "Kontaktname konnte nicht gesetzt werden."
-    "Could not set contact location: %s": "Kontaktort konnte nicht gesetzt werden: %s"
-    "Could not set contact zipcode: %s": "Kontakt-PLZ konnte nicht gesetzt werden: %s"
+    "Could not set contact location: %s (%s)": "Kontaktort konnte nicht gesetzt werden: %s (%s)"
+    "Could not set contact zipcode: %s (%s)": "Kontakt-PLZ konnte nicht gesetzt werden: %s (%s)"
     ? "Phone number field not present on page. This is expected for many private accounts; commercial accounts may still support phone numbers."
     : "Telefonnummernfeld auf der Seite nicht vorhanden. Dies ist bei vielen privaten Konten zu erwarten; gewerbliche Konten unterstützen Telefonnummern möglicherweise weiterhin."
 
@@ -244,6 +244,9 @@ kleinanzeigen_bot/__init__.py:
 
   __check_ad_republication:
     " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days": " -> ÜBERSPRUNGEN: Anzeige [%s] wurde zuletzt vor %d Tagen veröffentlicht. Erneute Veröffentlichung ist erst nach %s Tagen erforderlich"
+
+  __select_button_combobox:
+    "Option '%(value)s' not found in button combobox '%(id)s'": "Option '%(value)s' nicht in Button-Combobox '%(id)s' gefunden"
 
   __set_special_attributes:
     "Found %i special attributes": "%i spezielle Attribute gefunden"
