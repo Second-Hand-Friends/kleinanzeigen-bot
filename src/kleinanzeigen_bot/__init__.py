@@ -2206,7 +2206,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         if contact.zipcode:
             try:
-                await self.__react_input("ad-zip-code", contact.zipcode)
+                await self.__react_input("ad-zip-code", str(contact.zipcode))
             except Exception as ex:  # noqa: BLE001
                 LOG.warning("Could not set contact zipcode: %s (%s)", contact.zipcode, ex)
         if contact.location:
