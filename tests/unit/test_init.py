@@ -634,7 +634,8 @@ class TestKleinanzeigenBotInitialization:
         extractor_mock.download_ad = AsyncMock()
 
         # Mock load_ads to return the saved_ad_ids
-        saved_ads:list[tuple[str, MagicMock, dict[str, Any]]] = [(f"ad_{ad_id}.yaml", MagicMock(spec = Ad, id = ad_id), {}) for ad_id in scenario["saved_ad_ids"]]
+        saved_ads:list[tuple[str, MagicMock, dict[str, Any]]] = [
+            (f"ad_{ad_id}.yaml", MagicMock(spec = Ad, id = ad_id), {}) for ad_id in scenario["saved_ad_ids"]]
 
         with (
             patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = scenario["published_ads"]) as mock_fetch_published_ads,
