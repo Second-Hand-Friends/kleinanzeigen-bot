@@ -2055,15 +2055,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # set description
         #############################
         description = self.__get_description(ad_cfg, with_affixes = True)
-        await self.web_execute(
-            "(function(v){"
-            "var el=document.querySelector('#ad-description');"
-            "var setter=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;"
-            "setter.call(el,v);"
-            "el.dispatchEvent(new Event('input',{bubbles:true}));"
-            "el.dispatchEvent(new Event('change',{bubbles:true}));"
-            "})(" + json.dumps(description) + ")"
-        )
+        await self.__react_input("ad-description", description)
 
         await self.__set_contact_fields(ad_cfg.contact)
 
@@ -2189,6 +2181,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def __react_input(self, element_id:str, value:str) -> None:
         """Sets a React-controlled input value using the native setter to trigger onChange."""
+        await self.web_find(By.ID, element_id)  # raises TimeoutError if element is absent
         await self.web_execute(
             "(function(id,v){"
             "var el=document.getElementById(id);"
