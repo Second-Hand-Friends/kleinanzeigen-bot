@@ -2591,6 +2591,8 @@ class TestKleinanzeigenBotShippingOptions:
         async def mock_web_execute(script:str) -> Any:
             if script == "document.body.scrollHeight":
                 return 0  # Return integer to prevent scrolling loop
+            if "window.location.href" in script:
+                return test_bot.page.url  # Return confirmation URL for ad_id extraction
             return None
 
         # Create mock elements
@@ -2725,6 +2727,12 @@ class TestKleinanzeigenBotShippingOptions:
         with patch("kleinanzeigen_bot.apply_auto_price_reduction") as mock_apply:
             # Mock other dependencies
             mock_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
+
+            async def mock_web_execute_price_reduction(script:str) -> Any:
+                if "window.location.href" in script:
+                    return "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+                return mock_response
+
             with (
                 patch.object(test_bot, "web_find", new_callable = AsyncMock),
                 patch.object(test_bot, "web_input", new_callable = AsyncMock),
@@ -2734,7 +2742,7 @@ class TestKleinanzeigenBotShippingOptions:
                 patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
                 patch.object(test_bot, "web_await", new_callable = AsyncMock),
                 patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-                patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = mock_response),
+                patch.object(test_bot, "web_execute", side_effect = mock_web_execute_price_reduction),
                 patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = mock_response),
                 patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
                 patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
@@ -2853,6 +2861,7 @@ class TestShippingSelectorTimeout:
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
 
@@ -3287,6 +3296,11 @@ class TestBuyNowRadioTimeout:
                 raise TimeoutError("no payment form")
             return MagicMock()
 
+        async def execute_side_effect(script:str) -> Any:
+            if "window.location.href" in script:
+                return test_bot.page.url
+            return None
+
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
@@ -3296,7 +3310,7 @@ class TestBuyNowRadioTimeout:
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
             patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = check_side_effect) as mock_check,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", side_effect = execute_side_effect),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(test_bot, "_KleinanzeigenBot__set_contact_fields", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
