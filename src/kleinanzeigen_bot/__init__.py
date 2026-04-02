@@ -2106,13 +2106,16 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # submit
         #############################
+        # Click is retryable — no submission can have occurred before this point.
+        # Edit page uses 'Änderungen speichern'; publish page uses 'Anzeige aufgeben'
+        await self.web_click(By.XPATH, "//button[contains(., 'Anzeige aufgeben') or contains(., 'Änderungen speichern')]")
+
+        # Everything after the first click is uncertain: the ad may already have been submitted.
         try:
-            # Edit page uses 'Änderungen speichern'; publish page uses 'Anzeige aufgeben'
-            await self.web_click(By.XPATH, "//button[contains(., 'Anzeige aufgeben') or contains(., 'Änderungen speichern')]")
             try:
-                await self.web_click(By.ID, "imprint-guidance-submit")
+                await self.web_click(By.ID, "imprint-guidance-submit", timeout = self._timeout("quick_dom"))
             except TimeoutError:
-                pass  # nosec
+                pass  # nosec — imprint overlay not shown
 
             # check for no image question
             try:
@@ -2120,8 +2123,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if not ad_cfg.images and await self.web_check(By.XPATH, image_hint_xpath, Is.DISPLAYED):
                     await self.web_click(By.XPATH, image_hint_xpath)
             except TimeoutError:
-                # Image hint not shown; continue publish flow.
-                pass  # nosec
+                pass  # nosec — image hint not shown
 
             #############################
             # wait for payment form if commercial account is used
