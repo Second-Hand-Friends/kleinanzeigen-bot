@@ -3789,6 +3789,166 @@ class TestBuyNowRadioTimeout:
         assert len(buy_now_click_calls) == 0, "web_click should not be called when already selected"
 
 
+class TestLocationMatching:
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        ("target", "candidate", "expected"),
+        [
+            ("10115 - Metroville", "12623 - Metroville", False),
+            ("10115 - Metroville", "10115 - Metroville", True),
+            ("Metroville", "10115 - Metroville", True),
+            ("Metroville", "Rivertown", False),
+            ("Region A - Northside", "Region B - Northside", False),
+            ("Metroville", None, False),
+        ],
+    )
+    def test_location_matches_target_specificity(
+        self,
+        test_bot:KleinanzeigenBot,
+        target:str,
+        candidate:str | None,
+        expected:bool,
+    ) -> None:
+        assert getattr(test_bot, "_KleinanzeigenBot__location_matches_target")(target, candidate) is expected
+
+
+class TestContactLocationSelection:
+    @staticmethod
+    def _make_option(text:str) -> MagicMock:
+        option = MagicMock()
+        option.text = text
+        option.click = AsyncMock()
+        return option
+
+    @pytest.mark.asyncio
+    async def test_set_contact_fields_uses_web_input_for_zip_and_location_helper(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "contact": {
+                    "name": "",
+                    "zipcode": "10115",
+                    "location": "Metroville",
+                    "street": "",
+                    "phone": "",
+                }
+            }
+        )
+
+        with (
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_web_input,
+            patch.object(test_bot, "_KleinanzeigenBot__set_contact_location", new_callable = AsyncMock) as mock_set_location,
+            patch.object(test_bot, "_KleinanzeigenBot__react_input", new_callable = AsyncMock) as mock_react_input,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_fields")(ad_cfg.contact)
+
+        mock_web_input.assert_awaited_once_with(By.ID, "ad-zip-code", "10115")
+        mock_set_location.assert_awaited_once_with("Metroville")
+        mock_react_input.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_set_contact_fields_skips_location_when_zip_cannot_be_set(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "contact": {
+                    "name": "",
+                    "zipcode": "10115",
+                    "location": "Metroville",
+                    "street": "",
+                    "phone": "",
+                }
+            }
+        )
+
+        with (
+            patch.object(test_bot, "web_input", new_callable = AsyncMock, side_effect = TimeoutError("zip timeout")) as mock_web_input,
+            patch.object(test_bot, "_KleinanzeigenBot__set_contact_location", new_callable = AsyncMock) as mock_set_location,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_fields")(ad_cfg.contact)
+
+        mock_web_input.assert_awaited_once_with(By.ID, "ad-zip-code", "10115")
+        mock_set_location.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_set_contact_location_readonly_selects_exact_combobox_option(self, test_bot:KleinanzeigenBot) -> None:
+        city_input = MagicMock()
+        city_input.local_name = "input"
+
+        other_option = self._make_option("20095 - Rivertown")
+        target_option = self._make_option("10115 - Metroville")
+
+        with (
+            patch.object(
+                test_bot,
+                "_KleinanzeigenBot__read_city_selection_text",
+                new_callable = AsyncMock,
+                side_effect = ["20095 - Rivertown", "10115 - Metroville"],
+            ),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [other_option, target_option]),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_location")("10115 - Metroville")
+
+        mock_click.assert_awaited_once_with(By.ID, "ad-city")
+        target_option.click.assert_awaited_once()
+        other_option.click.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_set_contact_location_rejects_qualified_city_suffix_mismatch(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        city_input = MagicMock()
+        city_input.local_name = "input"
+
+        mismatched_option = self._make_option("12623 - Metroville")
+
+        with (
+            patch.object(test_bot, "_KleinanzeigenBot__read_city_selection_text", new_callable = AsyncMock, return_value = "20095 - Rivertown"),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [mismatched_option]),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_location")("10115 - Metroville")
+
+        mock_click.assert_awaited_once_with(By.ID, "ad-city")
+        mismatched_option.click.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_set_contact_location_city_only_target_allows_city_fallback(self, test_bot:KleinanzeigenBot) -> None:
+        city_input = MagicMock()
+        city_input.local_name = "input"
+        city_option = self._make_option("12623 - Metroville")
+
+        with (
+            patch.object(
+                test_bot,
+                "_KleinanzeigenBot__read_city_selection_text",
+                new_callable = AsyncMock,
+                side_effect = ["20095 - Rivertown", "12623 - Metroville"],
+            ),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [city_option]),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_location")("Metroville")
+
+        city_option.click.assert_awaited_once()
+
+
 class TestImageUploadProcessedMarkerFallback:
     """Regression tests for image upload completion detection via hidden marker inputs."""
 

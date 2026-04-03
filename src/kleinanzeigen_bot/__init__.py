@@ -2223,20 +2223,190 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             f"}})({js_element_id},{js_value})"
         )
 
+    @staticmethod
+    def __location_matches_target(target:str, candidate:str | None) -> bool:
+        if not candidate:
+            return False
+
+        normalized_target = " ".join(target.split()).casefold()
+        normalized_candidate = " ".join(candidate.split()).casefold()
+        if not normalized_target or not normalized_candidate:
+            return False
+
+        if normalized_target == normalized_candidate:
+            LOG.debug("Location match (exact): target=%r candidate=%r", target, candidate)
+            return True
+
+        # Qualified targets must match exactly. City-only targets may use suffix fallback.
+        if " - " in normalized_target:
+            LOG.debug("Location mismatch (qualified target): target=%r candidate=%r", target, candidate)
+            return False
+
+        candidate_city = normalized_candidate.rsplit(" - ", maxsplit = 1)[-1]
+        city_match = normalized_target == candidate_city
+        if city_match:
+            LOG.debug("Location match (city-only fallback): target=%r candidate=%r", target, candidate)
+        return city_match
+
+    @staticmethod
+    def __location_city_fragment(location:str) -> str:
+        normalized_location = " ".join(location.split())
+        if not normalized_location:
+            return ""
+        return normalized_location.rsplit(" - ", maxsplit = 1)[-1]
+
+    async def __read_city_selection_text(self) -> str | None:
+        short_timeout = self._timeout("quick_dom")
+        try:
+            city_element = await self.web_find(By.ID, "ad-city", timeout = short_timeout)
+        except TimeoutError:
+            return None
+        if city_element is None:
+            return None
+
+        if city_element.local_name == "input":
+            attrs = getattr(city_element, "attrs", None)
+            if attrs is not None:
+                value = attrs.get("value") if hasattr(attrs, "get") else getattr(attrs, "value", None)
+                if isinstance(value, str) and value.strip():
+                    return value
+
+        try:
+            selected_text = await self.web_text(By.ID, "ad-city-selected-option", timeout = short_timeout)
+            if selected_text:
+                return selected_text
+        except TimeoutError:
+            LOG.debug("ad-city-selected-option text not available, trying ad-city text fallback")
+
+        try:
+            selected_text = await self.web_text(By.ID, "ad-city", timeout = short_timeout)
+            if selected_text:
+                return selected_text
+        except TimeoutError:
+            LOG.debug("ad-city text not available")
+        return None
+
+    async def __city_option_text(self, option:Element) -> str:
+        text = str(getattr(option, "text", "") or "").strip()
+        if text:
+            return text
+        return (await self._extract_visible_text(option)).strip()
+
+    async def __select_city_combobox_option(self, target:str) -> bool | None:
+        await self.web_click(By.ID, "ad-city")
+
+        option_selector = (
+            "[role='option'], "
+            "li[aria-selected='true'], li[aria-selected='false'], "
+            "button[aria-selected='true'], button[aria-selected='false']"
+        )
+        quick_dom_timeout = self._timeout("quick_dom")
+        try:
+            candidates = await self.web_find_all(By.CSS_SELECTOR, option_selector, timeout = quick_dom_timeout)
+        except TimeoutError as ex:
+            LOG.warning(
+                "City combobox options did not load within %.1fs for selector [%s]: %s",
+                quick_dom_timeout,
+                option_selector,
+                ex,
+            )
+            return None
+
+        def normalize(value:str) -> str:
+            return " ".join(value.split()).casefold()
+
+        target_norm = normalize(target)
+        option_entries:list[tuple[Element, str, str]] = []
+        for candidate in candidates:
+            option_text = await self.__city_option_text(candidate)
+            option_entries.append((candidate, option_text, normalize(option_text)))
+
+        exact_match = next((entry[0] for entry in option_entries if entry[2] == target_norm), None)
+        city_match:Element | None = None
+        if " - " not in target_norm:
+            target_city = target_norm
+            city_match = next((entry[0] for entry in option_entries if entry[2] and entry[2].rsplit(" - ", maxsplit = 1)[-1] == target_city), None)
+
+        selected_option = exact_match or city_match
+        LOG.debug(
+            "Combobox match mode: exact=%s city-only=%s for target=%r",
+            exact_match is not None,
+            exact_match is None and city_match is not None,
+            target,
+        )
+        if selected_option is None:
+            return False
+
+        await selected_option.click()
+        selected_city = await self.__read_city_selection_text()
+        return self.__location_matches_target(target, selected_city)
+
+    async def __set_contact_location(self, location:str) -> None:
+        target = location.strip()
+        if not target:
+            return
+
+        selected_city = await self.__read_city_selection_text()
+        if self.__location_matches_target(target, selected_city):
+            return
+
+        short_timeout = self._timeout("quick_dom")
+        try:
+            city_element = await self.web_find(By.ID, "ad-city", timeout = short_timeout)
+        except TimeoutError as ex:
+            LOG.warning("Could not set contact location: %s (%s)", location, ex)
+            return
+        if city_element is None:
+            LOG.warning("Could not set contact location: %s", location)
+            return
+
+        city_tag = city_element.local_name
+        city_is_read_only = False
+        if city_tag == "input":
+            try:
+                city_is_read_only = await self.web_check(By.ID, "ad-city", Is.READONLY, timeout = short_timeout)
+            except TimeoutError:
+                city_is_read_only = False
+
+        if city_tag == "button" or (city_tag == "input" and city_is_read_only):
+            match_result = await self.__select_city_combobox_option(target)
+            if match_result:
+                return
+            if match_result is None:
+                LOG.warning("City combobox options unavailable for location: %s", location)
+            else:
+                LOG.warning("No city combobox option matched location: %s", location)
+            return
+
+        if city_tag == "input":
+            try:
+                await self.web_input(By.ID, "ad-city", self.__location_city_fragment(target))
+                selected_city = await self.__read_city_selection_text()
+                if self.__location_matches_target(target, selected_city):
+                    return
+                LOG.warning("Could not set contact location: %s", location)
+            except TimeoutError as ex:
+                LOG.warning("Could not set contact location: %s (%s)", location, ex)
+            return
+
+        LOG.warning("Unsupported city element type while setting contact location: <%s>", city_tag)
+
     async def __set_contact_fields(self, contact:Contact) -> None:
         #############################
         # set contact zipcode
         #############################
+        zipcode_set = False
         if contact.zipcode:
             try:
-                await self.__react_input("ad-zip-code", str(contact.zipcode))
+                await self.web_input(By.ID, "ad-zip-code", str(contact.zipcode))
+                zipcode_set = True
             except TimeoutError as ex:
                 LOG.warning("Could not set contact zipcode: %s (%s)", contact.zipcode, ex)
         if contact.location:
-            try:
-                await self.__react_input("ad-city", contact.location)
-            except TimeoutError as ex:
-                LOG.warning("Could not set contact location: %s (%s)", contact.location, ex)
+            if zipcode_set:
+                await self.__set_contact_location(contact.location)
+            else:
+                LOG.warning("Skipping contact location because zipcode could not be set: %s", contact.location)
 
         #############################
         # set contact street
