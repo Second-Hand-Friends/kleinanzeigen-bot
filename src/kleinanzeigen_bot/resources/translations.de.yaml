@@ -221,6 +221,7 @@ kleinanzeigen_bot/__init__.py:
     "Unable to close condition dialog!": "Kann den Dialog für Artikelzustand nicht schließen!"
     "Unable to open condition dialog and select condition [%s]": "Zustandsdialog konnte nicht geöffnet und Zustand [%s] nicht ausgewählt werden"
     "Unable to select condition [%s]": "Zustand [%s] konnte nicht ausgewählt werden"
+    "Failed to set attribute '%s'": "Fehler beim Setzen des Attributs '%s'"
 
   __set_contact_fields:
     "Could not set contact street.": "Kontaktstraße konnte nicht gesetzt werden."
@@ -252,7 +253,6 @@ kleinanzeigen_bot/__init__.py:
     "Found %i special attributes": "%i spezielle Attribute gefunden"
     "Setting special attribute [%s] to [%s]...": "Setze spezielles Attribut [%s] auf [%s]..."
     "Successfully set attribute field [%s] to [%s]...": "Attributfeld [%s] erfolgreich auf [%s] gesetzt..."
-    "Attribute field '%s' could not be found.": "Attributfeld '%s' konnte nicht gefunden werden."
     "Failed to set attribute '%s'": "Fehler beim Setzen des Attributs '%s'"
     "Attribute field '%s' seems to be a select...": "Attributfeld '%s' scheint ein Auswahlfeld zu sein..."
     "Failed to set attribute field '%s' via known input types.": "Fehler beim Setzen des Attributfelds '%s' über bekannte Eingabetypen."
@@ -299,6 +299,12 @@ kleinanzeigen_bot/__init__.py:
     "Timing collector flush failed: %s": "Zeitmessdaten konnten nicht gespeichert werden: %s"
 
   __set_shipping:
+    "Failed to set shipping attribute for type '%s'!": "Fehler beim setzen des Versandattributs für den Typ '%s'!"
+    ? "Shipping options dialog entry not found. Legacy '.versand_s' select UI is no longer supported and requires dedicated rebuild."
+    : "Einstieg in den Versandoptionen-Dialog nicht gefunden. Die alte '.versand_s'-Select-UI wird nicht mehr unterstützt und muss gezielt neu umgesetzt werden."
+    "Unable to open shipping options dialog!": "Versandoptionen-Dialog konnte nicht geöffnet werden!"
+    "Unable to select individual shipping option!": "Individuelle Versandoption konnte nicht ausgewählt werden!"
+    "Unable to set shipping price!": "Versandpreis konnte nicht gesetzt werden!"
     "Unable to close shipping dialog!": "Versanddialog konnte nicht geschlossen werden!"
 
   __set_shipping_options:

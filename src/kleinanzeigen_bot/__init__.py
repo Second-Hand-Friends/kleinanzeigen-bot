@@ -35,6 +35,7 @@ LOG.setLevel(loggers.INFO)
 
 PUBLISH_MAX_RETRIES:Final[int] = 3
 _NUMERIC_IDS_RE:Final[re.Pattern[str]] = re.compile(r"^\d+(,\d+)*$")
+_SPECIAL_ATTRIBUTE_TOKEN_RE:Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_]+$")
 _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
     (By.ID, "user-email"),
@@ -49,6 +50,26 @@ colorama.just_fix_windows_console()
 
 def _format_login_detection_selectors(selectors:Sequence[tuple["By", str]]) -> str:
     return ", ".join(f"{selector_type.name}={selector_value}" for selector_type, selector_value in selectors)
+
+
+def _xpath_literal(value:str) -> str:
+    """Return an XPath-safe string literal for *value*.
+
+    Strategy:
+    - no single quotes -> wrap in single quotes
+    - no double quotes -> wrap in double quotes
+    - contains both -> use concat('part1', "'", 'part2', ...)
+
+    Example:
+    - value = Bob's "Bike" -> concat('Bob', "'", 's "Bike"')
+
+    This avoids quote-escaping issues in dynamic XPath expressions.
+    """
+    if "'" not in value:
+        return f"'{value}'"
+    if '"' not in value:
+        return f'"{value}"'
+    return "concat(" + ", \"'\", ".join(f"'{part}'" for part in value.split("'")) + ")"
 
 
 class AdUpdateStrategy(enum.Enum):
@@ -2003,11 +2024,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             if ad_cfg.type == "WANTED":
                 # special handling for ads of type WANTED since shipping is a special attribute for these
                 if shipping_type in {"PICKUP", "SHIPPING"}:
-                    shipping_value = "ja" if shipping_type == "SHIPPING" else "nein"
+                    short_timeout = self._timeout("quick_dom")
+                    shipping_toggle = "ad-shipping-enabled-yes" if shipping_type == "SHIPPING" else "ad-shipping-enabled-no"
                     try:
-                        await self.web_select(By.XPATH, "//select[contains(@id, '.versand_s')]", shipping_value)
-                    except TimeoutError:
+                        if not await self.web_check(By.ID, shipping_toggle, Is.SELECTED, timeout = short_timeout):
+                            await self.web_click(By.ID, shipping_toggle, timeout = short_timeout)
+                    except TimeoutError as ex:
                         LOG.warning("Failed to set shipping attribute for type '%s'!", shipping_type)
+                        raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % shipping_type) from ex
             else:
                 await self.__set_shipping(ad_cfg, mode)
         else:
@@ -2297,18 +2321,36 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.info("############################################")
 
     async def __set_condition(self, condition_value:str) -> None:
+        short_timeout = self._timeout("quick_dom")
         try:
             # Open condition dialog
-            await self.web_click(By.XPATH, '//*[@id="j-post-listing-frontend-conditions"]//button[@aria-haspopup="true"]')
-        except TimeoutError:
+            await self.web_click(
+                By.XPATH,
+                "//label[contains(@for, '.condition')]/following::button[@aria-haspopup='dialog' or @aria-haspopup='true'][1]",
+            )
+        except TimeoutError as ex:
             LOG.debug("Unable to open condition dialog and select condition [%s]", condition_value, exc_info = True)
-            return
+            raise TimeoutError(_("Failed to set attribute '%s'") % "condition_s") from ex
 
         try:
-            # Click radio button
-            await self.web_click(By.ID, f"radio-button-{condition_value}")
-        except TimeoutError:
+            await self.web_find(By.XPATH, '//*[self::dialog or @role="dialog"]', timeout = short_timeout)
+            condition_radio = await self.web_find(
+                By.XPATH,
+                f"//*[self::dialog or @role='dialog']//input[@type='radio' and @value={_xpath_literal(condition_value)}]",
+                timeout = short_timeout,
+            )
+            condition_radio_id_attr = condition_radio.attrs.get("id")
+            condition_radio_id = str(condition_radio_id_attr) if condition_radio_id_attr else ""
+            if condition_radio_id:
+                try:
+                    await self.web_click(By.XPATH, f"//*[self::dialog or @role='dialog']//label[@for={_xpath_literal(condition_radio_id)}]")
+                except TimeoutError:
+                    await condition_radio.click()
+            else:
+                await condition_radio.click()
+        except TimeoutError as ex:
             LOG.debug("Unable to select condition [%s]", condition_value, exc_info = True)
+            raise TimeoutError(_("Failed to set attribute '%s'") % "condition_s") from ex
 
         try:
             # Click accept button
@@ -2347,57 +2389,107 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         for special_attribute_key, special_attribute_value in ad_cfg.special_attributes.items():
             # Ensure special_attribute_value is treated as a string
             special_attribute_value_str = str(special_attribute_value)
+            normalized_special_attribute_key = re.sub(r"_[a-z]+$", "", special_attribute_key).rsplit(".", maxsplit = 1)[-1]
+            if not _SPECIAL_ATTRIBUTE_TOKEN_RE.fullmatch(normalized_special_attribute_key):
+                LOG.debug(
+                    "Attribute field '%s' has unsupported normalized key '%s'.",
+                    special_attribute_key,
+                    normalized_special_attribute_key,
+                )
+                raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
 
-            if special_attribute_key == "condition_s":
+            if normalized_special_attribute_key == "condition":
                 await self.__set_condition(special_attribute_value_str)
                 continue
 
             LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
+            id_suffix_literal = _xpath_literal(f".{normalized_special_attribute_key}")
+            name_suffix_literal = _xpath_literal(f".{normalized_special_attribute_key}]")
+            name_plus_literal = _xpath_literal(f".{normalized_special_attribute_key}+")
+            bare_id_literal = _xpath_literal(normalized_special_attribute_key)
+            bare_name_literal = _xpath_literal(f"attributeMap[{normalized_special_attribute_key}]")
+            original_key_literal = _xpath_literal(special_attribute_key)
+            # Match attribute fields by five patterns:
+            # 1) exact id                 -> @id={bare_id_literal}
+            # 2) dotted id suffix         -> ... = {id_suffix_literal}
+            # 3) exact attributeMap name  -> @name={bare_name_literal}
+            # 4) dotted name suffix       -> ... = {name_suffix_literal}
+            # 5) compound key marker      -> contains(@name, {name_plus_literal})
+            # Literals are derived via _xpath_literal from normalized_special_attribute_key.
+            # 6) original config key      -> contains(@name, {original_key_literal}) for compound keys
+            special_attr_xpath = (
+                "//*["
+                f"@id={bare_id_literal}"
+                f" or (contains(@id, '.') and substring(@id, string-length(@id) - string-length({id_suffix_literal}) + 1) = {id_suffix_literal})"
+                f" or @name={bare_name_literal}"
+                f" or (contains(@name, '.') and substring(@name, string-length(@name) - string-length({name_suffix_literal}) + 1) = {name_suffix_literal})"
+                f" or contains(@name, {name_plus_literal})"
+                f" or contains(@name, {original_key_literal})"
+                "]"
+            )
             try:
-                # if the <select> element exists but is inside an invisible container, make the container visible
-                select_container_xpath = f"//div[@class='l-row' and descendant::select[@id='{special_attribute_key}']]"
-                if not await self.web_check(By.XPATH, select_container_xpath, Is.DISPLAYED):
-                    await (await self.web_find(By.XPATH, select_container_xpath)).apply("elem => elem.singleNodeValue.style.display = 'block'")
-            except TimeoutError:
-                # Skip visibility adjustment when container cannot be located in time.
-                pass  # nosec
+                special_attr_elem = await self.web_find(
+                    By.XPATH,
+                    special_attr_xpath,
+                )
+            except TimeoutError as ex:
+                LOG.debug(
+                    "Attribute field '%s' (normalized: '%s') could not be found.",
+                    special_attribute_key,
+                    normalized_special_attribute_key,
+                )
+                if special_attribute_key.endswith("_s"):
+                    LOG.debug(
+                        "Legacy special-attribute id-only selectors (for example '%s') are intentionally not targeted directly. "
+                        "If this category still renders legacy id-only controls, a dedicated rebuild is required.",
+                        special_attribute_key,
+                    )
+                raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
 
             try:
-                # finding element by name cause id are composed sometimes eg. autos.marke_s+autos.model_s for Modell by cars
-                special_attr_elem = await self.web_find(By.XPATH, f"//*[contains(@name, '{special_attribute_key}')]")
-            except TimeoutError:
-                # Trying to find element by ID instead cause sometimes there is NO name attribute...
-                try:
-                    special_attr_elem = await self.web_find(By.ID, special_attribute_key)
-                except TimeoutError:
-                    # New site dropped Solr type suffixes (_s, _i, _b, etc.) from element IDs — try without suffix
-                    stripped_key = re.sub(r"_[a-z]+$", "", special_attribute_key)
-                    if stripped_key == special_attribute_key:
-                        LOG.debug("Attribute field '%s' could not be found.", special_attribute_key)
-                        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from None
-                    try:
-                        special_attr_elem = await self.web_find(By.ID, stripped_key)
-                    except TimeoutError as ex:
-                        LOG.debug("Attribute field '%s' could not be found.", special_attribute_key)
-                        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
+                elem_id = cast(str | None, special_attr_elem.attrs.get("id"))
+                elem_selector_type = By.ID if elem_id else By.XPATH
+                elem_selector_value = elem_id or special_attr_xpath
 
-            try:
-                elem_id:str = str(special_attr_elem.attrs.id)
                 if special_attr_elem.local_name == "select":
                     LOG.debug("Attribute field '%s' seems to be a select...", special_attribute_key)
-                    await self.web_select(By.ID, elem_id, special_attribute_value_str)
+                    await self.web_select(elem_selector_type, elem_selector_value, special_attribute_value_str)
                 elif special_attr_elem.attrs.type == "checkbox":
                     LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
-                    await self.web_click(By.ID, elem_id)
+                    truthy_values = {"1", "true", "yes", "on", "ja", "checked"}
+                    falsy_values = {"", "0", "false", "no", "off", "nein", "unchecked", "none"}
+                    normalized_checkbox_value = special_attribute_value_str.strip().lower()
+                    if normalized_checkbox_value in truthy_values:
+                        desired_checked = True
+                    elif normalized_checkbox_value in falsy_values:
+                        desired_checked = False
+                    else:
+                        LOG.debug(
+                            "Attribute field '%s' has unsupported checkbox value '%s'.",
+                            special_attribute_key,
+                            special_attribute_value_str,
+                        )
+                        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
+
+                    current_checked_attr = special_attr_elem.attrs.get("checked")
+                    if isinstance(current_checked_attr, bool):
+                        current_checked = current_checked_attr
+                    else:
+                        normalized_current_checked = str(current_checked_attr).strip().lower() if current_checked_attr is not None else ""
+                        current_checked = normalized_current_checked not in falsy_values
+
+                    if desired_checked != current_checked:
+                        await self.web_click(elem_selector_type, elem_selector_value)
                 elif special_attr_elem.local_name == "button" and special_attr_elem.attrs.get("role") == "combobox":
                     LOG.debug("Attribute field '%s' seems to be a button combobox (click-to-open dropdown)...", special_attribute_key)
-                    await self.__select_button_combobox(elem_id, special_attribute_value_str)
+                    ensure(elem_id, f"No id available for button combobox special attribute [{special_attribute_key}]")
+                    await self.__select_button_combobox(cast(str, elem_id), special_attribute_value_str)
                 elif special_attr_elem.attrs.type == "text" and special_attr_elem.attrs.get("role") == "combobox":
                     LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
-                    await self.web_select_combobox(By.ID, elem_id, special_attribute_value_str)
+                    await self.web_select_combobox(elem_selector_type, elem_selector_value, special_attribute_value_str)
                 else:
                     LOG.debug("Attribute field '%s' seems to be a text input...", special_attribute_key)
-                    await self.web_input(By.ID, elem_id, special_attribute_value_str)
+                    await self.web_input(elem_selector_type, elem_selector_value, special_attribute_value_str)
             except TimeoutError as ex:
                 LOG.debug("Failed to set attribute field '%s' via known input types.", special_attribute_key)
                 raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
@@ -2444,9 +2536,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         short_timeout = self._timeout("quick_dom")
         if ad_cfg.shipping_type == "PICKUP":
             try:
-                await self.web_click(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
+                if not await self.web_check(By.ID, "ad-shipping-enabled-no", Is.SELECTED, timeout = short_timeout):
+                    await self.web_click(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
+                raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % ad_cfg.shipping_type) from ex
         elif ad_cfg.shipping_options:
             # Ensure shipping is enabled before opening the dialog (may already be selected)
             try:
@@ -2472,50 +2566,61 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             await self.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
             await self.__set_shipping_options(ad_cfg, mode)
         else:
-            special_shipping_selector = '//select[contains(@id, ".versand_s")]'
-            is_commercial_shipping = False
+            # Ensure shipping is enabled before opening the dialog (may already be selected)
             try:
-                has_commercial_selector = await self.web_check(By.XPATH, special_shipping_selector, Is.DISPLAYED, timeout = short_timeout)
+                await self.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
+                await self.web_sleep(500, 800)
+            except TimeoutError as ex:
+                LOG.debug("Shipping enabled toggle not found before options dialog: %s", ex)
+
+            # no options. only costs. Set custom shipping cost
+            try:
+                await self.web_click(By.ID, "ad-shipping-options")
+            except TimeoutError as ex:
+                LOG.debug(ex, exc_info = True)
+                LOG.warning(
+                    "Shipping options dialog entry not found. Legacy '.versand_s' select UI is no longer supported and requires dedicated rebuild."
+                )
+                raise TimeoutError(_("Unable to open shipping options dialog!")) from ex
+
+            try:
+                # when "Andere Versandmethoden" is not available, then we are already on the individual page
+                await self.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
             except TimeoutError:
-                # Element does not exist in DOM (non-commercial account or UI change); fall through to dialog-based shipping.
-                has_commercial_selector = False
-            if has_commercial_selector:
-                shipping_value = "ja" if ad_cfg.shipping_type == "SHIPPING" else "nein"
-                await self.web_select(By.XPATH, special_shipping_selector, shipping_value)
-                is_commercial_shipping = True
-            if not is_commercial_shipping:
+                # Dialog option not present; already on the individual shipping page.
+                pass
+
+            try:
+                # only click on "Individueller Versand" when the price input is not available, otherwise it's already checked
+                # (important for mode = UPDATE)
+                await self.web_find(By.ID, "ad-individual-shipping-price", timeout = short_timeout)
+            except TimeoutError:
+                # Input not visible yet; click the individual shipping option.
                 try:
-                    # Ensure shipping is enabled before opening the dialog (may already be selected)
-                    try:
-                        await self.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
-                        await self.web_sleep(500, 800)
-                    except TimeoutError as ex:
-                        LOG.debug("Shipping enabled toggle not found before options dialog: %s", ex)
-                    # no options. only costs. Set custom shipping cost
-                    await self.web_click(By.ID, "ad-shipping-options")
-                    try:
-                        # when "Andere Versandmethoden" is not available, then we are already on the individual page
-                        await self.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
-                    except TimeoutError:
-                        # Dialog option not present; already on the individual shipping page.
-                        pass
-
-                    try:
-                        # only click on "Individueller Versand" when the price input is not available, otherwise its already checked
-                        # (important for mode = UPDATE)
-                        await self.web_find(By.ID, "ad-individual-shipping-price", timeout = short_timeout)
-                    except TimeoutError:
-                        # Input not visible yet; click the individual shipping option.
-                        await self.web_click(By.ID, "ad-individual-shipping-checkbox-control")
-
-                    if ad_cfg.shipping_costs is not None:
-                        await self.web_input(
-                            By.ID, "ad-individual-shipping-price", str.replace(str(ad_cfg.shipping_costs), ".", ",")
-                        )
-                    await self.web_click(By.XPATH, '//button[contains(., "Fertig")]')
+                    await self.web_click(By.ID, "ad-individual-shipping-checkbox-control")
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
-                    raise TimeoutError(_("Unable to close shipping dialog!")) from ex
+                    raise TimeoutError(_("Unable to select individual shipping option!")) from ex
+
+            if ad_cfg.shipping_costs is not None:
+                try:
+                    await self.web_input(
+                        By.ID, "ad-individual-shipping-price", str(ad_cfg.shipping_costs).replace(".", ",")
+                    )
+                except TimeoutError as ex:
+                    LOG.debug(ex, exc_info = True)
+                    raise TimeoutError(_("Unable to set shipping price!")) from ex
+            else:
+                LOG.debug(
+                    "Shipping option 'ad-individual-shipping-checkbox-control' selected but no shipping_costs provided; "
+                    "leaving field 'ad-individual-shipping-price' unchanged."
+                )
+
+            try:
+                await self.web_click(By.XPATH, '//button[contains(., "Fertig")]')
+            except TimeoutError as ex:
+                LOG.debug(ex, exc_info = True)
+                raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 
     async def __set_shipping_options(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         if not ad_cfg.shipping_options:
