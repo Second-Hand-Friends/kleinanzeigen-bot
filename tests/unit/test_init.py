@@ -2889,6 +2889,54 @@ class TestKleinanzeigenBotShippingOptions:
             assert "contains(@name, 'autos.model_s')" in str(mock_select.await_args.args[1])
             assert mock_select.await_args.args[2] == "a3"
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("checked_attr", "attribute_value", "expect_click"),
+        [(None, "true", True), ("checked", "true", False), ("checked", "false", True)],
+    )
+    async def test_special_attributes_checkbox_clicks_only_on_state_change(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        checked_attr:str | None,
+        attribute_value:str,
+        expect_click:bool,
+    ) -> None:
+        """Checkbox attributes should only click when current and desired states differ."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"feature_b": attribute_value},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        checkbox_elem = MagicMock()
+        checkbox_attrs = MagicMock()
+        checkbox_attrs.id = "feature"
+        checkbox_attrs.type = "checkbox"
+        checkbox_attrs.get.side_effect = lambda key, default = None: {
+            "id": "feature",
+            "name": "attributeMap[feature]",
+            "type": "checkbox",
+            "role": None,
+            "checked": checked_attr,
+        }.get(key, default)
+        checkbox_elem.attrs = checkbox_attrs
+        checkbox_elem.local_name = "input"
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = checkbox_elem),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
+
+        if expect_click:
+            mock_click.assert_awaited_once_with(By.ID, "feature")
+        else:
+            mock_click.assert_not_awaited()
+
 
 class TestConditionSelector:
     """Regression tests for condition dialog selection."""
@@ -2927,8 +2975,8 @@ class TestConditionSelector:
             assert any("Bestätigen" in selector for selector in clicked_xpath_selectors)
 
     @pytest.mark.asyncio
-    async def test_condition_missing_selector_is_swallowed(self, test_bot:KleinanzeigenBot) -> None:
-        """Missing condition trigger should be treated as optional and not fail publish."""
+    async def test_condition_missing_selector_raises(self, test_bot:KleinanzeigenBot) -> None:
+        """Missing condition trigger should fail fast to avoid stale condition data."""
         async def click_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> None:
             if (
                 selector_type == By.XPATH
@@ -2937,7 +2985,10 @@ class TestConditionSelector:
             ):
                 raise TimeoutError("missing trigger")
 
-        with patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect):
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect),
+            pytest.raises(TimeoutError, match = "Failed to set attribute 'condition_s'"),
+        ):
             await getattr(test_bot, "_KleinanzeigenBot__set_condition")("ok")
 
     @pytest.mark.asyncio

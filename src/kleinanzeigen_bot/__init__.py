@@ -2328,9 +2328,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 By.XPATH,
                 "//label[contains(@for, '.condition')]/following::button[@aria-haspopup='dialog' or @aria-haspopup='true'][1]",
             )
-        except TimeoutError:
+        except TimeoutError as ex:
             LOG.debug("Unable to open condition dialog and select condition [%s]", condition_value, exc_info = True)
-            return
+            raise TimeoutError(_("Failed to set attribute '%s'") % "condition_s") from ex
 
         try:
             await self.web_find(By.XPATH, '//*[self::dialog or @role="dialog"]', timeout = short_timeout)
@@ -2456,7 +2456,30 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     await self.web_select(elem_selector_type, elem_selector_value, special_attribute_value_str)
                 elif special_attr_elem.attrs.type == "checkbox":
                     LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
-                    await self.web_click(elem_selector_type, elem_selector_value)
+                    truthy_values = {"1", "true", "yes", "on", "ja", "checked"}
+                    falsy_values = {"", "0", "false", "no", "off", "nein", "unchecked", "none"}
+                    normalized_checkbox_value = special_attribute_value_str.strip().lower()
+                    if normalized_checkbox_value in truthy_values:
+                        desired_checked = True
+                    elif normalized_checkbox_value in falsy_values:
+                        desired_checked = False
+                    else:
+                        LOG.debug(
+                            "Attribute field '%s' has unsupported checkbox value '%s'.",
+                            special_attribute_key,
+                            special_attribute_value_str,
+                        )
+                        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
+
+                    current_checked_attr = special_attr_elem.attrs.get("checked")
+                    if isinstance(current_checked_attr, bool):
+                        current_checked = current_checked_attr
+                    else:
+                        normalized_current_checked = str(current_checked_attr).strip().lower() if current_checked_attr is not None else ""
+                        current_checked = normalized_current_checked not in falsy_values
+
+                    if desired_checked != current_checked:
+                        await self.web_click(elem_selector_type, elem_selector_value)
                 elif special_attr_elem.local_name == "button" and special_attr_elem.attrs.get("role") == "combobox":
                     LOG.debug("Attribute field '%s' seems to be a button combobox (click-to-open dropdown)...", special_attribute_key)
                     ensure(elem_id, f"No id available for button combobox special attribute [{special_attribute_key}]")
