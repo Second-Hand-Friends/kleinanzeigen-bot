@@ -186,8 +186,7 @@ Common API values are `new`, `like_new`, `ok`, `alright`, and `defect` (for exam
 
 ```yaml
 special_attributes:
-  # Example for item condition (API value, not display label):
-  # condition_s: like_new   # common values: new, like_new, ok, alright, defect (availability depends on category)
+  # condition_s: like_new  # common values include new, like_new, ok, alright, defect
 
   # Example for rental properties
   # haus_mieten.zimmer_d: "3"  # Number of rooms

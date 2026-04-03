@@ -2839,11 +2839,11 @@ class TestKleinanzeigenBotShippingOptions:
             await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
 
             # Verify that web_select was called with string values (str() conversion)
-            mock_select.assert_any_call(By.ID, "wohnzimmer.art", "12345")  # Converted to string
-            mock_select.assert_any_call(By.ID, "wohnzimmer.color", "red")  # Already string
+            mock_select.assert_any_await(By.ID, "wohnzimmer.art", "12345")  # Converted to string
+            mock_select.assert_any_await(By.ID, "wohnzimmer.color", "red")  # Already string
 
             # Verify that __set_condition was called with string value
-            mock_set_condition.assert_called_once_with("67890")  # Converted to string
+            mock_set_condition.assert_awaited_once_with("67890")  # Converted to string
 
     @pytest.mark.asyncio
     async def test_special_attributes_compound_name_lookup(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
@@ -3101,15 +3101,23 @@ class TestWantedShippingSelection:
             mock_check.side_effect = check_side_effect
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
 
+        quick_dom_timeout = test_bot._timeout("quick_dom")
         wanted_shipping_checks = [
-            c for c in mock_check.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == expected_radio
+            c for c in mock_check.await_args_list
+            if len(c.args) >= 3
+            and c.args[0] == By.ID
+            and c.args[1] == expected_radio
+            and c.args[2] == Is.SELECTED
+            and c.kwargs.get("timeout") == quick_dom_timeout
         ]
         assert len(wanted_shipping_checks) == 1
 
         wanted_shipping_clicks = [
-            c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == expected_radio
+            c for c in mock_click.await_args_list
+            if len(c.args) >= 2
+            and c.args[0] == By.ID
+            and c.args[1] == expected_radio
+            and c.kwargs.get("timeout") == quick_dom_timeout
         ]
         assert len(wanted_shipping_clicks) == 1
 
@@ -3139,9 +3147,23 @@ class TestWantedShippingSelection:
             mock_check.return_value = True
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
 
+        quick_dom_timeout = test_bot._timeout("quick_dom")
+        wanted_shipping_checks = [
+            c for c in mock_check.await_args_list
+            if len(c.args) >= 3
+            and c.args[0] == By.ID
+            and c.args[1] == "ad-shipping-enabled-yes"
+            and c.args[2] == Is.SELECTED
+            and c.kwargs.get("timeout") == quick_dom_timeout
+        ]
+        assert len(wanted_shipping_checks) == 1
+
         wanted_shipping_clicks = [
-            c for c in mock_click.call_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-shipping-enabled-yes"
+            c for c in mock_click.await_args_list
+            if len(c.args) >= 2
+            and c.args[0] == By.ID
+            and c.args[1] == "ad-shipping-enabled-yes"
+            and c.kwargs.get("timeout") == quick_dom_timeout
         ]
         assert len(wanted_shipping_clicks) == 0
 
