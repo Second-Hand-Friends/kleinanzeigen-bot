@@ -2886,7 +2886,7 @@ class TestKleinanzeigenBotShippingOptions:
             assert mock_select.await_count == 1
             assert mock_select.await_args is not None
             assert mock_select.await_args.args[0] == By.XPATH
-            assert "autos.model_s" in str(mock_select.await_args.args[1])
+            assert "contains(@name, 'autos.model_s')" in str(mock_select.await_args.args[1])
             assert mock_select.await_args.args[2] == "a3"
 
 
@@ -2929,7 +2929,15 @@ class TestConditionSelector:
     @pytest.mark.asyncio
     async def test_condition_missing_selector_is_swallowed(self, test_bot:KleinanzeigenBot) -> None:
         """Missing condition trigger should be treated as optional and not fail publish."""
-        with patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = TimeoutError("missing trigger")):
+        async def click_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> None:
+            if (
+                selector_type == By.XPATH
+                and "contains(@for, '.condition')" in selector_value
+                and "@aria-haspopup='dialog'" in selector_value
+            ):
+                raise TimeoutError("missing trigger")
+
+        with patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect):
             await getattr(test_bot, "_KleinanzeigenBot__set_condition")("ok")
 
     @pytest.mark.asyncio
@@ -2959,36 +2967,51 @@ class TestConditionSelector:
 class TestShippingDialogFlow:
     """Regression tests for shipping dialog flow using new radio selectors only."""
 
+    def _assert_pickup_radio_interaction(
+        self,
+        test_bot:KleinanzeigenBot,
+        mock_check:AsyncMock,
+        mock_click:AsyncMock,
+        *,
+        selected:bool,
+    ) -> None:
+        quick_dom_timeout = test_bot._timeout("quick_dom")
+        mock_check.assert_awaited_once_with(By.ID, "ad-shipping-enabled-no", Is.SELECTED, timeout = quick_dom_timeout)
+        if selected:
+            mock_click.assert_not_awaited()
+            return
+
+        mock_click.assert_awaited_once_with(By.ID, "ad-shipping-enabled-no", timeout = quick_dom_timeout)
+
     @pytest.mark.asyncio
-    async def test_pickup_shipping_clicks_pickup_radio(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+    @pytest.mark.parametrize("selected", [False, True])
+    async def test_pickup_shipping_radio_selection(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        selected:bool,
+    ) -> None:
         """PICKUP shipping should toggle ad-shipping-enabled-no."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         with (
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False) as mock_check,
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = selected) as mock_check,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
 
-        mock_check.assert_awaited_once_with(By.ID, "ad-shipping-enabled-no", Is.SELECTED, timeout = test_bot._timeout("quick_dom"))
-        mock_click.assert_awaited_once()
-        assert mock_click.await_args is not None
-        assert mock_click.await_args.args[:2] == (By.ID, "ad-shipping-enabled-no")
-        assert mock_click.await_args.kwargs["timeout"] == test_bot._timeout("quick_dom")
+        self._assert_pickup_radio_interaction(test_bot, mock_check, mock_click, selected = selected)
 
     @pytest.mark.asyncio
-    async def test_pickup_shipping_skips_click_when_already_selected(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
-        """PICKUP shipping should not click toggle when already selected."""
+    async def test_pickup_shipping_raises_when_radio_lookup_times_out(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """PICKUP shipping should fail fast when pickup radio selector is unavailable."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         with (
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True) as mock_check,
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = TimeoutError("pickup lookup timed out")),
+            pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'PICKUP'!"),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
-
-        mock_check.assert_awaited_once_with(By.ID, "ad-shipping-enabled-no", Is.SELECTED, timeout = test_bot._timeout("quick_dom"))
-        mock_click.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_shipping_without_options_uses_radio_and_dialog(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
@@ -3029,6 +3052,35 @@ class TestShippingDialogFlow:
 
 class TestWantedShippingSelection:
     """Regression tests for WANTED shipping path using radio selectors."""
+
+    def _assert_wanted_shipping_radio_interaction(
+        self,
+        test_bot:KleinanzeigenBot,
+        mock_check:AsyncMock,
+        mock_click:AsyncMock,
+        *,
+        expected_radio:str,
+        clicked:bool,
+    ) -> None:
+        quick_dom_timeout = test_bot._timeout("quick_dom")
+        check_calls = [
+            c for c in mock_check.await_args_list
+            if len(c.args) >= 3
+            and c.args[0] == By.ID
+            and c.args[1] == expected_radio
+            and c.args[2] == Is.SELECTED
+            and c.kwargs.get("timeout") == quick_dom_timeout
+        ]
+        assert len(check_calls) == 1
+
+        click_calls = [
+            c for c in mock_click.await_args_list
+            if len(c.args) >= 2
+            and c.args[0] == By.ID
+            and c.args[1] == expected_radio
+            and c.kwargs.get("timeout") == quick_dom_timeout
+        ]
+        assert len(click_calls) == (1 if clicked else 0)
 
     @contextmanager
     def _mock_publish_dependencies(self, test_bot:KleinanzeigenBot, mock_page:MagicMock) -> Iterator[tuple[MagicMock, MagicMock]]:
@@ -3101,25 +3153,13 @@ class TestWantedShippingSelection:
             mock_check.side_effect = check_side_effect
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
 
-        quick_dom_timeout = test_bot._timeout("quick_dom")
-        wanted_shipping_checks = [
-            c for c in mock_check.await_args_list
-            if len(c.args) >= 3
-            and c.args[0] == By.ID
-            and c.args[1] == expected_radio
-            and c.args[2] == Is.SELECTED
-            and c.kwargs.get("timeout") == quick_dom_timeout
-        ]
-        assert len(wanted_shipping_checks) == 1
-
-        wanted_shipping_clicks = [
-            c for c in mock_click.await_args_list
-            if len(c.args) >= 2
-            and c.args[0] == By.ID
-            and c.args[1] == expected_radio
-            and c.kwargs.get("timeout") == quick_dom_timeout
-        ]
-        assert len(wanted_shipping_clicks) == 1
+        self._assert_wanted_shipping_radio_interaction(
+            test_bot,
+            mock_check,
+            mock_click,
+            expected_radio = expected_radio,
+            clicked = True,
+        )
 
     @pytest.mark.asyncio
     async def test_wanted_shipping_skips_click_when_radio_already_selected(
@@ -3147,25 +3187,13 @@ class TestWantedShippingSelection:
             mock_check.return_value = True
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
 
-        quick_dom_timeout = test_bot._timeout("quick_dom")
-        wanted_shipping_checks = [
-            c for c in mock_check.await_args_list
-            if len(c.args) >= 3
-            and c.args[0] == By.ID
-            and c.args[1] == "ad-shipping-enabled-yes"
-            and c.args[2] == Is.SELECTED
-            and c.kwargs.get("timeout") == quick_dom_timeout
-        ]
-        assert len(wanted_shipping_checks) == 1
-
-        wanted_shipping_clicks = [
-            c for c in mock_click.await_args_list
-            if len(c.args) >= 2
-            and c.args[0] == By.ID
-            and c.args[1] == "ad-shipping-enabled-yes"
-            and c.kwargs.get("timeout") == quick_dom_timeout
-        ]
-        assert len(wanted_shipping_clicks) == 0
+        self._assert_wanted_shipping_radio_interaction(
+            test_bot,
+            mock_check,
+            mock_click,
+            expected_radio = "ad-shipping-enabled-yes",
+            clicked = False,
+        )
 
     @pytest.mark.asyncio
     async def test_wanted_shipping_raises_when_radio_lookup_times_out(

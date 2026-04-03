@@ -2515,6 +2515,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     await self.web_click(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
+                raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % ad_cfg.shipping_type) from ex
         elif ad_cfg.shipping_options:
             # Ensure shipping is enabled before opening the dialog (may already be selected)
             try:
@@ -2584,6 +2585,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
                     raise TimeoutError(_("Unable to set shipping price!")) from ex
+            else:
+                LOG.debug(
+                    "Shipping option 'ad-individual-shipping-checkbox-control' selected but no shipping_costs provided; "
+                    "leaving field 'ad-individual-shipping-price' unchanged."
+                )
 
             try:
                 await self.web_click(By.XPATH, '//button[contains(., "Fertig")]')
