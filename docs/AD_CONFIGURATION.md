@@ -181,8 +181,14 @@ You can configure `auto_price_reduction` once under `ad_defaults` in `config.yam
 
 Special attributes are category-specific key/value pairs. Use the download command to inspect existing ads in your category and reuse the keys you see under `special_attributes`.
 
+For condition values, use the API values from downloaded ads instead of translated display labels.
+Common API values are `new`, `like_new`, `ok`, `alright`, and `defect` (for example API `like_new` corresponds to the German UI label `Sehr Gut`), but available values can vary by category.
+
 ```yaml
 special_attributes:
+  # Example for item condition (API value, not display label):
+  # condition_s: like_new   # common values: new, like_new, ok, alright, defect (availability depends on category)
+
   # Example for rental properties
   # haus_mieten.zimmer_d: "3"  # Number of rooms
 ```
