@@ -3003,7 +3003,7 @@ class TestShippingDialogFlow:
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
 
-            click_args = [c.args for c in mock_click.call_args_list]
+            click_args = [c.args for c in mock_click.await_args_list]
             assert (By.ID, "ad-shipping-enabled-yes") in [(a[0], a[1]) for a in click_args if len(a) >= 2]
             assert (By.ID, "ad-shipping-options") in [(a[0], a[1]) for a in click_args if len(a) >= 2]
             assert any("Fertig" in str(a[1]) for a in click_args if len(a) >= 2)
@@ -3166,6 +3166,38 @@ class TestWantedShippingSelection:
             and c.kwargs.get("timeout") == quick_dom_timeout
         ]
         assert len(wanted_shipping_clicks) == 0
+
+    @pytest.mark.asyncio
+    async def test_wanted_shipping_raises_when_radio_lookup_times_out(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+        tmp_path:Path,
+    ) -> None:
+        """WANTED shipping should fail fast when new radio selectors are unavailable."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "type": "WANTED",
+                "shipping_type": "SHIPPING",
+                "shipping_options": [],
+                "price_type": "NOT_APPLICABLE",
+                "price": None,
+            }
+        )
+        ad_cfg_orig = ad_cfg.model_dump()
+        ad_file = str(tmp_path / "ad.yaml")
+
+        async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
+            if selector_type == By.ID and selector_value == "ad-shipping-enabled-yes":
+                raise TimeoutError("radio lookup timed out")
+            return True
+
+        with self._mock_publish_dependencies(test_bot, mock_page) as (mock_check, _):
+            mock_check.side_effect = check_side_effect
+            with pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'SHIPPING'!"):
+                await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
 
 
 class TestKleinanzeigenBotUrlConstruction:

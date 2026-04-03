@@ -2029,8 +2029,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     try:
                         if not await self.web_check(By.ID, shipping_toggle, Is.SELECTED, timeout = short_timeout):
                             await self.web_click(By.ID, shipping_toggle, timeout = short_timeout)
-                    except TimeoutError:
+                    except TimeoutError as ex:
                         LOG.warning("Failed to set shipping attribute for type '%s'!", shipping_type)
+                        raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % shipping_type) from ex
             else:
                 await self.__set_shipping(ad_cfg, mode)
         else:
@@ -2435,6 +2436,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     special_attribute_key,
                     normalized_special_attribute_key,
                 )
+                if special_attribute_key.endswith("_s"):
+                    LOG.debug(
+                        "Legacy special-attribute id-only selectors (for example '%s') are intentionally not targeted directly. "
+                        "If this category still renders legacy id-only controls, a dedicated rebuild is required.",
+                        special_attribute_key,
+                    )
                 raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
 
             try:
@@ -2545,6 +2552,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 await self.web_click(By.ID, "ad-shipping-options")
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
+                LOG.warning(
+                    "Shipping options dialog entry not found. Legacy '.versand_s' select UI is no longer supported and requires dedicated rebuild."
+                )
                 raise TimeoutError(_("Unable to open shipping options dialog!")) from ex
 
             try:

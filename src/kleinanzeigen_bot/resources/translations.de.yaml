@@ -299,6 +299,8 @@ kleinanzeigen_bot/__init__.py:
     "Timing collector flush failed: %s": "Zeitmessdaten konnten nicht gespeichert werden: %s"
 
   __set_shipping:
+    ? "Shipping options dialog entry not found. Legacy '.versand_s' select UI is no longer supported and requires dedicated rebuild."
+    : "Einstieg in den Versandoptionen-Dialog nicht gefunden. Die alte '.versand_s'-Select-UI wird nicht mehr unterstützt und muss gezielt neu umgesetzt werden."
     "Unable to open shipping options dialog!": "Versandoptionen-Dialog konnte nicht geöffnet werden!"
     "Unable to select individual shipping option!": "Individuelle Versandoption konnte nicht ausgewählt werden!"
     "Unable to set shipping price!": "Versandpreis konnte nicht gesetzt werden!"
