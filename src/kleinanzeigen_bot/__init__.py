@@ -2321,6 +2321,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.info("############################################")
 
     async def __set_condition(self, condition_value:str) -> None:
+        short_timeout = self._timeout("quick_dom")
         try:
             # Open condition dialog
             await self.web_click(
@@ -2332,10 +2333,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return
 
         try:
-            await self.web_find(By.XPATH, '//*[self::dialog or @role="dialog"]')
+            await self.web_find(By.XPATH, '//*[self::dialog or @role="dialog"]', timeout = short_timeout)
             condition_radio = await self.web_find(
                 By.XPATH,
                 f"//*[self::dialog or @role='dialog']//input[@type='radio' and @value={_xpath_literal(condition_value)}]",
+                timeout = short_timeout,
             )
             condition_radio_id_attr = condition_radio.attrs.get("id")
             condition_radio_id = str(condition_radio_id_attr) if condition_radio_id_attr else ""
