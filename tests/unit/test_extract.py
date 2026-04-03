@@ -585,7 +585,6 @@ class TestAdExtractorNavigation:
             # --- Setup mock objects for DOM elements ---
             # Mocks needed for the actual execution flow
             ad_list_container_mock = MagicMock()
-            pagination_section_mock = MagicMock()
             cardbox_mock = MagicMock()  # Represents the <li> element
             link_mock = MagicMock()  # Represents the <a> element
             link_mock.attrs = {"href": "/s-anzeige/test/12345"}  # Configure the desired output
@@ -597,23 +596,20 @@ class TestAdExtractorNavigation:
             # --- Setup mock responses for web_find and web_find_all in CORRECT ORDER ---
 
             # 1. Initial find for ad list container (before loop)
-            # 2. Find for pagination section (pagination check)
-            # 3. Find for ad list container (inside loop)
-            # 4. Find for the link (inside list comprehension)
+            # 2. Find for ad list container (inside loop)
+            # 3. Find for the link (inside list comprehension)
             mock_web_find.side_effect = [
                 ad_list_container_mock,  # Call 1: find #my-manageitems-adlist (before loop)
-                pagination_section_mock,  # Call 2: find .Pagination
-                ad_list_container_mock,  # Call 3: find #my-manageitems-adlist (inside loop)
-                link_mock,  # Call 4: find 'div.manageitems-item-ad h3 a.text-onSurface'
+                ad_list_container_mock,  # Call 2: find #my-manageitems-adlist (inside loop)
+                link_mock,  # Call 3: find 'div.manageitems-item-ad h3 a.text-onSurface'
                 # Add more mocks here if the pagination navigation logic calls web_find again
             ]
 
-            # 1. Find all 'Nächste' buttons (pagination check) - Return empty list for single page test case
+            # 1. Find all next buttons (pagination check) - Raise timeout for single page
             # 2. Find all '.cardbox' elements (inside loop)
             mock_web_find_all.side_effect = [
-                [],  # Call 1: find 'button[aria-label="Nächste"]' -> No next button = single page
+                TimeoutError("No pagination"),  # Call 1: find 'button[aria-label="Nächste"]' -> single page
                 [cardbox_mock],  # Call 2: find .cardbox -> One ad item
-                # Add more mocks here if pagination navigation calls web_find_all
             ]
 
             # --- Execute test and verify results ---
@@ -626,7 +622,6 @@ class TestAdExtractorNavigation:
             mock_web_find.assert_has_calls(
                 [
                     call(By.ID, "my-manageitems-adlist"),
-                    call(By.CSS_SELECTOR, ".Pagination", timeout = 10),
                     call(By.ID, "my-manageitems-adlist"),
                     call(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = cardbox_mock),
                 ],
@@ -635,7 +630,7 @@ class TestAdExtractorNavigation:
 
             mock_web_find_all.assert_has_calls(
                 [
-                    call(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', parent = pagination_section_mock),
+                    call(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', timeout = 10),
                     call(By.CLASS_NAME, "cardbox", parent = ad_list_container_mock),
                 ],
                 any_order = False,
@@ -645,7 +640,6 @@ class TestAdExtractorNavigation:
     async def test_extract_own_ads_urls_paginates_with_enabled_next_button(self, test_extractor:extract_module.AdExtractor) -> None:
         """Ensure the paginator clicks the first enabled next button and advances."""
         ad_list_container_mock = MagicMock()
-        pagination_section_mock = MagicMock()
         cardbox_page_one = MagicMock()
         cardbox_page_two = MagicMock()
         link_page_one = MagicMock(attrs = {"href": "/s-anzeige/page-one/111"})
@@ -663,8 +657,6 @@ class TestAdExtractorNavigation:
         async def fake_web_find(selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element:
             if selector_type == By.ID and selector_value == "my-manageitems-adlist":
                 return ad_list_container_mock
-            if selector_type == By.CSS_SELECTOR and selector_value == ".Pagination":
-                return pagination_section_mock
             if selector_type == By.CSS_SELECTOR and selector_value == "div h3 a.text-onSurface":
                 return link_queue.pop(0)
             raise AssertionError(f"Unexpected selector {selector_type} {selector_value}")
@@ -678,7 +670,7 @@ class TestAdExtractorNavigation:
                     return [next_button_enabled]  # initial detection -> multi page
                 if next_button_call["count"] == 2:
                     return [disabled_button, next_button_enabled]  # navigation on page 1
-                return []  # after navigating, stop
+                return [disabled_button]  # after navigating, stop
             if selector_type == By.CLASS_NAME and selector_value == "cardbox":
                 cardbox_call["count"] += 1
                 return [cardbox_page_one] if cardbox_call["count"] == 1 else [cardbox_page_two]
@@ -695,6 +687,116 @@ class TestAdExtractorNavigation:
 
         assert refs == ["/s-anzeige/page-one/111", "/s-anzeige/page-two/222"]
         next_button_enabled.click.assert_awaited()  # triggered once during navigation
+
+    @pytest.mark.asyncio
+    async def test_extract_own_ads_urls_deduplicates_duplicate_refs_on_same_page(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Duplicate refs on one page should be deduplicated while still paginating."""
+        ad_list_container_mock = MagicMock()
+        cardbox_page_one_a = MagicMock()
+        cardbox_page_one_b = MagicMock()
+        cardbox_page_two = MagicMock()
+
+        link_page_one_a = MagicMock(attrs = {"href": "/s-anzeige/duplicate/111"})
+        link_page_one_b = MagicMock(attrs = {"href": "/s-anzeige/duplicate/111"})
+        link_page_two = MagicMock(attrs = {"href": "/s-anzeige/page-two/222"})
+
+        next_button_enabled = AsyncMock()
+        next_button_enabled.attrs = {}
+        disabled_button = MagicMock()
+        disabled_button.attrs = {"disabled": True}
+
+        link_queue = [link_page_one_a, link_page_one_b, link_page_two]
+        next_button_call = {"count": 0}
+        cardbox_call = {"count": 0}
+
+        async def fake_web_find(selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element:
+            if selector_type == By.ID and selector_value == "my-manageitems-adlist":
+                return ad_list_container_mock
+            if selector_type == By.CSS_SELECTOR and selector_value == "div h3 a.text-onSurface":
+                return link_queue.pop(0)
+            raise AssertionError(f"Unexpected selector {selector_type} {selector_value}")
+
+        async def fake_web_find_all(
+            selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None
+        ) -> list[Element]:
+            if selector_type == By.CSS_SELECTOR and selector_value == 'button[aria-label="Nächste"]':
+                next_button_call["count"] += 1
+                if next_button_call["count"] == 1:
+                    return [next_button_enabled]  # initial detection -> multi page
+                if next_button_call["count"] == 2:
+                    return [disabled_button, next_button_enabled]  # navigation on page 1
+                return [disabled_button]  # after navigating, stop
+            if selector_type == By.CLASS_NAME and selector_value == "cardbox":
+                cardbox_call["count"] += 1
+                if cardbox_call["count"] == 1:
+                    return [cardbox_page_one_a, cardbox_page_one_b]
+                return [cardbox_page_two]
+            raise AssertionError(f"Unexpected find_all selector {selector_type} {selector_value}")
+
+        with (
+            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_find", new_callable = AsyncMock, side_effect = fake_web_find),
+            patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, side_effect = fake_web_find_all),
+        ):
+            refs = await test_extractor.extract_own_ads_urls()
+
+        assert refs == ["/s-anzeige/duplicate/111", "/s-anzeige/page-two/222"]
+        next_button_enabled.click.assert_awaited()  # triggered once during navigation
+
+    @pytest.mark.asyncio
+    async def test_extract_own_ads_urls_stops_when_second_page_contains_only_seen_refs(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Pagination should stop when page 2 only contains refs already seen on page 1."""
+        ad_list_container_mock = MagicMock()
+        cardbox_page_one = MagicMock()
+        cardbox_page_two = MagicMock()
+
+        link_page_one = MagicMock(attrs = {"href": "/s-anzeige/repeat/111"})
+        link_page_two = MagicMock(attrs = {"href": "/s-anzeige/repeat/111"})
+
+        next_button_enabled = AsyncMock()
+        next_button_enabled.attrs = {}
+        disabled_button = MagicMock()
+        disabled_button.attrs = {"disabled": True}
+
+        link_queue = [link_page_one, link_page_two]
+        next_button_call = {"count": 0}
+        cardbox_call = {"count": 0}
+
+        async def fake_web_find(selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element:
+            if selector_type == By.ID and selector_value == "my-manageitems-adlist":
+                return ad_list_container_mock
+            if selector_type == By.CSS_SELECTOR and selector_value == "div h3 a.text-onSurface":
+                return link_queue.pop(0)
+            raise AssertionError(f"Unexpected selector {selector_type} {selector_value}")
+
+        async def fake_web_find_all(
+            selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None
+        ) -> list[Element]:
+            if selector_type == By.CSS_SELECTOR and selector_value == 'button[aria-label="Nächste"]':
+                next_button_call["count"] += 1
+                if next_button_call["count"] == 1:
+                    return [next_button_enabled]  # initial detection -> multi page
+                if next_button_call["count"] == 2:
+                    return [disabled_button, next_button_enabled]  # navigation on page 1
+                return [disabled_button]  # after navigating, stop
+            if selector_type == By.CLASS_NAME and selector_value == "cardbox":
+                cardbox_call["count"] += 1
+                return [cardbox_page_one] if cardbox_call["count"] == 1 else [cardbox_page_two]
+            raise AssertionError(f"Unexpected find_all selector {selector_type} {selector_value}")
+
+        with (
+            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_find", new_callable = AsyncMock, side_effect = fake_web_find),
+            patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, side_effect = fake_web_find_all),
+        ):
+            refs = await test_extractor.extract_own_ads_urls()
+
+        assert refs == ["/s-anzeige/repeat/111"]
+        next_button_enabled.click.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_extract_own_ads_urls_timeout_in_callback(self, test_extractor:extract_module.AdExtractor) -> None:
@@ -745,12 +847,17 @@ class TestAdExtractorNavigation:
             patch.object(test_extractor, "web_open", new_callable = AsyncMock),
             patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
             patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, return_value = [first_item, second_item]),
+            patch.object(
+                test_extractor,
+                "web_find_all",
+                new_callable = AsyncMock,
+                side_effect = [TimeoutError("No pagination"), [first_item, second_item]],
+            ),
             patch.object(
                 test_extractor,
                 "web_find",
                 new_callable = AsyncMock,
-                side_effect = [ad_list_container_mock, TimeoutError(), ad_list_container_mock, TimeoutError(), valid_link],
+                side_effect = [ad_list_container_mock, ad_list_container_mock, TimeoutError(), valid_link],
             ),
         ):
             refs = await test_extractor.extract_own_ads_urls()
@@ -772,12 +879,17 @@ class TestAdExtractorNavigation:
             patch.object(test_extractor, "web_open", new_callable = AsyncMock),
             patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
             patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, return_value = [first_item, second_item]),
+            patch.object(
+                test_extractor,
+                "web_find_all",
+                new_callable = AsyncMock,
+                side_effect = [TimeoutError("No pagination"), [first_item, second_item]],
+            ),
             patch.object(
                 test_extractor,
                 "web_find",
                 new_callable = AsyncMock,
-                side_effect = [ad_list_container_mock, TimeoutError(), ad_list_container_mock, missing_href_link, valid_link],
+                side_effect = [ad_list_container_mock, ad_list_container_mock, missing_href_link, valid_link],
             ),
         ):
             refs = await test_extractor.extract_own_ads_urls()
@@ -803,19 +915,17 @@ class TestAdExtractorNavigation:
                 if call_count["count"] == 1:
                     # First call: ad list container (before pagination loop)
                     return ad_list_container_mock
-                # Second call: pagination check - raise TimeoutError to indicate no pagination
-                if call_count["count"] == 2:
-                    raise TimeoutError("No pagination")
-                # Third call: ad list container (inside callback)
+                # Second call: ad list container (inside callback)
                 return ad_list_container_mock
 
             mock_web_find.side_effect = mock_find_side_effect
 
-            # Make web_find_all raise a generic exception
-            async def mock_find_all_side_effect(*args:Any, **kwargs:Any) -> list[Element]:
-                raise AttributeError("Unexpected error")
-
-            with patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, side_effect = mock_find_all_side_effect):
+            with patch.object(
+                test_extractor,
+                "web_find_all",
+                new_callable = AsyncMock,
+                side_effect = [TimeoutError("No pagination"), AttributeError("Unexpected error")],
+            ):
                 refs = await test_extractor.extract_own_ads_urls()
 
             # Pagination should continue despite exception (callback returns False)

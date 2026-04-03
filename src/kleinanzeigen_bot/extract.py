@@ -378,8 +378,18 @@ class AdExtractor(WebScrapingMixin):
                             len(list_items),
                             page_num,
                         )
-                refs.extend(page_refs)
-                LOG.info("Successfully extracted %s refs from page %s.", len(page_refs), page_num)
+                unique_page_refs = list(dict.fromkeys(page_refs))
+                existing_refs = set(refs)
+                new_page_refs = [ref for ref in unique_page_refs if ref not in existing_refs]
+                if page_refs and not new_page_refs:
+                    LOG.warning(
+                        "No new ad refs found on page %s. Likely reloaded the same page. Stopping pagination.",
+                        page_num,
+                    )
+                    return True
+
+                refs.extend(new_page_refs)
+                LOG.info("Successfully extracted %s refs from page %s.", len(new_page_refs), page_num)
                 return False  # Continue to next page
 
             except TimeoutError:

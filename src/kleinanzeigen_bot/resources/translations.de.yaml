@@ -342,6 +342,7 @@ kleinanzeigen_bot/extract.py:
     "Could not find ad list container or ad items on page %s.": "Anzeigenlistencontainer oder Anzeigenelemente auf Seite %s nicht gefunden."
     "Error extracting refs on page %s: %s": "Fehler beim Extrahieren der Referenzen auf Seite %s: %s"
     "Found %s ad items on page %s.": "%s Anzeigen-Elemente auf Seite %s gefunden."
+    "No new ad refs found on page %s. Likely reloaded the same page. Stopping pagination.": "Keine neuen Anzeigenreferenzen auf Seite %s gefunden. Wahrscheinlich wurde dieselbe Seite erneut geladen. Pagination wird beendet."
     "Skipping ad item %s/%s on page %s: ad reference link has no href attribute.": "Überspringe Anzeigenelement %s/%s auf Seite %s: Anzeigenlink hat kein href-Attribut."
     "Skipping ad item %s/%s on page %s: no ad reference link found (likely unpublished or draft item).": "Überspringe Anzeigenelement %s/%s auf Seite %s: kein Anzeigenlink gefunden (wahrscheinlich unveröffentlicht oder Entwurf)."
     "Successfully extracted %s refs from page %s.": "%s Referenzen von Seite %s erfolgreich extrahiert."
@@ -571,7 +572,7 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "No pagination controls found. Assuming single page.": "Keine Paginierungssteuerung gefunden. Es wird von einer einzelnen Seite ausgegangen."
     "Processing page %s...": "Verarbeite Seite %s..."
     "Navigating to page %s...": "Navigiere zu Seite %s..."
-    "Last page reached (no enabled 'Naechste' button found).": "Letzte Seite erreicht (kein aktivierter 'Naechste'-Button gefunden)."
+    "Last page reached (next button is disabled).": "Letzte Seite erreicht (Weiter-Button ist deaktiviert)."
     "No pagination controls found. Assuming last page.": "Keine Paginierungssteuerung gefunden. Es wird von der letzten Seite ausgegangen."
 
   _record_timing:
