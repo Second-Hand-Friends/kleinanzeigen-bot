@@ -2295,12 +2295,24 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def __select_city_combobox_option(self, target:str) -> bool | None:
         await self.web_click(By.ID, "ad-city")
 
-        option_selector = (
-            "[role='option'], "
-            "li[aria-selected='true'], li[aria-selected='false'], "
-            "button[aria-selected='true'], button[aria-selected='false']"
-        )
         quick_dom_timeout = self._timeout("quick_dom")
+        city_element = await self.web_find(By.ID, "ad-city", timeout = quick_dom_timeout)
+        city_attrs = getattr(city_element, "attrs", None)
+        listbox_id_raw = None
+        if city_attrs is not None:
+            listbox_id_raw = city_attrs.get("aria-controls") if hasattr(city_attrs, "get") else getattr(city_attrs, "aria-controls", None)
+        listbox_id = next((candidate for candidate in str(listbox_id_raw or "").split() if candidate.strip()), "")
+        if not listbox_id:
+            listbox_id = "ad-city-menu"
+            LOG.debug("ad-city aria-controls missing; falling back to listbox id %r", listbox_id)
+
+        listbox_id_css = listbox_id.replace("\\", "\\\\").replace('"', '\\"')
+        listbox_scope = f'[id="{listbox_id_css}"]'
+        option_selector = (
+            f"{listbox_scope} [role='option'], "
+            f"{listbox_scope} li[aria-selected='true'], {listbox_scope} li[aria-selected='false'], "
+            f"{listbox_scope} button[aria-selected='true'], {listbox_scope} button[aria-selected='false']"
+        )
         try:
             candidates = await self.web_find_all(By.CSS_SELECTOR, option_selector, timeout = quick_dom_timeout)
         except TimeoutError as ex:

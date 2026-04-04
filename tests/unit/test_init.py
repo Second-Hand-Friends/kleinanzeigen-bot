@@ -3896,11 +3896,15 @@ class TestContactLocationSelection:
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
             patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [other_option, target_option]),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [other_option, target_option]) as mock_find_all,
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_contact_location")("10115 - Metroville")
 
         mock_click.assert_awaited_once_with(By.ID, "ad-city")
+        mock_find_all.assert_awaited_once()
+        assert mock_find_all.await_args is not None
+        assert mock_find_all.await_args.args[0] == By.CSS_SELECTOR
+        assert '[id="' in str(mock_find_all.await_args.args[1])
         target_option.click.assert_awaited_once()
         other_option.click.assert_not_awaited()
 
@@ -3941,11 +3945,12 @@ class TestContactLocationSelection:
             ),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
             patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [city_option]),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_contact_location")("Metroville")
 
+        mock_click.assert_awaited_once_with(By.ID, "ad-city")
         city_option.click.assert_awaited_once()
 
 
