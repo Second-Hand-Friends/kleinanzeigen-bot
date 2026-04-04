@@ -69,7 +69,7 @@ def _xpath_literal(value:str) -> str:
         return f"'{value}'"
     if '"' not in value:
         return f'"{value}"'
-    return "concat(" + ", \"'\", ".join(f"'{part}'" for part in value.split("'")) + ")"
+    return "concat(" + ', "\'", '.join(f"'{part}'" for part in value.split("'")) + ")"
 
 
 class AdUpdateStrategy(enum.Enum):
@@ -118,6 +118,7 @@ class ResolvedAdState(NamedTuple):
         owned: Whether the ad belongs to the current user (True) or is foreign (False).
             For "all"/"new" selectors this is typically True; for numeric IDs it may be False.
     """
+
     active:bool
     owned:bool
 
@@ -422,17 +423,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if published_ad is None:
             return ResolvedAdState(active = False, owned = False)
 
-        return ResolvedAdState(
-            active = published_ad.get("state") == "active",
-            owned = True
-        )
+        return ResolvedAdState(active = published_ad.get("state") == "active", owned = True)
 
-    async def _download_ad_with_resolved_state(
-        self,
-        ad_extractor:extract.AdExtractor,
-        ad_id:int,
-        published_ads_by_id:dict[int, dict[str, Any]]
-    ) -> None:
+    async def _download_ad_with_resolved_state(self, ad_extractor:extract.AdExtractor, ad_id:int, published_ads_by_id:dict[int, dict[str, Any]]) -> None:
         """Download an ad with proper active state resolution and logging.
 
         Resolves the ad's activity state from the published profile, logs appropriately
@@ -455,18 +448,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if not resolved.owned:
             # Ad not in user's published profile - unexpected for "all"/"new" selectors
             # since these only list the user's own ads from the overview page
-            LOG.warning(
-                "Ad %d found in overview but not in published profile. Saving as inactive.",
-                ad_id
-            )
+            LOG.warning("Ad %d found in overview but not in published profile. Saving as inactive.", ad_id)
         elif not resolved.active:
             # Ad is in published profile but not in active state (paused, inactive, etc.)
             published_ad = published_ads_by_id.get(ad_id, {})
-            LOG.debug(
-                "Ad %d has state '%s'. Saving as inactive.",
-                ad_id,
-                published_ad.get("state", "unknown")
-            )
+            LOG.debug("Ad %d has state '%s'. Saving as inactive.", ad_id, published_ad.get("state", "unknown"))
 
         await ad_extractor.download_ad(ad_id, active = resolved.active)
 
@@ -2381,6 +2367,55 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         else:
             ensure(is_category_auto_selected, f"No category specified in [{ad_file}] and automatic category detection failed")
 
+    @staticmethod
+    def __special_attribute_candidate_priority(elem:Element) -> tuple[int, int]:
+        local_name = elem.local_name
+        elem_type = str(cast(Any, elem.attrs.get("type")) or "").lower()
+        role = str(cast(Any, elem.attrs.get("role")) or "").lower()
+
+        if local_name == "button" and role == "combobox":
+            return (0, 0)
+        if elem_type == "text" and role == "combobox":
+            return (1, 0)
+        if local_name == "select":
+            return (2, 0)
+        if elem_type == "checkbox":
+            return (3, 0)
+        if local_name in {"input", "textarea"} and elem_type != "hidden":
+            return (4, 0)
+        if elem_type == "hidden":
+            return (9, 1)
+        return (8, 0)
+
+    @staticmethod
+    def __describe_special_attribute_candidate(elem:Element) -> str:
+        elem_id = cast(str | None, elem.attrs.get("id"))
+        elem_name = cast(str | None, elem.attrs.get("name"))
+        elem_type = cast(str | None, elem.attrs.get("type"))
+        elem_role = cast(str | None, elem.attrs.get("role"))
+        return f"{elem.local_name}#'{elem_id}' name='{elem_name}' type='{elem_type}' role='{elem_role}'"
+
+    def __pick_special_attribute_candidate(self, candidates:Sequence[Element], special_attribute_key:str) -> Element:
+        ensure(candidates, f"No candidates found for special attribute [{special_attribute_key}]")
+        ranked_candidates = sorted(
+            enumerate(candidates),
+            key = lambda entry: (self.__special_attribute_candidate_priority(entry[1]), entry[0]),
+        )
+        selected_idx, selected = ranked_candidates[0]
+
+        if len(candidates) > 1:
+            debug_candidates = ", ".join(f"#{idx}:{self.__describe_special_attribute_candidate(candidate)}" for idx, candidate in enumerate(candidates))
+            LOG.debug(
+                "Attribute field '%s' matched %s elements. Selected #%s: %s. Candidates: %s",
+                special_attribute_key,
+                len(candidates),
+                selected_idx,
+                self.__describe_special_attribute_candidate(selected),
+                debug_candidates,
+            )
+
+        return selected
+
     async def __set_special_attributes(self, ad_cfg:Ad) -> None:
         if not ad_cfg.special_attributes:
             return
@@ -2428,10 +2463,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 "]"
             )
             try:
-                special_attr_elem = await self.web_find(
+                special_attr_candidates = await self.web_find_all(
                     By.XPATH,
                     special_attr_xpath,
                 )
+                special_attr_elem = self.__pick_special_attribute_candidate(special_attr_candidates, special_attribute_key)
             except TimeoutError as ex:
                 LOG.debug(
                     "Attribute field '%s' (normalized: '%s') could not be found.",
@@ -2448,13 +2484,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             try:
                 elem_id = cast(str | None, special_attr_elem.attrs.get("id"))
+                elem_type = str(cast(Any, special_attr_elem.attrs.get("type")) or "").lower()
+                elem_role = str(cast(Any, special_attr_elem.attrs.get("role")) or "").lower()
                 elem_selector_type = By.ID if elem_id else By.XPATH
                 elem_selector_value = elem_id or special_attr_xpath
 
                 if special_attr_elem.local_name == "select":
                     LOG.debug("Attribute field '%s' seems to be a select...", special_attribute_key)
                     await self.web_select(elem_selector_type, elem_selector_value, special_attribute_value_str)
-                elif special_attr_elem.attrs.type == "checkbox":
+                elif elem_type == "checkbox":
                     LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
                     truthy_values = {"1", "true", "yes", "on", "ja", "checked"}
                     falsy_values = {"", "0", "false", "no", "off", "nein", "unchecked", "none"}
@@ -2480,11 +2518,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
                     if desired_checked != current_checked:
                         await self.web_click(elem_selector_type, elem_selector_value)
-                elif special_attr_elem.local_name == "button" and special_attr_elem.attrs.get("role") == "combobox":
+                elif special_attr_elem.local_name == "button" and elem_role == "combobox":
                     LOG.debug("Attribute field '%s' seems to be a button combobox (click-to-open dropdown)...", special_attribute_key)
                     ensure(elem_id, f"No id available for button combobox special attribute [{special_attribute_key}]")
                     await self.__select_button_combobox(cast(str, elem_id), special_attribute_value_str)
-                elif special_attr_elem.attrs.type == "text" and special_attr_elem.attrs.get("role") == "combobox":
+                elif elem_type == "text" and elem_role == "combobox":
                     LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
                     await self.web_select_combobox(elem_selector_type, elem_selector_value, special_attribute_value_str)
                 else:
@@ -2578,9 +2616,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 await self.web_click(By.ID, "ad-shipping-options")
             except TimeoutError as ex:
                 LOG.debug(ex, exc_info = True)
-                LOG.warning(
-                    "Shipping options dialog entry not found. Legacy '.versand_s' select UI is no longer supported and requires dedicated rebuild."
-                )
+                LOG.warning("Shipping options dialog entry not found. Legacy '.versand_s' select UI is no longer supported and requires dedicated rebuild.")
                 raise TimeoutError(_("Unable to open shipping options dialog!")) from ex
 
             try:
@@ -2604,9 +2640,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             if ad_cfg.shipping_costs is not None:
                 try:
-                    await self.web_input(
-                        By.ID, "ad-individual-shipping-price", str(ad_cfg.shipping_costs).replace(".", ",")
-                    )
+                    await self.web_input(By.ID, "ad-individual-shipping-price", str(ad_cfg.shipping_costs).replace(".", ","))
                 except TimeoutError as ex:
                     LOG.debug(ex, exc_info = True)
                     raise TimeoutError(_("Unable to set shipping price!")) from ex
