@@ -635,7 +635,10 @@ class TestKleinanzeigenBotInitialization:
 
         # Mock load_ads to return the saved_ad_ids
         saved_ads:list[tuple[str, MagicMock, dict[str, Any]]] = [
-            (f"ad_{ad_id}.yaml", MagicMock(spec = Ad, id = ad_id), {}) for ad_id in scenario["saved_ad_ids"]]
+            (
+                f"ad_{ad_id}.yaml",
+                MagicMock(spec = Ad, id = ad_id
+            ), {}) for ad_id in scenario["saved_ad_ids"]]
 
         with (
             patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = scenario["published_ads"]) as mock_fetch_published_ads,
@@ -2820,20 +2823,20 @@ class TestKleinanzeigenBotShippingOptions:
 
         # Mock the necessary web interaction methods
         with (
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock) as mock_find_all,
             patch.object(test_bot, "web_select", new_callable = AsyncMock) as mock_select,
             patch.object(test_bot, "_KleinanzeigenBot__set_condition", new_callable = AsyncMock) as mock_set_condition,
         ):
-            # Mock web_find to simulate element detection
-            async def mock_find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            # Mock web_find_all to simulate element detection
+            async def mock_find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[Element]:
                 if selector_type == By.XPATH:
                     if ".art" in selector_value:
-                        return art_s_elem
+                        return [art_s_elem]
                     if ".color" in selector_value:
-                        return color_s_elem
-                return None
+                        return [color_s_elem]
+                return []
 
-            mock_find.side_effect = mock_find_side_effect
+            mock_find_all.side_effect = mock_find_all_side_effect
 
             # Test the __set_special_attributes method directly
             await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
@@ -2871,15 +2874,16 @@ class TestKleinanzeigenBotShippingOptions:
         model_elem.local_name = "select"
 
         with (
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock) as mock_find_all,
             patch.object(test_bot, "web_select", new_callable = AsyncMock) as mock_select,
         ):
-            async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
-                if selector_type == By.XPATH and "autos.model_s" in selector_value:
-                    return model_elem
-                return None
 
-            mock_find.side_effect = find_side_effect
+            async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[Element]:
+                if selector_type == By.XPATH and "autos.model_s" in selector_value:
+                    return [model_elem]
+                return []
+
+            mock_find_all.side_effect = find_all_side_effect
 
             await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
 
@@ -2888,6 +2892,110 @@ class TestKleinanzeigenBotShippingOptions:
             assert mock_select.await_args.args[0] == By.XPATH
             assert "contains(@name, 'autos.model_s')" in str(mock_select.await_args.args[1])
             assert mock_select.await_args.args[2] == "a3"
+
+    @pytest.mark.asyncio
+    async def test_special_attributes_prefers_button_combobox_over_hidden_input(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Hidden backing inputs must not win over visible button combobox controls."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"color_s": "beige"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        hidden_elem = MagicMock()
+        hidden_attrs = MagicMock()
+        hidden_attrs.id = None
+        hidden_attrs.type = "hidden"
+        hidden_attrs.get.side_effect = lambda key, default = None: {
+            "id": None,
+            "name": "attributeMap[kleidung_herren.color]",
+            "type": "hidden",
+            "role": None,
+        }.get(key, default)
+        hidden_elem.attrs = hidden_attrs
+        hidden_elem.local_name = "input"
+
+        button_elem = MagicMock()
+        button_attrs = MagicMock()
+        button_attrs.id = "kleidung_herren.color"
+        button_attrs.type = "button"
+        button_attrs.get.side_effect = lambda key, default = None: {
+            "id": "kleidung_herren.color",
+            "name": None,
+            "type": "button",
+            "role": "combobox",
+        }.get(key, default)
+        button_elem.attrs = button_attrs
+        button_elem.local_name = "button"
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [hidden_elem, button_elem]),
+            patch.object(test_bot, "_KleinanzeigenBot__select_button_combobox", new_callable = AsyncMock) as mock_button_combobox,
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
+
+        mock_button_combobox.assert_awaited_once_with("kleidung_herren.color", "beige")
+        mock_input.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_special_attributes_prefers_text_combobox_over_hidden_input(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Hidden backing inputs must not win over visible text-combobox controls."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"brand_s": "armani"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        hidden_elem = MagicMock()
+        hidden_attrs = MagicMock()
+        hidden_attrs.id = None
+        hidden_attrs.type = "hidden"
+        hidden_attrs.get.side_effect = lambda key, default = None: {
+            "id": None,
+            "name": "attributeMap[kleidung_herren.brand]",
+            "type": "hidden",
+            "role": None,
+        }.get(key, default)
+        hidden_elem.attrs = hidden_attrs
+        hidden_elem.local_name = "input"
+
+        combobox_elem = MagicMock()
+        combobox_attrs = MagicMock()
+        combobox_attrs.id = "kleidung_herren.brand"
+        combobox_attrs.type = "text"
+        combobox_attrs.get.side_effect = lambda key, default = None: {
+            "id": "kleidung_herren.brand",
+            "name": None,
+            "type": "text",
+            "role": "combobox",
+        }.get(key, default)
+        combobox_elem.attrs = combobox_attrs
+        combobox_elem.local_name = "input"
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [hidden_elem, combobox_elem]),
+            patch.object(test_bot, "web_select_combobox", new_callable = AsyncMock) as mock_select_combobox,
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
+
+        mock_select_combobox.assert_awaited_once_with(By.ID, "kleidung_herren.brand", "armani")
+        mock_input.assert_not_awaited()
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -2927,7 +3035,7 @@ class TestKleinanzeigenBotShippingOptions:
         checkbox_elem.local_name = "input"
 
         with (
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = checkbox_elem),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [checkbox_elem]),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
@@ -2956,6 +3064,7 @@ class TestConditionSelector:
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
+
             async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
                 if selector_type != By.XPATH:
                     raise TimeoutError("unexpected selector")
@@ -2977,12 +3086,9 @@ class TestConditionSelector:
     @pytest.mark.asyncio
     async def test_condition_missing_selector_raises(self, test_bot:KleinanzeigenBot) -> None:
         """Missing condition trigger should fail fast to avoid stale condition data."""
+
         async def click_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> None:
-            if (
-                selector_type == By.XPATH
-                and "contains(@for, '.condition')" in selector_value
-                and "@aria-haspopup='dialog'" in selector_value
-            ):
+            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value and "@aria-haspopup='dialog'" in selector_value:
                 raise TimeoutError("missing trigger")
 
         with (
@@ -3115,7 +3221,8 @@ class TestWantedShippingSelection:
     ) -> None:
         quick_dom_timeout = test_bot._timeout("quick_dom")
         check_calls = [
-            c for c in mock_check.await_args_list
+            c
+            for c in mock_check.await_args_list
             if len(c.args) >= 3
             and c.args[0] == By.ID
             and c.args[1] == expected_radio
@@ -3125,11 +3232,9 @@ class TestWantedShippingSelection:
         assert len(check_calls) == 1
 
         click_calls = [
-            c for c in mock_click.await_args_list
-            if len(c.args) >= 2
-            and c.args[0] == By.ID
-            and c.args[1] == expected_radio
-            and c.kwargs.get("timeout") == quick_dom_timeout
+            c
+            for c in mock_click.await_args_list
+            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == expected_radio and c.kwargs.get("timeout") == quick_dom_timeout
         ]
         assert len(click_calls) == (1 if clicked else 0)
 
