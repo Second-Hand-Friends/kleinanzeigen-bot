@@ -247,12 +247,14 @@ class TestWebScrapingErrorHandling:
         assert web_scraper.web_sleep.await_count == 2
 
     @pytest.mark.asyncio
-    async def test_web_select_combobox_no_matching_option_falls_back_to_keys(self, web_scraper:WebScrapingMixin) -> None:
-        """When no <li> matches, the method falls back to ArrowDown+Enter key confirmation."""
+    async def test_web_select_combobox_no_matching_option_wrong_selection_raises(self, web_scraper:WebScrapingMixin) -> None:
+        """When no <li> matches and ArrowDown+Enter selects the wrong value, raise TimeoutError."""
         input_field = AsyncMock(spec = Element)
         input_field.attrs = {"aria-controls": "dropdown-id"}
         input_field.clear_input = AsyncMock()
         input_field.send_keys = AsyncMock()
+        # After ArrowDown+Enter, the verification reads input_field.value via apply
+        input_field.apply = AsyncMock(return_value = "Wrong Value")
 
         dropdown_elem = AsyncMock(spec = Element)
         dropdown_elem.apply = AsyncMock(return_value = False)
@@ -261,7 +263,27 @@ class TestWebScrapingErrorHandling:
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
         web_scraper._dispatch_arrow_down_and_enter = AsyncMock()  # type: ignore[method-assign]
 
-        result = await web_scraper.web_select_combobox(By.ID, "combo-id", "Missing Label")
+        with pytest.raises(TimeoutError, match = "Combobox selected 'Wrong Value' instead of 'Missing Label'"):
+            await web_scraper.web_select_combobox(By.ID, "combo-id", "Missing Label")
+
+    @pytest.mark.asyncio
+    async def test_web_select_combobox_no_matching_option_correct_fallback_succeeds(self, web_scraper:WebScrapingMixin) -> None:
+        """When no <li> matches but ArrowDown+Enter selects the correct value, return the input field."""
+        input_field = AsyncMock(spec = Element)
+        input_field.attrs = {"aria-controls": "dropdown-id"}
+        input_field.clear_input = AsyncMock()
+        input_field.send_keys = AsyncMock()
+        # After ArrowDown+Enter, verification reads back the matching value
+        input_field.apply = AsyncMock(return_value = "Expected Value")
+
+        dropdown_elem = AsyncMock(spec = Element)
+        dropdown_elem.apply = AsyncMock(return_value = False)
+
+        web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+        web_scraper._dispatch_arrow_down_and_enter = AsyncMock()  # type: ignore[method-assign]
+
+        result = await web_scraper.web_select_combobox(By.ID, "combo-id", "Expected Value")
 
         web_scraper._dispatch_arrow_down_and_enter.assert_awaited_once_with(input_field)
         assert result is input_field

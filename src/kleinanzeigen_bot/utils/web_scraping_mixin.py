@@ -1499,6 +1499,13 @@ class WebScrapingMixin:
             LOG.warning("No matching option found in listbox for combobox '%s'. Falling back to ArrowDown + Enter.", selected_value)
             await self._dispatch_arrow_down_and_enter(input_field)
             await self.web_sleep()
+
+            # Verify the selection matches the intended value (case-insensitive, whitespace-normalized)
+            expected_str = str(selected_value).strip()
+            actual_value = str(await input_field.apply("(elem) => (elem.value || '').trim()") or "")
+            if actual_value.strip().lower() != expected_str.lower():
+                raise TimeoutError(_("Combobox selected '%(actual)s' instead of '%(expected)s'") % {"actual": actual_value.strip(), "expected": expected_str})
+            LOG.info("Combobox fallback verified: '%s' confirmed.", actual_value.strip())
             return input_field
 
         await self.web_sleep()

@@ -565,6 +565,8 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "Option not found by value or displayed text: %s": "Option nicht gefunden nach Wert oder angezeigtem Text: %s"
 
   web_select_combobox:
+    "Combobox selected '%(actual)s' instead of '%(expected)s'": "Combobox hat '%(actual)s' statt '%(expected)s' ausgewählt"
+    "Combobox fallback verified: '%s' confirmed.": "Combobox-Fallback bestätigt: '%s' verifiziert."
     "No matching option found in listbox for combobox '%s'. Falling back to ArrowDown + Enter.": "Keine passende Option in der Listbox für Combobox '%s' gefunden. Fallback auf ArrowDown + Enter."
 
   _navigate_paginated_ad_overview:
