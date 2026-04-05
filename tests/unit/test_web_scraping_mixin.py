@@ -211,6 +211,8 @@ class TestWebScrapingErrorHandling:
         input_field.attrs = {}
         input_field.clear_input = AsyncMock()
         input_field.send_keys = AsyncMock()
+        # After ArrowDown+Enter, verification reads back the input value
+        input_field.apply = AsyncMock(return_value = "Option")
 
         # No aria-controls → first web_find returns input; second web_find for listbox also fails
         web_scraper.web_find = AsyncMock(side_effect = [input_field, TimeoutError("no listbox")])  # type: ignore[method-assign]
@@ -223,6 +225,7 @@ class TestWebScrapingErrorHandling:
         assert result is input_field
         input_field.clear_input.assert_awaited_once()
         input_field.send_keys.assert_awaited_once_with("Option")
+        input_field.apply.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_web_select_combobox_selects_matching_option(self, web_scraper:WebScrapingMixin) -> None:

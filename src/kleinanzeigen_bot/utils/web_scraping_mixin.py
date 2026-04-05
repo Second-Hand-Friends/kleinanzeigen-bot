@@ -1457,6 +1457,14 @@ class WebScrapingMixin:
                 LOG.debug("No listbox found for combobox. Falling back to ArrowDown + Enter key confirmation.")
                 await self._dispatch_arrow_down_and_enter(input_field)
                 await self.web_sleep()
+
+                # Verify the selection matches the intended value (case-insensitive, whitespace-normalized)
+                expected_str = str(selected_value).strip()
+                actual_value = str(await input_field.apply("(elem) => (elem.value || '').trim()") or "")
+                if actual_value.strip().lower() != expected_str.lower():
+                    raise TimeoutError(
+                        _("Combobox selected '%(actual)s' instead of '%(expected)s'") % {"actual": actual_value.strip(), "expected": expected_str}
+                    ) from None
                 return input_field
 
         js_value = json.dumps(selected_value)  # safe escaping for JS
