@@ -228,6 +228,24 @@ class TestWebScrapingErrorHandling:
         input_field.apply.assert_awaited()
 
     @pytest.mark.asyncio
+    async def test_web_select_combobox_missing_dropdown_wrong_value_raises(self, web_scraper:WebScrapingMixin) -> None:
+        """When no listbox is found and ArrowDown+Enter selects wrong value, raise TimeoutError."""
+        input_field = AsyncMock(spec = Element)
+        input_field.attrs = {}
+        input_field.clear_input = AsyncMock()
+        input_field.send_keys = AsyncMock()
+        # After ArrowDown+Enter, verification reads back a mismatching value
+        input_field.apply = AsyncMock(return_value = "Wrong Brand")
+
+        # No aria-controls → first web_find returns input; second web_find for listbox also fails
+        web_scraper.web_find = AsyncMock(side_effect = [input_field, TimeoutError("no listbox")])  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+        web_scraper._dispatch_arrow_down_and_enter = AsyncMock()  # type: ignore[method-assign]
+
+        with pytest.raises(TimeoutError):
+            await web_scraper.web_select_combobox(By.ID, "combo-id", "Armani", timeout = 0.1)
+
+    @pytest.mark.asyncio
     async def test_web_select_combobox_selects_matching_option(self, web_scraper:WebScrapingMixin) -> None:
         """Test combobox selection matches a visible <li> option."""
         input_field = AsyncMock(spec = Element)
