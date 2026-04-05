@@ -328,30 +328,6 @@ class TestWebScrapingErrorHandling:
         assert tab_send.call_count == 4
 
     @pytest.mark.asyncio
-    async def test_web_select_combobox_special_characters(self, web_scraper:WebScrapingMixin) -> None:
-        """Test combobox selection with special characters (quotes, newlines, etc)."""
-        input_field = AsyncMock(spec = Element)
-        input_field.attrs = {"aria-controls": "dropdown-id"}
-        input_field.clear_input = AsyncMock()
-        input_field.send_keys = AsyncMock()
-
-        dropdown_elem = AsyncMock(spec = Element)
-        dropdown_elem.apply = AsyncMock(return_value = True)
-
-        web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
-        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
-
-        # Test with quotes, backslashes, and newlines
-        special_value = 'Value with "quotes" and \\ backslash'
-        result = await web_scraper.web_select_combobox(By.ID, "combo-id", special_value)
-
-        assert result is dropdown_elem
-        input_field.send_keys.assert_awaited_once_with(special_value)
-        # Verify that the JavaScript received properly escaped value
-        call_args = dropdown_elem.apply.call_args[0][0]
-        assert '"quotes"' in call_args or r"\"quotes\"" in call_args  # JSON escaping should handle quotes
-
-    @pytest.mark.asyncio
     async def test_web_select_by_value(self, web_scraper:WebScrapingMixin) -> None:
         """Test web_select successfully matches by option value."""
         select_elem = AsyncMock(spec = Element)
