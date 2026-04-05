@@ -12,7 +12,7 @@ import zipfile
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, NoReturn, Protocol, cast
-from unittest.mock import AsyncMock, MagicMock, Mock, mock_open, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, call, mock_open, patch
 
 import nodriver
 import psutil
@@ -265,6 +265,24 @@ class TestWebScrapingErrorHandling:
 
         web_scraper._dispatch_arrow_down_and_enter.assert_awaited_once_with(input_field)
         assert result is input_field
+
+    @pytest.mark.asyncio
+    async def test_dispatch_arrow_down_and_enter(self, web_scraper:WebScrapingMixin) -> None:
+        """_dispatch_arrow_down_and_enter should focus, send ArrowDown+Enter via CDP, and sleep between steps."""
+        input_field = AsyncMock(spec = Element)
+        input_field._tab = AsyncMock()  # noqa: SLF001
+
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        await web_scraper._dispatch_arrow_down_and_enter(input_field)
+
+        input_field.apply.assert_awaited_once_with("(elem) => elem.focus()")
+        assert web_scraper.web_sleep.await_count == 2
+        assert web_scraper.web_sleep.call_args_list[0] == call(min_ms = 300, max_ms = 600)
+        assert web_scraper.web_sleep.call_args_list[1] == call(min_ms = 200, max_ms = 400)
+
+        tab_send = input_field._tab.send
+        assert tab_send.call_count == 4
 
     @pytest.mark.asyncio
     async def test_web_select_combobox_special_characters(self, web_scraper:WebScrapingMixin) -> None:
