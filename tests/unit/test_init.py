@@ -635,10 +635,7 @@ class TestKleinanzeigenBotInitialization:
 
         # Mock load_ads to return the saved_ad_ids
         saved_ads:list[tuple[str, MagicMock, dict[str, Any]]] = [
-            (
-                f"ad_{ad_id}.yaml",
-                MagicMock(spec = Ad, id = ad_id
-            ), {}) for ad_id in scenario["saved_ad_ids"]]
+            (f"ad_{ad_id}.yaml", MagicMock(spec = Ad, id = ad_id), {}) for ad_id in scenario["saved_ad_ids"]]
 
         with (
             patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = scenario["published_ads"]) as mock_fetch_published_ads,
@@ -2982,6 +2979,64 @@ class TestKleinanzeigenBotShippingOptions:
             "id": "kleidung_herren.brand",
             "name": None,
             "type": "text",
+            "role": "combobox",
+        }.get(key, default)
+        combobox_elem.attrs = combobox_attrs
+        combobox_elem.local_name = "input"
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [hidden_elem, combobox_elem]),
+            patch.object(test_bot, "web_select_combobox", new_callable = AsyncMock) as mock_select_combobox,
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
+
+        mock_select_combobox.assert_awaited_once_with(By.ID, "kleidung_herren.brand", "armani")
+        mock_input.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_special_attributes_typeless_combobox_routed_correctly(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Combobox <input> without a type attribute must still be routed to web_select_combobox.
+
+        The real kleinanzeigen.de DOM for brand fields uses <input role='combobox'> without
+        an explicit type='text' attribute.  The empty-string elem_type must match the
+        combobox branch rather than falling through to web_input.
+        """
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"brand_s": "armani"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        hidden_elem = MagicMock()
+        hidden_attrs = MagicMock()
+        hidden_attrs.id = None
+        hidden_attrs.type = "hidden"
+        hidden_attrs.get.side_effect = lambda key, default = None: {
+            "id": None,
+            "name": "attributeMap[kleidung_herren.brand]",
+            "type": "hidden",
+            "role": None,
+        }.get(key, default)
+        hidden_elem.attrs = hidden_attrs
+        hidden_elem.local_name = "input"
+
+        # typeless combobox — no "type" attribute in the DOM at all
+        combobox_elem = MagicMock()
+        combobox_attrs = MagicMock()
+        combobox_attrs.id = "kleidung_herren.brand"
+        combobox_attrs.type = None  # attribute is absent
+        combobox_attrs.get.side_effect = lambda key, default = None: {
+            "id": "kleidung_herren.brand",
+            "name": None,
+            "type": None,  # absent → attrs.get returns None
             "role": "combobox",
         }.get(key, default)
         combobox_elem.attrs = combobox_attrs

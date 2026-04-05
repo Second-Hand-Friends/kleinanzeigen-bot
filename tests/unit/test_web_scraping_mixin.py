@@ -1,8 +1,7 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""Unit tests for web_scraping_mixin.py focusing on error handling scenarios.
-"""
+"""Unit tests for web_scraping_mixin.py focusing on error handling scenarios."""
 
 import json
 import logging
@@ -207,20 +206,23 @@ class TestWebScrapingErrorHandling:
 
     @pytest.mark.asyncio
     async def test_web_select_combobox_missing_dropdown_options(self, web_scraper:WebScrapingMixin) -> None:
-        """Test combobox selection when aria-controls attribute is missing."""
+        """Test combobox fallback to ArrowDown+Enter when aria-controls is missing."""
         input_field = AsyncMock(spec = Element)
         input_field.attrs = {}
         input_field.clear_input = AsyncMock()
         input_field.send_keys = AsyncMock()
-        web_scraper.web_find = AsyncMock(return_value = input_field)  # type: ignore[method-assign]
+
+        # No aria-controls → first web_find returns input; second web_find for listbox also fails
+        web_scraper.web_find = AsyncMock(side_effect = [input_field, TimeoutError("no listbox")])  # type: ignore[method-assign]
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+        web_scraper._dispatch_arrow_down_and_enter = AsyncMock()  # type: ignore[method-assign]
 
-        with pytest.raises(TimeoutError, match = "Combobox missing aria-controls attribute"):
-            await web_scraper.web_select_combobox(By.ID, "combo-id", "Option", timeout = 0.1)
+        result = await web_scraper.web_select_combobox(By.ID, "combo-id", "Option", timeout = 0.1)
 
+        web_scraper._dispatch_arrow_down_and_enter.assert_awaited_once_with(input_field)
+        assert result is input_field
         input_field.clear_input.assert_awaited_once()
         input_field.send_keys.assert_awaited_once_with("Option")
-        assert web_scraper.web_sleep.await_count == 1  # Only one sleep before checking aria-controls
 
     @pytest.mark.asyncio
     async def test_web_select_combobox_selects_matching_option(self, web_scraper:WebScrapingMixin) -> None:
@@ -245,8 +247,8 @@ class TestWebScrapingErrorHandling:
         assert web_scraper.web_sleep.await_count == 2
 
     @pytest.mark.asyncio
-    async def test_web_select_combobox_no_matching_option_raises(self, web_scraper:WebScrapingMixin) -> None:
-        """Test combobox selection raises when no <li> matches the entered text."""
+    async def test_web_select_combobox_no_matching_option_falls_back_to_keys(self, web_scraper:WebScrapingMixin) -> None:
+        """When no <li> matches, the method falls back to ArrowDown+Enter key confirmation."""
         input_field = AsyncMock(spec = Element)
         input_field.attrs = {"aria-controls": "dropdown-id"}
         input_field.clear_input = AsyncMock()
@@ -257,12 +259,12 @@ class TestWebScrapingErrorHandling:
 
         web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+        web_scraper._dispatch_arrow_down_and_enter = AsyncMock()  # type: ignore[method-assign]
 
-        with pytest.raises(TimeoutError, match = "No matching option found in combobox"):
-            await web_scraper.web_select_combobox(By.ID, "combo-id", "Missing Label")
+        result = await web_scraper.web_select_combobox(By.ID, "combo-id", "Missing Label")
 
-        dropdown_elem.apply.assert_awaited_once()
-        assert web_scraper.web_sleep.await_count == 1  # One sleep after typing, error before second sleep
+        web_scraper._dispatch_arrow_down_and_enter.assert_awaited_once_with(input_field)
+        assert result is input_field
 
     @pytest.mark.asyncio
     async def test_web_select_combobox_special_characters(self, web_scraper:WebScrapingMixin) -> None:
@@ -585,9 +587,7 @@ class TestTimeoutAndRetryHelpers:
         second_timeout:float | None = None
         found = AsyncMock(spec = Element)
 
-        async def fake_find_once(
-            selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None
-        ) -> Element:
+        async def fake_find_once(selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None) -> Element:
             nonlocal first_timeout, second_timeout
             if selector_value == "first":
                 first_timeout = timeout
@@ -1311,6 +1311,7 @@ class TestWebScrapingBrowserConfiguration:
         self, monkeypatch:pytest.MonkeyPatch, caplog:pytest.LogCaptureFixture
     ) -> None:
         """Test non-test runtime without user_data_dir logs fallback diagnostics and default profile usage."""
+
         class DummyConfig:
             def __init__(self, **kwargs:object) -> None:
                 self.browser_args = cast(list[str], kwargs.get("browser_args", []))
@@ -1352,6 +1353,7 @@ class TestWebScrapingBrowserConfiguration:
     @pytest.mark.asyncio
     async def test_create_browser_session_ensures_profile_directory_for_user_data_dir(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test configured user_data_dir creates profile structure and skips non-debug log-level override."""
+
         class DummyConfig:
             def __init__(self, **kwargs:object) -> None:
                 self.browser_args = cast(list[str], kwargs.get("browser_args", []))
@@ -1381,8 +1383,7 @@ class TestWebScrapingBrowserConfiguration:
 
         monkeypatch.setattr(files, "exists", mock_exists)
 
-        with patch.dict(os.environ, {}, clear = True), \
-                patch("kleinanzeigen_bot.utils.web_scraping_mixin.xdg_paths.ensure_directory") as mock_ensure_dir:
+        with patch.dict(os.environ, {}, clear = True), patch("kleinanzeigen_bot.utils.web_scraping_mixin.xdg_paths.ensure_directory") as mock_ensure_dir:
             scraper = WebScrapingMixin()
             scraper.browser_config.binary_location = "/usr/bin/chrome"
             scraper.browser_config.user_data_dir = str(tmp_path / "profile-root")
