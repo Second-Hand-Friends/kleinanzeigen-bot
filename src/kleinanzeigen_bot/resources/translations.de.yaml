@@ -565,9 +565,9 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "Option not found by value or displayed text: %s": "Option nicht gefunden nach Wert oder angezeigtem Text: %s"
 
   web_select_combobox:
-    "Combobox input field does not have 'aria-controls' attribute.": "Das Eingabefeld der Combobox hat kein 'aria-controls'-Attribut."
-    "Combobox missing aria-controls attribute": "Combobox fehlt aria-controls Attribut"
-    "No matching option found in combobox: '%s'": "Keine passende Option in Combobox gefunden: '%s'"
+    "Combobox selected '%(actual)s' instead of '%(expected)s'": "Combobox hat '%(actual)s' statt '%(expected)s' ausgewählt"
+    "Combobox fallback verified: '%s' confirmed.": "Combobox-Fallback bestätigt: '%s' verifiziert."
+    "No matching option found in listbox for combobox '%s'. Falling back to ArrowDown + Enter.": "Keine passende Option in der Listbox für Combobox '%s' gefunden. Fallback auf ArrowDown + Enter."
 
   _navigate_paginated_ad_overview:
     "Failed to open ad overview page at %s: timeout": "Fehler beim Öffnen der Anzeigenübersichtsseite unter %s: Zeitüberschreitung"

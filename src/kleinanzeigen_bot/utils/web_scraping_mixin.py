@@ -13,6 +13,7 @@ except ImportError:
     from typing import NoReturn as Never  # Python <3.11
 
 import nodriver, psutil  # isort: skip
+from nodriver.cdp import input_ as cdp_input  # isort: skip
 from typing import TYPE_CHECKING, TypeGuard
 
 from nodriver.core.browser import Browser
@@ -1442,13 +1443,30 @@ class WebScrapingMixin:
         await input_field.send_keys(str(selected_value))
         await self.web_sleep()
 
-        # From the Inputfield, get the attribute "aria-controls" which POINTS to the Dropdown ul #id:
+        # From the input field, get the attribute "aria-controls" which points to the dropdown <ul> #id.
+        # Some combobox implementations (e.g. brand selector on kleinanzeigen.de) omit aria-controls;
+        # in that case fall back to dispatching ArrowDown + Enter key events to confirm the suggestion.
         dropdown_id = input_field.attrs.get("aria-controls")
-        if not dropdown_id:
-            LOG.error("Combobox input field does not have 'aria-controls' attribute.")
-            raise TimeoutError(_("Combobox missing aria-controls attribute"))
+        if dropdown_id:
+            dropdown_elem = await self.web_find(By.ID, dropdown_id, timeout = timeout)
+        else:
+            LOG.debug("Combobox input field does not have 'aria-controls'. Trying listbox lookup by role.")
+            try:
+                dropdown_elem = await self.web_find(By.CSS_SELECTOR, '[role="listbox"]', timeout = self._timeout("quick_dom"))
+            except TimeoutError:
+                LOG.debug("No listbox found for combobox. Falling back to ArrowDown + Enter key confirmation.")
+                await self._dispatch_arrow_down_and_enter(input_field)
+                await self.web_sleep()
 
-        dropdown_elem = await self.web_find(By.ID, dropdown_id, timeout = timeout)
+                # Verify the selection matches the intended value (case-insensitive, whitespace-normalized)
+                expected_str = str(selected_value).strip()
+                actual_value = str(await input_field.apply("(elem) => (elem.value || '').trim()") or "")
+                if actual_value.strip().lower() != expected_str.lower():
+                    raise TimeoutError(
+                        _("Combobox selected '%(actual)s' instead of '%(expected)s'") % {"actual": actual_value.strip(), "expected": expected_str}
+                    ) from None
+                return input_field
+
         js_value = json.dumps(selected_value)  # safe escaping for JS
 
         # This selects the correct <li> by visible text inside the dropdown. It includes normalization, i.e. trimming
@@ -1484,12 +1502,41 @@ class WebScrapingMixin:
           return false;
         }}
         """)
+
         if not ok:
-            LOG.error("No matching option found in combobox: '%s'", selected_value)
-            raise TimeoutError(_("No matching option found in combobox: '%s'") % selected_value)
+            LOG.warning("No matching option found in listbox for combobox '%s'. Falling back to ArrowDown + Enter.", selected_value)
+            await self._dispatch_arrow_down_and_enter(input_field)
+            await self.web_sleep()
+
+            # Verify the selection matches the intended value (case-insensitive, whitespace-normalized)
+            expected_str = str(selected_value).strip()
+            actual_value = str(await input_field.apply("(elem) => (elem.value || '').trim()") or "")
+            if actual_value.strip().lower() != expected_str.lower():
+                raise TimeoutError(_("Combobox selected '%(actual)s' instead of '%(expected)s'") % {"actual": actual_value.strip(), "expected": expected_str})
+            LOG.info("Combobox fallback verified: '%s' confirmed.", actual_value.strip())
+            return input_field
 
         await self.web_sleep()
         return dropdown_elem
+
+    async def _dispatch_arrow_down_and_enter(self, input_field:Element) -> None:
+        """Dispatch ArrowDown + Enter key events via CDP to confirm an autocomplete suggestion.
+
+        Used as a fallback when the combobox listbox cannot be located or when ``aria-controls``
+        is absent. The sequence moves focus to the first suggestion and confirms it.
+        """
+
+        tab = input_field._tab  # noqa: SLF001 – nodriver Element exposes its CDP tab via _tab
+        # Ensure the field is focused
+        await input_field.apply("(elem) => elem.focus()")
+        await self.web_sleep(min_ms = 300, max_ms = 600)
+        # ArrowDown to highlight the first autocomplete suggestion
+        await tab.send(cdp_input.dispatch_key_event("keyDown", key = "ArrowDown", code = "ArrowDown"))
+        await tab.send(cdp_input.dispatch_key_event("keyUp", key = "ArrowDown", code = "ArrowDown"))
+        await self.web_sleep(min_ms = 200, max_ms = 400)
+        # Enter to confirm the selection
+        await tab.send(cdp_input.dispatch_key_event("keyDown", key = "Enter", code = "Enter", text = "\r"))
+        await tab.send(cdp_input.dispatch_key_event("keyUp", key = "Enter", code = "Enter"))
 
     async def _validate_chrome_version_configuration(self) -> None:
         """

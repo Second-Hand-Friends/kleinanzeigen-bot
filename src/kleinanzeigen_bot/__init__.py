@@ -2375,7 +2375,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         if local_name == "button" and role == "combobox":
             return (0, 0)
-        if elem_type == "text" and role == "combobox":
+        if local_name == "input" and elem_type in {"text", ""} and role == "combobox":
             return (1, 0)
         if local_name == "select":
             return (2, 0)
@@ -2522,7 +2522,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     LOG.debug("Attribute field '%s' seems to be a button combobox (click-to-open dropdown)...", special_attribute_key)
                     ensure(elem_id, f"No id available for button combobox special attribute [{special_attribute_key}]")
                     await self.__select_button_combobox(cast(str, elem_id), special_attribute_value_str)
-                elif elem_type == "text" and elem_role == "combobox":
+                elif elem_role == "combobox" and elem_type in {"text", ""} and special_attr_elem.local_name == "input":
                     LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
                     await self.web_select_combobox(elem_selector_type, elem_selector_value, special_attribute_value_str)
                 else:

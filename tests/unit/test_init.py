@@ -635,10 +635,7 @@ class TestKleinanzeigenBotInitialization:
 
         # Mock load_ads to return the saved_ad_ids
         saved_ads:list[tuple[str, MagicMock, dict[str, Any]]] = [
-            (
-                f"ad_{ad_id}.yaml",
-                MagicMock(spec = Ad, id = ad_id
-            ), {}) for ad_id in scenario["saved_ad_ids"]]
+            (f"ad_{ad_id}.yaml", MagicMock(spec = Ad, id = ad_id), {}) for ad_id in scenario["saved_ad_ids"]]
 
         with (
             patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = scenario["published_ads"]) as mock_fetch_published_ads,
@@ -2946,12 +2943,15 @@ class TestKleinanzeigenBotShippingOptions:
         mock_input.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_special_attributes_prefers_text_combobox_over_hidden_input(
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("combobox_type", ["text", None], ids = ["type-text", "type-absent"])
+    async def test_special_attributes_combobox_routed_over_hidden_input(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
+        combobox_type:str | None,
     ) -> None:
-        """Hidden backing inputs must not win over visible text-combobox controls."""
+        """Combobox <input> must be routed to web_select_combobox regardless of type attribute presence."""
         ad_cfg = Ad.model_validate(
             base_ad_config
             | {
@@ -2977,11 +2977,11 @@ class TestKleinanzeigenBotShippingOptions:
         combobox_elem = MagicMock()
         combobox_attrs = MagicMock()
         combobox_attrs.id = "kleidung_herren.brand"
-        combobox_attrs.type = "text"
+        combobox_attrs.type = combobox_type
         combobox_attrs.get.side_effect = lambda key, default = None: {
             "id": "kleidung_herren.brand",
             "name": None,
-            "type": "text",
+            "type": combobox_type,
             "role": "combobox",
         }.get(key, default)
         combobox_elem.attrs = combobox_attrs
