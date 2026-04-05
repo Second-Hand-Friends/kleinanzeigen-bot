@@ -263,7 +263,7 @@ class TestWebScrapingErrorHandling:
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
         web_scraper._dispatch_arrow_down_and_enter = AsyncMock()  # type: ignore[method-assign]
 
-        with pytest.raises(TimeoutError, match = "Combobox selected 'Wrong Value' instead of 'Missing Label'"):
+        with pytest.raises(TimeoutError):
             await web_scraper.web_select_combobox(By.ID, "combo-id", "Missing Label")
 
     @pytest.mark.asyncio

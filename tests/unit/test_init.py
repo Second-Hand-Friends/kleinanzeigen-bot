@@ -2943,69 +2943,15 @@ class TestKleinanzeigenBotShippingOptions:
         mock_input.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_special_attributes_prefers_text_combobox_over_hidden_input(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-    ) -> None:
-        """Hidden backing inputs must not win over visible text-combobox controls."""
-        ad_cfg = Ad.model_validate(
-            base_ad_config
-            | {
-                "special_attributes": {"brand_s": "armani"},
-                "updated_on": "2024-01-01T00:00:00",
-                "created_on": "2024-01-01T00:00:00",
-            }
-        )
-
-        hidden_elem = MagicMock()
-        hidden_attrs = MagicMock()
-        hidden_attrs.id = None
-        hidden_attrs.type = "hidden"
-        hidden_attrs.get.side_effect = lambda key, default = None: {
-            "id": None,
-            "name": "attributeMap[kleidung_herren.brand]",
-            "type": "hidden",
-            "role": None,
-        }.get(key, default)
-        hidden_elem.attrs = hidden_attrs
-        hidden_elem.local_name = "input"
-
-        combobox_elem = MagicMock()
-        combobox_attrs = MagicMock()
-        combobox_attrs.id = "kleidung_herren.brand"
-        combobox_attrs.type = "text"
-        combobox_attrs.get.side_effect = lambda key, default = None: {
-            "id": "kleidung_herren.brand",
-            "name": None,
-            "type": "text",
-            "role": "combobox",
-        }.get(key, default)
-        combobox_elem.attrs = combobox_attrs
-        combobox_elem.local_name = "input"
-
-        with (
-            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [hidden_elem, combobox_elem]),
-            patch.object(test_bot, "web_select_combobox", new_callable = AsyncMock) as mock_select_combobox,
-            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
-        ):
-            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
-
-        mock_select_combobox.assert_awaited_once_with(By.ID, "kleidung_herren.brand", "armani")
-        mock_input.assert_not_awaited()
-
     @pytest.mark.asyncio
-    async def test_special_attributes_typeless_combobox_routed_correctly(
+    @pytest.mark.parametrize("combobox_type", ["text", None], ids = ["type-text", "type-absent"])
+    async def test_special_attributes_combobox_routed_over_hidden_input(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
+        combobox_type:str | None,
     ) -> None:
-        """Combobox <input> without a type attribute must still be routed to web_select_combobox.
-
-        The real kleinanzeigen.de DOM for brand fields uses <input role='combobox'> without
-        an explicit type='text' attribute.  The empty-string elem_type must match the
-        combobox branch rather than falling through to web_input.
-        """
+        """Combobox <input> must be routed to web_select_combobox regardless of type attribute presence."""
         ad_cfg = Ad.model_validate(
             base_ad_config
             | {
@@ -3028,15 +2974,14 @@ class TestKleinanzeigenBotShippingOptions:
         hidden_elem.attrs = hidden_attrs
         hidden_elem.local_name = "input"
 
-        # typeless combobox — no "type" attribute in the DOM at all
         combobox_elem = MagicMock()
         combobox_attrs = MagicMock()
         combobox_attrs.id = "kleidung_herren.brand"
-        combobox_attrs.type = None  # attribute is absent
+        combobox_attrs.type = combobox_type
         combobox_attrs.get.side_effect = lambda key, default = None: {
             "id": "kleidung_herren.brand",
             "name": None,
-            "type": None,  # absent → attrs.get returns None
+            "type": combobox_type,
             "role": "combobox",
         }.get(key, default)
         combobox_elem.attrs = combobox_attrs
