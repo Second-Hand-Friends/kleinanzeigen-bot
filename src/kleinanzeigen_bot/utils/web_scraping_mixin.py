@@ -1439,8 +1439,21 @@ class WebScrapingMixin:
             timeout = self._timeout("default")
 
         input_field = await self.web_find(selector_type, selector_value, timeout = timeout)
-        await input_field.clear_input()
-        await input_field.send_keys(str(selected_value))
+
+        # Normalize search value: convert underscores to spaces and collapse consecutive whitespace
+        # for combobox filtering. Config values like "rene__lezard" need to become "rene lezard".
+        # Hyphens are preserved since they can be legitimate characters in brand names.
+        search_value = " ".join(str(selected_value).replace("_", " ").split())
+
+        # Clear input with DOM events so framework state (React/Vue) is properly updated.
+        # nodriver's clear_input() only sets element.value="" without dispatching events,
+        # which causes stale values to persist and get concatenated on retries.
+        await input_field.apply("""(elem) => {
+            elem.value = '';
+            elem.dispatchEvent(new Event('input', { bubbles: true }));
+            elem.dispatchEvent(new Event('change', { bubbles: true }));
+        }""")
+        await input_field.send_keys(search_value)
         await self.web_sleep()
 
         # From the input field, get the attribute "aria-controls" which points to the dropdown <ul> #id.
@@ -1458,23 +1471,26 @@ class WebScrapingMixin:
                 await self._dispatch_arrow_down_and_enter(input_field)
                 await self.web_sleep()
 
-                # Verify the selection matches the intended value (case-insensitive, whitespace-normalized)
-                expected_str = str(selected_value).strip()
-                actual_value = str(await input_field.apply("(elem) => (elem.value || '').trim()") or "")
-                if actual_value.strip().lower() != expected_str.lower():
+                # Verify the selection matches the intended value (case-insensitive, whitespace-normalized).
+                # Collapse consecutive whitespace to match the dropdown path's normalize() behavior.
+                expected_str = " ".join(search_value.split()).lower()
+                actual_value = " ".join(str(await input_field.apply("(elem) => (elem.value || '').trim()") or "").split()).lower()
+                if actual_value != expected_str:
                     raise TimeoutError(
-                        _("Combobox selected '%(actual)s' instead of '%(expected)s'") % {"actual": actual_value.strip(), "expected": expected_str}
+                        _("Combobox selected '%(actual)s' instead of '%(expected)s'") % {"actual": actual_value, "expected": expected_str}
                     ) from None
                 return input_field
 
-        js_value = json.dumps(selected_value)  # safe escaping for JS
+        js_value = json.dumps(search_value)  # safe escaping for JS
 
         # This selects the correct <li> by visible text inside the dropdown. It includes normalization, i.e. trimming
-        # leading/trailing spaces and collapsing multiple spaces to single spaces for matching. It is done case-insensitive.
+        # leading/trailing spaces, collapsing multiple spaces, and converting underscores to spaces for matching.
+        # Hyphens are preserved since they can be legitimate characters in brand names.
+        # Matching is done case-insensitive.
         ok = await dropdown_elem.apply(f"""
         function (element) {{
           const selected = String({js_value});
-          const normalize = s => (s ?? '').replace(/\\s+/g, ' ').trim().toLowerCase();
+          const normalize = s => (s ?? '').replace(/_+/g, ' ').replace(/\\s+/g, ' ').trim().toLowerCase();
           // Normalize whitespace and convert to lowercase for comparison
 
           // Get all <li> elements inside the dropdown
@@ -1508,12 +1524,13 @@ class WebScrapingMixin:
             await self._dispatch_arrow_down_and_enter(input_field)
             await self.web_sleep()
 
-            # Verify the selection matches the intended value (case-insensitive, whitespace-normalized)
-            expected_str = str(selected_value).strip()
-            actual_value = str(await input_field.apply("(elem) => (elem.value || '').trim()") or "")
-            if actual_value.strip().lower() != expected_str.lower():
-                raise TimeoutError(_("Combobox selected '%(actual)s' instead of '%(expected)s'") % {"actual": actual_value.strip(), "expected": expected_str})
-            LOG.info("Combobox fallback verified: '%s' confirmed.", actual_value.strip())
+            # Verify the selection matches the intended value (case-insensitive, whitespace-normalized).
+            # Collapse consecutive whitespace to match the dropdown path's normalize() behavior.
+            expected_str = " ".join(search_value.split()).lower()
+            actual_value = " ".join(str(await input_field.apply("(elem) => (elem.value || '').trim()") or "").split()).lower()
+            if actual_value != expected_str:
+                raise TimeoutError(_("Combobox selected '%(actual)s' instead of '%(expected)s'") % {"actual": actual_value, "expected": expected_str})
+            LOG.info("Combobox fallback verified: '%s' confirmed.", actual_value)
             return input_field
 
         await self.web_sleep()
@@ -1571,10 +1588,7 @@ class WebScrapingMixin:
         }})""")
 
         if not ok:
-            raise TimeoutError(
-                _("Option '%(value)s' not found in button combobox '%(id)s'")
-                % {"value": selected_value, "id": elem_id}
-            )
+            raise TimeoutError(_("Option '%(value)s' not found in button combobox '%(id)s'") % {"value": selected_value, "id": elem_id})
 
         await self.web_sleep()
         return listbox
