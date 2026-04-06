@@ -307,8 +307,8 @@ class TestWebScrapingErrorHandling:
         input_field.send_keys.assert_awaited_once_with("rene lezard")
 
     @pytest.mark.asyncio
-    async def test_web_select_combobox_converts_hyphens_to_spaces(self, web_scraper:WebScrapingMixin) -> None:
-        """Combobox should convert hyphens to spaces in the search value."""
+    async def test_web_select_combobox_preserves_hyphens(self, web_scraper:WebScrapingMixin) -> None:
+        """Combobox should preserve hyphens in the search value since they are legitimate characters."""
         input_field = AsyncMock(spec = Element)
         input_field.attrs = {"aria-controls": "dropdown-id"}
         input_field.apply = AsyncMock(return_value = None)  # clearing call only
@@ -322,7 +322,7 @@ class TestWebScrapingErrorHandling:
 
         await web_scraper.web_select_combobox(By.ID, "combo-id", "some-brand")
 
-        input_field.send_keys.assert_awaited_once_with("some brand")
+        input_field.send_keys.assert_awaited_once_with("some-brand")
 
     @pytest.mark.asyncio
     async def test_dispatch_arrow_down_and_enter(self, web_scraper:WebScrapingMixin) -> None:

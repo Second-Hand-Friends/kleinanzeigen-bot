@@ -1440,9 +1440,10 @@ class WebScrapingMixin:
 
         input_field = await self.web_find(selector_type, selector_value, timeout = timeout)
 
-        # Normalize search value: convert underscores and hyphens to spaces for combobox filtering.
+        # Normalize search value: convert underscores to spaces for combobox filtering.
         # Config values like "rene_lezard" need to become "rene lezard" to match dropdown options.
-        search_value = str(selected_value).replace("_", " ").replace("-", " ")
+        # Hyphens are preserved since they can be legitimate characters in brand names.
+        search_value = str(selected_value).replace("_", " ")
 
         # Clear input with DOM events so framework state (React/Vue) is properly updated.
         # nodriver's clear_input() only sets element.value="" without dispatching events,
@@ -1482,12 +1483,13 @@ class WebScrapingMixin:
         js_value = json.dumps(search_value)  # safe escaping for JS
 
         # This selects the correct <li> by visible text inside the dropdown. It includes normalization, i.e. trimming
-        # leading/trailing spaces, collapsing multiple spaces, and converting underscores/hyphens to spaces for matching.
+        # leading/trailing spaces, collapsing multiple spaces, and converting underscores to spaces for matching.
+        # Hyphens are preserved since they can be legitimate characters in brand names.
         # Matching is done case-insensitive.
         ok = await dropdown_elem.apply(f"""
         function (element) {{
           const selected = String({js_value});
-          const normalize = s => (s ?? '').replace(/[_-]+/g, ' ').replace(/\\s+/g, ' ').trim().toLowerCase();
+          const normalize = s => (s ?? '').replace(/_+/g, ' ').replace(/\\s+/g, ' ').trim().toLowerCase();
           // Normalize whitespace and convert to lowercase for comparison
 
           // Get all <li> elements inside the dropdown
