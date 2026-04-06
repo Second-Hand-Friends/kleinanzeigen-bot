@@ -1519,6 +1519,66 @@ class WebScrapingMixin:
         await self.web_sleep()
         return dropdown_elem
 
+    async def web_select_button_combobox(
+        self,
+        elem_id:str,
+        selected_value:str,
+        *,
+        timeout:int | float | None = None,
+    ) -> Element:
+        """Select an option from a ``<button role="combobox">`` dropdown by display text.
+
+        Opens the dropdown by clicking the button, waits for the listbox
+        (``{elem_id}-menu``), and clicks the ``<li role="option">`` whose
+        normalized visible text matches *selected_value*.
+
+        Matching is case-insensitive and collapses consecutive whitespace,
+        consistent with :meth:`web_select_combobox`.
+
+        :param elem_id: HTML ``id`` of the ``<button role="combobox">`` element.
+        :param selected_value: Visible label text to match.
+        :param timeout: Timeout in seconds for element lookups.
+        :returns: The listbox ``<ul>`` element on success.
+        :raises TimeoutError: if the combobox, listbox, or a matching option cannot be found.
+
+        .. note::
+            This method uses standard DOM APIs (``querySelectorAll``,
+            ``textContent``, ``click()``) and does **not** depend on React
+            fiber internals.  It is intended as the future replacement for
+            the React-fiber-based ``__select_button_combobox`` used in special
+            attribute handling — see GitHub issue #930.
+        """
+        if timeout is None:
+            timeout = self._timeout("default")
+
+        await self.web_click(By.ID, elem_id, timeout = timeout)
+        listbox_id = f"{elem_id}-menu"
+        listbox = await self.web_find(By.ID, listbox_id, timeout = timeout)
+
+        js_value = json.dumps(selected_value)
+        ok = await listbox.apply(f"""(function(element) {{
+            const normalize = s => (s ?? '').replace(/\\s+/g, ' ').trim().toLowerCase();
+            const needle = normalize({js_value});
+            const items = element.querySelectorAll('[role="option"]');
+            for (const li of items) {{
+                if (normalize(li.textContent) === needle) {{
+                    try {{ li.scrollIntoView({{block: 'nearest'}}); }} catch (e) {{}}
+                    li.click();
+                    return true;
+                }}
+            }}
+            return false;
+        }})""")
+
+        if not ok:
+            raise TimeoutError(
+                _("Option '%(value)s' not found in button combobox '%(id)s'")
+                % {"value": selected_value, "id": elem_id}
+            )
+
+        await self.web_sleep()
+        return listbox
+
     async def _dispatch_arrow_down_and_enter(self, input_field:Element) -> None:
         """Dispatch ArrowDown + Enter key events via CDP to confirm an autocomplete suggestion.
 
