@@ -38,14 +38,14 @@ jobs:
 
 
     - name: Generate GitHub Access Token
-      uses: tibdex/github-app-token@3beb63f4bd073e61482598c45c71c1019b59b73a # v2.1.0
-      # https://github.com/tibdex/github-app-token
+      uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+      # https://github.com/actions/create-github-app-token
       id: generate_token
       # see https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#authenticating-with-github-app-generated-tokens
       with:
         # see https://github.com/organizations/Second-Hand-Friends/settings/apps/kleinanzeigen-bot-tu
-        app_id: ${{ secrets.DEPS_UPDATER_APP_ID }}
-        private_key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
+        app-id: ${{ secrets.DEPS_UPDATER_APP_ID }}
+        private-key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
 
 
     - name: Git Checkout
