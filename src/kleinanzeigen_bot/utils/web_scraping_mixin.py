@@ -1592,7 +1592,7 @@ class WebScrapingMixin:
         return listbox
 
     async def _clear_input_via_keyboard(self, input_field:Element) -> None:
-        """Clear an input field by selecting all text via keyboard (Ctrl+A) and deleting it.
+        """Clear an input field by selecting all text via keyboard (Cmd+A on macOS, Ctrl+A elsewhere) and deleting it.
 
         This is more reliable with React/Vue-controlled inputs than setting ``element.value``
         directly (including with dispatched ``input``/``change`` events), because framework
@@ -1603,9 +1603,10 @@ class WebScrapingMixin:
         await input_field.apply("(elem) => elem.focus()")
         await self.web_sleep(min_ms = 100, max_ms = 200)
         tab = input_field._tab  # noqa: SLF001 – nodriver Element exposes its CDP tab via _tab
-        # Ctrl+A to select all text (modifier=2 is the Ctrl flag)
-        await tab.send(cdp_input.dispatch_key_event("keyDown", key = "a", code = "KeyA", modifiers = 2))
-        await tab.send(cdp_input.dispatch_key_event("keyUp", key = "a", code = "KeyA", modifiers = 2))
+        # Select all: Cmd+A on macOS (modifier=4), Ctrl+A elsewhere (modifier=2)
+        select_all_modifier = 4 if platform.system() == "Darwin" else 2
+        await tab.send(cdp_input.dispatch_key_event("keyDown", key = "a", code = "KeyA", modifiers = select_all_modifier))
+        await tab.send(cdp_input.dispatch_key_event("keyUp", key = "a", code = "KeyA", modifiers = select_all_modifier))
         # Delete to remove the selected text
         await tab.send(cdp_input.dispatch_key_event("keyDown", key = "Backspace", code = "Backspace"))
         await tab.send(cdp_input.dispatch_key_event("keyUp", key = "Backspace", code = "Backspace"))

@@ -350,20 +350,41 @@ class TestWebScrapingErrorHandling:
         assert tab_send.call_count == 4
 
     @pytest.mark.asyncio
-    async def test_clear_input_via_keyboard(self, web_scraper:WebScrapingMixin) -> None:
-        """_clear_input_via_keyboard should focus, send Ctrl+A+Backspace via CDP to clear reliably."""
+    async def test_clear_input_via_keyboard_uses_cmd_on_macos(self, web_scraper:WebScrapingMixin) -> None:
+        """_clear_input_via_keyboard should use Cmd+A (modifier=4) on macOS."""
         input_field = AsyncMock(spec = Element)
         input_field._tab = AsyncMock()  # noqa: SLF001
-
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
 
-        await web_scraper._clear_input_via_keyboard(input_field)
+        with patch("kleinanzeigen_bot.utils.web_scraping_mixin.cdp_input.dispatch_key_event", return_value = "mock_event") as mock_dispatch:
+            with patch("kleinanzeigen_bot.utils.web_scraping_mixin.platform.system", return_value = "Darwin"):
+                await web_scraper._clear_input_via_keyboard(input_field)
 
         input_field.apply.assert_awaited_once_with("(elem) => elem.focus()")
-        assert web_scraper.web_sleep.await_count == 1
-        # 2 Ctrl+A key events + 2 Backspace key events = 4 CDP sends
-        tab_send = input_field._tab.send
-        assert tab_send.call_count == 4
+        # 4 dispatch_key_event calls: 2 for Cmd+A + 2 for Backspace
+        assert mock_dispatch.call_count == 4
+        select_all_calls = [c for c in mock_dispatch.call_args_list if c.kwargs.get("key") == "a"]
+        assert len(select_all_calls) == 2
+        for call_args in select_all_calls:
+            assert call_args.kwargs.get("modifiers") == 4
+
+    @pytest.mark.asyncio
+    async def test_clear_input_via_keyboard_uses_ctrl_on_linux(self, web_scraper:WebScrapingMixin) -> None:
+        """_clear_input_via_keyboard should use Ctrl+A (modifier=2) on non-macOS."""
+        input_field = AsyncMock(spec = Element)
+        input_field._tab = AsyncMock()  # noqa: SLF001
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        with patch("kleinanzeigen_bot.utils.web_scraping_mixin.cdp_input.dispatch_key_event", return_value = "mock_event") as mock_dispatch:
+            with patch("kleinanzeigen_bot.utils.web_scraping_mixin.platform.system", return_value = "Linux"):
+                await web_scraper._clear_input_via_keyboard(input_field)
+
+        input_field.apply.assert_awaited_once_with("(elem) => elem.focus()")
+        assert mock_dispatch.call_count == 4
+        select_all_calls = [c for c in mock_dispatch.call_args_list if c.kwargs.get("key") == "a"]
+        assert len(select_all_calls) == 2
+        for call_args in select_all_calls:
+            assert call_args.kwargs.get("modifiers") == 2
 
     @pytest.mark.asyncio
     async def test_web_select_by_value(self, web_scraper:WebScrapingMixin) -> None:
