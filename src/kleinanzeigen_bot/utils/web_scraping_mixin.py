@@ -1179,7 +1179,7 @@ class WebScrapingMixin:
         :raises TimeoutError: if element could not be found within time
         """
         input_field = await self.web_find(selector_type, selector_value, timeout = timeout)
-        await self._clear_input_via_keyboard(input_field)
+        await self._clear_input(input_field)
         await input_field.send_keys(str(text))
         await self.web_sleep()
         return input_field
@@ -1445,12 +1445,11 @@ class WebScrapingMixin:
         # Hyphens are preserved since they can be legitimate characters in brand names.
         search_value = " ".join(str(selected_value).replace("_", " ").split())
 
-        # Clear input using keyboard-based selection (Ctrl+A + Backspace) so React/Vue
-        # framework state is properly updated.  Programmatic ``element.value = ''`` (even
-        # with dispatched ``input``/``change`` events) can be intercepted and reverted by
-        # the framework, causing stale values to be concatenated on retries
-        # (e.g. "Sonstigesrene_lezard" → issue #945).
-        await self._clear_input_via_keyboard(input_field)
+        # Clear input using elem.select() + CDP Backspace so React/Vue framework state is
+        # properly updated.  Programmatic ``element.value = ''`` (even with dispatched
+        # ``input``/``change`` events) can be intercepted and reverted by the framework,
+        # causing stale values to be concatenated on retries (e.g. "Sonstigesrene_lezard").
+        await self._clear_input(input_field)
         await input_field.send_keys(search_value)
         await self.web_sleep()
 
@@ -1591,23 +1590,22 @@ class WebScrapingMixin:
         await self.web_sleep()
         return listbox
 
-    async def _clear_input_via_keyboard(self, input_field:Element) -> None:
-        """Clear an input field by selecting all text via keyboard (Cmd+A on macOS, Ctrl+A elsewhere) and deleting it.
+    async def _clear_input(self, input_field:Element) -> None:
+        """Clear an input field by selecting all text via ``elem.select()`` and deleting it via CDP Backspace.
 
-        This is more reliable with React/Vue-controlled inputs than setting ``element.value``
-        directly (including with dispatched ``input``/``change`` events), because framework
-        state can intercept and revert programmatic value changes.  Keyboard-based clearing
-        works through the same event pipeline that React hooks into natively, so the
-        framework's internal state is updated correctly.
+        Uses the standard DOM ``select()`` method to select all text (cross-platform, no
+        keyboard modifier differences), then dispatches a single Backspace via CDP to delete
+        the selection through the browser's native editing pipeline.  This triggers the same
+        ``InputEvent`` with ``inputType: 'deleteContentBackward'`` that React/Vue hooks into,
+        so the framework's internal state is updated correctly.
+
+        This is more reliable with framework-controlled inputs than setting ``element.value``
+        directly (even with dispatched ``input``/``change`` events), because frameworks can
+        intercept and revert programmatic value mutations.
         """
-        await input_field.apply("(elem) => elem.focus()")
-        await self.web_sleep(min_ms = 100, max_ms = 200)
+        await input_field.apply("(elem) => { elem.focus(); elem.select(); }")
+        await self.web_sleep(min_ms = 50, max_ms = 100)
         tab = input_field._tab  # noqa: SLF001 – nodriver Element exposes its CDP tab via _tab
-        # Select all: Cmd+A on macOS (modifier=4), Ctrl+A elsewhere (modifier=2)
-        select_all_modifier = 4 if platform.system() == "Darwin" else 2
-        await tab.send(cdp_input.dispatch_key_event("keyDown", key = "a", code = "KeyA", modifiers = select_all_modifier))
-        await tab.send(cdp_input.dispatch_key_event("keyUp", key = "a", code = "KeyA", modifiers = select_all_modifier))
-        # Delete to remove the selected text
         await tab.send(cdp_input.dispatch_key_event("keyDown", key = "Backspace", code = "Backspace"))
         await tab.send(cdp_input.dispatch_key_event("keyUp", key = "Backspace", code = "Backspace"))
 
