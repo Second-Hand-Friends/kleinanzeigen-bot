@@ -1440,10 +1440,10 @@ class WebScrapingMixin:
 
         input_field = await self.web_find(selector_type, selector_value, timeout = timeout)
 
-        # Normalize search value: convert underscores to spaces for combobox filtering.
-        # Config values like "rene_lezard" need to become "rene lezard" to match dropdown options.
+        # Normalize search value: convert underscores to spaces and collapse consecutive whitespace
+        # for combobox filtering. Config values like "rene__lezard" need to become "rene lezard".
         # Hyphens are preserved since they can be legitimate characters in brand names.
-        search_value = str(selected_value).replace("_", " ")
+        search_value = " ".join(str(selected_value).replace("_", " ").split())
 
         # Clear input with DOM events so framework state (React/Vue) is properly updated.
         # nodriver's clear_input() only sets element.value="" without dispatching events,
@@ -1588,10 +1588,7 @@ class WebScrapingMixin:
         }})""")
 
         if not ok:
-            raise TimeoutError(
-                _("Option '%(value)s' not found in button combobox '%(id)s'")
-                % {"value": selected_value, "id": elem_id}
-            )
+            raise TimeoutError(_("Option '%(value)s' not found in button combobox '%(id)s'") % {"value": selected_value, "id": elem_id})
 
         await self.web_sleep()
         return listbox
