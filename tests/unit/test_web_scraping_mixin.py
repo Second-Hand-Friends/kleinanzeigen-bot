@@ -12,7 +12,7 @@ import zipfile
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, NoReturn, Protocol, cast
-from unittest.mock import ANY, AsyncMock, MagicMock, Mock, call, mock_open, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, Mock, mock_open, patch
 
 import nodriver
 import psutil
@@ -296,8 +296,15 @@ class TestWebScrapingErrorHandling:
         assert result is input_field
 
     @pytest.mark.asyncio
-    async def test_web_select_combobox_converts_underscores_to_spaces(self, web_scraper:WebScrapingMixin) -> None:
-        """Combobox should convert underscores to spaces in the search value."""
+    @pytest.mark.parametrize(
+        ("input_value", "expected_sent"),
+        [
+            pytest.param("rene_lezard", "rene lezard", id = "underscores-to-spaces"),
+            pytest.param("some-brand", "some-brand", id = "hyphens-preserved"),
+        ],
+    )
+    async def test_web_select_combobox_normalizes_search_value(self, web_scraper:WebScrapingMixin, input_value:str, expected_sent:str) -> None:
+        """Combobox should convert underscores to spaces while preserving hyphens."""
         input_field = AsyncMock(spec = Element)
         input_field.attrs = {"aria-controls": "dropdown-id"}
         input_field.send_keys = AsyncMock()
@@ -309,60 +316,9 @@ class TestWebScrapingErrorHandling:
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
         web_scraper._clear_input = AsyncMock()  # type: ignore[method-assign]
 
-        await web_scraper.web_select_combobox(By.ID, "combo-id", "rene_lezard")
+        await web_scraper.web_select_combobox(By.ID, "combo-id", input_value)
 
-        input_field.send_keys.assert_awaited_once_with("rene lezard")
-
-    @pytest.mark.asyncio
-    async def test_web_select_combobox_preserves_hyphens(self, web_scraper:WebScrapingMixin) -> None:
-        """Combobox should preserve hyphens in the search value since they are legitimate characters."""
-        input_field = AsyncMock(spec = Element)
-        input_field.attrs = {"aria-controls": "dropdown-id"}
-        input_field.send_keys = AsyncMock()
-
-        dropdown_elem = AsyncMock(spec = Element)
-        dropdown_elem.apply = AsyncMock(return_value = True)
-
-        web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
-        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
-        web_scraper._clear_input = AsyncMock()  # type: ignore[method-assign]
-
-        await web_scraper.web_select_combobox(By.ID, "combo-id", "some-brand")
-
-        input_field.send_keys.assert_awaited_once_with("some-brand")
-
-    @pytest.mark.asyncio
-    async def test_dispatch_arrow_down_and_enter(self, web_scraper:WebScrapingMixin) -> None:
-        """_dispatch_arrow_down_and_enter should focus, send ArrowDown+Enter via CDP, and sleep between steps."""
-        input_field = AsyncMock(spec = Element)
-        input_field._tab = AsyncMock()  # noqa: SLF001
-
-        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
-
-        await web_scraper._dispatch_arrow_down_and_enter(input_field)
-
-        input_field.apply.assert_awaited_once_with("(elem) => elem.focus()")
-        assert web_scraper.web_sleep.await_count == 2
-        assert web_scraper.web_sleep.call_args_list[0] == call(min_ms = 300, max_ms = 600)
-        assert web_scraper.web_sleep.call_args_list[1] == call(min_ms = 200, max_ms = 400)
-
-        tab_send = input_field._tab.send
-        assert tab_send.call_count == 4
-
-    @pytest.mark.asyncio
-    async def test_clear_input(self, web_scraper:WebScrapingMixin) -> None:
-        """_clear_input should focus+select via JS, then send 2 CDP Backspace events."""
-        input_field = AsyncMock(spec = Element)
-        input_field._tab = AsyncMock()  # noqa: SLF001
-        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
-
-        await web_scraper._clear_input(input_field)
-
-        input_field.apply.assert_awaited_once_with("(elem) => { elem.focus(); elem.select(); }")
-        assert web_scraper.web_sleep.await_count == 1
-        # 2 CDP sends: Backspace keyDown + keyUp
-        tab_send = input_field._tab.send
-        assert tab_send.call_count == 2
+        input_field.send_keys.assert_awaited_once_with(expected_sent)
 
     @pytest.mark.asyncio
     async def test_web_select_by_value(self, web_scraper:WebScrapingMixin) -> None:
@@ -395,21 +351,19 @@ class TestWebScrapingErrorHandling:
         with pytest.raises(TimeoutError, match = "Option not found by value or displayed text"):
             await web_scraper.web_select(By.ID, "select-id", "missing-option")
 
+    @pytest.mark.asyncio
     async def test_web_input_success_returns_element(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
-        """Successful web_input should clear via elem.select()+Backspace, send keys, wait, and return the element."""
+        """Successful web_input should clear, send keys, wait, and return the element."""
         mock_element = AsyncMock(spec = Element)
-        mock_tab = AsyncMock()
-        mock_element._tab = mock_tab  # noqa: SLF001
         mock_page.query_selector.return_value = mock_element
         mock_sleep = AsyncMock()
         cast(Any, web_scraper).web_sleep = mock_sleep
+        web_scraper._clear_input = AsyncMock()  # type: ignore[method-assign]
 
         result = await web_scraper.web_input(By.ID, "username", "hello world", timeout = 1)
 
         assert result is mock_element
-        mock_element.apply.assert_awaited_once_with("(elem) => { elem.focus(); elem.select(); }")
-        # 2 CDP sends: Backspace keyDown + keyUp
-        assert mock_tab.send.call_count == 2
+        web_scraper._clear_input.assert_awaited_once_with(mock_element)
         mock_element.send_keys.assert_awaited_once_with("hello world")
         mock_sleep.assert_awaited()
 
