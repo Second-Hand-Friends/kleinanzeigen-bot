@@ -36,6 +36,11 @@ LOG.setLevel(loggers.INFO)
 PUBLISH_MAX_RETRIES:Final[int] = 3
 _NUMERIC_IDS_RE:Final[re.Pattern[str]] = re.compile(r"^\d+(,\d+)*$")
 _SPECIAL_ATTRIBUTE_TOKEN_RE:Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_]+$")
+# See issue #930 for migrating __select_button_combobox to web_select_button_combobox
+_WANTED_SHIPPING_LABELS:Final[dict[str, str]] = {
+    "SHIPPING": "Versand möglich",
+    "PICKUP": "Nur Abholung",
+}
 _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
     (By.ID, "user-email"),
@@ -2008,13 +2013,21 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         shipping_type = ad_cfg.shipping_type
         if shipping_type != "NOT_APPLICABLE":
             if ad_cfg.type == "WANTED":
-                # special handling for ads of type WANTED since shipping is a special attribute for these
-                if shipping_type in {"PICKUP", "SHIPPING"}:
-                    short_timeout = self._timeout("quick_dom")
-                    shipping_toggle = "ad-shipping-enabled-yes" if shipping_type == "SHIPPING" else "ad-shipping-enabled-no"
+                # WANTED ads render shipping as a special-attribute combobox dropdown,
+                # not as radio buttons.  Select by display text using the standard
+                # DOM-based web_select_button_combobox (no React fiber internals).
+                # See issue #930 for broader React fiber migration.
+                display_text = _WANTED_SHIPPING_LABELS.get(shipping_type)
+                if display_text:
                     try:
-                        if not await self.web_check(By.ID, shipping_toggle, Is.SELECTED, timeout = short_timeout):
-                            await self.web_click(By.ID, shipping_toggle, timeout = short_timeout)
+                        shipping_btn = await self.web_find(
+                            By.CSS_SELECTOR, '[role="combobox"][id$=".versand"]',
+                            timeout = self._timeout("quick_dom"),
+                        )
+                        btn_id = cast(str, shipping_btn.attrs.get("id"))
+                        if not btn_id:
+                            raise TimeoutError(_("Shipping combobox button has no id attribute"))
+                        await self.web_select_button_combobox(btn_id, display_text)
                     except TimeoutError as ex:
                         LOG.warning("Failed to set shipping attribute for type '%s'!", shipping_type)
                         raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % shipping_type) from ex
@@ -2042,24 +2055,25 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # set sell_directly
         #############################
-        sell_directly = ad_cfg.sell_directly
-        try:
-            if ad_cfg.shipping_type == "SHIPPING":
-                if sell_directly and ad_cfg.shipping_options and price_type in {"FIXED", "NEGOTIABLE"}:
-                    if not await self.web_check(By.ID, "ad-buy-now-true", Is.SELECTED):
-                        await self.web_click(By.ID, "ad-buy-now-true")
-                elif not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED):
-                    await self.web_click(By.ID, "ad-buy-now-false")
-            else:
-                # For PICKUP/other types: always opt out of buy-now if the radio exists
-                try:
-                    short_check = self._timeout("quick_dom")
-                    if not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = short_check):
-                        await self.web_click(By.ID, "ad-buy-now-false", timeout = short_check)
-                except TimeoutError:
-                    pass  # nosec
-        except TimeoutError as ex:
-            LOG.debug(ex, exc_info = True)
+        if ad_cfg.type != "WANTED":
+            sell_directly = ad_cfg.sell_directly
+            try:
+                if ad_cfg.shipping_type == "SHIPPING":
+                    if sell_directly and ad_cfg.shipping_options and price_type in {"FIXED", "NEGOTIABLE"}:
+                        if not await self.web_check(By.ID, "ad-buy-now-true", Is.SELECTED):
+                            await self.web_click(By.ID, "ad-buy-now-true")
+                    elif not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED):
+                        await self.web_click(By.ID, "ad-buy-now-false")
+                else:
+                    # For PICKUP/other types: always opt out of buy-now if the radio exists
+                    try:
+                        short_check = self._timeout("quick_dom")
+                        if not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = short_check):
+                            await self.web_click(By.ID, "ad-buy-now-false", timeout = short_check)
+                    except TimeoutError:
+                        pass  # nosec
+            except TimeoutError as ex:
+                LOG.debug(ex, exc_info = True)
 
         #############################
         # set description
@@ -2533,6 +2547,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
             LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
 
+    # TODO: Issue #930 — migrate to web_select_button_combobox (display-text-based, no React fiber)
     async def __select_button_combobox(self, elem_id:str, value:str) -> None:
         """Select an option from a <button role="combobox"> dropdown by its API value.
 

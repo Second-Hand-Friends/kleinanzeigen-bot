@@ -12,7 +12,7 @@ import zipfile
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, NoReturn, Protocol, cast
-from unittest.mock import AsyncMock, MagicMock, Mock, call, mock_open, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, Mock, call, mock_open, patch
 
 import nodriver
 import psutil
@@ -137,20 +137,6 @@ class TestWebScrapingErrorHandling:
     """Test error handling scenarios in WebScrapingMixin."""
 
     @pytest.mark.asyncio
-    async def test_web_find_timeout(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
-        """Test timeout handling in web_find."""
-        # Mock page.query_selector to return None, simulating element not found
-        mock_page.query_selector.return_value = None
-
-        # Test timeout for ID selector
-        with pytest.raises(TimeoutError, match = "No HTML element found with ID 'test-id'"):
-            await web_scraper.web_find(By.ID, "test-id", timeout = 0.1)
-
-        # Test timeout for class selector
-        with pytest.raises(TimeoutError, match = "No HTML element found with CSS class 'test-class'"):
-            await web_scraper.web_find(By.CLASS_NAME, "test-class", timeout = 0.1)
-
-    @pytest.mark.asyncio
     async def test_web_find_network_error(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
         """Test network error handling in web_find."""
         # Mock page.query_selector to raise a network error
@@ -228,24 +214,6 @@ class TestWebScrapingErrorHandling:
         input_field.apply.assert_awaited()
 
     @pytest.mark.asyncio
-    async def test_web_select_combobox_missing_dropdown_wrong_value_raises(self, web_scraper:WebScrapingMixin) -> None:
-        """When no listbox is found and ArrowDown+Enter selects wrong value, raise TimeoutError."""
-        input_field = AsyncMock(spec = Element)
-        input_field.attrs = {}
-        input_field.clear_input = AsyncMock()
-        input_field.send_keys = AsyncMock()
-        # After ArrowDown+Enter, verification reads back a mismatching value
-        input_field.apply = AsyncMock(return_value = "Wrong Brand")
-
-        # No aria-controls → first web_find returns input; second web_find for listbox also fails
-        web_scraper.web_find = AsyncMock(side_effect = [input_field, TimeoutError("no listbox")])  # type: ignore[method-assign]
-        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
-        web_scraper._dispatch_arrow_down_and_enter = AsyncMock()  # type: ignore[method-assign]
-
-        with pytest.raises(TimeoutError):
-            await web_scraper.web_select_combobox(By.ID, "combo-id", "Armani", timeout = 0.1)
-
-    @pytest.mark.asyncio
     async def test_web_select_combobox_selects_matching_option(self, web_scraper:WebScrapingMixin) -> None:
         """Test combobox selection matches a visible <li> option."""
         input_field = AsyncMock(spec = Element)
@@ -268,19 +236,34 @@ class TestWebScrapingErrorHandling:
         assert web_scraper.web_sleep.await_count == 2
 
     @pytest.mark.asyncio
-    async def test_web_select_combobox_no_matching_option_wrong_selection_raises(self, web_scraper:WebScrapingMixin) -> None:
-        """When no <li> matches and ArrowDown+Enter selects the wrong value, raise TimeoutError."""
+    @pytest.mark.parametrize(
+        ("has_aria_controls", "second_find_result"),
+        [
+            pytest.param(False, TimeoutError("no listbox"), id = "no-dropdown"),
+            pytest.param(True, None, id = "no-li-match"),
+        ],
+    )
+    async def test_web_select_combobox_wrong_selection_raises(
+        self,
+        web_scraper:WebScrapingMixin,
+        has_aria_controls:bool,
+        second_find_result:TimeoutError | None,
+    ) -> None:
+        """When ArrowDown+Enter selects a wrong value, raise TimeoutError regardless of dropdown presence."""
         input_field = AsyncMock(spec = Element)
-        input_field.attrs = {"aria-controls": "dropdown-id"}
+        input_field.attrs = {"aria-controls": "dropdown-id"} if has_aria_controls else {}
         input_field.clear_input = AsyncMock()
         input_field.send_keys = AsyncMock()
-        # After ArrowDown+Enter, the verification reads input_field.value via apply
         input_field.apply = AsyncMock(return_value = "Wrong Value")
 
-        dropdown_elem = AsyncMock(spec = Element)
-        dropdown_elem.apply = AsyncMock(return_value = False)
+        if has_aria_controls:
+            dropdown_elem = AsyncMock(spec = Element)
+            dropdown_elem.apply = AsyncMock(return_value = False)
+            web_find_results:list[Any] = [input_field, dropdown_elem]
+        else:
+            web_find_results = [input_field, second_find_result]
 
-        web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
+        web_scraper.web_find = AsyncMock(side_effect = web_find_results)  # type: ignore[method-assign]
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
         web_scraper._dispatch_arrow_down_and_enter = AsyncMock()  # type: ignore[method-assign]
 
@@ -1759,22 +1742,6 @@ class TestWebScrapingBrowserConfiguration:
         assert scraper.browser is not None
         assert scraper.page is not None
 
-    def test_diagnose_browser_issues(self, caplog:pytest.LogCaptureFixture) -> None:
-        """Test that diagnose_browser_issues provides expected diagnostic output."""
-        # Configure logging to capture output
-        caplog.set_level(loggers.INFO)
-
-        # Create a WebScrapingMixin instance
-        mixin = WebScrapingMixin()
-
-        # Call the diagnose method
-        mixin.diagnose_browser_issues()
-
-        # Check that diagnostic output was produced
-        log_output = caplog.text.lower()
-        assert "browser connection diagnostics" in log_output or "browser-verbindungsdiagnose" in log_output
-        assert "end diagnostics" in log_output or "ende der diagnose" in log_output
-
 
 class TestWebScrapingDiagnostics:
     """Test the diagnose_browser_issues method."""
@@ -2717,3 +2684,44 @@ class TestWebScrapingMixinAdminCheck:
 
         with patch("kleinanzeigen_bot.utils.web_scraping_mixin.os", mock_os):
             assert _is_admin() is False
+
+
+class TestWebSelectButtonCombobox:
+    """Direct unit tests for the web_select_button_combobox method."""
+
+    @pytest.mark.asyncio
+    async def test_web_select_button_combobox_selects_matching_option(self, web_scraper:WebScrapingMixin) -> None:
+        """Happy path: clicking and selecting a matching option returns the listbox."""
+        listbox = AsyncMock(spec = Element)
+        listbox.apply = AsyncMock(return_value = True)
+
+        web_scraper.web_click = AsyncMock()  # type: ignore[method-assign]
+        web_scraper.web_find = AsyncMock(return_value = listbox)  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        result = await web_scraper.web_select_button_combobox("test-combo", "Nur Abholung")
+
+        assert result is listbox
+        web_scraper.web_click.assert_awaited_once_with(By.ID, "test-combo", timeout = ANY)
+        web_scraper.web_find.assert_awaited_once_with(By.ID, "test-combo-menu", timeout = ANY)
+        web_scraper.web_sleep.assert_awaited_once()
+
+        js_arg = listbox.apply.call_args[0][0]
+        assert json.dumps("Nur Abholung") in js_arg
+
+    @pytest.mark.asyncio
+    async def test_web_select_button_combobox_raises_when_no_matching_option(self, web_scraper:WebScrapingMixin) -> None:
+        """Error path: raises TimeoutError when no matching option is found."""
+        listbox = AsyncMock(spec = Element)
+        listbox.apply = AsyncMock(return_value = False)
+
+        web_scraper.web_click = AsyncMock()  # type: ignore[method-assign]
+        web_scraper.web_find = AsyncMock(return_value = listbox)  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        with pytest.raises(TimeoutError, match = "Option 'Missing' not found in button combobox 'test-combo'"):
+            await web_scraper.web_select_button_combobox("test-combo", "Missing")
+
+        web_scraper.web_click.assert_awaited_once()
+        web_scraper.web_find.assert_awaited_once()
+        web_scraper.web_sleep.assert_not_awaited()

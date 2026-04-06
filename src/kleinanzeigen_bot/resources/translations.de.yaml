@@ -203,6 +203,7 @@ kleinanzeigen_bot/__init__.py:
     "Failed to set price type '%s'": "Fehler beim Setzen des Preistyps '%s'"
     "Failed to set shipping attribute for type '%s'!": "Fehler beim setzen des Versandattributs für den Typ '%s'!"
     "Shipping step skipped - reason: NOT_APPLICABLE": "Versandschritt übersprungen: Versand nicht anwendbar (Status = NOT_APPLICABLE)"
+    "Shipping combobox button has no id attribute": "Versand-Combobox-Button hat kein ID-Attribut"
     "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
     " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
     " -> SUCCESS: ad updated with ID %s": " -> ERFOLG: Anzeige mit ID %s aktualisiert"
@@ -563,6 +564,9 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
 
   web_select:
     "Option not found by value or displayed text: %s": "Option nicht gefunden nach Wert oder angezeigtem Text: %s"
+
+  web_select_button_combobox:
+    "Option '%(value)s' not found in button combobox '%(id)s'": "Option '%(value)s' nicht in Button-Combobox '%(id)s' gefunden"
 
   web_select_combobox:
     "Combobox selected '%(actual)s' instead of '%(expected)s'": "Combobox hat '%(actual)s' statt '%(expected)s' ausgewählt"
