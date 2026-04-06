@@ -181,10 +181,13 @@ class TestWebScrapingErrorHandling:
     @pytest.mark.asyncio
     async def test_web_input_clear_failure(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
         """Test input clear failure in web_input."""
-        # Create a mock element that raises an error on clear_input
+        # Create a mock element whose _tab.send raises an error (simulating CDP failure)
         mock_element = AsyncMock(spec = Element)
-        mock_element.clear_input.side_effect = Exception("Cannot clear input")
+        mock_tab = AsyncMock()
+        mock_tab.send.side_effect = Exception("Cannot clear input")
+        mock_element._tab = mock_tab  # noqa: SLF001
         mock_page.query_selector.return_value = mock_element
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
 
         # Test input clear failure
         with pytest.raises(Exception, match = "Cannot clear input"):
@@ -196,27 +199,27 @@ class TestWebScrapingErrorHandling:
         input_field = AsyncMock(spec = Element)
         input_field.attrs = {}
         input_field.send_keys = AsyncMock()
-        # First apply call: clearing input via JS; second: verification reads back the input value
-        input_field.apply = AsyncMock(side_effect = [None, "Option"])
+        # apply is called once for verification: reads back the input value
+        input_field.apply = AsyncMock(return_value = "Option")
 
         # No aria-controls → first web_find returns input; second web_find for listbox also fails
         web_scraper.web_find = AsyncMock(side_effect = [input_field, TimeoutError("no listbox")])  # type: ignore[method-assign]
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+        web_scraper._clear_input_via_keyboard = AsyncMock()  # type: ignore[method-assign]
         web_scraper._dispatch_arrow_down_and_enter = AsyncMock()  # type: ignore[method-assign]
 
         result = await web_scraper.web_select_combobox(By.ID, "combo-id", "Option", timeout = 0.1)
 
+        web_scraper._clear_input_via_keyboard.assert_awaited_once_with(input_field)
         web_scraper._dispatch_arrow_down_and_enter.assert_awaited_once_with(input_field)
         assert result is input_field
         input_field.send_keys.assert_awaited_once_with("Option")
-        input_field.apply.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_web_select_combobox_selects_matching_option(self, web_scraper:WebScrapingMixin) -> None:
         """Test combobox selection matches a visible <li> option."""
         input_field = AsyncMock(spec = Element)
         input_field.attrs = {"aria-controls": "dropdown-id"}
-        input_field.apply = AsyncMock(return_value = None)  # clearing call only
         input_field.send_keys = AsyncMock()
 
         dropdown_elem = AsyncMock(spec = Element)
@@ -224,10 +227,12 @@ class TestWebScrapingErrorHandling:
 
         web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+        web_scraper._clear_input_via_keyboard = AsyncMock()  # type: ignore[method-assign]
 
         result = await web_scraper.web_select_combobox(By.ID, "combo-id", "Visible Label")
 
         assert result is dropdown_elem
+        web_scraper._clear_input_via_keyboard.assert_awaited_once_with(input_field)
         input_field.send_keys.assert_awaited_once_with("Visible Label")
         dropdown_elem.apply.assert_awaited_once()
         assert web_scraper.web_sleep.await_count == 2
@@ -250,8 +255,8 @@ class TestWebScrapingErrorHandling:
         input_field = AsyncMock(spec = Element)
         input_field.attrs = {"aria-controls": "dropdown-id"} if has_aria_controls else {}
         input_field.send_keys = AsyncMock()
-        # First apply call: clearing input via JS; second: verification reads back a mismatching value
-        input_field.apply = AsyncMock(side_effect = [None, "Wrong Value"])
+        # apply is called once for verification: reads back a mismatching value
+        input_field.apply = AsyncMock(side_effect = ["Wrong Value"])
 
         if has_aria_controls:
             dropdown_elem = AsyncMock(spec = Element)
@@ -262,6 +267,7 @@ class TestWebScrapingErrorHandling:
 
         web_scraper.web_find = AsyncMock(side_effect = web_find_results)  # type: ignore[method-assign]
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+        web_scraper._clear_input_via_keyboard = AsyncMock()  # type: ignore[method-assign]
         web_scraper._dispatch_arrow_down_and_enter = AsyncMock()  # type: ignore[method-assign]
 
         with pytest.raises(TimeoutError):
@@ -273,14 +279,15 @@ class TestWebScrapingErrorHandling:
         input_field = AsyncMock(spec = Element)
         input_field.attrs = {"aria-controls": "dropdown-id"}
         input_field.send_keys = AsyncMock()
-        # First apply call: clearing input via JS; second: verification reads back the matching value
-        input_field.apply = AsyncMock(side_effect = [None, "Expected Value"])
+        # apply is called for verification: reads back the matching value
+        input_field.apply = AsyncMock(side_effect = ["Expected Value"])
 
         dropdown_elem = AsyncMock(spec = Element)
         dropdown_elem.apply = AsyncMock(return_value = False)
 
         web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+        web_scraper._clear_input_via_keyboard = AsyncMock()  # type: ignore[method-assign]
         web_scraper._dispatch_arrow_down_and_enter = AsyncMock()  # type: ignore[method-assign]
 
         result = await web_scraper.web_select_combobox(By.ID, "combo-id", "Expected Value")
@@ -293,7 +300,6 @@ class TestWebScrapingErrorHandling:
         """Combobox should convert underscores to spaces in the search value."""
         input_field = AsyncMock(spec = Element)
         input_field.attrs = {"aria-controls": "dropdown-id"}
-        input_field.apply = AsyncMock(return_value = None)  # clearing call only
         input_field.send_keys = AsyncMock()
 
         dropdown_elem = AsyncMock(spec = Element)
@@ -301,6 +307,7 @@ class TestWebScrapingErrorHandling:
 
         web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+        web_scraper._clear_input_via_keyboard = AsyncMock()  # type: ignore[method-assign]
 
         await web_scraper.web_select_combobox(By.ID, "combo-id", "rene_lezard")
 
@@ -311,7 +318,6 @@ class TestWebScrapingErrorHandling:
         """Combobox should preserve hyphens in the search value since they are legitimate characters."""
         input_field = AsyncMock(spec = Element)
         input_field.attrs = {"aria-controls": "dropdown-id"}
-        input_field.apply = AsyncMock(return_value = None)  # clearing call only
         input_field.send_keys = AsyncMock()
 
         dropdown_elem = AsyncMock(spec = Element)
@@ -319,6 +325,7 @@ class TestWebScrapingErrorHandling:
 
         web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+        web_scraper._clear_input_via_keyboard = AsyncMock()  # type: ignore[method-assign]
 
         await web_scraper.web_select_combobox(By.ID, "combo-id", "some-brand")
 
@@ -339,6 +346,22 @@ class TestWebScrapingErrorHandling:
         assert web_scraper.web_sleep.call_args_list[0] == call(min_ms = 300, max_ms = 600)
         assert web_scraper.web_sleep.call_args_list[1] == call(min_ms = 200, max_ms = 400)
 
+        tab_send = input_field._tab.send
+        assert tab_send.call_count == 4
+
+    @pytest.mark.asyncio
+    async def test_clear_input_via_keyboard(self, web_scraper:WebScrapingMixin) -> None:
+        """_clear_input_via_keyboard should focus, send Ctrl+A+Backspace via CDP to clear reliably."""
+        input_field = AsyncMock(spec = Element)
+        input_field._tab = AsyncMock()  # noqa: SLF001
+
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        await web_scraper._clear_input_via_keyboard(input_field)
+
+        input_field.apply.assert_awaited_once_with("(elem) => elem.focus()")
+        assert web_scraper.web_sleep.await_count == 1
+        # 2 Ctrl+A key events + 2 Backspace key events = 4 CDP sends
         tab_send = input_field._tab.send
         assert tab_send.call_count == 4
 
@@ -374,8 +397,10 @@ class TestWebScrapingErrorHandling:
             await web_scraper.web_select(By.ID, "select-id", "missing-option")
 
     async def test_web_input_success_returns_element(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
-        """Successful web_input should send keys, wait, and return the element."""
+        """Successful web_input should clear via keyboard, send keys, wait, and return the element."""
         mock_element = AsyncMock(spec = Element)
+        mock_tab = AsyncMock()
+        mock_element._tab = mock_tab  # noqa: SLF001
         mock_page.query_selector.return_value = mock_element
         mock_sleep = AsyncMock()
         cast(Any, web_scraper).web_sleep = mock_sleep
@@ -383,9 +408,11 @@ class TestWebScrapingErrorHandling:
         result = await web_scraper.web_input(By.ID, "username", "hello world", timeout = 1)
 
         assert result is mock_element
-        mock_element.clear_input.assert_awaited_once()
+        mock_element.apply.assert_awaited_once_with("(elem) => elem.focus()")
+        # 2 Ctrl+A key events + 2 Backspace key events = 4 CDP sends
+        assert mock_tab.send.call_count == 4
         mock_element.send_keys.assert_awaited_once_with("hello world")
-        mock_sleep.assert_awaited_once()
+        mock_sleep.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_web_open_timeout(self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock) -> None:

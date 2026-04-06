@@ -1179,7 +1179,7 @@ class WebScrapingMixin:
         :raises TimeoutError: if element could not be found within time
         """
         input_field = await self.web_find(selector_type, selector_value, timeout = timeout)
-        await input_field.clear_input()
+        await self._clear_input_via_keyboard(input_field)
         await input_field.send_keys(str(text))
         await self.web_sleep()
         return input_field
@@ -1445,14 +1445,12 @@ class WebScrapingMixin:
         # Hyphens are preserved since they can be legitimate characters in brand names.
         search_value = " ".join(str(selected_value).replace("_", " ").split())
 
-        # Clear input with DOM events so framework state (React/Vue) is properly updated.
-        # nodriver's clear_input() only sets element.value="" without dispatching events,
-        # which causes stale values to persist and get concatenated on retries.
-        await input_field.apply("""(elem) => {
-            elem.value = '';
-            elem.dispatchEvent(new Event('input', { bubbles: true }));
-            elem.dispatchEvent(new Event('change', { bubbles: true }));
-        }""")
+        # Clear input using keyboard-based selection (Ctrl+A + Backspace) so React/Vue
+        # framework state is properly updated.  Programmatic ``element.value = ''`` (even
+        # with dispatched ``input``/``change`` events) can be intercepted and reverted by
+        # the framework, causing stale values to be concatenated on retries
+        # (e.g. "Sonstigesrene_lezard" → issue #945).
+        await self._clear_input_via_keyboard(input_field)
         await input_field.send_keys(search_value)
         await self.web_sleep()
 
@@ -1592,6 +1590,25 @@ class WebScrapingMixin:
 
         await self.web_sleep()
         return listbox
+
+    async def _clear_input_via_keyboard(self, input_field:Element) -> None:
+        """Clear an input field by selecting all text via keyboard (Ctrl+A) and deleting it.
+
+        This is more reliable with React/Vue-controlled inputs than setting ``element.value``
+        directly (including with dispatched ``input``/``change`` events), because framework
+        state can intercept and revert programmatic value changes.  Keyboard-based clearing
+        works through the same event pipeline that React hooks into natively, so the
+        framework's internal state is updated correctly.
+        """
+        await input_field.apply("(elem) => elem.focus()")
+        await self.web_sleep(min_ms = 100, max_ms = 200)
+        tab = input_field._tab  # noqa: SLF001 – nodriver Element exposes its CDP tab via _tab
+        # Ctrl+A to select all text (modifier=2 is the Ctrl flag)
+        await tab.send(cdp_input.dispatch_key_event("keyDown", key = "a", code = "KeyA", modifiers = 2))
+        await tab.send(cdp_input.dispatch_key_event("keyUp", key = "a", code = "KeyA", modifiers = 2))
+        # Delete to remove the selected text
+        await tab.send(cdp_input.dispatch_key_event("keyDown", key = "Backspace", code = "Backspace"))
+        await tab.send(cdp_input.dispatch_key_event("keyUp", key = "Backspace", code = "Backspace"))
 
     async def _dispatch_arrow_down_and_enter(self, input_field:Element) -> None:
         """Dispatch ArrowDown + Enter key events via CDP to confirm an autocomplete suggestion.
