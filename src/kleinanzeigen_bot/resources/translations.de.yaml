@@ -310,6 +310,7 @@ kleinanzeigen_bot/__init__.py:
     "Unable to close shipping dialog!": "Versanddialog konnte nicht geschlossen werden!"
 
   __set_shipping_options:
+    "Failed to configure shipping options in dialog!": "Versandoptionen konnten im Dialog nicht konfiguriert werden!"
     "Unable to close shipping dialog!": "Versanddialog konnte nicht geschlossen werden!"
 
   update_content_hashes:

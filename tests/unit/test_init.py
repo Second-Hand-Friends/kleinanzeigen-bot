@@ -2531,7 +2531,7 @@ class TestKleinanzeigenBotShippingOptions:
         shipping_form_elem.attrs = {}
 
         shipping_size_radio = MagicMock()
-        shipping_size_radio.attrs = {"checked": False}
+        shipping_size_radio.attrs = {"checked": ""}  # SMALL radio is pre-checked
 
         category_path_elem = MagicMock()
         category_path_elem.apply = AsyncMock(return_value = "Test Category")
@@ -2539,7 +2539,7 @@ class TestKleinanzeigenBotShippingOptions:
         # Mock the necessary web interaction methods
         with (
             patch.object(test_bot, "web_execute", side_effect = mock_web_execute),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
             patch.object(test_bot, "web_select", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
@@ -2558,7 +2558,8 @@ class TestKleinanzeigenBotShippingOptions:
                     return csrf_token_elem
                 if selector_value == "myftr-shppngcrt-frm":
                     return shipping_form_elem
-                if selector_type == By.ID and selector_value.startswith("radio-button-"):
+                # New shipping dialog: size radio via XPath with value attribute
+                if selector_type == By.XPATH and '@type="radio"' in selector_value and "@value=" in selector_value:
                     return shipping_size_radio
                 if selector_value == "ad-category-path":
                     return category_path_elem
@@ -2573,8 +2574,17 @@ class TestKleinanzeigenBotShippingOptions:
                 # Test through the public interface by publishing an ad
                 await test_bot.publish_ad(str(ad_file), ad_cfg, ad_cfg_orig, published_ads)
 
-            # Verify that web_find was called the expected number of times
-            assert mock_find.await_count >= 3
+            # Verify that the shipping dialog was interacted with:
+            # - web_find should have been called for the size radio (XPath with @type="radio")
+            # - web_click should have been called to deselect unwanted carriers and close dialog
+            radio_find_calls = [c for c in mock_find.await_args_list if len(c.args) >= 2 and '@type="radio"' in str(c.args[1])]
+            assert len(radio_find_calls) >= 1, "Expected at least one web_find for size radio"
+
+            click_xpath_values = [str(c.args[1]) for c in mock_click.await_args_list if len(c.args) >= 2 and c.args[0] == By.XPATH]
+            # Should click Weiter, deselect HERMES_002 (unwanted), and click Fertig
+            assert any("Weiter" in v for v in click_xpath_values), "Expected click on Weiter button"
+            assert any("HERMES_002" in v for v in click_xpath_values), "Expected click to deselect HERMES_002"
+            assert any("Fertig" in v for v in click_xpath_values), "Expected click on Fertig button"
 
             # Verify the file was created in the temporary directory
             assert ad_file.exists()
@@ -3215,6 +3225,192 @@ class TestShippingDialogFlow:
             pytest.raises(TimeoutError, match = "Unable to close shipping dialog!"),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+
+class TestShippingOptionsDialog:
+    """Tests for __set_shipping_options using carrier-code-based selectors."""
+
+    @staticmethod
+    def _make_ad_with_options(base_ad_config:dict[str, Any], options:list[str]) -> Ad:
+        return Ad.model_validate(
+            base_ad_config
+            | {
+                "shipping_type": "SHIPPING",
+                "shipping_options": options,
+            }
+        )
+
+    @staticmethod
+    def _mock_checkbox(checked:bool = False) -> MagicMock:
+        """Create a mock checkbox element with optional checked attribute."""
+        el = MagicMock()
+        if checked:
+            el.attrs = {"checked": ""}
+        else:
+            el.attrs = {}
+        return el
+
+    @pytest.mark.asyncio
+    async def test_replace_mode_deselects_unwanted_carriers(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """REPLACE mode: only wanted carrier remains checked; others are deselected."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["Hermes_Päckchen"])
+
+        radio_mock = self._mock_checkbox(checked = True)  # SMALL already selected
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            if "radio" in selector_value and "SMALL" in selector_value:
+                return radio_mock
+            return self._mock_checkbox(checked = True)  # all checkboxes pre-checked
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg, mode = AdUpdateStrategy.REPLACE)
+
+        click_args = [(c.args[0], c.args[1]) for c in mock_click.await_args_list if len(c.args) >= 2]
+        # Should click Weiter and Fertig
+        assert any("Weiter" in str(a[1]) for a in click_args)
+        assert any("Fertig" in str(a[1]) for a in click_args)
+        # Should deselect HERMES_002 and DHL_001 (unwanted carriers for Klein)
+        deselected = [a for a in click_args if "HERMES_002" in str(a[1]) or "DHL_001" in str(a[1])]
+        assert len(deselected) == 2
+
+    @pytest.mark.asyncio
+    async def test_modify_mode_toggles_carriers(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """MODIFY mode: explicitly (de-)selects each carrier based on wanted set."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["Hermes_Päckchen", "DHL_2"])
+
+        radio_mock = self._mock_checkbox(checked = True)  # SMALL already selected
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            if "radio" in selector_value and "SMALL" in selector_value:
+                return radio_mock
+            # HERMES_001 checked, HERMES_002 checked, DHL_001 unchecked
+            if "HERMES_001" in selector_value:
+                return self._mock_checkbox(checked = True)
+            if "HERMES_002" in selector_value:
+                return self._mock_checkbox(checked = True)
+            if "DHL_001" in selector_value:
+                return self._mock_checkbox(checked = False)
+            return self._mock_checkbox(checked = False)
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg, mode = AdUpdateStrategy.MODIFY)
+
+        click_args = [(c.args[0], c.args[1]) for c in mock_click.await_args_list if len(c.args) >= 2]
+        # HERMES_002 should be deselected (was checked, not wanted)
+        assert any("HERMES_002" in str(a[1]) for a in click_args)
+        # DHL_001 should be selected (was unchecked, wanted via DHL_2 → DHL_001)
+        assert any("DHL_001" in str(a[1]) for a in click_args)
+        # HERMES_001 should NOT be clicked (was checked, wanted)
+        assert not any("HERMES_001" in str(a[1]) for a in click_args)
+
+    @pytest.mark.asyncio
+    async def test_unknown_option_raises_key_error(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Unknown shipping option name raises KeyError with helpful message."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["NonExistent_Option"])
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(KeyError, match = "Unknown shipping option"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg)
+
+    @pytest.mark.asyncio
+    async def test_mixed_size_options_raises_value_error(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Options from different size groups raise ValueError."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["Hermes_Päckchen", "DHL_5"])
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(ValueError, match = "one package size"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg)
+
+    @pytest.mark.asyncio
+    async def test_timeout_in_dialog_raises(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """TimeoutError during dialog interaction is re-raised with descriptive message."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["Hermes_Päckchen"])
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = TimeoutError("radio not found")),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(TimeoutError, match = "Failed to configure shipping options in dialog!"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg)
+
+    @pytest.mark.asyncio
+    async def test_empty_options_returns_early(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Empty shipping_options list returns immediately without any DOM interaction."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, [])
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg)
+
+        mock_find.assert_not_awaited()
+        mock_click.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_selects_size_radio_when_not_already_checked(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """When the size radio is not pre-checked, it gets clicked."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_10"])
+
+        radio_mock = self._mock_checkbox(checked = False)  # LARGE not checked
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            if "radio" in selector_value and "LARGE" in selector_value:
+                return radio_mock
+            return self._mock_checkbox(checked = True)
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg, mode = AdUpdateStrategy.REPLACE)
+
+        click_args = [(c.args[0], c.args[1]) for c in mock_click.await_args_list if len(c.args) >= 2]
+        # Should have clicked the LARGE radio button
+        assert any("LARGE" in str(a[1]) and "radio" in str(a[1]) for a in click_args)
 
 
 class TestWantedShippingSelection:

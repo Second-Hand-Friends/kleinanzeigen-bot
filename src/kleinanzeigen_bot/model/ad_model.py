@@ -76,6 +76,45 @@ def _validate_shipping_option_item(v:str) -> str:
 
 ShippingOption = Annotated[str, AfterValidator(_validate_shipping_option_item)]
 
+# ── Shipping option → carrier code mapping ──────────────────────────────────
+
+#: Maps the user-facing config name (used in ad YAML) to the carrier code
+#: used by the kleinanzeigen.de API and shipping dialog DOM.
+CARRIER_CODE_BY_OPTION:Final[dict[str, str]] = {
+    "DHL_2": "DHL_001",
+    "Hermes_Päckchen": "HERMES_001",
+    "Hermes_S": "HERMES_002",
+    "DHL_5": "DHL_002",
+    "Hermes_M": "HERMES_003",
+    "DHL_10": "DHL_003",
+    "DHL_20": "DHL_005",
+    "DHL_31,5": "DHL_004",
+    "Hermes_L": "HERMES_004",
+}
+
+#: Reverse mapping: carrier code → user-facing config name.
+OPTION_NAME_BY_CARRIER_CODE:Final[dict[str, str]] = {v: k for k, v in CARRIER_CODE_BY_OPTION.items()}
+
+#: Maps carrier code → (size_display_name, radio_value).
+SIZE_INFO_BY_CARRIER_CODE:Final[dict[str, tuple[str, str]]] = {
+    "HERMES_001": ("Klein", "SMALL"),
+    "HERMES_002": ("Klein", "SMALL"),
+    "DHL_001": ("Klein", "SMALL"),
+    "HERMES_003": ("Mittel", "MEDIUM"),
+    "DHL_002": ("Mittel", "MEDIUM"),
+    "HERMES_004": ("Groß", "LARGE"),
+    "DHL_003": ("Groß", "LARGE"),
+    "DHL_004": ("Groß", "LARGE"),
+    "DHL_005": ("Groß", "LARGE"),
+}
+
+#: Size group → all carrier codes in that group.
+CARRIER_CODES_BY_SIZE:Final[dict[str, list[str]]] = {
+    "Klein": ["HERMES_001", "HERMES_002", "DHL_001"],
+    "Mittel": ["HERMES_003", "DHL_002"],
+    "Groß": ["HERMES_004", "DHL_003", "DHL_004", "DHL_005"],
+}
+
 
 def _validate_auto_price_reduction_constraints(price:int | None, auto_price_reduction:AutoPriceReductionConfig | dict[str, Any] | None) -> None:
     """
