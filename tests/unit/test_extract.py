@@ -140,44 +140,6 @@ class TestAdExtractorBasics:
         assert await files.is_dir(non_existing) is False
         assert await files.is_dir(str(non_existing)) is False
 
-    @pytest.mark.asyncio
-    async def test_exists_async_helper(self, tmp_path:Path) -> None:
-        """Test files.exists async helper function."""
-        from kleinanzeigen_bot.utils import files  # noqa: PLC0415
-
-        # Test with existing path
-        existing_file = tmp_path / "test.txt"
-        existing_file.write_text("test")
-        assert await files.exists(existing_file) is True
-        assert await files.exists(str(existing_file)) is True
-
-        # Test with non-existing path
-        non_existing = tmp_path / "nonexistent.txt"
-        assert await files.exists(non_existing) is False
-        assert await files.exists(str(non_existing)) is False
-
-    @pytest.mark.asyncio
-    async def test_isdir_async_helper(self, tmp_path:Path) -> None:
-        """Test files.is_dir async helper function."""
-        from kleinanzeigen_bot.utils import files  # noqa: PLC0415
-
-        # Test with directory
-        test_dir = tmp_path / "testdir"
-        test_dir.mkdir()
-        assert await files.is_dir(test_dir) is True
-        assert await files.is_dir(str(test_dir)) is True
-
-        # Test with file
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("test")
-        assert await files.is_dir(test_file) is False
-        assert await files.is_dir(str(test_file)) is False
-
-        # Test with non-existing path
-        non_existing = tmp_path / "nonexistent"
-        assert await files.is_dir(non_existing) is False
-        assert await files.is_dir(str(non_existing)) is False
-
     def test_download_and_save_image_sync_success(self, tmp_path:Path) -> None:
         """Test _download_and_save_image_sync with successful download."""
         from unittest.mock import MagicMock, mock_open  # noqa: PLC0415
@@ -280,25 +242,6 @@ class TestAdExtractorShipping:
                 assert options == ["DHL_2"]
             else:
                 assert options is None
-
-    @pytest.mark.asyncio
-    # pylint: disable=protected-access
-    async def test_extract_shipping_info_with_options(self, test_extractor:extract_module.AdExtractor) -> None:
-        """Test shipping info extraction with shipping options."""
-        shipping_response = {
-            "content": json.dumps({"data": {"shippingOptionsResponse": {"options": [{"id": "DHL_001", "priceInEuroCent": 549, "packageSize": "SMALL"}]}}})
-        }
-
-        with (
-            patch.object(test_extractor, "page", MagicMock()),
-            patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 5,49 €"),
-            patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
-        ):
-            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
-
-            assert shipping_type == "SHIPPING"
-            assert costs == 5.49
-            assert options == ["DHL_2"]
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access

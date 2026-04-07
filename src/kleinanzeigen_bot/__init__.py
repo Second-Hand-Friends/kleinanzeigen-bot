@@ -2687,7 +2687,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def __set_shipping_options(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         if not ad_cfg.shipping_options:
-            return
+            msg = "shipping_options must be provided"
+            raise ValueError(msg)
 
         # Resolve user-facing config names to carrier codes
         try:
