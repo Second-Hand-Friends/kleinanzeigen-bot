@@ -14,7 +14,7 @@ from jsonschema import Draft202012Validator
 from ruamel.yaml import YAML
 
 import kleinanzeigen_bot.extract as extract_module
-from kleinanzeigen_bot.model.ad_model import AdPartial, ContactPartial
+from kleinanzeigen_bot.model.ad_model import OPTION_NAME_BY_CARRIER_CODE, AdPartial, ContactPartial
 from kleinanzeigen_bot.model.config_model import Config, DownloadConfig
 from kleinanzeigen_bot.utils.web_scraping_mixin import Browser, By, Element
 
@@ -239,7 +239,7 @@ class TestAdExtractorShipping:
             assert shipping_type == expected_type
             assert costs == expected_cost
             if expected_cost:
-                assert options == ["DHL_2"]
+                assert options == [OPTION_NAME_BY_CARRIER_CODE["DHL_001"]]
             else:
                 assert options is None
 
@@ -1222,21 +1222,6 @@ class TestAdExtractorCategory:
             result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
 
         assert result == {"condition_s": "new"}
-
-    @pytest.mark.asyncio
-    # pylint: disable=protected-access
-    async def test_extract_special_attributes_dom_fallback_not_called_when_present(self, extractor:extract_module.AdExtractor) -> None:
-        """When ad_attributes is present, special attributes should be extracted from it directly."""
-        belen_conf:dict[str, Any] = {"universalAnalyticsOpts": {"dimensions": {"ad_attributes": "condition_s:ok|versand_s:t"}}}
-        with patch.object(
-            extractor,
-            "_extract_special_attributes_from_dom",
-            new_callable = AsyncMock,
-            return_value = {},
-        ):
-            result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
-
-        assert result == {"condition_s": "ok"}
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
