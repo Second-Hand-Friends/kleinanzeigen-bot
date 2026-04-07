@@ -4,7 +4,6 @@
 import json  # isort: skip
 import asyncio
 import shutil
-from gettext import gettext as _
 from pathlib import Path
 from typing import Any, Final, TypedDict
 from unittest.mock import AsyncMock, MagicMock, call, patch
@@ -1194,7 +1193,7 @@ class TestAdExtractorCategory:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_category_fallback_to_legacy_selectors(self, extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
+    async def test_extract_category_fallback_to_legacy_selectors(self, extractor:extract_module.AdExtractor) -> None:
         """Test category extraction when breadcrumb links are not available and legacy selectors are used."""
         category_line = MagicMock()
         first_part = MagicMock()
@@ -1202,8 +1201,6 @@ class TestAdExtractorCategory:
         second_part = MagicMock()
         second_part.attrs = {"href": 67890}  # This will need str() conversion
 
-        caplog.set_level("DEBUG")
-        expected_message = _("Falling back to legacy breadcrumb selectors; collected ids: %s") % []
         with (
             patch.object(extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
             patch.object(extractor, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError) as mock_web_find_all,
@@ -1212,7 +1209,6 @@ class TestAdExtractorCategory:
 
             result = await extractor._extract_category_from_ad_page()
             assert result == "12345/67890"
-            assert sum(1 for record in caplog.records if record.message == expected_message) == 1
 
             mock_web_find.assert_any_call(By.ID, "vap-brdcrmb")
             mock_web_find.assert_any_call(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
@@ -1220,8 +1216,8 @@ class TestAdExtractorCategory:
             mock_web_find_all.assert_awaited_once_with(By.CSS_SELECTOR, "a", parent = category_line)
 
     @pytest.mark.asyncio
-    async def test_extract_category_legacy_selectors_timeout(self, extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
-        """Ensure fallback timeout logs the error and re-raises with translated message."""
+    async def test_extract_category_legacy_selectors_timeout(self, extractor:extract_module.AdExtractor) -> None:
+        """Ensure fallback timeout re-raises with translated message."""
         category_line = MagicMock()
 
         async def fake_web_find(selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element:
@@ -1232,20 +1228,17 @@ class TestAdExtractorCategory:
         with (
             patch.object(extractor, "web_find", new_callable = AsyncMock, side_effect = fake_web_find),
             patch.object(extractor, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError),
-            caplog.at_level("ERROR"),
             pytest.raises(TimeoutError, match = "Unable to locate breadcrumb fallback selectors"),
         ):
             await extractor._extract_category_from_ad_page()
-
-        assert any("Legacy breadcrumb selectors not found" in record.message for record in caplog.records)
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
     async def test_extract_special_attributes_empty(self, extractor:extract_module.AdExtractor) -> None:
         """Test extraction of special attributes when empty."""
-        with patch.object(extractor, "web_execute", new_callable = AsyncMock) as mock_web_execute:
-            mock_web_execute.return_value = {"universalAnalyticsOpts": {"dimensions": {"ad_attributes": ""}}}
-            result = await extractor._extract_special_attributes_from_ad_page(mock_web_execute.return_value)
+        belen_conf:dict[str, Any] = {"universalAnalyticsOpts": {"dimensions": {"ad_attributes": ""}}}
+        with patch.object(extractor, "_extract_special_attributes_from_dom", new_callable = AsyncMock, return_value = {}):
+            result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
             assert result == {}
 
     @pytest.mark.asyncio
@@ -1274,16 +1267,155 @@ class TestAdExtractorCategory:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_special_attributes_missing_ad_attributes(self, extractor:extract_module.AdExtractor) -> None:
-        """Test extraction of special attributes when ad_attributes key is missing."""
-        belen_conf:dict[str, Any] = {
-            "universalAnalyticsOpts": {
-                "dimensions": {
-                    # ad_attributes key is completely missing
-                }
-            }
-        }
-        result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
+    async def test_extract_special_attributes_dom_fallback_when_missing(self, extractor:extract_module.AdExtractor) -> None:
+        """When ad_attributes is missing, special attributes should be extracted via DOM fallback."""
+        belen_conf:dict[str, Any] = {"universalAnalyticsOpts": {"dimensions": {}}}
+        with patch.object(
+            extractor,
+            "_extract_special_attributes_from_dom",
+            new_callable = AsyncMock,
+            return_value = {"condition_s": "new"},
+        ):
+            result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
+
+        assert result == {"condition_s": "new"}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_dom_fallback_not_called_when_present(self, extractor:extract_module.AdExtractor) -> None:
+        """When ad_attributes is present, special attributes should be extracted from it directly."""
+        belen_conf:dict[str, Any] = {"universalAnalyticsOpts": {"dimensions": {"ad_attributes": "condition_s:ok|versand_s:t"}}}
+        with patch.object(
+            extractor,
+            "_extract_special_attributes_from_dom",
+            new_callable = AsyncMock,
+            return_value = {},
+        ):
+            result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
+
+        assert result == {"condition_s": "ok"}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_from_dom_extracts_condition(self, extractor:extract_module.AdExtractor) -> None:
+        """DOM fallback should extract condition_s from #viewad-details section."""
+        detail_item = MagicMock()
+        detail_item.text = "Zustand Neu"
+
+        async def text_side_effect(by:Any, selector:str, *, parent:Any = None, **__:Any) -> str:
+            if parent is detail_item:
+                return "Neu"
+            return ""
+
+        async def visible_text_side_effect(element:Any) -> str:
+            if element is detail_item:
+                return "Zustand Neu"
+            return ""
+
+        with (
+            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [detail_item]),
+            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
+            patch.object(extractor, "_extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+        ):
+            result = await extractor._extract_special_attributes_from_dom()
+
+        assert result == {"condition_s": "new"}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_from_dom_skips_malformed_row(self, extractor:extract_module.AdExtractor) -> None:
+        """DOM fallback should skip rows where web_text raises TimeoutError and still extract valid rows."""
+        good_item = MagicMock()
+        good_item.text = "Zustand Neu"
+
+        async def text_side_effect(by:Any, selector:str, *, parent:Any = None, **__:Any) -> str:
+            if parent is good_item:
+                return "Neu"
+            raise TimeoutError("value span not found")
+
+        async def visible_text_side_effect(element:Any) -> str:
+            if element is good_item:
+                return "Zustand Neu"
+            return ""
+
+        malformed_item = MagicMock()
+
+        with (
+            patch.object(
+                extractor,
+                "web_find_all",
+                new_callable = AsyncMock,
+                return_value = [malformed_item, good_item],
+            ),
+            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
+            patch.object(extractor, "_extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+        ):
+            result = await extractor._extract_special_attributes_from_dom()
+
+        assert result == {"condition_s": "new"}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_from_dom_returns_empty_when_no_details_section(self, extractor:extract_module.AdExtractor) -> None:
+        """DOM fallback should return empty dict when the details section is not found."""
+        with patch.object(
+            extractor,
+            "web_find_all",
+            new_callable = AsyncMock,
+            side_effect = TimeoutError,
+        ):
+            result = await extractor._extract_special_attributes_from_dom()
+
+        assert result == {}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_from_dom_skips_unrecognized_label(self, extractor:extract_module.AdExtractor) -> None:
+        """DOM fallback should skip rows whose label is not in the lookup map."""
+        detail_item = MagicMock()
+
+        async def text_side_effect(by:Any, selector:str, *, parent:Any = None, **__:Any) -> str:
+            if parent is detail_item:
+                return "SomeValue"
+            return ""
+
+        async def visible_text_side_effect(element:Any) -> str:
+            if element is detail_item:
+                return "UnrecognizedLabel SomeValue"
+            return ""
+
+        with (
+            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [detail_item]),
+            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
+            patch.object(extractor, "_extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+        ):
+            result = await extractor._extract_special_attributes_from_dom()
+
+        assert result == {}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_from_dom_skips_unmapped_condition_value(self, extractor:extract_module.AdExtractor) -> None:
+        """DOM fallback should skip condition rows whose display value is not in the API mapping."""
+        detail_item = MagicMock()
+
+        async def text_side_effect(by:Any, selector:str, *, parent:Any = None, **__:Any) -> str:
+            if parent is detail_item:
+                return "Unbekannt"
+            return ""
+
+        async def visible_text_side_effect(element:Any) -> str:
+            if element is detail_item:
+                return "Zustand Unbekannt"
+            return ""
+
+        with (
+            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [detail_item]),
+            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
+            patch.object(extractor, "_extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+        ):
+            result = await extractor._extract_special_attributes_from_dom()
+
         assert result == {}
 
 

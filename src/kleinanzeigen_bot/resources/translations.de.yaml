@@ -260,6 +260,7 @@ kleinanzeigen_bot/__init__.py:
     "Attribute field '%s' seems to be a checkbox...": "Attributfeld '%s' scheint eine Checkbox zu sein..."
     "Attribute field '%s' seems to be a text input...": "Attributfeld '%s' scheint ein Texteingabefeld zu sein..."
     "Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...": "Attributfeld '%s' scheint eine Combobox zu sein (d.h. Texteingabefeld mit Dropdown-Filter)..."
+    "Condition dialog not available, falling back to generic attribute handler for [%s]...": "Zustandsdialog nicht verfügbar, falle auf generischen Attribut-Handler für [%s] zurück..."
 
   download_ads:
     "Ads download directory: %s": "Anzeigen-Download-Verzeichnis: %s"
