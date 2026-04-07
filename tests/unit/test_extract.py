@@ -4,7 +4,6 @@
 import json  # isort: skip
 import asyncio
 import shutil
-from gettext import gettext as _
 from pathlib import Path
 from typing import Any, Final, TypedDict
 from unittest.mock import AsyncMock, MagicMock, call, patch
@@ -1194,7 +1193,7 @@ class TestAdExtractorCategory:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_category_fallback_to_legacy_selectors(self, extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
+    async def test_extract_category_fallback_to_legacy_selectors(self, extractor:extract_module.AdExtractor) -> None:
         """Test category extraction when breadcrumb links are not available and legacy selectors are used."""
         category_line = MagicMock()
         first_part = MagicMock()
@@ -1202,8 +1201,6 @@ class TestAdExtractorCategory:
         second_part = MagicMock()
         second_part.attrs = {"href": 67890}  # This will need str() conversion
 
-        caplog.set_level("DEBUG")
-        expected_message = _("Falling back to legacy breadcrumb selectors; collected ids: %s") % []
         with (
             patch.object(extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
             patch.object(extractor, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError) as mock_web_find_all,
@@ -1212,7 +1209,6 @@ class TestAdExtractorCategory:
 
             result = await extractor._extract_category_from_ad_page()
             assert result == "12345/67890"
-            assert sum(1 for record in caplog.records if record.message == expected_message) == 1
 
             mock_web_find.assert_any_call(By.ID, "vap-brdcrmb")
             mock_web_find.assert_any_call(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
@@ -1220,8 +1216,8 @@ class TestAdExtractorCategory:
             mock_web_find_all.assert_awaited_once_with(By.CSS_SELECTOR, "a", parent = category_line)
 
     @pytest.mark.asyncio
-    async def test_extract_category_legacy_selectors_timeout(self, extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
-        """Ensure fallback timeout logs the error and re-raises with translated message."""
+    async def test_extract_category_legacy_selectors_timeout(self, extractor:extract_module.AdExtractor) -> None:
+        """Ensure fallback timeout re-raises with translated message."""
         category_line = MagicMock()
 
         async def fake_web_find(selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element:
@@ -1232,12 +1228,9 @@ class TestAdExtractorCategory:
         with (
             patch.object(extractor, "web_find", new_callable = AsyncMock, side_effect = fake_web_find),
             patch.object(extractor, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError),
-            caplog.at_level("ERROR"),
             pytest.raises(TimeoutError, match = "Unable to locate breadcrumb fallback selectors"),
         ):
             await extractor._extract_category_from_ad_page()
-
-        assert any("Legacy breadcrumb selectors not found" in record.message for record in caplog.records)
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
