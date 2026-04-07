@@ -2021,7 +2021,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if display_text:
                     try:
                         shipping_btn = await self.web_find(
-                            By.CSS_SELECTOR, '[role="combobox"][id$=".versand"]',
+                            By.CSS_SELECTOR,
+                            '[role="combobox"][id$=".versand"]',
                             timeout = self._timeout("quick_dom"),
                         )
                         btn_id = cast(str, shipping_btn.attrs.get("id"))
@@ -2448,8 +2449,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
 
             if normalized_special_attribute_key == "condition":
-                await self.__set_condition(special_attribute_value_str)
-                continue
+                try:
+                    await self.__set_condition(special_attribute_value_str)
+                    continue
+                except TimeoutError:
+                    LOG.info("Condition dialog not available, falling back to generic attribute handler for [%s]...", special_attribute_key)
 
             LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
             id_suffix_literal = _xpath_literal(f".{normalized_special_attribute_key}")

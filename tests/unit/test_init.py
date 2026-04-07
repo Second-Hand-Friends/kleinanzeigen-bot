@@ -635,7 +635,13 @@ class TestKleinanzeigenBotInitialization:
 
         # Mock load_ads to return the saved_ad_ids
         saved_ads:list[tuple[str, MagicMock, dict[str, Any]]] = [
-            (f"ad_{ad_id}.yaml", MagicMock(spec = Ad, id = ad_id), {}) for ad_id in scenario["saved_ad_ids"]]
+            (
+                f"ad_{ad_id}.yaml",
+                MagicMock(spec = Ad, id = ad_id),
+                {},
+            )
+            for ad_id in scenario["saved_ad_ids"]
+        ]
 
         with (
             patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = scenario["published_ads"]) as mock_fetch_published_ads,
@@ -3038,6 +3044,91 @@ class TestConditionSelector:
 
             with pytest.raises(TimeoutError, match = "Failed to set attribute 'condition_s'"):
                 await getattr(test_bot, "_KleinanzeigenBot__set_condition")("defect")
+
+
+class TestConditionFallbackToGenericHandler:
+    """Regression tests for condition_s falling back to generic attribute handler when dialog is unavailable.
+
+    When __set_condition raises TimeoutError (e.g. category uses a button-combobox instead of a dialog),
+    __set_special_attributes should fall through to the generic XPath-based handler.
+    """
+
+    @pytest.mark.asyncio
+    async def test_condition_falls_back_to_generic_handler_on_dialog_timeout(self, test_bot:KleinanzeigenBot) -> None:
+        """When condition dialog is not available, generic handler should be used as fallback."""
+        ad_cfg = Ad.model_validate(
+            {
+                "active": True,
+                "type": "OFFER",
+                "title": "Test Modellauto Neu im Karton",
+                "description": "Test Description for ad",
+                "category": "185/249",
+                "special_attributes": {"condition_s": "new"},
+                "price_type": "NEGOTIABLE",
+                "shipping_type": "PICKUP",
+                "sell_directly": False,
+                "republication_interval": 7,
+                "contact": {"name": "Test", "zipcode": "12345"},
+            }
+        )
+
+        button_elem = MagicMock()
+        button_attrs = MagicMock()
+        button_attrs.get.side_effect = lambda key, default = None: {
+            "id": "modellbau.condition",
+            "type": "button",
+            "role": "combobox",
+            "name": None,
+        }.get(key, default)
+        button_elem.attrs = button_attrs
+        button_elem.local_name = "button"
+
+        with (
+            patch.object(
+                test_bot,
+                "_KleinanzeigenBot__set_condition",
+                new_callable = AsyncMock,
+                side_effect = TimeoutError("dialog not available"),
+            ) as mock_set_condition,
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [button_elem]),
+            patch.object(
+                test_bot,
+                "_KleinanzeigenBot__select_button_combobox",
+                new_callable = AsyncMock,
+            ) as mock_select_combobox,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
+
+        mock_set_condition.assert_awaited_once_with("new")
+        mock_select_combobox.assert_awaited_once_with("modellbau.condition", "new")
+
+    @pytest.mark.asyncio
+    async def test_condition_uses_dialog_when_available(self, test_bot:KleinanzeigenBot) -> None:
+        """When condition dialog works, it should be used without falling back."""
+        ad_cfg = Ad.model_validate(
+            {
+                "active": True,
+                "type": "OFFER",
+                "title": "Test Artikel guter Zustand",
+                "description": "Test Description for ad",
+                "category": "161/176",
+                "special_attributes": {"condition_s": "ok"},
+                "price_type": "NEGOTIABLE",
+                "shipping_type": "PICKUP",
+                "sell_directly": False,
+                "republication_interval": 7,
+                "contact": {"name": "Test", "zipcode": "12345"},
+            }
+        )
+
+        with patch.object(
+            test_bot,
+            "_KleinanzeigenBot__set_condition",
+            new_callable = AsyncMock,
+        ) as mock_set_condition:
+            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
+
+        mock_set_condition.assert_awaited_once_with("ok")
 
 
 class TestShippingDialogFlow:

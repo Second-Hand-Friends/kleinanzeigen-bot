@@ -653,10 +653,62 @@ class AdExtractor(WebScrapingMixin):
         # e.g. "art_s:lautsprecher_kopfhoerer|condition_s:like_new|versand_s:t"
         special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"].get("ad_attributes")
         if not special_attributes_str:
-            return {}
+            return await self._extract_special_attributes_from_dom()
         special_attributes = dict(item.split(":") for item in special_attributes_str.split("|") if ":" in item)
         special_attributes = {k: v for k, v in special_attributes.items() if not k.endswith(".versand_s") and k != "versand_s"}
         return special_attributes
+
+    async def _extract_special_attributes_from_dom(self) -> dict[str, str]:
+        """Extract special attributes from the ad details section as a fallback.
+
+        Used when ``BelenConf.universalAnalyticsOpts.dimensions.ad_attributes`` is empty,
+        which can happen for categories where condition is an optional field.
+
+        Scrapes ``#viewad-details .addetailslist--detail`` entries and maps
+        display labels (e.g. "Zustand") to API keys (e.g. "condition_s").
+        """
+        # Maps display labels (lowercased, stripped) to (attribute_key, {display_value: api_value})
+        _CONDITION_DISPLAY_TO_API:dict[str, str] = {
+            "neu": "new",
+            "sehr gut": "like_new",
+            "gut": "ok",
+            "in ordnung": "alright",
+            "defekt": "defect",
+        }
+        _LABEL_TO_KEY:dict[str, str] = {
+            "zustand": "condition_s",
+        }
+
+        attributes:dict[str, str] = {}
+        try:
+            detail_items = await self.web_find_all(
+                By.CSS_SELECTOR,
+                "#viewad-details .addetailslist--detail",
+                timeout = self._effective_timeout(),
+            )
+        except TimeoutError:
+            LOG.debug("No ad details section found on view page for DOM-based attribute extraction.")
+            return attributes
+
+        for item in detail_items:
+            value_text = (await self.web_text(By.CSS_SELECTOR, ".addetailslist--detail--value", parent = item)).strip().lower()
+            full_text = (await self._extract_visible_text(item)).strip().lower()
+            label = full_text.removesuffix(value_text).strip()
+
+            attr_key = _LABEL_TO_KEY.get(label)
+            if not attr_key:
+                continue
+
+            if attr_key == "condition_s":
+                api_value = _CONDITION_DISPLAY_TO_API.get(value_text)
+                if api_value:
+                    attributes[attr_key] = api_value
+            else:
+                attributes[attr_key] = value_text
+
+        if attributes:
+            LOG.debug("Extracted special attributes from DOM fallback: %s", attributes)
+        return attributes
 
     async def _extract_pricing_info_from_ad_page(self) -> tuple[float | None, str]:
         """

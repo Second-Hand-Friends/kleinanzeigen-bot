@@ -1243,7 +1243,10 @@ class TestAdExtractorCategory:
     # pylint: disable=protected-access
     async def test_extract_special_attributes_empty(self, extractor:extract_module.AdExtractor) -> None:
         """Test extraction of special attributes when empty."""
-        with patch.object(extractor, "web_execute", new_callable = AsyncMock) as mock_web_execute:
+        with (
+            patch.object(extractor, "web_execute", new_callable = AsyncMock) as mock_web_execute,
+            patch.object(extractor, "_extract_special_attributes_from_dom", new_callable = AsyncMock, return_value = {}),
+        ):
             mock_web_execute.return_value = {"universalAnalyticsOpts": {"dimensions": {"ad_attributes": ""}}}
             result = await extractor._extract_special_attributes_from_ad_page(mock_web_execute.return_value)
             assert result == {}
@@ -1274,17 +1277,59 @@ class TestAdExtractorCategory:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_special_attributes_missing_ad_attributes(self, extractor:extract_module.AdExtractor) -> None:
-        """Test extraction of special attributes when ad_attributes key is missing."""
-        belen_conf:dict[str, Any] = {
-            "universalAnalyticsOpts": {
-                "dimensions": {
-                    # ad_attributes key is completely missing
-                }
-            }
-        }
-        result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
-        assert result == {}
+    async def test_extract_special_attributes_dom_fallback_when_missing(self, extractor:extract_module.AdExtractor) -> None:
+        """When ad_attributes is missing, special attributes should be extracted via DOM fallback."""
+        belen_conf:dict[str, Any] = {"universalAnalyticsOpts": {"dimensions": {}}}
+        with patch.object(
+            extractor,
+            "_extract_special_attributes_from_dom",
+            new_callable = AsyncMock,
+            return_value = {"condition_s": "new"},
+        ):
+            result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
+
+        assert result == {"condition_s": "new"}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_dom_fallback_not_called_when_present(self, extractor:extract_module.AdExtractor) -> None:
+        """When ad_attributes is present, special attributes should be extracted from it directly."""
+        belen_conf:dict[str, Any] = {"universalAnalyticsOpts": {"dimensions": {"ad_attributes": "condition_s:ok|versand_s:t"}}}
+        with patch.object(
+            extractor,
+            "_extract_special_attributes_from_dom",
+            new_callable = AsyncMock,
+            return_value = {},
+        ):
+            result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
+
+        assert result == {"condition_s": "ok"}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_from_dom_extracts_condition(self, extractor:extract_module.AdExtractor) -> None:
+        """DOM fallback should extract condition_s from #viewad-details section."""
+        detail_item = MagicMock()
+        detail_item.text = "Zustand Neu"
+
+        async def text_side_effect(by:Any, selector:str, *, parent:Any = None, **__:Any) -> str:
+            if parent is detail_item:
+                return "Neu"
+            return ""
+
+        async def visible_text_side_effect(element:Any) -> str:
+            if element is detail_item:
+                return "Zustand Neu"
+            return ""
+
+        with (
+            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [detail_item]),
+            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
+            patch.object(extractor, "_extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+        ):
+            result = await extractor._extract_special_attributes_from_dom()
+
+        assert result == {"condition_s": "new"}
 
 
 class TestAdExtractorContact:
