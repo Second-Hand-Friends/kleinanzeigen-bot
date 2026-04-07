@@ -2752,7 +2752,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         try:
             # Click apply button
-            await self.web_click(By.XPATH, f'{dialog}//button[contains(., "Fertig")]')
+            await self.web_click(By.XPATH, f'{dialog}//button[contains(., "Fertig")]', timeout = short_timeout)
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 

@@ -208,7 +208,7 @@ shipping_options: []
 #   - DHL_2
 #   - Hermes_Päckchen
 
-sell_directly:  # true or false, requires shipping_type SHIPPING to take effect (default: false)
+sell_directly:  # true or false, requires shipping_type SHIPPING with predefined shipping_options to take effect (default: false)
 ```
 
 #### Shipping Options Reference
