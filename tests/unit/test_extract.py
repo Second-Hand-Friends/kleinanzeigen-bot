@@ -1331,6 +1331,39 @@ class TestAdExtractorCategory:
 
         assert result == {"condition_s": "new"}
 
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_from_dom_skips_malformed_row(self, extractor:extract_module.AdExtractor) -> None:
+        """DOM fallback should skip rows where web_text raises TimeoutError and still extract valid rows."""
+        good_item = MagicMock()
+        good_item.text = "Zustand Neu"
+
+        async def text_side_effect(by:Any, selector:str, *, parent:Any = None, **__:Any) -> str:
+            if parent is good_item:
+                return "Neu"
+            raise TimeoutError("value span not found")
+
+        async def visible_text_side_effect(element:Any) -> str:
+            if element is good_item:
+                return "Zustand Neu"
+            return ""
+
+        malformed_item = MagicMock()
+
+        with (
+            patch.object(
+                extractor,
+                "web_find_all",
+                new_callable = AsyncMock,
+                return_value = [malformed_item, good_item],
+            ),
+            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
+            patch.object(extractor, "_extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+        ):
+            result = await extractor._extract_special_attributes_from_dom()
+
+        assert result == {"condition_s": "new"}
+
 
 class TestAdExtractorContact:
     """Tests for contact information extraction."""

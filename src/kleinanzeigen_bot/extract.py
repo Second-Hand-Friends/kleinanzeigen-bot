@@ -691,8 +691,12 @@ class AdExtractor(WebScrapingMixin):
             return attributes
 
         for item in detail_items:
-            value_text = (await self.web_text(By.CSS_SELECTOR, ".addetailslist--detail--value", parent = item)).strip().lower()
-            full_text = (await self._extract_visible_text(item)).strip().lower()
+            try:
+                value_text = (await self.web_text(By.CSS_SELECTOR, ".addetailslist--detail--value", parent = item)).strip().lower()
+                full_text = (await self._extract_visible_text(item)).strip().lower()
+            except TimeoutError:
+                LOG.debug("Skipping detail row without extractable value in DOM fallback.")
+                continue
             label = full_text.removesuffix(value_text).strip()
 
             attr_key = _LABEL_TO_KEY.get(label)
