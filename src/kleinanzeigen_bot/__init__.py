@@ -2687,19 +2687,18 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def __set_shipping_options(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         if not ad_cfg.shipping_options:
-            msg = "shipping_options must be provided"
-            raise ValueError(msg)
+            raise ValueError(_("shipping_options must be provided"))
 
         # Resolve user-facing config names to carrier codes
         try:
             wanted_carrier_codes = [CARRIER_CODE_BY_OPTION[opt] for opt in set(ad_cfg.shipping_options)]
         except KeyError as ex:
-            raise KeyError(f"Unknown shipping option(s), please refer to the documentation/README: {ad_cfg.shipping_options}") from ex
+            raise KeyError(_("Unknown shipping option(s), please refer to the documentation/README: %s") % ad_cfg.shipping_options) from ex
 
         # Determine the size group — all options must belong to the same group
         size_info = {SIZE_INFO_BY_CARRIER_CODE[code] for code in wanted_carrier_codes}
         if len(size_info) != 1:
-            raise ValueError("You can only specify shipping options for one package size!")
+            raise ValueError(_("You can only specify shipping options for one package size!"))
         ((shipping_size, shipping_radio_value),) = size_info
         wanted_codes = set(wanted_carrier_codes)
         all_codes_for_size = CARRIER_CODES_BY_SIZE[shipping_size]
