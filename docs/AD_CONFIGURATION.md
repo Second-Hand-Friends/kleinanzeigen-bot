@@ -237,7 +237,7 @@ You can select multiple options, but **only from one size group** (S, M, or L). 
 - `NOT_APPLICABLE` - Shipping not applicable for this item
 
 **Sell Directly:**
-When `sell_directly: true`, buyers can purchase the item directly through the platform without contacting the seller first. This feature only works when `shipping_type: SHIPPING`.
+When `sell_directly: true`, buyers can purchase the item directly through the platform without contacting the seller first. This feature requires `shipping_type: SHIPPING` (with either predefined `shipping_options` or individual `shipping_costs`) and a fixed or negotiable price.
 
 ### Images
 
@@ -309,7 +309,9 @@ auto_price_reduction:
   delay_days: 0
 
 shipping_type: SHIPPING
-shipping_costs: 4.95
+shipping_options:
+  - DHL_2
+  - Hermes_Päckchen
 sell_directly: true
 
 images:

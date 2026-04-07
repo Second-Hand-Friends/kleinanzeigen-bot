@@ -2070,7 +2070,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             sell_directly = ad_cfg.sell_directly
             try:
                 if ad_cfg.shipping_type == "SHIPPING":
-                    if sell_directly and ad_cfg.shipping_options and price_type in {"FIXED", "NEGOTIABLE"}:
+                    if sell_directly and price_type in {"FIXED", "NEGOTIABLE"}:
                         if not await self.web_check(By.ID, "ad-buy-now-true", Is.SELECTED):
                             await self.web_click(By.ID, "ad-buy-now-true")
                     elif not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED):
