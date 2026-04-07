@@ -1179,7 +1179,7 @@ class WebScrapingMixin:
         :raises TimeoutError: if element could not be found within time
         """
         input_field = await self.web_find(selector_type, selector_value, timeout = timeout)
-        await input_field.clear_input()
+        await self._clear_input(input_field)
         await input_field.send_keys(str(text))
         await self.web_sleep()
         return input_field
@@ -1445,14 +1445,11 @@ class WebScrapingMixin:
         # Hyphens are preserved since they can be legitimate characters in brand names.
         search_value = " ".join(str(selected_value).replace("_", " ").split())
 
-        # Clear input with DOM events so framework state (React/Vue) is properly updated.
-        # nodriver's clear_input() only sets element.value="" without dispatching events,
-        # which causes stale values to persist and get concatenated on retries.
-        await input_field.apply("""(elem) => {
-            elem.value = '';
-            elem.dispatchEvent(new Event('input', { bubbles: true }));
-            elem.dispatchEvent(new Event('change', { bubbles: true }));
-        }""")
+        # Clear input using elem.select() + CDP Backspace so React/Vue framework state is
+        # properly updated.  Programmatic ``element.value = ''`` (even with dispatched
+        # ``input``/``change`` events) can be intercepted and reverted by the framework,
+        # causing stale values to be concatenated on retries (e.g. "Sonstigesrene_lezard").
+        await self._clear_input(input_field)
         await input_field.send_keys(search_value)
         await self.web_sleep()
 
@@ -1592,6 +1589,25 @@ class WebScrapingMixin:
 
         await self.web_sleep()
         return listbox
+
+    async def _clear_input(self, input_field:Element) -> None:
+        """Clear an input field by selecting all text via ``elem.select()`` and deleting it via CDP Backspace.
+
+        Uses the standard DOM ``select()`` method to select all text (cross-platform, no
+        keyboard modifier differences), then dispatches a single Backspace via CDP to delete
+        the selection through the browser's native editing pipeline.  This triggers the same
+        ``InputEvent`` with ``inputType: 'deleteContentBackward'`` that React/Vue hooks into,
+        so the framework's internal state is updated correctly.
+
+        This is more reliable with framework-controlled inputs than setting ``element.value``
+        directly (even with dispatched ``input``/``change`` events), because frameworks can
+        intercept and revert programmatic value mutations.
+        """
+        await input_field.apply("(elem) => { elem.focus(); elem.select(); }")
+        await self.web_sleep(min_ms = 50, max_ms = 100)
+        tab = input_field._tab  # noqa: SLF001 – nodriver Element exposes its CDP tab via _tab
+        await tab.send(cdp_input.dispatch_key_event("keyDown", key = "Backspace", code = "Backspace"))
+        await tab.send(cdp_input.dispatch_key_event("keyUp", key = "Backspace", code = "Backspace"))
 
     async def _dispatch_arrow_down_and_enter(self, input_field:Element) -> None:
         """Dispatch ArrowDown + Enter key events via CDP to confirm an autocomplete suggestion.
