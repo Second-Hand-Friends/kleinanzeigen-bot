@@ -34,6 +34,16 @@ _BACKUP_DIR_PREFIX:Final[str] = ".bak-"
 _LOG_SNIPPET_LIMIT:Final[int] = 120
 _ELLIPSIS:Final[str] = "..."
 _ELLIPSIS_LEN:Final[int] = len(_ELLIPSIS)
+_CONDITION_DISPLAY_TO_API:Final[dict[str, str]] = {
+    "neu": "new",
+    "sehr gut": "like_new",
+    "gut": "ok",
+    "in ordnung": "alright",
+    "defekt": "defect",
+}
+_LABEL_TO_KEY:Final[dict[str, str]] = {
+    "zustand": "condition_s",
+}
 
 
 class AdExtractor(WebScrapingMixin):
@@ -667,18 +677,6 @@ class AdExtractor(WebScrapingMixin):
         Scrapes ``#viewad-details .addetailslist--detail`` entries and maps
         display labels (e.g. "Zustand") to API keys (e.g. "condition_s").
         """
-        # Maps display labels (lowercased, stripped) to (attribute_key, {display_value: api_value})
-        _CONDITION_DISPLAY_TO_API:dict[str, str] = {
-            "neu": "new",
-            "sehr gut": "like_new",
-            "gut": "ok",
-            "in ordnung": "alright",
-            "defekt": "defect",
-        }
-        _LABEL_TO_KEY:dict[str, str] = {
-            "zustand": "condition_s",
-        }
-
         attributes:dict[str, str] = {}
         try:
             detail_items = await self.web_find_all(

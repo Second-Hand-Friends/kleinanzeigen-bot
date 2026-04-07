@@ -1243,12 +1243,9 @@ class TestAdExtractorCategory:
     # pylint: disable=protected-access
     async def test_extract_special_attributes_empty(self, extractor:extract_module.AdExtractor) -> None:
         """Test extraction of special attributes when empty."""
-        with (
-            patch.object(extractor, "web_execute", new_callable = AsyncMock) as mock_web_execute,
-            patch.object(extractor, "_extract_special_attributes_from_dom", new_callable = AsyncMock, return_value = {}),
-        ):
-            mock_web_execute.return_value = {"universalAnalyticsOpts": {"dimensions": {"ad_attributes": ""}}}
-            result = await extractor._extract_special_attributes_from_ad_page(mock_web_execute.return_value)
+        belen_conf:dict[str, Any] = {"universalAnalyticsOpts": {"dimensions": {"ad_attributes": ""}}}
+        with patch.object(extractor, "_extract_special_attributes_from_dom", new_callable = AsyncMock, return_value = {}):
+            result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
             assert result == {}
 
     @pytest.mark.asyncio
