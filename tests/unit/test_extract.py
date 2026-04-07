@@ -1354,6 +1354,70 @@ class TestAdExtractorCategory:
 
         assert result == {"condition_s": "new"}
 
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_from_dom_returns_empty_when_no_details_section(self, extractor:extract_module.AdExtractor) -> None:
+        """DOM fallback should return empty dict when the details section is not found."""
+        with patch.object(
+            extractor,
+            "web_find_all",
+            new_callable = AsyncMock,
+            side_effect = TimeoutError,
+        ):
+            result = await extractor._extract_special_attributes_from_dom()
+
+        assert result == {}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_from_dom_skips_unrecognized_label(self, extractor:extract_module.AdExtractor) -> None:
+        """DOM fallback should skip rows whose label is not in the lookup map."""
+        detail_item = MagicMock()
+
+        async def text_side_effect(by:Any, selector:str, *, parent:Any = None, **__:Any) -> str:
+            if parent is detail_item:
+                return "SomeValue"
+            return ""
+
+        async def visible_text_side_effect(element:Any) -> str:
+            if element is detail_item:
+                return "UnrecognizedLabel SomeValue"
+            return ""
+
+        with (
+            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [detail_item]),
+            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
+            patch.object(extractor, "_extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+        ):
+            result = await extractor._extract_special_attributes_from_dom()
+
+        assert result == {}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_from_dom_skips_unmapped_condition_value(self, extractor:extract_module.AdExtractor) -> None:
+        """DOM fallback should skip condition rows whose display value is not in the API mapping."""
+        detail_item = MagicMock()
+
+        async def text_side_effect(by:Any, selector:str, *, parent:Any = None, **__:Any) -> str:
+            if parent is detail_item:
+                return "Unbekannt"
+            return ""
+
+        async def visible_text_side_effect(element:Any) -> str:
+            if element is detail_item:
+                return "Zustand Unbekannt"
+            return ""
+
+        with (
+            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [detail_item]),
+            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
+            patch.object(extractor, "_extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+        ):
+            result = await extractor._extract_special_attributes_from_dom()
+
+        assert result == {}
+
 
 class TestAdExtractorContact:
     """Tests for contact information extraction."""
