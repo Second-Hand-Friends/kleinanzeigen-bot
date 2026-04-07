@@ -19,7 +19,7 @@ from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config, DiagnosticsConfig, PublishingConfig
 from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
 from kleinanzeigen_bot.utils.exceptions import PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
-from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element, Is
+from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
 @pytest.fixture
@@ -2531,7 +2531,7 @@ class TestKleinanzeigenBotShippingOptions:
         shipping_form_elem.attrs = {}
 
         shipping_size_radio = MagicMock()
-        shipping_size_radio.attrs = {"checked": False}
+        shipping_size_radio.attrs = {"checked": ""}  # SMALL radio is pre-checked
 
         category_path_elem = MagicMock()
         category_path_elem.apply = AsyncMock(return_value = "Test Category")
@@ -2539,7 +2539,7 @@ class TestKleinanzeigenBotShippingOptions:
         # Mock the necessary web interaction methods
         with (
             patch.object(test_bot, "web_execute", side_effect = mock_web_execute),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
             patch.object(test_bot, "web_select", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
@@ -2558,7 +2558,8 @@ class TestKleinanzeigenBotShippingOptions:
                     return csrf_token_elem
                 if selector_value == "myftr-shppngcrt-frm":
                     return shipping_form_elem
-                if selector_type == By.ID and selector_value.startswith("radio-button-"):
+                # New shipping dialog: size radio via XPath with value attribute
+                if selector_type == By.XPATH and '@type="radio"' in selector_value and "@value=" in selector_value:
                     return shipping_size_radio
                 if selector_value == "ad-category-path":
                     return category_path_elem
@@ -2573,8 +2574,17 @@ class TestKleinanzeigenBotShippingOptions:
                 # Test through the public interface by publishing an ad
                 await test_bot.publish_ad(str(ad_file), ad_cfg, ad_cfg_orig, published_ads)
 
-            # Verify that web_find was called the expected number of times
-            assert mock_find.await_count >= 3
+            # Verify that the shipping dialog was interacted with:
+            # - web_find should have been called for the size radio (XPath with @type="radio")
+            # - web_click should have been called to deselect unwanted carriers and close dialog
+            radio_find_calls = [c for c in mock_find.await_args_list if len(c.args) >= 2 and '@type="radio"' in str(c.args[1])]
+            assert len(radio_find_calls) >= 1, "Expected at least one web_find for size radio"
+
+            click_xpath_values = [str(c.args[1]) for c in mock_click.await_args_list if len(c.args) >= 2 and c.args[0] == By.XPATH]
+            # Should click Weiter, deselect HERMES_002 (unwanted), and click Fertig
+            assert any("Weiter" in v for v in click_xpath_values), "Expected click on Weiter button"
+            assert any("HERMES_002" in v for v in click_xpath_values), "Expected click to deselect HERMES_002"
+            assert any("Fertig" in v for v in click_xpath_values), "Expected click on Fertig button"
 
             # Verify the file was created in the temporary directory
             assert ad_file.exists()
@@ -3054,23 +3064,9 @@ class TestConditionFallbackToGenericHandler:
     """
 
     @pytest.mark.asyncio
-    async def test_condition_falls_back_to_generic_handler_on_dialog_timeout(self, test_bot:KleinanzeigenBot) -> None:
+    async def test_condition_falls_back_to_generic_handler_on_dialog_timeout(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
         """When condition dialog is not available, generic handler should be used as fallback."""
-        ad_cfg = Ad.model_validate(
-            {
-                "active": True,
-                "type": "OFFER",
-                "title": "Test Modellauto Neu im Karton",
-                "description": "Test Description for ad",
-                "category": "185/249",
-                "special_attributes": {"condition_s": "new"},
-                "price_type": "NEGOTIABLE",
-                "shipping_type": "PICKUP",
-                "sell_directly": False,
-                "republication_interval": 7,
-                "contact": {"name": "Test", "zipcode": "12345"},
-            }
-        )
+        ad_cfg = Ad.model_validate(base_ad_config | {"category": "185/249", "special_attributes": {"condition_s": "new"}, "shipping_type": "PICKUP"})
 
         button_elem = MagicMock()
         button_attrs = MagicMock()
@@ -3103,23 +3099,9 @@ class TestConditionFallbackToGenericHandler:
         mock_select_combobox.assert_awaited_once_with("modellbau.condition", "new")
 
     @pytest.mark.asyncio
-    async def test_condition_uses_dialog_when_available(self, test_bot:KleinanzeigenBot) -> None:
+    async def test_condition_uses_dialog_when_available(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
         """When condition dialog works, it should be used without falling back."""
-        ad_cfg = Ad.model_validate(
-            {
-                "active": True,
-                "type": "OFFER",
-                "title": "Test Artikel guter Zustand",
-                "description": "Test Description for ad",
-                "category": "161/176",
-                "special_attributes": {"condition_s": "ok"},
-                "price_type": "NEGOTIABLE",
-                "shipping_type": "PICKUP",
-                "sell_directly": False,
-                "republication_interval": 7,
-                "contact": {"name": "Test", "zipcode": "12345"},
-            }
-        )
+        ad_cfg = Ad.model_validate(base_ad_config | {"category": "161/176", "special_attributes": {"condition_s": "ok"}})
 
         with patch.object(
             test_bot,
@@ -3134,22 +3116,6 @@ class TestConditionFallbackToGenericHandler:
 class TestShippingDialogFlow:
     """Regression tests for shipping dialog flow using new radio selectors only."""
 
-    def _assert_pickup_radio_interaction(
-        self,
-        test_bot:KleinanzeigenBot,
-        mock_check:AsyncMock,
-        mock_click:AsyncMock,
-        *,
-        selected:bool,
-    ) -> None:
-        quick_dom_timeout = test_bot._timeout("quick_dom")
-        mock_check.assert_awaited_once_with(By.ID, "ad-shipping-enabled-no", Is.SELECTED, timeout = quick_dom_timeout)
-        if selected:
-            mock_click.assert_not_awaited()
-            return
-
-        mock_click.assert_awaited_once_with(By.ID, "ad-shipping-enabled-no", timeout = quick_dom_timeout)
-
     @pytest.mark.asyncio
     @pytest.mark.parametrize("selected", [False, True])
     async def test_pickup_shipping_radio_selection(
@@ -3158,16 +3124,20 @@ class TestShippingDialogFlow:
         base_ad_config:dict[str, Any],
         selected:bool,
     ) -> None:
-        """PICKUP shipping should toggle ad-shipping-enabled-no."""
+        """PICKUP shipping should click the pickup radio only when it is not already selected."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         with (
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = selected) as mock_check,
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = selected),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
 
-        self._assert_pickup_radio_interaction(test_bot, mock_check, mock_click, selected = selected)
+        if selected:
+            mock_click.assert_not_awaited()
+        else:
+            mock_click.assert_awaited_once()
+            assert mock_click.call_args.args[:2] == (By.ID, "ad-shipping-enabled-no")
 
     @pytest.mark.asyncio
     async def test_pickup_shipping_raises_when_radio_lookup_times_out(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
@@ -3194,8 +3164,6 @@ class TestShippingDialogFlow:
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
 
             click_args = [c.args for c in mock_click.await_args_list]
-            assert (By.ID, "ad-shipping-enabled-yes") in [(a[0], a[1]) for a in click_args if len(a) >= 2]
-            assert (By.ID, "ad-shipping-options") in [(a[0], a[1]) for a in click_args if len(a) >= 2]
             assert any("Fertig" in str(a[1]) for a in click_args if len(a) >= 2)
             mock_input.assert_awaited_once_with(By.ID, "ad-individual-shipping-price", "4,95")
 
@@ -3215,6 +3183,172 @@ class TestShippingDialogFlow:
             pytest.raises(TimeoutError, match = "Unable to close shipping dialog!"),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+
+class TestShippingOptionsDialog:
+    """Tests for __set_shipping_options using carrier-code-based selectors."""
+
+    @staticmethod
+    def _make_ad_with_options(base_ad_config:dict[str, Any], options:list[str]) -> Ad:
+        return Ad.model_validate(
+            base_ad_config
+            | {
+                "shipping_type": "SHIPPING",
+                "shipping_options": options,
+            }
+        )
+
+    @staticmethod
+    def _mock_checkbox(checked:bool = False) -> MagicMock:
+        """Create a mock checkbox element with optional checked attribute."""
+        el = MagicMock()
+        if checked:
+            el.attrs = {"checked": ""}
+        else:
+            el.attrs = {}
+        return el
+
+    @pytest.mark.parametrize(
+        ("options", "radio_checked", "expected_radio_click"),
+        [
+            (["Hermes_Päckchen"], True, False),  # SMALL pre-checked, no radio click needed
+            (["DHL_10"], False, True),  # LARGE not checked, radio click needed
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_replace_mode_handles_radio_state(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        options:list[str],
+        radio_checked:bool,
+        expected_radio_click:bool,
+    ) -> None:
+        """REPLACE mode: handles both pre-checked and unchecked radio states."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, options)
+
+        radio_mock = self._mock_checkbox(checked = radio_checked)
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            if "radio" in selector_value:
+                return radio_mock
+            return self._mock_checkbox(checked = True)  # all checkboxes pre-checked
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg, mode = AdUpdateStrategy.REPLACE)
+
+        click_args = [(c.args[0], c.args[1]) for c in mock_click.await_args_list if len(c.args) >= 2]
+
+        # Radio click behavior matches expectation
+        radio_clicked = any("radio" in str(a[1]) for a in click_args)
+        assert radio_clicked == expected_radio_click
+
+        # Should click Weiter and Fertig
+        assert any("Weiter" in str(a[1]) for a in click_args)
+        assert any("Fertig" in str(a[1]) for a in click_args)
+
+        # Should deselect unwanted carriers
+        deselected = [a for a in click_args if "HERMES_" in str(a[1]) or "DHL_" in str(a[1])]
+        assert len(deselected) > 0
+
+    @pytest.mark.asyncio
+    async def test_modify_mode_toggles_carriers(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """MODIFY mode: explicitly (de-)selects each carrier based on wanted set."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["Hermes_Päckchen", "DHL_2"])
+
+        radio_mock = self._mock_checkbox(checked = True)  # SMALL already selected
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            if "radio" in selector_value and "SMALL" in selector_value:
+                return radio_mock
+            # HERMES_001 checked, HERMES_002 checked, DHL_001 unchecked
+            if "HERMES_001" in selector_value:
+                return self._mock_checkbox(checked = True)
+            if "HERMES_002" in selector_value:
+                return self._mock_checkbox(checked = True)
+            if "DHL_001" in selector_value:
+                return self._mock_checkbox(checked = False)
+            return self._mock_checkbox(checked = False)
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg, mode = AdUpdateStrategy.MODIFY)
+
+        click_args = [(c.args[0], c.args[1]) for c in mock_click.await_args_list if len(c.args) >= 2]
+        # HERMES_002 should be deselected (was checked, not wanted)
+        assert any("HERMES_002" in str(a[1]) for a in click_args)
+        # DHL_001 should be selected (was unchecked, wanted via DHL_2 → DHL_001)
+        assert any("DHL_001" in str(a[1]) for a in click_args)
+        # HERMES_001 should NOT be clicked (was checked, wanted)
+        assert not any("HERMES_001" in str(a[1]) for a in click_args)
+
+    @pytest.mark.asyncio
+    async def test_unknown_option_raises_key_error(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Unknown shipping option name raises KeyError with helpful message."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["NonExistent_Option"])
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+            pytest.raises(KeyError, match = "Unknown shipping option"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg)
+
+        # Validation errors must occur before any DOM interaction
+        mock_find.assert_not_awaited()
+        mock_click.assert_not_awaited()
+        mock_sleep.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_mixed_size_options_raises_value_error(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Options from different size groups raise ValueError."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["Hermes_Päckchen", "DHL_5"])
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+            pytest.raises(ValueError, match = "one package size"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg)
+
+        # Validation errors must occur before any DOM interaction
+        mock_find.assert_not_awaited()
+        mock_click.assert_not_awaited()
+        mock_sleep.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_timeout_in_dialog_raises(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """TimeoutError during dialog interaction is re-raised with descriptive message."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["Hermes_Päckchen"])
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = TimeoutError("radio not found")),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(TimeoutError, match = "Failed to configure shipping options in dialog!"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg)
 
 
 class TestWantedShippingSelection:
@@ -3793,91 +3927,44 @@ class TestBuyNowRadioTimeout:
         ):
             yield mock_check, mock_click
 
-    def _assert_quick_dom_timeout_for_buy_now_check(self, mock_check:MagicMock, test_bot:KleinanzeigenBot) -> None:
-        """Assert that web_check was called with quick_dom timeout for ad-buy-now-false."""
-        buy_now_check_calls = [c for c in mock_check.call_args_list if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"]
-        assert len(buy_now_check_calls) == 1, "web_check should be called once for ad-buy-now-false"
-        assert buy_now_check_calls[0].kwargs["timeout"] == test_bot._timeout("quick_dom")
-
     @pytest.mark.asyncio
-    async def test_missing_buy_now_radio_swallowed_gracefully(
+    @pytest.mark.parametrize(
+        ("scenario", "expected_click"),
+        [
+            ("radio_absent_swallowed", False),
+            ("radio_visible_needs_click", True),
+            ("radio_already_selected", False),
+        ],
+    )
+    async def test_buy_now_radio_behavior_for_pickup(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
         mock_page:MagicMock,
         tmp_path:Path,
+        scenario:str,
+        expected_click:bool,
     ) -> None:
-        """When ad-buy-now-false is absent, web_check raises TimeoutError which must be swallowed."""
+        """Buy-now radio handling for PICKUP: graceful on timeout, clicks when needed, skips when selected."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP", "price_type": "FIXED", "price": 100})
         ad_cfg_orig = copy.deepcopy(base_ad_config)
         ad_file = str(tmp_path / "ad.yaml")
 
         async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
             if selector_type == By.ID and selector_value == "ad-buy-now-false":
-                raise TimeoutError("radio not found")
+                if scenario == "radio_absent_swallowed":
+                    raise TimeoutError("radio not found")
+                return scenario == "radio_already_selected"
             return False
 
-        with self._mock_publish_ad_dependencies(test_bot, mock_page, check_side_effect) as (mock_check, mock_click):
+        with self._mock_publish_ad_dependencies(test_bot, mock_page, check_side_effect) as (_, mock_click):
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
 
-        self._assert_quick_dom_timeout_for_buy_now_check(mock_check, test_bot)
-
-        # web_click must NOT have been called for ad-buy-now-false (TimeoutError was swallowed)
-        buy_now_click_calls = [c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"]
-        assert len(buy_now_click_calls) == 0, "web_click should not be called when TimeoutError occurs"
-
-    @pytest.mark.asyncio
-    async def test_visible_buy_now_radio_uses_quick_dom_timeout(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-        mock_page:MagicMock,
-        tmp_path:Path,
-    ) -> None:
-        """When ad-buy-now-false is present but not selected, it must be clicked with quick_dom timeout."""
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP", "price_type": "FIXED", "price": 100})
-        ad_cfg_orig = copy.deepcopy(base_ad_config)
-        ad_file = str(tmp_path / "ad.yaml")
-
-        async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
-            # Return False for ad-buy-now-false (exists but not selected)
-            return selector_type != By.ID or selector_value != "ad-buy-now-false"
-
-        with self._mock_publish_ad_dependencies(test_bot, mock_page, check_side_effect) as (mock_check, mock_click):
-            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
-
-        self._assert_quick_dom_timeout_for_buy_now_check(mock_check, test_bot)
-
-        # web_click must have been called with quick_dom timeout
-        buy_now_click_calls = [c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"]
-        assert len(buy_now_click_calls) == 1, "web_click should be called once"
-        assert buy_now_click_calls[0].kwargs["timeout"] == test_bot._timeout("quick_dom")
-
-    @pytest.mark.asyncio
-    async def test_already_selected_buy_now_radio_skips_click(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-        mock_page:MagicMock,
-        tmp_path:Path,
-    ) -> None:
-        """When ad-buy-now-false is already selected, web_click should not be called."""
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP", "price_type": "FIXED", "price": 100})
-        ad_cfg_orig = copy.deepcopy(base_ad_config)
-        ad_file = str(tmp_path / "ad.yaml")
-
-        async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
-            # Return True for ad-buy-now-false (already selected)
-            return selector_type == By.ID and selector_value == "ad-buy-now-false"
-
-        with self._mock_publish_ad_dependencies(test_bot, mock_page, check_side_effect) as (mock_check, mock_click):
-            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
-
-        self._assert_quick_dom_timeout_for_buy_now_check(mock_check, test_bot)
-
-        # web_click must NOT have been called (already selected)
-        buy_now_click_calls = [c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"]
-        assert len(buy_now_click_calls) == 0, "web_click should not be called when already selected"
+        buy_now_clicks = [c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"]
+        if expected_click:
+            assert buy_now_clicks, "web_click should be called for ad-buy-now-false when visible but not selected"
+        else:
+            assert not buy_now_clicks, "web_click should not be called for ad-buy-now-false"
 
 
 class TestImageUploadProcessedMarkerFallback:

@@ -17,7 +17,17 @@ from wcmatch import glob
 
 from . import extract, resources
 from ._version import __version__
-from .model.ad_model import MAX_DESCRIPTION_LENGTH, Ad, AdPartial, Contact, calculate_auto_price, calculate_auto_price_with_trace
+from .model.ad_model import (
+    CARRIER_CODE_BY_OPTION,
+    CARRIER_CODES_BY_SIZE,
+    MAX_DESCRIPTION_LENGTH,
+    SIZE_INFO_BY_CARRIER_CODE,
+    Ad,
+    AdPartial,
+    Contact,
+    calculate_auto_price,
+    calculate_auto_price_with_trace,
+)
 from .model.config_model import DEFAULT_DOWNLOAD_DIR, Config
 from .update_checker import UpdateChecker
 from .utils import diagnostics, dicts, error_handlers, loggers, misc, xdg_paths
@@ -2060,7 +2070,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             sell_directly = ad_cfg.sell_directly
             try:
                 if ad_cfg.shipping_type == "SHIPPING":
-                    if sell_directly and ad_cfg.shipping_options and price_type in {"FIXED", "NEGOTIABLE"}:
+                    if sell_directly and price_type in {"FIXED", "NEGOTIABLE"}:
                         if not await self.web_check(By.ID, "ad-buy-now-true", Is.SELECTED):
                             await self.web_click(By.ID, "ad-buy-now-true")
                     elif not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED):
@@ -2677,84 +2687,71 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def __set_shipping_options(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         if not ad_cfg.shipping_options:
-            return
+            raise ValueError(_("shipping_options must be provided"))
 
-        shipping_options_mapping = {
-            "DHL_2": ("Klein", "SMALL", "Paket 2 kg"),
-            "Hermes_Päckchen": ("Klein", "SMALL", "Päckchen"),
-            "Hermes_S": ("Klein", "SMALL", "S-Paket"),
-            "DHL_5": ("Mittel", "MEDIUM", "Paket 5 kg"),
-            "Hermes_M": ("Mittel", "MEDIUM", "M-Paket"),
-            "DHL_10": ("Groß", "LARGE", "Paket 10 kg"),
-            "DHL_20": ("Groß", "LARGE", "Paket 20 kg"),
-            "DHL_31,5": ("Groß", "LARGE", "Paket 31,5 kg"),
-            "Hermes_L": ("Groß", "LARGE", "L-Paket"),
-        }
+        # Resolve user-facing config names to carrier codes
         try:
-            mapped_shipping_options = [shipping_options_mapping[option] for option in set(ad_cfg.shipping_options)]
+            wanted_carrier_codes = [CARRIER_CODE_BY_OPTION[opt] for opt in set(ad_cfg.shipping_options)]
         except KeyError as ex:
-            raise KeyError(f"Unknown shipping option(s), please refer to the documentation/README: {ad_cfg.shipping_options}") from ex
+            raise KeyError(_("Unknown shipping option(s), please refer to the documentation/README: %s") % ad_cfg.shipping_options) from ex
 
-        shipping_sizes, shipping_selector, shipping_packages = zip(*mapped_shipping_options, strict = False)
+        # Determine the size group — all options must belong to the same group
+        size_info = {SIZE_INFO_BY_CARRIER_CODE[code] for code in wanted_carrier_codes}
+        if len(size_info) != 1:
+            raise ValueError(_("You can only specify shipping options for one package size!"))
+        ((shipping_size, shipping_radio_value),) = size_info
+        wanted_codes = set(wanted_carrier_codes)
+        all_codes_for_size = CARRIER_CODES_BY_SIZE[shipping_size]
+
+        short_timeout = self._timeout("quick_dom")
+        dialog = '//*[self::dialog or @role="dialog"]'
 
         try:
-            (shipping_size,) = set(shipping_sizes)
-        except ValueError as ex:
-            raise ValueError("You can only specify shipping options for one package size!") from ex
+            # Select the size group via radio button value (e.g. "SMALL", "MEDIUM", "LARGE")
+            size_radio_xpath = f'{dialog}//input[@type="radio" and @value="{shipping_radio_value}"]'
+            shipping_size_radio = await self.web_find(By.XPATH, size_radio_xpath, timeout = short_timeout)
+            shipping_size_radio_is_checked = shipping_size_radio.attrs.get("checked") is not None
 
-        try:
-            shipping_radio_selector = shipping_selector[0]
-            shipping_size_radio = await self.web_find(By.ID, f"radio-button-{shipping_radio_selector}")
-            shipping_size_radio_is_checked = hasattr(shipping_size_radio.attrs, "checked")
+            if not shipping_size_radio_is_checked:
+                LOG.debug("Selecting size '%s' (radio value=%s)", shipping_size, shipping_radio_value)
+                await self.web_click(By.XPATH, size_radio_xpath, timeout = short_timeout)
 
-            if shipping_size_radio_is_checked:
-                # in the same size category all options are preselected, so deselect the unwanted ones
-                unwanted_shipping_packages = [
-                    package for size, selector, package in shipping_options_mapping.values() if size == shipping_size and package not in shipping_packages
-                ]
-                to_be_clicked_shipping_packages = unwanted_shipping_packages
-            else:
-                # in a different size category nothing is preselected, so select all we want
-                await self.web_click(By.ID, f"radio-button-{shipping_radio_selector}")
-                to_be_clicked_shipping_packages = list(shipping_packages)
+            await self.web_sleep(300, 500)
+            await self.web_click(By.XPATH, f'{dialog}//button[contains(., "Weiter")]', timeout = short_timeout)
+            await self.web_sleep(500, 800)
 
-            await self.web_click(By.XPATH, '//*[self::dialog or @role="dialog"]//button[contains(., "Weiter")]')
-
+            # Toggle package checkboxes by carrier code value attribute
             if mode == AdUpdateStrategy.MODIFY:
-                # in update mode we cannot rely on any information and have to (de-)select every package
+                # In MODIFY mode we cannot rely on any information and have to (de-)select every package
                 LOG.debug("Using MODIFY mode logic for shipping options")
+                LOG.debug("Processing %d packages for size '%s'", len(all_codes_for_size), shipping_size)
 
-                # get only correct size
-                selected_size_shipping_packages = [package for size, selector, package in shipping_options_mapping.values() if size == shipping_size]
-                LOG.debug("Processing %d packages for size '%s'", len(selected_size_shipping_packages), shipping_size)
+                for carrier_code in all_codes_for_size:
+                    checkbox_xpath = f'{dialog}//input[@type="checkbox" and @value="{carrier_code}"]'
+                    checkbox = await self.web_find(By.XPATH, checkbox_xpath, timeout = short_timeout)
+                    is_checked = checkbox.attrs.get("checked") is not None
+                    should_be_checked = carrier_code in wanted_codes
 
-                for shipping_package in selected_size_shipping_packages:
-                    shipping_package_xpath = f'//*[self::dialog or @role="dialog"]//input[contains(@data-testid, "{shipping_package}")]'
-                    shipping_package_checkbox = await self.web_find(By.XPATH, shipping_package_xpath)
-                    shipping_package_checkbox_is_checked = hasattr(shipping_package_checkbox.attrs, "checked")
+                    LOG.debug("Carrier '%s': checked=%s, wanted=%s", carrier_code, is_checked, should_be_checked)
 
-                    LOG.debug(
-                        "Package '%s': checked=%s, wanted=%s", shipping_package, shipping_package_checkbox_is_checked, shipping_package in shipping_packages
-                    )
-
-                    # select wanted packages if not checked already
-                    if shipping_package in shipping_packages:
-                        if not shipping_package_checkbox_is_checked:
-                            # select
-                            LOG.debug("Selecting package '%s'", shipping_package)
-                            await self.web_click(By.XPATH, shipping_package_xpath)
-                    # deselect unwanted if selected
-                    elif shipping_package_checkbox_is_checked:
-                        LOG.debug("Deselecting package '%s'", shipping_package)
-                        await self.web_click(By.XPATH, shipping_package_xpath)
+                    if is_checked != should_be_checked:
+                        LOG.debug("Toggling carrier '%s'", carrier_code)
+                        await self.web_click(By.XPATH, checkbox_xpath, timeout = short_timeout)
             else:
-                for shipping_package in to_be_clicked_shipping_packages:
-                    await self.web_click(By.XPATH, f'//*[self::dialog or @role="dialog"]//input[contains(@data-testid, "{shipping_package}")]')
+                # REPLACE mode: after selecting size + Weiter, all packages for that size are pre-checked.
+                # Deselect unwanted ones.
+                for carrier_code in all_codes_for_size:
+                    if carrier_code not in wanted_codes:
+                        unwanted_xpath = f'{dialog}//input[@type="checkbox" and @value="{carrier_code}"]'
+                        LOG.debug("Deselecting pre-checked carrier '%s'", carrier_code)
+                        await self.web_click(By.XPATH, unwanted_xpath, timeout = short_timeout)
         except TimeoutError as ex:
             LOG.debug(ex, exc_info = True)
+            raise TimeoutError(_("Failed to configure shipping options in dialog!")) from ex
+
         try:
             # Click apply button
-            await self.web_click(By.XPATH, '//*[self::dialog or @role="dialog"]//button[contains(., "Fertig")]')
+            await self.web_click(By.XPATH, f'{dialog}//button[contains(., "Fertig")]', timeout = short_timeout)
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 

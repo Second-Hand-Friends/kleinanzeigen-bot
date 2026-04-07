@@ -14,7 +14,7 @@ from typing import Any, Final
 
 from kleinanzeigen_bot.model.ad_model import ContactPartial
 
-from .model.ad_model import AdPartial
+from .model.ad_model import OPTION_NAME_BY_CARRIER_CODE, AdPartial
 from .model.config_model import Config
 from .utils import dicts, files, i18n, loggers, misc, reflect
 from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
@@ -764,17 +764,7 @@ class AdExtractor(WebScrapingMixin):
                 )["data"]["shippingOptionsResponse"]["options"]
 
                 # map to internal shipping identifiers used by kleinanzeigen-bot
-                shipping_option_mapping = {
-                    "DHL_001": "DHL_2",
-                    "DHL_002": "DHL_5",
-                    "DHL_003": "DHL_10",
-                    "DHL_004": "DHL_31,5",
-                    "DHL_005": "DHL_20",
-                    "HERMES_001": "Hermes_Päckchen",
-                    "HERMES_002": "Hermes_S",
-                    "HERMES_003": "Hermes_M",
-                    "HERMES_004": "Hermes_L",
-                }
+                shipping_option_mapping = OPTION_NAME_BY_CARRIER_CODE
 
                 # Convert Euro to cents and round to nearest integer
                 price_in_cent = round(ship_costs * 100)

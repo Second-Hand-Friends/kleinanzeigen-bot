@@ -198,20 +198,9 @@ special_attributes:
 shipping_type:  # one of: PICKUP, SHIPPING, NOT_APPLICABLE (default: SHIPPING)
 shipping_costs:  # e.g. 2.95 (for individual postage, keep shipping_type SHIPPING and leave shipping_options empty)
 
-# Specify shipping options / packages
-# It is possible to select multiple packages, but only from one size (S, M, L)!
-# Possible package types for size S:
-#   - DHL_2
-#   - Hermes_Päckchen
-#   - Hermes_S
-# Possible package types for size M:
-#   - DHL_5
-#   - Hermes_M
-# Possible package types for size L:
-#   - DHL_10
-#   - DHL_20
-#   - DHL_31,5
-#   - Hermes_L
+# Specify shipping options / packages.
+# It is possible to select multiple packages, but only from one size group (S, M, L)!
+# See the "Shipping Options Reference" table below for all available options.
 shipping_options: []
 
 # Example (size S only):
@@ -219,8 +208,27 @@ shipping_options: []
 #   - DHL_2
 #   - Hermes_Päckchen
 
-sell_directly:  # true or false, requires shipping_type SHIPPING to take effect (default: false)
+sell_directly:  # true or false, requires shipping_type SHIPPING (with shipping_options or shipping_costs) to take effect (default: false)
 ```
+
+#### Shipping Options Reference
+
+You can select multiple options, but **only from one size group** (S, M, or L). Each option corresponds to a specific carrier package. Prices are set by the carrier and may change over time.
+
+| Config Name | Size Group | Carrier | Package | Max Dimensions / Weight |
+|---|---|---|---|---|
+| **Size S (Klein)** | | | | |
+| `DHL_2` | S | DHL | DHL Paket 2 kg | 2 kg, max 60 × 30 × 15 cm |
+| `Hermes_Päckchen` | S | Hermes | Hermes Päckchen | L+shortest side ≤ 37 cm, max 25 kg |
+| `Hermes_S` | S | Hermes | Hermes S-Paket | L+W+H ≤ 50 cm, max 25 kg |
+| **Size M (Mittel)** | | | | |
+| `DHL_5` | M | DHL | DHL Paket 5 kg | 5 kg |
+| `Hermes_M` | M | Hermes | Hermes M-Paket | Standard medium package |
+| **Size L (Groß)** | | | | |
+| `DHL_10` | L | DHL | DHL Paket 10 kg | 10 kg |
+| `DHL_20` | L | DHL | DHL Paket 20 kg | 20 kg |
+| `DHL_31,5` | L | DHL | DHL Paket 31,5 kg | 31.5 kg |
+| `Hermes_L` | L | Hermes | Hermes L-Paket | Standard large package |
 
 **Shipping types:**
 
@@ -229,7 +237,7 @@ sell_directly:  # true or false, requires shipping_type SHIPPING to take effect 
 - `NOT_APPLICABLE` - Shipping not applicable for this item
 
 **Sell Directly:**
-When `sell_directly: true`, buyers can purchase the item directly through the platform without contacting the seller first. This feature only works when `shipping_type: SHIPPING`.
+When `sell_directly: true`, buyers can purchase the item directly through the platform without contacting the seller first. This feature requires `shipping_type: SHIPPING` (with either predefined `shipping_options` or individual `shipping_costs`) and a fixed or negotiable price.
 
 ### Images
 
@@ -301,7 +309,9 @@ auto_price_reduction:
   delay_days: 0
 
 shipping_type: SHIPPING
-shipping_costs: 4.95
+shipping_options:
+  - DHL_2
+  - Hermes_Päckchen
 sell_directly: true
 
 images:
