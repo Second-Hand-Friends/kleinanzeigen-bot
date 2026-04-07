@@ -3303,12 +3303,17 @@ class TestShippingOptionsDialog:
         ad_cfg = self._make_ad_with_options(base_ad_config, ["NonExistent_Option"])
 
         with (
-            patch.object(test_bot, "web_find", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
             pytest.raises(KeyError, match = "Unknown shipping option"),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg)
+
+        # Validation errors must occur before any DOM interaction
+        mock_find.assert_not_awaited()
+        mock_click.assert_not_awaited()
+        mock_sleep.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_mixed_size_options_raises_value_error(
@@ -3320,12 +3325,17 @@ class TestShippingOptionsDialog:
         ad_cfg = self._make_ad_with_options(base_ad_config, ["Hermes_Päckchen", "DHL_5"])
 
         with (
-            patch.object(test_bot, "web_find", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
             pytest.raises(ValueError, match = "one package size"),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg)
+
+        # Validation errors must occur before any DOM interaction
+        mock_find.assert_not_awaited()
+        mock_click.assert_not_awaited()
+        mock_sleep.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_timeout_in_dialog_raises(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
