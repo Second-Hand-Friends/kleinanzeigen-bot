@@ -16,7 +16,7 @@ from pydantic import ValidationError
 from kleinanzeigen_bot import LOG, PUBLISH_MAX_RETRIES, AdUpdateStrategy, KleinanzeigenBot, LoginDetectionReason, LoginDetectionResult, misc
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad
-from kleinanzeigen_bot.model.config_model import AdDefaults, Config, DiagnosticsConfig, PublishingConfig
+from kleinanzeigen_bot.model.config_model import AdDefaults, AutoPriceReductionConfig, Config, DiagnosticsConfig, PublishingConfig
 from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
 from kleinanzeigen_bot.utils.exceptions import PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
@@ -2613,7 +2613,14 @@ class TestKleinanzeigenBotShippingOptions:
         # Track what path argument __apply_auto_price_reduction receives
         recorded_path:list[str] = []
 
-        def mock_apply_auto_price_reduction(ad_cfg:Ad, ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
+        def mock_apply_auto_price_reduction(
+            ad_cfg:Ad,
+            ad_cfg_orig:dict[str, Any],
+            ad_file_relative:str,
+            *,
+            mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE,
+        ) -> None:
+            _ = mode
             recorded_path.append(ad_file_relative)
             raise _SentinelException("Abort early for test")
 
@@ -2637,9 +2644,16 @@ class TestKleinanzeigenBotShippingOptions:
         assert recorded_path[0] == ad_file, f"Expected absolute path fallback, got: {recorded_path[0]}"
 
     @pytest.mark.asyncio
-    async def test_auto_price_reduction_only_on_replace_not_update(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], tmp_path:Path) -> None:
-        """Test that auto price reduction is ONLY applied on REPLACE mode, not UPDATE."""
-        # Create ad with auto price reduction enabled
+    async def test_auto_price_reduction_conditional_on_mode_and_on_update(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], tmp_path:Path
+    ) -> None:
+        """Test price reduction dispatch across REPLACE and MODIFY modes.
+
+        - REPLACE mode always calls apply_auto_price_reduction.
+        - MODIFY mode with on_update=false (default) does NOT call it.
+        - MODIFY mode with on_update=true DOES call it (conditional new behavior).
+        """
+        # Shared ad config with auto price reduction enabled
         ad_cfg = Ad.model_validate(
             base_ad_config
             | {
@@ -2655,47 +2669,57 @@ class TestKleinanzeigenBotShippingOptions:
         ad_cfg.update_content_hash()
         ad_cfg_orig = ad_cfg.model_dump()
 
-        # Mock the private __apply_auto_price_reduction method
-        with patch("kleinanzeigen_bot.apply_auto_price_reduction") as mock_apply:
-            # Mock other dependencies
-            mock_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
+        mock_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
 
-            async def mock_web_execute_price_reduction(script:str) -> Any:
-                if "window.location.href" in script:
-                    return "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
-                return mock_response
+        async def mock_web_execute_price_reduction(script:str) -> Any:
+            if "window.location.href" in script:
+                return "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+            return mock_response
 
-            with (
-                patch.object(test_bot, "web_find", new_callable = AsyncMock),
-                patch.object(test_bot, "web_input", new_callable = AsyncMock),
-                patch.object(test_bot, "web_click", new_callable = AsyncMock),
-                patch.object(test_bot, "web_open", new_callable = AsyncMock),
-                patch.object(test_bot, "web_select", new_callable = AsyncMock),
-                patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
-                patch.object(test_bot, "web_await", new_callable = AsyncMock),
-                patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-                patch.object(test_bot, "web_execute", side_effect = mock_web_execute_price_reduction),
-                patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = mock_response),
-                patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
-                patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
-                patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
-                patch("builtins.input", return_value = ""),
-                patch("kleinanzeigen_bot.utils.misc.ainput", new_callable = AsyncMock, return_value = ""),
-            ):
-                test_bot.page = MagicMock()
-                test_bot.page.url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
-                test_bot.config.publishing.delete_old_ads = "BEFORE_PUBLISH"
+        with (
+            patch("kleinanzeigen_bot.apply_auto_price_reduction") as mock_apply,
+            patch.object(test_bot, "web_find", new_callable = AsyncMock),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_select", new_callable = AsyncMock),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", side_effect = mock_web_execute_price_reduction),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = mock_response),
+            patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch("builtins.input", return_value = ""),
+            patch("kleinanzeigen_bot.utils.misc.ainput", new_callable = AsyncMock, return_value = ""),
+        ):
+            test_bot.page = MagicMock()
+            test_bot.page.url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+            test_bot.config.publishing.delete_old_ads = "BEFORE_PUBLISH"
 
-                # Test REPLACE mode - should call __apply_auto_price_reduction
-                await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
-                assert mock_apply.call_count == 1, "Auto price reduction should be called on REPLACE"
+            # --- REPLACE mode: always calls apply_auto_price_reduction ---
+            await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+            assert mock_apply.call_count == 1, "Auto price reduction should be called on REPLACE"
 
-                # Reset mock
-                mock_apply.reset_mock()
+            # --- MODIFY mode with default config (on_update=false): should NOT call ---
+            mock_apply.reset_mock()
+            await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
+            assert mock_apply.call_count == 0, "Auto price reduction should NOT be called on MODIFY with on_update=false"
 
-                # Test MODIFY mode - should NOT call __apply_auto_price_reduction
-                await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
-                assert mock_apply.call_count == 0, "Auto price reduction should NOT be called on MODIFY"
+            # --- MODIFY mode with on_update=true: SHOULD call (new conditional behavior) ---
+            mock_apply.reset_mock()
+            ad_cfg.auto_price_reduction = AutoPriceReductionConfig(
+                enabled = True,
+                strategy = "FIXED",
+                amount = 50,
+                min_price = 50,
+                delay_reposts = 0,
+                delay_days = 0,
+                on_update = True,
+            )
+            await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
+            assert mock_apply.call_count >= 1, "Auto price reduction SHOULD be called on MODIFY when on_update=true"
 
     @pytest.mark.asyncio
     async def test_special_attributes_compound_name_lookup(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:

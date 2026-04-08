@@ -10,6 +10,7 @@ from typing import Any, Protocol, runtime_checkable
 import pytest
 
 import kleinanzeigen_bot
+from kleinanzeigen_bot import AdUpdateStrategy
 from kleinanzeigen_bot.model.ad_model import calculate_auto_price
 from kleinanzeigen_bot.model.config_model import AutoPriceReductionConfig
 from kleinanzeigen_bot.utils.pydantics import ContextualValidationError
@@ -17,14 +18,36 @@ from kleinanzeigen_bot.utils.pydantics import ContextualValidationError
 
 @runtime_checkable
 class _ApplyAutoPriceReduction(Protocol):
-    def __call__(self, ad_cfg:SimpleNamespace, ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
+    def __call__(
+        self,
+        ad_cfg:Any,
+        _ad_cfg_orig:dict[str, Any],
+        ad_file_relative:str,
+        *,
+        mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE,
+    ) -> None:
         pass
 
 
 @pytest.fixture
 def apply_auto_price_reduction() -> _ApplyAutoPriceReduction:
     # Return the module-level function directly (no more name-mangling!)
-    return kleinanzeigen_bot.apply_auto_price_reduction  # type: ignore[return-value]
+    return kleinanzeigen_bot.apply_auto_price_reduction
+
+
+def _price_cfg(*, on_update:bool = False, **overrides:Any) -> AutoPriceReductionConfig:
+    """Create an auto_price_reduction config with optional overrides."""
+    defaults:dict[str, Any] = {
+        "enabled": True,
+        "strategy": "PERCENTAGE",
+        "amount": 10,
+        "min_price": 50,
+        "delay_reposts": 0,
+        "delay_days": 0,
+        "on_update": on_update,
+    }
+    defaults.update(overrides)
+    return AutoPriceReductionConfig.model_validate(defaults)
 
 
 @pytest.mark.unit
@@ -347,7 +370,7 @@ def test_apply_auto_price_reduction_waits_when_reduction_already_applied(
         "next reduction earliest at repost >= 4 and day delay 0/0 days. repost_count=3 eligible_cycles=3 applied_cycles=3"
     )
     assert any(message.startswith(decision_message) for message in caplog.messages)
-    assert ad_cfg.price == 100
+    assert ad_cfg.price == 73
     assert ad_cfg.price_reduction_count == 3
     assert "price_reduction_count" not in ad_orig
 
@@ -435,11 +458,11 @@ def test_apply_auto_price_reduction_delayed_when_timestamp_missing(
 
 
 @pytest.mark.unit
-def test_fractional_reduction_increments_counter_even_when_price_unchanged(
+def test_fractional_reduction_does_not_increment_counter_when_price_unchanged(
     caplog:pytest.LogCaptureFixture, apply_auto_price_reduction:_ApplyAutoPriceReduction
 ) -> None:
-    # Test that small fractional reductions increment the counter even when rounded price doesn't change
-    # This allows cumulative reductions to eventually show visible effect
+    # Small reductions that round back to the same euro value should not advance the
+    # persisted cycle counter. This avoids counter drift when no visible price change occurs.
     ad_cfg = SimpleNamespace(
         price = 100,
         auto_price_reduction = AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = 0.3, min_price = 50, delay_reposts = 0, delay_days = 0),
@@ -455,11 +478,10 @@ def test_fractional_reduction_increments_counter_even_when_price_unchanged(
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_fractional.yaml")
 
     # Price: 100 - 0.3 = 99.7, rounds to 100 (no visible change)
-    # But counter should still increment for future cumulative reductions
     expected = _("Auto price reduction kept price %s after attempting %s reduction cycles") % (100, 1)
     assert any(expected in message for message in caplog.messages)
     assert ad_cfg.price == 100
-    assert ad_cfg.price_reduction_count == 1  # Counter incremented despite no visible price change
+    assert ad_cfg.price_reduction_count == 0
     assert "price_reduction_count" not in ad_orig
 
 
@@ -558,3 +580,148 @@ def test_fractional_min_price_is_rounded_up_with_ceiling() -> None:
         target_reduction_cycle = 3,  # 60 - 5 - 5 - 5 = 45, clamped to ceil(49.1) = 50
     )
     assert result2 == 50  # Rounded up from 49.1 floor
+
+
+# ---------------------------------------------------------------------------
+# MODIFY-mode price reduction tests (on_update conditional behavior)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_apply_modify_mode_skips_when_on_update_false(
+    apply_auto_price_reduction:_ApplyAutoPriceReduction,
+) -> None:
+    """MODIFY mode with on_update=false must not touch the price at all."""
+    ad_cfg = SimpleNamespace(
+        price = 200,
+        auto_price_reduction = _price_cfg(on_update = False, amount = 25),
+        price_reduction_count = 0,
+        repost_count = 1,
+        updated_on = None,
+        created_on = None,
+    )
+
+    apply_auto_price_reduction(ad_cfg, {}, "ad_no_update.yaml", mode = AdUpdateStrategy.MODIFY)
+
+    assert ad_cfg.price == 200
+    assert ad_cfg.price_reduction_count == 0
+
+
+@pytest.mark.unit
+def test_apply_modify_mode_applies_reduction_when_on_update_true_and_day_delay_satisfied(
+    monkeypatch:pytest.MonkeyPatch,
+    apply_auto_price_reduction:_ApplyAutoPriceReduction,
+) -> None:
+    """MODIFY mode with on_update=true reduces price when day delay is met.
+
+    delay_reposts must be ignored in MODIFY mode (repost count does not change).
+    """
+    reference = datetime(2025, 1, 1, tzinfo = timezone.utc)
+    ad_cfg = SimpleNamespace(
+        price = 200,
+        # delay_reposts=5 would normally block reduction, but MODIFY mode ignores it
+        auto_price_reduction = _price_cfg(on_update = True, amount = 25, delay_reposts = 5, delay_days = 3),
+        price_reduction_count = 0,
+        repost_count = 1,
+        updated_on = reference - timedelta(days = 5),
+        created_on = reference - timedelta(days = 10),
+    )
+
+    monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: reference)
+
+    apply_auto_price_reduction(ad_cfg, {}, "ad_modify.yaml", mode = AdUpdateStrategy.MODIFY)
+
+    assert ad_cfg.price == 150  # 200 * 0.75
+    assert ad_cfg.price_reduction_count == 1
+
+
+@pytest.mark.unit
+def test_apply_modify_mode_skips_new_cycle_when_day_delay_not_satisfied(
+    monkeypatch:pytest.MonkeyPatch,
+    apply_auto_price_reduction:_ApplyAutoPriceReduction,
+) -> None:
+    """MODIFY mode with on_update=true does NOT apply a new cycle when day delay is not met."""
+    reference = datetime(2025, 1, 1, tzinfo = timezone.utc)
+    ad_cfg = SimpleNamespace(
+        price = 200,
+        auto_price_reduction = _price_cfg(on_update = True, amount = 25, delay_days = 3),
+        price_reduction_count = 0,
+        repost_count = 1,
+        updated_on = reference - timedelta(days = 1),  # only 1 day elapsed, need 3
+        created_on = reference - timedelta(days = 10),
+    )
+
+    monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: reference)
+
+    apply_auto_price_reduction(ad_cfg, {}, "ad_delay_not_met.yaml", mode = AdUpdateStrategy.MODIFY)
+
+    assert ad_cfg.price == 200
+    assert ad_cfg.price_reduction_count == 0
+
+
+@pytest.mark.unit
+def test_apply_modify_mode_restores_reduced_price_with_prior_reductions(
+    apply_auto_price_reduction:_ApplyAutoPriceReduction,
+) -> None:
+    """Restore-first invariant: effective reduced price is recalculated from base price
+    and existing reduction_count even when no new cycle is eligible.
+
+    This prevents the YAML base price from overwriting an already-reduced effective price
+    during MODIFY operations.
+    """
+    ad_cfg = SimpleNamespace(
+        price = 100,  # YAML base price (original)
+        auto_price_reduction = _price_cfg(on_update = True, amount = 10, delay_days = 5),
+        price_reduction_count = 2,  # 2 prior reductions were applied
+        repost_count = 5,
+        updated_on = None,  # missing timestamp → day delay not satisfied
+        created_on = None,
+    )
+
+    apply_auto_price_reduction(ad_cfg, {}, "ad_restore.yaml", mode = AdUpdateStrategy.MODIFY)
+
+    # base=100, 2 cycles of 10%: 100*0.9=90 → 90*0.9=81
+    assert ad_cfg.price == 81  # restored to reduced price, not left at base 100
+    assert ad_cfg.price_reduction_count == 2  # no increment (no new cycle)
+
+
+@pytest.mark.unit
+def test_cross_mode_update_then_publish_preserves_reduced_price(
+    apply_auto_price_reduction:_ApplyAutoPriceReduction,
+) -> None:
+    """After a MODIFY-mode reduction, a subsequent REPLACE with no newly eligible cycle
+    must preserve the reduced price.
+
+    Simulates:
+      1. MODIFY applies one reduction cycle (100 → 90).
+      2. Price and counters are persisted (simulated by resetting price to base and
+         adjusting counters as if re-loaded from YAML).
+      3. REPLACE runs but no new repost cycle is eligible → reduced price restored.
+    """
+    cfg = _price_cfg(on_update = True, amount = 10, delay_days = 0)
+
+    # --- Step 1: MODIFY applies first reduction ---
+    ad_cfg = SimpleNamespace(
+        price = 100,
+        auto_price_reduction = cfg,
+        price_reduction_count = 0,
+        repost_count = 1,
+        updated_on = None,
+        created_on = None,
+    )
+    apply_auto_price_reduction(ad_cfg, {}, "ad_cross.yaml", mode = AdUpdateStrategy.MODIFY)
+    assert ad_cfg.price == 90
+    assert ad_cfg.price_reduction_count == 1
+
+    # --- Step 2: Simulate re-load from YAML (price resets to base) ---
+    # repost_count and price_reduction_count reflect post-persist state
+    ad_cfg.price = 100  # YAML always stores base price
+    ad_cfg.repost_count = 2
+    ad_cfg.price_reduction_count = 2  # persisted after successful publish
+
+    # --- Step 3: REPLACE mode, no new repost cycle eligible ---
+    apply_auto_price_reduction(ad_cfg, {}, "ad_cross.yaml", mode = AdUpdateStrategy.REPLACE)
+
+    # Restore-first: 2 cycles from base 100 → 81, NOT left at base 100
+    assert ad_cfg.price == 81
+    assert ad_cfg.price_reduction_count == 2

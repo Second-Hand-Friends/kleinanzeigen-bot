@@ -80,6 +80,12 @@
           "minimum": 0,
           "title": "Delay Days",
           "type": "integer"
+        },
+        "on_update": {
+          "default": false,
+          "description": "also apply automatic price reduction during update runs (MODIFY mode). delay_days applies, delay_reposts is ignored",
+          "title": "On Update",
+          "type": "boolean"
         }
       },
       "title": "AutoPriceReductionConfig",

@@ -42,6 +42,10 @@ class AutoPriceReductionConfig(ContextualModel):
     )
     delay_reposts:int = Field(default = 0, ge = 0, description = "number of reposts to wait before applying the first automatic price reduction")
     delay_days:int = Field(default = 0, ge = 0, description = "number of days to wait after publication before applying automatic price reductions")
+    on_update:bool = Field(
+        default = False,
+        description = "also apply automatic price reduction during update runs (MODIFY mode). delay_days applies, delay_reposts is ignored",
+    )
 
     @model_validator(mode = "after")
     def _validate_config(self) -> "AutoPriceReductionConfig":
@@ -122,7 +126,7 @@ class AdDefaults(ContextualModel):
 class DownloadConfig(ContextualModel):
     dir:str = Field(
         default = DEFAULT_DOWNLOAD_DIR,
-        description = (
+        description=(
             "directory where downloaded ads are written. "
             "The default literal 'downloaded-ads' uses workspace-specific resolution; "
             "custom relative paths are resolved against the config file location"
@@ -146,7 +150,7 @@ class DownloadConfig(ContextualModel):
     )
     folder_name_template:str = Field(
         default = "ad_{id}_{title}",
-        description = (
+        description=(
             "folder naming template for downloaded ad directories. "
             "Allowed placeholders: {id}, {title}. "
             "Each placeholder may appear at most once. "
@@ -156,7 +160,7 @@ class DownloadConfig(ContextualModel):
     )
     ad_file_name_template:str = Field(
         default = "ad_{id}",
-        description = (
+        description=(
             "base name template for downloaded ad files. "
             "The bot writes the ad config as <base>.yaml and downloaded images as <base>__imgN.<ext>. "
             "Supported placeholders: {id}, {title}. "
