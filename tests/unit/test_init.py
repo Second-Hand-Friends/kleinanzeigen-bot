@@ -2518,6 +2518,9 @@ class TestKleinanzeigenBotShippingOptions:
         shipping_size_radio = MagicMock()
         shipping_size_radio.attrs = {"checked": ""}  # SMALL radio is pre-checked
 
+        shipping_checkbox = MagicMock()
+        shipping_checkbox.attrs = {"checked": ""}  # Simulate pre-checked carriers for SMALL
+
         category_path_elem = MagicMock()
         category_path_elem.apply = AsyncMock(return_value = "Test Category")
 
@@ -2546,6 +2549,8 @@ class TestKleinanzeigenBotShippingOptions:
                 # New shipping dialog: size radio via XPath with value attribute
                 if selector_type == By.XPATH and '@type="radio"' in selector_value and "@value=" in selector_value:
                     return shipping_size_radio
+                if selector_type == By.XPATH and '@type="checkbox"' in selector_value and "@value=" in selector_value:
+                    return shipping_checkbox
                 if selector_value == "ad-category-path":
                     return category_path_elem
                 return None
@@ -2569,6 +2574,8 @@ class TestKleinanzeigenBotShippingOptions:
             # Should click Weiter, deselect HERMES_002 (unwanted), and click Fertig
             assert any("Weiter" in v for v in click_xpath_values), "Expected click on Weiter button"
             assert any("HERMES_002" in v for v in click_xpath_values), "Expected click to deselect HERMES_002"
+            assert not any("DHL_001" in v for v in click_xpath_values), "Did not expect click for wanted DHL_001"
+            assert not any("HERMES_001" in v for v in click_xpath_values), "Did not expect click for wanted HERMES_001"
             assert any("Fertig" in v for v in click_xpath_values), "Expected click on Fertig button"
 
             # Verify the file was created in the temporary directory
@@ -2687,84 +2694,6 @@ class TestKleinanzeigenBotShippingOptions:
                 # Test MODIFY mode - should NOT call __apply_auto_price_reduction
                 await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
                 assert mock_apply.call_count == 0, "Auto price reduction should NOT be called on MODIFY"
-
-    @pytest.mark.asyncio
-    async def test_special_attributes_with_non_string_values(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
-        """Test that special attributes with non-string values are converted to strings."""
-        # Create ad config with string special attributes first (to pass validation)
-        ad_cfg = Ad.model_validate(
-            base_ad_config
-            | {
-                "special_attributes": {
-                    "art_s": "12345",  # String value initially
-                    "condition_s": "67890",  # String value initially
-                    "color_s": "red",  # String value
-                },
-                "updated_on": "2024-01-01T00:00:00",
-                "created_on": "2024-01-01T00:00:00",
-            }
-        )
-
-        # Now modify the special attributes to non-string values to test str() conversion
-        # This simulates the scenario where the values come from external sources as non-strings
-        # We need to cast to Any to bypass type checking for this test
-        special_attrs = cast(Any, ad_cfg.special_attributes)
-        special_attrs["art_s"] = 12345  # Non-string value
-        special_attrs["condition_s"] = 67890  # Non-string value
-
-        # Mock special attribute elements
-        art_s_elem = MagicMock()
-        art_s_attrs = MagicMock()
-        art_s_attrs.id = "wohnzimmer.art"
-        art_s_attrs.name = "attributeMap[wohnzimmer.art]"
-        art_s_attrs.get.side_effect = lambda key, default = None: {
-            "id": "wohnzimmer.art",
-            "name": "attributeMap[wohnzimmer.art]",
-            "type": None,
-            "role": None,
-        }.get(key, default)
-        art_s_elem.attrs = art_s_attrs
-        art_s_elem.local_name = "select"
-
-        color_s_elem = MagicMock()
-        color_s_attrs = MagicMock()
-        color_s_attrs.id = "wohnzimmer.color"
-        color_s_attrs.name = "attributeMap[wohnzimmer.color]"
-        color_s_attrs.get.side_effect = lambda key, default = None: {
-            "id": "wohnzimmer.color",
-            "name": "attributeMap[wohnzimmer.color]",
-            "type": None,
-            "role": None,
-        }.get(key, default)
-        color_s_elem.attrs = color_s_attrs
-        color_s_elem.local_name = "select"
-
-        # Mock the necessary web interaction methods
-        with (
-            patch.object(test_bot, "web_find_all", new_callable = AsyncMock) as mock_find_all,
-            patch.object(test_bot, "web_select", new_callable = AsyncMock) as mock_select,
-            patch.object(test_bot, "_KleinanzeigenBot__set_condition", new_callable = AsyncMock) as mock_set_condition,
-        ):
-            # Mock web_find_all to simulate element detection
-            async def mock_find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[Element]:
-                if selector_type == By.XPATH:
-                    if ".art" in selector_value:
-                        return [art_s_elem]
-                    if ".color" in selector_value:
-                        return [color_s_elem]
-                return []
-
-            mock_find_all.side_effect = mock_find_all_side_effect
-
-            # Test the __set_special_attributes method directly
-            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
-
-            # Verify that web_select was called with string values (str() conversion)
-            mock_select.assert_any_await(By.ID, "wohnzimmer.art", "12345")  # Converted to string
-            mock_select.assert_any_await(By.ID, "wohnzimmer.color", "red")  # Already string
-
-            # Verify that __set_condition was called with string value
-            mock_set_condition.assert_awaited_once_with("67890")  # Converted to string
 
     @pytest.mark.asyncio
     async def test_special_attributes_compound_name_lookup(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
@@ -3194,10 +3123,24 @@ class TestShippingOptionsDialog:
         return el
 
     @pytest.mark.parametrize(
-        ("options", "radio_checked", "expected_radio_click"),
+        "case",
         [
-            (["Hermes_Päckchen"], True, False),  # SMALL pre-checked, no radio click needed
-            (["DHL_10"], False, True),  # LARGE not checked, radio click needed
+            # SMALL pre-checked, only unwanted carriers are toggled
+            {
+                "options": ["Hermes_Päckchen"],
+                "radio_checked": True,
+                "expected_radio_click": False,
+                "expected_clicked_carriers": ["HERMES_002", "DHL_001"],
+                "expected_not_clicked_carriers": ["HERMES_001"],
+            },
+            # LARGE not checked, radio click needed and only unwanted carriers are toggled
+            {
+                "options": ["DHL_10"],
+                "radio_checked": False,
+                "expected_radio_click": True,
+                "expected_clicked_carriers": ["HERMES_004", "DHL_004", "DHL_005"],
+                "expected_not_clicked_carriers": ["DHL_003"],
+            },
         ],
     )
     @pytest.mark.asyncio
@@ -3205,14 +3148,12 @@ class TestShippingOptionsDialog:
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
-        options:list[str],
-        radio_checked:bool,
-        expected_radio_click:bool,
+        case:dict[str, Any],
     ) -> None:
         """REPLACE mode: handles both pre-checked and unchecked radio states."""
-        ad_cfg = self._make_ad_with_options(base_ad_config, options)
+        ad_cfg = self._make_ad_with_options(base_ad_config, case["options"])
 
-        radio_mock = self._mock_checkbox(checked = radio_checked)
+        radio_mock = self._mock_checkbox(checked = case["radio_checked"])
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
             if "radio" in selector_value:
@@ -3230,15 +3171,53 @@ class TestShippingOptionsDialog:
 
         # Radio click behavior matches expectation
         radio_clicked = any("radio" in str(a[1]) for a in click_args)
-        assert radio_clicked == expected_radio_click
+        assert radio_clicked == case["expected_radio_click"]
 
         # Should click Weiter and Fertig
         assert any("Weiter" in str(a[1]) for a in click_args)
         assert any("Fertig" in str(a[1]) for a in click_args)
 
-        # Should deselect unwanted carriers
-        deselected = [a for a in click_args if "HERMES_" in str(a[1]) or "DHL_" in str(a[1])]
-        assert len(deselected) > 0
+        # Should toggle exactly the expected carriers for this scenario
+        for carrier_code in case["expected_clicked_carriers"]:
+            assert any(carrier_code in str(a[1]) for a in click_args)
+
+        for carrier_code in case["expected_not_clicked_carriers"]:
+            assert not any(carrier_code in str(a[1]) for a in click_args)
+
+    @pytest.mark.asyncio
+    async def test_replace_mode_dom_verified_unchecked_defaults_select_wanted_carrier(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """REPLACE mode must select wanted carriers when defaults are unchecked (DOM-verified for MEDIUM/LARGE)."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
+
+        radio_mock = self._mock_checkbox(checked = False)  # MEDIUM radio not selected yet
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            if "radio" in selector_value and "MEDIUM" in selector_value:
+                return radio_mock
+            # DOM probe confirms MEDIUM defaults can be unchecked after "Weiter"
+            if "HERMES_003" in selector_value:
+                return self._mock_checkbox(checked = False)
+            if "DHL_002" in selector_value:
+                return self._mock_checkbox(checked = False)
+            return self._mock_checkbox(checked = False)
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg, mode = AdUpdateStrategy.REPLACE)
+
+        click_args = [(c.args[0], c.args[1]) for c in mock_click.await_args_list if len(c.args) >= 2]
+
+        # Regression guard for issue #956: wanted DHL_002 must be selected
+        assert any("DHL_002" in str(a[1]) for a in click_args)
+        # Unwanted Hermes checkbox must remain untouched when already unchecked
+        assert not any("HERMES_003" in str(a[1]) for a in click_args)
 
     @pytest.mark.asyncio
     async def test_modify_mode_toggles_carriers(

@@ -2720,31 +2720,24 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             await self.web_click(By.XPATH, f'{dialog}//button[contains(., "Weiter")]', timeout = short_timeout)
             await self.web_sleep(500, 800)
 
-            # Toggle package checkboxes by carrier code value attribute
-            if mode == AdUpdateStrategy.MODIFY:
-                # In MODIFY mode we cannot rely on any information and have to (de-)select every package
-                LOG.debug("Using MODIFY mode logic for shipping options")
-                LOG.debug("Processing %d packages for size '%s'", len(all_codes_for_size), shipping_size)
+            # Toggle package checkboxes by carrier code value attribute.
+            # IMPORTANT: REPLACE intentionally uses the same state-based sync as MODIFY.
+            # Live DOM defaults after "Weiter" are not stable across size/category (issue #956),
+            # so we must read current checkbox state and reconcile with desired state.
+            LOG.debug("Using state-based shipping option sync for mode '%s'", mode)
+            LOG.debug("Processing %d packages for size '%s'", len(all_codes_for_size), shipping_size)
 
-                for carrier_code in all_codes_for_size:
-                    checkbox_xpath = f'{dialog}//input[@type="checkbox" and @value="{carrier_code}"]'
-                    checkbox = await self.web_find(By.XPATH, checkbox_xpath, timeout = short_timeout)
-                    is_checked = checkbox.attrs.get("checked") is not None
-                    should_be_checked = carrier_code in wanted_codes
+            for carrier_code in all_codes_for_size:
+                checkbox_xpath = f'{dialog}//input[@type="checkbox" and @value="{carrier_code}"]'
+                checkbox = await self.web_find(By.XPATH, checkbox_xpath, timeout = short_timeout)
+                is_checked = checkbox.attrs.get("checked") is not None
+                should_be_checked = carrier_code in wanted_codes
 
-                    LOG.debug("Carrier '%s': checked=%s, wanted=%s", carrier_code, is_checked, should_be_checked)
+                LOG.debug("Carrier '%s': checked=%s, wanted=%s", carrier_code, is_checked, should_be_checked)
 
-                    if is_checked != should_be_checked:
-                        LOG.debug("Toggling carrier '%s'", carrier_code)
-                        await self.web_click(By.XPATH, checkbox_xpath, timeout = short_timeout)
-            else:
-                # REPLACE mode: after selecting size + Weiter, all packages for that size are pre-checked.
-                # Deselect unwanted ones.
-                for carrier_code in all_codes_for_size:
-                    if carrier_code not in wanted_codes:
-                        unwanted_xpath = f'{dialog}//input[@type="checkbox" and @value="{carrier_code}"]'
-                        LOG.debug("Deselecting pre-checked carrier '%s'", carrier_code)
-                        await self.web_click(By.XPATH, unwanted_xpath, timeout = short_timeout)
+                if is_checked != should_be_checked:
+                    LOG.debug("Toggling carrier '%s'", carrier_code)
+                    await self.web_click(By.XPATH, checkbox_xpath, timeout = short_timeout)
         except TimeoutError as ex:
             LOG.debug(ex, exc_info = True)
             raise TimeoutError(_("Failed to configure shipping options in dialog!")) from ex
