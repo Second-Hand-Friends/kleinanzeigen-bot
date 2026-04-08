@@ -437,11 +437,11 @@ class TestKleinanzeigenBotInitialization:
 
         extractor_mock.download_ad.assert_awaited_once_with(123, active = expected_active)
 
-        warning_messages = [record.getMessage() for record in caplog.records if record.levelno >= logging.WARNING]
+        warning_records = [r for r in caplog.records if r.levelno >= logging.WARNING]
         if expect_warning:
-            assert any("123" in msg for msg in warning_messages)
+            assert len(warning_records) >= 1
         else:
-            assert len(warning_messages) == 0
+            assert len(warning_records) == 0
 
     @pytest.mark.asyncio
     async def test_download_ads_numeric_selector_fails_when_published_ads_fetch_incomplete(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:

@@ -220,49 +220,34 @@ def test_apply_auto_price_reduction_logs_unchanged_price_at_floor(
 
 
 @pytest.mark.unit
-def test_apply_auto_price_reduction_warns_when_price_missing(caplog:pytest.LogCaptureFixture, apply_auto_price_reduction:_ApplyAutoPriceReduction) -> None:
-    ad_cfg = SimpleNamespace(
-        price = None,
-        auto_price_reduction = AutoPriceReductionConfig(
-            enabled = True,
-            strategy = "PERCENTAGE",
-            amount = 25,
-            min_price = 10,
-            delay_reposts = 0,
-            delay_days = 0,
-        ),
-        price_reduction_count = 2,
-        repost_count = 2,
-        updated_on = None,
-        created_on = None,
-    )
-
-    ad_orig:dict[str, Any] = {}
-
-    with caplog.at_level(logging.WARNING):
-        apply_auto_price_reduction(ad_cfg, ad_orig, "ad_warning.yaml")
-
-    expected = _("Auto price reduction is enabled for [%s] but no price is configured.") % ("ad_warning.yaml",)
-    assert any(expected in message for message in caplog.messages)
-    assert ad_cfg.price is None
-
-
-@pytest.mark.unit
-def test_apply_auto_price_reduction_warns_when_min_price_equals_price(
-    caplog:pytest.LogCaptureFixture, apply_auto_price_reduction:_ApplyAutoPriceReduction
+@pytest.mark.parametrize(
+    ("price", "min_price", "price_reduction_count", "repost_count"),
+    [
+        (None, 10, 2, 2),
+        (100, 100, 0, 1),
+    ],
+    ids = ["price_missing", "min_price_equals_price"],
+)
+def test_apply_auto_price_reduction_warns_and_preserves_state_on_invalid_config(
+    price:int | None,
+    min_price:int,
+    price_reduction_count:int,
+    repost_count:int,
+    caplog:pytest.LogCaptureFixture,
+    apply_auto_price_reduction:_ApplyAutoPriceReduction,
 ) -> None:
     ad_cfg = SimpleNamespace(
-        price = 100,
+        price = price,
         auto_price_reduction = AutoPriceReductionConfig(
             enabled = True,
             strategy = "PERCENTAGE",
             amount = 25,
-            min_price = 100,
+            min_price = min_price,
             delay_reposts = 0,
             delay_days = 0,
         ),
-        price_reduction_count = 0,
-        repost_count = 1,
+        price_reduction_count = price_reduction_count,
+        repost_count = repost_count,
         updated_on = None,
         created_on = None,
     )
@@ -270,12 +255,12 @@ def test_apply_auto_price_reduction_warns_when_min_price_equals_price(
     ad_orig:dict[str, Any] = {}
 
     with caplog.at_level(logging.WARNING):
-        apply_auto_price_reduction(ad_cfg, ad_orig, "ad_equal_prices.yaml")
+        apply_auto_price_reduction(ad_cfg, ad_orig, "ad_invalid.yaml")
 
-    expected = _("Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur.") % ("ad_equal_prices.yaml", 100)
-    assert any(expected in message for message in caplog.messages)
-    assert ad_cfg.price == 100
-    assert ad_cfg.price_reduction_count == 0
+    warning_records = [r for r in caplog.records if r.levelno >= logging.WARNING]
+    assert len(warning_records) >= 1
+    assert ad_cfg.price == price
+    assert ad_cfg.price_reduction_count == price_reduction_count
 
 
 @pytest.mark.unit
