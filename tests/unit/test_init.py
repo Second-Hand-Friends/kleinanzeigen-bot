@@ -1809,24 +1809,40 @@ class TestKleinanzeigenBotBasics:
         base_ad_config:dict[str, Any],
         mock_page:MagicMock,
     ) -> None:
-        """Retry branch should sleep with explicit millisecond delay."""
+        """Retry branch should sleep with explicit millisecond delay and reset price-reduction mutations."""
         test_bot.page = mock_page
         test_bot.keep_old_ads = True
 
-        ad_cfg = Ad.model_validate(base_ad_config)
+        ad_cfg = Ad.model_validate(base_ad_config | {"price": 100, "price_reduction_count": 0, "repost_count": 1})
         ad_cfg_orig = copy.deepcopy(base_ad_config)
         ad_file = "ad.yaml"
         ads_response = {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})}
+        seen_prices:list[tuple[int | None, int | None]] = []
+
+        async def publish_side_effect(
+            _ad_file:str,
+            candidate_cfg:Ad,
+            _candidate_orig:dict[str, Any],
+            _published_ads:list[dict[str, Any]],
+            _mode:AdUpdateStrategy,
+        ) -> None:
+            seen_prices.append((candidate_cfg.price, candidate_cfg.price_reduction_count))
+            if len(seen_prices) == 1:
+                # Simulate in-memory mutation done by apply_auto_price_reduction before a failed attempt.
+                candidate_cfg.price = 90
+                candidate_cfg.price_reduction_count = 1
+                raise TimeoutError("transient")
 
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ads_response),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = [TimeoutError("transient"), None]) as publish_mock,
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
             assert publish_mock.await_count == 2
+            assert seen_prices == [(100, 0), (100, 0)]
             sleep_mock.assert_awaited_once_with(2_000)
 
     @pytest.mark.asyncio

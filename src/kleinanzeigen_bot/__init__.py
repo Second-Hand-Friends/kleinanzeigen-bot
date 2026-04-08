@@ -2150,9 +2150,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             count += 1
             success = False
+            baseline_price = ad_cfg.price
+            baseline_price_reduction_count = ad_cfg.price_reduction_count
 
             for attempt in range(1, max_retries + 1):
                 try:
+                    # publish_ad mutates pricing fields before submit; reset them so retries
+                    # remain idempotent for a single eligible reduction cycle.
+                    ad_cfg.price = baseline_price
+                    ad_cfg.price_reduction_count = baseline_price_reduction_count
                     await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.REPLACE)
                     success = True
                     break  # Publish succeeded, exit retry loop
