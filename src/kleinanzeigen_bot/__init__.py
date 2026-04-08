@@ -1992,10 +1992,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             apply_auto_price_reduction(ad_cfg, ad_cfg_orig, _relative_ad_path(ad_file, self.config_file_path))
 
             LOG.info("Publishing ad '%s'...", ad_cfg.title)
-            await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html")
+            await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html", reload_if_already_open = True)
         else:
             LOG.info("Updating ad '%s'...", ad_cfg.title)
-            await self.web_open(f"{self.root_url}/p-anzeige-bearbeiten.html?adId={ad_cfg.id}")
+            await self.web_open(f"{self.root_url}/p-anzeige-bearbeiten.html?adId={ad_cfg.id}", reload_if_already_open = True)
 
         await self._dismiss_consent_banner()
 
@@ -2097,7 +2097,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # delete previous images to ensure a clean slate
         # (needed for MODIFY because we don't know which changed,
-        #  and for REPLACE retries where stale thumbnails may remain)
+        #  and as defensive cleanup when the form is pre-populated with thumbnails)
         #############################
         try:
             img_items = await self.web_find_all(

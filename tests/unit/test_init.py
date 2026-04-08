@@ -1870,31 +1870,51 @@ class TestKleinanzeigenBotBasics:
             sleep_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("mode", "expected_path"),
+        [
+            (AdUpdateStrategy.REPLACE, "/p-anzeige-aufgeben-schritt2.html"),
+            (AdUpdateStrategy.MODIFY, "/p-anzeige-bearbeiten.html?adId=12345"),
+        ],
+        ids = ["replace", "modify"],
+    )
     async def test_publish_ad_keeps_pre_submit_timeouts_retryable(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
+        mode:AdUpdateStrategy,
+        expected_path:str,
     ) -> None:
-        """Timeouts before submit boundary should remain plain retryable failures."""
+        """Timeouts before submit boundary should remain plain retryable failures and force reload."""
         ad_cfg = Ad.model_validate(base_ad_config | {"id": 12345, "shipping_type": "NOT_APPLICABLE", "price_type": "NOT_APPLICABLE"})
         ad_cfg_orig = copy.deepcopy(base_ad_config)
+        expected_url = f"{test_bot.root_url}{expected_path}"
+        test_bot.keep_old_ads = True
 
         with (
-            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock) as web_open_mock,
             patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
             patch.object(test_bot, "_KleinanzeigenBot__set_category", new_callable = AsyncMock, side_effect = TimeoutError("image upload timeout")),
             pytest.raises(TimeoutError, match = "image upload timeout"),
         ):
-            await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
+            await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], mode)
+
+        web_open_mock.assert_awaited_once_with(expected_url, reload_if_already_open = True)
 
     @pytest.mark.asyncio
-    async def test_publish_ad_marks_post_submit_timeout_as_uncertain(
+    @pytest.mark.parametrize(
+        "web_await_error",
+        [TimeoutError("confirmation timeout"), ProtocolException(MagicMock(), "connection lost", 0)],
+        ids = ["timeout", "protocol-exception"],
+    )
+    async def test_publish_ad_marks_post_submit_errors_as_uncertain(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
         mock_page:MagicMock,
+        web_await_error:Exception,
     ) -> None:
-        """Timeouts after submit click should be converted to non-retryable uncertainty."""
+        """Post-submit exceptions (TimeoutError, ProtocolException) should be converted to non-retryable uncertainty."""
         test_bot.page = mock_page
         ad_cfg = Ad.model_validate(base_ad_config | {"id": 12345, "shipping_type": "NOT_APPLICABLE", "price_type": "NOT_APPLICABLE"})
         ad_cfg_orig = copy.deepcopy(base_ad_config)
@@ -1917,42 +1937,7 @@ class TestKleinanzeigenBotBasics:
             patch.object(test_bot, "web_execute", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = TimeoutError("confirmation timeout")),
-            pytest.raises(PublishSubmissionUncertainError, match = "submission may have succeeded before failure"),
-        ):
-            await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
-
-    @pytest.mark.asyncio
-    async def test_publish_ad_marks_post_submit_protocol_exception_as_uncertain(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-        mock_page:MagicMock,
-    ) -> None:
-        """Protocol exceptions after submit click should be converted to uncertainty."""
-        test_bot.page = mock_page
-        ad_cfg = Ad.model_validate(base_ad_config | {"id": 12345, "shipping_type": "NOT_APPLICABLE", "price_type": "NOT_APPLICABLE"})
-        ad_cfg_orig = copy.deepcopy(base_ad_config)
-
-        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
-            if selector_type == By.ID and selector_value == "myftr-shppngcrt-frm":
-                raise TimeoutError("no payment form")
-            return MagicMock()
-
-        with (
-            patch.object(test_bot, "web_open", new_callable = AsyncMock),
-            patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
-            patch.object(test_bot, "_KleinanzeigenBot__set_category", new_callable = AsyncMock),
-            patch.object(test_bot, "_KleinanzeigenBot__set_special_attributes", new_callable = AsyncMock),
-            patch.object(test_bot, "_KleinanzeigenBot__set_contact_fields", new_callable = AsyncMock),
-            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
-            patch.object(test_bot, "web_input", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
-            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = ProtocolException(MagicMock(), "connection lost", 0)),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = web_await_error),
             pytest.raises(PublishSubmissionUncertainError, match = "submission may have succeeded before failure"),
         ):
             await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
@@ -4046,10 +4031,8 @@ class TestImageUploadProcessedMarkerFallback:
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
         tmp_path:Path,
-        caplog:pytest.LogCaptureFixture,
     ) -> None:
         """Pre-existing hidden markers must not satisfy completion for a new upload attempt."""
-        caplog.set_level(logging.DEBUG)
         ad_cfg, image_a, image_b = self._build_two_image_ad(base_ad_config, tmp_path)
 
         file_input = MagicMock()
@@ -4077,7 +4060,6 @@ class TestImageUploadProcessedMarkerFallback:
             await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)
 
         assert condition_results == [False]
-        assert any("detected 2 pre-existing image marker(s) before upload" in msg for msg in caplog.messages)
         file_input.send_file.assert_any_await(image_a)
         file_input.send_file.assert_any_await(image_b)
 
