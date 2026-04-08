@@ -2721,8 +2721,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             await self.web_sleep(500, 800)
 
             # Toggle package checkboxes by carrier code value attribute.
-            # The default checked state after "Weiter" differs by size/category in the live DOM,
-            # so both REPLACE and MODIFY must be state-based.
+            # IMPORTANT: REPLACE intentionally uses the same state-based sync as MODIFY.
+            # Live DOM defaults after "Weiter" are not stable across size/category (issue #956),
+            # so we must read current checkbox state and reconcile with desired state.
             LOG.debug("Using state-based shipping option sync for mode '%s'", mode)
             LOG.debug("Processing %d packages for size '%s'", len(all_codes_for_size), shipping_size)
 
