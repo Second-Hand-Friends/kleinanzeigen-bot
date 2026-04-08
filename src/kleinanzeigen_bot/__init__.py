@@ -583,12 +583,6 @@ def apply_auto_price_reduction(
 
     ad_cfg.price = effective_price
 
-    if decision.restored_price is not None and effective_price == decision.restored_price:
-        # Still increment counter so small fractional reductions can accumulate over multiple cycles
-        ad_cfg.price_reduction_count = next_cycle
-        LOG.info("Auto price reduction kept price %s after attempting %s reduction cycles", effective_price, next_cycle)
-        return
-
     LOG.info("Auto price reduction applied: %s -> %s after %s reduction cycles", decision.restored_price, effective_price, next_cycle)
     ad_cfg.price_reduction_count = next_cycle
     # Note: price_reduction_count is persisted to ad_cfg_orig only after successful publish
