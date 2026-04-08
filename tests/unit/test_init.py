@@ -2518,6 +2518,9 @@ class TestKleinanzeigenBotShippingOptions:
         shipping_size_radio = MagicMock()
         shipping_size_radio.attrs = {"checked": ""}  # SMALL radio is pre-checked
 
+        shipping_checkbox = MagicMock()
+        shipping_checkbox.attrs = {"checked": ""}  # Simulate pre-checked carriers for SMALL
+
         category_path_elem = MagicMock()
         category_path_elem.apply = AsyncMock(return_value = "Test Category")
 
@@ -2546,6 +2549,8 @@ class TestKleinanzeigenBotShippingOptions:
                 # New shipping dialog: size radio via XPath with value attribute
                 if selector_type == By.XPATH and '@type="radio"' in selector_value and "@value=" in selector_value:
                     return shipping_size_radio
+                if selector_type == By.XPATH and '@type="checkbox"' in selector_value and "@value=" in selector_value:
+                    return shipping_checkbox
                 if selector_value == "ad-category-path":
                     return category_path_elem
                 return None
@@ -3239,6 +3244,41 @@ class TestShippingOptionsDialog:
         # Should deselect unwanted carriers
         deselected = [a for a in click_args if "HERMES_" in str(a[1]) or "DHL_" in str(a[1])]
         assert len(deselected) > 0
+
+    @pytest.mark.asyncio
+    async def test_replace_mode_dom_verified_unchecked_defaults_select_wanted_carrier(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """REPLACE mode must select wanted carriers when defaults are unchecked (DOM-verified for MEDIUM/LARGE)."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
+
+        radio_mock = self._mock_checkbox(checked = False)  # MEDIUM radio not selected yet
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            if "radio" in selector_value and "MEDIUM" in selector_value:
+                return radio_mock
+            # DOM probe confirms MEDIUM defaults can be unchecked after "Weiter"
+            if "HERMES_003" in selector_value:
+                return self._mock_checkbox(checked = False)
+            if "DHL_002" in selector_value:
+                return self._mock_checkbox(checked = False)
+            return self._mock_checkbox(checked = False)
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping_options")(ad_cfg, mode = AdUpdateStrategy.REPLACE)
+
+        click_args = [(c.args[0], c.args[1]) for c in mock_click.await_args_list if len(c.args) >= 2]
+
+        # Regression guard for issue #956: wanted DHL_002 must be selected
+        assert any("DHL_002" in str(a[1]) for a in click_args)
+        # Unwanted Hermes checkbox must remain untouched when already unchecked
+        assert not any("HERMES_003" in str(a[1]) for a in click_args)
 
     @pytest.mark.asyncio
     async def test_modify_mode_toggles_carriers(
