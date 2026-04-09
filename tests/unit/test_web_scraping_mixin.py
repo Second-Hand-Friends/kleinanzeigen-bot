@@ -797,6 +797,56 @@ class TestSelectorTimeoutMessages:
         assert once_call.args[2] == 0.42
 
     @pytest.mark.asyncio
+    async def test_web_probe_returns_element_without_retry(self, web_scraper:WebScrapingMixin) -> None:
+        """web_probe should use a single _web_find_once attempt and skip retry helper."""
+        element = AsyncMock(spec = Element)
+        once_mock = AsyncMock(return_value = element)
+        retry_mock = AsyncMock()
+
+        cast(Any, web_scraper)._web_find_once = once_mock
+        cast(Any, web_scraper)._run_with_timeout_retries = retry_mock
+
+        result = await web_scraper.web_probe(By.ID, "probe-id")
+
+        assert result is element
+        once_call = once_mock.await_args_list[0]
+        assert once_call.args[:2] == (By.ID, "probe-id")
+        assert once_call.args[2] == web_scraper._timeout("quick_dom")
+        retry_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_web_probe_returns_none_on_timeout_without_retries(self, web_scraper:WebScrapingMixin) -> None:
+        """web_probe should return None on TimeoutError and never use retry helper."""
+        once_mock = AsyncMock(side_effect = TimeoutError("not found"))
+        retry_mock = AsyncMock()
+
+        cast(Any, web_scraper)._web_find_once = once_mock
+        cast(Any, web_scraper)._run_with_timeout_retries = retry_mock
+
+        result = await web_scraper.web_probe(By.ID, "missing-id", timeout = 0.2)
+
+        assert result is None
+        once_call = once_mock.await_args_list[0]
+        assert once_call.args[:2] == (By.ID, "missing-id")
+        assert once_call.args[2] == 0.2
+        once_mock.assert_awaited_once()
+        retry_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_web_probe_ignores_global_retry_config(self, web_scraper:WebScrapingMixin) -> None:
+        """Global retry settings should not change web_probe single-attempt behavior."""
+        web_scraper.config.timeouts.retry_enabled = True
+        web_scraper.config.timeouts.retry_max_attempts = 5
+
+        once_mock = AsyncMock(side_effect = TimeoutError("still missing"))
+        cast(Any, web_scraper)._web_find_once = once_mock
+
+        result = await web_scraper.web_probe(By.CSS_SELECTOR, ".missing")
+
+        assert result is None
+        once_mock.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_web_check_unsupported_attribute(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
         """web_check should raise for unsupported attribute queries."""
         mock_element = AsyncMock(spec = Element)

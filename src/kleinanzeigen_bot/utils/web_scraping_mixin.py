@@ -1058,6 +1058,22 @@ class WebScrapingMixin:
             attempt, description = f"web_find({selector_type.name}, {selector_value})", key = "default", override = timeout
         )
 
+    async def web_probe(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element | None:
+        """Single-attempt element lookup for branch probes.
+
+        Returns the element when found, otherwise None. Unlike web_find, this helper
+        intentionally does not apply retry/backoff because probe absence is a valid
+        branch outcome on settled DOM states.
+
+        :param timeout: timeout in seconds (defaults to quick_dom when omitted)
+        :raises Exception: non-timeout browser/runtime exceptions are propagated
+        """
+        probe_timeout = self._timeout("quick_dom", timeout)
+        try:
+            return await self._web_find_once(selector_type, selector_value, probe_timeout, parent = parent)
+        except TimeoutError:
+            return None
+
     async def web_find_all(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> list[Element]:
         """
         Locates multiple HTML elements by the given selector type and value.

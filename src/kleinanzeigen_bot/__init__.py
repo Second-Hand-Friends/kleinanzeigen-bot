@@ -2394,12 +2394,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         await self.web_click(By.ID, "ad-description")
 
         is_category_auto_selected = False
-        try:
-            if await self.web_text(By.ID, "ad-category-path"):
-                is_category_auto_selected = True
-        except TimeoutError:
-            # Category auto-selection indicator not available within timeout.
-            pass
+        category_path_elem = await self.web_probe(By.ID, "ad-category-path")
+        if category_path_elem and await self._extract_visible_text(category_path_elem):
+            is_category_auto_selected = True
 
         if category:
             await self.web_sleep()  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
@@ -2676,11 +2673,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # Dialog option not present; already on the individual shipping page.
                 pass
 
-            try:
-                # only click on "Individueller Versand" when the price input is not available, otherwise it's already checked
-                # (important for mode = UPDATE)
-                await self.web_find(By.ID, "ad-individual-shipping-price", timeout = short_timeout)
-            except TimeoutError:
+            # only click on "Individueller Versand" when the price input is not available, otherwise it's already checked
+            # (important for mode = UPDATE)
+            individual_price_elem = await self.web_probe(By.ID, "ad-individual-shipping-price", timeout = short_timeout)
+            if individual_price_elem is None:
                 # Input not visible yet; click the individual shipping option.
                 try:
                     await self.web_click(By.ID, "ad-individual-shipping-checkbox-control")

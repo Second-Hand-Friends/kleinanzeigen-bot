@@ -2529,6 +2529,7 @@ class TestKleinanzeigenBotShippingOptions:
             patch.object(test_bot, "web_execute", side_effect = mock_web_execute),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = category_path_elem),
             patch.object(test_bot, "web_select", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
@@ -2551,8 +2552,6 @@ class TestKleinanzeigenBotShippingOptions:
                     return shipping_size_radio
                 if selector_type == By.XPATH and '@type="checkbox"' in selector_value and "@value=" in selector_value:
                     return shipping_checkbox
-                if selector_value == "ad-category-path":
-                    return category_path_elem
                 return None
 
             mock_find.side_effect = mock_find_side_effect
@@ -3075,6 +3074,37 @@ class TestConditionFallbackToGenericHandler:
         mock_set_condition.assert_awaited_once_with("ok")
 
 
+class TestCategoryProbeBehavior:
+    """Tests for category marker probing without retry backoff."""
+
+    @pytest.mark.asyncio
+    async def test_set_category_uses_probe_for_auto_selected_marker(self, test_bot:KleinanzeigenBot) -> None:
+        """Category marker lookup should use web_probe with quick_dom timeout."""
+        category_marker = MagicMock()
+        category_marker.apply = AsyncMock(return_value = "Auto Category")
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = category_marker) as mock_probe,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_category")("185/249", "data/my_ads/ad.yaml")
+
+        mock_probe.assert_awaited_once_with(By.ID, "ad-category-path")
+
+    @pytest.mark.asyncio
+    async def test_set_category_without_explicit_category_requires_probe_match(self, test_bot:KleinanzeigenBot) -> None:
+        """When no category is configured, missing marker should fail fast."""
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            pytest.raises(AssertionError, match = "No category specified"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_category")(None, "data/my_ads/ad.yaml")
+
+
 class TestShippingDialogFlow:
     """Regression tests for shipping dialog flow using new radio selectors only."""
 
@@ -3119,6 +3149,7 @@ class TestShippingDialogFlow:
 
         with (
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
             patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
@@ -3140,11 +3171,33 @@ class TestShippingDialogFlow:
 
         with (
             patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             pytest.raises(TimeoutError, match = "Unable to close shipping dialog!"),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+    @pytest.mark.asyncio
+    async def test_shipping_without_options_does_not_toggle_checkbox_when_price_input_visible(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """When price input is already visible, individual-shipping checkbox is not toggled."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": [], "shipping_costs": 4.95})
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+        click_args = [c.args for c in mock_click.await_args_list]
+        assert not any(len(a) >= 2 and a[0] == By.ID and a[1] == "ad-individual-shipping-checkbox-control" for a in click_args)
 
 
 class TestShippingOptionsDialog:
