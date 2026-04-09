@@ -2925,7 +2925,9 @@ class TestConditionSelector:
 
             mock_find.side_effect = find_side_effect
 
-            await getattr(test_bot, "_KleinanzeigenBot__set_condition")("ok")
+            handled = await getattr(test_bot, "_KleinanzeigenBot__set_condition")("ok")
+
+            assert handled is True
 
             clicked_xpath_selectors = [str(call.args[1]) for call in mock_click.await_args_list if len(call.args) > 1]
             assert any("contains(@for, '.condition')" in selector for selector in clicked_xpath_selectors)
@@ -2933,18 +2935,18 @@ class TestConditionSelector:
             assert any("Bestätigen" in selector for selector in clicked_xpath_selectors)
 
     @pytest.mark.asyncio
-    async def test_condition_missing_selector_raises(self, test_bot:KleinanzeigenBot) -> None:
-        """Missing condition trigger should fail fast to avoid stale condition data."""
+    async def test_condition_missing_selector_returns_not_handled(self, test_bot:KleinanzeigenBot) -> None:
+        """Missing condition trigger should return not-handled and use generic fallback path."""
 
-        async def click_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> None:
+        async def find_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> Element:
             if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value and "@aria-haspopup='dialog'" in selector_value:
                 raise TimeoutError("missing trigger")
+            raise TimeoutError("unexpected selector")
 
-        with (
-            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect),
-            pytest.raises(TimeoutError, match = "Failed to set attribute 'condition_s'"),
-        ):
-            await getattr(test_bot, "_KleinanzeigenBot__set_condition")("ok")
+        with patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect):
+            handled = await getattr(test_bot, "_KleinanzeigenBot__set_condition")("ok")
+
+        assert handled is False
 
     @pytest.mark.asyncio
     async def test_condition_unknown_value_raises(self, test_bot:KleinanzeigenBot) -> None:
@@ -2969,17 +2971,43 @@ class TestConditionSelector:
             with pytest.raises(TimeoutError, match = "Failed to set attribute 'condition_s'"):
                 await getattr(test_bot, "_KleinanzeigenBot__set_condition")("defect")
 
+    @pytest.mark.asyncio
+    async def test_condition_rejects_shipping_trigger(self, test_bot:KleinanzeigenBot) -> None:
+        """Condition dialog path should not click shipping trigger controls."""
+        trigger = MagicMock()
+        trigger.attrs = {
+            "id": "ad-shipping-options",
+            "aria-controls": None,
+            "aria-haspopup": "dialog",
+        }
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
+            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
+                return trigger
+            raise TimeoutError("unexpected selector")
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            handled = await getattr(test_bot, "_KleinanzeigenBot__set_condition")("new")
+
+        assert handled is False
+        # Regression guard: wrong shipping trigger must never be clicked by condition handler
+        mock_click.assert_not_awaited()
+
 
 class TestConditionFallbackToGenericHandler:
-    """Regression tests for condition_s falling back to generic attribute handler when dialog is unavailable.
+    """Regression tests for condition_s fallback behavior.
 
-    When __set_condition raises TimeoutError (e.g. category uses a button-combobox instead of a dialog),
-    __set_special_attributes should fall through to the generic XPath-based handler.
+    When __set_condition reports "not handled" (e.g. category uses a button-combobox
+    instead of a dialog), __set_special_attributes should fall through to the generic
+    XPath-based handler.
     """
 
     @pytest.mark.asyncio
-    async def test_condition_falls_back_to_generic_handler_on_dialog_timeout(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
-        """When condition dialog is not available, generic handler should be used as fallback."""
+    async def test_condition_falls_back_to_generic_handler_when_dialog_not_handled(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """When condition dialog is not handled, generic handler should be used as fallback."""
         ad_cfg = Ad.model_validate(base_ad_config | {"category": "185/249", "special_attributes": {"condition_s": "new"}, "shipping_type": "PICKUP"})
 
         button_elem = MagicMock()
@@ -2998,7 +3026,7 @@ class TestConditionFallbackToGenericHandler:
                 test_bot,
                 "_KleinanzeigenBot__set_condition",
                 new_callable = AsyncMock,
-                side_effect = TimeoutError("dialog not available"),
+                return_value = False,
             ) as mock_set_condition,
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [button_elem]),
             patch.object(
@@ -3013,6 +3041,25 @@ class TestConditionFallbackToGenericHandler:
         mock_select_combobox.assert_awaited_once_with("modellbau.condition", "new")
 
     @pytest.mark.asyncio
+    async def test_condition_timeout_propagates_instead_of_falling_back(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """Real condition dialog failures should propagate and not silently use generic fallback."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"category": "161/176", "special_attributes": {"condition_s": "ok"}})
+
+        with (
+            patch.object(
+                test_bot,
+                "_KleinanzeigenBot__set_condition",
+                new_callable = AsyncMock,
+                side_effect = TimeoutError("dialog timeout"),
+            ),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock) as mock_find_all,
+            pytest.raises(TimeoutError, match = "dialog timeout"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
+
+        mock_find_all.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_condition_uses_dialog_when_available(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
         """When condition dialog works, it should be used without falling back."""
         ad_cfg = Ad.model_validate(base_ad_config | {"category": "161/176", "special_attributes": {"condition_s": "ok"}})
@@ -3021,6 +3068,7 @@ class TestConditionFallbackToGenericHandler:
             test_bot,
             "_KleinanzeigenBot__set_condition",
             new_callable = AsyncMock,
+            return_value = True,
         ) as mock_set_condition:
             await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
 
