@@ -72,9 +72,13 @@ jobs:
         - os: ubuntu-latest
           PYTHON_VERSION: "3.10"
           PUBLISH_RELEASE: false
+        - os: ubuntu-24.04-arm  # https://github.com/actions/partner-runner-images#available-images
+          PYTHON_VERSION: "3.10"
+          PUBLISH_RELEASE: false
         - os: windows-latest
           PYTHON_VERSION: "3.10"
           PUBLISH_RELEASE: false
+
         - os: macos-15-intel  # X86
           PYTHON_VERSION: "3.14"
           PUBLISH_RELEASE: true
@@ -82,6 +86,9 @@ jobs:
           PYTHON_VERSION: "3.14"
           PUBLISH_RELEASE: true
         - os: ubuntu-latest
+          PYTHON_VERSION: "3.14"
+          PUBLISH_RELEASE: true
+        - os: ubuntu-24.04-arm  # https://github.com/actions/partner-runner-images#available-images
           PYTHON_VERSION: "3.14"
           PUBLISH_RELEASE: true
         - os: windows-latest
@@ -112,12 +119,10 @@ jobs:
 
 
     - name: "Install: Chromium Browser"
-      if: env.ACT == 'true' && startsWith(matrix.os, 'ubuntu')
+      if: startsWith(matrix.os, 'ubuntu')
       run: |
-        if ! hash google-chrome &>/dev/null; then
-          curl -sSfL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o /tmp/chrome.deb
-          sudo dpkg -i /tmp/chrome.deb || true
-          sudo apt-get --no-install-recommends -y --fix-broken install
+        if ! hash chromium &>/dev/null; then
+          sudo apt-get --no-install-recommends -y install chromium
         fi
 
 
@@ -427,6 +432,7 @@ jobs:
         mv artifacts-macos-15-intel/kleinanzeigen-bot kleinanzeigen-bot-darwin-amd64
         mv artifacts-macos-latest/kleinanzeigen-bot kleinanzeigen-bot-darwin-arm64
         mv artifacts-ubuntu-latest/kleinanzeigen-bot kleinanzeigen-bot-linux-amd64
+        mv artifacts-ubuntu-24.04-arm/kleinanzeigen-bot kleinanzeigen-bot-linux-arm64
         mv artifacts-windows-latest/kleinanzeigen-bot-uncompressed.exe kleinanzeigen-bot-windows-amd64-uncompressed.exe
         mv artifacts-windows-latest/kleinanzeigen-bot.exe kleinanzeigen-bot-windows-amd64.exe
 
@@ -538,6 +544,7 @@ jobs:
           kleinanzeigen-bot-darwin-amd64 \
           kleinanzeigen-bot-darwin-arm64 \
           kleinanzeigen-bot-linux-amd64 \
+          kleinanzeigen-bot-linux-arm64 \
           kleinanzeigen-bot-windows-amd64.exe \
           kleinanzeigen-bot-windows-amd64-uncompressed.exe
 
