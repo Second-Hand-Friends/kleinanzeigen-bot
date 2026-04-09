@@ -839,12 +839,15 @@ class TestSelectorTimeoutMessages:
         web_scraper.config.timeouts.retry_max_attempts = 5
 
         once_mock = AsyncMock(side_effect = TimeoutError("still missing"))
+        retry_mock = AsyncMock()
         cast(Any, web_scraper)._web_find_once = once_mock
+        cast(Any, web_scraper)._run_with_timeout_retries = retry_mock
 
         result = await web_scraper.web_probe(By.CSS_SELECTOR, ".missing")
 
         assert result is None
         once_mock.assert_awaited_once()
+        retry_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_web_check_unsupported_attribute(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
@@ -989,27 +992,18 @@ class TestWebScrapingSessionManagement:
         stop_mock.assert_called_once()
         mock_child.kill.assert_called_once()
 
-    def test_close_browser_session_skips_psutil_when_pid_is_none(self) -> None:
-        """When _process_pid is None, psutil.Process should not be called but stop() should."""
+    @pytest.mark.parametrize(
+        "pid_value",
+        [
+            pytest.param(None, id = "none-pid"),
+            pytest.param(MagicMock(), id = "non-int-pid"),
+        ],
+    )
+    def test_close_browser_session_skips_psutil_when_pid_is_invalid(self, pid_value:object) -> None:
+        """When _process_pid is not a valid int, psutil.Process should not be called but stop() should."""
         scraper = WebScrapingMixin()
         scraper.browser = MagicMock()
-        scraper.browser._process_pid = None
-        stop_mock = scraper.browser.stop = MagicMock()
-        scraper.page = MagicMock(spec = Page)
-
-        with patch("psutil.Process") as mock_proc:
-            scraper.close_browser_session()
-
-        mock_proc.assert_not_called()
-        stop_mock.assert_called_once()
-        assert scraper.browser is None
-        assert scraper.page is None
-
-    def test_close_browser_session_skips_psutil_when_pid_is_non_int(self) -> None:
-        """When _process_pid is non-integer (e.g., MagicMock), psutil.Process should not be called."""
-        scraper = WebScrapingMixin()
-        scraper.browser = MagicMock()
-        scraper.browser._process_pid = MagicMock()  # Simulate mock object in tests
+        scraper.browser._process_pid = pid_value
         stop_mock = scraper.browser.stop = MagicMock()
         scraper.page = MagicMock(spec = Page)
 

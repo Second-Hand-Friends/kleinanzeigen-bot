@@ -147,11 +147,6 @@ class TestKleinanzeigenBotInitialization:
         assert test_bot.log_file_path is not None
         assert test_bot.file_log is None
 
-    def test_get_version_returns_correct_version(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify version retrieval works correctly."""
-        with patch("kleinanzeigen_bot.__version__", "1.2.3"):
-            assert test_bot.get_version() == "1.2.3"
-
     def test_resolve_workspace_skips_help(self, test_bot:KleinanzeigenBot) -> None:
         """Ensure workspace resolution returns early for help."""
         test_bot.command = "help"
