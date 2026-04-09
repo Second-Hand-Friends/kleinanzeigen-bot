@@ -3174,6 +3174,7 @@ class TestShippingDialogFlow:
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
 
             click_args = [c.args for c in mock_click.await_args_list]
+            assert any(len(a) >= 2 and a[0] == By.ID and a[1] == "ad-individual-shipping-checkbox-control" for a in click_args)
             assert any("Fertig" in str(a[1]) for a in click_args if len(a) >= 2)
             mock_input.assert_awaited_once_with(By.ID, "ad-individual-shipping-price", "4,95")
 
