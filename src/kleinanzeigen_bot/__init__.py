@@ -2136,8 +2136,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # submit
         #############################
         # Click is retryable — no submission can have occurred before this point.
-        # Edit page uses 'Änderungen speichern'; publish page uses 'Anzeige aufgeben'
-        await self.web_click(By.XPATH, "//button[contains(., 'Anzeige aufgeben') or contains(., 'Änderungen speichern')]")
+        # Edit page uses 'Änderungen speichern' or 'Anzeige speichern'; publish page uses 'Anzeige aufgeben'
+        await self.web_click(By.XPATH, "//button[contains(., 'Anzeige aufgeben') or contains(., 'Änderungen speichern') or contains(., 'Anzeige speichern')]")
 
         # Everything after the first click is uncertain: the ad may already have been submitted.
         try:
