@@ -2993,6 +2993,7 @@ class TestConditionSelector:
             "aria-controls": None,
             "aria-haspopup": "dialog",
         }
+        trigger.click = AsyncMock()
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
             if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
@@ -3008,6 +3009,7 @@ class TestConditionSelector:
 
         assert handled is False
         # Regression guard: wrong shipping trigger must never be clicked by condition handler
+        trigger.click.assert_not_awaited()
         mock_click.assert_not_awaited()
 
 
@@ -3094,7 +3096,7 @@ class TestCategoryProbeBehavior:
 
     @pytest.mark.asyncio
     async def test_set_category_uses_probe_for_auto_selected_marker(self, test_bot:KleinanzeigenBot) -> None:
-        """Category marker lookup should use web_probe with quick_dom timeout."""
+        """In __set_category, category marker lookup should go through web_probe."""
         category_marker = MagicMock()
         category_marker.apply = AsyncMock(return_value = "Auto Category")
 
