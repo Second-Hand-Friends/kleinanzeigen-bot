@@ -2524,7 +2524,7 @@ class TestKleinanzeigenBotShippingOptions:
             patch.object(test_bot, "web_execute", side_effect = mock_web_execute),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = category_path_elem),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
             patch.object(test_bot, "web_select", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
@@ -2536,6 +2536,14 @@ class TestKleinanzeigenBotShippingOptions:
             patch("builtins.input", return_value = ""),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
         ):
+
+            async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+                if selector_type == By.ID and selector_value == "ad-category-path":
+                    return category_path_elem
+                return None
+
+            mock_probe.side_effect = probe_side_effect
+
             # Mock web_find to simulate element detection
             async def mock_find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
                 if selector_value == "meta[name=_csrf]":
@@ -2896,6 +2904,9 @@ class TestConditionSelector:
     async def test_condition_selects_radio_by_value(self, test_bot:KleinanzeigenBot) -> None:
         """Condition selection should resolve radios by value in the new dialog."""
         dialog = MagicMock()
+        trigger = MagicMock()
+        trigger.attrs = {"id": "condition-trigger", "aria-controls": "condition-dialog"}
+        trigger.click = AsyncMock()
         radio = MagicMock()
         radio_attrs = MagicMock()
         radio_attrs.id = "radio-condition-ok"
@@ -2904,6 +2915,7 @@ class TestConditionSelector:
         radio.click = AsyncMock()
 
         with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = trigger),
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
@@ -2924,7 +2936,7 @@ class TestConditionSelector:
             assert handled is True
 
             clicked_xpath_selectors = [str(call.args[1]) for call in mock_click.await_args_list if len(call.args) > 1]
-            assert any("contains(@for, '.condition')" in selector for selector in clicked_xpath_selectors)
+            trigger.click.assert_awaited_once()
             assert any("label[@for=" in selector and "radio-condition-ok" in selector for selector in clicked_xpath_selectors)
             assert any("Bestätigen" in selector for selector in clicked_xpath_selectors)
 
@@ -2937,7 +2949,10 @@ class TestConditionSelector:
                 raise TimeoutError("missing trigger")
             raise TimeoutError("unexpected selector")
 
-        with patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect):
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+        ):
             handled = await getattr(test_bot, "_KleinanzeigenBot__set_condition")("ok")
 
         assert handled is False
@@ -2946,6 +2961,9 @@ class TestConditionSelector:
     async def test_condition_unknown_value_raises(self, test_bot:KleinanzeigenBot) -> None:
         """Unknown condition values should raise when no matching radio option is present."""
         dialog = MagicMock()
+        trigger = MagicMock()
+        trigger.attrs = {"id": "condition-trigger", "aria-controls": "condition-dialog"}
+        trigger.click = AsyncMock()
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
             if selector_type != By.XPATH:
@@ -2957,6 +2975,7 @@ class TestConditionSelector:
             raise TimeoutError("selector not found")
 
         with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = trigger),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
         ):
@@ -2981,6 +3000,7 @@ class TestConditionSelector:
             raise TimeoutError("unexpected selector")
 
         with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = trigger),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
@@ -3186,13 +3206,14 @@ class TestShippingDialogFlow:
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
 
         click_args = [c.args for c in mock_click.await_args_list]
         assert not any(len(a) >= 2 and a[0] == By.ID and a[1] == "ad-individual-shipping-checkbox-control" for a in click_args)
+        mock_input.assert_awaited_once_with(By.ID, "ad-individual-shipping-price", "4,95")
 
 
 class TestShippingOptionsDialog:

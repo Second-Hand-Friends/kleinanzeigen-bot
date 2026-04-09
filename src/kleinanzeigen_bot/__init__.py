@@ -2340,10 +2340,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         short_timeout = self._timeout("quick_dom")
         condition_trigger_xpath = "//label[contains(@for, '.condition')]/following::button[@aria-haspopup='dialog' or @aria-haspopup='true'][1]"
 
-        try:
-            condition_trigger = await self.web_find(By.XPATH, condition_trigger_xpath)
-        except TimeoutError:
-            LOG.debug("Condition dialog trigger not available for [%s]; falling back to generic handler.", condition_value, exc_info = True)
+        condition_trigger = await self.web_probe(By.XPATH, condition_trigger_xpath, timeout = short_timeout)
+        if condition_trigger is None:
+            LOG.debug("Condition dialog trigger not available for [%s]; falling back to generic handler.", condition_value)
             return False
 
         trigger_id = str(condition_trigger.attrs.get("id") or "")
@@ -2362,7 +2361,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return False
 
         try:
-            await self.web_click(By.XPATH, condition_trigger_xpath)
+            await condition_trigger.click()
             await self.web_find(By.XPATH, '//*[self::dialog or @role="dialog"]', timeout = short_timeout)
             condition_radio = await self.web_find(
                 By.XPATH,
