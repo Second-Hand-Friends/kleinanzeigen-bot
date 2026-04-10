@@ -107,8 +107,7 @@ ad_defaults:
 ```
 
 - `ad_defaults.republication_interval` controls when ads become due for republishing.
-- Automatic price reductions (including `delay_reposts` and `delay_days`) are evaluated during `publish` runs.
-- When `on_update: true` is set, reductions also apply during `update` runs (using `delay_days` but ignoring `delay_reposts`).
+- Automatic price reductions are always evaluated during `publish` runs, and they also apply during `update` runs when `on_update: true` is set (using `delay_days` but ignoring `delay_reposts`).
 - Reductions do not run in the background between runs.
 - When auto price reduction is enabled, each `publish` (and optionally `update`) run logs the reduction decision.
 - The `verify` command previews pricing outcomes for both publish and update modes.

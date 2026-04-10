@@ -321,7 +321,10 @@ created_on:  # ISO timestamp when the ad was first published
 updated_on:  # ISO timestamp when the ad was last published
 content_hash:  # Hash of the ad content, used to detect changes
 repost_count:  # How often the ad has been (re)published; used for automatic price reductions
+price_reduction_count:  # Auto-managed reduction cycle counter (starts at 0); used with price to recompute effective reduced price
 ```
+
+`price_reduction_count` is maintained by the bot after successful runs and should not be edited manually.
 
 ## Complete Example
 

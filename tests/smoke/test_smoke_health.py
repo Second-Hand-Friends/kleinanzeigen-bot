@@ -188,7 +188,7 @@ def test_cli_subcommands_create_config_fails_if_exists(tmp_path:Path) -> None:
     assert result.returncode == 0
     assert config_file.exists(), "config.yaml was deleted or not present after second create-config run"
     out = (result.stdout + "\n" + result.stderr).lower()
-    assert "already exists" in out or "not overwritten" in out or "saving" in out, f"Expected message about existing config in CLI output.\n{out}"
+    assert "already exists" in out or "not overwritten" in out, f"Expected message about existing config in CLI output.\n{out}"
 
 
 @pytest.mark.smoke

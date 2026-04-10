@@ -260,7 +260,7 @@ def evaluate_auto_price_reduction(ad_cfg:Ad, _ad_file_relative:str, *, mode:AdUp
     if applied_cycles > 0:
         restored_price = calculate_auto_price(base_price = base_price, auto_price_reduction = cfg, target_reduction_cycle = applied_cycles)
 
-    if cfg.min_price is not None and cfg.min_price == base_price and applied_cycles <= 0:
+    if cfg.min_price is not None and cfg.min_price == base_price and applied_cycles == 0:
         return PriceReductionDecision(
             mode = mode,
             enabled = True,
@@ -565,7 +565,7 @@ def apply_auto_price_reduction(
         if next_cycle is None:
             LOG.debug("Auto price reduction skipped for [%s]: missing next_cycle for no_visible_change", ad_file_relative)
             return
-        ad_cfg.price_reduction_count = int(next_cycle)
+        ad_cfg.price_reduction_count = next_cycle
         LOG.info("Auto price reduction kept price %s after attempting %s reduction cycles", decision.restored_price, next_cycle)
         return
 

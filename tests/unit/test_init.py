@@ -2735,7 +2735,7 @@ class TestKleinanzeigenBotShippingOptions:
                 on_update = True,
             )
             await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
-            assert mock_apply.call_count >= 1, "Auto price reduction SHOULD be called on MODIFY when on_update=true"
+            assert mock_apply.call_count == 1, "Auto price reduction SHOULD be called exactly once on MODIFY when on_update=true"
 
     @pytest.mark.asyncio
     async def test_special_attributes_compound_name_lookup(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
