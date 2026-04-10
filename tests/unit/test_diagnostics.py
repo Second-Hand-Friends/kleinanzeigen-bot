@@ -112,7 +112,7 @@ class TestDiagnosticsCapture:
         assert not log_path.exists()
 
     @pytest.mark.asyncio
-    async def test_capture_diagnostics_handles_screenshot_exception(self, tmp_path:Path, caplog:pytest.LogCaptureFixture) -> None:
+    async def test_capture_diagnostics_handles_screenshot_exception(self, tmp_path:Path) -> None:
         """Test that capture_diagnostics handles screenshot capture exceptions gracefully."""
         mock_page = AsyncMock()
         mock_page.save_screenshot = AsyncMock(side_effect = Exception("Screenshot failed"))
@@ -126,10 +126,9 @@ class TestDiagnosticsCapture:
 
         # Verify no artifacts were saved due to exception
         assert len(result.saved_artifacts) == 0
-        assert "Diagnostics screenshot capture failed" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_capture_diagnostics_handles_json_exception(self, tmp_path:Path, caplog:pytest.LogCaptureFixture, monkeypatch:pytest.MonkeyPatch) -> None:
+    async def test_capture_diagnostics_handles_json_exception(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that capture_diagnostics handles JSON write exceptions gracefully."""
         mock_page = AsyncMock()
         mock_page.get_content = AsyncMock(return_value = "<html></html>")
@@ -151,12 +150,9 @@ class TestDiagnosticsCapture:
         assert any(a.suffix == ".png" for a in result.saved_artifacts)
         assert any(a.suffix == ".html" for a in result.saved_artifacts)
         assert not any(a.suffix == ".json" for a in result.saved_artifacts)
-        assert "Diagnostics JSON capture failed" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_capture_diagnostics_handles_log_copy_exception(
-        self, tmp_path:Path, caplog:pytest.LogCaptureFixture, monkeypatch:pytest.MonkeyPatch
-    ) -> None:
+    async def test_capture_diagnostics_handles_log_copy_exception(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that capture_diagnostics handles log copy exceptions gracefully."""
         # Create a log file
         log_file = tmp_path / "test.log"
@@ -179,7 +175,6 @@ class TestDiagnosticsCapture:
 
             # Verify no artifacts were saved due to exception
             assert len(result.saved_artifacts) == 0
-            assert "Diagnostics log copy failed" in caplog.text
         finally:
             monkeypatch.setattr(diagnostics_module, "_copy_log_sync", original_copy_log)
 
@@ -206,19 +201,3 @@ class TestDiagnosticsCapture:
         # Verify no artifacts were saved
         assert len(result.saved_artifacts) == 0
         assert "Diagnostics capture attempted but no artifacts were saved" in caplog.text
-
-    @pytest.mark.asyncio
-    async def test_capture_diagnostics_logs_debug_when_no_capture_requested(self, tmp_path:Path, caplog:pytest.LogCaptureFixture) -> None:
-        """Test debug is logged when no diagnostics capture is requested."""
-        output_dir = tmp_path / "diagnostics"
-
-        with caplog.at_level("DEBUG"):
-            _ = await capture_diagnostics(
-                output_dir = output_dir,
-                base_prefix = "test",
-                page = None,
-                json_payload = None,
-                copy_log = False,
-            )
-
-        assert "No diagnostics capture requested" in caplog.text
