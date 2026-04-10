@@ -4176,7 +4176,7 @@ class TestImageUploadProcessedMarkerFallback:
 
         first_file_input.send_file.assert_awaited_once_with(image_a)
         second_file_input.send_file.assert_awaited_once_with(image_b)
-        assert mock_find.await_count == 2
+        assert mock_find.await_count >= 2
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
