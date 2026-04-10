@@ -2769,7 +2769,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return
 
         LOG.info(" -> found %s", pluralize("image", ad_cfg.images))
-        image_upload:Element = await self.web_find(By.CSS_SELECTOR, "input[type=file]")
         hidden_marker_selector = "input[name^='adImages'][name$='.url']"
 
         # Capture marker baseline before this upload attempt to avoid counting stale values
@@ -2784,6 +2783,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.debug(" -> detected %d pre-existing image marker(s) before upload", baseline_marker_count)
 
         for image in ad_cfg.images:
+            image_upload:Element = await self.web_find(By.CSS_SELECTOR, "input[type=file]")
             LOG.info(" -> uploading image [%s]", image)
             await image_upload.send_file(image)
             await self.web_sleep()

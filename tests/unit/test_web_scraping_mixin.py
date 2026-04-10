@@ -8,6 +8,7 @@ import logging
 import os
 import platform
 import shutil
+import time
 import zipfile
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -1142,13 +1143,41 @@ class TestWebScrolling:
         async def condition() -> bool:
             return False
 
+        start = time.monotonic()
         with pytest.raises(TimeoutError):
             await web_scraper.web_await(condition, timeout = 0.2, apply_multiplier = False)
+        elapsed = time.monotonic() - start
 
-        sleep_mock = cast(AsyncMock, mock_page.sleep)
-        sleep_mock.assert_awaited()
-        slept_seconds = sleep_mock.await_args_list[0].args[0]
-        assert slept_seconds <= 0.2
+        # The polling interval is capped to min(0.5, remaining_timeout) via asyncio.sleep,
+        # so the total elapsed time should be at least the timeout (0.2s) but not wildly exceed it.
+        assert elapsed >= 0.15, f"Expected >= 0.15s elapsed, got {elapsed:.3f}s"
+        assert elapsed < 1.0, f"Expected < 1.0s elapsed, got {elapsed:.3f}s"
+
+    @pytest.mark.asyncio
+    async def test_web_sleep_produces_real_delay(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
+        """web_sleep should produce a real wall-clock delay, not return instantly."""
+
+        start = time.monotonic()
+        await web_scraper.web_sleep(200, 200)
+        elapsed = time.monotonic() - start
+
+        # 200ms sleep should take at least 150ms (allowing some scheduling slack)
+        assert elapsed >= 0.15, f"Expected >= 0.15s elapsed, got {elapsed:.3f}s"
+        assert elapsed < 1.0, f"Expected < 1.0s elapsed, got {elapsed:.3f}s"
+
+    @pytest.mark.asyncio
+    async def test_web_sleep_uses_asyncio_not_page_sleep(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
+        """web_sleep should use asyncio.sleep, not the broken page.sleep."""
+        with (
+            patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.sleep", new_callable = AsyncMock) as mock_asyncio_sleep,
+        ):
+            await web_scraper.web_sleep(500, 500)
+
+            # asyncio.sleep should have been called with the duration in seconds
+            mock_asyncio_sleep.assert_awaited_once_with(0.5)
+
+        # page.sleep should NOT have been called
+        cast(AsyncMock, mock_page.sleep).assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_web_find_retry_mechanism(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:

@@ -4125,40 +4125,104 @@ class TestImageUploadProcessedMarkerFallback:
         file_input.send_file.assert_any_await(image_b)
 
     @pytest.mark.asyncio
-    async def test_upload_images_stale_markers_do_not_satisfy_completion(
+    async def test_upload_images_refetches_file_input_per_image_to_avoid_stale_element(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
         tmp_path:Path,
     ) -> None:
-        """Pre-existing hidden markers must not satisfy completion for a new upload attempt."""
+        """Each image upload should re-fetch the file input because the DOM replaces it after selection."""
+        ad_cfg, image_a, image_b = self._build_two_image_ad(base_ad_config, tmp_path)
+
+        first_file_input = MagicMock()
+        first_file_input.send_file = AsyncMock()
+        second_file_input = MagicMock()
+        second_file_input.send_file = AsyncMock()
+
+        marker_a = self._build_marker("https://img.example/a.jpg")
+        marker_b = self._build_marker("https://img.example/b.jpg")
+        marker_query_count = 0
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            assert selector_type == By.CSS_SELECTOR
+            assert selector_value == "input[type=file]"
+            if first_file_input.send_file.await_count == 0:
+                return first_file_input
+            return second_file_input
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[MagicMock]:
+            nonlocal marker_query_count
+            if selector_type == By.CSS_SELECTOR and selector_value == "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)":
+                raise TimeoutError("no thumbnails")
+            if selector_type == By.CSS_SELECTOR and selector_value == "input[name^='adImages'][name$='.url']":
+                marker_query_count += 1
+                if marker_query_count == 1:
+                    return []  # baseline before upload
+                return [marker_a, marker_b]
+            return []
+
+        async def await_side_effect(condition:Callable[[], Awaitable[bool]], **_:Any) -> bool:
+            if await condition():
+                return True
+            raise TimeoutError("condition did not pass")
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect) as mock_find,
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_side_effect),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)
+
+        first_file_input.send_file.assert_awaited_once_with(image_a)
+        second_file_input.send_file.assert_awaited_once_with(image_b)
+        assert mock_find.await_count >= 2
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("baseline_count", "post_count", "expected_found"),
+        [
+            pytest.param(2, 2, 0, id = "stale-only-markers"),
+            pytest.param(0, 1, 1, id = "one-new-marker"),
+        ],
+    )
+    async def test_upload_images_timeout_reports_processed_count(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+        baseline_count:int,
+        post_count:int,
+        expected_found:int,
+    ) -> None:
+        """Upload timeout should report the correct processed-marker count based on baseline vs post-upload markers."""
         ad_cfg, image_a, image_b = self._build_two_image_ad(base_ad_config, tmp_path)
 
         file_input = MagicMock()
         file_input.send_file = AsyncMock()
 
-        stale_marker_a = self._build_marker("https://img.example/stale-a.jpg")
-        stale_marker_b = self._build_marker("https://img.example/stale-b.jpg")
-        condition_results:list[bool] = []
+        marker_query_count = 0
 
         async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[MagicMock]:
+            nonlocal marker_query_count
             if selector_type == By.CSS_SELECTOR and selector_value == "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)":
                 raise TimeoutError("no thumbnails")
             if selector_type == By.CSS_SELECTOR and selector_value == "input[name^='adImages'][name$='.url']":
-                return [stale_marker_a, stale_marker_b]
+                marker_query_count += 1
+                if marker_query_count == 1:
+                    return [self._build_marker(f"https://img.example/baseline-{i}.jpg") for i in range(baseline_count)]
+                return [self._build_marker(f"https://img.example/post-{i}.jpg") for i in range(post_count)]
             return []
 
-        async def await_timeout(condition:Callable[[], Awaitable[bool]], **_:Any) -> None:
-            condition_results.append(await condition())
+        async def await_timeout(*_:Any, **__:Any) -> None:
             raise TimeoutError("Image upload timeout exceeded")
 
         with (
-            pytest.raises(TimeoutError, match = r"Expected 2, found 0 processed images\.$"),
+            pytest.raises(TimeoutError, match = rf"Expected 2, found {expected_found} processed"),
             self._mock_upload_dependencies(test_bot, file_input, find_all_side_effect, await_timeout),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)
 
-        assert condition_results == [False]
         file_input.send_file.assert_any_await(image_a)
         file_input.send_file.assert_any_await(image_b)
 
@@ -4291,45 +4355,6 @@ class TestImageUploadProcessedMarkerFallback:
             raise TimeoutError("condition did not pass")
 
         with self._mock_upload_dependencies(test_bot, file_input, find_all_side_effect, await_side_effect):
-            await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)
-
-        file_input.send_file.assert_any_await(image_a)
-        file_input.send_file.assert_any_await(image_b)
-
-    @pytest.mark.asyncio
-    async def test_upload_images_timeout_reports_processed_marker_count(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-        tmp_path:Path,
-    ) -> None:
-        """Timeout message should include processed count derived from hidden markers."""
-        ad_cfg, image_a, image_b = self._build_two_image_ad(base_ad_config, tmp_path)
-
-        file_input = MagicMock()
-        file_input.send_file = AsyncMock()
-
-        marker_a = self._build_marker("https://img.example/a.jpg")
-        marker_query_count = 0
-
-        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[MagicMock]:
-            nonlocal marker_query_count
-            if selector_type == By.CSS_SELECTOR and selector_value == "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)":
-                raise TimeoutError("no thumbnails")
-            if selector_type == By.CSS_SELECTOR and selector_value == "input[name^='adImages'][name$='.url']":
-                marker_query_count += 1
-                if marker_query_count == 1:
-                    return []  # baseline before upload
-                return [marker_a]
-            return []
-
-        async def await_timeout(*_:Any, **__:Any) -> None:
-            raise TimeoutError("Image upload timeout exceeded")
-
-        with (
-            pytest.raises(TimeoutError, match = r"Expected 2, found 1 processed images\.$"),
-            self._mock_upload_dependencies(test_bot, file_input, find_all_side_effect, await_timeout),
-        ):
             await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)
 
         file_input.send_file.assert_any_await(image_a)

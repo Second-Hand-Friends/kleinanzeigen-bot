@@ -884,7 +884,7 @@ class WebScrapingMixin:
                     raise ex
                 raise TimeoutError(timeout_error_message or f"Condition not met within {effective_timeout} seconds")
             remaining_timeout = max(effective_timeout - elapsed, 0.0)
-            await self.page.sleep(min(0.5, remaining_timeout))
+            await asyncio.sleep(min(0.5, remaining_timeout))
 
     async def web_check(self, selector_type:By, selector_value:str, attr:Is, *, timeout:int | float | None = None) -> bool:
         """
@@ -1231,7 +1231,7 @@ class WebScrapingMixin:
             " ... pausing for %d ms ...",
             duration,
         )
-        await self.page.sleep(duration / 1_000)
+        await asyncio.sleep(duration / 1_000)
 
     async def _navigate_paginated_ad_overview(
         self,
