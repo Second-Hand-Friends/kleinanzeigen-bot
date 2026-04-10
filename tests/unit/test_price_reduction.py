@@ -586,10 +586,10 @@ def test_fractional_min_price_is_rounded_up_with_ceiling() -> None:
 
 
 @pytest.mark.unit
-def test_apply_modify_mode_skips_when_on_update_false(
+def test_apply_modify_mode_on_update_false_leaves_base_price_when_no_prior_reductions(
     apply_auto_price_reduction:_ApplyAutoPriceReduction,
 ) -> None:
-    """MODIFY mode with on_update=false must not touch the price at all."""
+    """With no prior reductions, MODIFY + on_update=false must not start a new cycle."""
     ad_cfg = SimpleNamespace(
         price = 200,
         auto_price_reduction = _price_cfg(on_update = False, amount = 25),
