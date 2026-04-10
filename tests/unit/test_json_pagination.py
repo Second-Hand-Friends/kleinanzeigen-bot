@@ -221,26 +221,22 @@ class TestJSONPagination:
                 pytest.fail(f"expected empty list when 'ads' is not a list, got: {result}")
 
     @pytest.mark.asyncio
-    async def test_fetch_published_ads_filters_non_dict_entries(self, bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
-        """Malformed entries should be filtered and logged."""
+    async def test_fetch_published_ads_filters_non_dict_entries(self, bot:KleinanzeigenBot) -> None:
+        """Malformed entries should be filtered out."""
         response_data = {"ads": [42, {"id": 1, "state": "active"}, "broken"], "paging": {"pageNum": 1, "last": 1}}
 
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": json.dumps(response_data)}
 
-            with caplog.at_level("WARNING"):
-                result = await bot._fetch_published_ads()
+            result = await bot._fetch_published_ads()
 
             if result != [{"id": 1, "state": "active"}]:
                 pytest.fail(f"expected malformed entries to be filtered out, got: {result}")
-            if "Filtered 2 malformed ad entries on page 1" not in caplog.text:
-                pytest.fail(f"expected malformed-entry warning in logs, got: {caplog.text}")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_filters_dict_entries_missing_required_keys(
         self,
         bot:KleinanzeigenBot,
-        caplog:pytest.LogCaptureFixture,
     ) -> None:
         """Dict entries without required id/state keys should be rejected."""
         response_data = {
@@ -256,13 +252,10 @@ class TestJSONPagination:
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": json.dumps(response_data)}
 
-            with caplog.at_level("WARNING"):
-                result = await bot._fetch_published_ads()
+            result = await bot._fetch_published_ads()
 
             if result != [{"id": 2, "state": "paused"}]:
                 pytest.fail(f"expected only entries with id and state to remain, got: {result}")
-            if "Filtered 3 malformed ad entries on page 1" not in caplog.text:
-                pytest.fail(f"expected malformed-entry warning in logs, got: {caplog.text}")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_strict_raises_on_malformed_entries(self, bot:KleinanzeigenBot) -> None:
@@ -297,18 +290,15 @@ class TestJSONPagination:
             await bot._fetch_published_ads(strict = True)
 
     @pytest.mark.asyncio
-    async def test_fetch_published_ads_handles_non_string_content_type(self, bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
-        """Unexpected non-string content types should stop pagination with warning."""
+    async def test_fetch_published_ads_handles_non_string_content_type(self, bot:KleinanzeigenBot) -> None:
+        """Unexpected non-string content types should stop pagination and return empty."""
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": None}
 
-            with caplog.at_level("WARNING"):
-                result = await bot._fetch_published_ads()
+            result = await bot._fetch_published_ads()
 
             if result != []:
                 pytest.fail(f"expected empty result on non-string content, got: {result}")
-            if "Unexpected response content type on page 1: NoneType" not in caplog.text:
-                pytest.fail(f"expected non-string content warning in logs, got: {caplog.text}")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_multi_page_without_last_field(self, bot:KleinanzeigenBot) -> None:

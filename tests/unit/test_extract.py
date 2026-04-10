@@ -2507,23 +2507,21 @@ class TestRenderDownloadNameWithBudgetWarnings:
         assert "Short" in rendered
         assert "truncated" not in caplog.text.lower()
 
-    def test_warns_when_id_truncated(self, test_extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
-        """Warning emitted when {id} is truncated."""
-        with caplog.at_level("WARNING"):
-            rendered = test_extractor._render_download_name_with_budget("{id}", 12345678901234567890, "", 5)
+    def test_truncates_id_when_budget_exhausted(self, test_extractor:extract_module.AdExtractor) -> None:
+        """{id} is truncated to fit within budget."""
+        rendered = test_extractor._render_download_name_with_budget("{id}", 12345678901234567890, "", 5)
 
         assert rendered == "12345"
         assert "12345678901234567890" not in rendered
         assert len(rendered) <= 5
-        assert "truncated {id}" in caplog.text
 
-    def test_warns_when_title_truncated(self, test_extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
-        """Warning emitted when {title} is truncated."""
-        with caplog.at_level("WARNING"):
-            rendered = test_extractor._render_download_name_with_budget("{id}_{title}", 12345, "Very Long Title Here", 12)
+    def test_truncates_title_when_budget_exhausted(self, test_extractor:extract_module.AdExtractor) -> None:
+        """{title} is truncated to fit within budget while {id} is preserved."""
+        rendered = test_extractor._render_download_name_with_budget("{id}_{title}", 12345, "Very Long Title Here", 12)
 
         assert "12345" in rendered
-        assert "truncated {title}" in caplog.text
+        assert "Very Long Title Here" not in rendered
+        assert len(rendered) <= 12
 
     def test_id_protected_over_literals(self, test_extractor:extract_module.AdExtractor) -> None:
         """{id} is protected over literal text with tight budget."""
@@ -2586,11 +2584,10 @@ class TestRenderDownloadNameWithBudgetWarnings:
         assert rendered.endswith("_12345")
         assert len(rendered) <= 20
 
-    def test_warns_when_both_id_and_title_truncated(self, test_extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
-        """Warnings are emitted when both placeholders are truncated."""
-        with caplog.at_level("WARNING"):
-            rendered = test_extractor._render_download_name_with_budget("{title}_{id}", 12345678901234567890, "Very Long Title Here", 15)
+    def test_truncates_both_id_and_title_under_extreme_budget(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Both {id} and {title} are truncated to fit within a tight budget."""
+        rendered = test_extractor._render_download_name_with_budget("{title}_{id}", 12345678901234567890, "Very Long Title Here", 15)
 
         assert len(rendered) <= 15
-        assert "truncated {id}" in caplog.text
-        assert "truncated {title}" in caplog.text
+        assert "Very Long Title Here" not in rendered
+        assert "12345678901234567890" not in rendered

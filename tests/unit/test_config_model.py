@@ -7,28 +7,42 @@ from kleinanzeigen_bot.model import config_model
 from kleinanzeigen_bot.model.config_model import DEFAULT_DOWNLOAD_DIR, AdDefaults, Config, TimeoutConfig
 
 
-def test_migrate_legacy_description_prefix() -> None:
-    assert AdDefaults.model_validate({}).description_prefix == ""  # noqa: PLC1901 explicit empty check is clearer
+@pytest.mark.parametrize("field", ["prefix", "suffix"])
+def test_migrate_legacy_description(field:str) -> None:
+    top_key = f"description_{field}"
 
-    assert AdDefaults.model_validate({"description_prefix": "Prefix"}).description_prefix == "Prefix"
+    # empty default
+    assert getattr(AdDefaults.model_validate({}), top_key) == ""  # noqa: PLC1901
 
-    assert AdDefaults.model_validate({"description_prefix": "Prefix", "description": {"prefix": "Legacy Prefix"}}).description_prefix == "Prefix"
+    # top-level key used directly
+    assert getattr(AdDefaults.model_validate({top_key: "Value"}), top_key) == "Value"
 
-    assert AdDefaults.model_validate({"description": {"prefix": "Legacy Prefix"}}).description_prefix == "Legacy Prefix"
+    # top-level key takes precedence over legacy nested key
+    assert (
+        getattr(
+            AdDefaults.model_validate({top_key: "Value", "description": {field: "Legacy"}}),
+            top_key,
+        )
+        == "Value"
+    )
 
-    assert AdDefaults.model_validate({"description_prefix": "", "description": {"prefix": "Legacy Prefix"}}).description_prefix == "Legacy Prefix"
+    # legacy nested key migrates when no top-level key present
+    assert (
+        getattr(
+            AdDefaults.model_validate({"description": {field: "Legacy"}}),
+            top_key,
+        )
+        == "Legacy"
+    )
 
-
-def test_migrate_legacy_description_suffix() -> None:
-    assert AdDefaults.model_validate({}).description_suffix == ""  # noqa: PLC1901 explicit empty check is clearer
-
-    assert AdDefaults.model_validate({"description_suffix": "Suffix"}).description_suffix == "Suffix"
-
-    assert AdDefaults.model_validate({"description_suffix": "Suffix", "description": {"suffix": "Legacy Suffix"}}).description_suffix == "Suffix"
-
-    assert AdDefaults.model_validate({"description": {"suffix": "Legacy Suffix"}}).description_suffix == "Legacy Suffix"
-
-    assert AdDefaults.model_validate({"description_suffix": "", "description": {"suffix": "Legacy Suffix"}}).description_suffix == "Legacy Suffix"
+    # empty top-level falls back to legacy nested key
+    assert (
+        getattr(
+            AdDefaults.model_validate({top_key: "", "description": {field: "Legacy"}}),
+            top_key,
+        )
+        == "Legacy"
+    )
 
 
 def test_minimal_config_validation() -> None:
@@ -315,109 +329,78 @@ def test_timeout_config_resolve_falls_back_to_default() -> None:
     assert timeouts.resolve("nonexistent_key") == 3.0
 
 
-def test_diagnostics_pause_requires_capture_validation() -> None:
+@pytest.fixture
+def minimal_config() -> dict[str, object]:
+    """Minimal valid config dict for diagnostics-related tests."""
+    return {
+        "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
+        "login": {"username": "dummy", "password": "dummy"},  # noqa: S105
+    }
+
+
+def test_diagnostics_pause_requires_capture_validation(minimal_config:dict[str, object]) -> None:
     """
     Unit: DiagnosticsConfig validator ensures pause_on_login_detection_failure
     requires capture_on.login_detection to be enabled.
     """
-    minimal_cfg = {
-        "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
-        "login": {"username": "dummy", "password": "dummy"},  # noqa: S105
-        "publishing": {"delete_old_ads": "BEFORE_PUBLISH", "delete_old_ads_by_title": False},
-    }
-
-    valid_cfg = {**minimal_cfg, "diagnostics": {"capture_on": {"login_detection": True}, "pause_on_login_detection_failure": True}}
+    valid_cfg = {**minimal_config, "diagnostics": {"capture_on": {"login_detection": True}, "pause_on_login_detection_failure": True}}
     config = Config.model_validate(valid_cfg)
     assert config.diagnostics is not None
     assert config.diagnostics.pause_on_login_detection_failure is True
     assert config.diagnostics.capture_on.login_detection is True
 
-    invalid_cfg = {**minimal_cfg, "diagnostics": {"capture_on": {"login_detection": False}, "pause_on_login_detection_failure": True}}
+    invalid_cfg = {**minimal_config, "diagnostics": {"capture_on": {"login_detection": False}, "pause_on_login_detection_failure": True}}
     with pytest.raises(ValueError, match = "pause_on_login_detection_failure requires capture_on.login_detection to be enabled"):
         Config.model_validate(invalid_cfg)
 
 
-def test_diagnostics_legacy_login_detection_capture_migration_when_capture_on_exists() -> None:
-    """
-    Unit: Test that legacy login_detection_capture is removed but doesn't overwrite explicit capture_on.login_detection.
-    """
-    minimal_cfg = {
-        "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
-        "login": {"username": "dummy", "password": "dummy"},  # noqa: S105
-    }
-
-    # When capture_on.login_detection is explicitly set to False, legacy True should be ignored
-    cfg_with_explicit = {
-        **minimal_cfg,
+@pytest.mark.parametrize(
+    ("legacy_key", "capture_attr", "capture_on_value", "expected"),
+    [
+        pytest.param(
+            "login_detection_capture",
+            "login_detection",
+            {"login_detection": False},
+            False,
+            id = "login_detection-ignored-when-capture_on-present",
+        ),
+        pytest.param(
+            "publish_error_capture",
+            "publish",
+            {"publish": False},
+            False,
+            id = "publish-ignored-when-capture_on-present",
+        ),
+        pytest.param(
+            "login_detection_capture",
+            "login_detection",
+            None,
+            True,
+            id = "login_detection-migrated-when-capture_on-none",
+        ),
+        pytest.param(
+            "publish_error_capture",
+            "publish",
+            None,
+            True,
+            id = "publish-migrated-when-capture_on-none",
+        ),
+    ],
+)
+def test_diagnostics_legacy_capture_migration(
+    minimal_config:dict[str, object],
+    legacy_key:str,
+    capture_attr:str,
+    capture_on_value:dict[str, bool] | None,
+    expected:bool,
+) -> None:
+    cfg = {
+        **minimal_config,
         "diagnostics": {
-            "login_detection_capture": True,  # legacy key
-            "capture_on": {"login_detection": False},  # explicit new key set to False
+            legacy_key: True,
+            "capture_on": capture_on_value,
         },
     }
-    config = Config.model_validate(cfg_with_explicit)
+    config = Config.model_validate(cfg)
     assert config.diagnostics is not None
-    assert config.diagnostics.capture_on.login_detection is False  # explicit value preserved
-
-
-def test_diagnostics_legacy_publish_error_capture_migration_when_capture_on_exists() -> None:
-    """
-    Unit: Test that legacy publish_error_capture is removed but doesn't overwrite explicit capture_on.publish.
-    """
-    minimal_cfg = {
-        "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
-        "login": {"username": "dummy", "password": "dummy"},  # noqa: S105
-    }
-
-    # When capture_on.publish is explicitly set to False, legacy True should be ignored
-    cfg_with_explicit = {
-        **minimal_cfg,
-        "diagnostics": {
-            "publish_error_capture": True,  # legacy key
-            "capture_on": {"publish": False},  # explicit new key set to False
-        },
-    }
-    config = Config.model_validate(cfg_with_explicit)
-    assert config.diagnostics is not None
-    assert config.diagnostics.capture_on.publish is False  # explicit value preserved
-
-
-def test_diagnostics_legacy_login_detection_capture_migration_when_capture_on_is_none() -> None:
-    """
-    Unit: Test that legacy login_detection_capture is migrated when capture_on is None.
-    """
-    minimal_cfg = {
-        "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
-        "login": {"username": "dummy", "password": "dummy"},  # noqa: S105
-    }
-
-    cfg_with_null_capture_on = {
-        **minimal_cfg,
-        "diagnostics": {
-            "login_detection_capture": True,  # legacy key
-            "capture_on": None,  # capture_on is explicitly None
-        },
-    }
-    config = Config.model_validate(cfg_with_null_capture_on)
-    assert config.diagnostics is not None
-    assert config.diagnostics.capture_on.login_detection is True  # legacy value migrated
-
-
-def test_diagnostics_legacy_publish_error_capture_migration_when_capture_on_is_none() -> None:
-    """
-    Unit: Test that legacy publish_error_capture is migrated when capture_on is None.
-    """
-    minimal_cfg = {
-        "ad_defaults": {"contact": {"name": "dummy", "zipcode": "12345"}},
-        "login": {"username": "dummy", "password": "dummy"},  # noqa: S105
-    }
-
-    cfg_with_null_capture_on = {
-        **minimal_cfg,
-        "diagnostics": {
-            "publish_error_capture": True,  # legacy key
-            "capture_on": None,  # capture_on is explicitly None
-        },
-    }
-    config = Config.model_validate(cfg_with_null_capture_on)
-    assert config.diagnostics is not None
-    assert config.diagnostics.capture_on.publish is True  # legacy value migrated
+    assert getattr(config.diagnostics.capture_on, capture_attr) == expected

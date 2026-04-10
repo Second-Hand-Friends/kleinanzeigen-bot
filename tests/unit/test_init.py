@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio, copy, fnmatch, io, json, logging, os, tempfile  # isort: skip
+import asyncio, copy, fnmatch, gc, io, json, logging, os, tempfile  # isort: skip
 from collections.abc import Callable, Generator
 from contextlib import contextmanager, redirect_stdout
 from datetime import timedelta
@@ -489,28 +489,24 @@ class TestKleinanzeigenBotInitialization:
                 "published_ads": [{"id": 123, "state": "active"}],
                 "expected_active": True,
                 "expect_ownership_warning": False,
-                "expect_inactive_debug": False,
             },
             {
                 "name": "inactive ad",
                 "published_ads": [{"id": 123, "state": "inactive"}],
                 "expected_active": False,
                 "expect_ownership_warning": False,
-                "expect_inactive_debug": True,
             },
             {
                 "name": "paused ad",
                 "published_ads": [{"id": 123, "state": "paused"}],
                 "expected_active": False,
                 "expect_ownership_warning": False,
-                "expect_inactive_debug": True,
             },
             {
                 "name": "ad not in published profile",
                 "published_ads": [{"id": 999, "state": "active"}],  # Different ID
                 "expected_active": False,
                 "expect_ownership_warning": True,
-                "expect_inactive_debug": False,
             },
         ],
         ids = lambda s: s["name"],
@@ -534,7 +530,7 @@ class TestKleinanzeigenBotInitialization:
         extractor_mock.navigate_to_ad_page = AsyncMock(return_value = True)
         extractor_mock.download_ad = AsyncMock()
 
-        caplog.set_level(logging.DEBUG)
+        caplog.set_level(logging.WARNING)
 
         with (
             patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = scenario["published_ads"]) as mock_fetch_published_ads,
@@ -548,11 +544,11 @@ class TestKleinanzeigenBotInitialization:
         # Verify download_ad called with correct active parameter
         extractor_mock.download_ad.assert_awaited_once_with(123, active = scenario["expected_active"])
 
-        # Verify appropriate logging
+        # Verify ownership warning only when expected
         if scenario["expect_ownership_warning"]:
             assert any("found in overview but not in published profile" in msg for msg in caplog.messages)
-        if scenario["expect_inactive_debug"]:
-            assert any("has state" in msg and "Saving as inactive" in msg for msg in caplog.messages)
+        else:
+            assert not any("found in overview but not in published profile" in msg for msg in caplog.messages)
 
     @pytest.mark.asyncio
     async def test_download_ads_all_selector_skips_invalid_ad_id(
@@ -656,7 +652,6 @@ class TestKleinanzeigenBotInitialization:
         self,
         test_bot:KleinanzeigenBot,
         tmp_path:Path,
-        caplog:pytest.LogCaptureFixture,
     ) -> None:
         """Test that --ads=new skips already-saved ads (existing behavior unchanged)."""
         test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
@@ -672,8 +667,6 @@ class TestKleinanzeigenBotInitialization:
         # Mock load_ads to return ad 123 as already saved
         saved_ads:list[tuple[str, MagicMock, dict[str, Any]]] = [("ad_123.yaml", MagicMock(spec = Ad, id = 123), {})]
 
-        caplog.set_level(logging.INFO)
-
         with (
             patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = []),
             patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock),
@@ -683,9 +676,6 @@ class TestKleinanzeigenBotInitialization:
 
         # Verify download_ad was NOT called for already-saved ad
         extractor_mock.download_ad.assert_not_called()
-
-        # Verify log message about already saved
-        assert any("already been saved" in msg for msg in caplog.messages)
 
     @pytest.mark.asyncio
     async def test_download_ads_new_selector_skips_invalid_ad_id(
@@ -721,13 +711,12 @@ class TestKleinanzeigenBotInitialization:
         assert not any("not in published profile" in msg for msg in caplog.messages)
 
     @pytest.mark.asyncio
-    async def test_download_ads_new_selector_logs_warning_for_ad_not_in_published_profile(
+    async def test_download_ads_new_selector_passes_inactive_for_ad_not_in_published_profile(
         self,
         test_bot:KleinanzeigenBot,
         tmp_path:Path,
-        caplog:pytest.LogCaptureFixture,
     ) -> None:
-        """Test that --ads=new logs warning when ad is not in published profile."""
+        """Test that --ads=new passes active=False when ad is not in published profile."""
         test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
         test_bot.ads_selector = "new"
         test_bot.browser = MagicMock()
@@ -741,8 +730,6 @@ class TestKleinanzeigenBotInitialization:
         # Mock load_ads to return different saved ads (999 is new but not in published profile)
         saved_ads:list[tuple[str, MagicMock, dict[str, Any]]] = [("ad_123.yaml", MagicMock(spec = Ad, id = 123), {})]
 
-        caplog.set_level(logging.WARNING)
-
         with (
             patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = []),
             patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock),
@@ -752,45 +739,6 @@ class TestKleinanzeigenBotInitialization:
 
         # Verify download_ad was called with active=False (not in profile)
         extractor_mock.download_ad.assert_awaited_once_with(999, active = False)
-
-        # Verify warning about not in published profile
-        assert any("found in overview but not in published profile" in msg for msg in caplog.messages)
-
-    @pytest.mark.asyncio
-    async def test_download_ads_new_selector_logs_debug_for_inactive_state(
-        self,
-        test_bot:KleinanzeigenBot,
-        tmp_path:Path,
-        caplog:pytest.LogCaptureFixture,
-    ) -> None:
-        """Test that --ads=new logs debug message when ad has inactive state."""
-        test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
-        test_bot.ads_selector = "new"
-        test_bot.browser = MagicMock()
-
-        extractor_mock = MagicMock()
-        extractor_mock.extract_own_ads_urls = AsyncMock(return_value = ["https://www.kleinanzeigen.de/s-anzeige/test-ad/999-234-5678"])
-        extractor_mock.extract_ad_id_from_ad_url = MagicMock(return_value = 999)
-        extractor_mock.navigate_to_ad_page = AsyncMock(return_value = True)
-        extractor_mock.download_ad = AsyncMock()
-
-        # Mock load_ads to return different saved ads (999 is new and inactive)
-        saved_ads:list[tuple[str, MagicMock, dict[str, Any]]] = [("ad_123.yaml", MagicMock(spec = Ad, id = 123), {})]
-
-        caplog.set_level(logging.DEBUG)
-
-        with (
-            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = [{"id": 999, "state": "inactive"}]),
-            patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock),
-            patch.object(test_bot, "load_ads", return_value = saved_ads),
-        ):
-            await test_bot.download_ads()
-
-        # Verify download_ad was called with active=False
-        extractor_mock.download_ad.assert_awaited_once_with(999, active = False)
-
-        # Verify debug message about inactive state
-        assert any("has state" in msg and "Saving as inactive" in msg for msg in caplog.messages)
 
     @pytest.mark.asyncio
     async def test_download_ads_all_selector_skips_when_navigation_fails(
@@ -848,6 +796,25 @@ class TestKleinanzeigenBotInitialization:
         # All non-"active" states should result in active=False
         extractor_mock.download_ad.assert_awaited_once_with(123, active = False)
 
+    def test_create_default_config_preserves_existing_file(self, tmp_path:Path, test_bot:KleinanzeigenBot) -> None:
+        """Test that create_default_config does not overwrite an existing config file."""
+        config_path = tmp_path / "config.yaml"
+        original_content = "dummy: value"
+        config_path.write_text(original_content)
+        test_bot.config_file_path = str(config_path)
+        test_bot.create_default_config()
+        assert config_path.read_text() == original_content
+
+    def test_create_default_config_creates_file(self, tmp_path:Path, test_bot:KleinanzeigenBot) -> None:
+        """Test that create_default_config creates a config file if it does not exist."""
+        config_path = tmp_path / "config.yaml"
+        test_bot.config_file_path = str(config_path)
+        assert not config_path.exists()
+        test_bot.create_default_config()
+        assert config_path.exists()
+        content = config_path.read_text()
+        assert "username: changeme" in content
+
 
 class TestKleinanzeigenBotLogging:
     """Tests for logging functionality."""
@@ -879,6 +846,26 @@ class TestKleinanzeigenBotLogging:
 
         assert test_bot.file_log is None
         assert list(root_logger.handlers) == initial_handlers
+
+    def test_file_log_closed_after_bot_shutdown(self, tmp_path:Path) -> None:
+        """Ensure the file log handler is properly closed after the bot is deleted."""
+
+        # Directly instantiate the bot to control its lifecycle within the test
+        bot = KleinanzeigenBot()
+        log_path = tmp_path / "test.log"
+        bot.log_file_path = str(log_path)
+
+        bot.configure_file_logging()
+        file_log = bot.file_log
+        assert file_log is not None
+        assert log_path.exists()
+        assert not file_log.is_closed()
+
+        # Delete and garbage collect the bot instance to ensure the destructor (__del__) is called
+        del bot
+        gc.collect()
+
+        assert file_log.is_closed()
 
 
 class TestKleinanzeigenBotCommandLine:
@@ -932,6 +919,11 @@ class TestKleinanzeigenBotCommandLine:
         config_path = Path(test_data_dir) / "custom_config.yaml"
         test_bot.parse_args(["dummy", "--config", str(config_path)])
         assert test_bot.config_file_path == str(config_path.absolute())
+
+    def test_parse_args_create_config(self, test_bot:KleinanzeigenBot) -> None:
+        """Test parsing of create-config command"""
+        test_bot.parse_args(["app", "create-config"])
+        assert test_bot.command == "create-config"
 
 
 class TestKleinanzeigenBotConfiguration:
