@@ -64,6 +64,9 @@ ad_defaults:
     # number of days to wait after publication before applying automatic price reductions
     delay_days: 0
 
+    # also apply automatic price reduction during update runs (MODIFY mode). delay_days applies, delay_reposts is ignored
+    on_update: false
+
   # shipping method for the item
   # Examples (choose one):
   #   • PICKUP

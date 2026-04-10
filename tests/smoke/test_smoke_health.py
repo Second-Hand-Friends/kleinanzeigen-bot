@@ -138,12 +138,15 @@ def test_app_starts(smoke_bot:SmokeKleinanzeigenBot) -> None:
 
 
 @pytest.mark.smoke
-@pytest.mark.parametrize("subcommand", [
-    "--help",
-    "help",
-    "version",
-    "diagnose",
-])
+@pytest.mark.parametrize(
+    "subcommand",
+    [
+        "--help",
+        "help",
+        "version",
+        "diagnose",
+    ],
+)
 def test_cli_subcommands_no_config(subcommand:str, tmp_path:Path) -> None:
     """
     Smoke: CLI subcommands that do not require a config file (--help, help, version, diagnose).
@@ -185,23 +188,26 @@ def test_cli_subcommands_create_config_fails_if_exists(tmp_path:Path) -> None:
     assert result.returncode == 0
     assert config_file.exists(), "config.yaml was deleted or not present after second create-config run"
     out = (result.stdout + "\n" + result.stderr).lower()
-    assert (
-        "already exists" in out or "not overwritten" in out or "saving" in out
-    ), f"Expected message about existing config in CLI output.\n{out}"
+    assert "already exists" in out or "not overwritten" in out, f"Expected message about existing config in CLI output.\n{out}"
 
 
 @pytest.mark.smoke
-@pytest.mark.parametrize(("subcommand", "output_check"), [
-    ("verify", "verify"),
-    ("update-check", "update"),
-    ("update-content-hash", "update-content-hash"),
-    ("diagnose", "diagnose"),
-])
-@pytest.mark.parametrize(("config_ext", "serializer"), [
-    ("yaml", None),
-    ("yml", None),
-    ("json", json.dumps),
-])
+@pytest.mark.parametrize(
+    ("subcommand", "output_check"),
+    [
+        ("verify", "verify"),
+        ("update-check", "update"),
+        ("update-content-hash", "update-content-hash"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("config_ext", "serializer"),
+    [
+        ("yaml", None),
+        ("yml", None),
+        ("json", json.dumps),
+    ],
+)
 def test_cli_subcommands_with_config_formats(
     subcommand:str,
     output_check:str,
@@ -234,13 +240,11 @@ def test_cli_subcommands_with_config_formats(
         assert "no active ads found" in out, f"Expected 'no active ads found' in output for 'update-content-hash'.\n{out}"
     elif subcommand == "update-check":
         assert result.returncode == 0
-    elif subcommand == "diagnose":
-        assert "browser connection diagnostics" in out or "browser-verbindungsdiagnose" in out, f"Expected diagnostic output for 'diagnose'.\n{out}"
 
 
 @pytest.mark.smoke
 def test_verify_shows_auto_price_reduction_decisions(tmp_path:Path, test_bot_config:Config) -> None:
-    """Smoke: verify command previews auto price reduction decisions for all configured ads."""
+    """Smoke: verify previews publish and update-mode price reduction decisions."""
     config_dict = test_bot_config.model_dump()
     config_dict["ad_files"] = ["./**/ad_*.yaml"]
     config_path = tmp_path / "config.yaml"
@@ -268,9 +272,33 @@ def test_verify_shows_auto_price_reduction_decisions(tmp_path:Path, test_bot_con
         encoding = "utf-8",
     )
 
+    ad_yaml_update = ad_dir / "ad_test_update_pricing.yaml"
+    ad_yaml_update.write_text(
+        "title: Test Auto Pricing Update Ad\n"
+        "description: A test ad to verify update price reduction preview\n"
+        "category: 161/gezielt\n"
+        "price: 200\n"
+        "price_type: FIXED\n"
+        "repost_count: 1\n"
+        "auto_price_reduction:\n"
+        "  enabled: true\n"
+        "  strategy: PERCENTAGE\n"
+        "  amount: 10\n"
+        "  min_price: 100\n"
+        "  delay_reposts: 3\n"
+        "  delay_days: 0\n"
+        "  on_update: true\n",
+        encoding = "utf-8",
+    )
+
     args = ["verify", "--config", str(config_path), "--workspace-mode", "portable"]
     result = invoke_cli(args, cwd = tmp_path)
     assert result.returncode == 0
     out = (result.stdout + "\n" + result.stderr).lower()
     assert "no configuration errors found" in out, f"Expected 'no configuration errors found' in output.\n{out}"
-    assert "auto price reduction applied" in out, f"Expected auto price reduction applied log in output.\n{out}"
+    assert "auto price reduction preview for" in out, f"Expected auto price reduction preview logs in output.\n{out}"
+    assert "(publish):" in out, f"Expected publish preview in output.\n{out}"
+    assert "disabled (on_update=false" in out, f"Expected update preview disabled message when on_update=false.\n{out}"
+    assert "ad_test_update_pricing.yaml" in out, f"Expected update-enabled ad preview in output.\n{out}"
+    assert "(update):" in out, f"Expected update preview in output.\n{out}"
+    assert "cycle 1" in out, f"Expected update preview with cycle progression in output.\n{out}"

@@ -210,7 +210,7 @@ Usage: kleinanzeigen-bot COMMAND [OPTIONS]
 
 Commands:
   publish  - (re-)publishes ads
-  verify   - verifies the configuration files
+  verify   - verifies the configuration files and previews automatic price reduction outcomes
   delete   - deletes ads
   update   - updates published ads
   download - downloads one or multiple ads

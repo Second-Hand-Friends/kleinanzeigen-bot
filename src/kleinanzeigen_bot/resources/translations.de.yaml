@@ -188,15 +188,19 @@ kleinanzeigen_bot/__init__.py:
   apply_auto_price_reduction:
     "Auto price reduction is enabled for [%s] but no price is configured.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber es wurde kein Preis konfiguriert."
     "Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber min_price entspricht dem Preis (%s) - es werden keine Reduktionen auftreten."
-    "Auto price reduction applied: %s -> %s after %s reduction cycles": "Automatische Preisreduzierung angewendet: %s -> %s nach %s Reduktionszyklen"
-    "Auto price reduction kept price %s after attempting %s reduction cycles": "Automatische Preisreduzierung hat Preis %s beibehalten nach dem Versuch von %s Reduktionszyklen"
-  _repost_cycle_ready:
     "Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)": "Automatische Preisreduzierung für [%s] verzögert: Warte %s weitere erneute Veröffentlichungen (abgeschlossen %s, angewendet %s Reduktionen)"
     "Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts": "Automatische Preisreduzierung für [%s] bereits angewendet: %s Reduktionen entsprechen %s berechtigten erneuten Veröffentlichungen"
-  _day_delay_elapsed:
     "Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)": "Automatische Preisreduzierung für [%s] verzögert: Warte %s Tage (vergangen %s)"
     "Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing": "Automatische Preisreduzierung für [%s] verzögert: Warte %s Tage, aber Zeitstempel der Veröffentlichung fehlt"
+    "Auto price reduction applied: %s -> %s after %s reduction cycles": "Automatische Preisreduzierung angewendet: %s -> %s nach %s Reduktionszyklen"
+    "Auto price reduction kept price %s after attempting %s reduction cycles": "Automatische Preisreduzierung hat Preis %s beibehalten nach dem Versuch von %s Reduktionszyklen"
 
+  _log_auto_price_reduction_preview:
+    "Auto price reduction preview for [%s] (%s): disabled": "Vorschau automatische Preisreduzierung für [%s] (%s): deaktiviert"
+    "Auto price reduction preview for [%s] (%s): missing price": "Vorschau automatische Preisreduzierung für [%s] (%s): Preis fehlt"
+    "Auto price reduction preview for [%s] (%s): disabled (on_update=false, effective_price=%s)": "Vorschau automatische Preisreduzierung für [%s] (%s): deaktiviert (on_update=false, effektiver Preis=%s)"
+    "Auto price reduction preview for [%s] (%s): %s -> %s (cycle %s)": "Vorschau automatische Preisreduzierung für [%s] (%s): %s -> %s (Zyklus %s)"
+    "Auto price reduction preview for [%s] (%s): no new reduction (effective_price=%s, reason=%s)": "Vorschau automatische Preisreduzierung für [%s] (%s): keine neue Reduktion (effektiver Preis=%s, Grund=%s)"
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
     "Updating ad '%s'...": "Aktualisiere Anzeige '%s'..."

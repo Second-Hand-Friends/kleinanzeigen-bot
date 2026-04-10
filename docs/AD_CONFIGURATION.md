@@ -101,9 +101,9 @@ price_type:  # one of: FIXED, NEGOTIABLE, GIVE_AWAY (default: NEGOTIABLE)
 
 ### Automatic Price Reduction
 
-When `auto_price_reduction.enabled` is set to `true`, the bot lowers the configured `price` every time the ad is reposted.
+When `auto_price_reduction.enabled` is set to `true`, the bot evaluates whether a price reduction is due each time the ad is republished via the `publish` command — the price is only lowered when all eligibility gates (repost cycle, day delay, minimum floor) are satisfied.
 
-**Important:** Price reductions only apply when using the `publish` command (which deletes the old ad and creates a new one). Using the `update` command to modify ad content does NOT trigger price reductions or increment `repost_count`.
+**Important:** By default, price reductions only apply when using the `publish` command (which deletes the old ad and creates a new one). Using the `update` command does NOT advance the reduction cycle. Set `on_update: true` (see below) to also apply reductions during update runs. Regardless of the `on_update` setting, the effective reduced price is always restored before submitting an update — this prevents previously applied reductions from being silently lost.
 
 `repost_count` is tracked for every ad (and persisted inside the corresponding `ad_*.yaml`) so reductions continue across runs.
 
@@ -111,7 +111,7 @@ When `auto_price_reduction.enabled` is set to `true`, the bot lowers the configu
 
 **Note:** `repost_count` and price reduction counters are only incremented and persisted after a successful publish. Failed publish attempts do not advance the counters.
 
-When automatic price reduction is enabled, each `publish` run logs one clear INFO message per ad summarizing the outcome—whether the price was reduced, kept, or the reduction was delayed (and why). The `verify` command also previews these outcomes for all configured ads so you can validate your pricing configuration without triggering a publish cycle. Ads without `auto_price_reduction` configured are silently skipped at default log level.
+When automatic price reduction is enabled, each `publish` (and optionally `update`) run logs one clear INFO message per ad summarizing the outcome—whether the price was reduced, kept, or the reduction was delayed (and why). The `verify` command also previews these outcomes for all configured ads so you can validate your pricing configuration without triggering a publish cycle. Ads without `auto_price_reduction` configured are silently skipped at default log level.
 
 If you run with `-v` / `--verbose`, the bot additionally logs structured decision details (repost counts, cycle state, day delay, reference timestamps) and the full cycle-by-cycle calculation trace (base price, reduction value, rounded step result, and floor clamp).
 
@@ -125,6 +125,7 @@ auto_price_reduction:
               # (use 0 for no lower bound, prefer whole euros for predictability)
   delay_reposts:  # Number of reposts to wait before first reduction (default: 0)
   delay_days:     # Number of days to wait after publication before reductions (default: 0)
+  on_update:      # Also apply price reductions during the update command (default: false)
 ```
 
 **Note:** All prices are rounded to whole euros after each reduction step.
@@ -173,9 +174,51 @@ Combined timeline example: with `republication_interval: 3`, `delay_reposts: 1`,
 - day 4: second publish, still waiting for repost delay
 - day 8: third publish, first reduction can apply
 
+#### Update-Mode Price Reductions (`on_update`)
+
+By default (`on_update: false`), price reductions only apply during `publish` (full republish). Set `on_update: true` to also apply reductions when running the `update` command (in-place ad modification).
+
+**Update-mode semantics differ from publish-mode in two ways:**
+
+- `delay_days` applies normally — the bot still checks that enough days have elapsed since the last publication before reducing.
+- `delay_reposts` is **ignored** — update-mode reductions always evaluate based on the current `price_reduction_count` regardless of `repost_count`, because `update` does not increment `repost_count`.
+
+This means an ad with `delay_reposts: 2` that has only been published once can still receive a price reduction via `update` if `on_update: true` and `delay_days` has elapsed.
+
+#### Restore-First Behavior
+
+When `on_update` is enabled, the reduced effective price is preserved across mixed `publish`/`update` runs:
+
+1. The ad file keeps the configured base `price`.
+2. The bot persists `price_reduction_count` after successful runs and recalculates the effective reduced price from `price` + `price_reduction_count` on each run.
+3. If you manually edit the `price` field in the ad file, the next run uses the new value as the base for recalculation.
+
+This ensures price reductions accumulate correctly regardless of whether you use `publish`, `update`, or both.
+
+#### Verify Command Preview
+
+The `verify` command previews pricing outcomes for both modes:
+
+- **Publish preview**: Always shown when `auto_price_reduction.enabled` is `true`. Shows the effective price after applying reductions based on the current `repost_count`, `price_reduction_count`, and delay settings.
+- **Update preview**: Always shown when `auto_price_reduction.enabled` is `true`. Reports the update-mode outcome: if `on_update` is `true`, it shows the reduction result; if `on_update` is `false` (default), it reports that update-mode reductions are disabled and shows the restored effective price (no new cycle).
+
+```yaml
+# Example: enable reductions for both publish and update
+auto_price_reduction:
+  enabled: true
+  strategy: PERCENTAGE
+  amount: 10
+  min_price: 90
+  delay_reposts: 0
+  delay_days: 7
+  on_update: true
+```
+
+With this configuration, the price is reduced on every `publish` and also on `update` runs, as long as at least 7 days have passed since the last publication.
+
 Set `auto_price_reduction.enabled: false` (or omit the entire `auto_price_reduction` section) to keep the existing behavior—prices stay fixed and `repost_count` only acts as tracked metadata for future changes.
 
-You can configure `auto_price_reduction` once under `ad_defaults` in `config.yaml`. The `min_price` can be set there or overridden per ad file as needed.
+You can configure `auto_price_reduction` once under `ad_defaults` in `config.yaml`. The `min_price` and `on_update` can be set there or overridden per ad file as needed.
 
 ### Special Attributes
 
@@ -278,7 +321,10 @@ created_on:  # ISO timestamp when the ad was first published
 updated_on:  # ISO timestamp when the ad was last published
 content_hash:  # Hash of the ad content, used to detect changes
 repost_count:  # How often the ad has been (re)published; used for automatic price reductions
+price_reduction_count:  # Auto-managed reduction cycle counter (starts at 0); used with price to recompute effective reduced price
 ```
+
+`price_reduction_count` is maintained by the bot after successful runs and should not be edited manually.
 
 ## Complete Example
 
@@ -307,6 +353,7 @@ auto_price_reduction:
   min_price: 90
   delay_reposts: 0
   delay_days: 0
+  on_update: false
 
 shipping_type: SHIPPING
 shipping_options:
@@ -338,7 +385,7 @@ republication_interval: 7
 ## Troubleshooting
 
 - **Schema validation errors**: Run `kleinanzeigen-bot verify` (binary) or `pdm run app verify` (source) to see which fields fail validation.
-- **Price reduction not applying**: Confirm `auto_price_reduction.enabled` is `true`, `min_price` is set, and you are using `publish` (not `update`). Run `kleinanzeigen-bot verify` to preview outcomes, or add `-v` for detailed decision data including repost/day-delay state. Remember ad-level values override `ad_defaults`.
+- **Price reduction not applying**: Confirm `auto_price_reduction.enabled` is `true`, `min_price` is set, and you are using `publish` (not `update`, unless `on_update: true`). Run `kleinanzeigen-bot verify` to preview outcomes, or add `-v` for detailed decision data including repost/day-delay state. Remember ad-level values override `ad_defaults`.
 - **Shipping configuration issues**: Use `shipping_type: SHIPPING` when setting `shipping_costs` or `shipping_options`, and pick options from a single size group (S/M/L).
 - **Category not found**: Verify the category name or ID and check any custom mappings in `config.yaml`.
 - **File naming/prefix mismatch**: Ensure ad files match your `ad_files` glob and prefix (default `ad_`).

@@ -138,69 +138,6 @@ class ResolvedAdState(NamedTuple):
     owned:bool
 
 
-def _repost_cycle_ready(
-    ad_cfg:Ad,
-    ad_file_relative:str,
-    repost_state:tuple[int, int, int, int] | None = None,
-) -> bool:
-    """
-    Check if the repost cycle delay has been satisfied.
-
-    :param ad_cfg: The ad configuration
-    :param ad_file_relative: Relative path to the ad file for logging
-    :param repost_state: Optional precomputed repost-delay state tuple
-    :return: True if ready to apply price reduction, False otherwise
-    """
-    total_reposts, delay_reposts, applied_cycles, eligible_cycles = repost_state or _repost_delay_state(ad_cfg)
-
-    if total_reposts <= delay_reposts:
-        remaining = (delay_reposts + 1) - total_reposts
-        LOG.info(
-            "Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)",
-            ad_file_relative,
-            max(remaining, 1),  # Clamp to 1 to avoid showing "0 more reposts" when at threshold
-            total_reposts,
-            applied_cycles,
-        )
-        return False
-
-    if eligible_cycles <= applied_cycles:
-        LOG.info("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts", ad_file_relative, applied_cycles, eligible_cycles)
-        return False
-
-    return True
-
-
-def _day_delay_elapsed(
-    ad_cfg:Ad,
-    ad_file_relative:str,
-    day_delay_state:tuple[bool, int | None, datetime | None] | None = None,
-) -> bool:
-    """
-    Check if the day delay has elapsed since the ad was last published.
-
-    :param ad_cfg: The ad configuration
-    :param ad_file_relative: Relative path to the ad file for logging
-    :param day_delay_state: Optional precomputed day-delay state tuple
-    :return: True if the delay has elapsed, False otherwise
-    """
-    delay_days = ad_cfg.auto_price_reduction.delay_days
-    ready, elapsed_days, reference = day_delay_state or _day_delay_state(ad_cfg)
-
-    if delay_days == 0:
-        return True
-
-    if not reference:
-        LOG.info("Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing", ad_file_relative, delay_days)
-        return False
-
-    if not ready and elapsed_days is not None:
-        LOG.info("Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)", ad_file_relative, delay_days, elapsed_days)
-        return False
-
-    return True
-
-
 def _repost_delay_state(ad_cfg:Ad) -> tuple[int, int, int, int]:
     """Return repost-delay state tuple.
 
@@ -246,7 +183,265 @@ def _relative_ad_path(ad_file:str, config_file_path:str) -> str:
         return ad_file
 
 
-def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> None:
+@dataclass(frozen = True)
+class PriceReductionDecision:
+    mode:AdUpdateStrategy
+    enabled:bool
+    on_update:bool
+    base_price:int | None
+    restored_price:int | None
+    result_price:int | None
+    applied_cycles:int
+    next_cycle:int | None
+    cycle_advanced:bool
+    reason:str
+    total_reposts:int
+    delay_reposts:int
+    eligible_cycles:int
+    delay_days:int
+    elapsed_days:int | None
+    reference:datetime | None
+    delay_reposts_ignored:bool
+
+
+def evaluate_auto_price_reduction(ad_cfg:Ad, _ad_file_relative:str, *, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> PriceReductionDecision:
+    """Evaluate automatic price reduction without mutating ``ad_cfg``.
+
+    Note:
+        ``_ad_file_relative`` is intentionally unused and kept for API parity
+        with :func:`apply_auto_price_reduction`.
+    """
+    cfg = ad_cfg.auto_price_reduction
+    on_update = bool(getattr(cfg, "on_update", False))
+    base_price = ad_cfg.price
+    total_reposts, delay_reposts, applied_cycles, eligible_cycles = _repost_delay_state(ad_cfg)
+    day_ready, elapsed_days, reference = _day_delay_state(ad_cfg)
+    delay_days = cfg.delay_days
+
+    restored_price = base_price
+
+    if not cfg.enabled:
+        return PriceReductionDecision(
+            mode = mode,
+            enabled = False,
+            on_update = on_update,
+            base_price = base_price,
+            restored_price = restored_price,
+            result_price = restored_price,
+            applied_cycles = applied_cycles,
+            next_cycle = None,
+            cycle_advanced = False,
+            reason = "not_configured",
+            total_reposts = total_reposts,
+            delay_reposts = delay_reposts,
+            eligible_cycles = eligible_cycles,
+            delay_days = delay_days,
+            elapsed_days = elapsed_days,
+            reference = reference,
+            delay_reposts_ignored = False,
+        )
+
+    if base_price is None:
+        return PriceReductionDecision(
+            mode = mode,
+            enabled = True,
+            on_update = on_update,
+            base_price = None,
+            restored_price = None,
+            result_price = None,
+            applied_cycles = applied_cycles,
+            next_cycle = None,
+            cycle_advanced = False,
+            reason = "missing_price",
+            total_reposts = total_reposts,
+            delay_reposts = delay_reposts,
+            eligible_cycles = eligible_cycles,
+            delay_days = delay_days,
+            elapsed_days = elapsed_days,
+            reference = reference,
+            delay_reposts_ignored = False,
+        )
+
+    if applied_cycles > 0:
+        restored_price = calculate_auto_price(base_price = base_price, auto_price_reduction = cfg, target_reduction_cycle = applied_cycles)
+
+    if cfg.min_price is not None and cfg.min_price == base_price and applied_cycles == 0:
+        return PriceReductionDecision(
+            mode = mode,
+            enabled = True,
+            on_update = on_update,
+            base_price = base_price,
+            restored_price = restored_price,
+            result_price = restored_price,
+            applied_cycles = applied_cycles,
+            next_cycle = None,
+            cycle_advanced = False,
+            reason = "min_price_equals_price",
+            total_reposts = total_reposts,
+            delay_reposts = delay_reposts,
+            eligible_cycles = eligible_cycles,
+            delay_days = delay_days,
+            elapsed_days = elapsed_days,
+            reference = reference,
+            delay_reposts_ignored = False,
+        )
+
+    if mode == AdUpdateStrategy.MODIFY and not on_update:
+        return PriceReductionDecision(
+            mode = mode,
+            enabled = True,
+            on_update = False,
+            base_price = base_price,
+            restored_price = restored_price,
+            result_price = restored_price,
+            applied_cycles = applied_cycles,
+            next_cycle = None,
+            cycle_advanced = False,
+            reason = "update_disabled",
+            total_reposts = total_reposts,
+            delay_reposts = delay_reposts,
+            eligible_cycles = eligible_cycles,
+            delay_days = delay_days,
+            elapsed_days = elapsed_days,
+            reference = reference,
+            delay_reposts_ignored = False,
+        )
+
+    delay_reposts_ignored = False
+    if mode == AdUpdateStrategy.REPLACE:
+        if total_reposts <= delay_reposts:
+            reason = "repost_delay_waiting"
+        elif eligible_cycles <= applied_cycles:
+            reason = "repost_delay_applied"
+        elif not day_ready:
+            reason = "day_delay_missing_timestamp" if reference is None else "day_delay_waiting"
+        else:
+            reason = "eligible"
+    else:
+        delay_reposts_ignored = delay_reposts > 0
+        reason = ("day_delay_missing_timestamp" if reference is None else "day_delay_waiting") if not day_ready else "eligible"
+
+    if reason != "eligible":
+        return PriceReductionDecision(
+            mode = mode,
+            enabled = True,
+            on_update = on_update,
+            base_price = base_price,
+            restored_price = restored_price,
+            result_price = restored_price,
+            applied_cycles = applied_cycles,
+            next_cycle = None,
+            cycle_advanced = False,
+            reason = reason,
+            total_reposts = total_reposts,
+            delay_reposts = delay_reposts,
+            eligible_cycles = eligible_cycles,
+            delay_days = delay_days,
+            elapsed_days = elapsed_days,
+            reference = reference,
+            delay_reposts_ignored = delay_reposts_ignored,
+        )
+
+    next_cycle = applied_cycles + 1
+    result_price = calculate_auto_price(base_price = base_price, auto_price_reduction = cfg, target_reduction_cycle = next_cycle)
+
+    if result_price is None:
+        return PriceReductionDecision(
+            mode = mode,
+            enabled = True,
+            on_update = on_update,
+            base_price = base_price,
+            restored_price = restored_price,
+            result_price = None,
+            applied_cycles = applied_cycles,
+            next_cycle = None,
+            cycle_advanced = False,
+            reason = "calculation_failed",
+            total_reposts = total_reposts,
+            delay_reposts = delay_reposts,
+            eligible_cycles = eligible_cycles,
+            delay_days = delay_days,
+            elapsed_days = elapsed_days,
+            reference = reference,
+            delay_reposts_ignored = delay_reposts_ignored,
+        )
+
+    cycle_advanced = result_price != restored_price
+
+    return PriceReductionDecision(
+        mode = mode,
+        enabled = True,
+        on_update = on_update,
+        base_price = base_price,
+        restored_price = restored_price,
+        result_price = result_price,
+        applied_cycles = applied_cycles,
+        next_cycle = next_cycle,
+        cycle_advanced = cycle_advanced,
+        reason = "eligible" if result_price != restored_price else "no_visible_change",
+        total_reposts = total_reposts,
+        delay_reposts = delay_reposts,
+        eligible_cycles = eligible_cycles,
+        delay_days = delay_days,
+        elapsed_days = elapsed_days,
+        reference = reference,
+        delay_reposts_ignored = delay_reposts_ignored,
+    )
+
+
+def _log_auto_price_reduction_preview(ad_file_relative:str, decision:PriceReductionDecision) -> None:
+    mode_label = "publish" if decision.mode == AdUpdateStrategy.REPLACE else "update"
+    if not decision.enabled:
+        LOG.info("Auto price reduction preview for [%s] (%s): disabled", ad_file_relative, mode_label)
+        return
+
+    if decision.base_price is None:
+        LOG.info("Auto price reduction preview for [%s] (%s): missing price", ad_file_relative, mode_label)
+        return
+
+    if decision.mode == AdUpdateStrategy.MODIFY and not decision.on_update:
+        LOG.info(
+            "Auto price reduction preview for [%s] (%s): disabled (on_update=false, effective_price=%s)",
+            ad_file_relative,
+            mode_label,
+            decision.result_price,
+        )
+        return
+
+    if decision.cycle_advanced:
+        LOG.info(
+            "Auto price reduction preview for [%s] (%s): %s -> %s (cycle %s)",
+            ad_file_relative,
+            mode_label,
+            decision.restored_price,
+            decision.result_price,
+            decision.next_cycle,
+        )
+        return
+
+    LOG.info(
+        "Auto price reduction preview for [%s] (%s): no new reduction (effective_price=%s, reason=%s)",
+        ad_file_relative,
+        mode_label,
+        decision.result_price,
+        decision.reason,
+    )
+    if decision.delay_reposts_ignored:
+        LOG.debug(
+            "Auto price reduction preview for [%s] (%s): delay_reposts=%s ignored in MODIFY mode",
+            ad_file_relative,
+            mode_label,
+            decision.delay_reposts,
+        )
+
+
+def apply_auto_price_reduction(
+    ad_cfg:Ad,
+    _ad_cfg_orig:dict[str, Any],
+    ad_file_relative:str,
+    *,
+    mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE,
+) -> None:
     """
     Apply automatic price reduction to an ad based on repost count and configuration.
 
@@ -256,29 +451,62 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
     :param ad_cfg: The ad configuration to potentially modify
     :param _ad_cfg_orig: The original ad configuration (unused, kept for compatibility)
     :param ad_file_relative: Relative path to the ad file for logging
+    :param mode: Price-reduction evaluation mode. REPLACE uses repost+day delays,
+        MODIFY uses day delay only and requires ``on_update``.
     """
-    if not ad_cfg.auto_price_reduction.enabled:
+    decision = evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = mode)
+
+    if not decision.enabled:
         LOG.debug("Auto price reduction: not configured for [%s]", ad_file_relative)
         return
 
-    base_price = ad_cfg.price
+    base_price = decision.base_price
     if base_price is None:
         LOG.warning("Auto price reduction is enabled for [%s] but no price is configured.", ad_file_relative)
         return
 
-    if ad_cfg.auto_price_reduction.min_price is not None and ad_cfg.auto_price_reduction.min_price == base_price:
+    if decision.restored_price is not None:
+        ad_cfg.price = decision.restored_price
+
+    if decision.reason == "min_price_equals_price":
         LOG.warning("Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur.", ad_file_relative, base_price)
         return
 
-    repost_state = _repost_delay_state(ad_cfg)
-    day_delay_state = _day_delay_state(ad_cfg)
-    total_reposts, delay_reposts, applied_cycles, eligible_cycles = repost_state
-    _, elapsed_days, reference = day_delay_state
-    delay_days = ad_cfg.auto_price_reduction.delay_days
+    total_reposts = decision.total_reposts
+    delay_reposts = decision.delay_reposts
+    applied_cycles = decision.applied_cycles
+    eligible_cycles = decision.eligible_cycles
+    elapsed_days = decision.elapsed_days
+    reference = decision.reference
+    delay_days = decision.delay_days
     elapsed_display = "missing" if elapsed_days is None else str(elapsed_days)
     reference_display = "missing" if reference is None else reference.isoformat(timespec = "seconds")
 
-    if not _repost_cycle_ready(ad_cfg, ad_file_relative, repost_state = repost_state):
+    if decision.reason == "update_disabled":
+        LOG.debug("Auto price reduction skipped for [%s] in update mode because on_update is false", ad_file_relative)
+        return
+
+    if decision.reason == "calculation_failed":
+        return
+
+    if decision.reason in {"repost_delay_waiting", "repost_delay_applied"}:
+        if decision.reason == "repost_delay_waiting":
+            remaining = (delay_reposts + 1) - total_reposts
+            LOG.info(
+                "Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)",
+                ad_file_relative,
+                max(remaining, 1),
+                total_reposts,
+                applied_cycles,
+            )
+        else:
+            LOG.info(
+                "Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts",
+                ad_file_relative,
+                applied_cycles,
+                eligible_cycles,
+            )
+
         next_repost = delay_reposts + 1 if total_reposts <= delay_reposts else delay_reposts + applied_cycles + 1
         LOG.debug(
             "Auto price reduction decision for [%s]: skipped (repost delay). next reduction earliest at repost >= %s and day delay %s/%s days."
@@ -294,7 +522,29 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
         )
         return
 
-    if not _day_delay_elapsed(ad_cfg, ad_file_relative, day_delay_state = day_delay_state):
+    if decision.reason in {"day_delay_waiting", "day_delay_missing_timestamp"}:
+        if decision.reason == "day_delay_missing_timestamp":
+            LOG.info("Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing", ad_file_relative, delay_days)
+        else:
+            LOG.info("Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)", ad_file_relative, delay_days, elapsed_days)
+
+        if decision.mode == AdUpdateStrategy.MODIFY and decision.delay_reposts_ignored:
+            LOG.debug(
+                "Auto price reduction for [%s]: delay_reposts=%s ignored in MODIFY mode (only delay_days applies)",
+                ad_file_relative,
+                delay_reposts,
+            )
+            LOG.debug(
+                "Auto price reduction decision for [%s]: skipped (day delay, update mode). "
+                "next reduction earliest when elapsed_days >= %s. elapsed_days=%s price_reduction_count=%s reference=%s",
+                ad_file_relative,
+                delay_days,
+                elapsed_display,
+                applied_cycles,
+                reference_display,
+            )
+            return
+
         LOG.debug(
             "Auto price reduction decision for [%s]: skipped (day delay). next reduction earliest when elapsed_days >= %s."
             " elapsed_days=%s repost_count=%s eligible_cycles=%s applied_cycles=%s reference=%s",
@@ -308,6 +558,22 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
         )
         return
 
+    if decision.mode == AdUpdateStrategy.MODIFY and decision.delay_reposts_ignored:
+        LOG.debug(
+            "Auto price reduction for [%s]: delay_reposts=%s ignored in MODIFY mode (only delay_days applies)",
+            ad_file_relative,
+            delay_reposts,
+        )
+
+    if decision.reason == "no_visible_change":
+        next_cycle = decision.next_cycle
+        if next_cycle is None:
+            LOG.debug("Auto price reduction skipped for [%s]: missing next_cycle for no_visible_change", ad_file_relative)
+            return
+        ad_cfg.price_reduction_count = next_cycle
+        LOG.info("Auto price reduction kept price %s after attempting %s reduction cycles", decision.restored_price, next_cycle)
+        return
+
     LOG.debug(
         "Auto price reduction decision for [%s]: applying now (eligible_cycles=%s, applied_cycles=%s, elapsed_days=%s/%s).",
         ad_file_relative,
@@ -317,7 +583,9 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
         delay_days,
     )
 
-    next_cycle = applied_cycles + 1
+    next_cycle = decision.next_cycle
+    if next_cycle is None:
+        return
 
     if loggers.is_debug(LOG):
         effective_price, reduction_steps, price_floor = calculate_auto_price_with_trace(
@@ -344,19 +612,14 @@ def apply_auto_price_reduction(ad_cfg:Ad, _ad_cfg_orig:dict[str, Any], ad_file_r
                 step.floor_applied,
             )
     else:
-        effective_price = calculate_auto_price(base_price = base_price, auto_price_reduction = ad_cfg.auto_price_reduction, target_reduction_cycle = next_cycle)
+        effective_price = decision.result_price
 
     if effective_price is None:
         return
 
-    if effective_price == base_price:
-        # Still increment counter so small fractional reductions can accumulate over multiple cycles
-        ad_cfg.price_reduction_count = next_cycle
-        LOG.info("Auto price reduction kept price %s after attempting %s reduction cycles", effective_price, next_cycle)
-        return
-
-    LOG.info("Auto price reduction applied: %s -> %s after %s reduction cycles", base_price, effective_price, next_cycle)
     ad_cfg.price = effective_price
+
+    LOG.info("Auto price reduction applied: %s -> %s after %s reduction cycles", decision.restored_price, effective_price, next_cycle)
     ad_cfg.price_reduction_count = next_cycle
     # Note: price_reduction_count is persisted to ad_cfg_orig only after successful publish
 
@@ -543,9 +806,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     checker.check_for_updates()
                     self.ads_selector = "all"
                     if ads := self.load_ads(exclude_ads_with_id = False):
-                        for ad_file, ad_cfg, ad_cfg_orig in ads:
+                        for ad_file, ad_cfg, _ad_cfg_orig in ads:
                             ad_file_relative = _relative_ad_path(ad_file, self.config_file_path)
-                            apply_auto_price_reduction(ad_cfg, ad_cfg_orig, ad_file_relative)
+                            publish_decision = evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = AdUpdateStrategy.REPLACE)
+                            _log_auto_price_reduction_preview(ad_file_relative, publish_decision)
+
+                            update_decision = evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = AdUpdateStrategy.MODIFY)
+                            _log_auto_price_reduction_preview(ad_file_relative, update_decision)
                     LOG.info("############################################")
                     LOG.info("DONE: No configuration errors found.")
                     LOG.info("############################################")
@@ -1913,9 +2180,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             count += 1
             success = False
+            baseline_price = ad_cfg.price
+            baseline_price_reduction_count = ad_cfg.price_reduction_count
 
             for attempt in range(1, max_retries + 1):
                 try:
+                    # publish_ad mutates pricing fields before submit; reset them so retries
+                    # remain idempotent for a single eligible reduction cycle.
+                    ad_cfg.price = baseline_price
+                    ad_cfg.price_reduction_count = baseline_price_reduction_count
                     await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.REPLACE)
                     success = True
                     break  # Publish succeeded, exit retry loop
@@ -1987,13 +2260,18 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             if self.config.publishing.delete_old_ads == "BEFORE_PUBLISH" and not self.keep_old_ads:
                 await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title)
 
-            # Apply auto price reduction only for REPLACE operations (actual reposts)
-            # This ensures price reductions only happen on republish, not on UPDATE
-            apply_auto_price_reduction(ad_cfg, ad_cfg_orig, _relative_ad_path(ad_file, self.config_file_path))
+            # Apply auto price reduction in REPLACE mode (republish flow)
+            apply_auto_price_reduction(ad_cfg, ad_cfg_orig, _relative_ad_path(ad_file, self.config_file_path), mode = AdUpdateStrategy.REPLACE)
 
             LOG.info("Publishing ad '%s'...", ad_cfg.title)
             await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html", reload_if_already_open = True)
         else:
+            # Always run restore-first when enabled so previously applied reductions
+            # are restored even when on_update is false.  The evaluator handles
+            # the on_update guard internally (returns early without advancing).
+            if ad_cfg.auto_price_reduction.enabled:
+                apply_auto_price_reduction(ad_cfg, ad_cfg_orig, _relative_ad_path(ad_file, self.config_file_path), mode = AdUpdateStrategy.MODIFY)
+
             LOG.info("Updating ad '%s'...", ad_cfg.title)
             await self.web_open(f"{self.root_url}/p-anzeige-bearbeiten.html?adId={ad_cfg.id}", reload_if_already_open = True)
 
@@ -2193,8 +2471,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if not ad_cfg.created_on and not ad_cfg.id:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
 
-        # Increment repost_count and persist price_reduction_count only for REPLACE operations (actual reposts)
-        # This ensures counters only advance on republish, not on UPDATE
+        # Increment repost_count only for REPLACE operations (actual reposts)
         if mode == AdUpdateStrategy.REPLACE:
             # Increment repost_count after successful publish
             # Note: This happens AFTER publish, so price reduction logic (which runs before publish)
@@ -2204,10 +2481,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             ad_cfg_orig["repost_count"] = current_reposts + 1
             ad_cfg.repost_count = ad_cfg_orig["repost_count"]
 
-            # Persist price_reduction_count after successful publish
-            # This ensures failed publishes don't incorrectly increment the reduction counter
-            if ad_cfg.price_reduction_count is not None and ad_cfg.price_reduction_count > 0:
-                ad_cfg_orig["price_reduction_count"] = ad_cfg.price_reduction_count
+        # Persist price_reduction_count after successful publish/update.
+        # This ensures failed submissions don't incorrectly increment the reduction counter.
+        if ad_cfg.price_reduction_count is not None and ad_cfg.price_reduction_count > 0:
+            ad_cfg_orig["price_reduction_count"] = ad_cfg.price_reduction_count
 
         if mode == AdUpdateStrategy.REPLACE:
             LOG.info(" -> SUCCESS: ad published with ID %s", ad_id)
