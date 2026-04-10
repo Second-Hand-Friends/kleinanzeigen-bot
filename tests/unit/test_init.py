@@ -547,6 +547,8 @@ class TestKleinanzeigenBotInitialization:
         # Verify ownership warning only when expected
         if scenario["expect_ownership_warning"]:
             assert any("found in overview but not in published profile" in msg for msg in caplog.messages)
+        else:
+            assert not any("found in overview but not in published profile" in msg for msg in caplog.messages)
 
     @pytest.mark.asyncio
     async def test_download_ads_all_selector_skips_invalid_ad_id(
@@ -845,15 +847,18 @@ class TestKleinanzeigenBotLogging:
         assert test_bot.file_log is None
         assert list(root_logger.handlers) == initial_handlers
 
-    def test_file_log_closed_after_bot_shutdown(self) -> None:
+    def test_file_log_closed_after_bot_shutdown(self, tmp_path:Path) -> None:
         """Ensure the file log handler is properly closed after the bot is deleted."""
 
         # Directly instantiate the bot to control its lifecycle within the test
         bot = KleinanzeigenBot()
+        log_path = tmp_path / "test.log"
+        bot.log_file_path = str(log_path)
 
         bot.configure_file_logging()
         file_log = bot.file_log
         assert file_log is not None
+        assert log_path.exists()
         assert not file_log.is_closed()
 
         # Delete and garbage collect the bot instance to ensure the destructor (__del__) is called
