@@ -31,14 +31,14 @@ class TestKleinanzeigenBot:
         bot.parse_args(["app", "create-config"])
         assert bot.command == "create-config"
 
-    def test_create_default_config_logs_error_if_exists(self, tmp_path:pathlib.Path, bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
-        """Test that create_default_config logs an error if the config file already exists."""
+    def test_create_default_config_preserves_existing_file(self, tmp_path:pathlib.Path, bot:KleinanzeigenBot) -> None:
+        """Test that create_default_config does not overwrite an existing config file."""
         config_path = tmp_path / "config.yaml"
-        config_path.write_text("dummy: value")
+        original_content = "dummy: value"
+        config_path.write_text(original_content)
         bot.config_file_path = str(config_path)
-        with caplog.at_level("ERROR"):
-            bot.create_default_config()
-        assert any("already exists" in m for m in caplog.messages)
+        bot.create_default_config()
+        assert config_path.read_text() == original_content
 
     def test_create_default_config_creates_file(self, tmp_path:pathlib.Path, bot:KleinanzeigenBot) -> None:
         """Test that create_default_config creates a config file if it does not exist."""
