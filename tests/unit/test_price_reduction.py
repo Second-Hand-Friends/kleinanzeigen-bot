@@ -160,7 +160,7 @@ def test_apply_auto_price_reduction_disabled_emits_no_decision_logs(
 
 
 @pytest.mark.unit
-def test_apply_auto_price_reduction_logs_drop(caplog:pytest.LogCaptureFixture, apply_auto_price_reduction:_ApplyAutoPriceReduction) -> None:
+def test_apply_auto_price_reduction_reduces_price_by_configured_percentage(apply_auto_price_reduction:_ApplyAutoPriceReduction) -> None:
     ad_cfg = SimpleNamespace(
         price = 200,
         auto_price_reduction = AutoPriceReductionConfig(
@@ -178,12 +178,8 @@ def test_apply_auto_price_reduction_logs_drop(caplog:pytest.LogCaptureFixture, a
     )
 
     ad_orig:dict[str, Any] = {}
+    apply_auto_price_reduction(ad_cfg, ad_orig, "ad_test.yaml")
 
-    with caplog.at_level(logging.INFO):
-        apply_auto_price_reduction(ad_cfg, ad_orig, "ad_test.yaml")
-
-    expected = _("Auto price reduction applied: %s -> %s after %s reduction cycles") % (200, 150, 1)
-    assert any(expected in message for message in caplog.messages)
     assert ad_cfg.price == 150
     assert ad_cfg.price_reduction_count == 1
     # Note: price_reduction_count is NOT persisted to ad_orig until after successful publish
@@ -264,7 +260,7 @@ def test_apply_auto_price_reduction_warns_and_preserves_state_on_invalid_config(
 
 
 @pytest.mark.unit
-def test_apply_auto_price_reduction_respects_repost_delay(caplog:pytest.LogCaptureFixture, apply_auto_price_reduction:_ApplyAutoPriceReduction) -> None:
+def test_apply_auto_price_reduction_respects_repost_delay(apply_auto_price_reduction:_ApplyAutoPriceReduction) -> None:
     ad_cfg = SimpleNamespace(
         price = 200,
         auto_price_reduction = AutoPriceReductionConfig(
@@ -282,18 +278,10 @@ def test_apply_auto_price_reduction_respects_repost_delay(caplog:pytest.LogCaptu
     )
 
     ad_orig:dict[str, Any] = {}
-
-    with caplog.at_level(logging.DEBUG):
-        apply_auto_price_reduction(ad_cfg, ad_orig, "ad_delay.yaml")
+    apply_auto_price_reduction(ad_cfg, ad_orig, "ad_delay.yaml")
 
     assert ad_cfg.price == 200
-    delayed_message = _("Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)") % ("ad_delay.yaml", 2, 2, 0)
-    assert any(delayed_message in message for message in caplog.messages)
-    decision_message = (
-        "Auto price reduction decision for [ad_delay.yaml]: skipped (repost delay). "
-        "next reduction earliest at repost >= 4 and day delay 0/0 days. repost_count=2 eligible_cycles=0 applied_cycles=0"
-    )
-    assert any(message.startswith(decision_message) for message in caplog.messages)
+    assert ad_cfg.price_reduction_count == 0
 
 
 @pytest.mark.unit

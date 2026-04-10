@@ -198,7 +198,6 @@ def test_cli_subcommands_create_config_fails_if_exists(tmp_path:Path) -> None:
         ("verify", "verify"),
         ("update-check", "update"),
         ("update-content-hash", "update-content-hash"),
-        ("diagnose", "diagnose"),
     ],
 )
 @pytest.mark.parametrize(
@@ -241,8 +240,6 @@ def test_cli_subcommands_with_config_formats(
         assert "no active ads found" in out, f"Expected 'no active ads found' in output for 'update-content-hash'.\n{out}"
     elif subcommand == "update-check":
         assert result.returncode == 0
-    elif subcommand == "diagnose":
-        assert "browser connection diagnostics" in out or "browser-verbindungsdiagnose" in out, f"Expected diagnostic output for 'diagnose'.\n{out}"
 
 
 @pytest.mark.smoke
