@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio, copy, fnmatch, io, json, logging, os, tempfile  # isort: skip
+import asyncio, copy, fnmatch, gc, io, json, logging, os, tempfile  # isort: skip
 from collections.abc import Callable, Generator
 from contextlib import contextmanager, redirect_stdout
 from datetime import timedelta
@@ -794,6 +794,25 @@ class TestKleinanzeigenBotInitialization:
         # All non-"active" states should result in active=False
         extractor_mock.download_ad.assert_awaited_once_with(123, active = False)
 
+    def test_create_default_config_preserves_existing_file(self, tmp_path:Path, test_bot:KleinanzeigenBot) -> None:
+        """Test that create_default_config does not overwrite an existing config file."""
+        config_path = tmp_path / "config.yaml"
+        original_content = "dummy: value"
+        config_path.write_text(original_content)
+        test_bot.config_file_path = str(config_path)
+        test_bot.create_default_config()
+        assert config_path.read_text() == original_content
+
+    def test_create_default_config_creates_file(self, tmp_path:Path, test_bot:KleinanzeigenBot) -> None:
+        """Test that create_default_config creates a config file if it does not exist."""
+        config_path = tmp_path / "config.yaml"
+        test_bot.config_file_path = str(config_path)
+        assert not config_path.exists()
+        test_bot.create_default_config()
+        assert config_path.exists()
+        content = config_path.read_text()
+        assert "username: changeme" in content
+
 
 class TestKleinanzeigenBotLogging:
     """Tests for logging functionality."""
@@ -825,6 +844,23 @@ class TestKleinanzeigenBotLogging:
 
         assert test_bot.file_log is None
         assert list(root_logger.handlers) == initial_handlers
+
+    def test_file_log_closed_after_bot_shutdown(self) -> None:
+        """Ensure the file log handler is properly closed after the bot is deleted."""
+
+        # Directly instantiate the bot to control its lifecycle within the test
+        bot = KleinanzeigenBot()
+
+        bot.configure_file_logging()
+        file_log = bot.file_log
+        assert file_log is not None
+        assert not file_log.is_closed()
+
+        # Delete and garbage collect the bot instance to ensure the destructor (__del__) is called
+        del bot
+        gc.collect()
+
+        assert file_log.is_closed()
 
 
 class TestKleinanzeigenBotCommandLine:
@@ -878,6 +914,11 @@ class TestKleinanzeigenBotCommandLine:
         config_path = Path(test_data_dir) / "custom_config.yaml"
         test_bot.parse_args(["dummy", "--config", str(config_path)])
         assert test_bot.config_file_path == str(config_path.absolute())
+
+    def test_parse_args_create_config(self, test_bot:KleinanzeigenBot) -> None:
+        """Test parsing of create-config command"""
+        test_bot.parse_args(["app", "create-config"])
+        assert test_bot.command == "create-config"
 
 
 class TestKleinanzeigenBotConfiguration:
