@@ -443,11 +443,11 @@ def test_apply_auto_price_reduction_delayed_when_timestamp_missing(
 
 
 @pytest.mark.unit
-def test_fractional_reduction_does_not_increment_counter_when_price_unchanged(
+def test_fractional_reduction_increments_counter_when_price_unchanged(
     caplog:pytest.LogCaptureFixture, apply_auto_price_reduction:_ApplyAutoPriceReduction
 ) -> None:
-    # Small reductions that round back to the same euro value should not advance the
-    # persisted cycle counter. This avoids counter drift when no visible price change occurs.
+    # Small reductions that round back to the same euro value still advance the
+    # reduction cycle counter so fractional progress can accumulate across runs.
     ad_cfg = SimpleNamespace(
         price = 100,
         auto_price_reduction = AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = 0.3, min_price = 50, delay_reposts = 0, delay_days = 0),
@@ -466,8 +466,33 @@ def test_fractional_reduction_does_not_increment_counter_when_price_unchanged(
     expected = _("Auto price reduction kept price %s after attempting %s reduction cycles") % (100, 1)
     assert any(expected in message for message in caplog.messages)
     assert ad_cfg.price == 100
-    assert ad_cfg.price_reduction_count == 0
+    assert ad_cfg.price_reduction_count == 1
     assert "price_reduction_count" not in ad_orig
+
+
+@pytest.mark.unit
+def test_no_visible_change_at_floor_advances_counter(apply_auto_price_reduction:_ApplyAutoPriceReduction) -> None:
+    """When price is already floor-clamped, no visible change still advances cycle counter."""
+    ad_cfg = SimpleNamespace(
+        price = 100,
+        auto_price_reduction = AutoPriceReductionConfig(
+            enabled = True,
+            strategy = "PERCENTAGE",
+            amount = 10,
+            min_price = 90,
+            delay_reposts = 0,
+            delay_days = 0,
+        ),
+        price_reduction_count = 3,
+        repost_count = 5,
+        updated_on = None,
+        created_on = None,
+    )
+
+    apply_auto_price_reduction(ad_cfg, {}, "ad_floor.yaml")
+
+    assert ad_cfg.price == 90
+    assert ad_cfg.price_reduction_count == 4
 
 
 @pytest.mark.unit

@@ -339,7 +339,29 @@ def evaluate_auto_price_reduction(ad_cfg:Ad, _ad_file_relative:str, *, mode:AdUp
 
     next_cycle = applied_cycles + 1
     result_price = calculate_auto_price(base_price = base_price, auto_price_reduction = cfg, target_reduction_cycle = next_cycle)
-    cycle_advanced = result_price is not None and result_price != restored_price
+
+    if result_price is None:
+        return PriceReductionDecision(
+            mode = mode,
+            enabled = True,
+            on_update = on_update,
+            base_price = base_price,
+            restored_price = restored_price,
+            result_price = None,
+            applied_cycles = applied_cycles,
+            next_cycle = None,
+            cycle_advanced = False,
+            reason = "calculation_failed",
+            total_reposts = total_reposts,
+            delay_reposts = delay_reposts,
+            eligible_cycles = eligible_cycles,
+            delay_days = delay_days,
+            elapsed_days = elapsed_days,
+            reference = reference,
+            delay_reposts_ignored = delay_reposts_ignored,
+        )
+
+    cycle_advanced = result_price != restored_price
 
     return PriceReductionDecision(
         mode = mode,
@@ -349,9 +371,9 @@ def evaluate_auto_price_reduction(ad_cfg:Ad, _ad_file_relative:str, *, mode:AdUp
         restored_price = restored_price,
         result_price = result_price,
         applied_cycles = applied_cycles,
-        next_cycle = next_cycle if cycle_advanced else None,
+        next_cycle = next_cycle,
         cycle_advanced = cycle_advanced,
-        reason = "eligible" if cycle_advanced else "no_visible_change",
+        reason = "eligible" if result_price != restored_price else "no_visible_change",
         total_reposts = total_reposts,
         delay_reposts = delay_reposts,
         eligible_cycles = eligible_cycles,
@@ -401,8 +423,9 @@ def _log_auto_price_reduction_preview(ad_file_relative:str, decision:PriceReduct
     )
     if decision.delay_reposts_ignored:
         LOG.debug(
-            "Auto price reduction preview for [%s] (update): delay_reposts=%s ignored in MODIFY mode",
+            "Auto price reduction preview for [%s] (%s): delay_reposts=%s ignored in MODIFY mode",
             ad_file_relative,
+            mode_label,
             decision.delay_reposts,
         )
 
@@ -456,6 +479,9 @@ def apply_auto_price_reduction(
 
     if decision.reason == "update_disabled":
         LOG.debug("Auto price reduction skipped for [%s] in update mode because on_update is false", ad_file_relative)
+        return
+
+    if decision.reason == "calculation_failed":
         return
 
     if decision.reason in {"repost_delay_waiting", "repost_delay_applied"}:
@@ -535,7 +561,12 @@ def apply_auto_price_reduction(
         )
 
     if decision.reason == "no_visible_change":
-        LOG.info("Auto price reduction kept price %s after attempting %s reduction cycles", decision.restored_price, applied_cycles + 1)
+        next_cycle = decision.next_cycle
+        if next_cycle is None:
+            LOG.debug("Auto price reduction skipped for [%s]: missing next_cycle for no_visible_change", ad_file_relative)
+            return
+        ad_cfg.price_reduction_count = int(next_cycle)
+        LOG.info("Auto price reduction kept price %s after attempting %s reduction cycles", decision.restored_price, next_cycle)
         return
 
     LOG.debug(
