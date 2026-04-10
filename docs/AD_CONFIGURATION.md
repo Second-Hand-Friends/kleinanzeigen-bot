@@ -200,7 +200,7 @@ This ensures price reductions accumulate correctly regardless of whether you use
 The `verify` command previews pricing outcomes for both modes:
 
 - **Publish preview**: Always shown when `auto_price_reduction.enabled` is `true`. Shows the effective price after applying reductions based on the current `repost_count`, `price_reduction_count`, and delay settings.
-- **Update preview**: Shown when `on_update` is `true`. Displays what the price would be after an update-mode reduction. When `on_update` is `false` (default), the update preview notes that price reductions are disabled for updates and shows no reduction.
+- **Update preview**: Always shown when `auto_price_reduction.enabled` is `true`. If `on_update` is `true`, it shows the update-mode reduction outcome. If `on_update` is `false` (default), it explicitly reports updates as disabled and shows no reduction.
 
 ```yaml
 # Example: enable reductions for both publish and update

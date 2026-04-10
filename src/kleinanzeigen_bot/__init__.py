@@ -205,7 +205,12 @@ class PriceReductionDecision:
 
 
 def evaluate_auto_price_reduction(ad_cfg:Ad, _ad_file_relative:str, *, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> PriceReductionDecision:
-    """Evaluate automatic price reduction without mutating ``ad_cfg``."""
+    """Evaluate automatic price reduction without mutating ``ad_cfg``.
+
+    Note:
+        ``_ad_file_relative`` is intentionally unused and kept for API parity
+        with :func:`apply_auto_price_reduction`.
+    """
     cfg = ad_cfg.auto_price_reduction
     on_update = bool(getattr(cfg, "on_update", False))
     base_price = ad_cfg.price

@@ -2716,7 +2716,8 @@ class TestKleinanzeigenBotShippingOptions:
 
             # --- REPLACE mode: always calls apply_auto_price_reduction ---
             await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
-            assert mock_apply.call_count == 1, "Auto price reduction should be called on REPLACE"
+            mock_apply.assert_called_once()
+            assert mock_apply.call_args.kwargs["mode"] == AdUpdateStrategy.REPLACE
 
             # --- MODIFY mode with default config (on_update=false): should NOT call ---
             mock_apply.reset_mock()
@@ -2735,7 +2736,8 @@ class TestKleinanzeigenBotShippingOptions:
                 on_update = True,
             )
             await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
-            assert mock_apply.call_count == 1, "Auto price reduction SHOULD be called exactly once on MODIFY when on_update=true"
+            mock_apply.assert_called_once()
+            assert mock_apply.call_args.kwargs["mode"] == AdUpdateStrategy.MODIFY
 
     @pytest.mark.asyncio
     async def test_special_attributes_compound_name_lookup(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:

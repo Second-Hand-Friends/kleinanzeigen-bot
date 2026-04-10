@@ -693,10 +693,10 @@ def test_cross_mode_update_then_publish_preserves_reduced_price(
     Simulates:
       1. MODIFY applies one reduction cycle (100 → 90).
       2. Price and counters are persisted (simulated by resetting price to base and
-         adjusting counters as if re-loaded from YAML).
+         restoring counters as if re-loaded from YAML after one applied cycle).
       3. REPLACE runs but no new repost cycle is eligible → reduced price restored.
     """
-    cfg = _price_cfg(on_update = True, amount = 10, delay_days = 0)
+    cfg = _price_cfg(on_update = True, amount = 10, delay_reposts = 1, delay_days = 0)
 
     # --- Step 1: MODIFY applies first reduction ---
     ad_cfg = SimpleNamespace(
@@ -712,14 +712,14 @@ def test_cross_mode_update_then_publish_preserves_reduced_price(
     assert ad_cfg.price_reduction_count == 1
 
     # --- Step 2: Simulate re-load from YAML (price resets to base) ---
-    # repost_count and price_reduction_count reflect post-persist state
+    # repost_count and price_reduction_count reflect post-persist state after one cycle
     ad_cfg.price = 100  # YAML always stores base price
     ad_cfg.repost_count = 2
-    ad_cfg.price_reduction_count = 2  # persisted after successful publish
+    ad_cfg.price_reduction_count = 1
 
     # --- Step 3: REPLACE mode, no new repost cycle eligible ---
     apply_auto_price_reduction(ad_cfg, {}, "ad_cross.yaml", mode = AdUpdateStrategy.REPLACE)
 
-    # Restore-first: 2 cycles from base 100 → 81, NOT left at base 100
-    assert ad_cfg.price == 81
-    assert ad_cfg.price_reduction_count == 2
+    # Restore-first: keep the single previously applied cycle from base 100 → 90
+    assert ad_cfg.price == 90
+    assert ad_cfg.price_reduction_count == 1
