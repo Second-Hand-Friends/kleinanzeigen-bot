@@ -4005,6 +4005,60 @@ class TestImageUploadProcessedMarkerFallback:
         file_input.send_file.assert_any_await(image_b)
 
     @pytest.mark.asyncio
+    async def test_upload_images_refetches_file_input_per_image_to_avoid_stale_element(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+    ) -> None:
+        """Each image upload should re-fetch the file input because the DOM replaces it after selection."""
+        ad_cfg, image_a, image_b = self._build_two_image_ad(base_ad_config, tmp_path)
+
+        first_file_input = MagicMock()
+        first_file_input.send_file = AsyncMock()
+        second_file_input = MagicMock()
+        second_file_input.send_file = AsyncMock()
+
+        marker_a = self._build_marker("https://img.example/a.jpg")
+        marker_b = self._build_marker("https://img.example/b.jpg")
+        marker_query_count = 0
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            assert selector_type == By.CSS_SELECTOR
+            assert selector_value == "input[type=file]"
+            if first_file_input.send_file.await_count == 0:
+                return first_file_input
+            return second_file_input
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[MagicMock]:
+            nonlocal marker_query_count
+            if selector_type == By.CSS_SELECTOR and selector_value == "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)":
+                raise TimeoutError("no thumbnails")
+            if selector_type == By.CSS_SELECTOR and selector_value == "input[name^='adImages'][name$='.url']":
+                marker_query_count += 1
+                if marker_query_count == 1:
+                    return []  # baseline before upload
+                return [marker_a, marker_b]
+            return []
+
+        async def await_side_effect(condition:Callable[[], Awaitable[bool]], **_:Any) -> bool:
+            if await condition():
+                return True
+            raise TimeoutError("condition did not pass")
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect) as mock_find,
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_side_effect),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__upload_images")(ad_cfg)
+
+        first_file_input.send_file.assert_awaited_once_with(image_a)
+        second_file_input.send_file.assert_awaited_once_with(image_b)
+        assert mock_find.await_count == 2
+
+    @pytest.mark.asyncio
     async def test_upload_images_stale_markers_do_not_satisfy_completion(
         self,
         test_bot:KleinanzeigenBot,
