@@ -220,7 +220,6 @@ kleinanzeigen_bot/__init__.py:
 
   __set_condition:
     "Unable to close condition dialog!": "Kann den Dialog für Artikelzustand nicht schließen!"
-    "Unable to open condition dialog and select condition [%s]": "Zustandsdialog konnte nicht geöffnet und Zustand [%s] nicht ausgewählt werden"
     "Unable to select condition [%s]": "Zustand [%s] konnte nicht ausgewählt werden"
     "Failed to set attribute '%s'": "Fehler beim Setzen des Attributs '%s'"
 
