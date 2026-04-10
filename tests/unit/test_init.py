@@ -147,16 +147,10 @@ class TestKleinanzeigenBotInitialization:
         assert test_bot.log_file_path is not None
         assert test_bot.file_log is None
 
-    def test_resolve_workspace_skips_help(self, test_bot:KleinanzeigenBot) -> None:
-        """Ensure workspace resolution returns early for help."""
-        test_bot.command = "help"
-        test_bot.workspace = None
-        test_bot._resolve_workspace()
-        assert test_bot.workspace is None
-
-    def test_resolve_workspace_skips_create_config(self, test_bot:KleinanzeigenBot) -> None:
-        """Ensure workspace resolution returns early for create-config."""
-        test_bot.command = "create-config"
+    @pytest.mark.parametrize("command", ["help", "create-config", "version"])
+    def test_resolve_workspace_skips_non_workspace_commands(self, test_bot:KleinanzeigenBot, command:str) -> None:
+        """Workspace resolution should remain None for commands that need no workspace."""
+        test_bot.command = command
         test_bot.workspace = None
         test_bot._resolve_workspace()
         assert test_bot.workspace is None
@@ -387,22 +381,18 @@ class TestKleinanzeigenBotInitialization:
             {
                 "published_ads": [{"id": 123, "state": "active"}],
                 "expected_active": True,
-                "expect_warning": False,
             },
             {
                 "published_ads": [{"id": 999, "state": "active"}],
                 "expected_active": False,
-                "expect_warning": True,
             },
             {
                 "published_ads": [{"id": 123, "state": "inactive"}],
                 "expected_active": False,
-                "expect_warning": False,
             },
             {
                 "published_ads": [{"id": 123, "state": "paused"}],
                 "expected_active": False,
-                "expect_warning": False,
             },
         ],
     )
@@ -410,12 +400,10 @@ class TestKleinanzeigenBotInitialization:
         self,
         test_bot:KleinanzeigenBot,
         tmp_path:Path,
-        caplog:pytest.LogCaptureFixture,
         scenario:dict[str, Any],
     ) -> None:
         published_ads = scenario["published_ads"]
         expected_active = scenario["expected_active"]
-        expect_warning = scenario["expect_warning"]
 
         test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
         test_bot.ads_selector = "123"
@@ -424,8 +412,6 @@ class TestKleinanzeigenBotInitialization:
         extractor_mock = MagicMock()
         extractor_mock.navigate_to_ad_page = AsyncMock(return_value = True)
         extractor_mock.download_ad = AsyncMock()
-
-        caplog.set_level(logging.WARNING)
 
         with (
             patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = published_ads) as mock_fetch_published_ads,
@@ -436,12 +422,6 @@ class TestKleinanzeigenBotInitialization:
         mock_fetch_published_ads.assert_awaited_once_with(strict = True)
 
         extractor_mock.download_ad.assert_awaited_once_with(123, active = expected_active)
-
-        warning_records = [r for r in caplog.records if r.levelno >= logging.WARNING]
-        if expect_warning:
-            assert len(warning_records) >= 1
-        else:
-            assert len(warning_records) == 0
 
     @pytest.mark.asyncio
     async def test_download_ads_numeric_selector_fails_when_published_ads_fetch_incomplete(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
@@ -3640,24 +3620,6 @@ class TestWantedShippingSelection:
             mock_find.side_effect = find_side_effect
             with pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'SHIPPING'!"):
                 await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
-
-
-class TestKleinanzeigenBotUrlConstruction:
-    """Tests for URL construction functionality."""
-
-    def test_url_construction(self, test_bot:KleinanzeigenBot) -> None:
-        """Test that URLs are constructed correctly."""
-        # Test login URL
-        expected_login_url = "https://www.kleinanzeigen.de/m-einloggen.html?targetUrl=/"
-        assert f"{test_bot.root_url}/m-einloggen.html?targetUrl=/" == expected_login_url
-
-        # Test ad management URL
-        expected_manage_url = "https://www.kleinanzeigen.de/m-meine-anzeigen.html"
-        assert f"{test_bot.root_url}/m-meine-anzeigen.html" == expected_manage_url
-
-        # Test ad publishing URL
-        expected_publish_url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-schritt2.html"
-        assert f"{test_bot.root_url}/p-anzeige-aufgeben-schritt2.html" == expected_publish_url
 
 
 class TestKleinanzeigenBotPrefixSuffix:

@@ -2389,7 +2389,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         try:
             existing_markers = await self.web_find_all(By.CSS_SELECTOR, hidden_marker_selector, timeout = quick_dom)
-            existing_image_count = sum(1 for marker in existing_markers if str(getattr(marker.attrs, "value", "") or "").strip())
+            existing_image_count = sum(
+                1
+                for marker in existing_markers
+                if str(marker.attrs.get("value", "") if isinstance(marker.attrs, dict) else getattr(marker.attrs, "value", "") or "").strip()
+            )
         except TimeoutError:
             existing_image_count = 0
 
@@ -2563,10 +2567,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             phone_elem = await self.web_probe(By.ID, "ad-phone", timeout = self._timeout("quick_dom"))
             if phone_elem is None:
                 LOG.warning(
-                    _(
-                        "Phone number field not present on page. This is expected for many private accounts; "
-                        "commercial accounts may still support phone numbers."
-                    )
+                    "Phone number field not present on page. This is expected for many private accounts; commercial accounts may still support phone numbers."
                 )
             else:
                 try:
@@ -3060,7 +3061,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         baseline_marker_count = 0
         try:
             baseline_markers = await self._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom_timeout)
-            baseline_marker_count = sum(1 for marker in baseline_markers if str(getattr(marker.attrs, "value", "") or "").strip())
+            baseline_marker_count = sum(
+                1
+                for marker in baseline_markers
+                if str(marker.attrs.get("value", "") if isinstance(marker.attrs, dict) else getattr(marker.attrs, "value", "") or "").strip()
+            )
         except TimeoutError:
             baseline_marker_count = 0
 
@@ -3080,7 +3085,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         async def count_processed_images() -> int:
             try:
                 markers = await self._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom_timeout)
-                marker_count = sum(1 for marker in markers if str(getattr(marker.attrs, "value", "") or "").strip())
+                marker_count = sum(
+                    1
+                    for marker in markers
+                    if str(marker.attrs.get("value", "") if isinstance(marker.attrs, dict) else getattr(marker.attrs, "value", "") or "").strip()
+                )
             except TimeoutError:
                 marker_count = 0
 
