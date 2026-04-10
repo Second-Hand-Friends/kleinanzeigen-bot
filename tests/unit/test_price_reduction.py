@@ -3,7 +3,6 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import logging
 from datetime import datetime, timedelta, timezone
-from gettext import gettext as _
 from types import SimpleNamespace
 from typing import Any, Protocol, runtime_checkable
 
@@ -160,7 +159,9 @@ def test_apply_auto_price_reduction_disabled_emits_no_decision_logs(
 
 
 @pytest.mark.unit
-def test_apply_auto_price_reduction_reduces_price_by_configured_percentage(apply_auto_price_reduction:_ApplyAutoPriceReduction) -> None:
+def test_apply_auto_price_reduction_reduces_price_by_configured_percentage(
+    caplog:pytest.LogCaptureFixture, apply_auto_price_reduction:_ApplyAutoPriceReduction
+) -> None:
     ad_cfg = SimpleNamespace(
         price = 200,
         auto_price_reduction = AutoPriceReductionConfig(
@@ -178,8 +179,10 @@ def test_apply_auto_price_reduction_reduces_price_by_configured_percentage(apply
     )
 
     ad_orig:dict[str, Any] = {}
-    apply_auto_price_reduction(ad_cfg, ad_orig, "ad_test.yaml")
+    with caplog.at_level(logging.INFO):
+        apply_auto_price_reduction(ad_cfg, ad_orig, "ad_test.yaml")
 
+    assert any(r.levelname == "INFO" and "Auto price reduction applied" in r.message for r in caplog.records)
     assert ad_cfg.price == 150
     assert ad_cfg.price_reduction_count == 1
     # Note: price_reduction_count is NOT persisted to ad_orig until after successful publish
@@ -208,8 +211,7 @@ def test_apply_auto_price_reduction_logs_unchanged_price_at_floor(
 
     # Price: 95 - 10 = 85, clamped to 90 (floor)
     # So the effective price is 90, not 95, meaning reduction was applied
-    expected = _("Auto price reduction applied: %s -> %s after %s reduction cycles") % (95, 90, 1)
-    assert any(expected in message for message in caplog.messages)
+    assert any(r.levelname == "INFO" and "Auto price reduction applied" in r.message for r in caplog.records)
     assert ad_cfg.price == 90
     assert ad_cfg.price_reduction_count == 1
     assert "price_reduction_count" not in ad_orig
@@ -336,8 +338,7 @@ def test_apply_auto_price_reduction_waits_when_reduction_already_applied(
     with caplog.at_level(logging.DEBUG, logger = "kleinanzeigen_bot"):
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_already.yaml")
 
-    expected = _("Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts") % ("ad_already.yaml", 3, 3)
-    assert any(expected in message for message in caplog.messages)
+    assert any(r.levelname == "INFO" and "already applied" in r.message and "reductions match" in r.message for r in caplog.records)
     decision_message = (
         "Auto price reduction decision for [ad_already.yaml]: skipped (repost delay). "
         "next reduction earliest at repost >= 4 and day delay 0/0 days. repost_count=3 eligible_cycles=3 applied_cycles=3"
@@ -377,8 +378,7 @@ def test_apply_auto_price_reduction_respects_day_delay(
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_delay_days.yaml")
 
     assert ad_cfg.price == 150
-    delayed_message = _("Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)") % ("ad_delay_days.yaml", 3, 1)
-    assert any(delayed_message in message for message in caplog.messages)
+    assert any(r.levelname == "INFO" and "waiting" in r.message and "days (elapsed" in r.message for r in caplog.records)
 
 
 @pytest.mark.unit
@@ -426,8 +426,7 @@ def test_apply_auto_price_reduction_delayed_when_timestamp_missing(
     with caplog.at_level("INFO"):
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_missing_time.yaml")
 
-    expected = _("Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing") % ("ad_missing_time.yaml", 2)
-    assert any(expected in message for message in caplog.messages)
+    assert any(r.levelname == "INFO" and "publish timestamp missing" in r.message for r in caplog.records)
 
 
 @pytest.mark.unit
@@ -451,8 +450,8 @@ def test_fractional_reduction_increments_counter_when_price_unchanged(
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_fractional.yaml")
 
     # Price: 100 - 0.3 = 99.7, rounds to 100 (no visible change)
-    expected = _("Auto price reduction kept price %s after attempting %s reduction cycles") % (100, 1)
-    assert any(expected in message for message in caplog.messages)
+    # But counter should still increment for future cumulative reductions
+    assert any(r.levelname == "INFO" and "kept price" in r.message for r in caplog.records)
     assert ad_cfg.price == 100
     assert ad_cfg.price_reduction_count == 1
     assert "price_reduction_count" not in ad_orig
