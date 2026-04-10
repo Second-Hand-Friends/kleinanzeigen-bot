@@ -723,3 +723,39 @@ def test_cross_mode_update_then_publish_preserves_reduced_price(
     # Restore-first: keep the single previously applied cycle from base 100 → 90
     assert ad_cfg.price == 90
     assert ad_cfg.price_reduction_count == 1
+
+
+def test_modify_on_update_false_restores_price(
+    apply_auto_price_reduction:_ApplyAutoPriceReduction,
+) -> None:
+    """MODIFY with on_update=false must still restore previously reduced prices.
+
+    Regression test: when on_update is false, the evaluator must still compute
+    and restore the effective price from price_reduction_count.  Without this,
+    an ad that previously received reductions via REPLACE would have its base
+    YAML price submitted during an update, silently reverting the reduction.
+
+    Given:
+      - base price 200, one 10% reduction already applied (→ 180)
+      - price_reduction_count = 1, on_update = false
+    Expected:
+      - price is restored to 180 (not base 200)
+      - price_reduction_count unchanged (no new cycle)
+    """
+    cfg = _price_cfg(on_update = False, amount = 10, delay_reposts = 0, delay_days = 0)
+
+    ad_cfg = SimpleNamespace(
+        price = 200,  # YAML base price (not yet restored)
+        auto_price_reduction = cfg,
+        price_reduction_count = 1,  # one reduction already applied
+        repost_count = 1,
+        updated_on = None,
+        created_on = None,
+    )
+
+    apply_auto_price_reduction(ad_cfg, {}, "ad_restore.yaml", mode = AdUpdateStrategy.MODIFY)
+
+    # Price must be restored from base 200 with one 10% reduction → 180
+    assert ad_cfg.price == 180
+    # Counter must NOT advance (on_update is false)
+    assert ad_cfg.price_reduction_count == 1

@@ -2266,7 +2266,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.info("Publishing ad '%s'...", ad_cfg.title)
             await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html", reload_if_already_open = True)
         else:
-            if ad_cfg.auto_price_reduction.on_update:
+            # Always run restore-first when enabled so previously applied reductions
+            # are restored even when on_update is false.  The evaluator handles
+            # the on_update guard internally (returns early without advancing).
+            if ad_cfg.auto_price_reduction.enabled:
                 apply_auto_price_reduction(ad_cfg, ad_cfg_orig, _relative_ad_path(ad_file, self.config_file_path), mode = AdUpdateStrategy.MODIFY)
 
             LOG.info("Updating ad '%s'...", ad_cfg.title)

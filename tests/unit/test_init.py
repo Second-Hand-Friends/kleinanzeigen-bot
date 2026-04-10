@@ -2666,8 +2666,8 @@ class TestKleinanzeigenBotShippingOptions:
         """Test price reduction dispatch across REPLACE and MODIFY modes.
 
         - REPLACE mode always calls apply_auto_price_reduction.
-        - MODIFY mode with on_update=false (default) does NOT call it.
-        - MODIFY mode with on_update=true DOES call it (conditional new behavior).
+        - MODIFY mode with on_update=false still calls it for restore-first (no cycle advance).
+        - MODIFY mode with on_update=true calls it with full evaluation and cycle advance.
         """
         # Shared ad config with auto price reduction enabled
         ad_cfg = Ad.model_validate(
@@ -2719,10 +2719,11 @@ class TestKleinanzeigenBotShippingOptions:
             mock_apply.assert_called_once()
             assert mock_apply.call_args.kwargs["mode"] == AdUpdateStrategy.REPLACE
 
-            # --- MODIFY mode with default config (on_update=false): should NOT call ---
+            # --- MODIFY mode with default config (on_update=false): still calls for restore-first ---
             mock_apply.reset_mock()
             await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
-            assert mock_apply.call_count == 0, "Auto price reduction should NOT be called on MODIFY with on_update=false"
+            mock_apply.assert_called_once()
+            assert mock_apply.call_args.kwargs["mode"] == AdUpdateStrategy.MODIFY
 
             # --- MODIFY mode with on_update=true: SHOULD call (new conditional behavior) ---
             mock_apply.reset_mock()

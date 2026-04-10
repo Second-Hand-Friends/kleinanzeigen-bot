@@ -101,9 +101,9 @@ price_type:  # one of: FIXED, NEGOTIABLE, GIVE_AWAY (default: NEGOTIABLE)
 
 ### Automatic Price Reduction
 
-When `auto_price_reduction.enabled` is set to `true`, the bot lowers the configured `price` every time the ad is reposted via the `publish` command.
+When `auto_price_reduction.enabled` is set to `true`, the bot evaluates whether a price reduction is due each time the ad is republished via the `publish` command — the price is only lowered when all eligibility gates (repost cycle, day delay, minimum floor) are satisfied.
 
-**Important:** By default, price reductions only apply when using the `publish` command (which deletes the old ad and creates a new one). Using the `update` command does NOT trigger price reductions or increment `repost_count`. Set `on_update: true` (see below) to also apply reductions during update runs.
+**Important:** By default, price reductions only apply when using the `publish` command (which deletes the old ad and creates a new one). Using the `update` command does NOT advance the reduction cycle. Set `on_update: true` (see below) to also apply reductions during update runs. Regardless of the `on_update` setting, the effective reduced price is always restored before submitting an update — this prevents previously applied reductions from being silently lost.
 
 `repost_count` is tracked for every ad (and persisted inside the corresponding `ad_*.yaml`) so reductions continue across runs.
 
@@ -200,7 +200,7 @@ This ensures price reductions accumulate correctly regardless of whether you use
 The `verify` command previews pricing outcomes for both modes:
 
 - **Publish preview**: Always shown when `auto_price_reduction.enabled` is `true`. Shows the effective price after applying reductions based on the current `repost_count`, `price_reduction_count`, and delay settings.
-- **Update preview**: Always shown when `auto_price_reduction.enabled` is `true`. If `on_update` is `true`, it shows the update-mode reduction outcome. If `on_update` is `false` (default), it explicitly reports updates as disabled and shows no reduction.
+- **Update preview**: Always shown when `auto_price_reduction.enabled` is `true`. Reports the update-mode outcome: if `on_update` is `true`, it shows the reduction result; if `on_update` is `false` (default), it reports that update-mode reductions are disabled and shows the restored effective price (no new cycle).
 
 ```yaml
 # Example: enable reductions for both publish and update
