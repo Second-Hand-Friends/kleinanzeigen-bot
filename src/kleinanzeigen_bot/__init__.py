@@ -2331,27 +2331,44 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.info("DONE: updated %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    async def __set_condition(self, condition_value:str) -> None:
+    async def __set_condition(self, condition_value:str) -> bool:
+        """Try to set condition via dialog path.
+
+        Returns True when dialog handling succeeded, otherwise False to indicate
+        that caller should use generic special-attribute handling.
+        """
         short_timeout = self._timeout("quick_dom")
-        try:
-            # Open condition dialog
-            await self.web_click(
-                By.XPATH,
-                "//label[contains(@for, '.condition')]/following::button[@aria-haspopup='dialog' or @aria-haspopup='true'][1]",
+        condition_trigger_xpath = "//label[contains(@for, '.condition')]/following::button[@aria-haspopup='dialog' or @aria-haspopup='true'][1]"
+
+        condition_trigger = await self.web_probe(By.XPATH, condition_trigger_xpath, timeout = short_timeout)
+        if condition_trigger is None:
+            LOG.debug("Condition dialog trigger not available for [%s]; falling back to generic handler.", condition_value)
+            return False
+
+        trigger_id = str(condition_trigger.attrs.get("id") or "")
+        trigger_controls = str(condition_trigger.attrs.get("aria-controls") or "")
+        LOG.debug("Condition dialog trigger resolved: id='%s', aria-controls='%s'", trigger_id, trigger_controls)
+
+        # Some categories render condition as a combobox and the broad dialog-trigger XPath
+        # may accidentally resolve to shipping controls (for example: id='ad-shipping-options').
+        # In that case we deliberately skip the dialog path and fall back to generic handling.
+        if "shipping" in trigger_id.lower() or "shipping" in trigger_controls.lower():
+            LOG.debug(
+                "Condition dialog trigger appears to be shipping-related (id='%s', aria-controls='%s'); skipping dialog path for condition_s.",
+                trigger_id,
+                trigger_controls,
             )
-        except TimeoutError as ex:
-            LOG.debug("Unable to open condition dialog and select condition [%s]", condition_value, exc_info = True)
-            raise TimeoutError(_("Failed to set attribute '%s'") % "condition_s") from ex
+            return False
 
         try:
+            await condition_trigger.click()
             await self.web_find(By.XPATH, '//*[self::dialog or @role="dialog"]', timeout = short_timeout)
             condition_radio = await self.web_find(
                 By.XPATH,
                 f"//*[self::dialog or @role='dialog']//input[@type='radio' and @value={_xpath_literal(condition_value)}]",
                 timeout = short_timeout,
             )
-            condition_radio_id_attr = condition_radio.attrs.get("id")
-            condition_radio_id = str(condition_radio_id_attr) if condition_radio_id_attr else ""
+            condition_radio_id = str(condition_radio.attrs.get("id") or "")
             if condition_radio_id:
                 try:
                     await self.web_click(By.XPATH, f"//*[self::dialog or @role='dialog']//label[@for={_xpath_literal(condition_radio_id)}]")
@@ -2369,17 +2386,16 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close condition dialog!")) from ex
 
+        return True
+
     async def __set_category(self, category:str | None, ad_file:str) -> None:
         # click on something to trigger automatic category detection
         await self.web_click(By.ID, "ad-description")
 
         is_category_auto_selected = False
-        try:
-            if await self.web_text(By.ID, "ad-category-path"):
-                is_category_auto_selected = True
-        except TimeoutError:
-            # Category auto-selection indicator not available within timeout.
-            pass
+        category_path_elem = await self.web_probe(By.ID, "ad-category-path")
+        if category_path_elem and await self._extract_visible_text(category_path_elem):
+            is_category_auto_selected = True
 
         if category:
             await self.web_sleep()  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
@@ -2459,11 +2475,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
 
             if normalized_special_attribute_key == "condition":
-                try:
-                    await self.__set_condition(special_attribute_value_str)
+                LOG.debug("Special attribute [%s]: trying dedicated condition dialog path", special_attribute_key)
+                if await self.__set_condition(special_attribute_value_str):
+                    LOG.debug("Special attribute [%s]: condition dialog path succeeded", special_attribute_key)
                     continue
-                except TimeoutError:
-                    LOG.info("Condition dialog not available, falling back to generic attribute handler for [%s]...", special_attribute_key)
+
+                LOG.info("Condition dialog not available, falling back to generic attribute handler for [%s]...", special_attribute_key)
 
             LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
             id_suffix_literal = _xpath_literal(f".{normalized_special_attribute_key}")
@@ -2655,11 +2672,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # Dialog option not present; already on the individual shipping page.
                 pass
 
-            try:
-                # only click on "Individueller Versand" when the price input is not available, otherwise it's already checked
-                # (important for mode = UPDATE)
-                await self.web_find(By.ID, "ad-individual-shipping-price", timeout = short_timeout)
-            except TimeoutError:
+            # only click on "Individueller Versand" when the price input is not available, otherwise it's already checked
+            # (important for mode = UPDATE)
+            individual_price_elem = await self.web_probe(By.ID, "ad-individual-shipping-price", timeout = short_timeout)
+            if individual_price_elem is None:
                 # Input not visible yet; click the individual shipping option.
                 try:
                     await self.web_click(By.ID, "ad-individual-shipping-checkbox-control")
