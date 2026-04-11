@@ -129,6 +129,14 @@ def test_shipping_costs() -> None:
     with pytest.raises(ContextualValidationError, match = "Did you mean shipping_options"):
         AdPartial.model_validate(minimal_ad_cfg | {"shipping_costs": "DHL_10"})
 
+    # multi-item sequence → generic list/sequence error (not the shipping_options hint)
+    with pytest.raises(ContextualValidationError, match = "not a list/sequence"):
+        AdPartial.model_validate(minimal_ad_cfg | {"shipping_costs": ["DHL_10", "HERMES_5"]})
+
+    # single non-string item in sequence → generic list/sequence error
+    with pytest.raises(ContextualValidationError, match = "not a list/sequence"):
+        AdPartial.model_validate(minimal_ad_cfg | {"shipping_costs": [4.95]})
+
 
 class ShippingOptionWrapper(ContextualModel):
     option:ShippingOption
