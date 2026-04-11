@@ -1390,16 +1390,16 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     def load_ad(self, ad_cfg_orig:dict[str, Any]) -> Ad:
         return AdPartial.model_validate(ad_cfg_orig).to_ad(self.config.ad_defaults)
 
-    async def check_and_wait_for_captcha(self, *, is_login_page:bool = True) -> None:
+    async def check_and_wait_for_captcha(self, *, is_login_page:bool = True, page_context:str | None = None) -> None:
         captcha_elem = await self.web_probe(
             By.CSS_SELECTOR,
             "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']",
             timeout = self._timeout("captcha_detection"),
         )
 
-        page_context = "login page" if is_login_page else "publish flow"
+        context_label = page_context or ("login page" if is_login_page else "publish operation")
         if captcha_elem is None:
-            LOG.debug("No captcha detected within timeout on %s", page_context)
+            LOG.debug("No captcha detected within timeout (page_context=%s)", context_label)
             return
 
         if not is_login_page and self.config.captcha.auto_restart:
@@ -2424,7 +2424,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # wait for captcha
         #############################
-        await self.check_and_wait_for_captcha(is_login_page = False)
+        await self.check_and_wait_for_captcha(is_login_page = False, page_context = f"{mode.name.lower()} operation")
 
         #############################
         # set title (right before submit to prevent React re-render clearing it)
