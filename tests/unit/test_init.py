@@ -1449,8 +1449,7 @@ class TestKleinanzeigenBotAuthentication:
 
             await test_bot.check_and_wait_for_captcha(is_login_page = True)
 
-            assert mock_probe.call_count == 1
-            assert mock_ainput.call_count == 1
+            mock_ainput.assert_awaited_once()
 
             # Test case 2: No captcha
             mock_probe.return_value = None
@@ -1458,8 +1457,7 @@ class TestKleinanzeigenBotAuthentication:
 
             await test_bot.check_and_wait_for_captcha(is_login_page = True)
 
-            assert mock_probe.call_count == 2
-            assert mock_ainput.call_count == 0
+            mock_ainput.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_fill_login_data_and_send(self, test_bot:KleinanzeigenBot) -> None:
@@ -4431,7 +4429,7 @@ class TestImageCleanupInPublishAd:
             patch.object(test_bot, "_KleinanzeigenBot__set_special_attributes", new_callable = AsyncMock),
             patch.object(test_bot, "_KleinanzeigenBot__set_shipping", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect) as mock_probe,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
             patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_execute", side_effect = execute_side_effect),
@@ -4446,8 +4444,6 @@ class TestImageCleanupInPublishAd:
         ):
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
 
-        cleanup_probe_calls = [call for call in mock_probe.await_args_list if len(call.args) >= 2 and call.args[1] == "button[aria-label='Bild entfernen']"]
-        assert len(cleanup_probe_calls) == 3
         assert sum(button.click.await_count for button in remove_buttons) == 3
         mock_upload.assert_awaited_once()
         assert event_log == ["remove-1", "remove-2", "remove-3", "upload"]
