@@ -2366,20 +2366,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     if not await self.web_check(By.ID, "ad-buy-now-true", Is.SELECTED, timeout = quick_dom):
                         await self.web_click(By.ID, "ad-buy-now-true", timeout = quick_dom)
                 else:
-                    try:
-                        buy_now_false = await self.web_probe(By.ID, "ad-buy-now-false", timeout = quick_dom)
-                        if buy_now_false and not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = quick_dom):
-                            await self.web_click(By.ID, "ad-buy-now-false", timeout = quick_dom)
-                    except TimeoutError as ex:
-                        LOG.debug(ex, exc_info = True)
-            else:
-                try:
-                    # For PICKUP/other types: always opt out of buy-now if the radio exists
                     buy_now_false = await self.web_probe(By.ID, "ad-buy-now-false", timeout = quick_dom)
                     if buy_now_false and not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = quick_dom):
                         await self.web_click(By.ID, "ad-buy-now-false", timeout = quick_dom)
-                except TimeoutError as ex:
-                    LOG.debug(ex, exc_info = True)
+            else:
+                # For PICKUP/other types: always opt out of buy-now if the radio exists
+                buy_now_false = await self.web_probe(By.ID, "ad-buy-now-false", timeout = quick_dom)
+                if buy_now_false and not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = quick_dom):
+                    await self.web_click(By.ID, "ad-buy-now-false", timeout = quick_dom)
 
         #############################
         # set description
