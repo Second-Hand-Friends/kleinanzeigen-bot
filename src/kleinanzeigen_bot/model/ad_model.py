@@ -186,7 +186,7 @@ class AdPartial(ContextualModel):
 
     @field_validator("shipping_costs", mode = "before")
     @classmethod
-    def _parse_shipping_costs(cls, v:float | int | str) -> Any:
+    def _parse_shipping_costs(cls, v:Any) -> Any:
         if v is None or (isinstance(v, str) and not v.strip()):
             return None
         if isinstance(v, Sequence) and not isinstance(v, str):

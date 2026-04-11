@@ -183,6 +183,13 @@ def _relative_ad_path(ad_file:str, config_file_path:str) -> str:
         return ad_file
 
 
+def _get_marker_value(marker:Element) -> str:
+    """Extract and normalize a hidden image marker value from a DOM element."""
+    attrs = marker.attrs
+    raw_value = attrs.get("value", "") if isinstance(attrs, dict) else getattr(attrs, "value", "")
+    return str(raw_value or "").strip()
+
+
 @dataclass(frozen = True)
 class PriceReductionDecision:
     mode:AdUpdateStrategy
@@ -2394,11 +2401,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         try:
             existing_markers = await self.web_find_all(By.CSS_SELECTOR, hidden_marker_selector, timeout = quick_dom)
-            existing_image_count = sum(
-                1
-                for marker in existing_markers
-                if str(marker.attrs.get("value", "") if isinstance(marker.attrs, dict) else getattr(marker.attrs, "value", "") or "").strip()
-            )
+            existing_image_count = sum(1 for marker in existing_markers if _get_marker_value(marker))
         except TimeoutError:
             existing_image_count = 0
 
@@ -3068,11 +3071,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         baseline_marker_count = 0
         try:
             baseline_markers = await self._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom_timeout)
-            baseline_marker_count = sum(
-                1
-                for marker in baseline_markers
-                if str(marker.attrs.get("value", "") if isinstance(marker.attrs, dict) else getattr(marker.attrs, "value", "") or "").strip()
-            )
+            baseline_marker_count = sum(1 for marker in baseline_markers if _get_marker_value(marker))
         except TimeoutError:
             baseline_marker_count = 0
 
@@ -3092,11 +3091,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         async def count_processed_images() -> int:
             try:
                 markers = await self._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom_timeout)
-                marker_count = sum(
-                    1
-                    for marker in markers
-                    if str(marker.attrs.get("value", "") if isinstance(marker.attrs, dict) else getattr(marker.attrs, "value", "") or "").strip()
-                )
+                marker_count = sum(1 for marker in markers if _get_marker_value(marker))
             except TimeoutError:
                 marker_count = 0
 

@@ -4443,7 +4443,7 @@ class TestImageCleanupInPublishAd:
         ):
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
 
-        cleanup_probe_calls = [call for call in mock_probe.call_args_list if len(call.args) >= 2 and call.args[1] == "button[aria-label='Bild entfernen']"]
+        cleanup_probe_calls = [call for call in mock_probe.await_args_list if len(call.args) >= 2 and call.args[1] == "button[aria-label='Bild entfernen']"]
         assert len(cleanup_probe_calls) == 3
         assert sum(button.click.await_count for button in remove_buttons) == 3
         mock_upload.assert_awaited_once()
