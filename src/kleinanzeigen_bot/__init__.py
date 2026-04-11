@@ -2424,7 +2424,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # wait for captcha
         #############################
-        await self.check_and_wait_for_captcha(is_login_page = False, page_context = f"{mode.name.lower()} operation")
+        operation_label = {
+            AdUpdateStrategy.REPLACE: "publish",
+            AdUpdateStrategy.MODIFY: "update",
+        }.get(mode, mode.name.lower())
+        await self.check_and_wait_for_captcha(is_login_page = False, page_context = f"{operation_label} operation")
 
         #############################
         # set title (right before submit to prevent React re-render clearing it)
