@@ -4044,6 +4044,33 @@ class TestBuyNowRadioTimeout:
         else:
             assert not buy_now_clicks, "web_click should not be called for ad-buy-now-false"
 
+    @pytest.mark.asyncio
+    async def test_buy_now_true_required_for_shipping_sell_directly(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+        tmp_path:Path,
+    ) -> None:
+        """Shipping ads with sell_directly enabled should fail if buy-now-true control is unavailable."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "sell_directly": True, "price_type": "FIXED", "price": 100})
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = str(tmp_path / "ad.yaml")
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.ID and selector_value == "ad-buy-now-true":
+                return None
+            return None
+
+        async def check_side_effect(*_:Any, **__:Any) -> bool:
+            return False
+
+        with (
+            pytest.raises(TimeoutError, match = "Failed to enable direct-buy option"),
+            self._mock_publish_ad_dependencies(test_bot, mock_page, probe_side_effect, check_side_effect),
+        ):
+            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+
 
 class TestImageUploadProcessedMarkerFallback:
     """Regression tests for image upload completion detection via hidden marker inputs."""
@@ -4355,11 +4382,14 @@ class TestImageCleanupInPublishAd:
 
         image_path = tmp_path / "img.jpg"
         ad_cfg = Ad.model_validate(base_ad_config | {"images": [str(image_path)]})
+        ad_cfg = ad_cfg.model_copy(update = {"id": 12345})
         image_path.write_bytes(b"\xff\xd8\xff")
         ad_cfg_orig = ad_cfg.model_dump()
         ad_file = str(tmp_path / "ad.yaml")
 
         probe_call_count = 0
+        remove_buttons:list[MagicMock] = []
+        event_log:list[str] = []
 
         async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
             nonlocal probe_call_count
@@ -4367,7 +4397,8 @@ class TestImageCleanupInPublishAd:
                 probe_call_count += 1
                 if probe_call_count <= 3:
                     remove_btn = MagicMock()
-                    remove_btn.click = AsyncMock()
+                    remove_btn.click = AsyncMock(side_effect = lambda idx = probe_call_count: event_log.append(f"remove-{idx}"))
+                    remove_buttons.append(remove_btn)
                     return remove_btn
                 return None
             return None
@@ -4387,6 +4418,9 @@ class TestImageCleanupInPublishAd:
                 return test_bot.page.url
             return None
 
+        async def upload_side_effect(*_:Any, **__:Any) -> None:
+            event_log.append("upload")
+
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
@@ -4401,14 +4435,16 @@ class TestImageCleanupInPublishAd:
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "_KleinanzeigenBot__set_contact_fields", new_callable = AsyncMock),
-            patch.object(test_bot, "_KleinanzeigenBot__upload_images", new_callable = AsyncMock) as mock_upload,
+            patch.object(test_bot, "_KleinanzeigenBot__upload_images", new_callable = AsyncMock, side_effect = upload_side_effect) as mock_upload,
             patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
         ):
-            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
 
         cleanup_probe_calls = [call for call in mock_probe.call_args_list if len(call.args) >= 2 and call.args[1] == "button[aria-label='Bild entfernen']"]
         assert len(cleanup_probe_calls) == 3
+        assert sum(button.click.await_count for button in remove_buttons) == 3
         mock_upload.assert_awaited_once()
+        assert event_log == ["remove-1", "remove-2", "remove-3", "upload"]

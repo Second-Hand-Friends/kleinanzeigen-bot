@@ -2351,23 +2351,28 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if ad_cfg.type != "WANTED":
             sell_directly = ad_cfg.sell_directly
             quick_dom = self._timeout("quick_dom")
-            try:
-                if ad_cfg.shipping_type == "SHIPPING":
-                    if sell_directly and price_type in {"FIXED", "NEGOTIABLE"}:
-                        buy_now_true = await self.web_probe(By.ID, "ad-buy-now-true", timeout = quick_dom)
-                        if buy_now_true and not await self.web_check(By.ID, "ad-buy-now-true", Is.SELECTED, timeout = quick_dom):
-                            await self.web_click(By.ID, "ad-buy-now-true", timeout = quick_dom)
-                    else:
+            if ad_cfg.shipping_type == "SHIPPING":
+                if sell_directly and price_type in {"FIXED", "NEGOTIABLE"}:
+                    buy_now_true = await self.web_probe(By.ID, "ad-buy-now-true", timeout = quick_dom)
+                    if buy_now_true is None:
+                        raise TimeoutError(_("Failed to enable direct-buy option: required control is not available."))
+                    if not await self.web_check(By.ID, "ad-buy-now-true", Is.SELECTED, timeout = quick_dom):
+                        await self.web_click(By.ID, "ad-buy-now-true", timeout = quick_dom)
+                else:
+                    try:
                         buy_now_false = await self.web_probe(By.ID, "ad-buy-now-false", timeout = quick_dom)
                         if buy_now_false and not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = quick_dom):
                             await self.web_click(By.ID, "ad-buy-now-false", timeout = quick_dom)
-                else:
+                    except TimeoutError as ex:
+                        LOG.debug(ex, exc_info = True)
+            else:
+                try:
                     # For PICKUP/other types: always opt out of buy-now if the radio exists
                     buy_now_false = await self.web_probe(By.ID, "ad-buy-now-false", timeout = quick_dom)
                     if buy_now_false and not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = quick_dom):
                         await self.web_click(By.ID, "ad-buy-now-false", timeout = quick_dom)
-            except TimeoutError as ex:
-                LOG.debug(ex, exc_info = True)
+                except TimeoutError as ex:
+                    LOG.debug(ex, exc_info = True)
 
         #############################
         # set description
@@ -2401,8 +2406,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             for idx in range(existing_image_count):
                 remove_btn = await self.web_probe(By.CSS_SELECTOR, remove_button_selector, timeout = quick_dom)
                 if remove_btn is None:
-                    LOG.debug("Image cleanup stopped after %d/%d removals: remove button no longer present", idx, existing_image_count)
-                    break
+                    raise TimeoutError(
+                        _("Image cleanup failed before upload. Removed %(removed)d of %(total)d existing images.")
+                        % {"removed": idx, "total": existing_image_count}
+                    )
                 await remove_btn.click()
                 removed_count += 1
                 await self.web_sleep(300, 500)
@@ -2566,7 +2573,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if contact.phone:
             phone_elem = await self.web_probe(By.ID, "ad-phone", timeout = self._timeout("quick_dom"))
             if phone_elem is None:
-                LOG.warning(
+                LOG.info(
                     "Phone number field not present on page. This is expected for many private accounts; commercial accounts may still support phone numbers."
                 )
             else:
@@ -2576,7 +2583,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         await self.web_sleep()
                     await self.__react_input("ad-phone", contact.phone)
                 except TimeoutError as ex:
-                    LOG.debug("Could not set contact phone despite visible phone field: %s", ex)
+                    LOG.warning("Could not set contact phone despite visible phone field: %s", ex)
 
     async def update_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         """

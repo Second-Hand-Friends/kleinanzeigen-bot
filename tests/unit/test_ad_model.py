@@ -123,6 +123,12 @@ def test_shipping_costs() -> None:
     assert AdPartial.model_validate(minimal_ad_cfg | {"shipping_costs": None}).shipping_costs is None
     assert AdPartial.model_validate(minimal_ad_cfg).shipping_costs is None
 
+    with pytest.raises(ContextualValidationError, match = "shipping_costs expects a numeric value"):
+        AdPartial.model_validate(minimal_ad_cfg | {"shipping_costs": ["DHL_10"]})
+
+    with pytest.raises(ContextualValidationError, match = "Did you mean shipping_options"):
+        AdPartial.model_validate(minimal_ad_cfg | {"shipping_costs": "DHL_10"})
+
 
 class ShippingOptionWrapper(ContextualModel):
     option:ShippingOption
