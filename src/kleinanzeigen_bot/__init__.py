@@ -2394,7 +2394,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         removed_count = 0
 
         try:
-            existing_markers = await self.web_find_all(By.CSS_SELECTOR, hidden_marker_selector, timeout = quick_dom)
+            existing_markers = await self._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom)
             existing_image_count = sum(1 for marker in existing_markers if _get_marker_value(marker))
         except TimeoutError:
             existing_image_count = 0

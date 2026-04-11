@@ -1919,6 +1919,7 @@ class TestKleinanzeigenBotBasics:
             patch.object(test_bot, "web_execute", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = web_await_error),
             pytest.raises(PublishSubmissionUncertainError, match = "submission may have succeeded before failure"),
         ):
@@ -2677,6 +2678,7 @@ class TestKleinanzeigenBotShippingOptions:
             patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = mock_response),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
             patch("builtins.input", return_value = ""),
             patch("kleinanzeigen_bot.utils.misc.ainput", new_callable = AsyncMock, return_value = ""),
@@ -3486,7 +3488,7 @@ class TestWantedShippingSelection:
             patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
-            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
@@ -3993,6 +3995,7 @@ class TestBuyNowRadioTimeout:
             patch.object(test_bot, "_KleinanzeigenBot__set_contact_fields", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
             patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
         ):
@@ -4403,7 +4406,7 @@ class TestImageCleanupInPublishAd:
                 return None
             return None
 
-        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[MagicMock]:
+        async def find_all_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> list[MagicMock]:
             if selector_type == By.CSS_SELECTOR and selector_value == "input[name^='adImages'][name$='.url']":
                 markers:list[MagicMock] = []
                 for index in range(3):
@@ -4438,7 +4441,7 @@ class TestImageCleanupInPublishAd:
             patch.object(test_bot, "_KleinanzeigenBot__upload_images", new_callable = AsyncMock, side_effect = upload_side_effect) as mock_upload,
             patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, side_effect = find_all_side_effect),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
         ):
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
