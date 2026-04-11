@@ -186,9 +186,16 @@ class AdPartial(ContextualModel):
 
     @field_validator("shipping_costs", mode = "before")
     @classmethod
-    def _parse_shipping_costs(cls, v:float | int | str) -> Any:
+    def _parse_shipping_costs(cls, v:Any) -> Any:
         if v is None or (isinstance(v, str) and not v.strip()):
             return None
+        if isinstance(v, Sequence) and not isinstance(v, str):
+            candidate = v[0] if len(v) == 1 else None
+            if isinstance(candidate, str) and candidate in CARRIER_CODE_BY_OPTION:
+                raise ValueError(_("shipping_costs expects a numeric value. Did you mean shipping_options: ['%s']?") % candidate)
+            raise ValueError(_("shipping_costs expects a numeric value like 4.95, not a list/sequence"))
+        if isinstance(v, str) and v in CARRIER_CODE_BY_OPTION:
+            raise ValueError(_("shipping_costs expects a numeric value. Did you mean shipping_options: ['%s']?") % v)
         return round(parse_decimal(v), 2)
 
     @field_validator("description")

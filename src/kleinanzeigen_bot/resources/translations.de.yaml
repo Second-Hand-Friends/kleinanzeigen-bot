@@ -208,12 +208,14 @@ kleinanzeigen_bot/__init__.py:
     "Failed to set shipping attribute for type '%s'!": "Fehler beim setzen des Versandattributs für den Typ '%s'!"
     "Shipping step skipped - reason: NOT_APPLICABLE": "Versandschritt übersprungen: Versand nicht anwendbar (Status = NOT_APPLICABLE)"
     "Shipping combobox button has no id attribute": "Versand-Combobox-Button hat kein ID-Attribut"
+    "Failed to enable direct-buy option: required control is not available.": "Direktkauf konnte nicht aktiviert werden: Erforderliches Steuerelement ist nicht verfügbar."
+    "Image cleanup failed before upload. Removed %(removed)d of %(total)d existing images.": "Bildbereinigung vor dem Hochladen fehlgeschlagen. %(removed)d von %(total)d vorhandenen Bildern wurden entfernt."
     "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
     " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
     " -> SUCCESS: ad updated with ID %s": " -> ERFOLG: Anzeige mit ID %s aktualisiert"
     " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
-    " -> removing %d existing image thumbnail(s) before upload...": " -> Entferne %d vorhandene Bild-Miniaturansicht(en) vor dem Hochladen..."
+    " -> removed %d existing image(s) before upload": " -> %d vorhandene Bilder vor dem Hochladen entfernt"
 
   update_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
@@ -232,6 +234,7 @@ kleinanzeigen_bot/__init__.py:
     "Could not set contact name.": "Kontaktname konnte nicht gesetzt werden."
     "Could not set contact location: %s (%s)": "Kontaktort konnte nicht gesetzt werden: %s (%s)"
     "Could not set contact zipcode: %s (%s)": "Kontakt-PLZ konnte nicht gesetzt werden: %s (%s)"
+    "Could not set contact phone despite visible phone field: %s": "Telefonnummer konnte trotz sichtbarem Feld nicht gesetzt werden: %s"
     ? "Phone number field not present on page. This is expected for many private accounts; commercial accounts may still support phone numbers."
     : "Telefonnummernfeld auf der Seite nicht vorhanden. Dies ist bei vielen privaten Konten zu erwarten; gewerbliche Konten unterstützen Telefonnummern möglicherweise weiterhin."
 
@@ -737,6 +740,9 @@ kleinanzeigen_bot/model/ad_model.py:
   _validate_auto_price_reduction_constraints:
     "price must be specified when auto_price_reduction is enabled": "price muss angegeben werden, wenn auto_price_reduction aktiviert ist"
     "min_price must not exceed price": "min_price darf price nicht überschreiten"
+  _parse_shipping_costs:
+    "shipping_costs expects a numeric value. Did you mean shipping_options: ['%s']?": "shipping_costs erwartet einen numerischen Wert. Meinten Sie shipping_options: ['%s']?"
+    "shipping_costs expects a numeric value like 4.95, not a list/sequence": "shipping_costs erwartet einen numerischen Wert wie 4,95 und keine Liste/Sequenz"
   _calculate_auto_price_internal:
     "min_price must be specified when auto_price_reduction is enabled": "min_price muss angegeben werden, wenn auto_price_reduction aktiviert ist"
 

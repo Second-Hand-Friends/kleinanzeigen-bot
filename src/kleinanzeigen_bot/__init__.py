@@ -183,6 +183,13 @@ def _relative_ad_path(ad_file:str, config_file_path:str) -> str:
         return ad_file
 
 
+def _get_marker_value(marker:Element) -> str:
+    """Extract and normalize a hidden image marker value from a DOM element."""
+    attrs = marker.attrs
+    raw_value = attrs.get("value", "") if isinstance(attrs, dict) else getattr(attrs, "value", "")
+    return str(raw_value or "").strip()
+
+
 @dataclass(frozen = True)
 class PriceReductionDecision:
     mode:AdUpdateStrategy
@@ -1383,26 +1390,30 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     def load_ad(self, ad_cfg_orig:dict[str, Any]) -> Ad:
         return AdPartial.model_validate(ad_cfg_orig).to_ad(self.config.ad_defaults)
 
-    async def check_and_wait_for_captcha(self, *, is_login_page:bool = True) -> None:
-        try:
-            captcha_timeout = self._timeout("captcha_detection")
-            await self.web_find(By.CSS_SELECTOR, "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']", timeout = captcha_timeout)
+    async def check_and_wait_for_captcha(self, *, is_login_page:bool = True, page_context:str | None = None) -> None:
+        captcha_elem = await self.web_probe(
+            By.CSS_SELECTOR,
+            "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']",
+            timeout = self._timeout("captcha_detection"),
+        )
 
-            if not is_login_page and self.config.captcha.auto_restart:
-                LOG.warning("Captcha recognized - auto-restart enabled, abort run...")
-                raise CaptchaEncountered(misc.parse_duration(self.config.captcha.restart_delay))
+        context_label = page_context or ("login page" if is_login_page else "publish operation")
+        if captcha_elem is None:
+            LOG.debug("No captcha detected within timeout (page_context=%s)", context_label)
+            return
 
-            LOG.warning("############################################")
-            LOG.warning("# Captcha present! Please solve the captcha.")
-            LOG.warning("############################################")
+        if not is_login_page and self.config.captcha.auto_restart:
+            LOG.warning("Captcha recognized - auto-restart enabled, abort run...")
+            raise CaptchaEncountered(misc.parse_duration(self.config.captcha.restart_delay))
 
-            if not is_login_page:
-                await self.web_scroll_page_down()
+        LOG.warning("############################################")
+        LOG.warning("# Captcha present! Please solve the captcha.")
+        LOG.warning("############################################")
 
-            await ainput(_("Press a key to continue..."))
-        except TimeoutError:
-            page_context = "login page" if is_login_page else "publish flow"
-            LOG.debug("No captcha detected within timeout on %s", page_context)
+        if not is_login_page:
+            await self.web_scroll_page_down()
+
+        await ainput(_("Press a key to continue..."))
 
     async def login(self) -> None:
         self._login_detection_diagnostics_captured = False
@@ -2346,23 +2357,23 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         if ad_cfg.type != "WANTED":
             sell_directly = ad_cfg.sell_directly
-            try:
-                if ad_cfg.shipping_type == "SHIPPING":
-                    if sell_directly and price_type in {"FIXED", "NEGOTIABLE"}:
-                        if not await self.web_check(By.ID, "ad-buy-now-true", Is.SELECTED):
-                            await self.web_click(By.ID, "ad-buy-now-true")
-                    elif not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED):
-                        await self.web_click(By.ID, "ad-buy-now-false")
+            quick_dom = self._timeout("quick_dom")
+            if ad_cfg.shipping_type == "SHIPPING":
+                if sell_directly and price_type in {"FIXED", "NEGOTIABLE"}:
+                    buy_now_true = await self.web_probe(By.ID, "ad-buy-now-true", timeout = quick_dom)
+                    if buy_now_true is None:
+                        raise TimeoutError(_("Failed to enable direct-buy option: required control is not available."))
+                    if not await self.web_check(By.ID, "ad-buy-now-true", Is.SELECTED, timeout = quick_dom):
+                        await self.web_click(By.ID, "ad-buy-now-true", timeout = quick_dom)
                 else:
-                    # For PICKUP/other types: always opt out of buy-now if the radio exists
-                    try:
-                        short_check = self._timeout("quick_dom")
-                        if not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = short_check):
-                            await self.web_click(By.ID, "ad-buy-now-false", timeout = short_check)
-                    except TimeoutError:
-                        pass  # nosec
-            except TimeoutError as ex:
-                LOG.debug(ex, exc_info = True)
+                    buy_now_false = await self.web_probe(By.ID, "ad-buy-now-false", timeout = quick_dom)
+                    if buy_now_false and not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = quick_dom):
+                        await self.web_click(By.ID, "ad-buy-now-false", timeout = quick_dom)
+            else:
+                # For PICKUP/other types: always opt out of buy-now if the radio exists
+                buy_now_false = await self.web_probe(By.ID, "ad-buy-now-false", timeout = quick_dom)
+                if buy_now_false and not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = quick_dom):
+                    await self.web_click(By.ID, "ad-buy-now-false", timeout = quick_dom)
 
         #############################
         # set description
@@ -2377,21 +2388,31 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # (needed for MODIFY because we don't know which changed,
         #  and as defensive cleanup when the form is pre-populated with thumbnails)
         #############################
-        try:
-            img_items = await self.web_find_all(
-                By.CSS_SELECTOR,
-                "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)",
-                timeout = self._timeout("quick_dom"),
-            )
-        except TimeoutError:
-            img_items = []  # no existing thumbnails — expected for fresh REPLACE forms
+        remove_button_selector = "button[aria-label='Bild entfernen']"
+        hidden_marker_selector = "input[name^='adImages'][name$='.url']"
+        quick_dom = self._timeout("quick_dom")
+        removed_count = 0
 
-        if img_items:
-            LOG.info(" -> removing %d existing image thumbnail(s) before upload...", len(img_items))
-            for element in img_items:
-                btn = await self.web_find(By.CSS_SELECTOR, "button.pictureupload-thumbnails-remove", parent = element)
-                await btn.click()
+        try:
+            existing_markers = await self._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom)
+            existing_image_count = sum(1 for marker in existing_markers if _get_marker_value(marker))
+        except TimeoutError:
+            existing_image_count = 0
+
+        if existing_image_count:
+            for idx in range(existing_image_count):
+                remove_btn = await self.web_probe(By.CSS_SELECTOR, remove_button_selector, timeout = quick_dom)
+                if remove_btn is None:
+                    raise TimeoutError(
+                        _("Image cleanup failed before upload. Removed %(removed)d of %(total)d existing images.")
+                        % {"removed": idx, "total": existing_image_count}
+                    )
+                await remove_btn.click()
+                removed_count += 1
                 await self.web_sleep(300, 500)
+
+        if removed_count > 0:
+            LOG.info(" -> removed %d existing image(s) before upload", removed_count)
             # Let async DOM updates settle before capturing hidden-marker baseline
             await self.web_sleep(200, 350)
 
@@ -2403,7 +2424,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # wait for captcha
         #############################
-        await self.check_and_wait_for_captcha(is_login_page = False)
+        operation_label = {
+            AdUpdateStrategy.REPLACE: "publish",
+            AdUpdateStrategy.MODIFY: "update",
+        }.get(mode, mode.name.lower())
+        await self.check_and_wait_for_captcha(is_login_page = False, page_context = f"{operation_label} operation")
 
         #############################
         # set title (right before submit to prevent React re-render clearing it)
@@ -2419,34 +2444,29 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         # Everything after the first click is uncertain: the ad may already have been submitted.
         try:
-            try:
-                await self.web_click(By.ID, "imprint-guidance-submit", timeout = self._timeout("quick_dom"))
-            except TimeoutError:
-                pass  # nosec — imprint overlay not shown
+            quick_dom = self._timeout("quick_dom")
+
+            imprint_btn = await self.web_probe(By.ID, "imprint-guidance-submit", timeout = quick_dom)
+            if imprint_btn is not None:
+                await imprint_btn.click()
 
             # check for no image question
-            try:
+            if not ad_cfg.images:
                 image_hint_xpath = '//button[contains(., "Ohne Bild veröffentlichen")]'
-                if not ad_cfg.images and await self.web_check(By.XPATH, image_hint_xpath, Is.DISPLAYED):
-                    await self.web_click(By.XPATH, image_hint_xpath)
-            except TimeoutError:
-                pass  # nosec — image hint not shown
+                image_hint_button = await self.web_probe(By.XPATH, image_hint_xpath, timeout = quick_dom)
+                if image_hint_button is not None:
+                    await image_hint_button.click()
 
             #############################
             # wait for payment form if commercial account is used
             #############################
-            try:
-                short_timeout = self._timeout("quick_dom")
-                await self.web_find(By.ID, "myftr-shppngcrt-frm", timeout = short_timeout)
-
+            payment_form = await self.web_probe(By.ID, "myftr-shppngcrt-frm", timeout = quick_dom)
+            if payment_form is not None:
                 LOG.warning("############################################")
                 LOG.warning("# Payment form detected! Please proceed with payment.")
                 LOG.warning("############################################")
                 await self.web_scroll_page_down()
                 await ainput(_("Press a key to continue..."))
-            except TimeoutError:
-                # Payment form not present.
-                pass
 
             confirmation_timeout = self._timeout("publishing_confirmation")
 
@@ -2552,23 +2572,19 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # set contact phone
         #############################
         if contact.phone:
-            try:
-                if await self.web_check(By.ID, "ad-phone", Is.DISPLAYED):
-                    try:
-                        if await self.web_check(By.ID, "ad-phone", Is.DISABLED):
-                            await self.web_click(By.ID, "ad-phone-visibility")
-                            await self.web_sleep()
-                    except TimeoutError:
-                        # ignore
-                        pass
-                    await self.__react_input("ad-phone", contact.phone)
-            except TimeoutError:
-                LOG.warning(
-                    _(
-                        "Phone number field not present on page. This is expected for many private accounts; "
-                        "commercial accounts may still support phone numbers."
-                    )
+            phone_elem = await self.web_probe(By.ID, "ad-phone", timeout = self._timeout("quick_dom"))
+            if phone_elem is None:
+                LOG.info(
+                    "Phone number field not present on page. This is expected for many private accounts; commercial accounts may still support phone numbers."
                 )
+            else:
+                try:
+                    if await self.web_check(By.ID, "ad-phone", Is.DISABLED, timeout = self._timeout("quick_dom")):
+                        await self.web_click(By.ID, "ad-phone-visibility", timeout = self._timeout("quick_dom"))
+                        await self.web_sleep()
+                    await self.__react_input("ad-phone", contact.phone)
+                except TimeoutError as ex:
+                    LOG.warning("Could not set contact phone despite visible phone field: %s", ex)
 
     async def update_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         """
@@ -3047,12 +3063,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         LOG.info(" -> found %s", pluralize("image", ad_cfg.images))
         hidden_marker_selector = "input[name^='adImages'][name$='.url']"
+        quick_dom_timeout = self._timeout("quick_dom")
 
         # Capture marker baseline before this upload attempt to avoid counting stale values
         baseline_marker_count = 0
         try:
-            baseline_markers = await self.web_find_all(By.CSS_SELECTOR, hidden_marker_selector, timeout = self._timeout("quick_dom"))
-            baseline_marker_count = sum(1 for marker in baseline_markers if str(getattr(marker.attrs, "value", "") or "").strip())
+            baseline_markers = await self._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom_timeout)
+            baseline_marker_count = sum(1 for marker in baseline_markers if _get_marker_value(marker))
         except TimeoutError:
             baseline_marker_count = 0
 
@@ -3065,29 +3082,18 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             await image_upload.send_file(image)
             await self.web_sleep()
 
-        # Wait for all images to be processed and thumbnails to appear
+        # Wait for all images to be processed
         expected_count = len(ad_cfg.images)
         LOG.info(" -> waiting for %s to be processed...", pluralize("image", ad_cfg.images))
-        thumbnail_selector = "ul#j-pictureupload-thumbnails > li:not(.is-placeholder)"
 
         async def count_processed_images() -> int:
-            thumbnail_count = 0
-            marker_count = 0
-
             try:
-                thumbnails = await self.web_find_all(By.CSS_SELECTOR, thumbnail_selector, timeout = self._timeout("quick_dom"))
-                thumbnail_count = len(thumbnails)
-            except TimeoutError:
-                thumbnail_count = 0
-
-            try:
-                markers = await self.web_find_all(By.CSS_SELECTOR, hidden_marker_selector, timeout = self._timeout("quick_dom"))
-                marker_count = sum(1 for marker in markers if str(getattr(marker.attrs, "value", "") or "").strip())
+                markers = await self._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom_timeout)
+                marker_count = sum(1 for marker in markers if _get_marker_value(marker))
             except TimeoutError:
                 marker_count = 0
 
-            effective_marker_count = max(0, marker_count - baseline_marker_count)
-            return max(thumbnail_count, effective_marker_count)
+            return max(0, marker_count - baseline_marker_count)
 
         async def check_thumbnails_uploaded() -> bool:
             current_count = await count_processed_images()
