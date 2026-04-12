@@ -43,7 +43,7 @@ from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 LOG.setLevel(loggers.INFO)
 
-PUBLISH_MAX_RETRIES:Final[int] = 3
+SUBMISSION_MAX_RETRIES:Final[int] = 3
 _NUMERIC_IDS_RE:Final[re.Pattern[str]] = re.compile(r"^\d+(,\d+)*$")
 _SPECIAL_ATTRIBUTE_TOKEN_RE:Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_]+$")
 # See issue #930 for migrating __select_button_combobox to web_select_button_combobox
@@ -2178,7 +2178,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
         failed_count = 0
-        max_retries = PUBLISH_MAX_RETRIES
+        max_retries = SUBMISSION_MAX_RETRIES
 
         published_ads = await self._fetch_published_ads()
 
@@ -2531,20 +2531,176 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             f"}})({js_element_id},{js_value})"
         )
 
+    @staticmethod
+    def __location_matches_target(target:str, candidate:str | None) -> bool:
+        if not candidate:
+            return False
+
+        normalized_target = " ".join(target.split()).casefold()
+        normalized_candidate = " ".join(candidate.split()).casefold()
+        if not normalized_target or not normalized_candidate:
+            return False
+
+        if normalized_target == normalized_candidate:
+            return True
+
+        if " - " in normalized_target:
+            return False
+
+        if normalized_candidate.startswith(f"{normalized_target} - "):
+            return True
+
+        candidate_city = normalized_candidate.rsplit(" - ", maxsplit = 1)[-1]
+        return normalized_target == candidate_city
+
+    async def __city_option_text(self, option:Element) -> str:
+        text = str(getattr(option, "text", "") or "").strip()
+        if text:
+            return text
+        try:
+            return (await self._extract_visible_text(option)).strip()
+        except TimeoutError:
+            return ""
+
+    async def __read_city_selection_text(self) -> str | None:
+        city_timeout = self._timeout("default")
+        quick_dom_timeout = self._timeout("quick_dom")
+        try:
+            city_element = await self.web_find(By.ID, "ad-city", timeout = city_timeout)
+        except TimeoutError:
+            return None
+        if city_element is None:
+            return None
+
+        if city_element.local_name == "input":
+            live_value = await city_element.apply("(elem) => (elem.value || '').trim()")
+            if isinstance(live_value, str) and live_value.strip():
+                return live_value
+
+        try:
+            selected_text = await self.web_text(By.ID, "ad-city-selected-option", timeout = quick_dom_timeout)
+            if selected_text:
+                return selected_text
+        except TimeoutError:
+            # #ad-city-selected-option may not exist in all DOM states; fall through to textContent
+            pass
+
+        live_text = await city_element.apply("(elem) => (elem.textContent || '').trim()")
+        if isinstance(live_text, str) and live_text.strip():
+            return live_text
+
+        try:
+            selected_text = await self.web_text(By.ID, "ad-city", timeout = quick_dom_timeout)
+            if selected_text:
+                return selected_text
+        except TimeoutError:
+            return None
+        return None
+
+    async def __select_city_combobox_option(self, target:str) -> None:
+        quick_dom_timeout = self._timeout("quick_dom")
+        city_flow_timeout = self._timeout("default")
+
+        await self.web_click(By.ID, "ad-city", timeout = quick_dom_timeout)
+        city_element = await self.web_find(By.ID, "ad-city", timeout = quick_dom_timeout)
+        city_attrs = getattr(city_element, "attrs", None)
+        listbox_id_raw = None
+        if city_attrs is not None:
+            listbox_id_raw = city_attrs.get("aria-controls") if hasattr(city_attrs, "get") else getattr(city_attrs, "aria-controls", None)
+        listbox_id = next((candidate for candidate in str(listbox_id_raw or "").split() if candidate.strip()), "")
+        if not listbox_id:
+            listbox_id = "ad-city-menu"
+
+        listbox_id_css = listbox_id.replace("\\", "\\\\").replace('"', '\\"')
+        listbox_scope = f'[id="{listbox_id_css}"]'
+        option_selector = (
+            f"{listbox_scope} [role='option'], "
+            f"{listbox_scope} li[aria-selected='true'], {listbox_scope} li[aria-selected='false'], "
+            f"{listbox_scope} button[aria-selected='true'], {listbox_scope} button[aria-selected='false']"
+        )
+
+        candidates:list[Element] = []
+
+        async def _options_available() -> bool:
+            nonlocal candidates
+            try:
+                candidates = await self.web_find_all(By.CSS_SELECTOR, option_selector, timeout = quick_dom_timeout)
+            except TimeoutError:
+                candidates = []
+            return bool(candidates)
+
+        try:
+            await self.web_await(_options_available, timeout = city_flow_timeout)
+        except TimeoutError as ex:
+            raise TimeoutError(_("City combobox options did not load for location: %s") % target) from ex
+
+        def normalize(value:str) -> str:
+            return " ".join(value.split()).casefold()
+
+        target_norm = normalize(target)
+        option_entries = [(candidate, normalize(await self.__city_option_text(candidate))) for candidate in candidates]
+
+        exact_match = next((entry[0] for entry in option_entries if entry[1] == target_norm), None)
+        city_matches:list[Element] = []
+        prefix_matches:list[Element] = []
+        if " - " not in target_norm:
+            city_matches = [entry[0] for entry in option_entries if entry[1] and entry[1].rsplit(" - ", maxsplit = 1)[-1] == target_norm]
+            prefix_matches = [entry[0] for entry in option_entries if entry[1].startswith(f"{target_norm} - ")]
+
+        if exact_match is None and len(city_matches) > 1:
+            raise TimeoutError(_("City combobox options are ambiguous for location: %s") % target)
+
+        if exact_match is None and not city_matches and len(prefix_matches) > 1:
+            raise TimeoutError(_("City combobox options are ambiguous for location: %s") % target)
+
+        selected_option = exact_match or (city_matches[0] if city_matches else None) or (prefix_matches[0] if len(prefix_matches) == 1 else None)
+        if selected_option is None:
+            raise TimeoutError(_("No city combobox option matched location: %s") % target)
+
+        await selected_option.click()
+
+        async def _selection_converged() -> bool:
+            selected_city = await self.__read_city_selection_text()
+            return self.__location_matches_target(target, selected_city)
+
+        try:
+            await self.web_await(_selection_converged, timeout = city_flow_timeout)
+        except TimeoutError as ex:
+            raise TimeoutError(_("City selection did not converge for location: %s") % target) from ex
+
+    async def __set_contact_location(self, location:str) -> None:
+        target = location.strip()
+        if not target:
+            return
+
+        selected_city = await self.__read_city_selection_text()
+        if self.__location_matches_target(target, selected_city):
+            return
+
+        city_timeout = self._timeout("default")
+        city_element = await self.web_find(By.ID, "ad-city", timeout = city_timeout)
+        if city_element is None:
+            raise TimeoutError(_("Unsupported city element type while setting contact location: <%s>") % "missing")
+        city_tag = city_element.local_name
+        city_role = str(city_element.attrs.get("role") or "").casefold()
+        if city_tag != "button" or city_role != "combobox":
+            raise TimeoutError(_("Unsupported city element type while setting contact location: <%s>") % city_tag)
+
+        await self.__select_city_combobox_option(target)
+
     async def __set_contact_fields(self, contact:Contact) -> None:
         #############################
-        # set contact zipcode
+        # set contact zipcode + location
         #############################
         if contact.zipcode:
             try:
-                await self.__react_input("ad-zip-code", str(contact.zipcode))
+                await self.web_input(By.ID, "ad-zip-code", str(contact.zipcode))
             except TimeoutError as ex:
                 LOG.warning("Could not set contact zipcode: %s (%s)", contact.zipcode, ex)
-        if contact.location:
-            try:
-                await self.__react_input("ad-city", contact.location)
-            except TimeoutError as ex:
-                LOG.warning("Could not set contact location: %s (%s)", contact.location, ex)
+                raise TimeoutError(_("Failed to set contact zipcode: %s") % contact.zipcode) from ex
+
+            if contact.location:
+                await self.__set_contact_location(contact.location)
 
         #############################
         # set contact street
@@ -2599,6 +2755,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             None
         """
         count = 0
+        failed_count = 0
+        max_retries = SUBMISSION_MAX_RETRIES
 
         published_ads = await self._fetch_published_ads()
 
@@ -2615,13 +2773,53 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 continue
 
             count += 1
+            success = False
+            baseline_price = ad_cfg.price
+            baseline_price_reduction_count = ad_cfg.price_reduction_count
 
-            await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.MODIFY)
-            publish_timeout = self._timeout("publishing_result")
-            await self.web_await(self.__check_publishing_result, timeout = publish_timeout)
+            for attempt in range(1, max_retries + 1):
+                try:
+                    ad_cfg.price = baseline_price
+                    ad_cfg.price_reduction_count = baseline_price_reduction_count
+                    await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.MODIFY)
+                    success = True
+                    break
+                except asyncio.CancelledError:
+                    raise
+                except PublishSubmissionUncertainError as ex:
+                    await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
+                    LOG.warning(
+                        "Attempt %s/%s for '%s' reached submit boundary but failed: %s. Not retrying to prevent duplicate modifications.",
+                        attempt,
+                        max_retries,
+                        ad_cfg.title,
+                        ex,
+                    )
+                    LOG.warning("Manual recovery required for '%s'. Check 'Meine Anzeigen' to confirm whether the update was applied.", ad_cfg.title)
+                    failed_count += 1
+                    break
+                except (TimeoutError, ProtocolException) as ex:
+                    await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
+                    if attempt >= max_retries:
+                        LOG.error("All %s attempts failed for '%s': %s. Skipping ad.", max_retries, ad_cfg.title, ex)
+                        failed_count += 1
+                        break
+
+                    LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
+                    await self.web_sleep(2_000)
+
+            if success:
+                try:
+                    publish_timeout = self._timeout("publishing_result")
+                    await self.web_await(self.__check_publishing_result, timeout = publish_timeout)
+                except TimeoutError:
+                    LOG.warning(" -> Could not confirm update for '%s', but changes may be online", ad_cfg.title)
 
         LOG.info("############################################")
-        LOG.info("DONE: updated %s", pluralize("ad", count))
+        if failed_count > 0:
+            LOG.info("DONE: updated %s (%s failed after retries)", pluralize("ad", count - failed_count), failed_count)
+        else:
+            LOG.info("DONE: updated %s", pluralize("ad", count))
         LOG.info("############################################")
 
     async def __set_condition(self, condition_value:str) -> bool:

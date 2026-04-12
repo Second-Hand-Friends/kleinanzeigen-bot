@@ -13,7 +13,7 @@ import pytest
 from nodriver.core.connection import ProtocolException
 from pydantic import ValidationError
 
-from kleinanzeigen_bot import LOG, PUBLISH_MAX_RETRIES, AdUpdateStrategy, KleinanzeigenBot, LoginDetectionReason, LoginDetectionResult, misc
+from kleinanzeigen_bot import LOG, SUBMISSION_MAX_RETRIES, AdUpdateStrategy, KleinanzeigenBot, LoginDetectionReason, LoginDetectionResult, misc
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, AutoPriceReductionConfig, Config, DiagnosticsConfig, PublishingConfig
@@ -1633,7 +1633,7 @@ class TestKleinanzeigenBotDiagnostics:
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
-        expected_retries = PUBLISH_MAX_RETRIES
+        expected_retries = SUBMISSION_MAX_RETRIES
         assert page.save_screenshot.await_count == expected_retries
         assert page.get_content.await_count == expected_retries
         entries = os.listdir(tmp_path)
@@ -1677,7 +1677,7 @@ class TestKleinanzeigenBotDiagnostics:
 
         entries = os.listdir(tmp_path)
         log_files = [name for name in entries if fnmatch.fnmatch(name, "publish_error_*_attempt*_ad_000001_Test.log")]
-        assert len(log_files) == PUBLISH_MAX_RETRIES
+        assert len(log_files) == SUBMISSION_MAX_RETRIES
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -1963,6 +1963,273 @@ class TestKleinanzeigenBotBasics:
         test_categories = {"test_cat": "test_id"}
         test_bot.categories = test_categories
         assert test_bot.categories == test_categories
+
+
+class TestKleinanzeigenBotUpdateAdsResilience:
+    @staticmethod
+    def _build_update_ad(base_ad_config:dict[str, Any], ad_id:int, title:str) -> tuple[str, Ad, dict[str, Any]]:
+        ad_payload = copy.deepcopy(base_ad_config) | {"id": ad_id, "title": title}
+        return (f"{ad_id}.yaml", Ad.model_validate(ad_payload), ad_payload)
+
+    @staticmethod
+    def _build_published_ads(*ad_ids:int) -> list[dict[str, Any]]:
+        return [{"id": ad_id, "state": "active"} for ad_id in ad_ids]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("first_failure", "first_title"),
+        [
+            (TimeoutError("transient timeout"), "Timeout Ad"),
+            (ProtocolException(MagicMock(), "connection lost", 0), "Protocol Failing"),
+            (TimeoutError("City selection did not converge for location: 10115 - Metroville"), "Location Failed"),
+        ],
+        ids = ["timeout_error", "protocol_exception", "location_non_convergence"],
+    )
+    async def test_update_ads_continues_after_retryable_first_ad_failure(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        first_failure:Exception,
+        first_title:str,
+    ) -> None:
+        ad_one = self._build_update_ad(base_ad_config, 101, first_title)
+        ad_two = self._build_update_ad(base_ad_config, 102, "Success Ad")
+
+        async def publish_side_effect(
+            _ad_file:str,
+            ad_cfg:Ad,
+            _ad_cfg_orig:dict[str, Any],
+            _published_ads:list[dict[str, Any]],
+            _mode:AdUpdateStrategy,
+        ) -> None:
+            if ad_cfg.id == 101:
+                raise first_failure
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = self._build_published_ads(101, 102)),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+        ):
+            await test_bot.update_ads([ad_one, ad_two])
+
+        assert publish_mock.await_count == SUBMISSION_MAX_RETRIES + 1
+        assert any(call.args[1].id == 102 for call in publish_mock.await_args_list)
+        assert all(call.args[4] == AdUpdateStrategy.MODIFY for call in publish_mock.await_args_list)
+        assert sleep_mock.await_count == SUBMISSION_MAX_RETRIES - 1
+
+    @pytest.mark.asyncio
+    async def test_update_ads_publish_submission_uncertain_is_not_retried(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        ad_one = self._build_update_ad(base_ad_config, 301, "Uncertain Update")
+        ad_two = self._build_update_ad(base_ad_config, 302, "Second Update")
+
+        async def publish_side_effect(
+            _ad_file:str,
+            ad_cfg:Ad,
+            _ad_cfg_orig:dict[str, Any],
+            _published_ads:list[dict[str, Any]],
+            _mode:AdUpdateStrategy,
+        ) -> None:
+            if ad_cfg.id == 301:
+                raise PublishSubmissionUncertainError("submission may have succeeded before failure")
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = self._build_published_ads(301, 302)),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+        ):
+            await test_bot.update_ads([ad_one, ad_two])
+
+        assert publish_mock.await_count == 2
+        sleep_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_update_ads_cancelled_error_propagates_immediately(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        ad_one = self._build_update_ad(base_ad_config, 401, "Cancelled Ad")
+        ad_two = self._build_update_ad(base_ad_config, 402, "Should Not Run")
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = self._build_published_ads(401, 402)),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = asyncio.CancelledError()) as publish_mock,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+            pytest.raises(asyncio.CancelledError),
+        ):
+            await test_bot.update_ads([ad_one, ad_two])
+
+        assert publish_mock.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_update_ads_publishing_result_timeout_is_non_fatal(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        ad_one = self._build_update_ad(base_ad_config, 501, "Result Timeout")
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = self._build_published_ads(501)),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock) as publish_mock,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = TimeoutError("result timeout")),
+        ):
+            await test_bot.update_ads([ad_one])
+
+        publish_mock.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_update_ads_summary_reports_mixed_outcomes(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        ad_one = self._build_update_ad(base_ad_config, 601, "Summary Failed")
+        ad_two = self._build_update_ad(base_ad_config, 602, "Summary Success")
+
+        async def publish_side_effect(
+            _ad_file:str,
+            ad_cfg:Ad,
+            _ad_cfg_orig:dict[str, Any],
+            _published_ads:list[dict[str, Any]],
+            _mode:AdUpdateStrategy,
+        ) -> None:
+            if ad_cfg.id == 601:
+                raise TimeoutError("still failing")
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = self._build_published_ads(601, 602)),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+            patch.object(LOG, "info") as log_info_mock,
+        ):
+            await test_bot.update_ads([ad_one, ad_two])
+
+        assert any(call.args and call.args[0] == "DONE: updated %s (%s failed after retries)" for call in log_info_mock.call_args_list)
+
+
+class TestKleinanzeigenBotContactLocationHardening:
+    @pytest.mark.parametrize(
+        ("target", "candidate", "expected"),
+        [
+            ("10115 - Metroville", "10115 - Metroville", True),
+            ("10115 - Metroville", "12623 - Metroville", False),
+            ("Metroville", "12623 - Metroville", True),
+            ("Berlin", "Berlin - Mitte", True),
+            ("Metroville", None, False),
+            ("Berlin", "Hamburg", False),
+            ("Berlin", "berlin", True),
+            ("Berlin", "  Berlin  ", True),
+        ],
+    )
+    def test_location_matches_target(self, test_bot:KleinanzeigenBot, target:str, candidate:str | None, expected:bool) -> None:
+        matcher = getattr(test_bot, "_KleinanzeigenBot__location_matches_target")
+        assert matcher(target, candidate) is expected
+
+    @pytest.mark.asyncio
+    async def test_read_city_selection_text_prefers_live_input_value(self, test_bot:KleinanzeigenBot) -> None:
+        city_input = MagicMock(spec = Element)
+        city_input.local_name = "input"
+        city_input.apply = AsyncMock(return_value = "Live City")
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock) as web_text_mock,
+        ):
+            selected = await getattr(test_bot, "_KleinanzeigenBot__read_city_selection_text")()
+
+        assert selected == "Live City"
+        web_text_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_set_contact_fields_fails_closed_when_zipcode_cannot_be_set(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        ad_cfg = Ad.model_validate(base_ad_config)
+
+        with (
+            patch.object(test_bot, "web_input", new_callable = AsyncMock, side_effect = TimeoutError("zip timeout")),
+            patch.object(test_bot, "_KleinanzeigenBot__set_contact_location", new_callable = AsyncMock) as set_location_mock,
+            pytest.raises(TimeoutError, match = "Failed to set contact zipcode"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_fields")(ad_cfg.contact)
+
+        set_location_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_set_contact_fields_skips_zipcode_and_location_when_empty(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """When no zipcode is configured, both ZIP entry and location setting are skipped without error."""
+        config = base_ad_config | {"contact": base_ad_config["contact"] | {"zipcode": ""}}
+        ad_cfg = Ad.model_validate(config)
+
+        with (
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as web_input_mock,
+            patch.object(test_bot, "_KleinanzeigenBot__set_contact_location", new_callable = AsyncMock) as set_location_mock,
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_fields")(ad_cfg.contact)
+
+        web_input_mock.assert_not_awaited()
+        set_location_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_set_contact_location_fails_when_city_suffix_matches_multiple_zip_codes(self, test_bot:KleinanzeigenBot) -> None:
+        """When multiple ZIP codes share the same city name and no exact match, selection must fail closed."""
+        city_button = MagicMock(spec = Element)
+        city_button.local_name = "button"
+        city_button.attrs = {"role": "combobox", "aria-controls": "ad-city-menu"}
+
+        option_a = MagicMock(spec = Element)
+        option_a.text = "10115 - Metroville"
+        option_b = MagicMock(spec = Element)
+        option_b.text = "12623 - Metroville"
+
+        def _mock_city_option_text(elem:Element) -> str:
+            return str(getattr(elem, "text", "") or "")
+
+        async def _web_await_side_effect(condition:Callable[..., Awaitable[bool] | bool], **_:Any) -> Any:
+            result = condition()
+            return await result if asyncio.iscoroutine(result) else result
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_button),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [option_a, option_b]),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _web_await_side_effect),
+            patch.object(test_bot, "_KleinanzeigenBot__read_city_selection_text", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "_KleinanzeigenBot__city_option_text", new_callable = AsyncMock, side_effect = _mock_city_option_text),
+            pytest.raises(TimeoutError, match = "City combobox options are ambiguous for location: Metroville"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_location")("Metroville")
+
+    @pytest.mark.asyncio
+    async def test_set_contact_location_raises_when_selection_does_not_converge(self, test_bot:KleinanzeigenBot) -> None:
+        city_button = MagicMock(spec = Element)
+        city_button.local_name = "button"
+        city_button.attrs = {"role": "combobox", "aria-controls": "ad-city-menu"}
+
+        target_option = MagicMock(spec = Element)
+        target_option.text = "10115 - Metroville"
+        target_option.click = AsyncMock()
+
+        wait_calls = 0
+
+        async def web_await_side_effect(condition:Callable[..., Awaitable[bool] | bool], **_:Any) -> Any:
+            nonlocal wait_calls
+            wait_calls += 1
+
+            result = condition()
+            condition_value = await result if asyncio.iscoroutine(result) else result
+            if wait_calls == 1:
+                return condition_value
+            raise TimeoutError("Condition not met")
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_button),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [target_option]),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = web_await_side_effect),
+            patch.object(test_bot, "_KleinanzeigenBot__read_city_selection_text", new_callable = AsyncMock, return_value = "20095 - Rivertown"),
+            pytest.raises(TimeoutError, match = "City selection did not converge"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_location")("10115 - Metroville")
 
 
 class TestKleinanzeigenBotArgParsing:
@@ -2519,6 +2786,7 @@ class TestKleinanzeigenBotShippingOptions:
             patch.object(test_bot, "web_request", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock),
             patch.object(test_bot, "web_await", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_contact_fields", new_callable = AsyncMock),
             patch("builtins.input", return_value = ""),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
         ):
@@ -2678,6 +2946,7 @@ class TestKleinanzeigenBotShippingOptions:
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_contact_fields", new_callable = AsyncMock),
             patch("builtins.input", return_value = ""),
             patch("kleinanzeigen_bot.utils.misc.ainput", new_callable = AsyncMock, return_value = ""),
         ):

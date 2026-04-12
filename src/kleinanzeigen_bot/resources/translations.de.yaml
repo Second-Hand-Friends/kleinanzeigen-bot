@@ -221,6 +221,12 @@ kleinanzeigen_bot/__init__.py:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
     " -> SKIPPED: ad '%s' (ID: %s) not found in published ads": " -> ÜBERSPRUNGEN: Anzeige '%s' (ID: %s) nicht in veröffentlichten Anzeigen gefunden"
+    "Attempt %s/%s for '%s' reached submit boundary but failed: %s. Not retrying to prevent duplicate modifications.": "Versuch %s/%s für '%s' hat die Sendegrenze erreicht, ist aber fehlgeschlagen: %s. Kein weiterer Versuch, um doppelte Änderungen zu vermeiden."
+    "Manual recovery required for '%s'. Check 'Meine Anzeigen' to confirm whether the update was applied.": "Manuelle Nachbearbeitung für '%s' erforderlich. Bitte unter 'Meine Anzeigen' prüfen, ob die Aktualisierung übernommen wurde."
+    "All %s attempts failed for '%s': %s. Skipping ad.": "Alle %s Versuche für '%s' sind fehlgeschlagen: %s. Anzeige wird übersprungen."
+    "Attempt %s/%s failed for '%s': %s. Retrying...": "Versuch %s/%s für '%s' ist fehlgeschlagen: %s. Erneuter Versuch..."
+    " -> Could not confirm update for '%s', but changes may be online": " -> Aktualisierung für '%s' konnte nicht bestätigt werden, aber Änderungen könnten online sein"
+    "DONE: updated %s (%s failed after retries)": "FERTIG: %s aktualisiert (%s nach Wiederholungen fehlgeschlagen)"
     "DONE: updated %s": "FERTIG: %s aktualisiert"
     "ad": "Anzeige"
 
@@ -232,11 +238,20 @@ kleinanzeigen_bot/__init__.py:
   __set_contact_fields:
     "Could not set contact street.": "Kontaktstraße konnte nicht gesetzt werden."
     "Could not set contact name.": "Kontaktname konnte nicht gesetzt werden."
-    "Could not set contact location: %s (%s)": "Kontaktort konnte nicht gesetzt werden: %s (%s)"
     "Could not set contact zipcode: %s (%s)": "Kontakt-PLZ konnte nicht gesetzt werden: %s (%s)"
+    "Failed to set contact zipcode: %s": "Kontakt-PLZ konnte nicht gesetzt werden: %s"
     "Could not set contact phone despite visible phone field: %s": "Telefonnummer konnte trotz sichtbarem Feld nicht gesetzt werden: %s"
     ? "Phone number field not present on page. This is expected for many private accounts; commercial accounts may still support phone numbers."
     : "Telefonnummernfeld auf der Seite nicht vorhanden. Dies ist bei vielen privaten Konten zu erwarten; gewerbliche Konten unterstützen Telefonnummern möglicherweise weiterhin."
+
+  __select_city_combobox_option:
+    "City combobox options did not load for location: %s": "Stadt-Combobox-Optionen für Ort nicht geladen: %s"
+    "City combobox options are ambiguous for location: %s": "Stadt-Combobox-Optionen für Ort sind mehrdeutig: %s"
+    "No city combobox option matched location: %s": "Keine Stadt-Combobox-Option passt zum Ort: %s"
+    "City selection did not converge for location: %s": "Stadtauswahl ist nicht auf den Ort konvergiert: %s"
+
+  __set_contact_location:
+    "Unsupported city element type while setting contact location: <%s>": "Nicht unterstützter Stadt-Elementtyp beim Setzen des Kontaktorts: <%s>"
 
   __upload_images:
     " -> found %s": "-> %s gefunden"
