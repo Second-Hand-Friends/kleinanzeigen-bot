@@ -2433,7 +2433,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # set title (right before submit to prevent React re-render clearing it)
         #############################
-        await self.__react_input("ad-title", ad_cfg.title)
+        await self.__react_input("ad-title", ad_cfg.title[:65])
 
         #############################
         # submit
