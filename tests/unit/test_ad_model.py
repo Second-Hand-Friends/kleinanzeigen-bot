@@ -7,7 +7,7 @@ import math
 
 import pytest
 
-from kleinanzeigen_bot.model.ad_model import MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH, AdPartial, ShippingOption
+from kleinanzeigen_bot.model.ad_model import MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH, MIN_TITLE_LENGTH, AdPartial, ShippingOption
 from kleinanzeigen_bot.model.config_model import AdDefaults, AutoPriceReductionConfig
 from kleinanzeigen_bot.utils.pydantics import ContextualModel, ContextualValidationError
 
@@ -157,20 +157,23 @@ def test_description_length_limit() -> None:
 
 
 @pytest.mark.parametrize(
-    ("title_length", "should_pass"),
+    ("title_length", "should_pass", "error_match"),
     [
-        (MAX_TITLE_LENGTH + 1, False),
-        (MAX_TITLE_LENGTH, True),
+        (MIN_TITLE_LENGTH - 1, False, f"title length must be at least {MIN_TITLE_LENGTH} characters"),
+        (MIN_TITLE_LENGTH, True, None),
+        (MAX_TITLE_LENGTH + 1, False, f"title length exceeds {MAX_TITLE_LENGTH} characters"),
+        (MAX_TITLE_LENGTH, True, None),
     ],
 )
 @pytest.mark.unit
-def test_title_length_validation(title_length:int, should_pass:bool) -> None:
+def test_title_length_validation(title_length:int, should_pass:bool, error_match:str | None) -> None:
     cfg = {"title": "x" * title_length, "category": "160", "description": "Test Description"}
     if should_pass:
         validated = AdPartial.model_validate(cfg)
         assert validated.title == "x" * title_length
     else:
-        with pytest.raises(ContextualValidationError, match = f"at most {MAX_TITLE_LENGTH} characters"):
+        assert error_match is not None
+        with pytest.raises(ContextualValidationError, match = error_match):
             AdPartial.model_validate(cfg)
 
 
