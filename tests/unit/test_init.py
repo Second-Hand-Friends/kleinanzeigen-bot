@@ -3751,7 +3751,7 @@ class TestWantedShippingSelection:
             patch.object(test_bot, "_KleinanzeigenBot__set_shipping", new_callable = AsyncMock),
             patch.object(test_bot, "_KleinanzeigenBot__set_contact_fields", new_callable = AsyncMock),
             patch.object(test_bot, "_KleinanzeigenBot__upload_images", new_callable = AsyncMock),
-            patch.object(test_bot, "_KleinanzeigenBot__react_input", new_callable = AsyncMock),
+            patch.object(test_bot, "_KleinanzeigenBot__set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
