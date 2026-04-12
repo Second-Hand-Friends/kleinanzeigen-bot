@@ -2107,6 +2107,10 @@ class TestKleinanzeigenBotContactLocationHardening:
             ("10115 - Metroville", "12623 - Metroville", False),
             ("Metroville", "12623 - Metroville", True),
             ("Berlin", "Berlin - Mitte", True),
+            ("Metroville", None, False),
+            ("Berlin", "Hamburg", False),
+            ("Berlin", "berlin", True),
+            ("Berlin", "  Berlin  ", True),
         ],
     )
     def test_location_matches_target(self, test_bot:KleinanzeigenBot, target:str, candidate:str | None, expected:bool) -> None:
@@ -2144,6 +2148,56 @@ class TestKleinanzeigenBotContactLocationHardening:
             await getattr(test_bot, "_KleinanzeigenBot__set_contact_fields")(ad_cfg.contact)
 
         set_location_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_set_contact_fields_skips_zipcode_and_location_when_empty(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """When no zipcode is configured, both ZIP entry and location setting are skipped without error."""
+        config = base_ad_config | {"contact": base_ad_config["contact"] | {"zipcode": ""}}
+        ad_cfg = Ad.model_validate(config)
+
+        with (
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as web_input_mock,
+            patch.object(test_bot, "_KleinanzeigenBot__set_contact_location", new_callable = AsyncMock) as set_location_mock,
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_fields")(ad_cfg.contact)
+
+        web_input_mock.assert_not_awaited()
+        set_location_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_set_contact_location_fails_when_city_suffix_matches_multiple_zip_codes(self, test_bot:KleinanzeigenBot) -> None:
+        """When multiple ZIP codes share the same city name and no exact match, selection must fail closed."""
+        city_button = MagicMock(spec = Element)
+        city_button.local_name = "button"
+        city_button.attrs = {"role": "combobox", "aria-controls": "ad-city-menu"}
+
+        option_a = MagicMock(spec = Element)
+        option_a.text = "10115 - Metroville"
+        option_b = MagicMock(spec = Element)
+        option_b.text = "12623 - Metroville"
+
+        def _mock_city_option_text(elem:Element) -> str:
+            return str(getattr(elem, "text", "") or "")
+
+        async def _web_await_side_effect(condition:Callable[..., Awaitable[bool] | bool], **_:Any) -> Any:
+            result = condition()
+            return await result if asyncio.iscoroutine(result) else result
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_button),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [option_a, option_b]),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _web_await_side_effect),
+            patch.object(test_bot, "_KleinanzeigenBot__read_city_selection_text", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "_KleinanzeigenBot__city_option_text", new_callable = AsyncMock, side_effect = _mock_city_option_text),
+            pytest.raises(TimeoutError, match = "City combobox options are ambiguous for location: Metroville"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_location")("Metroville")
 
     @pytest.mark.asyncio
     async def test_set_contact_location_raises_when_selection_does_not_converge(self, test_bot:KleinanzeigenBot) -> None:

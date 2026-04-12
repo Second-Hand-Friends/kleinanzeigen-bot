@@ -2582,6 +2582,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             if selected_text:
                 return selected_text
         except TimeoutError:
+            # #ad-city-selected-option may not exist in all DOM states; fall through to textContent
             pass
 
         live_text = await city_element.apply("(elem) => (elem.textContent || '').trim()")
@@ -2640,16 +2641,19 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         option_entries = [(candidate, normalize(await self.__city_option_text(candidate))) for candidate in candidates]
 
         exact_match = next((entry[0] for entry in option_entries if entry[1] == target_norm), None)
-        city_match:Element | None = None
+        city_matches:list[Element] = []
         prefix_matches:list[Element] = []
         if " - " not in target_norm:
-            city_match = next((entry[0] for entry in option_entries if entry[1] and entry[1].rsplit(" - ", maxsplit = 1)[-1] == target_norm), None)
+            city_matches = [entry[0] for entry in option_entries if entry[1] and entry[1].rsplit(" - ", maxsplit = 1)[-1] == target_norm]
             prefix_matches = [entry[0] for entry in option_entries if entry[1].startswith(f"{target_norm} - ")]
 
-        if exact_match is None and city_match is None and len(prefix_matches) > 1:
+        if exact_match is None and len(city_matches) > 1:
             raise TimeoutError(_("City combobox options are ambiguous for location: %s") % target)
 
-        selected_option = exact_match or city_match or (prefix_matches[0] if len(prefix_matches) == 1 else None)
+        if exact_match is None and not city_matches and len(prefix_matches) > 1:
+            raise TimeoutError(_("City combobox options are ambiguous for location: %s") % target)
+
+        selected_option = exact_match or (city_matches[0] if city_matches else None) or (prefix_matches[0] if len(prefix_matches) == 1 else None)
         if selected_option is None:
             raise TimeoutError(_("No city combobox option matched location: %s") % target)
 
@@ -2686,23 +2690,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def __set_contact_fields(self, contact:Contact) -> None:
         #############################
-        # set contact zipcode
+        # set contact zipcode + location
         #############################
-        zipcode_failed = False
         if contact.zipcode:
             try:
                 await self.web_input(By.ID, "ad-zip-code", str(contact.zipcode))
             except TimeoutError as ex:
                 LOG.warning("Could not set contact zipcode: %s (%s)", contact.zipcode, ex)
-                zipcode_failed = True
-        else:
-            zipcode_failed = True
+                raise TimeoutError(_("Failed to set contact zipcode: %s") % contact.zipcode) from ex
 
-        if zipcode_failed:
-            raise TimeoutError(_("Failed to set contact zipcode: %s") % contact.zipcode)
-
-        if contact.location:
-            await self.__set_contact_location(contact.location)
+            if contact.location:
+                await self.__set_contact_location(contact.location)
 
         #############################
         # set contact street
