@@ -758,6 +758,9 @@ kleinanzeigen_bot/model/ad_model.py:
   _parse_shipping_costs:
     "shipping_costs expects a numeric value. Did you mean shipping_options: ['%s']?": "shipping_costs erwartet einen numerischen Wert. Meinten Sie shipping_options: ['%s']?"
     "shipping_costs expects a numeric value like 4.95, not a list/sequence": "shipping_costs erwartet einen numerischen Wert wie 4,95 und keine Liste/Sequenz"
+  _validate_title_length:
+    "title length must be at least {min} characters": "Die Titellänge muss mindestens {min} Zeichen betragen"
+    "title length exceeds {max} characters": "Die Titellänge überschreitet {max} Zeichen"
   _calculate_auto_price_internal:
     "min_price must be specified when auto_price_reduction is enabled": "min_price muss angegeben werden, wenn auto_price_reduction aktiviert ist"
 

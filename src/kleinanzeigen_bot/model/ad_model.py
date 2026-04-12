@@ -19,6 +19,8 @@ from kleinanzeigen_bot.utils import dicts
 from kleinanzeigen_bot.utils.misc import parse_datetime, parse_decimal
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
 
+MIN_TITLE_LENGTH:Final[int] = 10
+MAX_TITLE_LENGTH:Final[int] = 65
 MAX_DESCRIPTION_LENGTH:Final[int] = 4000
 EURO_PRECISION:Final[Decimal] = Decimal("1")
 
@@ -155,7 +157,7 @@ def _validate_auto_price_reduction_constraints(price:int | None, auto_price_redu
 class AdPartial(ContextualModel):
     active:bool | None = _OPTIONAL()
     type:Literal["OFFER", "WANTED"] | None = _OPTIONAL()
-    title:str = Field(..., min_length = 10)
+    title:str = Field(..., min_length = MIN_TITLE_LENGTH, max_length = MAX_TITLE_LENGTH)
     description:str
     description_prefix:str | None = _OPTIONAL()
     description_suffix:str | None = _OPTIONAL()
@@ -197,6 +199,20 @@ class AdPartial(ContextualModel):
         if isinstance(v, str) and v in CARRIER_CODE_BY_OPTION:
             raise ValueError(_("shipping_costs expects a numeric value. Did you mean shipping_options: ['%s']?") % v)
         return round(parse_decimal(v), 2)
+
+    # Keep Field min/max constraints for schema generation, but pre-validate title length
+    # so we raise value_error instead of string_too_short/string_too_long. The latter
+    # currently crashes format_validation_error() because expected_plural is missing.
+    @field_validator("title", mode = "before")
+    @classmethod
+    def _validate_title_length(cls, v:Any) -> Any:
+        if not isinstance(v, str):
+            return v
+        if len(v) < MIN_TITLE_LENGTH:
+            raise ValueError(_("title length must be at least {min} characters").format(min = MIN_TITLE_LENGTH))
+        if len(v) > MAX_TITLE_LENGTH:
+            raise ValueError(_("title length exceeds {max} characters").format(max = MAX_TITLE_LENGTH))
+        return v
 
     @field_validator("description")
     @classmethod

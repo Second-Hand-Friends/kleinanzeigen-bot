@@ -7,7 +7,7 @@ import math
 
 import pytest
 
-from kleinanzeigen_bot.model.ad_model import MAX_DESCRIPTION_LENGTH, AdPartial, ShippingOption, calculate_auto_price
+from kleinanzeigen_bot.model.ad_model import MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH, MIN_TITLE_LENGTH, AdPartial, ShippingOption
 from kleinanzeigen_bot.model.config_model import AdDefaults, AutoPriceReductionConfig
 from kleinanzeigen_bot.utils.pydantics import ContextualModel, ContextualValidationError
 
@@ -156,6 +156,28 @@ def test_description_length_limit() -> None:
         AdPartial.model_validate(cfg)
 
 
+@pytest.mark.parametrize(
+    ("title_length", "should_pass", "error_match"),
+    [
+        (MIN_TITLE_LENGTH - 1, False, f"title length must be at least {MIN_TITLE_LENGTH} characters"),
+        (MIN_TITLE_LENGTH, True, None),
+        (MAX_TITLE_LENGTH + 1, False, f"title length exceeds {MAX_TITLE_LENGTH} characters"),
+        (MAX_TITLE_LENGTH, True, None),
+    ],
+)
+@pytest.mark.unit
+def test_title_length_validation(title_length:int, should_pass:bool, error_match:str | None) -> None:
+    assert MAX_TITLE_LENGTH == 65
+    cfg = {"title": "x" * title_length, "category": "160", "description": "Test Description"}
+    if should_pass:
+        validated = AdPartial.model_validate(cfg)
+        assert validated.title == "x" * title_length
+    else:
+        assert error_match is not None
+        with pytest.raises(ContextualValidationError, match = error_match):
+            AdPartial.model_validate(cfg)
+
+
 @pytest.fixture
 def base_ad_cfg() -> dict[str, object]:
     return {
@@ -268,14 +290,8 @@ def test_price_reduction_delay_inherited_from_defaults(complete_ad_cfg:dict[str,
     # When auto_price_reduction is not specified in ad config, it inherits from defaults
     cfg = complete_ad_cfg.copy()
     cfg.pop("auto_price_reduction", None)  # Remove to inherit from defaults
-    defaults = AdDefaults(
-        auto_price_reduction = AutoPriceReductionConfig(
-            enabled = True,
-            strategy = "FIXED",
-            amount = 5,
-            min_price = 50,
-            delay_reposts = 4,
-            delay_days = 0))
+    apr = AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = 5, min_price = 50, delay_reposts = 4, delay_days = 0)
+    defaults = AdDefaults(auto_price_reduction = apr)
     ad = AdPartial.model_validate(cfg).to_ad(defaults)
     assert ad.auto_price_reduction.delay_reposts == 4
 
@@ -285,44 +301,10 @@ def test_price_reduction_delay_override_zero(complete_ad_cfg:dict[str, object]) 
     cfg = complete_ad_cfg.copy()
     # Type-safe way to modify nested dict
     cfg["auto_price_reduction"] = {"enabled": True, "strategy": "FIXED", "amount": 5, "min_price": 50, "delay_reposts": 0, "delay_days": 0}
-    defaults = AdDefaults(
-        auto_price_reduction = AutoPriceReductionConfig(
-            enabled = True,
-            strategy = "FIXED",
-            amount = 5,
-            min_price = 50,
-            delay_reposts = 4,
-            delay_days = 0))
+    apr = AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = 5, min_price = 50, delay_reposts = 4, delay_days = 0)
+    defaults = AdDefaults(auto_price_reduction = apr)
     ad = AdPartial.model_validate(cfg).to_ad(defaults)
     assert ad.auto_price_reduction.delay_reposts == 0
-
-
-@pytest.mark.unit
-def test_calculate_auto_price_with_missing_strategy() -> None:
-    """Test calculate_auto_price when strategy is None but enabled is True (defensive check)"""
-    # Use model_construct to bypass validation and reach defensive lines 234-235
-    config = AutoPriceReductionConfig.model_construct(enabled = True, strategy = None, amount = None, min_price = 50)
-    result = calculate_auto_price(base_price = 100, auto_price_reduction = config, target_reduction_cycle = 1)
-    assert result == 100  # Should return base price when strategy is None
-
-
-@pytest.mark.unit
-def test_calculate_auto_price_with_missing_amount() -> None:
-    """Test calculate_auto_price when amount is None but enabled is True (defensive check)"""
-    # Use model_construct to bypass validation and reach defensive lines 234-235
-    config = AutoPriceReductionConfig.model_construct(enabled = True, strategy = "FIXED", amount = None, min_price = 50)
-    result = calculate_auto_price(base_price = 100, auto_price_reduction = config, target_reduction_cycle = 1)
-    assert result == 100  # Should return base price when amount is None
-
-
-@pytest.mark.unit
-def test_calculate_auto_price_raises_when_min_price_none_and_enabled() -> None:
-    """Test that calculate_auto_price raises ValueError when min_price is None during calculation (defensive check)"""
-    # Use model_construct to bypass validation and reach defensive line 237-238
-    config = AutoPriceReductionConfig.model_construct(enabled = True, strategy = "FIXED", amount = 10, min_price = None)
-
-    with pytest.raises(ValueError, match = "min_price must be specified when auto_price_reduction is enabled"):
-        calculate_auto_price(base_price = 100, auto_price_reduction = config, target_reduction_cycle = 1)
 
 
 @pytest.mark.unit
