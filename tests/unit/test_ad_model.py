@@ -167,6 +167,7 @@ def test_description_length_limit() -> None:
 )
 @pytest.mark.unit
 def test_title_length_validation(title_length:int, should_pass:bool, error_match:str | None) -> None:
+    assert MAX_TITLE_LENGTH == 65
     cfg = {"title": "x" * title_length, "category": "160", "description": "Test Description"}
     if should_pass:
         validated = AdPartial.model_validate(cfg)

@@ -209,9 +209,9 @@ class AdPartial(ContextualModel):
         if not isinstance(v, str):
             return v
         if len(v) < MIN_TITLE_LENGTH:
-            raise ValueError(f"title length must be at least {MIN_TITLE_LENGTH} characters")
+            raise ValueError(_("title length must be at least {min} characters").format(min = MIN_TITLE_LENGTH))
         if len(v) > MAX_TITLE_LENGTH:
-            raise ValueError(f"title length exceeds {MAX_TITLE_LENGTH} characters")
+            raise ValueError(_("title length exceeds {max} characters").format(max = MAX_TITLE_LENGTH))
         return v
 
     @field_validator("description")
