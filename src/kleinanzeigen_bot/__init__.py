@@ -2350,7 +2350,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 except TimeoutError as ex:
                     raise TimeoutError(_("Failed to set price type '%s'") % price_type) from ex
             if ad_cfg.price is not None:
-                await self.__react_input("ad-price-amount", str(ad_cfg.price))
+                await self.__set_input_value("ad-price-amount", str(ad_cfg.price))
 
         #############################
         # set sell_directly
@@ -2379,7 +2379,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # set description
         #############################
         description = self.__get_description(ad_cfg, with_affixes = True)
-        await self.__react_input("ad-description", description)
+        await self.__set_input_value("ad-description", description)
 
         await self.__set_contact_fields(ad_cfg.contact)
 
@@ -2433,7 +2433,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # set title (right before submit to prevent React re-render clearing it)
         #############################
-        await self.__react_input("ad-title", ad_cfg.title)
+        await self.__set_input_value("ad-title", ad_cfg.title)
 
         #############################
         # submit
@@ -2513,8 +2513,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         dicts.save_dict(ad_file, ad_cfg_orig)
 
-    async def __react_input(self, element_id:str, value:str) -> None:
-        """Sets a React-controlled input value using the native setter to trigger onChange."""
+    async def __set_input_value(self, element_id:str, value:str) -> None:
+        """Sets a framework-controlled input value using the native DOM setter to trigger onChange."""
         await self.web_find(By.ID, element_id)  # raises TimeoutError if element is absent
         js_element_id = json.dumps(element_id)
         js_value = json.dumps(value)
@@ -2710,7 +2710,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if await self.web_check(By.ID, "ad-street", Is.DISABLED):
                     await self.web_click(By.ID, "ad-address-visibility")
                     await self.web_sleep()
-                await self.__react_input("ad-street", contact.street)
+                await self.__set_input_value("ad-street", contact.street)
             except TimeoutError:
                 LOG.warning("Could not set contact street.")
 
@@ -2720,7 +2720,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if contact.name:
             try:
                 if not await self.web_check(By.ID, "ad-name", Is.READONLY):
-                    await self.__react_input("ad-name", contact.name)
+                    await self.__set_input_value("ad-name", contact.name)
             except TimeoutError:
                 LOG.warning("Could not set contact name.")
 
@@ -2738,7 +2738,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     if await self.web_check(By.ID, "ad-phone", Is.DISABLED, timeout = self._timeout("quick_dom")):
                         await self.web_click(By.ID, "ad-phone-visibility", timeout = self._timeout("quick_dom"))
                         await self.web_sleep()
-                    await self.__react_input("ad-phone", contact.phone)
+                    await self.__set_input_value("ad-phone", contact.phone)
                 except TimeoutError as ex:
                     LOG.warning("Could not set contact phone despite visible phone field: %s", ex)
 
