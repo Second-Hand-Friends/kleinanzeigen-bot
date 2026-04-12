@@ -19,6 +19,7 @@ from kleinanzeigen_bot.utils import dicts
 from kleinanzeigen_bot.utils.misc import parse_datetime, parse_decimal
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
 
+MAX_TITLE_LENGTH:Final[int] = 65
 MAX_DESCRIPTION_LENGTH:Final[int] = 4000
 EURO_PRECISION:Final[Decimal] = Decimal("1")
 
@@ -155,7 +156,7 @@ def _validate_auto_price_reduction_constraints(price:int | None, auto_price_redu
 class AdPartial(ContextualModel):
     active:bool | None = _OPTIONAL()
     type:Literal["OFFER", "WANTED"] | None = _OPTIONAL()
-    title:str = Field(..., min_length = 10)
+    title:str = Field(..., min_length = 10, max_length = MAX_TITLE_LENGTH)
     description:str
     description_prefix:str | None = _OPTIONAL()
     description_suffix:str | None = _OPTIONAL()
