@@ -1539,7 +1539,7 @@ class TestKleinanzeigenBotAuthentication:
         with (
             patch.object(test_bot, "_timeout", return_value = 1.25) as mock_timeout,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = mock_element) as mock_probe,
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
         ):
             await test_bot._click_gdpr_banner()
 
@@ -1548,6 +1548,7 @@ class TestKleinanzeigenBotAuthentication:
             assert mock_probe.await_args is not None
             assert mock_probe.await_args.args == (By.ID, "gdpr-banner-accept")
             mock_element.click.assert_awaited_once()
+            mock_sleep.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_click_gdpr_banner_does_nothing_when_banner_absent(self, test_bot:KleinanzeigenBot) -> None:
