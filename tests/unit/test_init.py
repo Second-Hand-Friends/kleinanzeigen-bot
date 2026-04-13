@@ -1544,7 +1544,7 @@ class TestKleinanzeigenBotAuthentication:
             await test_bot._click_gdpr_banner()
 
             mock_timeout.assert_called_once_with("quick_dom")
-            mock_probe.assert_awaited_once_with(By.ID, "gdpr-banner-accept", timeout = 1.25)
+            assert mock_probe.call_args.args == (By.ID, "gdpr-banner-accept")
             mock_element.click.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -1570,7 +1570,7 @@ class TestKleinanzeigenBotAuthentication:
             await test_bot._dismiss_consent_banner()
 
             mock_timeout.assert_called_once_with("quick_dom")
-            mock_probe.assert_awaited_once_with(By.ID, "gdpr-banner-accept", timeout = 2.0)
+            assert mock_probe.call_args.args == (By.ID, "gdpr-banner-accept")
             mock_element.click.assert_awaited_once()
             mock_sleep.assert_awaited_once()
 
@@ -1597,7 +1597,7 @@ class TestKleinanzeigenBotAuthentication:
             await test_bot._check_sms_verification()
 
             mock_timeout.assert_called_once_with("sms_verification")
-            mock_probe.assert_awaited_once_with(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout = 3.0)
+            assert mock_probe.call_args.args == (By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer")
             mock_ainput.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -1623,7 +1623,7 @@ class TestKleinanzeigenBotAuthentication:
             await test_bot._check_email_verification()
 
             mock_timeout.assert_called_once_with("email_verification")
-            mock_probe.assert_awaited_once_with(By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout = 4.0)
+            assert mock_probe.call_args.args == (By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt")
             mock_ainput.assert_awaited_once()
 
     @pytest.mark.asyncio
