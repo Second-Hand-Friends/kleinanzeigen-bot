@@ -171,15 +171,18 @@ download:
 - `download.folder_name_max_length` limits folder names only; downloaded file stems use a separate filename budget.
 
 Valid templates:
+
 - `ad_{id}_{title}`
 - `{id}_listing`
 - `{title}_{id}`
 
 Invalid templates (rejected at startup):
+
 - `{id}_{id}_duplicate` (repeated `{id}`)
 - `{title}_{title}_{id}` (repeated `{title}`)
 
 Tight-budget example (priority: `{id}` > literals > `{title}`):
+
 - Template: `PREFIX_{id}_{title}`
 - Input: `id=12345`, `title="Very Long Title"`, `max_length=15`
 - Result: `PREFIX_12345_Ve` (literals are preserved and `{title}` is truncated first)
@@ -300,10 +303,10 @@ The bot uses a layered DOM-first approach to detect login status:
 
 1. **DOM check (primary method - preferred for stealth)**: Checks for user profile elements
 
-   - Looks for `.mr-medium` element containing username
-   - Falls back to `#user-email` ID
+    - Looks for `.mr-medium` element containing username
+    - Falls back to `#user-email` ID
     - Uses `login_detection` timeout (see [config.default.yaml](./config.default.yaml) for current default)
-   - Minimizes bot-like behavior by avoiding JSON API requests
+    - Minimizes bot-like behavior by avoiding JSON API requests
 
 2. **Logged-out CTA check**: Looks for login call-to-action links if logged-in markers are not found
 
