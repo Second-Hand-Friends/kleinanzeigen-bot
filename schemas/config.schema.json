@@ -644,13 +644,6 @@
           "title": "Email Verification",
           "type": "number"
         },
-        "gdpr_prompt": {
-          "default": 10.0,
-          "description": "Timeout for GDPR/consent dialogs.",
-          "minimum": 1.0,
-          "title": "Gdpr Prompt",
-          "type": "number"
-        },
         "login_detection": {
           "default": 12.0,
           "description": "Timeout for detecting existing login session via DOM elements.",

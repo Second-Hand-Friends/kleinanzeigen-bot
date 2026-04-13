@@ -256,7 +256,6 @@ class TimeoutConfig(ContextualModel):
     captcha_detection:float = Field(default = 2.0, ge = 0.1, description = "Timeout for captcha iframe detection.")
     sms_verification:float = Field(default = 5.0, ge = 0.1, description = "Timeout for SMS verification prompts.")
     email_verification:float = Field(default = 5.0, ge = 0.1, description = "Timeout for email verification prompts.")
-    gdpr_prompt:float = Field(default = 10.0, ge = 1.0, description = "Timeout for GDPR/consent dialogs.")
     login_detection:float = Field(default = 12.0, ge = 1.0, description = "Timeout for detecting existing login session via DOM elements.")
     publishing_result:float = Field(default = 300.0, ge = 10.0, description = "Timeout for publishing result checks.")
     publishing_confirmation:float = Field(default = 20.0, ge = 1.0, description = "Timeout for publish confirmation redirect.")

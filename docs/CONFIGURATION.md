@@ -132,30 +132,7 @@ categories:
 
 Timeout tuning for various browser operations. Adjust these if you experience slow page loads or recurring timeouts.
 
-```yaml
-  timeouts:
-    multiplier: 1.0                     # Scale all timeouts (e.g. 2.0 for slower networks)
-    default: 5.0                        # Base timeout for web_find/web_click/etc.
-    page_load: 15.0                     # Timeout for web_open page loads
-    captcha_detection: 2.0              # Timeout for captcha iframe detection
-    sms_verification: 4.0               # Timeout for SMS verification banners
-    email_verification: 4.0             # Timeout for email verification prompts
-    gdpr_prompt: 10.0                   # Timeout when handling GDPR dialogs
-  login_detection: 10.0               # Timeout for DOM-based login detection (primary method)
-  publishing_result: 300.0            # Timeout for publishing status checks
-  publishing_confirmation: 20.0         # Timeout for publish confirmation redirect
-  image_upload: 30.0                  # Timeout for image upload and server-side processing
-  pagination_initial: 10.0            # Timeout for first pagination lookup
-  pagination_follow_up: 5.0           # Timeout for subsequent pagination clicks
-  quick_dom: 2.0                      # Generic short DOM timeout (shipping dialogs, etc.)
-  update_check: 10.0                  # Timeout for GitHub update requests
-  chrome_remote_probe: 2.0            # Timeout for local remote-debugging probes
-  chrome_remote_debugging: 5.0         # Timeout for remote debugging API calls
-  chrome_binary_detection: 10.0       # Timeout for chrome --version subprocess
-  retry_enabled: true                 # Enables DOM retry/backoff when timeouts occur
-  retry_max_attempts: 2
-  retry_backoff_factor: 1.5
-```
+For the full list of timeout keys and their current default values, see [config.default.yaml](./config.default.yaml).
 
 **Timeout tuning tips:**
 
@@ -325,7 +302,7 @@ The bot uses a layered DOM-first approach to detect login status:
 
    - Looks for `.mr-medium` element containing username
    - Falls back to `#user-email` ID
-   - Uses `login_detection` timeout (default: 10.0 seconds)
+    - Uses `login_detection` timeout (see [config.default.yaml](./config.default.yaml) for current default)
    - Minimizes bot-like behavior by avoiding JSON API requests
 
 2. **Logged-out CTA check**: Looks for login call-to-action links if logged-in markers are not found

@@ -264,9 +264,6 @@ timeouts:
   # Timeout for email verification prompts.
   email_verification: 5.0
 
-  # Timeout for GDPR/consent dialogs.
-  gdpr_prompt: 10.0
-
   # Timeout for detecting existing login session via DOM elements.
   login_detection: 12.0
 
