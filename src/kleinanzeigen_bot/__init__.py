@@ -2223,7 +2223,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     if attempt >= max_retries:
                         LOG.error("All %s attempts failed for '%s': %s. Skipping ad.", max_retries, ad_cfg.title, ex)
                         failed_count += 1
-                        continue
+                        break
 
                     LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
                     await self.web_sleep(2_000)  # Wait before retry
