@@ -1544,7 +1544,9 @@ class TestKleinanzeigenBotAuthentication:
             await test_bot._click_gdpr_banner()
 
             mock_timeout.assert_called_once_with("quick_dom")
-            assert mock_probe.call_args.args == (By.ID, "gdpr-banner-accept")
+            mock_probe.assert_awaited_once()
+            assert mock_probe.await_args is not None
+            assert mock_probe.await_args.args == (By.ID, "gdpr-banner-accept")
             mock_element.click.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -1570,7 +1572,9 @@ class TestKleinanzeigenBotAuthentication:
             await test_bot._dismiss_consent_banner()
 
             mock_timeout.assert_called_once_with("quick_dom")
-            assert mock_probe.call_args.args == (By.ID, "gdpr-banner-accept")
+            mock_probe.assert_awaited_once()
+            assert mock_probe.await_args is not None
+            assert mock_probe.await_args.args == (By.ID, "gdpr-banner-accept")
             mock_element.click.assert_awaited_once()
             mock_sleep.assert_awaited_once()
 
