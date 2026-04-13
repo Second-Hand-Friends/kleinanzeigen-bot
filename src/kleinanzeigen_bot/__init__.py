@@ -2182,8 +2182,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         published_ads = await self._fetch_published_ads()
 
-        for ad_file, ad_cfg, ad_cfg_orig in ad_cfgs:
-            LOG.info("Processing %s/%s: '%s' from [%s]...", count + 1, len(ad_cfgs), ad_cfg.title, ad_file)
+        for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ad_cfgs, start = 1):
+            LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ad_cfgs), ad_cfg.title, ad_file)
 
             if [x for x in published_ads if x["id"] == ad_cfg.id and x["state"] == "paused"]:
                 LOG.info("Skipping because ad is reserved")
@@ -2760,14 +2760,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         published_ads = await self._fetch_published_ads()
 
-        for ad_file, ad_cfg, ad_cfg_orig in ad_cfgs:
+        for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ad_cfgs, start = 1):
+            LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ad_cfgs), ad_cfg.title, ad_file)
+
             ad = next((ad for ad in published_ads if ad["id"] == ad_cfg.id), None)
 
             if not ad:
                 LOG.warning(" -> SKIPPED: ad '%s' (ID: %s) not found in published ads", ad_cfg.title, ad_cfg.id)
                 continue
 
-            LOG.info("Processing %s/%s: '%s' from [%s]...", count + 1, len(ad_cfgs), ad_cfg.title, ad_file)
             if ad["state"] == "paused":
                 LOG.info("Skipping because ad is reserved")
                 continue
@@ -3478,18 +3479,18 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         return final_description
 
     def update_content_hashes(self, ads:list[tuple[str, Ad, dict[str, Any]]]) -> None:
-        count = 0
+        changed = 0
 
-        for ad_file, ad_cfg, ad_cfg_orig in ads:
-            LOG.info("Processing %s/%s: '%s' from [%s]...", count + 1, len(ads), ad_cfg.title, ad_file)
+        for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ads, start = 1):
+            LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ads), ad_cfg.title, ad_file)
             ad_cfg.update_content_hash()
             if ad_cfg.content_hash != ad_cfg_orig["content_hash"]:
-                count += 1
+                changed += 1
                 ad_cfg_orig["content_hash"] = ad_cfg.content_hash
                 dicts.save_dict(ad_file, ad_cfg_orig)
 
         LOG.info("############################################")
-        LOG.info("DONE: Updated [content_hash] in %s", pluralize("ad", count))
+        LOG.info("DONE: Updated [content_hash] in %s", pluralize("ad", changed))
         LOG.info("############################################")
 
 
