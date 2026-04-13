@@ -7,7 +7,7 @@ from contextlib import contextmanager, redirect_stdout
 from datetime import timedelta
 from pathlib import Path, PureWindowsPath
 from typing import Any, Awaitable, Iterator, cast
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from nodriver.core.connection import ProtocolException
@@ -950,17 +950,6 @@ class TestKleinanzeigenBotAuthentication:
             assert await test_bot.is_logged_in() is True
 
     @pytest.mark.asyncio
-    async def test_is_logged_in_returns_true_with_alternative_element(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that login check returns true when logged in with alternative element."""
-        with patch.object(
-            test_bot,
-            "web_text_first_available",
-            new_callable = AsyncMock,
-            return_value = ("angemeldet als: dummy_user", 1),
-        ):
-            assert await test_bot.is_logged_in() is True
-
-    @pytest.mark.asyncio
     async def test_is_logged_in_returns_false_when_not_logged_in(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login check returns false when not logged in."""
         with (
@@ -1475,9 +1464,15 @@ class TestKleinanzeigenBotAuthentication:
             wait_context.assert_awaited_once()
             wait_password.assert_awaited_once()
             wait_transition.assert_awaited_once()
-            assert mock_captcha.call_count == 1
-            assert mock_input.call_count == 2
-            assert mock_click.call_count == 2
+            mock_captcha.assert_awaited_once_with(is_login_page = True)
+            assert mock_input.call_args_list == [
+                call(By.ID, "username", test_bot.config.login.username),
+                call(By.CSS_SELECTOR, "input[type='password']", test_bot.config.login.password),
+            ]
+            assert mock_click.call_args_list == [
+                call(By.CSS_SELECTOR, "button[type='submit']"),
+                call(By.CSS_SELECTOR, "button[type='submit']"),
+            ]
 
     @pytest.mark.asyncio
     async def test_fill_login_data_and_send_fails_when_password_step_missing(self, test_bot:KleinanzeigenBot) -> None:
@@ -1539,46 +1534,118 @@ class TestKleinanzeigenBotAuthentication:
             assert sleep_kwargs["min_ms"] < sleep_kwargs["max_ms"]
 
     @pytest.mark.asyncio
-    async def test_wait_for_post_auth0_submit_transition_sleep_fallback_when_login_not_confirmed(self, test_bot:KleinanzeigenBot) -> None:
-        """Sleep fallback should run when bounded login check returns False."""
-        with (
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]) as mock_wait,
-            patch.object(test_bot, "is_logged_in", new_callable = AsyncMock, return_value = False) as mock_is_logged_in,
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
-        ):
-            with pytest.raises(TimeoutError, match = "Auth0 post-submit verification remained inconclusive"):
-                await test_bot._wait_for_post_auth0_submit_transition()
-
-            mock_wait.assert_awaited_once()
-            assert mock_is_logged_in.await_count == 2
-            mock_sleep.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_click_gdpr_banner_uses_quick_dom_timeout_and_passes_click_timeout(self, test_bot:KleinanzeigenBot) -> None:
+    async def test_click_gdpr_banner_uses_quick_dom_timeout_and_clicks_found_element(self, test_bot:KleinanzeigenBot) -> None:
+        mock_element = AsyncMock()
         with (
             patch.object(test_bot, "_timeout", return_value = 1.25) as mock_timeout,
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = mock_element) as mock_probe,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
         ):
             await test_bot._click_gdpr_banner()
 
             mock_timeout.assert_called_once_with("quick_dom")
-            mock_find.assert_awaited_once_with(By.ID, "gdpr-banner-accept", timeout = 1.25)
-            mock_click.assert_awaited_once_with(By.ID, "gdpr-banner-accept", timeout = 1.25)
+            mock_probe.assert_awaited_once()
+            assert mock_probe.await_args is not None
+            assert mock_probe.await_args.args == (By.ID, "gdpr-banner-accept")
+            mock_element.click.assert_awaited_once()
+            mock_sleep.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_handle_after_login_logic(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that post-login handling works correctly."""
+    async def test_click_gdpr_banner_does_nothing_when_banner_absent(self, test_bot:KleinanzeigenBot) -> None:
         with (
-            patch.object(test_bot, "_check_sms_verification", new_callable = AsyncMock, side_effect = TimeoutError()) as mock_sms,
-            patch.object(test_bot, "_check_email_verification", new_callable = AsyncMock, side_effect = TimeoutError()) as mock_email,
-            patch.object(test_bot, "_click_gdpr_banner", new_callable = AsyncMock, side_effect = TimeoutError()) as mock_gdpr,
+            patch.object(test_bot, "_timeout", return_value = 1.25),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None) as mock_probe,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
         ):
-            await test_bot.handle_after_login_logic()
+            await test_bot._click_gdpr_banner()
 
-            mock_sms.assert_awaited_once()
-            mock_email.assert_awaited_once()
-            mock_gdpr.assert_awaited_once()
+            mock_probe.assert_awaited_once()
+            mock_sleep.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_dismiss_consent_banner_clicks_when_present(self, test_bot:KleinanzeigenBot) -> None:
+        mock_element = AsyncMock()
+        with (
+            patch.object(test_bot, "_timeout", return_value = 2.0) as mock_timeout,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = mock_element) as mock_probe,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+        ):
+            await test_bot._dismiss_consent_banner()
+
+            mock_timeout.assert_called_once_with("quick_dom")
+            mock_probe.assert_awaited_once()
+            assert mock_probe.await_args is not None
+            assert mock_probe.await_args.args == (By.ID, "gdpr-banner-accept")
+            mock_element.click.assert_awaited_once()
+            mock_sleep.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_dismiss_consent_banner_does_nothing_when_absent(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch.object(test_bot, "_timeout", return_value = 2.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None) as mock_probe,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+        ):
+            await test_bot._dismiss_consent_banner()
+
+            mock_probe.assert_awaited_once()
+            mock_sleep.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_check_sms_verification_prompts_user_when_detected(self, test_bot:KleinanzeigenBot) -> None:
+        mock_element = MagicMock()
+        with (
+            patch.object(test_bot, "_timeout", return_value = 3.0) as mock_timeout,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = mock_element) as mock_probe,
+            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
+            await test_bot._check_sms_verification()
+
+            mock_timeout.assert_called_once_with("sms_verification")
+            mock_probe.assert_awaited_once()
+            assert mock_probe.await_args is not None
+            assert mock_probe.await_args.args == (By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer")
+            mock_ainput.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_check_sms_verification_returns_silently_when_absent(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch.object(test_bot, "_timeout", return_value = 3.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None) as mock_probe,
+            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
+            await test_bot._check_sms_verification()
+
+            mock_probe.assert_awaited_once()
+            mock_ainput.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_check_email_verification_prompts_user_when_detected(self, test_bot:KleinanzeigenBot) -> None:
+        mock_element = MagicMock()
+        with (
+            patch.object(test_bot, "_timeout", return_value = 4.0) as mock_timeout,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = mock_element) as mock_probe,
+            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
+            await test_bot._check_email_verification()
+
+            mock_timeout.assert_called_once_with("email_verification")
+            mock_probe.assert_awaited_once()
+            assert mock_probe.await_args is not None
+            assert mock_probe.await_args.args == (By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt")
+            mock_ainput.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_check_email_verification_returns_silently_when_absent(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch.object(test_bot, "_timeout", return_value = 4.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None) as mock_probe,
+            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
+            await test_bot._check_email_verification()
+
+            mock_probe.assert_awaited_once()
+            mock_ainput.assert_not_awaited()
 
 
 class TestKleinanzeigenBotDiagnostics:

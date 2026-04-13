@@ -1422,10 +1422,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         LOG.info("Checking if already logged in...")
         await self.web_open(f"{self.root_url}")
-        try:
-            await self._click_gdpr_banner(timeout = pre_login_gdpr_timeout)
-        except TimeoutError:
-            LOG.debug("No GDPR banner detected before login")
+        await self._click_gdpr_banner(timeout = pre_login_gdpr_timeout)
 
         detection_result = await self.get_login_state(capture_diagnostics = False)
         if detection_result.is_logged_in:
@@ -1595,25 +1592,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.debug("Auth0 login submitted.")
 
     async def handle_after_login_logic(self) -> None:
-        try:
-            await self._check_sms_verification()
-        except TimeoutError:
-            LOG.debug("No SMS verification prompt detected after login")
-
-        try:
-            await self._check_email_verification()
-        except TimeoutError:
-            LOG.debug("No email verification prompt detected after login")
-
-        try:
-            LOG.debug("Handling GDPR disclaimer...")
-            await self._click_gdpr_banner()
-        except TimeoutError:
-            LOG.debug("GDPR banner not found or timed out")
+        await self._check_sms_verification()
+        await self._check_email_verification()
+        LOG.debug("Handling GDPR disclaimer...")
+        await self._click_gdpr_banner()
 
     async def _check_sms_verification(self) -> None:
         sms_timeout = self._timeout("sms_verification")
-        await self.web_find(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout = sms_timeout)
+        element = await self.web_probe(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout = sms_timeout)
+        if element is None:
+            LOG.debug("No SMS verification prompt detected after login")
+            return
         LOG.warning("############################################")
         LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
         LOG.warning("############################################")
@@ -1626,17 +1615,21 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         all form interaction until dismissed. Uses a short timeout to avoid slowing down
         the flow when the banner is already gone.
         """
-        try:
-            banner_timeout = self._timeout("quick_dom")
-            await self.web_find(By.ID, "gdpr-banner-accept", timeout = banner_timeout)
+        banner_timeout = self._timeout("quick_dom")
+        element = await self.web_probe(By.ID, "gdpr-banner-accept", timeout = banner_timeout)
+        if element is not None:
             LOG.debug("Consent banner detected, clicking 'Alle akzeptieren'...")
-            await self.web_click(By.ID, "gdpr-banner-accept")
-        except TimeoutError:
+            await element.click()
+            await self.web_sleep()
+        else:
             LOG.debug("Consent banner not present; continuing without dismissal")
 
     async def _check_email_verification(self) -> None:
         email_timeout = self._timeout("email_verification")
-        await self.web_find(By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout = email_timeout)
+        element = await self.web_probe(By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout = email_timeout)
+        if element is None:
+            LOG.debug("No email verification prompt detected after login")
+            return
         LOG.warning("############################################")
         LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
         LOG.warning("############################################")
@@ -1644,8 +1637,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def _click_gdpr_banner(self, *, timeout:float | None = None) -> None:
         gdpr_timeout = self._timeout("quick_dom") if timeout is None else timeout
-        await self.web_find(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
-        await self.web_click(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
+        element = await self.web_probe(By.ID, "gdpr-banner-accept", timeout = gdpr_timeout)
+        if element is not None:
+            await element.click()
+            await self.web_sleep()
+        else:
+            LOG.debug("GDPR banner not present; continuing without click")
 
     async def get_login_state(self, *, capture_diagnostics:bool = True) -> LoginDetectionResult:
         """Determine login status using DOM-first detection and return result with reason.

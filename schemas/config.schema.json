@@ -631,28 +631,21 @@
           "type": "number"
         },
         "sms_verification": {
-          "default": 4.0,
+          "default": 5.0,
           "description": "Timeout for SMS verification prompts.",
           "minimum": 0.1,
           "title": "Sms Verification",
           "type": "number"
         },
         "email_verification": {
-          "default": 4.0,
+          "default": 5.0,
           "description": "Timeout for email verification prompts.",
           "minimum": 0.1,
           "title": "Email Verification",
           "type": "number"
         },
-        "gdpr_prompt": {
-          "default": 10.0,
-          "description": "Timeout for GDPR/consent dialogs.",
-          "minimum": 1.0,
-          "title": "Gdpr Prompt",
-          "type": "number"
-        },
         "login_detection": {
-          "default": 10.0,
+          "default": 12.0,
           "description": "Timeout for detecting existing login session via DOM elements.",
           "minimum": 1.0,
           "title": "Login Detection",

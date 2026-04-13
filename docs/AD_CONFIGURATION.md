@@ -259,7 +259,7 @@ sell_directly:  # true or false, requires shipping_type SHIPPING (with shipping_
 You can select multiple options, but **only from one size group** (S, M, or L). Each option corresponds to a specific carrier package. Prices are set by the carrier and may change over time.
 
 | Config Name | Size Group | Carrier | Package | Max Dimensions / Weight |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | **Size S (Klein)** | | | | |
 | `DHL_2` | S | DHL | DHL Paket 2 kg | 2 kg, max 60 × 30 × 15 cm |
 | `Hermes_Päckchen` | S | Hermes | Hermes Päckchen | L+shortest side ≤ 37 cm, max 25 kg |
