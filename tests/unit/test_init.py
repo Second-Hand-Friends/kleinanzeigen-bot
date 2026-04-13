@@ -1597,7 +1597,9 @@ class TestKleinanzeigenBotAuthentication:
             await test_bot._check_sms_verification()
 
             mock_timeout.assert_called_once_with("sms_verification")
-            assert mock_probe.call_args.args == (By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer")
+            mock_probe.assert_awaited_once()
+            assert mock_probe.await_args is not None
+            assert mock_probe.await_args.args == (By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer")
             mock_ainput.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -1623,7 +1625,9 @@ class TestKleinanzeigenBotAuthentication:
             await test_bot._check_email_verification()
 
             mock_timeout.assert_called_once_with("email_verification")
-            assert mock_probe.call_args.args == (By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt")
+            mock_probe.assert_awaited_once()
+            assert mock_probe.await_args is not None
+            assert mock_probe.await_args.args == (By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt")
             mock_ainput.assert_awaited_once()
 
     @pytest.mark.asyncio
