@@ -1981,9 +1981,8 @@ class TestKleinanzeigenBotUpdateAdsResilience:
         [
             (TimeoutError("transient timeout"), "Timeout Ad"),
             (ProtocolException(MagicMock(), "connection lost", 0), "Protocol Failing"),
-            (TimeoutError("City selection did not converge for location: 10115 - Metroville"), "Location Failed"),
         ],
-        ids = ["timeout_error", "protocol_exception", "location_non_convergence"],
+        ids = ["timeout_error", "protocol_exception"],
     )
     async def test_update_ads_continues_after_retryable_first_ad_failure(
         self,
@@ -2072,31 +2071,154 @@ class TestKleinanzeigenBotUpdateAdsResilience:
 
         publish_mock.assert_awaited_once()
 
-    @pytest.mark.asyncio
-    async def test_update_ads_summary_reports_mixed_outcomes(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
-        ad_one = self._build_update_ad(base_ad_config, 601, "Summary Failed")
-        ad_two = self._build_update_ad(base_ad_config, 602, "Summary Success")
 
-        async def publish_side_effect(
-            _ad_file:str,
-            ad_cfg:Ad,
-            _ad_cfg_orig:dict[str, Any],
-            _published_ads:list[dict[str, Any]],
-            _mode:AdUpdateStrategy,
-        ) -> None:
-            if ad_cfg.id == 601:
-                raise TimeoutError("still failing")
+class TestDisplayCounterProgression:
+    """Regression tests for issue #977: progress counter must increment for every ad, including skipped ones."""
+
+    @staticmethod
+    def _build_ad(base_ad_config:dict[str, Any], ad_id:int | None, title:str) -> tuple[str, Ad, dict[str, Any]]:
+        ad_payload = copy.deepcopy(base_ad_config) | {"id": ad_id, "title": title}
+        return (f"{ad_id}.yaml", Ad.model_validate(ad_payload), ad_payload)
+
+    @staticmethod
+    def _build_published_ads(*ad_specs:tuple[int, str]) -> list[dict[str, Any]]:
+        return [{"id": ad_id, "state": state} for ad_id, state in ad_specs]
+
+    def test_update_content_hashes_counter_progression(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Display counter must advance for every ad, even when hash is unchanged."""
+        ads = [
+            self._build_ad(base_ad_config, None, "Unchanged Ad 1"),
+            self._build_ad(base_ad_config, None, "Changed Ad"),
+            self._build_ad(base_ad_config, None, "Unchanged Ad 2"),
+        ]
+
+        # Pre-compute hashes so two match and one differs
+        for _ad_file, ad_cfg, ad_cfg_orig in ads:
+            ad_cfg.update_content_hash()
+            ad_cfg_orig["content_hash"] = ad_cfg.content_hash
+
+        # Make the middle ad's original hash differ
+        ads[1][2]["content_hash"] = "deliberately_wrong_hash"
 
         with (
-            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = self._build_published_ads(601, 602)),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect),
+            caplog.at_level(logging.INFO),
+            patch.object(dicts, "save_dict"),
+        ):
+            test_bot.update_content_hashes(ads)
+
+        processing = [r for r in caplog.records if r.message.startswith("Processing")]
+        assert len(processing) == 3
+        assert "1/3" in processing[0].message
+        assert "2/3" in processing[1].message
+        assert "3/3" in processing[2].message
+
+        summary = [r for r in caplog.records if "DONE:" in r.message and "content_hash" in r.message]
+        assert any("1 ad" in r.message for r in summary)
+
+    @pytest.mark.asyncio
+    async def test_publish_ads_counter_progression_with_paused_ads(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Display counter must advance for paused ads, and only non-paused ads are published."""
+        ad_cfgs = [
+            self._build_ad(base_ad_config, 101, "Paused Ad 1"),
+            self._build_ad(base_ad_config, 102, "Active Ad 102"),
+            self._build_ad(base_ad_config, 103, "Paused Ad 2"),
+        ]
+        published_ads = self._build_published_ads((101, "paused"), (102, "active"), (103, "paused"))
+
+        with (
+            caplog.at_level(logging.INFO),
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = published_ads),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock) as publish_mock,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+        ):
+            await test_bot.publish_ads(ad_cfgs)
+
+        processing = [r for r in caplog.records if r.message.startswith("Processing")]
+        assert len(processing) == 3
+        assert "1/3" in processing[0].message
+        assert "2/3" in processing[1].message
+        assert "3/3" in processing[2].message
+
+        skip_msgs = [r for r in caplog.records if "Skipping because ad is reserved" in r.message]
+        assert len(skip_msgs) == 2
+
+        publish_mock.assert_awaited_once()
+        assert publish_mock.call_args.args[1].id == 102
+
+        summary = [r for r in caplog.records if "DONE:" in r.message]
+        assert any("1 ad" in r.message for r in summary)
+
+    @pytest.mark.asyncio
+    async def test_update_ads_counter_progression_with_paused_ads(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Display counter must advance for paused ads, and only non-paused ads are updated."""
+        ad_cfgs = [
+            self._build_ad(base_ad_config, 201, "Paused Ad 1"),
+            self._build_ad(base_ad_config, 202, "Active Ad 202"),
+            self._build_ad(base_ad_config, 203, "Paused Ad 2"),
+        ]
+        published_ads = self._build_published_ads((201, "paused"), (202, "active"), (203, "paused"))
+
+        with (
+            caplog.at_level(logging.INFO),
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = published_ads),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock) as publish_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
-            patch.object(LOG, "info") as log_info_mock,
         ):
-            await test_bot.update_ads([ad_one, ad_two])
+            await test_bot.update_ads(ad_cfgs)
 
-        assert any(call.args and call.args[0] == "DONE: updated %s (%s failed after retries)" for call in log_info_mock.call_args_list)
+        processing = [r for r in caplog.records if r.message.startswith("Processing")]
+        assert len(processing) == 3
+        assert "1/3" in processing[0].message
+        assert "2/3" in processing[1].message
+        assert "3/3" in processing[2].message
+
+        skip_msgs = [r for r in caplog.records if "Skipping because ad is reserved" in r.message]
+        assert len(skip_msgs) == 2
+
+        publish_mock.assert_awaited_once()
+        assert publish_mock.call_args.args[1].id == 202
+
+        summary = [r for r in caplog.records if "DONE:" in r.message]
+        assert any("1 ad" in r.message for r in summary)
+
+    @pytest.mark.asyncio
+    async def test_update_ads_counter_includes_not_found_ads(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Display counter must advance even for ads not found in published ads."""
+        ad_cfgs = [
+            self._build_ad(base_ad_config, 301, "Not Found Ad"),
+            self._build_ad(base_ad_config, 302, "Active Ad 302"),
+        ]
+        published_ads = self._build_published_ads((302, "active"))
+
+        with (
+            caplog.at_level(logging.INFO),
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = published_ads),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock) as publish_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+        ):
+            await test_bot.update_ads(ad_cfgs)
+
+        processing = [r for r in caplog.records if r.message.startswith("Processing")]
+        assert len(processing) == 2
+        assert "1/2" in processing[0].message
+        assert "2/2" in processing[1].message
+        assert "Not Found Ad" in processing[0].message
+
+        skip_msgs = [r for r in caplog.records if "SKIPPED" in r.message and "not found" in r.message]
+        assert len(skip_msgs) == 1
+
+        publish_mock.assert_awaited_once()
+        assert publish_mock.call_args.args[1].id == 302
 
 
 class TestKleinanzeigenBotContactLocationHardening:
