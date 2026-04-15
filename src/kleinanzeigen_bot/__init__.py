@@ -2551,7 +2551,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Note: referrer reflects the most recent navigation, so a stale ID from a
         # previous publish is not a concern — the publish flow navigates to the edit
         # page first, resetting the referrer before the confirmation redirect occurs.
-        referrer = str(await self.web_execute("document.referrer") or "")
+        try:
+            referrer = str(await self.web_execute("document.referrer") or "")
+        except (TimeoutError, ProtocolException) as ex:
+            LOG.debug("document.referrer lookup failed (%s), skipping to script scan", type(ex).__name__)
+            referrer = ""
+
         if "p-anzeige-aufgeben-bestaetigung.html?adId=" in referrer:
             try:
                 query = urllib_parse.parse_qs(urllib_parse.urlparse(referrer).query)
@@ -2572,8 +2577,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 ad_id = int(match.group(1))
                 LOG.debug("Extracted ad ID %s from inline script fallback", ad_id)
                 return ad_id
-        except (ValueError, TypeError) as ex:
-            LOG.debug("Failed to parse ad ID from script content: %s", ex)
+        except (TimeoutError, ProtocolException, ValueError, TypeError) as ex:
+            LOG.debug("Script content scan failed (%s): %s", type(ex).__name__, ex)
 
         return None
 
