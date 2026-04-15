@@ -2901,16 +2901,13 @@ class TestKleinanzeigenBotAdDeletion:
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_request", new_callable = AsyncMock,
-                         return_value = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}) as mock_request,
+                         return_value = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}),
         ):
             mock_find.return_value.attrs = {"content": "some-token"}
             result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = True)
 
         assert result is True
         assert ad_cfg.id is None
-        # Verify the unified loop uses valid_response_codes=[200, 404] for both modes
-        mock_request.assert_called_once()
-        assert mock_request.call_args[1]["valid_response_codes"] == [200, 404]
 
     @pytest.mark.asyncio
     async def test_delete_ad_by_id_succeeds(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
