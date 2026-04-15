@@ -2055,6 +2055,28 @@ class TestKleinanzeigenBotBasics:
         assert ad_cfg_orig["id"] == 99887766
 
     @pytest.mark.asyncio
+    async def test_publish_ad_confirmation_fallback_when_redirect_happens_after_url_poll(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """When the confirmation URL was observed by polling but the page redirected before extraction, the fallback should recover the ad ID."""
+        ad_cfg, ad_cfg_orig = self._build_publish_ad_cfg(base_ad_config)
+
+        # web_await succeeds (confirmation URL was seen during polling), but the page
+        # redirects before line 2479 can extract the URL, causing IndexError in the
+        # extraction which falls into the except block and triggers the fallback.
+        with self._mock_post_submit_dependencies(
+            test_bot, mock_page,
+            redirect_recovery_return = 55667788,
+            include_success_mocks = True,
+        ):
+            await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
+
+        assert ad_cfg_orig["id"] == 55667788
+
+    @pytest.mark.asyncio
     async def test_publish_ad_confirmation_fallback_from_tracking_raises_uncertain_when_not_found(
         self,
         test_bot:KleinanzeigenBot,

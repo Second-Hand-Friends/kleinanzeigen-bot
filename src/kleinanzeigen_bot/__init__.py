@@ -2480,10 +2480,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(current_url).query)
             ad_id = int(current_url_query_params.get("adId", [])[0])
 
-        except (TimeoutError, ProtocolException) as ex:
-            # The confirmation page may have auto-redirected before we could poll it.
+        except (TimeoutError, ProtocolException, IndexError, ValueError, TypeError) as ex:
+            # The confirmation page may have auto-redirected before we could poll it,
+            # or the URL was redirected between polling and extraction (race condition).
             # Try to recover the ad ID from tracking data on the current page.
-            LOG.debug("Confirmation URL polling timed out, attempting tracking data fallback...")
+            LOG.debug("Confirmation URL polling or extraction failed (%s), attempting tracking data fallback...", type(ex).__name__)
             try:
                 ad_id = await self._try_recover_ad_id_from_redirect()
             except Exception as fallback_ex:  # noqa: BLE001
