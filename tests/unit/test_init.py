@@ -2891,88 +2891,189 @@ class TestKleinanzeigenBotAdDeletion:
     """Tests for ad deletion functionality."""
 
     @pytest.mark.asyncio
-    async def test_delete_ad_by_title(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
-        """Test deleting an ad by title."""
-        test_bot.page = MagicMock()
-        test_bot.page.evaluate = AsyncMock(return_value = {"statusCode": 200, "statusMessage": "OK", "content": "{}"})
-        test_bot.page.sleep = AsyncMock()
-
-        # Use minimal config since we only need title for deletion by title
-        ad_cfg = Ad.model_validate(
-            minimal_ad_config
-            | {
-                "title": "Test Title",
-                "id": None,  # Explicitly set id to None for title-based deletion
-            }
-        )
-
-        published_ads = [{"title": "Test Title", "id": "67890"}, {"title": "Other Title", "id": "11111"}]
+    async def test_delete_ad_by_title_match_succeeds(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
+        """When title matches a published ad and server returns 200, should return True and clear id."""
+        ad_cfg = Ad.model_validate(minimal_ad_config | {"title": "Test Title", "id": None})
+        published_ads = [{"title": "Test Title", "id": 67890}, {"title": "Other Title", "id": 11111}]
 
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock,
+                         return_value = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}),
         ):
             mock_find.return_value.attrs = {"content": "some-token"}
             result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = True)
-            assert result is True
+
+        assert result is True
+        assert ad_cfg.id is None
 
     @pytest.mark.asyncio
-    async def test_delete_ad_by_id(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
-        """Test deleting an ad by ID."""
-        test_bot.page = MagicMock()
-        test_bot.page.evaluate = AsyncMock(return_value = {"statusCode": 200, "statusMessage": "OK", "content": "{}"})
-        test_bot.page.sleep = AsyncMock()
-
-        # Create config with ID for deletion by ID
-        ad_cfg = Ad.model_validate(
-            minimal_ad_config
-            | {
-                "id": "12345"  # Fixed: use proper dict key syntax
-            }
-        )
-
-        published_ads = [{"title": "Different Title", "id": "12345"}, {"title": "Other Title", "id": "11111"}]
+    async def test_delete_ad_by_id_succeeds(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
+        """When ad has an ID and server returns 200, should return True and clear id."""
+        ad_cfg = Ad.model_validate(minimal_ad_config | {"id": 12345})
+        published_ads = [{"title": "Different Title", "id": 12345}, {"title": "Other Title", "id": 11111}]
 
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock,
+                         return_value = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}),
         ):
             mock_find.return_value.attrs = {"content": "some-token"}
             result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = False)
-            assert result is True
+
+        assert result is True
+        assert ad_cfg.id is None
 
     @pytest.mark.asyncio
-    async def test_delete_ad_by_id_with_non_string_csrf_token(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
-        """Test deleting an ad by ID with non-string CSRF token to cover str() conversion."""
-        test_bot.page = MagicMock()
-        test_bot.page.evaluate = AsyncMock(return_value = {"statusCode": 200, "statusMessage": "OK", "content": "{}"})
-        test_bot.page.sleep = AsyncMock()
+    async def test_delete_ad_returns_false_when_no_match(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
+        """When no published ads match, should return False without opening any pages."""
+        ad_cfg = Ad.model_validate(minimal_ad_config | {"title": "No Match Title", "id": 99999})
+        published_ads = [{"title": "Different Title", "id": 12345}]
 
-        # Create config with ID for deletion by ID
-        ad_cfg = Ad.model_validate(minimal_ad_config | {"id": "12345"})
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock) as mock_web_open,
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_web_find,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_web_sleep,
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+        ):
+            result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = True)
 
-        published_ads = [{"title": "Different Title", "id": "12345"}, {"title": "Other Title", "id": "11111"}]
+        assert result is False
+        assert ad_cfg.id == 99999  # Preserved — no deletion attempted
+        mock_web_open.assert_not_called()
+        mock_web_find.assert_not_called()
+        mock_web_sleep.assert_not_called()
+        mock_request.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_delete_ad_returns_false_on_404_clears_id(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
+        """When delete is attempted but server returns 404, should return False but still clear the id."""
+        ad_cfg = Ad.model_validate(minimal_ad_config | {"id": 12345})
+        published_ads:list[dict[str, Any]] = []
 
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
-            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"statusCode": 404, "statusMessage": "Not Found", "content": "{}"}),
         ):
-            # Mock non-string CSRF token to test str() conversion
-            mock_find.return_value.attrs = {"content": 12345}  # Non-string token
+            mock_find.return_value.attrs = {"content": "some-token"}
             result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = False)
-            assert result is True
 
-            # Verify that str() was called on the CSRF token
-            mock_request.assert_called_once()
-            call_args = mock_request.call_args
-            assert call_args[1]["headers"]["x-csrf-token"] == "12345"  # Should be converted to string
+        assert result is False
+        assert ad_cfg.id is None  # Cleared because delete was attempted
+
+    @pytest.mark.asyncio
+    async def test_delete_ad_skips_invalid_published_ad_id(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
+        """When a title-matched published ad has an invalid id (None), it should be skipped."""
+        ad_cfg = Ad.model_validate(minimal_ad_config | {"title": "Test Title", "id": None})
+        published_ads:list[dict[str, Any]] = [
+            {"title": "Test Title", "id": None},  # Invalid — should be skipped
+            {"title": "Test Title", "id": "not-a-number"},  # Invalid — should be skipped
+        ]
+
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock) as mock_web_open,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock),
+        ):
+            result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = True)
+
+        assert result is False
+        mock_web_open.assert_not_called()  # No valid IDs → no page open
+
+    @pytest.mark.asyncio
+    async def test_delete_ad_with_zero_id(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
+        """When ad_cfg.id is 0 (falsy but valid), should still enter the ID-based deletion path."""
+        ad_cfg = Ad.model_validate(minimal_ad_config | {"id": 0})
+        published_ads:list[dict[str, Any]] = []
+
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock,
+                         return_value = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}) as mock_request,
+        ):
+            mock_find.return_value.attrs = {"content": "some-token"}
+            result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = False)
+
+        assert result is True
+        assert ad_cfg.id is None
+        mock_request.assert_called_once()
+        assert "ids=0" in mock_request.call_args[1]["url"]
+
+    @pytest.mark.asyncio
+    async def test_delete_ad_multiple_title_matches(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
+        """When multiple published ads match by title with mixed 200/404, should return True."""
+        ad_cfg = Ad.model_validate(minimal_ad_config | {"title": "Test Title", "id": None})
+        published_ads = [
+            {"title": "Test Title", "id": 100},
+            {"title": "Test Title", "id": 200},
+            {"title": "Test Title", "id": 300},
+        ]
+
+        response_sequence = [
+            {"statusCode": 200, "statusMessage": "OK", "content": "{}"},
+            {"statusCode": 404, "statusMessage": "Not Found", "content": "{}"},
+            {"statusCode": 200, "statusMessage": "OK", "content": "{}"},
+        ]
+
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = response_sequence) as mock_request,
+        ):
+            mock_find.return_value.attrs = {"content": "some-token"}
+            result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = True)
+
+        assert result is True
+        assert ad_cfg.id is None
+        assert mock_request.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_delete_ad_title_and_id_match_deduplicated(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
+        """When the same ad matches by both title and ID, it should be deleted only once."""
+        ad_cfg = Ad.model_validate(minimal_ad_config | {"title": "Test Title", "id": 100})
+        published_ads = [{"title": "Test Title", "id": 100}]
+        ok_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
+
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ok_response) as mock_request,
+        ):
+            mock_find.return_value.attrs = {"content": "some-token"}
+            result = await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = True)
+
+        assert result is True
+        assert ad_cfg.id is None
+        mock_request.assert_called_once()  # Deduplicated — only one request
+
+    @pytest.mark.asyncio
+    async def test_delete_ad_exception_preserves_id(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
+        """When web_request raises an exception mid-loop, ad_cfg.id should be preserved and web_sleep not called."""
+        ad_cfg = Ad.model_validate(minimal_ad_config | {"id": 12345})
+        published_ads:list[dict[str, Any]] = []
+
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_web_sleep,
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = TimeoutError("request timed out")),
+        ):
+            mock_find.return_value.attrs = {"content": "some-token"}
+            with pytest.raises(TimeoutError, match = "request timed out"):
+                await test_bot.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = False)
+
+        assert ad_cfg.id == 12345  # Preserved — exception prevented clearing
+        mock_web_sleep.assert_not_called()
 
 
 class TestKleinanzeigenBotAdRepublication:
