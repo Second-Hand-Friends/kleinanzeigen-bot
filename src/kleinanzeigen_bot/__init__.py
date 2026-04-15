@@ -2430,6 +2430,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # set title (right before submit to prevent React re-render clearing it)
         #############################
+        LOG.debug("Setting title '%s' (deferred to prevent React re-render clearing it)", ad_cfg.title)
         await self.__set_input_value("ad-title", ad_cfg.title)
 
         #############################
@@ -2440,6 +2441,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         await self.web_click(By.XPATH, "//button[contains(., 'Anzeige aufgeben') or contains(., 'Änderungen speichern') or contains(., 'Anzeige speichern')]")
 
         # Everything after the first click is uncertain: the ad may already have been submitted.
+        ad_id:int | None = None
         try:
             quick_dom = self._timeout("quick_dom")
 
@@ -2472,13 +2474,38 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 return "p-anzeige-aufgeben-bestaetigung.html?adId=" in url
 
             await self.web_await(_check_confirmation_url, timeout = confirmation_timeout)
-        except (TimeoutError, ProtocolException) as ex:
-            raise PublishSubmissionUncertainError("submission may have succeeded before failure") from ex
 
-        # extract the ad id from the URL's query parameter (use JS for fresh URL, not stale self.page.url)
-        current_url = str(await self.web_execute("window.location.href"))
-        current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(current_url).query)
-        ad_id = int(current_url_query_params.get("adId", [])[0])
+            # extract the ad id from the URL's query parameter (use JS for fresh URL, not stale self.page.url)
+            current_url = str(await self.web_execute("window.location.href"))
+            current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(current_url).query)
+            ad_id = int(current_url_query_params.get("adId", [])[0])
+
+        except (TimeoutError, ProtocolException, IndexError, ValueError, TypeError) as ex:
+            # The confirmation page may have auto-redirected before we could poll it,
+            # or the URL was redirected between polling and extraction (race condition).
+            # Try to recover the ad ID from tracking data on the current page.
+            LOG.debug("Confirmation URL polling or extraction failed (%s), attempting tracking data fallback...", type(ex).__name__)
+            try:
+                ad_id = await self._try_recover_ad_id_from_redirect()
+            except Exception as fallback_ex:  # noqa: BLE001
+                LOG.debug("Tracking data fallback failed: %s", fallback_ex)
+
+            if ad_id is None:
+                raise PublishSubmissionUncertainError("submission may have succeeded before failure") from ex
+
+            LOG.warning(
+                "Confirmation page redirected too fast; extracted ad ID %s from page tracking data",
+                ad_id,
+            )
+
+        # Defensive guard: ad_id must be set by now — either from the confirmation URL
+        # (try block) or the tracking fallback (except block). The except block always
+        # either sets ad_id or raises PublishSubmissionUncertainError, making this
+        # unreachable in the current code. Guards against future regressions.
+        if ad_id is None:
+            msg = _("ad_id is unexpectedly None after confirmation flow for %s") % ad_file
+            raise RuntimeError(msg)
+
         ad_cfg_orig["id"] = ad_id
 
         # Update content hash after successful publication
@@ -2509,6 +2536,51 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.info(" -> SUCCESS: ad updated with ID %s", ad_id)
 
         dicts.save_dict(ad_file, ad_cfg_orig)
+
+    async def _try_recover_ad_id_from_redirect(self) -> int | None:
+        """Try to extract the published ad ID from page tracking data.
+
+        Used as a fallback when the confirmation page auto-redirects before
+        the URL can be polled. Checks document.referrer first, then scans
+        inline script content for the confirmation URL containing adId.
+
+        Returns:
+            The extracted ad ID, or None if no ad ID could be found.
+        """
+        # Layer 1: check document.referrer for the confirmation URL.
+        # Note: referrer reflects the most recent navigation, so a stale ID from a
+        # previous publish is not a concern — the publish flow navigates to the edit
+        # page first, resetting the referrer before the confirmation redirect occurs.
+        try:
+            referrer = str(await self.web_execute("document.referrer") or "")
+        except (TimeoutError, ProtocolException) as ex:
+            LOG.debug("document.referrer lookup failed (%s), skipping to script scan", type(ex).__name__)
+            referrer = ""
+
+        if "p-anzeige-aufgeben-bestaetigung.html?adId=" in referrer:
+            try:
+                query = urllib_parse.parse_qs(urllib_parse.urlparse(referrer).query)
+                ad_id_str = query.get("adId", [])[0]
+                ad_id = int(ad_id_str)
+                LOG.debug("Extracted ad ID %s from document.referrer fallback", ad_id)
+                return ad_id
+            except (IndexError, ValueError, TypeError):
+                LOG.debug("Failed to parse ad ID from document.referrer: %s", referrer)
+
+        # Layer 2: scan inline <script> tags for confirmation URL with adId
+        try:
+            script_content = str(await self.web_execute(
+                "[...document.querySelectorAll('script')].map(s => s.textContent).join('\\n')"
+            ) or "")
+            match = re.search(r"p-anzeige-aufgeben-bestaetigung\.html\?adId=(\d+)", script_content)
+            if match:
+                ad_id = int(match.group(1))
+                LOG.debug("Extracted ad ID %s from inline script fallback", ad_id)
+                return ad_id
+        except (TimeoutError, ProtocolException, ValueError, TypeError) as ex:
+            LOG.debug("Script content scan failed (%s): %s", type(ex).__name__, ex)
+
+        return None
 
     async def __set_input_value(self, element_id:str, value:str) -> None:
         """Sets a framework-controlled input value using the native DOM setter to trigger onChange."""

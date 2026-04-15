@@ -3,7 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import asyncio, copy, fnmatch, gc, io, json, logging, os, tempfile  # isort: skip
 from collections.abc import Callable, Generator
-from contextlib import contextmanager, redirect_stdout
+from contextlib import ExitStack, contextmanager, redirect_stdout
 from datetime import timedelta
 from pathlib import Path, PureWindowsPath
 from typing import Any, Awaitable, Iterator, cast
@@ -1952,25 +1952,36 @@ class TestKleinanzeigenBotBasics:
 
         web_open_mock.assert_awaited_once_with(expected_url, reload_if_already_open = True)
 
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "web_await_error",
-        [TimeoutError("confirmation timeout"), ProtocolException(MagicMock(), "connection lost", 0)],
-        ids = ["timeout", "protocol-exception"],
-    )
-    async def test_publish_ad_marks_post_submit_errors_as_uncertain(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-        mock_page:MagicMock,
-        web_await_error:Exception,
-    ) -> None:
-        """Post-submit exceptions (TimeoutError, ProtocolException) should be converted to non-retryable uncertainty."""
-        test_bot.page = mock_page
+    @staticmethod
+    def _build_publish_ad_cfg(base_ad_config:dict[str, Any]) -> tuple[Ad, dict[str, Any]]:
+        """Build ad config and original dict for publish_ad tests."""
         ad_cfg = Ad.model_validate(base_ad_config | {"id": 12345, "shipping_type": "NOT_APPLICABLE", "price_type": "NOT_APPLICABLE"})
         ad_cfg_orig = copy.deepcopy(base_ad_config)
+        return ad_cfg, ad_cfg_orig
 
-        with (
+    @contextmanager
+    def _mock_post_submit_dependencies(
+        self,
+        test_bot:KleinanzeigenBot,
+        mock_page:MagicMock,
+        *,
+        web_await_side_effect:BaseException | None = None,
+        redirect_recovery_return:int | None = None,
+        redirect_recovery_side_effect:BaseException | None = None,
+        include_success_mocks:bool = False,
+    ) -> Iterator[None]:
+        """Mock all post-submit publish_ad dependencies for confirmation fallback tests.
+
+        Parameters
+        ----------
+            web_await_side_effect: Exception to raise from web_await (simulates confirmation timeout).
+            redirect_recovery_return: Return value for _try_recover_ad_id_from_redirect.
+            redirect_recovery_side_effect: Exception to raise from _try_recover_ad_id_from_redirect.
+            include_success_mocks: If True, also mock dicts.save_dict (for success-path tests).
+        """
+        test_bot.page = mock_page
+
+        common_patches:list[Any] = [
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
             patch.object(test_bot, "_KleinanzeigenBot__set_category", new_callable = AsyncMock),
@@ -1985,7 +1996,118 @@ class TestKleinanzeigenBotBasics:
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = web_await_error),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = web_await_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "_try_recover_ad_id_from_redirect", new_callable = AsyncMock,
+                         return_value = redirect_recovery_return, side_effect = redirect_recovery_side_effect),
+        ]
+
+        if include_success_mocks:
+            common_patches.append(patch("kleinanzeigen_bot.dicts.save_dict"))
+
+        with ExitStack() as stack:
+            for p in common_patches:
+                stack.enter_context(p)
+            yield
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "web_await_error",
+        [TimeoutError("confirmation timeout"), ProtocolException(MagicMock(), "connection lost", 0)],
+        ids = ["timeout", "protocol-exception"],
+    )
+    async def test_publish_ad_marks_post_submit_errors_as_uncertain(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+        web_await_error:Exception,
+    ) -> None:
+        """Post-submit exceptions (TimeoutError, ProtocolException) should be converted to non-retryable uncertainty."""
+        ad_cfg, ad_cfg_orig = self._build_publish_ad_cfg(base_ad_config)
+
+        with (
+            self._mock_post_submit_dependencies(test_bot, mock_page,
+                                                web_await_side_effect = web_await_error,
+                                                redirect_recovery_return = None),
+            pytest.raises(PublishSubmissionUncertainError, match = "submission may have succeeded before failure"),
+        ):
+            await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
+
+    @pytest.mark.asyncio
+    async def test_publish_ad_confirmation_fallback_from_referrer(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """When confirmation URL polling times out, ad ID should be recovered from document.referrer."""
+        ad_cfg, ad_cfg_orig = self._build_publish_ad_cfg(base_ad_config)
+
+        with self._mock_post_submit_dependencies(
+            test_bot, mock_page,
+            web_await_side_effect = TimeoutError("confirmation timeout"),
+            redirect_recovery_return = 99887766,
+            include_success_mocks = True,
+        ):
+            await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
+
+        assert ad_cfg_orig["id"] == 99887766
+
+    @pytest.mark.asyncio
+    async def test_publish_ad_confirmation_fallback_when_redirect_happens_after_url_poll(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """When the confirmation URL was observed by polling but the page redirected before extraction, the fallback should recover the ad ID."""
+        ad_cfg, ad_cfg_orig = self._build_publish_ad_cfg(base_ad_config)
+
+        # web_await succeeds (confirmation URL was seen during polling), but the page
+        # redirects before line 2479 can extract the URL, causing IndexError in the
+        # extraction which falls into the except block and triggers the fallback.
+        with self._mock_post_submit_dependencies(
+            test_bot, mock_page,
+            redirect_recovery_return = 55667788,
+            include_success_mocks = True,
+        ):
+            await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
+
+        assert ad_cfg_orig["id"] == 55667788
+
+    @pytest.mark.asyncio
+    async def test_publish_ad_confirmation_fallback_from_tracking_raises_uncertain_when_not_found(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """When both confirmation URL polling and tracking fallback fail, PublishSubmissionUncertainError should be raised."""
+        ad_cfg, ad_cfg_orig = self._build_publish_ad_cfg(base_ad_config)
+
+        with (
+            self._mock_post_submit_dependencies(test_bot, mock_page,
+                                                web_await_side_effect = TimeoutError("confirmation timeout"),
+                                                redirect_recovery_return = None),
+            pytest.raises(PublishSubmissionUncertainError, match = "submission may have succeeded before failure"),
+        ):
+            await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
+
+    @pytest.mark.asyncio
+    async def test_publish_ad_confirmation_fallback_helper_failure_still_raises_uncertain(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """When the tracking fallback helper itself raises, it should not change retry behavior — PublishSubmissionUncertainError must still be raised."""
+        ad_cfg, ad_cfg_orig = self._build_publish_ad_cfg(base_ad_config)
+
+        with (
+            self._mock_post_submit_dependencies(test_bot, mock_page,
+                                                web_await_side_effect = TimeoutError("confirmation timeout"),
+                                                redirect_recovery_side_effect = RuntimeError("browser disconnected")),
             pytest.raises(PublishSubmissionUncertainError, match = "submission may have succeeded before failure"),
         ):
             await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
@@ -4905,3 +5027,57 @@ class TestImageCleanupInPublishAd:
         assert sum(button.click.await_count for button in remove_buttons) == 3
         mock_upload.assert_awaited_once()
         assert event_log == ["remove-1", "remove-2", "remove-3", "upload"]
+
+
+class TestTrackingFallback:
+    """Tests for _try_recover_ad_id_from_redirect helper method."""
+
+    @pytest.mark.asyncio
+    async def test_extract_ad_id_from_referrer(self, test_bot:KleinanzeigenBot) -> None:
+        """Ad ID should be extracted from document.referrer containing the confirmation URL."""
+        referrer_url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=3382410263"
+        with patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = referrer_url):
+            result = await test_bot._try_recover_ad_id_from_redirect()
+
+        assert result == 3382410263
+
+    @pytest.mark.asyncio
+    async def test_extract_ad_id_from_script_content(self, test_bot:KleinanzeigenBot) -> None:
+        """When referrer has no confirmation URL, ad ID should be extracted from inline script content."""
+        referrer = "https://www.kleinanzeigen.de/m-meine-anzeigen.html"
+        script_content = (
+            'Belen.Tracking.initTrackingData({"page":"p-anzeige-aufgeben-bestaetigung.html?adId=44556677"});'
+        )
+        execute_returns = [referrer, script_content]
+
+        with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
+            result = await test_bot._try_recover_ad_id_from_redirect()
+
+        assert result == 44556677
+
+    @pytest.mark.asyncio
+    async def test_extract_ad_id_returns_none_when_not_found(self, test_bot:KleinanzeigenBot) -> None:
+        """When neither referrer nor scripts contain a confirmation URL, None should be returned."""
+        execute_returns = [
+            "https://www.kleinanzeigen.de/m-meine-anzeigen.html",  # referrer
+            "var x = 42;",  # script content — no confirmation URL
+        ]
+
+        with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
+            result = await test_bot._try_recover_ad_id_from_redirect()
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("referrer_value", ["", None], ids = ["empty-referrer", "none-referrer"])
+    async def test_extract_ad_id_falls_back_to_script_when_referrer_lacks_confirmation_url(
+        self, test_bot:KleinanzeigenBot, referrer_value:str | None,
+    ) -> None:
+        """When document.referrer is empty or None, the script scan fallback should extract the ad ID."""
+        script_content = 'initTrackingData("p-anzeige-aufgeben-bestaetigung.html?adId=11223344")'
+        execute_returns = [referrer_value, script_content]
+
+        with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
+            result = await test_bot._try_recover_ad_id_from_redirect()
+
+        assert result == 11223344

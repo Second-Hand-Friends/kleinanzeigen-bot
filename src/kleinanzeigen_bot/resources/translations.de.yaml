@@ -216,6 +216,8 @@ kleinanzeigen_bot/__init__.py:
     " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
     " -> removed %d existing image(s) before upload": " -> %d vorhandene Bilder vor dem Hochladen entfernt"
+    "Confirmation page redirected too fast; extracted ad ID %s from page tracking data": "Bestätigungsseite wurde zu schnell weitergeleitet; Anzeigen-ID %s aus Seiten-Trackingdaten extrahiert"
+    "ad_id is unexpectedly None after confirmation flow for %s": "ad_id ist unerwartet None nach dem Bestätigungsablauf für %s"
 
   update_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
