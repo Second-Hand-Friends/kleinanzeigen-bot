@@ -2058,7 +2058,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     continue
                 published_ad_title = published_ad.get("title", "")
                 if ad_cfg.id == published_ad_id or ad_cfg.title == published_ad_title:
-                    LOG.info(" -> matched ad %s '%s' for deletion", published_ad_id, published_ad_title)
+                    LOG.debug(" -> matched ad %s '%s' for deletion", published_ad_id, published_ad_title)
                     ids_to_delete.add(published_ad_id)
         elif ad_cfg.id is not None:
             ids_to_delete.add(ad_cfg.id)
@@ -2076,7 +2076,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         HTTP_OK:Final = 200
         deleted = False
         for target_id in ids_to_delete:
-            LOG.info(" -> deleting ad %s...", target_id)
+            LOG.debug(" -> deleting ad %s...", target_id)
             response = await self.web_request(
                 url = f"{self.root_url}/m-anzeigen-loeschen.json?ids={target_id}",
                 method = "POST",

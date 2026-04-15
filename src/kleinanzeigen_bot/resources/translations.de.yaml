@@ -135,8 +135,6 @@ kleinanzeigen_bot/__init__.py:
   delete_ad:
     "Deleting ad '%s' if already present...": "Lösche Anzeige '%s', falls bereits vorhanden..."
     "Expected CSRF Token not found in HTML content!": "Erwartetes CSRF-Token wurde im HTML-Inhalt nicht gefunden!"
-    " -> matched ad %s '%s' for deletion": " -> Anzeige %s '%s' zum Löschen gefunden"
-    " -> deleting ad %s...": " -> lösche Anzeige %s..."
     " -> ad %s not found (status %s), may have been removed already": " -> Anzeige %s nicht gefunden (Status %s), möglicherweise bereits entfernt"
 
   extend_ads:
