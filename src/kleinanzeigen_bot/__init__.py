@@ -2083,7 +2083,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             if delete_attempted and after_delete != "NONE":
                 if _apply_after_delete_policy(ad_cfg, ad_cfg_orig, mode = after_delete):
                     dicts.save_dict(ad_file, ad_cfg_orig)
-
             await self.web_sleep()
 
         LOG.info("############################################")
