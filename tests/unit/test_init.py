@@ -5248,6 +5248,8 @@ class TestDeleteAdsAfterDeletePolicy:
             assert ad_cfg.repost_count == 3
             if mode == "NONE":
                 mock_save.assert_not_called()
+            else:  # DISABLE
+                mock_save.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_cleanup_on_404_detection(
