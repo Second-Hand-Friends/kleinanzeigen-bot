@@ -168,6 +168,17 @@ publishing:
   delete_old_ads_by_title: true
 
 # ################################################################################
+# post-delete YAML cleanup configuration
+deleting:
+
+  # what to do with the local ad YAML after a delete attempt (applies to both 200 and 404 responses)
+  # Examples (choose one):
+  #   • NONE
+  #   • RESET
+  #   • DISABLE
+  after_delete: NONE
+
+# ################################################################################
 # Browser configuration
 browser:
 

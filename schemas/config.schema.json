@@ -398,6 +398,28 @@
       "title": "ContactDefaults",
       "type": "object"
     },
+    "DeletingConfig": {
+      "properties": {
+        "after_delete": {
+          "default": "NONE",
+          "description": "what to do with the local ad YAML after a delete attempt (applies to both 200 and 404 responses)",
+          "enum": [
+            "NONE",
+            "RESET",
+            "DISABLE"
+          ],
+          "examples": [
+            "NONE",
+            "RESET",
+            "DISABLE"
+          ],
+          "title": "After Delete",
+          "type": "string"
+        }
+      },
+      "title": "DeletingConfig",
+      "type": "object"
+    },
     "DescriptionAffixes": {
       "deprecated": true,
       "properties": {
@@ -817,6 +839,10 @@
     },
     "publishing": {
       "$ref": "#/$defs/PublishingConfig"
+    },
+    "deleting": {
+      "$ref": "#/$defs/DeletingConfig",
+      "description": "post-delete YAML cleanup configuration"
     },
     "browser": {
       "$ref": "#/$defs/BrowserConfig",

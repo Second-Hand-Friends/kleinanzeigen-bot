@@ -240,6 +240,14 @@ class PublishingConfig(ContextualModel):
     delete_old_ads_by_title:bool = Field(default = True, description = "match old ads by title when deleting (only works with BEFORE_PUBLISH)")
 
 
+class DeletingConfig(ContextualModel):
+    after_delete:Literal["NONE", "RESET", "DISABLE"] = Field(
+        default = "NONE",
+        description = "what to do with the local ad YAML after a delete attempt (applies to both 200 and 404 responses)",
+        examples = ["NONE", "RESET", "DISABLE"],
+    )
+
+
 class CaptchaConfig(ContextualModel):
     auto_restart:bool = Field(
         default = False, description = "if true, abort when captcha is detected and auto-retry after restart_delay (if false, wait for manual solving)"
@@ -456,6 +464,7 @@ if relative paths are specified, then they are relative to this configuration fi
 
     download:DownloadConfig = Field(default_factory = DownloadConfig)
     publishing:PublishingConfig = Field(default_factory = PublishingConfig)
+    deleting:DeletingConfig = Field(default_factory = DeletingConfig, description = "post-delete YAML cleanup configuration")
     browser:BrowserConfig = Field(default_factory = BrowserConfig, description = "Browser configuration")
     login:LoginConfig = Field(default_factory = LoginConfig.model_construct, description = "Login credentials")
     captcha:CaptchaConfig = Field(default_factory = CaptchaConfig)
