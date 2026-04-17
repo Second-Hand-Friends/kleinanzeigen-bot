@@ -2551,6 +2551,9 @@ class TestAdExtractorDownload:
         observed_false = False
         original_exists = Path.exists
 
+        # Budget the mocked exists checks so _remove_tree_with_retries sees one pre-loop check,
+        # _RMTREE_RETRY_ATTEMPTS in-loop retries, and then a final False via exists_side_effect;
+        # observed_false confirms the last_error path is suppressed once the tree is gone.
         def exists_side_effect(self:Path) -> bool:
             nonlocal exists_calls, observed_false
             if self == path:
