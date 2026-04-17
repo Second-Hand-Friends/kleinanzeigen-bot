@@ -2472,7 +2472,7 @@ class TestAdExtractorDownload:
         assert calls == 1
         assert path.exists()
 
-    def test_handle_rmtree_onerror_preserves_existing_mode_on_windows(self) -> None:
+    def test_handle_rmtree_onerror_adds_write_bit_preserving_other_mode_bits_on_windows(self) -> None:
         path = "C:/Temp/readonly.txt"
         retry_func = MagicMock()
         stat_result = MagicMock(st_mode = 0o555)
