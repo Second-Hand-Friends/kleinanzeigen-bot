@@ -3,7 +3,9 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import json  # isort: skip
 import asyncio
+import errno
 import shutil
+import stat
 from pathlib import Path
 from typing import Any, Final, TypedDict
 from unittest.mock import AsyncMock, MagicMock, call, patch
@@ -2011,9 +2013,9 @@ class TestAdExtractorDownload:
         def rmtree_side_effect(path:str | Path, *_args:object, **_kwargs:object) -> None:
             normalized_path = Path(path)
             if cleanup_target == "backup" and normalized_path == backup_dir:
-                raise OSError("busy")
+                raise PermissionError("busy")
             if cleanup_target == "staging" and normalized_path == staging_dir:
-                raise OSError("busy")
+                raise PermissionError("busy")
             # Any other cleanup target would be unexpected for this scenario.
             raise AssertionError(f"Unexpected rmtree path: {path}")
 
@@ -2022,6 +2024,7 @@ class TestAdExtractorDownload:
                 patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
                 patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True, side_effect = OSError("write failed")),
                 patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
+                patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
                 caplog.at_level("WARNING"),
             ):
                 mock_extract_with_dir.return_value = (
@@ -2036,6 +2039,7 @@ class TestAdExtractorDownload:
             with (
                 patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
                 patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
+                patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
                 caplog.at_level("WARNING"),
             ):
                 mock_extract_with_dir.return_value = (
@@ -2330,7 +2334,8 @@ class TestAdExtractorDownload:
 
         with (
             patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
-            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = OSError("busy")),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = PermissionError("busy")),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
             patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock) as mock_extract,
             pytest.raises(OSError, match = "Could not remove stale staging directory"),
         ):
@@ -2338,6 +2343,151 @@ class TestAdExtractorDownload:
 
         mock_extract.assert_not_called()
         assert stale_staging_dir.exists()
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_ad_page_info_with_directory_handling_retries_stale_staging_cleanup(
+        self,
+        extractor:extract_module.AdExtractor,
+        tmp_path:Path,
+    ) -> None:
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        stale_staging_dir = base_dir / ".tmp-ad_12345"
+        stale_staging_dir.mkdir()
+        stale_marker = stale_staging_dir / "stale.txt"
+        stale_marker.write_text("stale")
+        original_rmtree = shutil.rmtree
+        calls:int = 0
+
+        def rmtree_side_effect(path:str | Path, *_args:object, **_kwargs:object) -> None:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise PermissionError("busy")
+            original_rmtree(path)
+
+        with (
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
+            patch.object(
+                extractor,
+                "_extract_ad_page_info",
+                new_callable = AsyncMock,
+                return_value = _create_test_ad_partial(title = "Test Title"),
+            ) as mock_extract,
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
+        ):
+            ad_cfg, staging_dir, final_dir, ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+        assert calls == 2
+        mock_extract.assert_awaited_once()
+        assert ad_cfg.title == "Test Title"
+        assert staging_dir.exists()
+        assert final_dir == base_dir / "ad_12345_Test Title"
+        assert ad_file_stem == "ad_12345"
+        assert not stale_marker.exists()
+
+    def test_remove_tree_with_retries_returns_when_path_disappears_after_failure(self, tmp_path:Path) -> None:
+        path = tmp_path / "staging"
+        path.mkdir()
+        original_rmtree = shutil.rmtree
+        calls:int = 0
+
+        def rmtree_side_effect(target:str | Path, *_args:object, **_kwargs:object) -> None:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                original_rmtree(target)
+                raise PermissionError("busy")
+            raise AssertionError("rmtree should not be retried once the path disappears")
+
+        with (
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
+        ):
+            extract_module._remove_tree_with_retries(path)
+
+        assert calls == 1
+        assert not path.exists()
+
+    def test_remove_tree_with_retries_retries_then_succeeds(self, tmp_path:Path) -> None:
+        path = tmp_path / "staging"
+        path.mkdir()
+        original_rmtree = shutil.rmtree
+        calls:int = 0
+
+        def rmtree_side_effect(target:str | Path, *_args:object, **_kwargs:object) -> None:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise PermissionError("busy")
+            original_rmtree(target)
+
+        with (
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
+        ):
+            extract_module._remove_tree_with_retries(path)
+
+        assert calls == 2
+        assert not path.exists()
+
+    def test_remove_tree_with_retries_fails_fast_for_non_retryable_error(self, tmp_path:Path) -> None:
+        path = tmp_path / "staging"
+        path.mkdir()
+        calls:int = 0
+
+        def rmtree_side_effect(_target:str | Path, *_args:object, **_kwargs:object) -> None:
+            nonlocal calls
+            calls += 1
+            raise OSError(errno.EINVAL, "invalid")
+
+        with (
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
+            pytest.raises(OSError, match = "invalid"),
+        ):
+            extract_module._remove_tree_with_retries(path)
+
+        assert calls == 1
+        assert path.exists()
+
+    def test_handle_rmtree_onerror_preserves_existing_mode_on_windows(self) -> None:
+        path = "C:/Temp/readonly.txt"
+        retry_func = MagicMock()
+        stat_result = MagicMock(st_mode = 0o555)
+
+        with (
+            patch("kleinanzeigen_bot.extract.os.name", "nt"),
+            patch("kleinanzeigen_bot.extract.os.stat", return_value = stat_result) as mock_stat,
+            patch("kleinanzeigen_bot.extract.os.chmod") as mock_chmod,
+        ):
+            extract_module._handle_rmtree_onerror(retry_func, path, (PermissionError, PermissionError("busy"), None))
+
+        mock_stat.assert_called_once_with(path)
+        mock_chmod.assert_called_once_with(path, 0o555 | stat.S_IWRITE)
+        retry_func.assert_called_once_with(path)
+
+    def test_remove_tree_with_retries_raises_after_exhausting_retries(self, tmp_path:Path) -> None:
+        path = tmp_path / "staging"
+        path.mkdir()
+        calls:int = 0
+
+        def rmtree_side_effect(_target:str | Path, *_args:object, **_kwargs:object) -> None:
+            nonlocal calls
+            calls += 1
+            raise PermissionError("busy")
+
+        with (
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
+            pytest.raises(PermissionError, match = "busy"),
+        ):
+            extract_module._remove_tree_with_retries(path)
+
+        assert calls == extract_module._RMTREE_RETRY_ATTEMPTS
+        assert path.exists()
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
@@ -2353,7 +2503,8 @@ class TestAdExtractorDownload:
         with (
             patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
             patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock, side_effect = RuntimeError("extract failed")),
-            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = OSError("busy")),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = PermissionError("busy")),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
             caplog.at_level("WARNING"),
             pytest.raises(RuntimeError, match = "extract failed"),
         ):

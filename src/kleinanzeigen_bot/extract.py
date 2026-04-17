@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import asyncio
+import errno
+import os
+import stat
+import time
 from gettext import gettext as _
 from string import Formatter
 
@@ -31,6 +35,8 @@ _MAX_FILENAME_COMPONENT_LENGTH:Final[int] = 255
 _DOWNLOAD_STEM_SUFFIX_BUDGET:Final[int] = len("__img9999.jpeg")
 _STAGING_DIR_PREFIX:Final[str] = ".tmp-"
 _BACKUP_DIR_PREFIX:Final[str] = ".bak-"
+_RMTREE_RETRY_ATTEMPTS:Final[int] = 5
+_RMTREE_RETRY_DELAY_SECONDS:Final[float] = 0.25
 _LOG_SNIPPET_LIMIT:Final[int] = 120
 _ELLIPSIS:Final[str] = "..."
 _ELLIPSIS_LEN:Final[int] = len(_ELLIPSIS)
@@ -44,6 +50,65 @@ _CONDITION_DISPLAY_TO_API:Final[dict[str, str]] = {
 _LABEL_TO_KEY:Final[dict[str, str]] = {
     "zustand": "condition_s",
 }
+
+
+def _is_retryable_rmtree_error(error:BaseException) -> bool:
+    if isinstance(error, PermissionError):
+        return True
+
+    if not isinstance(error, OSError):
+        return False
+
+    if getattr(error, "winerror", None) in {5, 32}:
+        return True
+
+    return error.errno in {errno.EACCES, errno.EPERM, errno.EBUSY}
+
+
+def _handle_rmtree_onerror(func:Any, path:str, exc_info:tuple[type[BaseException], BaseException, Any]) -> None:
+    error = exc_info[1]
+    if not _is_retryable_rmtree_error(error):
+        raise error
+
+    if os.name == "nt":
+        try:
+            current_mode = os.stat(path).st_mode
+        except OSError:
+            current_mode = None
+
+        if current_mode is not None:
+            try:
+                os.chmod(path, current_mode | stat.S_IWRITE)
+            except OSError:
+                pass
+
+    func(path)
+
+
+def _remove_tree_with_retries(path:Path) -> None:
+    if not path.exists():
+        return
+
+    last_error:OSError | None = None
+    for attempt in range(_RMTREE_RETRY_ATTEMPTS):
+        try:
+            shutil.rmtree(path, onerror = _handle_rmtree_onerror)
+            return
+        except FileNotFoundError:
+            return
+        except OSError as error:
+            if not _is_retryable_rmtree_error(error):
+                raise
+
+            last_error = error
+            if not path.exists():
+                return
+
+            if attempt + 1 < _RMTREE_RETRY_ATTEMPTS:
+                time.sleep(_RMTREE_RETRY_DELAY_SECONDS)
+
+    if path.exists() and last_error is not None:
+        raise last_error
 
 
 class AdExtractor(WebScrapingMixin):
@@ -252,7 +317,7 @@ class AdExtractor(WebScrapingMixin):
 
             if await files.exists(backup_dir):
                 try:
-                    await loop.run_in_executor(None, shutil.rmtree, str(backup_dir))
+                    await loop.run_in_executor(None, _remove_tree_with_retries, backup_dir)
                 except OSError as ex:
                     LOG.warning("Could not remove backup directory %s: %s", backup_dir, ex)
         except Exception:
@@ -265,7 +330,7 @@ class AdExtractor(WebScrapingMixin):
                     LOG.error("Failed to restore backup directory %s to %s after download failure: %s", backup_dir, final_dir, restore_ex)
             if await files.exists(staging_dir):
                 try:
-                    await loop.run_in_executor(None, shutil.rmtree, str(staging_dir))
+                    await loop.run_in_executor(None, _remove_tree_with_retries, staging_dir)
                 except OSError as cleanup_ex:
                     LOG.warning("Could not remove staging directory %s: %s", staging_dir, cleanup_ex)
             raise
@@ -579,7 +644,7 @@ class AdExtractor(WebScrapingMixin):
         if await files.exists(staging_dir):
             LOG.info("Removing stale staging directory: %s", staging_dir)
             try:
-                await loop.run_in_executor(None, shutil.rmtree, str(staging_dir))
+                await loop.run_in_executor(None, _remove_tree_with_retries, staging_dir)
             except OSError as cleanup_ex:
                 LOG.warning("Could not remove stale staging directory %s: %s", staging_dir, cleanup_ex)
                 if await files.exists(staging_dir):
@@ -596,7 +661,7 @@ class AdExtractor(WebScrapingMixin):
         except Exception:
             if await files.exists(staging_dir):
                 try:
-                    await loop.run_in_executor(None, shutil.rmtree, str(staging_dir))
+                    await loop.run_in_executor(None, _remove_tree_with_retries, staging_dir)
                 except OSError as cleanup_ex:
                     LOG.warning("Could not remove staging directory %s: %s", staging_dir, cleanup_ex)
             raise
