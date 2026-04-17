@@ -79,7 +79,7 @@ def _handle_rmtree_onerror(func:Any, path:str, exc_info:tuple[type[BaseException
         if current_mode is not None:
             try:
                 os.chmod(path, current_mode | stat.S_IWRITE)
-            except OSError:
+            except OSError:  # Best-effort only; retries handle transient access issues.
                 pass
 
     func(path)

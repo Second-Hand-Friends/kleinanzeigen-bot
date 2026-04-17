@@ -2433,6 +2433,25 @@ class TestAdExtractorDownload:
         assert calls == 2
         assert not path.exists()
 
+    @pytest.mark.parametrize(
+        ("error_factory", "expected", "winerror"),
+        [
+            pytest.param(lambda: PermissionError("busy"), True, None, id = "permissionerror"),
+            pytest.param(lambda: OSError(errno.EACCES, "denied"), True, None, id = "eacces"),
+            pytest.param(lambda: OSError(errno.EPERM, "denied"), True, None, id = "eperm"),
+            pytest.param(lambda: OSError(errno.EBUSY, "busy"), True, None, id = "ebusy"),
+            pytest.param(lambda: OSError("busy"), False, None, id = "generic-oserror"),
+            pytest.param(lambda: OSError("busy"), True, 5, id = "winerror-access-denied"),
+            pytest.param(lambda: OSError("busy"), True, 32, id = "winerror-sharing-violation"),
+            pytest.param(lambda: ValueError("bad"), False, None, id = "non-oserror"),
+        ],
+    )
+    def test_is_retryable_rmtree_error(self, error_factory:Any, expected:bool, winerror:int | None) -> None:
+        error = error_factory()
+        if winerror is not None:
+            setattr(error, "winerror", winerror)
+        assert extract_module._is_retryable_rmtree_error(error) is expected
+
     def test_remove_tree_with_retries_fails_fast_for_non_retryable_error(self, tmp_path:Path) -> None:
         path = tmp_path / "staging"
         path.mkdir()
@@ -2468,6 +2487,66 @@ class TestAdExtractorDownload:
         mock_stat.assert_called_once_with(path)
         mock_chmod.assert_called_once_with(path, 0o555 | stat.S_IWRITE)
         retry_func.assert_called_once_with(path)
+
+    def test_handle_rmtree_onerror_skips_chmod_on_posix(self, tmp_path:Path) -> None:
+        path = str(tmp_path / "readonly.txt")
+        retry_func = MagicMock()
+
+        with (
+            patch("kleinanzeigen_bot.extract.os.name", "posix"),
+            patch("kleinanzeigen_bot.extract.os.stat") as mock_stat,
+            patch("kleinanzeigen_bot.extract.os.chmod") as mock_chmod,
+        ):
+            extract_module._handle_rmtree_onerror(retry_func, path, (PermissionError, PermissionError("busy"), None))
+
+        mock_stat.assert_not_called()
+        mock_chmod.assert_not_called()
+        retry_func.assert_called_once_with(path)
+
+    def test_handle_rmtree_onerror_ignores_chmod_failures_on_windows(self) -> None:
+        path = "C:/Temp/readonly.txt"
+        retry_func = MagicMock()
+        stat_result = MagicMock(st_mode = 0o555)
+
+        with (
+            patch("kleinanzeigen_bot.extract.os.name", "nt"),
+            patch("kleinanzeigen_bot.extract.os.stat", return_value = stat_result),
+            patch("kleinanzeigen_bot.extract.os.chmod", side_effect = OSError("chmod failed")),
+        ):
+            extract_module._handle_rmtree_onerror(retry_func, path, (PermissionError, PermissionError("busy"), None))
+
+        retry_func.assert_called_once_with(path)
+
+    def test_handle_rmtree_onerror_continues_when_stat_fails_on_windows(self) -> None:
+        path = "C:/Temp/readonly.txt"
+        retry_func = MagicMock()
+
+        with (
+            patch("kleinanzeigen_bot.extract.os.name", "nt"),
+            patch("kleinanzeigen_bot.extract.os.stat", side_effect = OSError("stat failed")),
+            patch("kleinanzeigen_bot.extract.os.chmod") as mock_chmod,
+        ):
+            extract_module._handle_rmtree_onerror(retry_func, path, (PermissionError, PermissionError("busy"), None))
+
+        mock_chmod.assert_not_called()
+        retry_func.assert_called_once_with(path)
+
+    def test_handle_rmtree_onerror_raises_for_non_retryable_error(self, tmp_path:Path) -> None:
+        path = str(tmp_path / "file.txt")
+        retry_func = MagicMock()
+
+        with pytest.raises(OSError, match = "bad"):
+            extract_module._handle_rmtree_onerror(retry_func, path, (OSError, OSError(errno.EINVAL, "bad"), None))
+
+        retry_func.assert_not_called()
+
+    def test_remove_tree_with_retries_returns_when_path_missing(self, tmp_path:Path) -> None:
+        path = tmp_path / "missing-staging"
+
+        with patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True) as mock_rmtree:
+            extract_module._remove_tree_with_retries(path)
+
+        mock_rmtree.assert_not_called()
 
     def test_remove_tree_with_retries_raises_after_exhausting_retries(self, tmp_path:Path) -> None:
         path = tmp_path / "staging"
