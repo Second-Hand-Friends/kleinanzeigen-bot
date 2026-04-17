@@ -404,3 +404,21 @@ def test_diagnostics_legacy_capture_migration(
     config = Config.model_validate(cfg)
     assert config.diagnostics is not None
     assert getattr(config.diagnostics.capture_on, capture_attr) == expected
+
+
+def test_deleting_config_defaults_to_none(minimal_config:dict[str, object]) -> None:
+    config = Config.model_validate(minimal_config)
+    assert config.deleting.after_delete == "NONE"
+
+
+@pytest.mark.parametrize("value", ["NONE", "RESET", "DISABLE"])
+def test_deleting_config_accepts_valid_values(minimal_config:dict[str, object], value:str) -> None:
+    cfg = {**minimal_config, "deleting": {"after_delete": value}}
+    config = Config.model_validate(cfg)
+    assert config.deleting.after_delete == value
+
+
+def test_deleting_config_rejects_invalid_value(minimal_config:dict[str, object]) -> None:
+    cfg = {**minimal_config, "deleting": {"after_delete": "INVALID"}}
+    with pytest.raises(Exception, match = "after_delete"):
+        Config.model_validate(cfg)

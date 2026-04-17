@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from gettext import gettext as _
 from pathlib import Path
-from typing import Any, Final, NamedTuple, Sequence, cast
+from typing import Any, Final, Literal, NamedTuple, Sequence, cast
 
 import certifi, colorama, nodriver  # isort: skip
 from nodriver.core.connection import ProtocolException
@@ -192,6 +192,50 @@ def _relative_ad_path(ad_file:str, config_file_path:str) -> str:
         return str(Path(ad_file).relative_to(Path(config_file_path).parent))
     except ValueError:
         return ad_file
+
+
+_RESET_FIELDS:Final[frozenset[str]] = frozenset({
+    "id", "created_on", "updated_on", "content_hash",
+    "repost_count", "price_reduction_count",
+})
+
+
+def _apply_after_delete_policy(
+    ad_cfg:Ad,
+    ad_cfg_orig:dict[str, Any],
+    *,
+    mode:Literal["NONE", "RESET", "DISABLE"],
+) -> bool:
+    """Apply post-delete cleanup to in-memory and dict state.
+
+    Called only from ``delete_ads`` — not from publish-time ``delete_ad`` call sites.
+    ``ad_cfg.id`` may already be ``None`` from ``delete_ad`` clearing it;
+    the helper only needs to handle ``ad_cfg_orig`` and remaining ``ad_cfg`` fields.
+
+    Returns:
+        True if state was mutated (caller should persist with ``save_dict``).
+    """
+    if mode == "NONE":
+        return False
+
+    if mode == "RESET":
+        for key in _RESET_FIELDS:
+            ad_cfg_orig.pop(key, None)
+        # ad_cfg.id may already be None from delete_ad — setting again is harmless
+        ad_cfg.id = None
+        ad_cfg.created_on = None
+        ad_cfg.updated_on = None
+        ad_cfg.content_hash = None
+        ad_cfg.repost_count = 0
+        ad_cfg.price_reduction_count = 0
+        return True
+
+    if mode == "DISABLE":
+        ad_cfg.active = False
+        ad_cfg_orig["active"] = False
+        return True
+
+    return False
 
 
 def _get_marker_value(marker:Element) -> str:
@@ -2025,14 +2069,31 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def delete_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
         deleted_count = 0
+        after_delete = self.config.deleting.after_delete
 
         published_ads = await self._fetch_published_ads()
 
-        for ad_file, ad_cfg, _ad_cfg_orig in ad_cfgs:
+        for ad_file, ad_cfg, ad_cfg_orig in ad_cfgs:
             count += 1
             LOG.info("Processing %s/%s: '%s' from [%s]...", count, len(ad_cfgs), ad_cfg.title, ad_file)
-            if await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title):
+
+            # Record pre-delete id to detect whether delete_ad attempted a deletion.
+            # delete_ad clears ad_cfg.id when targets were found (Phase B ran),
+            # and preserves it on no-match early return.
+            id_before = ad_cfg.id
+            deleted = await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title)
+            if deleted:
                 deleted_count += 1
+
+            # Apply after_delete policy only when a delete was actually attempted.
+            # Detection: True return (some 200), or id changed from non-None to None (all 404).
+            # When id was already None before the call, only True return is reliable;
+            # a False return could be no-match or title-match all-404, both treated as no cleanup.
+            delete_attempted = deleted or (id_before is not None and ad_cfg.id is None)
+
+            if delete_attempted and after_delete != "NONE":
+                if _apply_after_delete_policy(ad_cfg, ad_cfg_orig, mode = after_delete):
+                    dicts.save_dict(ad_file, ad_cfg_orig)
             await self.web_sleep()
 
         LOG.info("############################################")

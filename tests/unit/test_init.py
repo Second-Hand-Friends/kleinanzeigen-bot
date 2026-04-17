@@ -13,10 +13,24 @@ import pytest
 from nodriver.core.connection import ProtocolException
 from pydantic import ValidationError
 
-from kleinanzeigen_bot import LOG, SUBMISSION_MAX_RETRIES, AdUpdateStrategy, KleinanzeigenBot, LoginDetectionReason, LoginDetectionResult, misc
+from kleinanzeigen_bot import (
+    LOG,
+    SUBMISSION_MAX_RETRIES,
+    AdUpdateStrategy,
+    KleinanzeigenBot,
+    LoginDetectionReason,
+    LoginDetectionResult,
+    misc,
+)
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad
-from kleinanzeigen_bot.model.config_model import AdDefaults, AutoPriceReductionConfig, Config, DiagnosticsConfig, PublishingConfig
+from kleinanzeigen_bot.model.config_model import (
+    AdDefaults,
+    AutoPriceReductionConfig,
+    Config,
+    DiagnosticsConfig,
+    PublishingConfig,
+)
 from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
 from kleinanzeigen_bot.utils.exceptions import PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
@@ -5261,3 +5275,100 @@ class TestTrackingFallback:
             result = await test_bot._try_recover_ad_id_from_redirect()
 
         assert result == 11223344
+
+
+class TestDeleteAdsAfterDeletePolicy:
+    """Tests for delete_ads orchestration with after_delete policy integration."""
+
+    @staticmethod
+    def _make_ad(minimal_ad_config:dict[str, Any], tmp_path:Path) -> tuple[str, Ad, dict[str, Any]]:
+        ad_cfg = Ad.model_validate(minimal_ad_config | {
+            "id": 12345, "active": True,
+            "created_on": "2024-06-01T12:00:00", "updated_on": "2024-06-10T08:30:00",
+            "content_hash": "abc123", "repost_count": 3, "price_reduction_count": 1,
+        })
+        return str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg.model_dump()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("mode", "expected_active", "expect_metadata_cleared"), [
+        ("RESET", True, True),
+        ("DISABLE", False, False),
+        ("NONE", True, False),
+    ])
+    async def test_after_delete_policy_applied(
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any],
+        tmp_path:Path, mode:str, expected_active:bool, expect_metadata_cleared:bool,
+    ) -> None:
+        """Each mode applies correct mutations and persistence behavior after successful delete."""
+        test_bot.config.deleting.after_delete = mode  # type: ignore[assignment]
+        ad_file, ad_cfg, ad_cfg_orig = self._make_ad(minimal_ad_config, tmp_path)
+
+        async def fake_delete(ad:Ad, _published:list[dict[str, Any]], **__:Any) -> bool:
+            ad.id = None  # real delete_ad clears id on attempted deletion
+            return True
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "delete_ad", new_callable = AsyncMock, side_effect = fake_delete),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.dicts.save_dict") as mock_save,
+        ):
+            await test_bot.delete_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
+        assert ad_cfg.active == expected_active
+        assert ad_cfg_orig.get("active", True) == expected_active
+        if expect_metadata_cleared:
+            assert ad_cfg.id is None
+            assert ad_cfg.repost_count == 0
+            assert "id" not in ad_cfg_orig
+            mock_save.assert_called_once()
+        else:
+            assert "id" in ad_cfg_orig
+            assert ad_cfg.repost_count == 3
+            if mode == "NONE":
+                mock_save.assert_not_called()
+            else:  # DISABLE
+                mock_save.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_cleanup_on_404_detection(
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any], tmp_path:Path,
+    ) -> None:
+        """Cleanup runs when delete_ad returns False but cleared the id (404 path)."""
+        test_bot.config.deleting.after_delete = "RESET"
+        ad_file, ad_cfg, ad_cfg_orig = self._make_ad(minimal_ad_config, tmp_path)
+
+        async def fake_delete(ad:Ad, _published:list[dict[str, Any]], **__:Any) -> bool:
+            ad.id = None  # Phase B ran and cleared the id
+            return False  # but all responses were 404
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "delete_ad", new_callable = AsyncMock, side_effect = fake_delete),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.dicts.save_dict") as mock_save,
+        ):
+            await test_bot.delete_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
+        assert ad_cfg.repost_count == 0
+        assert "id" not in ad_cfg_orig
+        mock_save.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_no_cleanup_when_delete_not_attempted(
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any], tmp_path:Path,
+    ) -> None:
+        """No cleanup when delete_ad returns False with id preserved (no match)."""
+        test_bot.config.deleting.after_delete = "RESET"
+        ad_file, ad_cfg, ad_cfg_orig = self._make_ad(minimal_ad_config, tmp_path)
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "delete_ad", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.dicts.save_dict") as mock_save,
+        ):
+            await test_bot.delete_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
+        mock_save.assert_not_called()
+        assert ad_cfg.id == 12345
