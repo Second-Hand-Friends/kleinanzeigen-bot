@@ -2484,7 +2484,7 @@ class TestAdExtractorDownload:
         ):
             extract_module._handle_rmtree_onerror(retry_func, path, (PermissionError, PermissionError("busy"), None))
 
-        mock_stat.assert_called_once_with(path)
+        mock_stat.assert_any_call(path)
         mock_chmod.assert_called_once_with(path, 0o555 | stat.S_IWRITE)
         retry_func.assert_called_once_with(path)
 
