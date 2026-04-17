@@ -51,6 +51,17 @@ _WANTED_SHIPPING_LABELS:Final[dict[str, str]] = {
     "SHIPPING": "Versand möglich",
     "PICKUP": "Nur Abholung",
 }
+# Kleinanzeigen migrated condition dialog radio values from German tokens to English
+# API codes. Existing ad YAMLs use the legacy German tokens; map them at publish time
+# so both old and new values work against the current DOM.
+_CONDITION_GERMAN_TO_API:Final[dict[str, str]] = {
+    "neu": "new",
+    "wie_neu": "like_new",
+    "sehr_gut": "like_new",  # legacy "very good" tier collapses to like_new
+    "gut": "ok",
+    "in_ordnung": "alright",
+    "defekt": "defect",
+}
 _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
     (By.ID, "user-email"),
@@ -2960,14 +2971,28 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             )
             return False
 
+        # Kleinanzeigen changed dialog radio values from German tokens to English API codes
+        # (e.g. "wie_neu" -> "like_new", "sehr_gut" -> "like_new"). Try the configured value
+        # first (handles already-English configs), then fall back to the mapped equivalent.
+        candidate_values = [condition_value]
+        mapped_value = _CONDITION_GERMAN_TO_API.get(condition_value)
+        if mapped_value and mapped_value != condition_value:
+            candidate_values.append(mapped_value)
+
         try:
             await condition_trigger.click()
             await self.web_find(By.XPATH, '//*[self::dialog or @role="dialog"]', timeout = short_timeout)
-            condition_radio = await self.web_find(
-                By.XPATH,
-                f"//*[self::dialog or @role='dialog']//input[@type='radio' and @value={_xpath_literal(condition_value)}]",
-                timeout = short_timeout,
-            )
+            condition_radio = None
+            for candidate in candidate_values:
+                condition_radio = await self.web_probe(
+                    By.XPATH,
+                    f"//*[self::dialog or @role='dialog']//input[@type='radio' and @value={_xpath_literal(candidate)}]",
+                    timeout = short_timeout,
+                )
+                if condition_radio is not None:
+                    break
+            if condition_radio is None:
+                raise TimeoutError(f"No condition radio matched values {candidate_values}")
             condition_radio_id = str(condition_radio.attrs.get("id") or "")
             if condition_radio_id:
                 try:
@@ -3219,6 +3244,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def __set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         short_timeout = self._timeout("quick_dom")
         if ad_cfg.shipping_type == "PICKUP":
+            # Some categories (notably books 76/77 and comics 76/77/15156) render the
+            # "Eigenschaften und Versand" fieldset without a shipping enable/disable toggle —
+            # those ads are PICKUP-only by site convention, so the absence of the radio is
+            # the expected state and matches the configured shipping_type.
+            pickup_radio = await self.web_probe(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
+            if pickup_radio is None:
+                LOG.debug("PICKUP: no shipping toggle for this category; treating as already PICKUP.")
+                return
             try:
                 if not await self.web_check(By.ID, "ad-shipping-enabled-no", Is.SELECTED, timeout = short_timeout):
                     await self.web_click(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)

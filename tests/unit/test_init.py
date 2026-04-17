@@ -3609,23 +3609,20 @@ class TestConditionSelector:
         radio.attrs = radio_attrs
         radio.click = AsyncMock()
 
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            # trigger lookup returns the dialog trigger button
+            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
+                return trigger
+            # radio lookup returns the matching radio
+            if selector_type == By.XPATH and "@type='radio'" in selector_value and "@value='ok'" in selector_value:
+                return radio
+            return None
+
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = trigger),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = dialog),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
-
-            async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
-                if selector_type != By.XPATH:
-                    raise TimeoutError("unexpected selector")
-                if "@type='radio'" in selector_value and "@value='ok'" in selector_value:
-                    return radio
-                if "dialog" in selector_value:
-                    return dialog
-                raise TimeoutError("selector not found")
-
-            mock_find.side_effect = find_side_effect
-
             handled = await getattr(test_bot, "_KleinanzeigenBot__set_condition")("ok")
 
             assert handled is True
@@ -3634,6 +3631,68 @@ class TestConditionSelector:
             trigger.click.assert_awaited_once()
             assert any("label[@for=" in selector and "radio-condition-ok" in selector for selector in clicked_xpath_selectors)
             assert any("Bestätigen" in selector for selector in clicked_xpath_selectors)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("configured", "expected_api_value"),
+        [
+            ("wie_neu", "like_new"),
+            ("sehr_gut", "like_new"),
+            ("neu", "new"),
+            ("gut", "ok"),
+            ("in_ordnung", "alright"),
+            ("defekt", "defect"),
+        ],
+    )
+    async def test_condition_falls_back_to_english_api_value(
+        self,
+        test_bot:KleinanzeigenBot,
+        configured:str,
+        expected_api_value:str,
+    ) -> None:
+        """Legacy German condition tokens should resolve to the current English API codes
+        when the German token no longer matches any radio in the dialog."""
+        dialog = MagicMock()
+        trigger = MagicMock()
+        trigger.attrs = {"id": "condition-trigger", "aria-controls": "condition-dialog"}
+        trigger.click = AsyncMock()
+        radio = MagicMock()
+        radio_attrs = MagicMock()
+        radio_attrs.get.side_effect = lambda key, default = None: f"radio-condition-{expected_api_value}" if key == "id" else default
+        radio.attrs = radio_attrs
+        radio.click = AsyncMock()
+
+        probed_values:list[str] = []
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
+                return trigger
+            if selector_type == By.XPATH and "@type='radio'" in selector_value:
+                if f"@value='{configured}'" in selector_value:
+                    probed_values.append(configured)
+                    # German token is no longer a valid DOM value — mimic that by returning None
+                    return None if configured != expected_api_value else radio
+                if f"@value='{expected_api_value}'" in selector_value:
+                    probed_values.append(expected_api_value)
+                    return radio
+            return None
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = dialog),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            handled = await getattr(test_bot, "_KleinanzeigenBot__set_condition")(configured)
+
+        assert handled is True
+        # If the configured value already matches (e.g. user wrote the English code),
+        # the fallback should not be probed. Otherwise both values should have been tried.
+        if configured == expected_api_value:
+            assert probed_values == [configured]
+        else:
+            assert probed_values == [configured, expected_api_value]
+        clicked_xpath_selectors = [str(call.args[1]) for call in mock_click.await_args_list if len(call.args) > 1]
+        assert any(f"radio-condition-{expected_api_value}" in selector for selector in clicked_xpath_selectors)
 
     @pytest.mark.asyncio
     async def test_condition_missing_selector_returns_not_handled(self, test_bot:KleinanzeigenBot) -> None:
@@ -3660,24 +3719,19 @@ class TestConditionSelector:
         trigger.attrs = {"id": "condition-trigger", "aria-controls": "condition-dialog"}
         trigger.click = AsyncMock()
 
-        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
-            if selector_type != By.XPATH:
-                raise TimeoutError("unexpected selector")
-            if "@type='radio'" in selector_value:
-                raise TimeoutError("value not found")
-            if "dialog" in selector_value:
-                return dialog
-            raise TimeoutError("selector not found")
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
+                return trigger
+            # Radio lookups for unknown values return None (no matching radio in the dialog).
+            return None
 
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = trigger),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = dialog),
+            pytest.raises(TimeoutError, match = "Failed to set attribute 'condition_s'"),
         ):
-            mock_find.side_effect = find_side_effect
-
-            with pytest.raises(TimeoutError, match = "Failed to set attribute 'condition_s'"):
-                await getattr(test_bot, "_KleinanzeigenBot__set_condition")("defect")
+            await getattr(test_bot, "_KleinanzeigenBot__set_condition")("totally_unknown_value")
 
     @pytest.mark.asyncio
     async def test_condition_rejects_shipping_trigger(self, test_bot:KleinanzeigenBot) -> None:
@@ -3832,6 +3886,7 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
             patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = selected),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
@@ -3849,10 +3904,34 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
             patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = TimeoutError("pickup lookup timed out")),
             pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'PICKUP'!"),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+    @pytest.mark.asyncio
+    async def test_pickup_shipping_skips_when_toggle_not_rendered(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Categories without a shipping toggle (e.g. books 76/77, comics 76/77/15156) are
+        PICKUP-only by site convention — the absence of ``ad-shipping-enabled-no`` should
+        short-circuit without calling ``web_check``/``web_click``."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None) as mock_probe,
+            patch.object(test_bot, "web_check", new_callable = AsyncMock) as mock_check,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+        mock_probe.assert_awaited_once()
+        assert mock_probe.call_args.args[:2] == (By.ID, "ad-shipping-enabled-no")
+        mock_check.assert_not_awaited()
+        mock_click.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_shipping_without_options_uses_radio_and_dialog(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
