@@ -779,8 +779,20 @@ class TestAdExtractorNavigation:
             assert refs == []
 
     @pytest.mark.asyncio
-    async def test_extract_own_ads_urls_skips_single_item_timeout(self, test_extractor:extract_module.AdExtractor) -> None:
-        """Timeout on one ad item should skip that item but keep extracting others."""
+    @pytest.mark.parametrize(
+        "single_item_find_result",
+        [
+            TimeoutError(),
+            MagicMock(attrs = {}),
+        ],
+        ids = ["timeout", "missing-href"],
+    )
+    async def test_extract_own_ads_urls_skips_single_item(
+        self,
+        test_extractor:extract_module.AdExtractor,
+        single_item_find_result:Any,
+    ) -> None:
+        """Bad single ad items should be skipped while valid items are still extracted."""
         ad_list_container_mock = MagicMock()
         first_item = MagicMock()
         second_item = MagicMock()
@@ -801,39 +813,7 @@ class TestAdExtractorNavigation:
                 test_extractor,
                 "web_find",
                 new_callable = AsyncMock,
-                side_effect = [ad_list_container_mock, ad_list_container_mock, TimeoutError(), valid_link],
-            ),
-        ):
-            refs = await test_extractor.extract_own_ads_urls()
-
-        assert refs == ["/s-anzeige/ok/999"]
-
-    @pytest.mark.asyncio
-    async def test_extract_own_ads_urls_skips_single_item_without_href(self, test_extractor:extract_module.AdExtractor) -> None:
-        """Anchor without href should be skipped instead of adding a 'None' entry."""
-        ad_list_container_mock = MagicMock()
-        first_item = MagicMock()
-        second_item = MagicMock()
-        missing_href_link = MagicMock()
-        missing_href_link.attrs = {}
-        valid_link = MagicMock()
-        valid_link.attrs = {"href": "/s-anzeige/ok/999"}
-
-        with (
-            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(
-                test_extractor,
-                "web_find_all",
-                new_callable = AsyncMock,
-                side_effect = [TimeoutError("No pagination"), [first_item, second_item]],
-            ),
-            patch.object(
-                test_extractor,
-                "web_find",
-                new_callable = AsyncMock,
-                side_effect = [ad_list_container_mock, ad_list_container_mock, missing_href_link, valid_link],
+                side_effect = [ad_list_container_mock, ad_list_container_mock, single_item_find_result, valid_link],
             ),
         ):
             refs = await test_extractor.extract_own_ads_urls()
@@ -2547,6 +2527,49 @@ class TestAdExtractorDownload:
             extract_module._remove_tree_with_retries(path)
 
         mock_rmtree.assert_not_called()
+
+    def test_remove_tree_with_retries_returns_when_rmtree_reports_missing(self, tmp_path:Path) -> None:
+        path = tmp_path / "staging"
+        path.mkdir()
+
+        with patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = FileNotFoundError()) as mock_rmtree:
+            extract_module._remove_tree_with_retries(path)
+
+        mock_rmtree.assert_called_once()
+
+    def test_remove_tree_with_retries_returns_when_path_disappears_before_final_check(self, tmp_path:Path) -> None:
+        path = tmp_path / "staging"
+        path.mkdir()
+        calls:int = 0
+
+        def rmtree_side_effect(_target:str | Path, *_args:object, **_kwargs:object) -> None:
+            nonlocal calls
+            calls += 1
+            raise PermissionError("busy")
+
+        exists_calls:int = 0
+        observed_false = False
+        original_exists = Path.exists
+
+        def exists_side_effect(self:Path) -> bool:
+            nonlocal exists_calls, observed_false
+            if self == path:
+                exists_calls += 1
+                result = exists_calls <= extract_module._RMTREE_RETRY_ATTEMPTS + 1
+                observed_false = observed_false or not result
+                return result
+            return original_exists(self)
+
+        with (
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
+            patch("kleinanzeigen_bot.extract.Path.exists", autospec = True, side_effect = exists_side_effect),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
+        ):
+            extract_module._remove_tree_with_retries(path)
+
+        assert calls == extract_module._RMTREE_RETRY_ATTEMPTS
+        assert exists_calls > extract_module._RMTREE_RETRY_ATTEMPTS
+        assert observed_false
 
     def test_remove_tree_with_retries_raises_after_exhausting_retries(self, tmp_path:Path) -> None:
         path = tmp_path / "staging"
