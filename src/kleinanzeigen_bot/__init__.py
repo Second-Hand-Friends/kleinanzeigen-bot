@@ -3378,11 +3378,31 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     raise TimeoutError(_("Unable to select individual shipping option!")) from ex
 
             if ad_cfg.shipping_costs is not None:
-                try:
-                    await self.web_input(By.ID, "ad-individual-shipping-price", str(ad_cfg.shipping_costs).replace(".", ","))
-                except TimeoutError as ex:
-                    LOG.debug(ex, exc_info = True)
-                    raise TimeoutError(_("Unable to set shipping price!")) from ex
+                price_str = str(ad_cfg.shipping_costs).replace(".", ",")
+                # Native DOM setter + React-aware events: send_keys gets wiped by
+                # React re-render after the ad-individual-shipping-checkbox-control click.
+                # A re-render between web_find and web_execute inside __set_input_value can
+                # also leave the write as a silent no-op, so verify and retry before "Fertig".
+                max_attempts = 3
+                for attempt in range(1, max_attempts + 1):
+                    try:
+                        await self.__set_input_value("ad-individual-shipping-price", price_str)
+                        actual = await self.web_execute("document.getElementById('ad-individual-shipping-price')?.value")
+                    except TimeoutError as ex:
+                        # A re-render landing on web_find inside __set_input_value or on the
+                        # readback web_execute can raise here; treat either as a transient
+                        # failure so the outer loop can retry instead of bailing.
+                        LOG.debug(ex, exc_info = True)
+                        if attempt >= max_attempts:
+                            raise TimeoutError(_("Unable to set shipping price!")) from ex
+                        await self.web_sleep(300, 500)
+                        continue
+                    if actual == price_str:
+                        break
+                    if attempt >= max_attempts:
+                        raise TimeoutError(_("Unable to set shipping price!"))
+                    LOG.debug("shipping price not persisted (attempt %d/%d): got %r, expected %r", attempt, max_attempts, actual, price_str)
+                    await self.web_sleep(300, 500)
             else:
                 LOG.debug(
                     "Shipping option 'ad-individual-shipping-checkbox-control' selected but no shipping_costs provided; "

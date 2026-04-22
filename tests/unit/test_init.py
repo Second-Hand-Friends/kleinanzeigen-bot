@@ -3956,7 +3956,8 @@ class TestShippingDialogFlow:
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
+            patch.object(test_bot, "_KleinanzeigenBot__set_input_value", new_callable = AsyncMock) as mock_set_input,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "4,95"),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
@@ -3964,7 +3965,7 @@ class TestShippingDialogFlow:
             click_args = [c.args for c in mock_click.await_args_list]
             assert any(len(a) >= 2 and a[0] == By.ID and a[1] == "ad-individual-shipping-checkbox-control" for a in click_args)
             assert any("Fertig" in str(a[1]) for a in click_args if len(a) >= 2)
-            mock_input.assert_awaited_once_with(By.ID, "ad-individual-shipping-price", "4,95")
+            mock_set_input.assert_awaited_once_with("ad-individual-shipping-price", "4,95")
 
     @pytest.mark.asyncio
     async def test_shipping_finish_timeout_raises(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
@@ -3997,14 +3998,104 @@ class TestShippingDialogFlow:
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
+            patch.object(test_bot, "_KleinanzeigenBot__set_input_value", new_callable = AsyncMock) as mock_set_input,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "4,95"),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
 
         click_args = [c.args for c in mock_click.await_args_list]
         assert not any(len(a) >= 2 and a[0] == By.ID and a[1] == "ad-individual-shipping-checkbox-control" for a in click_args)
-        mock_input.assert_awaited_once_with(By.ID, "ad-individual-shipping-price", "4,95")
+        mock_set_input.assert_awaited_once_with("ad-individual-shipping-price", "4,95")
+
+    @pytest.mark.asyncio
+    async def test_shipping_price_lost_to_react_rerender_raises(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """When React re-render swallows the shipping price, the dialog must NOT be closed."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": [], "shipping_costs": 4.95})
+
+        async def set_input_side_effect(element_id:str, value:str) -> None:
+            # Simulate __set_input_value succeeding (no TimeoutError) but
+            # the JS returning early because the element is null after re-render.
+            # The real __set_input_value does a web_find + web_execute whose JS
+            # silently returns on `if(!el) return;`.  By mocking at this level we
+            # model the observable effect: the call completes without error, but
+            # the DOM value was never written.
+            pass
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "_KleinanzeigenBot__set_input_value", new_callable = AsyncMock, side_effect = set_input_side_effect),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(TimeoutError, match = "Unable to set shipping price!"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+        # Fertig must never be clicked when the price was not confirmed
+        fertig_clicks = [c for c in mock_click.await_args_list if c.args and len(c.args) >= 2 and "Fertig" in str(c.args[1])]
+        assert not fertig_clicks, "Fertig was clicked despite shipping price not being set"
+
+    @pytest.mark.asyncio
+    async def test_shipping_price_recovers_when_readback_matches_on_retry(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """First attempt mismatches (readback empty), second attempt succeeds — must close the dialog normally."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": [], "shipping_costs": 4.95})
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "_KleinanzeigenBot__set_input_value", new_callable = AsyncMock) as mock_set_input,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = [None, "4,95"]),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+        assert mock_set_input.await_count == 2, "expected exactly one retry after the first mismatch"
+        inter_attempt_sleeps = [c for c in mock_sleep.await_args_list if c.args == (300, 500)]
+        assert len(inter_attempt_sleeps) == 1, "expected one inter-attempt backoff sleep"
+        fertig_clicks = [c for c in mock_click.await_args_list if c.args and len(c.args) >= 2 and "Fertig" in str(c.args[1])]
+        assert fertig_clicks, "Fertig must be clicked once the readback confirms the price"
+
+    @pytest.mark.asyncio
+    async def test_shipping_price_retries_when_readback_raises_transiently(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """A TimeoutError from the readback web_execute must be retried, not propagated on the first occurrence."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": [], "shipping_costs": 4.95})
+
+        readback_results:list[str | Exception] = [TimeoutError("readback raced with re-render"), "4,95"]
+
+        async def readback_side_effect(*_args:Any, **_kwargs:Any) -> str | None:
+            result = readback_results.pop(0)
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "_KleinanzeigenBot__set_input_value", new_callable = AsyncMock) as mock_set_input,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = readback_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+        assert mock_set_input.await_count == 2, "expected one retry after the readback raised"
+        fertig_clicks = [c for c in mock_click.await_args_list if c.args and len(c.args) >= 2 and "Fertig" in str(c.args[1])]
+        assert fertig_clicks, "Fertig must be clicked once a later readback confirms the price"
 
 
 class TestShippingOptionsDialog:
