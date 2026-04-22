@@ -3963,9 +3963,26 @@ class TestCategorySuggestionPicker:
         mock_click.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_picker_present_without_rendered_radios_silently_skips(self, test_bot:KleinanzeigenBot) -> None:
+        """Picker shell present but radios not rendered yet (transient React state) -> silent no-op."""
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = True)),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []) as mock_find_all,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__resolve_category_suggestions")("73/76/sachbuecher")
+
+        mock_find_all.assert_awaited_once()
+        mock_click.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_picker_present_matches_leaf_segment_and_clicks_label(self, test_bot:KleinanzeigenBot) -> None:
-        """Picker present with matching radio value -> label[for=ID] is clicked."""
-        radios = [self._radio("76", "76"), self._radio("77", "77"), self._radio("240", "240")]
+        """Picker present with matching radio value -> label[for=ID] is clicked (value != id to catch regressions)."""
+        radios = [
+            self._radio("76", "category-suggestion-parent"),
+            self._radio("77", "category-suggestion-leaf"),
+            self._radio("240", "category-suggestion-other"),
+        ]
 
         with (
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = True)),
@@ -3977,28 +3994,38 @@ class TestCategorySuggestionPicker:
         mock_click.assert_awaited_once()
         selector_type, selector_value = mock_click.call_args.args[:2]
         assert selector_type == By.XPATH
-        assert "label[@for='77']" in selector_value
+        assert "label[@for='category-suggestion-leaf']" in selector_value
         assert "'ad-category-picker'" in selector_value
 
     @pytest.mark.asyncio
     async def test_picker_present_no_match_raises_with_offered_list(self, test_bot:KleinanzeigenBot) -> None:
-        """Picker present but path has no matching segment -> CategoryResolutionError with offered IDs."""
-        radios = [self._radio("76", "76"), self._radio("77", "77"), self._radio("240", "240")]
+        """Picker present but path has no matching segment -> CategoryResolutionError listing offered IDs."""
+        radios = [
+            self._radio("76", "category-suggestion-parent"),
+            self._radio("77", "category-suggestion-leaf"),
+            self._radio("240", "category-suggestion-other"),
+        ]
 
         with (
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = True)),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = radios),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            pytest.raises(CategoryResolutionError, match = r"Category suggestion picker shown.*offered"),
+            pytest.raises(CategoryResolutionError, match = r"Category suggestion picker shown.*offered") as exc_info,
         ):
             await getattr(test_bot, "_KleinanzeigenBot__resolve_category_suggestions")("999/888")
 
         mock_click.assert_not_awaited()
+        error_message = str(exc_info.value)
+        # The error must name the configured (unmatched) path and every offered ID,
+        # otherwise the user cannot know what to correct.
+        assert "999/888" in error_message
+        for offered_id in ("76", "77", "240"):
+            assert offered_id in error_message
 
     @pytest.mark.asyncio
     async def test_picker_prefers_deepest_matching_segment(self, test_bot:KleinanzeigenBot) -> None:
         """When both parent and leaf segments match radios, the leaf (deepest) wins."""
-        radios = [self._radio("76", "76"), self._radio("77", "77")]
+        radios = [self._radio("76", "id-for-76"), self._radio("77", "id-for-77")]
 
         with (
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = True)),
@@ -4008,7 +4035,7 @@ class TestCategorySuggestionPicker:
             await getattr(test_bot, "_KleinanzeigenBot__resolve_category_suggestions")("76/77")
 
         mock_click.assert_awaited_once()
-        assert "label[@for='77']" in mock_click.call_args.args[1]
+        assert "label[@for='id-for-77']" in mock_click.call_args.args[1]
 
 
 class TestShippingDialogFlow:
