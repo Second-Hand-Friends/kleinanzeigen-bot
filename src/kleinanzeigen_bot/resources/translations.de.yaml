@@ -181,6 +181,7 @@ kleinanzeigen_bot/__init__.py:
     ? "If posted, sync local state with 'kleinanzeigen-bot download --ads=new' or 'kleinanzeigen-bot download --ads=<id>'; otherwise rerun publish for this ad."
     : "Falls veröffentlicht, lokalen Stand mit 'kleinanzeigen-bot download --ads=new' oder 'kleinanzeigen-bot download --ads=<id>' synchronisieren; andernfalls Veröffentlichung für diese Anzeige erneut starten."
     "All %s attempts failed for '%s': %s. Skipping ad.": "Alle %s Versuche fehlgeschlagen für '%s': %s. Überspringe Anzeige."
+    "Category resolution failed for '%s': %s. Skipping ad (configuration error, no retry).": "Kategorieauflösung fehlgeschlagen für '%s': %s. Anzeige wird übersprungen (Konfigurationsfehler, kein erneuter Versuch)."
     "DONE: (Re-)published %s (%s failed after retries)": "FERTIG: %s (erneut) veröffentlicht (%s fehlgeschlagen nach Wiederholungen)"
     "DONE: (Re-)published %s": "FERTIG: %s (erneut) veröffentlicht"
     "ad": "Anzeige"
@@ -239,7 +240,7 @@ kleinanzeigen_bot/__init__.py:
 
   __resolve_category_suggestions:
     "Category suggestion picker shown, but no segment of configured path '%(category)s' matched the offered suggestions [%(offered)s]. Update the ad's 'category' to an offered ID or a valid full path.": "Kategorievorschlag-Auswahl wurde angezeigt, aber kein Segment des konfigurierten Pfades '%(category)s' passte zu den angebotenen Vorschlägen [%(offered)s]. Aktualisieren Sie 'category' auf eine angebotene ID oder einen gültigen vollständigen Pfad."
-    "Category suggestion picker: selected value=%s (matched path segment).": "Kategorievorschlag-Auswahl: Wert=%s ausgewählt (passender Pfad-Segment)."
+    "Category suggestion picker: selected value=%s (matched path segment).": "Kategorievorschlag-Auswahl: Wert=%s ausgewählt (passendes Pfad-Segment)."
     "Category suggestion picker element found but no radio suggestions rendered; skipping resolver.": "Kategorievorschlag-Auswahl gefunden, aber keine Radio-Vorschläge gerendert; Resolver wird übersprungen."
 
   __set_contact_fields:

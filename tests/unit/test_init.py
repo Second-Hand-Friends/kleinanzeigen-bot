@@ -32,7 +32,7 @@ from kleinanzeigen_bot.model.config_model import (
     PublishingConfig,
 )
 from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
-from kleinanzeigen_bot.utils.exceptions import PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
+from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
@@ -1930,6 +1930,40 @@ class TestKleinanzeigenBotBasics:
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
+            assert publish_mock.await_count == 1
+            sleep_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_publish_ads_does_not_retry_on_category_resolution_error(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """CategoryResolutionError is deterministic configuration failure -> no retry, fail fast."""
+        test_bot.page = mock_page
+        test_bot.keep_old_ads = True
+
+        ad_cfg = Ad.model_validate(base_ad_config)
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+
+        with (
+            patch.object(
+                test_bot,
+                "web_request",
+                new_callable = AsyncMock,
+                return_value = {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})},
+            ),
+            patch.object(
+                test_bot,
+                "publish_ad",
+                new_callable = AsyncMock,
+                side_effect = CategoryResolutionError("no suggestion matched"),
+            ) as publish_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
+        ):
+            await test_bot.publish_ads([("ad.yaml", ad_cfg, ad_cfg_orig)])
 
             assert publish_mock.await_count == 1
             sleep_mock.assert_not_awaited()
@@ -3948,14 +3982,14 @@ class TestCategorySuggestionPicker:
 
     @pytest.mark.asyncio
     async def test_picker_present_no_match_raises_with_offered_list(self, test_bot:KleinanzeigenBot) -> None:
-        """Picker present but path has no matching segment -> TimeoutError with offered IDs."""
+        """Picker present but path has no matching segment -> CategoryResolutionError with offered IDs."""
         radios = [self._radio("76", "76"), self._radio("77", "77"), self._radio("240", "240")]
 
         with (
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = True)),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = radios),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            pytest.raises(TimeoutError, match = r"Category suggestion picker shown.*offered"),
+            pytest.raises(CategoryResolutionError, match = r"Category suggestion picker shown.*offered"),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__resolve_category_suggestions")("999/888")
 

@@ -31,7 +31,7 @@ from .model.ad_model import (
 from .model.config_model import DEFAULT_DOWNLOAD_DIR, Config
 from .update_checker import UpdateChecker
 from .utils import diagnostics, dicts, error_handlers, loggers, misc, xdg_paths
-from .utils.exceptions import CaptchaEncountered, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
+from .utils.exceptions import CaptchaEncountered, CategoryResolutionError, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
 from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
 from .utils.misc import ainput, ensure, is_frozen
@@ -2313,6 +2313,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     break  # Publish succeeded, exit retry loop
                 except asyncio.CancelledError:
                     raise  # Respect task cancellation
+                except CategoryResolutionError as ex:
+                    await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
+                    LOG.error("Category resolution failed for '%s': %s. Skipping ad (configuration error, no retry).", ad_cfg.title, ex)
+                    failed_count += 1
+                    break
                 except PublishSubmissionUncertainError as ex:
                     await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
                     LOG.warning(
@@ -3149,6 +3154,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     await self.web_click(
                         By.XPATH,
                         f"//fieldset[@id='ad-category-picker']//label[@for={_xpath_literal(radio_id)}]",
+                        timeout = picker_timeout,
                     )
                 else:
                     await radio.click()
@@ -3159,7 +3165,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         offered = ", ".join(sorted(radio_by_value.keys())) or "(none)"
         message = _("Category suggestion picker shown, but no segment of configured path '%(category)s' matched the offered suggestions [%(offered)s]. Update the ad's 'category' to an offered ID or a valid full path.")  # noqa: E501
-        raise TimeoutError(message % {"category": category, "offered": offered})
+        raise CategoryResolutionError(message % {"category": category, "offered": offered})
 
     @staticmethod
     def __special_attribute_candidate_priority(elem:Element) -> tuple[int, int]:
