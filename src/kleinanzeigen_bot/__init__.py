@@ -3091,8 +3091,75 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             category_url = f"{self.root_url}/p-kategorie-aendern.html#?path={category}"
             await self.web_open(category_url)
             await self.web_click(By.XPATH, "//button[contains(., 'Weiter')]")
+
+            # When the configured path cannot be resolved (e.g. outdated or ambiguous),
+            # the site falls back to a React category-suggestion radio picker. Handle it
+            # by matching a path segment against one of the offered suggestions.
+            await self.__resolve_category_suggestions(category)
         else:
             ensure(is_category_auto_selected, f"No category specified in [{ad_file}] and automatic category detection failed")
+
+    async def __resolve_category_suggestions(self, category:str) -> None:
+        """Handle Kleinanzeigen's post-redesign category-suggestion picker.
+
+        If ``fieldset#ad-category-picker`` is rendered after the category change
+        flow (because the configured path could not be resolved), try to click
+        the suggestion whose radio ``value`` matches one of the segments of
+        ``category`` (deepest first). The radio input is ``sr-only``, so clicks
+        go on the associated ``<label for="...">``.
+
+        Raises ``TimeoutError`` with the list of offered suggestions if none of
+        the segments match — surfaces an actionable error instead of letting the
+        submit retry loop trip the duplicate-guard.
+        """
+        picker_timeout = self._timeout("quick_dom")
+        picker = await self.web_probe(By.ID, "ad-category-picker", timeout = picker_timeout)
+        if picker is None:
+            return
+
+        try:
+            radios = await self.web_find_all(
+                By.CSS_SELECTOR,
+                "#ad-category-picker input[type='radio'][name='category-suggestions']",
+                timeout = picker_timeout,
+            )
+        except TimeoutError:
+            radios = []
+
+        radio_by_value:dict[str, Element] = {}
+        for radio in radios:
+            value = str(cast(Any, radio.attrs.get("value")) or "").strip()
+            if value and value not in radio_by_value:
+                radio_by_value[value] = radio
+
+        # If the fieldset is present but radios haven't rendered yet (transient
+        # React state, or an unrelated fieldset reuse), don't block the flow.
+        if not radio_by_value:
+            LOG.debug("Category suggestion picker element found but no radio suggestions rendered; skipping resolver.")
+            return
+
+        # Try deepest-first segments so "73/76/sachbuecher" first probes the leaf, then 76, then 73.
+        for segment in (seg.strip() for seg in reversed(category.split("/")) if seg.strip()):
+            radio = radio_by_value.get(segment)
+            if radio is None:
+                continue
+            radio_id = str(cast(Any, radio.attrs.get("id")) or "")
+            try:
+                if radio_id:
+                    await self.web_click(
+                        By.XPATH,
+                        f"//fieldset[@id='ad-category-picker']//label[@for={_xpath_literal(radio_id)}]",
+                    )
+                else:
+                    await radio.click()
+            except TimeoutError:
+                await radio.click()
+            LOG.info("Category suggestion picker: selected value=%s (matched path segment).", segment)
+            return
+
+        offered = ", ".join(sorted(radio_by_value.keys())) or "(none)"
+        message = _("Category suggestion picker shown, but no segment of configured path '%(category)s' matched the offered suggestions [%(offered)s]. Update the ad's 'category' to an offered ID or a valid full path.")  # noqa: E501
+        raise TimeoutError(message % {"category": category, "offered": offered})
 
     @staticmethod
     def __special_attribute_candidate_priority(elem:Element) -> tuple[int, int]:

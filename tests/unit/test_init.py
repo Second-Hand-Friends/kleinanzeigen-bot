@@ -3863,8 +3863,13 @@ class TestCategoryProbeBehavior:
         category_marker = MagicMock()
         category_marker.apply = AsyncMock(return_value = "Auto Category")
 
+        async def probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
+            if selector_value == "ad-category-path":
+                return category_marker
+            return None  # no suggestion picker shown
+
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = category_marker) as mock_probe,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe) as mock_probe,
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
@@ -3872,7 +3877,7 @@ class TestCategoryProbeBehavior:
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_category")("185/249", "data/my_ads/ad.yaml")
 
-        mock_probe.assert_awaited_once_with(By.ID, "ad-category-path")
+        mock_probe.assert_any_await(By.ID, "ad-category-path")
 
     @pytest.mark.asyncio
     async def test_set_category_without_explicit_category_requires_probe_match(self, test_bot:KleinanzeigenBot) -> None:
@@ -3883,6 +3888,93 @@ class TestCategoryProbeBehavior:
             pytest.raises(AssertionError, match = "No category specified"),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_category")(None, "data/my_ads/ad.yaml")
+
+
+class TestCategorySuggestionPicker:
+    """Regression tests for the post-redesign category-suggestion radio picker fallback."""
+
+    @staticmethod
+    def _picker_probe_factory(picker_present:bool) -> Callable[..., Any]:
+        async def probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
+            if selector_value == "ad-category-path":
+                marker = MagicMock()
+                marker.apply = AsyncMock(return_value = "")
+                return marker
+            if selector_value == "ad-category-picker":
+                return MagicMock() if picker_present else None
+            return None
+
+        return probe
+
+    @staticmethod
+    def _radio(value:str, radio_id:str | None = None) -> MagicMock:
+        elem = MagicMock()
+        elem.attrs = {"value": value}
+        if radio_id is not None:
+            elem.attrs["id"] = radio_id
+        elem.click = AsyncMock()
+        return elem
+
+    @pytest.mark.asyncio
+    async def test_picker_absent_leaves_flow_unchanged(self, test_bot:KleinanzeigenBot) -> None:
+        """No picker -> no-op, no find_all / label click."""
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = False)),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock) as mock_find_all,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__resolve_category_suggestions")("73/76/sachbuecher")
+
+        mock_find_all.assert_not_awaited()
+        mock_click.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_picker_present_matches_leaf_segment_and_clicks_label(self, test_bot:KleinanzeigenBot) -> None:
+        """Picker present with matching radio value -> label[for=ID] is clicked."""
+        radios = [self._radio("76", "76"), self._radio("77", "77"), self._radio("240", "240")]
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = True)),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = radios),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__resolve_category_suggestions")("73/77")
+
+        mock_click.assert_awaited_once()
+        selector_type, selector_value = mock_click.call_args.args[:2]
+        assert selector_type == By.XPATH
+        assert "label[@for='77']" in selector_value
+        assert "'ad-category-picker'" in selector_value
+
+    @pytest.mark.asyncio
+    async def test_picker_present_no_match_raises_with_offered_list(self, test_bot:KleinanzeigenBot) -> None:
+        """Picker present but path has no matching segment -> TimeoutError with offered IDs."""
+        radios = [self._radio("76", "76"), self._radio("77", "77"), self._radio("240", "240")]
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = True)),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = radios),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            pytest.raises(TimeoutError, match = r"Category suggestion picker shown.*offered"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__resolve_category_suggestions")("999/888")
+
+        mock_click.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_picker_prefers_deepest_matching_segment(self, test_bot:KleinanzeigenBot) -> None:
+        """When both parent and leaf segments match radios, the leaf (deepest) wins."""
+        radios = [self._radio("76", "76"), self._radio("77", "77")]
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = True)),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = radios),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__resolve_category_suggestions")("76/77")
+
+        mock_click.assert_awaited_once()
+        assert "label[@for='77']" in mock_click.call_args.args[1]
 
 
 class TestShippingDialogFlow:

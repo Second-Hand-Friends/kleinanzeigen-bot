@@ -237,6 +237,11 @@ kleinanzeigen_bot/__init__.py:
     "Unable to select condition [%s]": "Zustand [%s] konnte nicht ausgewählt werden"
     "Failed to set attribute '%s'": "Fehler beim Setzen des Attributs '%s'"
 
+  __resolve_category_suggestions:
+    "Category suggestion picker shown, but no segment of configured path '%(category)s' matched the offered suggestions [%(offered)s]. Update the ad's 'category' to an offered ID or a valid full path.": "Kategorievorschlag-Auswahl wurde angezeigt, aber kein Segment des konfigurierten Pfades '%(category)s' passte zu den angebotenen Vorschlägen [%(offered)s]. Aktualisieren Sie 'category' auf eine angebotene ID oder einen gültigen vollständigen Pfad."
+    "Category suggestion picker: selected value=%s (matched path segment).": "Kategorievorschlag-Auswahl: Wert=%s ausgewählt (passender Pfad-Segment)."
+    "Category suggestion picker element found but no radio suggestions rendered; skipping resolver.": "Kategorievorschlag-Auswahl gefunden, aber keine Radio-Vorschläge gerendert; Resolver wird übersprungen."
+
   __set_contact_fields:
     "Could not set contact street.": "Kontaktstraße konnte nicht gesetzt werden."
     "Could not set contact name.": "Kontaktname konnte nicht gesetzt werden."
