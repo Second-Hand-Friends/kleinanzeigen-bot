@@ -75,11 +75,23 @@ Valid file extensions: `.json`, `.yaml`, `.yml`
 
 ### ad_files
 
-Glob (wildcard) patterns to select ad configuration files. If relative paths are specified, they are relative to this configuration file.
+`ad_files` tells the bot which local ad configuration files to load.
+It is a file-selection glob only; it does not control how downloaded folders or files are named.
+If relative paths are specified, they are relative to this configuration file.
 
 ```yaml
 ad_files:
   - "./**/ad_*.{json,yml,yaml}"
+```
+
+If you want to keep downloaded ads as your working files, a common setup is:
+
+```yaml
+ad_files:
+  - "./downloaded-ads/**/*.yaml"
+
+download:
+  dir: "./downloaded-ads"
 ```
 
 ### ad_defaults
@@ -146,6 +158,10 @@ For more details on timeout configuration and troubleshooting, see [Browser Trou
 
 Download configuration for the `download` command.
 
+Use these templates to control how downloaded ads are named. Text outside `{id}` and `{title}` is copied literally.
+`{id}` is required in both templates; `{title}` is optional. The defaults are different by design: folder names default to `ad_{id}_{title}`, while file stems default to `ad_{id}`.
+So a folder/file name can be just the ID, or ID plus title.
+
 ```yaml
 download:
   dir: "downloaded-ads"  # default literal keeps workspace-mode download-folder behavior
@@ -170,14 +186,55 @@ download:
 - `download.ad_file_name_template` must include `{id}` so downloaded filenames remain stable and unique.
 - `download.folder_name_max_length` limits folder names only; downloaded file stems use a separate filename budget.
 
-Valid templates:
+Assume this sample ad:
 
-- `ad_{id}_{title}`
-- `{id}_listing`
-- `{title}_{id}`
+- ad ID: `123456789`
+- title: `My Listing`
+
+Template rules:
+
+- Allowed placeholders: `{id}`, `{title}`
+- Required placeholder: `{id}`
+- `{title}` is optional
+- Each placeholder may appear at most once
+
+How templates render:
+
+| Template | Folder name (`folder_name_template`) | File stem (`ad_file_name_template`) |
+| --- | --- | --- |
+| `ad_{id}_{title}` | `ad_123456789_My Listing/` | `ad_123456789_My Listing.yaml` |
+| `ad_{id}` | `ad_123456789/` | `ad_123456789.yaml` |
+| `ad_{id} {title}` | `ad_123456789 My Listing/` | `ad_123456789 My Listing.yaml` |
+| `{title} ({id})` | `My Listing (123456789)/` | `My Listing (123456789).yaml` |
+| `{id}` | `123456789/` | `123456789.yaml` |
+
+Full example:
+
+```yaml
+ad_files:
+  - "./downloaded-ads/**/*.yaml"
+
+download:
+  dir: "./downloaded-ads"
+  folder_name_template: "{title} ({id})"
+  ad_file_name_template: "{title} ({id})"
+```
+
+This produces a structure like:
+
+```text
+downloaded-ads/
+  My Listing (123456789)/
+    My Listing (123456789).yaml
+    My Listing (123456789)__img1.jpg
+```
+
+> **Important:** When an ad is published or republished and receives a new ID, the bot updates the `id` inside the existing local ad file. It does **not** automatically rename existing local files or folders to match the new ID.
 
 Invalid templates (rejected at startup):
 
+- `{title}` (missing required `{id}`)
+- `my-ad` (missing required `{id}`)
 - `{id}_{id}_duplicate` (repeated `{id}`)
 - `{title}_{title}_{id}` (repeated `{title}`)
 

@@ -331,11 +331,13 @@ Full documentation including timeout tuning, browser settings, ad defaults, diag
 
 ### <a name="ad-config"></a>2) Ad configuration 📝
 
-Each ad is defined in a separate YAML/JSON file (default pattern: `ad_*.yaml`). These files specify the title, description, price, category, images, and other ad-specific settings.
+Each ad is defined in a separate YAML/JSON file. The `publish` workflow reads files matched by the `ad_files` glob pattern. The `download` workflow writes files into `download.dir` (default: the literal `downloaded-ads/` directory in the workspace root).
 
-The `publish` workflow reads files matched by the `ad_files` glob pattern. The `download` workflow writes files into `download.dir` (default: the literal `downloaded-ads/` directory in the workspace root).
+In XDG mode, the bare default `downloaded-ads/` stays in the workspace default download location. If you want a config-relative shared tree, set `download.dir` to `./downloaded-ads` and point `ad_files` at that tree, for example `./downloaded-ads/**/*.yaml`.
 
-In XDG mode, the bare default `downloaded-ads/` stays in the workspace default download location. If you want a config-relative shared tree, set `download.dir` to `./downloaded-ads` and ensure the `ad_files` glob pattern matches files inside that tree.
+Downloaded folder/file names are configured separately with `download.folder_name_template` and `download.ad_file_name_template`. For example: `ad_{id} {title}` or `{title} ({id})`.
+
+When an ad is published or republished and receives a new ID, the bot updates the `id` inside the existing local ad file; it does not rename local files or folders automatically.
 
 **Quick example (`ad_laptop.yaml`):**
 

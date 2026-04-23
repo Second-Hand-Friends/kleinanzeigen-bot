@@ -4,7 +4,7 @@ Complete reference for ad YAML files in kleinanzeigen-bot.
 
 ## File Format
 
-Each ad is described in a separate JSON or YAML file with the default `ad_` prefix (for example, `ad_laptop.yaml`). You can customize the prefix via the `ad_files` pattern in `config.yaml`.
+Each ad is described in a separate JSON or YAML file. The bot loads whichever files match the `ad_files` glob in `config.yaml`. Many users keep the default `ad_` prefix for downloaded files (for example, `ad_laptop.yaml`), but the filename itself is user-controlled.
 Examples below use YAML, but JSON uses the same keys and structure.
 
 Parameter values specified in the `ad_defaults` section of `config.yaml` don't need to be specified again in the ad configuration file.

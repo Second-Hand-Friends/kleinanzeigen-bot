@@ -1,7 +1,9 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json
-
-# glob (wildcard) patterns to select ad configuration files
-# if relative paths are specified, then they are relative to this configuration file
+# glob (wildcard) patterns to select local ad configuration files. This only controls which files are loaded; it does not rename downloaded files. If relative paths are specified, they are relative to this configuration file
+# Example usage:
+#   ad_files:
+#     - "./downloaded-ads/**/*.yaml"
+#     - "./**/ad_*.{json,yml,yaml}"
 ad_files:
   - ./**/ad_*.{json,yml,yaml}
 
@@ -137,18 +139,20 @@ download:
   # maximum length for downloaded folder names (default: 100). does not limit downloaded file base names
   folder_name_max_length: 100
 
-  # folder naming template for downloaded ad directories. Allowed placeholders: {id}, {title}. Each placeholder may appear at most once. Template must include {id}
+  # template for downloaded ad folder names. Default: "ad_{id}_{title}". Text outside {id} and {title} is copied literally. Allowed placeholders: {id}, {title}. Each placeholder may appear at most once. Template must include {id}; {title} is optional
   # Examples (choose one):
   #   • "ad_{id}_{title}"
-  #   • "listing_{id}_{title}"
+  #   • "ad_{id} {title}"
+  #   • "{title} ({id})"
   #   • "{id}"
   folder_name_template: ad_{id}_{title}
 
-  # base name template for downloaded ad files. The bot writes the ad config as <base>.yaml and downloaded images as <base>__imgN.<ext>. Supported placeholders: {id}, {title}. Each placeholder may appear at most once. Template must include {id}. Long titles may be truncated to keep filename limits
+  # template for the downloaded ad YAML stem and image prefix. Default: "ad_{id}". The bot writes the ad config as <base>.yaml and downloaded images as <base>__imgN.<ext>. Text outside {id} and {title} is copied literally. Supported placeholders: {id}, {title}. Each placeholder may appear at most once. Template must include {id}; {title} is optional. Long titles may be truncated to keep filename limits
   # Examples (choose one):
   #   • "ad_{id}"
-  #   • "listing_{id}"
-  #   • "listing_{id}_{title}"
+  #   • "ad_{id} {title}"
+  #   • "{title} ({id})"
+  #   • "{id}"
   ad_file_name_template: ad_{id}
 
   # if true, rename existing folders without titles to include titles (default: false)
