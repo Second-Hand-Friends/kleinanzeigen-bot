@@ -151,24 +151,26 @@ class DownloadConfig(ContextualModel):
     folder_name_template:str = Field(
         default = "ad_{id}_{title}",
         description=(
-            "folder naming template for downloaded ad directories. "
+            'template for downloaded ad folder names. Default: "ad_{id}_{title}". '
+            "Text outside {id} and {title} is copied literally. "
             "Allowed placeholders: {id}, {title}. "
             "Each placeholder may appear at most once. "
-            "Template must include {id}"
+            "Template must include {id}; {title} is optional"
         ),
-        examples = ['"ad_{id}_{title}"', '"listing_{id}_{title}"', '"{id}"'],
+        examples = ['"ad_{id}_{title}"', '"ad_{id} {title}"', '"{title} ({id})"', '"{id}"'],
     )
     ad_file_name_template:str = Field(
         default = "ad_{id}",
         description=(
-            "base name template for downloaded ad files. "
+            'template for the downloaded ad YAML stem and image prefix. Default: "ad_{id}". '
             "The bot writes the ad config as <base>.yaml and downloaded images as <base>__imgN.<ext>. "
+            "Text outside {id} and {title} is copied literally. "
             "Supported placeholders: {id}, {title}. "
             "Each placeholder may appear at most once. "
-            "Template must include {id}. "
+            "Template must include {id}; {title} is optional. "
             "Long titles may be truncated to keep filename limits"
         ),
-        examples = ['"ad_{id}"', '"listing_{id}"', '"listing_{id}_{title}"'],
+        examples = ['"ad_{id}"', '"ad_{id} {title}"', '"{title} ({id})"', '"{id}"'],
     )
     rename_existing_folders:bool = Field(
         default = False,
@@ -444,10 +446,12 @@ class Config(ContextualModel):
         default_factory = lambda: ["./**/ad_*.{json,yml,yaml}"],
         json_schema_extra = {"default": ["./**/ad_*.{json,yml,yaml}"]},
         min_length = 1,
-        description = """
-glob (wildcard) patterns to select ad configuration files
-if relative paths are specified, then they are relative to this configuration file
-""",
+        description = (
+            "glob (wildcard) patterns to select local ad configuration files. "
+            "This only controls which files are loaded; it does not rename downloaded files. "
+            "If relative paths are specified, they are relative to this configuration file"
+        ),
+        examples = ['"./downloaded-ads/**/*.yaml"', '"./**/ad_*.{json,yml,yaml}"'],
     )
 
     ad_defaults:AdDefaults = Field(default_factory = AdDefaults, description = "Default values for ads, can be overwritten in each ad configuration file")
