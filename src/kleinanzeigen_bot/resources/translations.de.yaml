@@ -225,6 +225,7 @@ kleinanzeigen_bot/__init__.py:
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
     " -> SKIPPED: ad '%s' (ID: %s) not found in published ads": " -> ÜBERSPRUNGEN: Anzeige '%s' (ID: %s) nicht in veröffentlichten Anzeigen gefunden"
     "Attempt %s/%s for '%s' reached submit boundary but failed: %s. Not retrying to prevent duplicate modifications.": "Versuch %s/%s für '%s' hat die Sendegrenze erreicht, ist aber fehlgeschlagen: %s. Kein weiterer Versuch, um doppelte Änderungen zu vermeiden."
+    "Category resolution failed for '%s': %s. Skipping ad (configuration error, no retry).": "Kategorieauflösung fehlgeschlagen für '%s': %s. Anzeige wird übersprungen (Konfigurationsfehler, kein erneuter Versuch)."
     "Manual recovery required for '%s'. Check 'Meine Anzeigen' to confirm whether the update was applied.": "Manuelle Nachbearbeitung für '%s' erforderlich. Bitte unter 'Meine Anzeigen' prüfen, ob die Aktualisierung übernommen wurde."
     "All %s attempts failed for '%s': %s. Skipping ad.": "Alle %s Versuche für '%s' sind fehlgeschlagen: %s. Anzeige wird übersprungen."
     "Attempt %s/%s failed for '%s': %s. Retrying...": "Versuch %s/%s für '%s' ist fehlgeschlagen: %s. Erneuter Versuch..."
