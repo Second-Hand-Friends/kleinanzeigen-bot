@@ -25,3 +25,16 @@ class PublishSubmissionUncertainError(KleinanzeigenBotError):
 
 class PublishedAdsFetchIncompleteError(KleinanzeigenBotError):
     """Raised when published ads cannot be fetched completely for ownership-critical operations."""
+
+
+class CategoryResolutionError(KleinanzeigenBotError):
+    """Raised when the ad's configured category cannot be resolved by publish/update flows.
+
+    This is a deterministic configuration problem (no retry value): the configured
+    'category' path did not match any offered category-suggestion radio, so the
+    user must update the ad YAML. Distinct from ``TimeoutError`` so the publish
+    retry loop does not burn attempts on an error it cannot recover from.
+    """
+
+    def __init__(self, reason:str) -> None:
+        super().__init__(reason)

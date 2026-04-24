@@ -32,7 +32,7 @@ from kleinanzeigen_bot.model.config_model import (
     PublishingConfig,
 )
 from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
-from kleinanzeigen_bot.utils.exceptions import PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
+from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
@@ -1935,6 +1935,40 @@ class TestKleinanzeigenBotBasics:
             sleep_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_publish_ads_does_not_retry_on_category_resolution_error(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """CategoryResolutionError is deterministic configuration failure -> no retry, fail fast."""
+        test_bot.page = mock_page
+        test_bot.keep_old_ads = True
+
+        ad_cfg = Ad.model_validate(base_ad_config)
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+
+        with (
+            patch.object(
+                test_bot,
+                "web_request",
+                new_callable = AsyncMock,
+                return_value = {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})},
+            ),
+            patch.object(
+                test_bot,
+                "publish_ad",
+                new_callable = AsyncMock,
+                side_effect = CategoryResolutionError("no suggestion matched"),
+            ) as publish_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
+        ):
+            await test_bot.publish_ads([("ad.yaml", ad_cfg, ad_cfg_orig)])
+
+            assert publish_mock.await_count == 1
+            sleep_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("mode", "expected_path"),
         [
@@ -2244,6 +2278,32 @@ class TestKleinanzeigenBotUpdateAdsResilience:
             await test_bot.update_ads([ad_one, ad_two])
 
         assert publish_mock.await_count == 2
+        sleep_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_update_ads_category_resolution_error_is_not_retried(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        ad_one = self._build_update_ad(base_ad_config, 303, "Category Error Update")
+        ad_two = self._build_update_ad(base_ad_config, 304, "Second Update")
+
+        async def publish_side_effect(
+            _ad_file:str,
+            ad_cfg:Ad,
+            _ad_cfg_orig:dict[str, Any],
+            _published_ads:list[dict[str, Any]],
+            _mode:AdUpdateStrategy,
+        ) -> None:
+            if ad_cfg.id == 303:
+                raise CategoryResolutionError("no suggestion matched")
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = self._build_published_ads(303, 304)),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+        ):
+            await test_bot.update_ads([ad_one, ad_two])
+
+        assert [call.args[1].id for call in publish_mock.await_args_list] == [303, 304]
         sleep_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -3356,8 +3416,16 @@ class TestKleinanzeigenBotShippingOptions:
                 return "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
             return mock_response
 
+        async def mock_web_probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
+            if selector_value == "ad-category-path":
+                marker = MagicMock()
+                marker.apply = AsyncMock(return_value = "")
+                return marker
+            return None
+
         with (
             patch("kleinanzeigen_bot.apply_auto_price_reduction") as mock_apply,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = mock_web_probe),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
@@ -3863,8 +3931,13 @@ class TestCategoryProbeBehavior:
         category_marker = MagicMock()
         category_marker.apply = AsyncMock(return_value = "Auto Category")
 
+        async def probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
+            if selector_value == "ad-category-path":
+                return category_marker
+            return None  # no suggestion picker shown
+
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = category_marker) as mock_probe,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe) as mock_probe,
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
@@ -3872,7 +3945,7 @@ class TestCategoryProbeBehavior:
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_category")("185/249", "data/my_ads/ad.yaml")
 
-        mock_probe.assert_awaited_once_with(By.ID, "ad-category-path")
+        mock_probe.assert_any_await(By.ID, "ad-category-path")
 
     @pytest.mark.asyncio
     async def test_set_category_without_explicit_category_requires_probe_match(self, test_bot:KleinanzeigenBot) -> None:
@@ -3883,6 +3956,123 @@ class TestCategoryProbeBehavior:
             pytest.raises(AssertionError, match = "No category specified"),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_category")(None, "data/my_ads/ad.yaml")
+
+
+class TestCategorySuggestionPicker:
+    """Regression tests for the post-redesign category-suggestion radio picker fallback."""
+
+    @staticmethod
+    def _picker_probe_factory(picker_present:bool) -> Callable[..., Any]:
+        async def probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
+            if selector_value == "ad-category-path":
+                marker = MagicMock()
+                marker.apply = AsyncMock(return_value = "")
+                return marker
+            if selector_value == "ad-category-picker":
+                return MagicMock() if picker_present else None
+            return None
+
+        return probe
+
+    @staticmethod
+    def _radio(value:str, radio_id:str | None = None) -> MagicMock:
+        elem = MagicMock()
+        elem.attrs = {"value": value}
+        if radio_id is not None:
+            elem.attrs["id"] = radio_id
+        elem.click = AsyncMock()
+        return elem
+
+    @pytest.mark.asyncio
+    async def test_picker_absent_leaves_flow_unchanged(self, test_bot:KleinanzeigenBot) -> None:
+        """No picker -> no-op, no find_all / label click."""
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = False)),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock) as mock_find_all,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__resolve_category_suggestions")("73/76/sachbuecher")
+
+        mock_find_all.assert_not_awaited()
+        mock_click.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_picker_present_without_rendered_radios_retries_then_times_out(self, test_bot:KleinanzeigenBot) -> None:
+        """Picker shell present but radios not rendered yet should fail closed after a bounded retry."""
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = True)),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []) as mock_find_all,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            pytest.raises(TimeoutError, match = "Category suggestion picker element found but no radio suggestions rendered after waiting."),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__resolve_category_suggestions")("73/76/sachbuecher")
+
+        assert mock_find_all.await_count == 2
+        mock_sleep.assert_awaited_once()
+        mock_click.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_picker_present_matches_leaf_segment_and_clicks_label(self, test_bot:KleinanzeigenBot) -> None:
+        """Picker present with matching radio value -> label[for=ID] is clicked (value != id to catch regressions)."""
+        radios = [
+            self._radio("76", "category-suggestion-parent"),
+            self._radio("77", "category-suggestion-leaf"),
+            self._radio("240", "category-suggestion-other"),
+        ]
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = True)),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = radios),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__resolve_category_suggestions")("73/77")
+
+        mock_click.assert_awaited_once()
+        selector_type, selector_value = mock_click.call_args.args[:2]
+        assert selector_type == By.XPATH
+        assert "label[@for='category-suggestion-leaf']" in selector_value
+        assert "'ad-category-picker'" in selector_value
+
+    @pytest.mark.asyncio
+    async def test_picker_present_no_match_raises_with_offered_list(self, test_bot:KleinanzeigenBot) -> None:
+        """Picker present but path has no matching segment -> CategoryResolutionError listing offered IDs."""
+        radios = [
+            self._radio("76", "category-suggestion-parent"),
+            self._radio("77", "category-suggestion-leaf"),
+            self._radio("240", "category-suggestion-other"),
+        ]
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = True)),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = radios),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            pytest.raises(CategoryResolutionError, match = r"Category suggestion picker shown.*offered") as exc_info,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__resolve_category_suggestions")("999/888")
+
+        mock_click.assert_not_awaited()
+        error_message = str(exc_info.value)
+        # The error must name the configured (unmatched) path and every offered ID,
+        # otherwise the user cannot know what to correct.
+        assert "999/888" in error_message
+        for offered_id in ("76", "77", "240"):
+            assert offered_id in error_message
+
+    @pytest.mark.asyncio
+    async def test_picker_prefers_deepest_matching_segment(self, test_bot:KleinanzeigenBot) -> None:
+        """When both parent and leaf segments match radios, the leaf (deepest) wins."""
+        radios = [self._radio("76", "id-for-76"), self._radio("77", "id-for-77")]
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = True)),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = radios),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__resolve_category_suggestions")("76/77")
+
+        mock_click.assert_awaited_once()
+        assert "label[@for='id-for-77']" in mock_click.call_args.args[1]
 
 
 class TestShippingDialogFlow:

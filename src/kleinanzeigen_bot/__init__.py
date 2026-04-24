@@ -31,7 +31,7 @@ from .model.ad_model import (
 from .model.config_model import DEFAULT_DOWNLOAD_DIR, Config
 from .update_checker import UpdateChecker
 from .utils import diagnostics, dicts, error_handlers, loggers, misc, xdg_paths
-from .utils.exceptions import CaptchaEncountered, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
+from .utils.exceptions import CaptchaEncountered, CategoryResolutionError, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
 from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
 from .utils.misc import ainput, ensure, is_frozen
@@ -2313,6 +2313,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     break  # Publish succeeded, exit retry loop
                 except asyncio.CancelledError:
                     raise  # Respect task cancellation
+                except CategoryResolutionError as ex:
+                    await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
+                    LOG.error("Category resolution failed for '%s': %s. Skipping ad (configuration error, no retry).", ad_cfg.title, ex)
+                    failed_count += 1
+                    break
                 except PublishSubmissionUncertainError as ex:
                     await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
                     LOG.warning(
@@ -2979,6 +2984,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     LOG.warning("Manual recovery required for '%s'. Check 'Meine Anzeigen' to confirm whether the update was applied.", ad_cfg.title)
                     failed_count += 1
                     break
+                except CategoryResolutionError as ex:
+                    await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
+                    LOG.error("Category resolution failed for '%s': %s. Skipping ad (configuration error, no retry).", ad_cfg.title, ex)
+                    failed_count += 1
+                    break
                 except (TimeoutError, ProtocolException) as ex:
                     await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
                     if attempt >= max_retries:
@@ -3091,8 +3101,81 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             category_url = f"{self.root_url}/p-kategorie-aendern.html#?path={category}"
             await self.web_open(category_url)
             await self.web_click(By.XPATH, "//button[contains(., 'Weiter')]")
+
+            # When the configured path cannot be resolved (e.g. outdated or ambiguous),
+            # the site falls back to a React category-suggestion radio picker. Handle it
+            # by matching a path segment against one of the offered suggestions.
+            await self.__resolve_category_suggestions(category)
         else:
             ensure(is_category_auto_selected, f"No category specified in [{ad_file}] and automatic category detection failed")
+
+    async def __resolve_category_suggestions(self, category:str) -> None:
+        """Handle Kleinanzeigen's post-redesign category-suggestion picker.
+
+        If ``fieldset#ad-category-picker`` is rendered after the category change
+        flow (because the configured path could not be resolved), try to click
+        the suggestion whose radio ``value`` matches one of the segments of
+        ``category`` (deepest first). The radio input is ``sr-only``, so clicks
+        go on the associated ``<label for="...">``.
+
+        If the picker shell is present but radios have not rendered yet, retry
+        once after a short pause and then raise ``TimeoutError`` so the caller
+        can treat it as a retryable pre-submit failure. Raises
+        ``CategoryResolutionError`` with the list of offered suggestions if none
+        of the segments match — surfaces an actionable error instead of letting
+        the submit retry loop trip the duplicate-guard.
+        """
+        picker_timeout = self._timeout("quick_dom")
+        picker = await self.web_probe(By.ID, "ad-category-picker", timeout = picker_timeout)
+        if picker is None:
+            return
+
+        radio_selector = "#ad-category-picker input[type='radio'][name='category-suggestions']"
+        radio_by_value:dict[str, Element] = {}
+        for attempt in range(2):
+            try:
+                radios = await self.web_find_all(By.CSS_SELECTOR, radio_selector, timeout = picker_timeout)
+            except TimeoutError:
+                radios = []
+
+            radio_by_value = {}
+            for radio in radios:
+                value = str(cast(Any, radio.attrs.get("value")) or "").strip()
+                if value and value not in radio_by_value:
+                    radio_by_value[value] = radio
+
+            if radio_by_value:
+                break
+
+            if attempt == 0:
+                await self.web_sleep(200, 350)
+
+        if not radio_by_value:
+            raise TimeoutError(_("Category suggestion picker element found but no radio suggestions rendered after waiting."))
+
+        # Try deepest-first segments so "73/76/sachbuecher" first probes the leaf, then 76, then 73.
+        for segment in (seg.strip() for seg in reversed(category.split("/")) if seg.strip()):
+            radio = radio_by_value.get(segment)
+            if radio is None:
+                continue
+            radio_id = str(cast(Any, radio.attrs.get("id")) or "")
+            try:
+                if radio_id:
+                    await self.web_click(
+                        By.XPATH,
+                        f"//fieldset[@id='ad-category-picker']//label[@for={_xpath_literal(radio_id)}]",
+                        timeout = picker_timeout,
+                    )
+                else:
+                    await radio.click()
+            except TimeoutError:
+                await radio.click()
+            LOG.info("Category suggestion picker: selected value=%s (matched path segment).", segment)
+            return
+
+        offered = ", ".join(sorted(radio_by_value.keys())) or "(none)"
+        message = _("Category suggestion picker shown, but no segment of configured path '%(category)s' matched the offered suggestions [%(offered)s]. Update the ad's 'category' to an offered ID or a valid full path.")  # noqa: E501
+        raise CategoryResolutionError(message % {"category": category, "offered": offered})
 
     @staticmethod
     def __special_attribute_candidate_priority(elem:Element) -> tuple[int, int]:
