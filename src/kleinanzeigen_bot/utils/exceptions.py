@@ -28,7 +28,7 @@ class PublishedAdsFetchIncompleteError(KleinanzeigenBotError):
 
 
 class CategoryResolutionError(KleinanzeigenBotError):
-    """Raised when the ad's configured category cannot be resolved by the publish flow.
+    """Raised when the ad's configured category cannot be resolved by publish/update flows.
 
     This is a deterministic configuration problem (no retry value): the configured
     'category' path did not match any offered category-suggestion radio, so the

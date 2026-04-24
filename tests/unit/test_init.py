@@ -2281,6 +2281,32 @@ class TestKleinanzeigenBotUpdateAdsResilience:
         sleep_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_update_ads_category_resolution_error_is_not_retried(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        ad_one = self._build_update_ad(base_ad_config, 303, "Category Error Update")
+        ad_two = self._build_update_ad(base_ad_config, 304, "Second Update")
+
+        async def publish_side_effect(
+            _ad_file:str,
+            ad_cfg:Ad,
+            _ad_cfg_orig:dict[str, Any],
+            _published_ads:list[dict[str, Any]],
+            _mode:AdUpdateStrategy,
+        ) -> None:
+            if ad_cfg.id == 303:
+                raise CategoryResolutionError("no suggestion matched")
+
+        with (
+            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = self._build_published_ads(303, 304)),
+            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+        ):
+            await test_bot.update_ads([ad_one, ad_two])
+
+        assert [call.args[1].id for call in publish_mock.await_args_list] == [303, 304]
+        sleep_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_update_ads_cancelled_error_propagates_immediately(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
         ad_one = self._build_update_ad(base_ad_config, 401, "Cancelled Ad")
         ad_two = self._build_update_ad(base_ad_config, 402, "Should Not Run")
@@ -3390,8 +3416,16 @@ class TestKleinanzeigenBotShippingOptions:
                 return "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
             return mock_response
 
+        async def mock_web_probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
+            if selector_value == "ad-category-path":
+                marker = MagicMock()
+                marker.apply = AsyncMock(return_value = "")
+                return marker
+            return None
+
         with (
             patch("kleinanzeigen_bot.apply_auto_price_reduction") as mock_apply,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = mock_web_probe),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
@@ -3963,16 +3997,19 @@ class TestCategorySuggestionPicker:
         mock_click.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_picker_present_without_rendered_radios_silently_skips(self, test_bot:KleinanzeigenBot) -> None:
-        """Picker shell present but radios not rendered yet (transient React state) -> silent no-op."""
+    async def test_picker_present_without_rendered_radios_retries_then_times_out(self, test_bot:KleinanzeigenBot) -> None:
+        """Picker shell present but radios not rendered yet should fail closed after a bounded retry."""
         with (
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = True)),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []) as mock_find_all,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            pytest.raises(TimeoutError, match = "Category suggestion picker element found but no radio suggestions rendered after waiting."),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__resolve_category_suggestions")("73/76/sachbuecher")
 
-        mock_find_all.assert_awaited_once()
+        assert mock_find_all.await_count == 2
+        mock_sleep.assert_awaited_once()
         mock_click.assert_not_awaited()
 
     @pytest.mark.asyncio

@@ -2984,6 +2984,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     LOG.warning("Manual recovery required for '%s'. Check 'Meine Anzeigen' to confirm whether the update was applied.", ad_cfg.title)
                     failed_count += 1
                     break
+                except CategoryResolutionError as ex:
+                    await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
+                    LOG.error("Category resolution failed for '%s': %s. Skipping ad (configuration error, no retry).", ad_cfg.title, ex)
+                    failed_count += 1
+                    break
                 except (TimeoutError, ProtocolException) as ex:
                     await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
                     if attempt >= max_retries:
@@ -3113,35 +3118,40 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         ``category`` (deepest first). The radio input is ``sr-only``, so clicks
         go on the associated ``<label for="...">``.
 
-        Raises ``TimeoutError`` with the list of offered suggestions if none of
-        the segments match — surfaces an actionable error instead of letting the
-        submit retry loop trip the duplicate-guard.
+        If the picker shell is present but radios have not rendered yet, retry
+        once after a short pause and then raise ``TimeoutError`` so the caller
+        can treat it as a retryable pre-submit failure. Raises
+        ``CategoryResolutionError`` with the list of offered suggestions if none
+        of the segments match — surfaces an actionable error instead of letting
+        the submit retry loop trip the duplicate-guard.
         """
         picker_timeout = self._timeout("quick_dom")
         picker = await self.web_probe(By.ID, "ad-category-picker", timeout = picker_timeout)
         if picker is None:
             return
 
-        try:
-            radios = await self.web_find_all(
-                By.CSS_SELECTOR,
-                "#ad-category-picker input[type='radio'][name='category-suggestions']",
-                timeout = picker_timeout,
-            )
-        except TimeoutError:
-            radios = []
-
+        radio_selector = "#ad-category-picker input[type='radio'][name='category-suggestions']"
         radio_by_value:dict[str, Element] = {}
-        for radio in radios:
-            value = str(cast(Any, radio.attrs.get("value")) or "").strip()
-            if value and value not in radio_by_value:
-                radio_by_value[value] = radio
+        for attempt in range(2):
+            try:
+                radios = await self.web_find_all(By.CSS_SELECTOR, radio_selector, timeout = picker_timeout)
+            except TimeoutError:
+                radios = []
 
-        # If the fieldset is present but radios haven't rendered yet (transient
-        # React state, or an unrelated fieldset reuse), don't block the flow.
+            radio_by_value = {}
+            for radio in radios:
+                value = str(cast(Any, radio.attrs.get("value")) or "").strip()
+                if value and value not in radio_by_value:
+                    radio_by_value[value] = radio
+
+            if radio_by_value:
+                break
+
+            if attempt == 0:
+                await self.web_sleep(200, 350)
+
         if not radio_by_value:
-            LOG.debug("Category suggestion picker element found but no radio suggestions rendered; skipping resolver.")
-            return
+            raise TimeoutError(_("Category suggestion picker element found but no radio suggestions rendered after waiting."))
 
         # Try deepest-first segments so "73/76/sachbuecher" first probes the leaf, then 76, then 73.
         for segment in (seg.strip() for seg in reversed(category.split("/")) if seg.strip()):
