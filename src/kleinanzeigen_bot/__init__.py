@@ -562,9 +562,12 @@ def apply_auto_price_reduction(
                 applied_cycles,
             )
         else:
+            current_price = decision.result_price if decision.result_price is not None else ad_cfg.price
             LOG.info(
-                "Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts",
+                "Auto price reduction already applied for [%s]: price %s -> %s; %s reductions match %s eligible reposts",
                 ad_file_relative,
+                base_price,
+                current_price,
                 applied_cycles,
                 eligible_cycles,
             )
@@ -2137,6 +2140,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         # Early return if nothing to delete — skip page open, CSRF fetch, and sleep
         if not ids_to_delete:
+            LOG.warning(" -> FAILED: no published ad matched '%s' for deletion", ad_cfg.title)
             return False
 
         # Phase B: Open manage-ads page, fetch CSRF token, execute deletions
@@ -2157,6 +2161,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             )
             if response["statusCode"] == HTTP_OK:
                 deleted = True
+                LOG.info(" -> SUCCESS: deleted ad '%s' (ID: %s)", ad_cfg.title, target_id)
             else:
                 LOG.warning(" -> ad %s not found (status %s), may have been removed already", target_id, response["statusCode"])
 
@@ -3580,9 +3585,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if baseline_marker_count:
             LOG.debug(" -> detected %d pre-existing image marker(s) before upload", baseline_marker_count)
 
-        for image in ad_cfg.images:
+        total_images = len(ad_cfg.images)
+        for index, image in enumerate(ad_cfg.images, start = 1):
             image_upload:Element = await self.web_find(By.CSS_SELECTOR, "input[type=file]")
-            LOG.info(" -> uploading image [%s]", image)
+            LOG.info(" -> uploading image %s/%s [%s]", index, total_images, image)
             await image_upload.send_file(image)
             await self.web_sleep()
 

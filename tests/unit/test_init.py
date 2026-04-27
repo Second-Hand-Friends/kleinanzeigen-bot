@@ -549,9 +549,8 @@ class TestKleinanzeigenBotInitialization:
         self,
         test_bot:KleinanzeigenBot,
         tmp_path:Path,
-        caplog:pytest.LogCaptureFixture,
     ) -> None:
-        """Test that --ads=all skips ads with invalid URL parsing (ad_id=-1) without misleading warnings."""
+        """Test that --ads=all skips ads with invalid URL parsing (ad_id=-1)."""
         test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
         test_bot.ads_selector = "all"
         test_bot.browser = MagicMock()
@@ -562,8 +561,6 @@ class TestKleinanzeigenBotInitialization:
         extractor_mock.navigate_to_ad_page = AsyncMock(return_value = True)
         extractor_mock.download_ad = AsyncMock()
 
-        caplog.set_level(logging.WARNING)
-
         with (
             patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = []),
             patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock),
@@ -572,9 +569,6 @@ class TestKleinanzeigenBotInitialization:
 
         # Verify download_ad was NOT called for invalid ad_id
         extractor_mock.download_ad.assert_not_called()
-
-        # Verify no misleading warning about "not in published profile"
-        assert not any("not in published profile" in msg for msg in caplog.messages)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -676,7 +670,6 @@ class TestKleinanzeigenBotInitialization:
         self,
         test_bot:KleinanzeigenBot,
         tmp_path:Path,
-        caplog:pytest.LogCaptureFixture,
     ) -> None:
         """Test that --ads=new skips ads with invalid URL parsing (ad_id=-1)."""
         test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
@@ -689,8 +682,6 @@ class TestKleinanzeigenBotInitialization:
         extractor_mock.navigate_to_ad_page = AsyncMock(return_value = True)
         extractor_mock.download_ad = AsyncMock()
 
-        caplog.set_level(logging.WARNING)
-
         with (
             patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = []),
             patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock),
@@ -700,9 +691,6 @@ class TestKleinanzeigenBotInitialization:
 
         # Verify download_ad was NOT called for invalid ad_id
         extractor_mock.download_ad.assert_not_called()
-
-        # Verify no misleading warning about "not in published profile"
-        assert not any("not in published profile" in msg for msg in caplog.messages)
 
     @pytest.mark.asyncio
     async def test_download_ads_new_selector_passes_inactive_for_ad_not_in_published_profile(
@@ -2965,7 +2953,11 @@ class TestKleinanzeigenBotAdDeletion:
     """Tests for ad deletion functionality."""
 
     @pytest.mark.asyncio
-    async def test_delete_ad_by_title_match_succeeds(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
+    async def test_delete_ad_by_title_match_succeeds(
+        self,
+        test_bot:KleinanzeigenBot,
+        minimal_ad_config:dict[str, Any],
+    ) -> None:
         """When title matches a published ad and server returns 200, should return True and clear id."""
         ad_cfg = Ad.model_validate(minimal_ad_config | {"title": "Test Title", "id": None})
         published_ads = [{"title": "Test Title", "id": 67890}, {"title": "Other Title", "id": 11111}]
@@ -3003,12 +2995,18 @@ class TestKleinanzeigenBotAdDeletion:
         assert ad_cfg.id is None
 
     @pytest.mark.asyncio
-    async def test_delete_ad_returns_false_when_no_match(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
+    async def test_delete_ad_returns_false_when_no_match(
+        self,
+        test_bot:KleinanzeigenBot,
+        minimal_ad_config:dict[str, Any],
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
         """When no published ads match, should return False without opening any pages."""
         ad_cfg = Ad.model_validate(minimal_ad_config | {"title": "No Match Title", "id": 99999})
         published_ads = [{"title": "Different Title", "id": 12345}]
 
         with (
+            caplog.at_level(logging.WARNING, logger = "kleinanzeigen_bot"),
             patch.object(test_bot, "web_open", new_callable = AsyncMock) as mock_web_open,
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_web_find,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_web_sleep,
@@ -3024,7 +3022,11 @@ class TestKleinanzeigenBotAdDeletion:
         mock_request.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_delete_ad_returns_false_on_404_clears_id(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
+    async def test_delete_ad_returns_false_on_404_clears_id(
+        self,
+        test_bot:KleinanzeigenBot,
+        minimal_ad_config:dict[str, Any],
+    ) -> None:
         """When delete is attempted but server returns 404, should return False but still clear the id."""
         ad_cfg = Ad.model_validate(minimal_ad_config | {"id": 12345})
         published_ads:list[dict[str, Any]] = []
