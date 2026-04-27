@@ -3733,9 +3733,11 @@ class TestConditionSelector:
         test_bot:KleinanzeigenBot,
         configured:str,
         expected_api_value:str,
+        caplog:pytest.LogCaptureFixture,
     ) -> None:
         """Legacy German condition tokens should resolve to the current English API codes
         when the German token no longer matches any radio in the dialog."""
+        caplog.set_level(logging.WARNING, logger = LOG.name)
         dialog = MagicMock()
         trigger = MagicMock()
         trigger.attrs = {"id": "condition-trigger", "aria-controls": "condition-dialog"}
@@ -3769,14 +3771,49 @@ class TestConditionSelector:
             handled = await getattr(test_bot, "_KleinanzeigenBot__set_condition")(configured)
 
         assert handled is True
-        # If the configured value already matches (e.g. user wrote the English code),
-        # the fallback should not be probed. Otherwise both values should have been tried.
-        if configured == expected_api_value:
-            assert probed_values == [configured]
-        else:
-            assert probed_values == [configured, expected_api_value]
+        warning_messages = [record.message for record in caplog.records if record.levelno == logging.WARNING]
+        assert warning_messages == [f"Condition value [{configured}] is deprecated; update your config to [{expected_api_value}]."]
+        # Legacy German values should probe the configured token first, then the mapped API code.
+        assert probed_values == [configured, expected_api_value]
         clicked_xpath_selectors = [str(call.args[1]) for call in mock_click.await_args_list if len(call.args) > 1]
         assert any(f"radio-condition-{expected_api_value}" in selector for selector in clicked_xpath_selectors)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("configured", ["new", "like_new", "ok", "alright", "defect"])
+    async def test_condition_english_api_value_does_not_warn(
+        self,
+        test_bot:KleinanzeigenBot,
+        configured:str,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Already-English condition values should not emit a deprecation warning."""
+        caplog.set_level(logging.WARNING, logger = LOG.name)
+        dialog = MagicMock()
+        trigger = MagicMock()
+        trigger.attrs = {"id": "condition-trigger", "aria-controls": "condition-dialog"}
+        trigger.click = AsyncMock()
+        radio = MagicMock()
+        radio_attrs = MagicMock()
+        radio_attrs.get.side_effect = lambda key, default = None: f"radio-condition-{configured}" if key == "id" else default
+        radio.attrs = radio_attrs
+        radio.click = AsyncMock()
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
+                return trigger
+            if selector_type == By.XPATH and "@type='radio'" in selector_value:
+                return radio if f"@value='{configured}'" in selector_value else None
+            return None
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = dialog),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+        ):
+            handled = await getattr(test_bot, "_KleinanzeigenBot__set_condition")(configured)
+
+        assert handled is True
+        assert [record.message for record in caplog.records if record.levelno == logging.WARNING] == []
 
     @pytest.mark.asyncio
     async def test_condition_missing_selector_returns_not_handled(self, test_bot:KleinanzeigenBot) -> None:
@@ -3794,6 +3831,23 @@ class TestConditionSelector:
             handled = await getattr(test_bot, "_KleinanzeigenBot__set_condition")("ok")
 
         assert handled is False
+
+    @pytest.mark.asyncio
+    async def test_condition_legacy_value_warns_even_when_not_handled(
+        self,
+        test_bot:KleinanzeigenBot,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Legacy German values should warn even when the condition dialog path is unavailable."""
+        caplog.set_level(logging.WARNING, logger = LOG.name)
+
+        with patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None):
+            handled = await getattr(test_bot, "_KleinanzeigenBot__set_condition")("wie_neu")
+
+        assert handled is False
+        assert [record.message for record in caplog.records if record.levelno == logging.WARNING] == [
+            "Condition value [wie_neu] is deprecated; update your config to [like_new]."
+        ]
 
     @pytest.mark.asyncio
     async def test_condition_unknown_value_raises(self, test_bot:KleinanzeigenBot) -> None:

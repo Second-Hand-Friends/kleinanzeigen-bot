@@ -237,6 +237,7 @@ kleinanzeigen_bot/__init__.py:
     "ad": "Anzeige"
 
   __set_condition:
+    "Condition value [%s] is deprecated; update your config to [%s].": "Zustandswert [%s] ist veraltet; aktualisieren Sie die Konfiguration auf [%s]."
     "Unable to close condition dialog!": "Kann den Dialog für Artikelzustand nicht schließen!"
     "Unable to select condition [%s]": "Zustand [%s] konnte nicht ausgewählt werden"
     "Failed to set attribute '%s'": "Fehler beim Setzen des Attributs '%s'"
