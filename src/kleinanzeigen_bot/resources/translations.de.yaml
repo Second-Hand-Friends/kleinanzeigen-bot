@@ -135,6 +135,8 @@ kleinanzeigen_bot/__init__.py:
   delete_ad:
     "Deleting ad '%s' if already present...": "Lösche Anzeige '%s', falls bereits vorhanden..."
     "Expected CSRF Token not found in HTML content!": "Erwartetes CSRF-Token wurde im HTML-Inhalt nicht gefunden!"
+    " -> SKIPPED: no published ad matched '%s' for deletion": " -> ÜBERSPRUNGEN: Keine veröffentlichte Anzeige '%s' zum Löschen gefunden"
+    " -> SUCCESS: deleted ad '%s' (ID: %s)": " -> ERFOLG: Anzeige '%s' (ID: %s) gelöscht"
     " -> ad %s not found (status %s), may have been removed already": " -> Anzeige %s nicht gefunden (Status %s), möglicherweise bereits entfernt"
 
   extend_ads:
@@ -190,7 +192,7 @@ kleinanzeigen_bot/__init__.py:
     "Auto price reduction is enabled for [%s] but no price is configured.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber es wurde kein Preis konfiguriert."
     "Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber min_price entspricht dem Preis (%s) - es werden keine Reduktionen auftreten."
     "Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)": "Automatische Preisreduzierung für [%s] verzögert: Warte %s weitere erneute Veröffentlichungen (abgeschlossen %s, angewendet %s Reduktionen)"
-    "Auto price reduction already applied for [%s]: %s reductions match %s eligible reposts": "Automatische Preisreduzierung für [%s] bereits angewendet: %s Reduktionen entsprechen %s berechtigten erneuten Veröffentlichungen"
+    "Auto price reduction already applied for [%s]: price %s -> %s; %s reductions match %s eligible reposts": "Automatische Preisreduzierung für [%s] bereits angewendet: Preis %s -> %s; %s Reduktionen entsprechen %s berechtigten erneuten Veröffentlichungen"
     "Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)": "Automatische Preisreduzierung für [%s] verzögert: Warte %s Tage (vergangen %s)"
     "Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing": "Automatische Preisreduzierung für [%s] verzögert: Warte %s Tage, aber Zeitstempel der Veröffentlichung fehlt"
     "Auto price reduction applied: %s -> %s after %s reduction cycles": "Automatische Preisreduzierung angewendet: %s -> %s nach %s Reduktionszyklen"
@@ -266,7 +268,7 @@ kleinanzeigen_bot/__init__.py:
   __upload_images:
     " -> found %s": "-> %s gefunden"
     "image": "Bild"
-    " -> uploading image [%s]": " -> Lade Bild [%s] hoch"
+    " -> uploading image %s/%s [%s]": " -> Lade Bild %s/%s [%s] hoch"
     " -> waiting for %s to be processed...": " -> Warte auf Verarbeitung von %s..."
     " -> all images uploaded successfully": " -> Alle Bilder erfolgreich hochgeladen"
     "Image upload timeout exceeded": "Zeitüberschreitung beim Hochladen der Bilder"

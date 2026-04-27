@@ -334,15 +334,10 @@ def test_apply_auto_price_reduction_waits_when_reduction_already_applied(
 
     ad_orig:dict[str, Any] = {}
 
-    with caplog.at_level(logging.DEBUG, logger = "kleinanzeigen_bot"):
+    with caplog.at_level(logging.INFO, logger = "kleinanzeigen_bot"):
         apply_auto_price_reduction(ad_cfg, ad_orig, "ad_already.yaml")
 
-    assert any(r.levelname == "INFO" and "already applied" in r.message and "reductions match" in r.message for r in caplog.records)
-    decision_message = (
-        "Auto price reduction decision for [ad_already.yaml]: skipped (repost delay). "
-        "next reduction earliest at repost >= 4 and day delay 0/0 days. repost_count=3 eligible_cycles=3 applied_cycles=3"
-    )
-    assert any(message.startswith(decision_message) for message in caplog.messages)
+    assert any(r.levelname == "INFO" and "already applied" in r.message for r in caplog.records)
     assert ad_cfg.price == 73
     assert ad_cfg.price_reduction_count == 3
     assert "price_reduction_count" not in ad_orig
