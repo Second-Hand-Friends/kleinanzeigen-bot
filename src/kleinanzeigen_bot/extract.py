@@ -18,7 +18,7 @@ from typing import Any, Final
 
 from kleinanzeigen_bot.model.ad_model import ContactPartial
 
-from .model.ad_model import OPTION_NAME_BY_CARRIER_CODE, AdPartial
+from .model.ad_model import OPTION_NAME_BY_CARRIER_CODE, AdPartial, validate_condition_api_mapping
 from .model.config_model import Config
 from .utils import dicts, files, i18n, loggers, misc, reflect
 from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
@@ -47,6 +47,7 @@ _CONDITION_DISPLAY_TO_API:Final[dict[str, str]] = {
     "in ordnung": "alright",
     "defekt": "defect",
 }
+validate_condition_api_mapping("_CONDITION_DISPLAY_TO_API", _CONDITION_DISPLAY_TO_API)
 _LABEL_TO_KEY:Final[dict[str, str]] = {
     "zustand": "condition_s",
 }

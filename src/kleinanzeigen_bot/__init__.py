@@ -27,6 +27,7 @@ from .model.ad_model import (
     Contact,
     calculate_auto_price,
     calculate_auto_price_with_trace,
+    validate_condition_api_mapping,
 )
 from .model.config_model import DEFAULT_DOWNLOAD_DIR, Config
 from .update_checker import UpdateChecker
@@ -62,6 +63,7 @@ _CONDITION_GERMAN_TO_API:Final[dict[str, str]] = {
     "in_ordnung": "alright",
     "defekt": "defect",
 }
+validate_condition_api_mapping("_CONDITION_GERMAN_TO_API", _CONDITION_GERMAN_TO_API)
 _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
     (By.ID, "user-email"),
