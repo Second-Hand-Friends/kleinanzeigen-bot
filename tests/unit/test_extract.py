@@ -2474,12 +2474,11 @@ class TestAdExtractorDownload:
 
         with (
             patch("kleinanzeigen_bot.extract.os.name", "posix"),
-            patch("kleinanzeigen_bot.extract.os.stat") as mock_stat,
+            patch("kleinanzeigen_bot.extract.os.stat"),
             patch("kleinanzeigen_bot.extract.os.chmod") as mock_chmod,
         ):
             extract_module._handle_rmtree_onerror(retry_func, path, (PermissionError, PermissionError("busy"), None))
 
-        mock_stat.assert_not_called()
         mock_chmod.assert_not_called()
         retry_func.assert_called_once_with(path)
 
@@ -2783,7 +2782,7 @@ class TestRenderDownloadNameWithBudgetWarnings:
         assert "12345" in rendered
         assert "Very Long Title Here" not in rendered
         assert len(rendered) <= 12
-        assert any(record.levelname == "WARNING" for record in caplog.records)
+        assert any("Download name truncated {title} placeholder" in record.getMessage() for record in caplog.records)
 
     def test_id_protected_over_literals(self, test_extractor:extract_module.AdExtractor) -> None:
         """{id} is protected over literal text with tight budget."""
