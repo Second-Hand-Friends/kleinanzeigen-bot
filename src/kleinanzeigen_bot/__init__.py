@@ -2140,7 +2140,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         # Early return if nothing to delete — skip page open, CSRF fetch, and sleep
         if not ids_to_delete:
-            LOG.warning(" -> FAILED: no published ad matched '%s' for deletion", ad_cfg.title)
+            LOG.info(" -> SKIPPED: no published ad matched '%s' for deletion", ad_cfg.title)
             return False
 
         # Phase B: Open manage-ads page, fetch CSRF token, execute deletions
