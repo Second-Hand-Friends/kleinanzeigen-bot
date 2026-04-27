@@ -7,7 +7,14 @@ import math
 
 import pytest
 
-from kleinanzeigen_bot.model.ad_model import MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH, MIN_TITLE_LENGTH, AdPartial, ShippingOption
+from kleinanzeigen_bot.model.ad_model import (
+    MAX_DESCRIPTION_LENGTH,
+    MAX_TITLE_LENGTH,
+    MIN_TITLE_LENGTH,
+    AdPartial,
+    ShippingOption,
+    validate_condition_api_mapping,
+)
 from kleinanzeigen_bot.model.config_model import AdDefaults, AutoPriceReductionConfig
 from kleinanzeigen_bot.utils.pydantics import ContextualModel, ContextualValidationError
 
@@ -146,6 +153,12 @@ class ShippingOptionWrapper(ContextualModel):
 def test_shipping_option_must_not_be_blank() -> None:
     with pytest.raises(ContextualValidationError, match = "must be non-empty and non-blank"):
         ShippingOptionWrapper.model_validate({"option": " "})
+
+
+@pytest.mark.unit
+def test_validate_condition_api_mapping_rejects_unknown_values() -> None:
+    with pytest.raises(ValueError, match = "contains unsupported condition API values: broken"):
+        validate_condition_api_mapping("mapping_name", {"known": "new", "bad": "broken"})
 
 
 @pytest.mark.unit

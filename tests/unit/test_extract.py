@@ -2771,13 +2771,19 @@ class TestRenderDownloadNameWithBudgetWarnings:
         assert "12345678901234567890" not in rendered
         assert len(rendered) <= 5
 
-    def test_truncates_title_when_budget_exhausted(self, test_extractor:extract_module.AdExtractor) -> None:
+    def test_truncates_title_when_budget_exhausted(
+        self,
+        test_extractor:extract_module.AdExtractor,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
         """{title} is truncated to fit within budget while {id} is preserved."""
-        rendered = test_extractor._render_download_name_with_budget("{id}_{title}", 12345, "Very Long Title Here", 12)
+        with caplog.at_level("WARNING"):
+            rendered = test_extractor._render_download_name_with_budget("{id}_{title}", 12345, "Very Long Title Here", 12)
 
         assert "12345" in rendered
         assert "Very Long Title Here" not in rendered
         assert len(rendered) <= 12
+        assert any(record.levelname == "WARNING" for record in caplog.records)
 
     def test_id_protected_over_literals(self, test_extractor:extract_module.AdExtractor) -> None:
         """{id} is protected over literal text with tight budget."""

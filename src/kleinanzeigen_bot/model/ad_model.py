@@ -117,6 +117,14 @@ CARRIER_CODES_BY_SIZE:Final[dict[str, list[str]]] = {
     "Groß": ["HERMES_004", "DHL_003", "DHL_004", "DHL_005"],
 }
 
+CONDITION_API_VALUES:Final[frozenset[str]] = frozenset({"new", "like_new", "ok", "alright", "defect"})
+
+
+def validate_condition_api_mapping(mapping_name:str, mapping:Mapping[str, str]) -> None:
+    unknown_values = set(mapping.values()) - CONDITION_API_VALUES
+    if unknown_values:
+        raise ValueError(f"{mapping_name} contains unsupported condition API values: {', '.join(sorted(unknown_values))}")
+
 
 def _validate_auto_price_reduction_constraints(price:int | None, auto_price_reduction:AutoPriceReductionConfig | dict[str, Any] | None) -> None:
     """
