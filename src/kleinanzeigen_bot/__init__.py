@@ -3026,6 +3026,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         Returns True when dialog handling succeeded, otherwise False to indicate
         that caller should use generic special-attribute handling.
         """
+        mapped_value = _CONDITION_GERMAN_TO_API.get(condition_value)
+        if mapped_value and mapped_value != condition_value:
+            LOG.warning("Condition value [%s] is deprecated; update your config to [%s].", condition_value, mapped_value)
+
         short_timeout = self._timeout("quick_dom")
         condition_trigger_xpath = "//label[contains(@for, '.condition')]/following::button[@aria-haspopup='dialog' or @aria-haspopup='true'][1]"
 
@@ -3053,7 +3057,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # (e.g. "wie_neu" -> "like_new", "sehr_gut" -> "like_new"). Try the configured value
         # first (handles already-English configs), then fall back to the mapped equivalent.
         candidate_values = [condition_value]
-        mapped_value = _CONDITION_GERMAN_TO_API.get(condition_value)
         if mapped_value and mapped_value != condition_value:
             candidate_values.append(mapped_value)
 
