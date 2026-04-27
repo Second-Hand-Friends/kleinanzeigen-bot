@@ -151,15 +151,15 @@ def _login_detection_result(is_logged_in:bool, reason:LoginDetectionReason) -> L
 class TestKleinanzeigenBotInitialization:
     """Tests for KleinanzeigenBot initialization and basic functionality."""
 
-    def test_constructor_initializes_default_values(self, test_bot:KleinanzeigenBot) -> None:
+    def test_constructor_initializes_default_values(self) -> None:
         """Verify that constructor sets all default values correctly."""
-        assert test_bot.root_url == "https://www.kleinanzeigen.de"
-        assert isinstance(test_bot.config, Config)
-        assert test_bot.command == "help"
-        assert test_bot.ads_selector == "due"
-        assert test_bot.keep_old_ads is False
-        assert test_bot.log_file_path is not None
-        assert test_bot.file_log is None
+        bot = KleinanzeigenBot()
+        assert bot.root_url == "https://www.kleinanzeigen.de"
+        assert bot.command == "help"
+        assert bot.ads_selector == "due"
+        assert bot.keep_old_ads is False
+        assert bot.log_file_path is not None
+        assert bot.file_log is None
 
     @pytest.mark.parametrize("command", ["help", "create-config", "version"])
     def test_resolve_workspace_skips_non_workspace_commands(self, test_bot:KleinanzeigenBot, command:str) -> None:
@@ -2148,17 +2148,6 @@ class TestKleinanzeigenBotBasics:
         ):
             await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
 
-    def test_get_root_url(self, test_bot:KleinanzeigenBot) -> None:
-        """Test root URL retrieval."""
-        assert test_bot.root_url == "https://www.kleinanzeigen.de"
-
-    def test_get_config_defaults(self, test_bot:KleinanzeigenBot) -> None:
-        """Test default configuration values."""
-        assert isinstance(test_bot.config, Config)
-        assert test_bot.command == "help"
-        assert test_bot.ads_selector == "due"
-        assert test_bot.keep_old_ads is False
-
     def test_get_log_level(self, test_bot:KleinanzeigenBot) -> None:
         """Test log level configuration."""
         # Reset log level to default
@@ -3755,12 +3744,11 @@ class TestConditionSelector:
             if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
                 return trigger
             if selector_type == By.XPATH and "@type='radio'" in selector_value:
-                if f"@value='{configured}'" in selector_value:
-                    probed_values.append(configured)
-                    # German token is no longer a valid DOM value — mimic that by returning None
-                    return None if configured != expected_api_value else radio
                 if f"@value='{expected_api_value}'" in selector_value:
                     probed_values.append(expected_api_value)
+                    return radio
+                if f"@value='{configured}'" in selector_value:
+                    probed_values.append(configured)
                     return radio
             return None
 
@@ -3777,13 +3765,62 @@ class TestConditionSelector:
             assert len(warning_messages) == 1
             assert configured in warning_messages[0]
             assert expected_api_value in warning_messages[0]
-            # Legacy German values should probe the configured token first, then the mapped API code.
-            assert probed_values == [configured, expected_api_value]
+            # Legacy German values should prefer the mapped API code and stop once it is found.
+            assert probed_values == [expected_api_value]
         else:
             assert warning_messages == []
             assert probed_values == [configured]
         clicked_xpath_selectors = [str(call.args[1]) for call in mock_click.await_args_list if len(call.args) > 1]
         assert any(f"radio-condition-{expected_api_value}" in selector for selector in clicked_xpath_selectors)
+
+    @pytest.mark.asyncio
+    async def test_condition_legacy_value_falls_back_when_mapped_value_is_missing(
+        self,
+        test_bot:KleinanzeigenBot,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Legacy values should still work if the mapped API radio is unavailable."""
+        caplog.set_level(logging.WARNING, logger = LOG.name)
+        dialog = MagicMock()
+        trigger = MagicMock()
+        trigger.attrs = {"id": "condition-trigger", "aria-controls": "condition-dialog"}
+        trigger.click = AsyncMock()
+        radio = MagicMock()
+        radio_attrs = MagicMock()
+        radio_attrs.id = "radio-condition-wie_neu"
+        radio_attrs.get.side_effect = lambda key, default = None: "radio-condition-wie_neu" if key == "id" else default
+        radio.attrs = radio_attrs
+        radio.click = AsyncMock()
+
+        probed_values:list[str] = []
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
+                return trigger
+            if selector_type == By.XPATH and "@type='radio'" in selector_value:
+                if "@value='like_new'" in selector_value:
+                    probed_values.append("like_new")
+                    return None
+                if "@value='wie_neu'" in selector_value:
+                    probed_values.append("wie_neu")
+                    return radio
+            return None
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = dialog),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            handled = await getattr(test_bot, "_KleinanzeigenBot__set_condition")("wie_neu")
+
+        assert handled is True
+        warning_messages = [record.message for record in caplog.records if record.levelno == logging.WARNING]
+        assert len(warning_messages) == 1
+        assert "wie_neu" in warning_messages[0]
+        assert "like_new" in warning_messages[0]
+        assert probed_values == ["like_new", "wie_neu"]
+        clicked_xpath_selectors = [str(call.args[1]) for call in mock_click.await_args_list if len(call.args) > 1]
+        assert any("radio-condition-wie_neu" in selector for selector in clicked_xpath_selectors)
 
     @pytest.mark.asyncio
     async def test_condition_missing_selector_returns_not_handled(self, test_bot:KleinanzeigenBot) -> None:
@@ -3880,9 +3917,22 @@ class TestConditionFallbackToGenericHandler:
     """
 
     @pytest.mark.asyncio
-    async def test_condition_falls_back_to_generic_handler_when_dialog_not_handled(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
-        """When condition dialog is not handled, generic handler should be used as fallback."""
-        ad_cfg = Ad.model_validate(base_ad_config | {"category": "185/249", "special_attributes": {"condition_s": "new"}, "shipping_type": "PICKUP"})
+    @pytest.mark.parametrize(
+        ("condition_s", "expected_generic_value"),
+        [
+            ("new", "new"),
+            ("wie_neu", "like_new"),
+        ],
+    )
+    async def test_condition_falls_back_to_generic_handler_with_canonical_value(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        condition_s:str,
+        expected_generic_value:str,
+    ) -> None:
+        """Fallback should pass the canonical condition value to the generic combobox handler."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"category": "185/249", "special_attributes": {"condition_s": condition_s}, "shipping_type": "PICKUP"})
 
         button_elem = MagicMock()
         button_attrs = MagicMock()
@@ -3911,8 +3961,8 @@ class TestConditionFallbackToGenericHandler:
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
 
-        mock_set_condition.assert_awaited_once_with("new")
-        mock_select_combobox.assert_awaited_once_with("modellbau.condition", "new")
+        mock_set_condition.assert_awaited_once_with(condition_s)
+        mock_select_combobox.assert_awaited_once_with("modellbau.condition", expected_generic_value)
 
     @pytest.mark.asyncio
     async def test_condition_timeout_propagates_instead_of_falling_back(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
