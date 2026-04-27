@@ -3054,11 +3054,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return False
 
         # Kleinanzeigen changed dialog radio values from German tokens to English API codes
-        # (e.g. "wie_neu" -> "like_new", "sehr_gut" -> "like_new"). Try the configured value
-        # first (handles already-English configs), then fall back to the mapped equivalent.
-        candidate_values = [condition_value]
+        # (e.g. "wie_neu" -> "like_new", "sehr_gut" -> "like_new"). Prefer the mapped
+        # API value first for legacy configs, then fall back to the configured value if needed.
+        candidate_values:list[str] = []
         if mapped_value and mapped_value != condition_value:
             candidate_values.append(mapped_value)
+        if condition_value not in candidate_values:
+            candidate_values.append(condition_value)
 
         try:
             await condition_trigger.click()
@@ -3260,6 +3262,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     continue
 
                 LOG.info("Condition dialog not available, falling back to generic attribute handler for [%s]...", special_attribute_key)
+                special_attribute_value_str = _CONDITION_GERMAN_TO_API.get(special_attribute_value_str, special_attribute_value_str)
 
             LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
             id_suffix_literal = _xpath_literal(f".{normalized_special_attribute_key}")
