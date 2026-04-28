@@ -3543,6 +3543,23 @@ class TestKleinanzeigenBotShippingOptions:
         mock_input.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_button_combobox_helper_matches_api_value_for_generic_attributes(self, test_bot:KleinanzeigenBot) -> None:
+        """Generic button comboboxes should still resolve by API value."""
+        listbox = MagicMock()
+        listbox.apply = AsyncMock(return_value = True)
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = listbox),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = True) as mock_execute,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__select_button_combobox")("kleidung_herren.color", "beige")
+
+        assert mock_execute.await_args is not None
+        assert "beige" in str(mock_execute.await_args.args[0])
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("combobox_type", ["text", None], ids = ["type-text", "type-absent"])
     async def test_special_attributes_combobox_routed_over_hidden_input(
         self,
@@ -3953,7 +3970,6 @@ class TestConditionFallbackToGenericHandler:
         "case",
         [
             ("web_select_combobox", "input", "text", "combobox", (By.ID, "modellbau.condition", "Sehr Gut")),
-            ("web_select_button_combobox", "button", "button", "combobox", ("modellbau.condition", "Sehr Gut")),
         ],
     )
     async def test_condition_legacy_value_uses_display_label_for_visible_generic_controls(
@@ -4040,12 +4056,17 @@ class TestConditionFallbackToGenericHandler:
                 return_value = False,
             ) as mock_set_condition,
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [control_elem]),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, helper_name, new_callable = AsyncMock, side_effect = helper_side_effect),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
 
         mock_set_condition.assert_awaited_once_with("wie_neu")
         assert selected_values == ["Sehr Gut", "Wie neu"]
+        if helper_name == "web_select_button_combobox":
+            mock_click.assert_awaited_once_with(By.ID, "modellbau.condition")
+        else:
+            mock_click.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_condition_legacy_value_retries_select_with_api_value_when_display_label_misses(

@@ -2795,6 +2795,23 @@ class TestWebSelectButtonCombobox:
         assert json.dumps("Nur Abholung") in js_arg
 
     @pytest.mark.asyncio
+    async def test_web_select_button_combobox_can_skip_clicking_open_button(self, web_scraper:WebScrapingMixin) -> None:
+        """When the combobox is already open, the helper should not click the trigger again."""
+        listbox = AsyncMock(spec = Element)
+        listbox.apply = AsyncMock(return_value = True)
+
+        web_scraper.web_click = AsyncMock()  # type: ignore[method-assign]
+        web_scraper.web_find = AsyncMock(return_value = listbox)  # type: ignore[method-assign]
+        web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
+
+        result = await web_scraper.web_select_button_combobox("test-combo", "Nur Abholung", click_trigger = False)
+
+        assert result is listbox
+        web_scraper.web_click.assert_not_awaited()
+        web_scraper.web_find.assert_awaited_once_with(By.ID, "test-combo-menu", timeout = ANY)
+        web_scraper.web_sleep.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_web_select_button_combobox_raises_when_no_matching_option(self, web_scraper:WebScrapingMixin) -> None:
         """Error path: raises TimeoutError when no matching option is found."""
         listbox = AsyncMock(spec = Element)

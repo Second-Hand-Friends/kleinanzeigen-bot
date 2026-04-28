@@ -1554,12 +1554,13 @@ class WebScrapingMixin:
         elem_id:str,
         selected_value:str,
         *,
+        click_trigger:bool = True,
         timeout:int | float | None = None,
     ) -> Element:
         """Select an option from a ``<button role="combobox">`` dropdown by display text.
 
-        Opens the dropdown by clicking the button, waits for the listbox
-        (``{elem_id}-menu``), and clicks the ``<li role="option">`` whose
+        Optionally clicks the button first, then waits for the listbox
+        (``{elem_id}-menu``) and clicks the ``<li role="option">`` whose
         normalized visible text matches *selected_value*.
 
         Matching is case-insensitive and collapses consecutive whitespace,
@@ -1581,7 +1582,8 @@ class WebScrapingMixin:
         if timeout is None:
             timeout = self._timeout("default")
 
-        await self.web_click(By.ID, elem_id, timeout = timeout)
+        if click_trigger:
+            await self.web_click(By.ID, elem_id, timeout = timeout)
         listbox_id = f"{elem_id}-menu"
         listbox = await self.web_find(By.ID, listbox_id, timeout = timeout)
 
