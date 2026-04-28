@@ -1207,19 +1207,33 @@ class TestAdExtractorCategory:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_special_attributes_from_dom_extracts_condition(self, extractor:extract_module.AdExtractor) -> None:
+    @pytest.mark.parametrize(
+        ("row_text", "value_text", "expected_api_value"),
+        [
+            ("Zustand Neu", "Neu", "new"),
+            ("Zustand Sehr gut", "Sehr gut", "like_new"),
+            ("Zustand Wie neu", "Wie neu", "like_new"),
+        ],
+    )
+    async def test_extract_special_attributes_from_dom_extracts_condition(
+        self,
+        extractor:extract_module.AdExtractor,
+        row_text:str,
+        value_text:str,
+        expected_api_value:str,
+    ) -> None:
         """DOM fallback should extract condition_s from #viewad-details section."""
         detail_item = MagicMock()
-        detail_item.text = "Zustand Neu"
+        detail_item.text = row_text
 
         async def text_side_effect(by:Any, selector:str, *, parent:Any = None, **__:Any) -> str:
             if parent is detail_item:
-                return "Neu"
+                return value_text
             return ""
 
         async def visible_text_side_effect(element:Any) -> str:
             if element is detail_item:
-                return "Zustand Neu"
+                return row_text
             return ""
 
         with (
@@ -1229,7 +1243,7 @@ class TestAdExtractorCategory:
         ):
             result = await extractor._extract_special_attributes_from_dom()
 
-        assert result == {"condition_s": "new"}
+        assert result == {"condition_s": expected_api_value}
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access

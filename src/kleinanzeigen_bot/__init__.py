@@ -64,6 +64,13 @@ _CONDITION_GERMAN_TO_API:Final[dict[str, str]] = {
     "defekt": "defect",
 }
 validate_condition_api_mapping("_CONDITION_GERMAN_TO_API", _CONDITION_GERMAN_TO_API)
+_CONDITION_API_TO_DISPLAY_CANDIDATES:Final[dict[str, tuple[str, ...]]] = {
+    "new": ("Neu",),
+    "like_new": ("Sehr Gut", "Wie neu"),
+    "ok": ("Gut",),
+    "alright": ("In Ordnung",),
+    "defect": ("Defekt",),
+}
 _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
     (By.ID, "user-email"),
@@ -3315,10 +3322,25 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 elem_role = str(cast(Any, special_attr_elem.attrs.get("role")) or "").lower()
                 elem_selector_type = By.ID if elem_id else By.XPATH
                 elem_selector_value = elem_id or special_attr_xpath
+                condition_display_candidates = _CONDITION_API_TO_DISPLAY_CANDIDATES.get(special_attribute_value_str, (special_attribute_value_str,))
+                condition_display_value = condition_display_candidates[0]
 
                 if special_attr_elem.local_name == "select":
                     LOG.debug("Attribute field '%s' seems to be a select...", special_attribute_key)
-                    await self.web_select(elem_selector_type, elem_selector_value, special_attribute_value_str)
+                    selected_values = [special_attribute_value_str]
+                    if normalized_special_attribute_key == "condition":
+                        selected_values = list(dict.fromkeys((*condition_display_candidates, special_attribute_value_str)))
+
+                    last_timeout_error:TimeoutError | None = None
+                    for selected_value in selected_values:
+                        try:
+                            await self.web_select(elem_selector_type, elem_selector_value, selected_value)
+                            break
+                        except TimeoutError as ex:
+                            last_timeout_error = ex
+                    else:
+                        if last_timeout_error is not None:
+                            raise last_timeout_error
                 elif elem_type == "checkbox":
                     LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
                     truthy_values = {"1", "true", "yes", "on", "ja", "checked"}
@@ -3348,10 +3370,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 elif special_attr_elem.local_name == "button" and elem_role == "combobox":
                     LOG.debug("Attribute field '%s' seems to be a button combobox (click-to-open dropdown)...", special_attribute_key)
                     ensure(elem_id, f"No id available for button combobox special attribute [{special_attribute_key}]")
-                    await self.__select_button_combobox(cast(str, elem_id), special_attribute_value_str)
+                    button_combobox_value = condition_display_value if normalized_special_attribute_key == "condition" else special_attribute_value_str
+                    await self.__select_button_combobox(cast(str, elem_id), button_combobox_value)
                 elif elem_role == "combobox" and elem_type in {"text", ""} and special_attr_elem.local_name == "input":
                     LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
-                    await self.web_select_combobox(elem_selector_type, elem_selector_value, special_attribute_value_str)
+                    selected_value = condition_display_value if normalized_special_attribute_key == "condition" else special_attribute_value_str
+                    await self.web_select_combobox(elem_selector_type, elem_selector_value, selected_value)
                 else:
                     LOG.debug("Attribute field '%s' seems to be a text input...", special_attribute_key)
                     await self.web_input(elem_selector_type, elem_selector_value, special_attribute_value_str)
@@ -3360,43 +3384,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
             LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
 
-    # TODO: Issue #930 — migrate to web_select_button_combobox (display-text-based, no React fiber)
+    # Legacy wrapper kept for compatibility; prefer web_select_button_combobox (display-text-based, no React fiber).
     async def __select_button_combobox(self, elem_id:str, value:str) -> None:
-        """Select an option from a <button role="combobox"> dropdown by its API value.
-
-        Clicks the button to open the listbox, reads the options data from the React fiber
-        (which maps API values to display labels), and clicks the matching option.
-        """
-        await self.web_click(By.ID, elem_id)
-        listbox_id = f"{elem_id}-menu"
-        await self.web_find(By.ID, listbox_id)
-        js_btn_id = json.dumps(elem_id)
-        js_listbox_id = json.dumps(listbox_id)
-        js_value = json.dumps(value)
-        ok = await self.web_execute(f"""(function() {{
-            const listbox = document.getElementById({js_listbox_id});
-            if (!listbox) return false;
-            const liOptions = Array.from(listbox.querySelectorAll('[role="option"]'));
-            const btnEl = document.getElementById({js_btn_id});
-            if (!btnEl) return false;
-            const fiberKey = Object.keys(btnEl).find(k => k.startsWith('__reactFiber'));
-            let fiber = fiberKey ? btnEl[fiberKey] : null;
-            for (let i = 0; i < 20 && fiber; i++, fiber = fiber.return) {{
-                if (fiber.memoizedProps && fiber.memoizedProps.options) {{
-                    const optionsData = fiber.memoizedProps.options;
-                    for (let j = 0; j < optionsData.length; j++) {{
-                        if (optionsData[j].value === {js_value} && liOptions[j]) {{
-                            liOptions[j].click();
-                            return true;
-                        }}
-                    }}
-                    return false;
-                }}
-            }}
-            return false;
-        }})()""")
-        if not ok:
-            raise TimeoutError(_("Option '%(value)s' not found in button combobox '%(id)s'") % {"value": value, "id": elem_id})
+        """Select an option from a ``<button role="combobox">`` dropdown by display text."""
+        await self.web_select_button_combobox(elem_id, value)
 
     async def __set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         short_timeout = self._timeout("quick_dom")

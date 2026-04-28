@@ -281,9 +281,6 @@ kleinanzeigen_bot/__init__.py:
   __check_ad_republication:
     " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days": " -> ÜBERSPRUNGEN: Anzeige [%s] wurde zuletzt vor %d Tagen veröffentlicht. Erneute Veröffentlichung ist erst nach %s Tagen erforderlich"
 
-  __select_button_combobox:
-    "Option '%(value)s' not found in button combobox '%(id)s'": "Option '%(value)s' nicht in Button-Combobox '%(id)s' gefunden"
-
   __set_special_attributes:
     "Found %i special attributes": "%i spezielle Attribute gefunden"
     "Setting special attribute [%s] to [%s]...": "Setze spezielles Attribut [%s] auf [%s]..."

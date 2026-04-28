@@ -3918,32 +3918,33 @@ class TestConditionFallbackToGenericHandler:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        ("condition_s", "expected_generic_value"),
+        ("condition_s", "expected_api_value"),
         [
             ("new", "new"),
             ("wie_neu", "like_new"),
         ],
     )
-    async def test_condition_falls_back_to_generic_handler_with_canonical_value(
+    async def test_condition_falls_back_to_generic_hidden_input_with_canonical_value(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
         condition_s:str,
-        expected_generic_value:str,
+        expected_api_value:str,
     ) -> None:
-        """Fallback should pass the canonical condition value to the generic combobox handler."""
+        """Fallback should normalize legacy condition values before setting the hidden input."""
         ad_cfg = Ad.model_validate(base_ad_config | {"category": "185/249", "special_attributes": {"condition_s": condition_s}, "shipping_type": "PICKUP"})
 
-        button_elem = MagicMock()
-        button_attrs = MagicMock()
-        button_attrs.get.side_effect = lambda key, default = None: {
-            "id": "modellbau.condition",
-            "type": "button",
-            "role": "combobox",
-            "name": None,
+        hidden_elem = MagicMock()
+        hidden_attrs = MagicMock()
+        hidden_attrs.id = None
+        hidden_attrs.get.side_effect = lambda key, default = None: {
+            "id": None,
+            "type": "hidden",
+            "role": None,
+            "name": "attributeMap[modellbau.condition]",
         }.get(key, default)
-        button_elem.attrs = button_attrs
-        button_elem.local_name = "button"
+        hidden_elem.attrs = hidden_attrs
+        hidden_elem.local_name = "input"
 
         with (
             patch.object(
@@ -3952,17 +3953,104 @@ class TestConditionFallbackToGenericHandler:
                 new_callable = AsyncMock,
                 return_value = False,
             ) as mock_set_condition,
-            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [button_elem]),
-            patch.object(
-                test_bot,
-                "_KleinanzeigenBot__select_button_combobox",
-                new_callable = AsyncMock,
-            ) as mock_select_combobox,
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [hidden_elem]),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
 
         mock_set_condition.assert_awaited_once_with(condition_s)
-        mock_select_combobox.assert_awaited_once_with("modellbau.condition", expected_generic_value)
+        assert mock_input.await_args is not None
+        assert mock_input.await_args.args[0] == By.XPATH
+        assert "condition" in str(mock_input.await_args.args[1])
+        assert mock_input.await_args.args[2] == expected_api_value
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "case",
+        [
+            ("web_select_combobox", "input", "text", "combobox", (By.ID, "modellbau.condition", "Sehr Gut")),
+            ("web_select_button_combobox", "button", "button", "combobox", ("modellbau.condition", "Sehr Gut")),
+        ],
+    )
+    async def test_condition_legacy_value_uses_display_label_for_visible_generic_controls(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        case:tuple[str, str, str, str | None, tuple[Any, ...]],
+    ) -> None:
+        """Visible condition controls should receive the canonical display label."""
+        helper_name, local_name, elem_type, elem_role, expected_args = case
+        ad_cfg = Ad.model_validate(base_ad_config | {"category": "185/249", "special_attributes": {"condition_s": "wie_neu"}, "shipping_type": "PICKUP"})
+
+        control_elem = MagicMock()
+        control_attrs = MagicMock()
+        control_attrs.id = "modellbau.condition"
+        control_attrs.get.side_effect = lambda key, default = None: {
+            "id": "modellbau.condition",
+            "name": None,
+            "type": elem_type,
+            "role": elem_role,
+        }.get(key, default)
+        control_elem.attrs = control_attrs
+        control_elem.local_name = local_name
+
+        with (
+            patch.object(
+                test_bot,
+                "_KleinanzeigenBot__set_condition",
+                new_callable = AsyncMock,
+                return_value = False,
+            ) as mock_set_condition,
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [control_elem]),
+            patch.object(test_bot, helper_name, new_callable = AsyncMock) as mock_helper,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
+
+        mock_set_condition.assert_awaited_once_with("wie_neu")
+        mock_helper.assert_awaited_once_with(*expected_args)
+
+    @pytest.mark.asyncio
+    async def test_condition_legacy_value_retries_select_with_api_value_when_display_label_misses(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Select controls should fall back from the visible condition label to the API value."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"category": "185/249", "special_attributes": {"condition_s": "wie_neu"}, "shipping_type": "PICKUP"})
+
+        control_elem = MagicMock()
+        control_attrs = MagicMock()
+        control_attrs.id = "modellbau.condition"
+        control_attrs.get.side_effect = lambda key, default = None: {
+            "id": "modellbau.condition",
+            "name": None,
+            "type": "select",
+            "role": None,
+        }.get(key, default)
+        control_elem.attrs = control_attrs
+        control_elem.local_name = "select"
+
+        selected_values:list[str] = []
+
+        async def web_select_side_effect(selector_type:By, selector_value:str, selected_value:str | int, **__:Any) -> None:
+            selected_values.append(str(selected_value))
+            if selected_value == "Sehr Gut":
+                raise TimeoutError("visible label missing")
+
+        with (
+            patch.object(
+                test_bot,
+                "_KleinanzeigenBot__set_condition",
+                new_callable = AsyncMock,
+                return_value = False,
+            ) as mock_set_condition,
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [control_elem]),
+            patch.object(test_bot, "web_select", new_callable = AsyncMock, side_effect = web_select_side_effect),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
+
+        mock_set_condition.assert_awaited_once_with("wie_neu")
+        assert selected_values == ["Sehr Gut", "Wie neu"]
 
     @pytest.mark.asyncio
     async def test_condition_timeout_propagates_instead_of_falling_back(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:

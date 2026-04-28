@@ -42,6 +42,7 @@ _ELLIPSIS:Final[str] = "..."
 _ELLIPSIS_LEN:Final[int] = len(_ELLIPSIS)
 _CONDITION_DISPLAY_TO_API:Final[dict[str, str]] = {
     "neu": "new",
+    "wie neu": "like_new",
     "sehr gut": "like_new",
     "gut": "ok",
     "in ordnung": "alright",
