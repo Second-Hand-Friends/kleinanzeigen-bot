@@ -3332,6 +3332,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         normalized_special_attribute_key:str,
         special_attr_xpath:str,
     ) -> None:
+        """Set a resolved special attribute on the detected form control.
+
+        Handles ``select``, ``checkbox``, button-combobox, combobox-input, and plain text
+        inputs; ``condition`` additionally retries the mapped display candidates before
+        falling back. All failures are normalized to ``TimeoutError`` so callers can treat
+        special-attribute setting uniformly in logs and error handling.
+        """
         try:
             elem_id = cast(str | None, special_attr_elem.attrs.get("id"))
             elem_type = str(cast(Any, special_attr_elem.attrs.get("type")) or "").lower()
