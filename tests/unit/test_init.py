@@ -296,6 +296,7 @@ class TestKleinanzeigenBotInitialization:
         config_file = tmp_path / "config.yaml"
         test_bot.workspace = xdg_paths.Workspace.for_config(config_file, "kleinanzeigen-bot")
         test_bot.config_file_path = str(config_file)
+        test_bot.config.download.dir = "./ads"
         test_bot.ads_selector = "all"
         test_bot.browser = MagicMock()
 
@@ -314,7 +315,7 @@ class TestKleinanzeigenBotInitialization:
         mock_extractor.assert_called_once_with(
             test_bot.browser,
             test_bot.config,
-            test_bot.workspace.download_dir,
+            (tmp_path / "ads").resolve(),
             published_ads_by_id = {123: mock_published_ads[0], 456: mock_published_ads[1]},
         )
 
@@ -343,27 +344,6 @@ class TestKleinanzeigenBotInitialization:
         test_bot.config.download.dir = str((tmp_path / "absolute-target").resolve())
 
         assert test_bot._resolve_download_dir() == (tmp_path / "absolute-target").resolve()
-
-    @pytest.mark.asyncio
-    async def test_download_ads_uses_configured_relative_download_dir(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-        config_file = tmp_path / "config.yaml"
-        test_bot.workspace = xdg_paths.Workspace.for_config(config_file, "kleinanzeigen-bot")
-        test_bot.config_file_path = str(config_file)
-        test_bot.config.download.dir = "./ads"
-        test_bot.ads_selector = "all"
-        test_bot.browser = MagicMock()
-
-        extractor_mock = MagicMock()
-        extractor_mock.extract_own_ads_urls = AsyncMock(return_value = [])
-
-        with (
-            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = []),
-            patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock) as mock_extractor,
-        ):
-            await test_bot.download_ads()
-
-        mock_extractor.assert_called_once()
-        assert mock_extractor.call_args.args[2] == (tmp_path / "ads").resolve()
 
     @pytest.mark.parametrize(
         ("published_ads_by_id", "ad_id", "expected_active", "expected_owned"),
@@ -3922,6 +3902,10 @@ class TestConditionFallbackToGenericHandler:
         [
             ("new", "new"),
             ("wie_neu", "like_new"),
+            ("sehr_gut", "like_new"),
+            ("gut", "ok"),
+            ("in_ordnung", "alright"),
+            ("defekt", "defect"),
         ],
     )
     async def test_condition_falls_back_to_generic_hidden_input_with_canonical_value(
