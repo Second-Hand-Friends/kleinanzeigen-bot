@@ -4010,6 +4010,60 @@ class TestConditionFallbackToGenericHandler:
         mock_helper.assert_awaited_once_with(*expected_args)
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("helper_name", "local_name", "elem_type", "elem_role"),
+        [
+            ("web_select_combobox", "input", "text", "combobox"),
+            ("web_select_button_combobox", "button", "button", "combobox"),
+        ],
+    )
+    async def test_condition_legacy_value_retries_visible_generic_controls_with_second_label(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        helper_name:str,
+        local_name:str,
+        elem_type:str,
+        elem_role:str | None,
+    ) -> None:
+        """Visible condition controls should retry the second live label when the first one is missing."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"category": "185/249", "special_attributes": {"condition_s": "wie_neu"}, "shipping_type": "PICKUP"})
+
+        control_elem = MagicMock()
+        control_attrs = MagicMock()
+        control_attrs.id = "modellbau.condition"
+        control_attrs.get.side_effect = lambda key, default = None: {
+            "id": "modellbau.condition",
+            "name": None,
+            "type": elem_type,
+            "role": elem_role,
+        }.get(key, default)
+        control_elem.attrs = control_attrs
+        control_elem.local_name = local_name
+
+        selected_values:list[str] = []
+
+        async def helper_side_effect(*args:Any, **__:Any) -> None:
+            selected_values.append(str(args[-1]))
+            if args[-1] == "Sehr Gut":
+                raise TimeoutError("first label missing")
+
+        with (
+            patch.object(
+                test_bot,
+                "_KleinanzeigenBot__set_condition",
+                new_callable = AsyncMock,
+                return_value = False,
+            ) as mock_set_condition,
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [control_elem]),
+            patch.object(test_bot, helper_name, new_callable = AsyncMock, side_effect = helper_side_effect),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
+
+        mock_set_condition.assert_awaited_once_with("wie_neu")
+        assert selected_values == ["Sehr Gut", "Wie neu"]
+
+    @pytest.mark.asyncio
     async def test_condition_legacy_value_retries_select_with_api_value_when_display_label_misses(
         self,
         test_bot:KleinanzeigenBot,
@@ -4034,7 +4088,7 @@ class TestConditionFallbackToGenericHandler:
 
         async def web_select_side_effect(selector_type:By, selector_value:str, selected_value:str | int, **__:Any) -> None:
             selected_values.append(str(selected_value))
-            if selected_value == "Sehr Gut":
+            if selected_value in {"Sehr Gut", "Wie neu"}:
                 raise TimeoutError("visible label missing")
 
         with (
@@ -4050,7 +4104,7 @@ class TestConditionFallbackToGenericHandler:
             await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
 
         mock_set_condition.assert_awaited_once_with("wie_neu")
-        assert selected_values == ["Sehr Gut", "Wie neu"]
+        assert selected_values == ["Sehr Gut", "Wie neu", "like_new"]
 
     @pytest.mark.asyncio
     async def test_condition_timeout_propagates_instead_of_falling_back(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:

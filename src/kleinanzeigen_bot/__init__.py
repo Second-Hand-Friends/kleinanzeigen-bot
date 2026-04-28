@@ -3323,7 +3323,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 elem_selector_type = By.ID if elem_id else By.XPATH
                 elem_selector_value = elem_id or special_attr_xpath
                 condition_display_candidates = _CONDITION_API_TO_DISPLAY_CANDIDATES.get(special_attribute_value_str, (special_attribute_value_str,))
-                condition_display_value = condition_display_candidates[0]
 
                 if special_attr_elem.local_name == "select":
                     LOG.debug("Attribute field '%s' seems to be a select...", special_attribute_key)
@@ -3370,12 +3369,36 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 elif special_attr_elem.local_name == "button" and elem_role == "combobox":
                     LOG.debug("Attribute field '%s' seems to be a button combobox (click-to-open dropdown)...", special_attribute_key)
                     ensure(elem_id, f"No id available for button combobox special attribute [{special_attribute_key}]")
-                    button_combobox_value = condition_display_value if normalized_special_attribute_key == "condition" else special_attribute_value_str
-                    await self.__select_button_combobox(cast(str, elem_id), button_combobox_value)
+                    button_values = [special_attribute_value_str]
+                    if normalized_special_attribute_key == "condition":
+                        button_values = list(dict.fromkeys((*condition_display_candidates, special_attribute_value_str)))
+
+                    last_timeout_error_button:TimeoutError | None = None
+                    for button_combobox_value in button_values:
+                        try:
+                            await self.__select_button_combobox(cast(str, elem_id), button_combobox_value)
+                            break
+                        except TimeoutError as ex:
+                            last_timeout_error_button = ex
+                    else:
+                        if last_timeout_error_button is not None:
+                            raise last_timeout_error_button
                 elif elem_role == "combobox" and elem_type in {"text", ""} and special_attr_elem.local_name == "input":
                     LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
-                    selected_value = condition_display_value if normalized_special_attribute_key == "condition" else special_attribute_value_str
-                    await self.web_select_combobox(elem_selector_type, elem_selector_value, selected_value)
+                    selected_values = [special_attribute_value_str]
+                    if normalized_special_attribute_key == "condition":
+                        selected_values = list(dict.fromkeys((*condition_display_candidates, special_attribute_value_str)))
+
+                    last_timeout_error_input:TimeoutError | None = None
+                    for selected_value in selected_values:
+                        try:
+                            await self.web_select_combobox(elem_selector_type, elem_selector_value, selected_value)
+                            break
+                        except TimeoutError as ex:
+                            last_timeout_error_input = ex
+                    else:
+                        if last_timeout_error_input is not None:
+                            raise last_timeout_error_input
                 else:
                     LOG.debug("Attribute field '%s' seems to be a text input...", special_attribute_key)
                     await self.web_input(elem_selector_type, elem_selector_value, special_attribute_value_str)

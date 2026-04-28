@@ -1213,6 +1213,9 @@ class TestAdExtractorCategory:
             ("Zustand Neu", "Neu", "new"),
             ("Zustand Sehr gut", "Sehr gut", "like_new"),
             ("Zustand Wie neu", "Wie neu", "like_new"),
+            ("Zustand Gut", "Gut", "ok"),
+            ("Zustand In Ordnung", "In Ordnung", "alright"),
+            ("Zustand Defekt", "Defekt", "defect"),
         ],
     )
     async def test_extract_special_attributes_from_dom_extracts_condition(
