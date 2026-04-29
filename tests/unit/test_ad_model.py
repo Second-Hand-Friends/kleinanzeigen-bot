@@ -8,11 +8,13 @@ import math
 import pytest
 
 from kleinanzeigen_bot.model.ad_model import (
+    CONDITION_API_VALUES,
     MAX_DESCRIPTION_LENGTH,
     MAX_TITLE_LENGTH,
     MIN_TITLE_LENGTH,
     AdPartial,
     ShippingOption,
+    validate_condition_api_display_candidates,
     validate_condition_api_mapping,
 )
 from kleinanzeigen_bot.model.config_model import AdDefaults, AutoPriceReductionConfig
@@ -159,6 +161,27 @@ def test_shipping_option_must_not_be_blank() -> None:
 def test_validate_condition_api_mapping_rejects_unknown_values() -> None:
     with pytest.raises(ValueError, match = "contains unsupported condition API values: broken"):
         validate_condition_api_mapping("mapping_name", {"known": "new", "bad": "broken"})
+
+
+@pytest.mark.unit
+def test_validate_condition_api_display_candidates_rejects_unknown_or_missing_keys() -> None:
+    with pytest.raises(ValueError, match = "unexpected condition API keys: typo"):
+        validate_condition_api_display_candidates(
+            "display_candidates",
+            {"new": ("Neu",), "like_new": ("Sehr Gut",), "ok": ("Gut",), "alright": ("In Ordnung",), "defect": ("Defekt",), "typo": ("X",)},
+        )
+
+    with pytest.raises(ValueError, match = "missing condition API keys: like_new"):
+        validate_condition_api_display_candidates(
+            "display_candidates",
+            {"new": ("Neu",), "ok": ("Gut",), "alright": ("In Ordnung",), "defect": ("Defekt",)},
+        )
+
+
+@pytest.mark.unit
+def test_validate_condition_api_display_candidates_accepts_exact_key_set() -> None:
+    mapping = {key: (key,) for key in CONDITION_API_VALUES}
+    validate_condition_api_display_candidates("display_candidates", mapping)
 
 
 @pytest.mark.unit

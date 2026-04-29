@@ -126,6 +126,18 @@ def validate_condition_api_mapping(mapping_name:str, mapping:Mapping[str, str]) 
         raise ValueError(f"{mapping_name} contains unsupported condition API values: {', '.join(sorted(unknown_values))}")
 
 
+def validate_condition_api_display_candidates(mapping_name:str, mapping:Mapping[str, tuple[str, ...]]) -> None:
+    unknown_keys = set(mapping) - CONDITION_API_VALUES
+    missing_keys = CONDITION_API_VALUES - set(mapping)
+    if unknown_keys or missing_keys:
+        problems:list[str] = []
+        if unknown_keys:
+            problems.append(f"unexpected condition API keys: {', '.join(sorted(unknown_keys))}")
+        if missing_keys:
+            problems.append(f"missing condition API keys: {', '.join(sorted(missing_keys))}")
+        raise ValueError(f"{mapping_name} has invalid condition API key set: {'; '.join(problems)}")
+
+
 def _validate_auto_price_reduction_constraints(price:int | None, auto_price_reduction:AutoPriceReductionConfig | dict[str, Any] | None) -> None:
     """
     Validate auto_price_reduction configuration constraints.

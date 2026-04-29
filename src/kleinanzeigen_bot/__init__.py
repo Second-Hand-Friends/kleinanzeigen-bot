@@ -27,6 +27,7 @@ from .model.ad_model import (
     Contact,
     calculate_auto_price,
     calculate_auto_price_with_trace,
+    validate_condition_api_display_candidates,
     validate_condition_api_mapping,
 )
 from .model.config_model import DEFAULT_DOWNLOAD_DIR, Config
@@ -71,6 +72,7 @@ _CONDITION_API_TO_DISPLAY_CANDIDATES:Final[dict[str, tuple[str, ...]]] = {
     "alright": ("In Ordnung",),
     "defect": ("Defekt",),
 }
+validate_condition_api_display_candidates("_CONDITION_API_TO_DISPLAY_CANDIDATES", _CONDITION_API_TO_DISPLAY_CANDIDATES)
 _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
     (By.ID, "user-email"),
