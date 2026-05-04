@@ -70,20 +70,10 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
       kleinanzeigen-bot --help
       ```
 
-   1. On Linux:
+   1. On Linux/macOS:
 
       ```shell
-      curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-linux-amd64 -o kleinanzeigen-bot
-
-      chmod 755 kleinanzeigen-bot
-
-      ./kleinanzeigen-bot --help
-      ```
-
-   1. On macOS:
-
-      ```shell
-      curl -L https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-darwin-amd64 -o kleinanzeigen-bot
+      curl -L "https://github.com/Second-Hand-Friends/kleinanzeigen-bot/releases/download/latest/kleinanzeigen-bot-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/')" -o kleinanzeigen-bot
 
       chmod 755 kleinanzeigen-bot
 
