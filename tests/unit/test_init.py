@@ -539,10 +539,11 @@ class TestKleinanzeigenBotInitialization:
         extractor_mock.download_ad.assert_awaited_once_with(123, active = scenario["expected_active"])
 
         # Verify ownership warning only when expected
+        ownership_warnings = [msg for msg in caplog.messages if "found in overview but not in published profile" in msg]
         if scenario["expect_ownership_warning"]:
-            assert any("found in overview but not in published profile" in msg for msg in caplog.messages)
+            assert len(ownership_warnings) == 1
         else:
-            assert not any("found in overview but not in published profile" in msg for msg in caplog.messages)
+            assert len(ownership_warnings) == 0
 
     @pytest.mark.asyncio
     async def test_download_ads_all_selector_skips_invalid_ad_id(
@@ -4028,7 +4029,7 @@ class TestConditionFallbackToGenericHandler:
         mock_set_condition.assert_awaited_once_with("ok")
         mock_select_combobox.assert_awaited_once_with("kleidung_herren.color", "beige")
         warning_messages = [record.message for record in caplog.records if record.levelno == logging.WARNING]
-        assert any("Special attribute 'condition_s' is not available" in message for message in warning_messages)
+        assert len([message for message in warning_messages if "Special attribute 'condition_s' is not available" in message]) == 1
 
     @pytest.mark.asyncio
     async def test_condition_s_lookup_timeout_propagates(
@@ -5240,7 +5241,7 @@ class TestBuyNowRadioWarning:
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
 
         warning_messages = [record.message for record in caplog.records if record.levelno == logging.WARNING]
-        assert any("Direct-buy (sell_directly) is not available" in message for message in warning_messages)
+        assert len([message for message in warning_messages if "Direct-buy (sell_directly) is not available" in message]) == 1
 
     @pytest.mark.asyncio
     async def test_buy_now_true_interaction_timeout_propagates(
