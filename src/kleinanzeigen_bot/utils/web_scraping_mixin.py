@@ -483,7 +483,7 @@ class WebScrapingMixin:
         # configure and initialize new browser instance...
         ########################################################
 
-        # default_browser_args: @ https://github.com/ultrafunkamsterdam/nodriver/blob/main/nodriver/core/config.py
+        # default_browser_args: @ https://github.com/1cu/nodriver/blob/main/nodriver/core/config.py
         # https://peter.sh/experiments/chromium-command-line-switches/
         # https://github.com/GoogleChrome/chrome-launcher/blob/main/docs/chrome-flags-for-tools.md
         browser_args = [
