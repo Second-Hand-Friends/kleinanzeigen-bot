@@ -38,7 +38,7 @@ dependencies = [
   "certifi",
   "colorama",
   "jaraco.text", # required by pkg_resources during runtime
-  "nodriver @ git+https://github.com/Second-Hand-Friends/nodriver.git@b0d1f0a59cd16e0d9001f32f35a663129e403efd", # Temporary fork pin; track in #1036; review again on 2026-06-15
+  "nodriver @ git+https://github.com/Second-Hand-Friends/nodriver.git@39c87cd882ef82153ff5f1fa189ca35ed1f24715", # Temporary fork pin; track in #1036; review again on 2026-06-15
   "platformdirs>=2.1.0",
   "pydantic>=2.11.0",
   "ruamel.yaml",
