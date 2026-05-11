@@ -539,10 +539,11 @@ class TestKleinanzeigenBotInitialization:
         extractor_mock.download_ad.assert_awaited_once_with(123, active = scenario["expected_active"])
 
         # Verify ownership warning only when expected
+        ownership_warnings = [msg for msg in caplog.messages if "found in overview but not in published profile" in msg]
         if scenario["expect_ownership_warning"]:
-            assert any("found in overview but not in published profile" in msg for msg in caplog.messages)
+            assert len(ownership_warnings) == 1
         else:
-            assert not any("found in overview but not in published profile" in msg for msg in caplog.messages)
+            assert len(ownership_warnings) == 0
 
     @pytest.mark.asyncio
     async def test_download_ads_all_selector_skips_invalid_ad_id(
@@ -3823,23 +3824,6 @@ class TestConditionSelector:
         assert any("radio-condition-wie_neu" in selector for selector in clicked_xpath_selectors)
 
     @pytest.mark.asyncio
-    async def test_condition_missing_selector_returns_not_handled(self, test_bot:KleinanzeigenBot) -> None:
-        """Missing condition trigger should return not-handled and use generic fallback path."""
-
-        async def find_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> Element:
-            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value and "@aria-haspopup='dialog'" in selector_value:
-                raise TimeoutError("missing trigger")
-            raise TimeoutError("unexpected selector")
-
-        with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
-        ):
-            handled = await getattr(test_bot, "_KleinanzeigenBot__set_condition")("ok")
-
-        assert handled is False
-
-    @pytest.mark.asyncio
     async def test_condition_legacy_value_warns_even_when_not_handled(
         self,
         test_bot:KleinanzeigenBot,
@@ -3944,6 +3928,8 @@ class TestConditionFallbackToGenericHandler:
         }.get(key, default)
         button_elem.attrs = button_attrs
         button_elem.local_name = "button"
+        probe_elem = MagicMock()
+        probe_elem.attrs = {"id": "modellbau.condition"}
 
         with (
             patch.object(
@@ -3952,6 +3938,7 @@ class TestConditionFallbackToGenericHandler:
                 new_callable = AsyncMock,
                 return_value = False,
             ) as mock_set_condition,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = probe_elem),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [button_elem]),
             patch.object(
                 test_bot,
@@ -3997,6 +3984,86 @@ class TestConditionFallbackToGenericHandler:
             await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
 
         mock_set_condition.assert_awaited_once_with("ok")
+
+    @pytest.mark.asyncio
+    async def test_condition_s_missing_control_logs_warning_and_continues(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Missing condition_s control should warn and allow later attributes to continue."""
+        caplog.set_level(logging.WARNING, logger = LOG.name)
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "category": "185/249",
+                "special_attributes": {"condition_s": "ok", "color_s": "beige"},
+                "shipping_type": "PICKUP",
+            }
+        )
+
+        color_elem = MagicMock()
+        color_attrs = MagicMock()
+        color_attrs.id = "kleidung_herren.color"
+        color_attrs.get.side_effect = lambda key, default = None: {
+            "id": "kleidung_herren.color",
+            "type": "button",
+            "role": "combobox",
+            "name": None,
+        }.get(key, default)
+        color_elem.attrs = color_attrs
+        color_elem.local_name = "button"
+
+        condition_probe = MagicMock()
+        condition_probe.attrs = {"id": "condition_s"}
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[Element]:
+            if selector_type == By.XPATH and "color_s" in selector_value:
+                return [color_elem]
+            if selector_type == By.XPATH and "condition_s" in selector_value:
+                raise AssertionError("condition_s lookup should be skipped when the probe returns None")
+            return []
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.XPATH and "condition_s" in selector_value:
+                return None
+            if selector_type == By.XPATH and "color_s" in selector_value:
+                return condition_probe
+            return None
+
+        with (
+            patch.object(test_bot, "_KleinanzeigenBot__set_condition", new_callable = AsyncMock, return_value = False) as mock_set_condition,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch.object(test_bot, "_KleinanzeigenBot__select_button_combobox", new_callable = AsyncMock) as mock_select_combobox,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
+
+        mock_set_condition.assert_awaited_once_with("ok")
+        mock_select_combobox.assert_awaited_once_with("kleidung_herren.color", "beige")
+        warning_messages = [record.message for record in caplog.records if record.levelno == logging.WARNING]
+        assert len([message for message in warning_messages if "Special attribute 'condition_s' is not available" in message]) == 1
+
+    @pytest.mark.asyncio
+    async def test_condition_s_lookup_timeout_propagates(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Lookup timeouts for condition_s should still fail instead of being skipped."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"category": "185/249", "special_attributes": {"condition_s": "ok"}, "shipping_type": "PICKUP"})
+
+        condition_probe = MagicMock()
+        condition_probe.attrs = {"id": "condition_s"}
+
+        with (
+            patch.object(test_bot, "_KleinanzeigenBot__set_condition", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = condition_probe),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError("lookup timeout")),
+            pytest.raises(TimeoutError, match = "lookup timeout"),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
 
 
 class TestCategoryProbeBehavior:
@@ -5054,34 +5121,22 @@ class TestPriceReductionPersistence:
     """Tests for price_reduction_count persistence logic."""
 
     @pytest.mark.unit
-    def test_persistence_logic_saves_when_count_positive(self) -> None:
+    @pytest.mark.parametrize(
+        ("count", "expected_cfg"),
+        [
+            (3, {"price_reduction_count": 3}),
+            (0, {}),
+            (None, {}),
+        ],
+        ids = ["positive", "zero", "none"],
+    )
+    def test_persistence_logic(self, count:int | None, expected_cfg:dict[str, Any]) -> None:
         """Test the conditional logic that decides whether to persist price_reduction_count."""
-        # Simulate the logic from publish_ad lines 1076-1079
-        # Test case 1: price_reduction_count = 3 (should persist)
-        ad_cfg_orig = _apply_price_reduction_persistence(3)
-
-        assert "price_reduction_count" in ad_cfg_orig
-        assert ad_cfg_orig["price_reduction_count"] == 3
-
-    @pytest.mark.unit
-    def test_persistence_logic_skips_when_count_zero(self) -> None:
-        """Test that price_reduction_count == 0 does not get persisted."""
-        # Test case 2: price_reduction_count = 0 (should NOT persist)
-        ad_cfg_orig = _apply_price_reduction_persistence(0)
-
-        assert "price_reduction_count" not in ad_cfg_orig
-
-    @pytest.mark.unit
-    def test_persistence_logic_skips_when_count_none(self) -> None:
-        """Test that price_reduction_count == None does not get persisted."""
-        # Test case 3: price_reduction_count = None (should NOT persist)
-        ad_cfg_orig = _apply_price_reduction_persistence(None)
-
-        assert "price_reduction_count" not in ad_cfg_orig
+        assert _apply_price_reduction_persistence(count) == expected_cfg
 
 
-class TestBuyNowRadioTimeout:
-    """Regression tests for buy-now radio button handling with PICKUP shipping."""
+class TestBuyNowRadioWarning:
+    """Regression tests for buy-now handling across shipping modes."""
 
     @contextmanager
     def _mock_publish_ad_dependencies(
@@ -5178,14 +5233,16 @@ class TestBuyNowRadioTimeout:
             assert not buy_now_clicks, "web_click should not be called for ad-buy-now-false"
 
     @pytest.mark.asyncio
-    async def test_buy_now_true_required_for_shipping_sell_directly(
+    async def test_buy_now_true_missing_logs_warning_and_continues(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
         mock_page:MagicMock,
         tmp_path:Path,
+        caplog:pytest.LogCaptureFixture,
     ) -> None:
-        """Shipping ads with sell_directly enabled should fail if buy-now-true control is unavailable."""
+        """Shipping ads with sell_directly enabled should warn if buy-now-true control is unavailable."""
+        caplog.set_level(logging.WARNING, logger = LOG.name)
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "sell_directly": True, "price_type": "FIXED", "price": 100})
         ad_cfg_orig = copy.deepcopy(base_ad_config)
         ad_file = str(tmp_path / "ad.yaml")
@@ -5198,8 +5255,39 @@ class TestBuyNowRadioTimeout:
         async def check_side_effect(*_:Any, **__:Any) -> bool:
             return False
 
+        with self._mock_publish_ad_dependencies(test_bot, mock_page, probe_side_effect, check_side_effect):
+            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+
+        warning_messages = [record.message for record in caplog.records if record.levelno == logging.WARNING]
+        assert len([message for message in warning_messages if "Direct-buy (sell_directly) is not available" in message]) == 1
+
+    @pytest.mark.asyncio
+    async def test_buy_now_true_interaction_timeout_propagates(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+        tmp_path:Path,
+    ) -> None:
+        """Existing direct-buy controls should still fail if interaction times out."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "sell_directly": True, "price_type": "FIXED", "price": 100})
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = str(tmp_path / "ad.yaml")
+
+        buy_now_elem = MagicMock()
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.ID and selector_value == "ad-buy-now-true":
+                return buy_now_elem
+            return None
+
+        async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
+            if selector_type == By.ID and selector_value == "ad-buy-now-true":
+                raise TimeoutError("check timeout")
+            return False
+
         with (
-            pytest.raises(TimeoutError, match = "Failed to enable direct-buy option"),
+            pytest.raises(TimeoutError, match = "check timeout"),
             self._mock_publish_ad_dependencies(test_bot, mock_page, probe_side_effect, check_side_effect),
         ):
             await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)

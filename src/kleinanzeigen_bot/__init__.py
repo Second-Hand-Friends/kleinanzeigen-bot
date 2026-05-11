@@ -2482,8 +2482,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if sell_directly and price_type in {"FIXED", "NEGOTIABLE"}:
                     buy_now_true = await self.web_probe(By.ID, "ad-buy-now-true", timeout = quick_dom)
                     if buy_now_true is None:
-                        raise TimeoutError(_("Failed to enable direct-buy option: required control is not available."))
-                    if not await self.web_check(By.ID, "ad-buy-now-true", Is.SELECTED, timeout = quick_dom):
+                        LOG.warning("Direct-buy (sell_directly) is not available for the selected category. Skipping.")
+                    elif not await self.web_check(By.ID, "ad-buy-now-true", Is.SELECTED, timeout = quick_dom):
                         await self.web_click(By.ID, "ad-buy-now-true", timeout = quick_dom)
                 else:
                     buy_now_false = await self.web_probe(By.ID, "ad-buy-now-false", timeout = quick_dom)
@@ -3289,24 +3289,27 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 f" or contains(@name, {original_key_literal})"
                 "]"
             )
+            quick_dom = self._timeout("quick_dom")
             try:
+                if special_attribute_key == "condition_s":
+                    special_attr_probe = await self.web_probe(By.XPATH, special_attr_xpath, timeout = quick_dom)
+                    if special_attr_probe is None:
+                        LOG.warning("Special attribute '%s' is not available for the selected category. Skipping.", special_attribute_key)
+                        continue
                 special_attr_candidates = await self.web_find_all(
                     By.XPATH,
                     special_attr_xpath,
                 )
                 special_attr_elem = self.__pick_special_attribute_candidate(special_attr_candidates, special_attribute_key)
-            except TimeoutError as ex:
+            except AssertionError as ex:
                 LOG.debug(
                     "Attribute field '%s' (normalized: '%s') could not be found.",
                     special_attribute_key,
                     normalized_special_attribute_key,
                 )
-                if special_attribute_key.endswith("_s"):
-                    LOG.debug(
-                        "Legacy special-attribute id-only selectors (for example '%s') are intentionally not targeted directly. "
-                        "If this category still renders legacy id-only controls, a dedicated rebuild is required.",
-                        special_attribute_key,
-                    )
+                if special_attribute_key == "condition_s":
+                    LOG.warning("Special attribute '%s' is not available for the selected category. Skipping.", special_attribute_key)
+                    continue
                 raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
 
             try:
