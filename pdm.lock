@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:253dbcd64dd8909f6d6bb516cf684ac98255b6a5e7df6ebfd359a56fc5d873a8"
+content_hash = "sha256:ac4eda6c0beb313f02a6efdfe31065361f41cdbcb223b59d220f15f312da3482"
 
 [[metadata.targets]]
 requires_python = ">=3.10,<3.15"
@@ -1125,11 +1125,11 @@ files = [
 
 [[package]]
 name = "nodriver"
-version = "0.48.1.post1"
+version = "0.50.1.post1"
 requires_python = ">=3.10"
 git = "https://github.com/Second-Hand-Friends/nodriver.git"
-ref = "b0d1f0a59cd16e0d9001f32f35a663129e403efd"
-revision = "b0d1f0a59cd16e0d9001f32f35a663129e403efd"
+ref = "39c87cd882ef82153ff5f1fa189ca35ed1f24715"
+revision = "39c87cd882ef82153ff5f1fa189ca35ed1f24715"
 summary = "Asynchronous browser automation and web scraping for Chromium-based browsers."
 groups = ["default"]
 dependencies = [
