@@ -3289,7 +3289,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 f" or contains(@name, {original_key_literal})"
                 "]"
             )
+            quick_dom = self._timeout("quick_dom")
             try:
+                if special_attribute_key == "condition_s":
+                    special_attr_probe = await self.web_probe(By.XPATH, special_attr_xpath, timeout = quick_dom)
+                    if special_attr_probe is None:
+                        LOG.warning("Special attribute '%s' is not available for the selected category. Skipping.", special_attribute_key)
+                        continue
                 special_attr_candidates = await self.web_find_all(
                     By.XPATH,
                     special_attr_xpath,

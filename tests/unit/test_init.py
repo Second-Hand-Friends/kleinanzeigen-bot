@@ -3928,6 +3928,8 @@ class TestConditionFallbackToGenericHandler:
         }.get(key, default)
         button_elem.attrs = button_attrs
         button_elem.local_name = "button"
+        probe_elem = MagicMock()
+        probe_elem.attrs = {"id": "modellbau.condition"}
 
         with (
             patch.object(
@@ -3936,6 +3938,7 @@ class TestConditionFallbackToGenericHandler:
                 new_callable = AsyncMock,
                 return_value = False,
             ) as mock_set_condition,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = probe_elem),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [button_elem]),
             patch.object(
                 test_bot,
@@ -4012,15 +4015,26 @@ class TestConditionFallbackToGenericHandler:
         color_elem.attrs = color_attrs
         color_elem.local_name = "button"
 
+        condition_probe = MagicMock()
+        condition_probe.attrs = {"id": "condition_s"}
+
         async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[Element]:
-            if selector_type == By.XPATH and "condition_s" in selector_value:
-                return []
             if selector_type == By.XPATH and "color_s" in selector_value:
                 return [color_elem]
+            if selector_type == By.XPATH and "condition_s" in selector_value:
+                raise AssertionError("condition_s lookup should be skipped when the probe returns None")
             return []
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.XPATH and "condition_s" in selector_value:
+                return None
+            if selector_type == By.XPATH and "color_s" in selector_value:
+                return condition_probe
+            return None
 
         with (
             patch.object(test_bot, "_KleinanzeigenBot__set_condition", new_callable = AsyncMock, return_value = False) as mock_set_condition,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
             patch.object(test_bot, "_KleinanzeigenBot__select_button_combobox", new_callable = AsyncMock) as mock_select_combobox,
         ):
@@ -4040,8 +4054,12 @@ class TestConditionFallbackToGenericHandler:
         """Lookup timeouts for condition_s should still fail instead of being skipped."""
         ad_cfg = Ad.model_validate(base_ad_config | {"category": "185/249", "special_attributes": {"condition_s": "ok"}, "shipping_type": "PICKUP"})
 
+        condition_probe = MagicMock()
+        condition_probe.attrs = {"id": "condition_s"}
+
         with (
             patch.object(test_bot, "_KleinanzeigenBot__set_condition", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = condition_probe),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError("lookup timeout")),
             pytest.raises(TimeoutError, match = "lookup timeout"),
         ):
@@ -5118,7 +5136,7 @@ class TestPriceReductionPersistence:
 
 
 class TestBuyNowRadioWarning:
-    """Regression tests for buy-now radio button handling with PICKUP shipping."""
+    """Regression tests for buy-now handling across shipping modes."""
 
     @contextmanager
     def _mock_publish_ad_dependencies(
