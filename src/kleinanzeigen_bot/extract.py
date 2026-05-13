@@ -911,8 +911,12 @@ class AdExtractor(WebScrapingMixin):
         # format: e.g. (Beispiel Allee 42,) 12345 Bundesland - Stadt
         street_element = await self.web_probe(By.ID, "street-address")
         if street_element is not None:
-            street = (await self._extract_visible_text(street_element))[:-1]  # trailing comma
-            contact["street"] = street
+            try:
+                street = (await self._extract_visible_text(street_element))[:-1]  # trailing comma
+            except TimeoutError:
+                LOG.debug("Skipping street extraction after timeout.")
+            else:
+                contact["street"] = street
         else:
             LOG.info("No street given in the contact.")
 
@@ -932,8 +936,13 @@ class AdExtractor(WebScrapingMixin):
             contact["street"] = None
         phone_element = await self.web_probe(By.ID, "viewad-contact-phone")
         if phone_element is not None:
-            phone_number = await self.web_text(By.TAG_NAME, "a", parent = phone_element)
-            contact["phone"] = "".join(phone_number.replace("-", " ").split(" ")).replace("+49(0)", "0")
+            try:
+                phone_number = await self.web_text(By.TAG_NAME, "a", parent = phone_element)
+            except TimeoutError:
+                LOG.debug("Skipping phone extraction after timeout.")
+                contact["phone"] = None
+            else:
+                contact["phone"] = "".join(phone_number.replace("-", " ").split(" ")).replace("+49(0)", "0")
         else:
             contact["phone"] = None  # phone seems to be a deprecated feature (for non-professional users)
         # also see 'https://themen.kleinanzeigen.de/hilfe/deine-anzeigen/Telefon/

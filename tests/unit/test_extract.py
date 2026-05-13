@@ -454,25 +454,16 @@ class TestAdExtractorNavigation:
         page_mock = AsyncMock()
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/{0}".format(ad_id)
 
-        popup_close_mock = AsyncMock()
-        popup_close_mock.click = AsyncMock()
-        popup_close_mock.apply = AsyncMock(return_value = True)
-
-        def find_mock(selector_type:By, selector_value:str, **_:Any) -> Element | None:
-            if selector_type == By.CLASS_NAME and selector_value == "mfp-close":
-                return popup_close_mock
-            return None
-
         with (
             patch.object(test_extractor, "page", page_mock),
             patch.object(test_extractor, "web_open", new_callable = AsyncMock) as mock_web_open,
             patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_extractor, "web_find", new_callable = AsyncMock, side_effect = find_mock),
+            patch.object(test_extractor, "web_click", new_callable = AsyncMock) as mock_web_click,
         ):
             result = await test_extractor.navigate_to_ad_page(ad_id)
             assert result is True
             mock_web_open.assert_called_with("https://www.kleinanzeigen.de/s-suchanfrage.html?keywords={0}".format(ad_id))
-            popup_close_mock.click.assert_awaited_once()
+            mock_web_click.assert_awaited_once_with(By.CLASS_NAME, "mfp-close")
 
     @pytest.mark.asyncio
     async def test_navigate_to_ad_page_with_popup(self, test_extractor:extract_module.AdExtractor) -> None:
@@ -1427,6 +1418,55 @@ class TestAdExtractorContact:
             pytest.raises(TimeoutError),
         ):
             await extractor._extract_contact_from_ad_page()
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_contact_info_with_street_timeout(self, extractor:extract_module.AdExtractor) -> None:
+        """Test street extraction timeout does not abort contact extraction."""
+        contact_person_element = MagicMock()
+        name_element = MagicMock()
+        street_element = MagicMock()
+
+        with (
+            patch.object(extractor, "page", MagicMock()),
+            patch.object(extractor, "web_text", new_callable = AsyncMock) as mock_web_text,
+            patch.object(extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [street_element, None]),
+            patch.object(extractor, "_extract_visible_text", new_callable = AsyncMock, side_effect = TimeoutError()),
+        ):
+            mock_web_text.side_effect = ["12345 Berlin - Mitte", "Test User"]
+            mock_web_find.side_effect = [contact_person_element, name_element]
+
+            contact_info = await extractor._extract_contact_from_ad_page()
+            assert contact_info.street is None
+            assert contact_info.zipcode == "12345"
+            assert contact_info.location == "Berlin - Mitte"
+            assert contact_info.name == "Test User"
+            assert contact_info.phone is None
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_contact_info_with_phone_timeout(self, extractor:extract_module.AdExtractor) -> None:
+        """Test phone extraction timeout does not abort contact extraction."""
+        contact_person_element = MagicMock()
+        name_element = MagicMock()
+        phone_element = MagicMock()
+
+        with (
+            patch.object(extractor, "page", MagicMock()),
+            patch.object(extractor, "web_text", new_callable = AsyncMock) as mock_web_text,
+            patch.object(extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, phone_element]),
+        ):
+            mock_web_text.side_effect = ["12345 Berlin - Mitte", "Test User", TimeoutError()]
+            mock_web_find.side_effect = [contact_person_element, name_element]
+
+            contact_info = await extractor._extract_contact_from_ad_page()
+            assert contact_info.street is None
+            assert contact_info.zipcode == "12345"
+            assert contact_info.location == "Berlin - Mitte"
+            assert contact_info.name == "Test User"
+            assert contact_info.phone is None
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
