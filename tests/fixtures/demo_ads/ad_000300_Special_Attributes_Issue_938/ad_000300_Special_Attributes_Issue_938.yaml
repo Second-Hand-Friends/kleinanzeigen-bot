@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+# Regression-check ad for Issue  #938 (special attributes in clothing categories).
+# This ad targets category 153/160/jacken_maentel and exercises the
+# multi-attribute combobox/dropdown flow that previously broke.
+#
+# Typical verification:
+# 1) Run: pdm run app publish -v
+# 2) Confirm these fields are set in the UI before submit:
+#    - art_s: jacken_maentel
+#    - condition_s: ok
+#    - brand_s: armani
+#    - color_s: beige
+#    - groesse_s: xl
+active: false
+type: OFFER
+title: "Alter Mantel Special Attributes 938"
+description: |-
+  Ein Mantel wie ihn sonst keiner hat - für 938.
+  Speziell für diese Kategorie - mit besonderen Attributen.
+description_prefix:
+description_suffix:
+category: 153/160/jacken_maentel
+
+special_attributes:
+  art_s: jacken_maentel
+  condition_s: ok
+  brand_s: armani
+  color_s: beige
+  groesse_s: xl
+
+price: 25
+price_type: NEGOTIABLE
+shipping_type: SHIPPING
+shipping_costs: 4.89
+shipping_options:
+sell_directly: false
+images: []
+
+contact:
+  name: Demo User A
+  street: Musterstraße 1
+  zipcode: '10115'
+  location: Berlin - Mitte
+  phone: '+490000000001'
+
+republication_interval: 3
+id: 9100033
+content_hash: bfdf9066e512268bf436b01507c94889d62e773897c99bbd446b5b9115724849
+created_on: '2026-05-01T12:32:00+00:00'
+updated_on: '2026-05-01T12:32:00+00:00'
+repost_count: 0

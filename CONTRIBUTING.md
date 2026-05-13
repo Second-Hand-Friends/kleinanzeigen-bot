@@ -45,6 +45,7 @@ This section provides quick reference commands for common development tasks. See
 - Linting issues found by ruff can be auto-fixed using `pdm run lint:fix`
 - Derive JSON schema files from Pydantic data model: `pdm run generate-schemas`
 - Create platform-specific executable: `pdm run compile`
+- Run the local DOM diagnostic: `pdm run verify-dom-assumptions` (maintainer-only, uses `scripts/verify_dom_assumptions.py` and live site checks; local use only)
 - Application bootstrap works like this:
 
 ```python

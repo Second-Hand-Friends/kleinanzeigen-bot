@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+active: true
+type: OFFER
+title: Gebr. Mixer, Rasselnde Teile
+description: |-
+  Defekter Standmixer, Motor macht Geräusche, verschmutzt.
+category: 161/176/haushaltskleingeraete
+price: 5
+price_type: NEGOTIABLE
+shipping_type: PICKUP
+shipping_costs:
+shipping_options:
+sell_directly:
+images: [ad_000001__img1.jpg, ad_000001__img2.jpg]
+
+contact:
+  name: Demo User A
+  street: Musterstraße 1
+  zipcode: '10115'
+  location: Berlin - Mitte
+  phone: '+490000000001'
+
+republication_interval: 1
+id: 9100001
+content_hash: cdcea0390580aed9453618fd5e971ec78fd065a50ad18d5bdc7a3634ed4ceb29
+updated_on: '2026-05-01T12:00:00+00:00'
+created_on: '2026-05-01T12:00:00+00:00'
+repost_count: 0

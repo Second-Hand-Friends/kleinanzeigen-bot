@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+# Reproduction case for Issue  #943: WANTED ad with shipping_type PICKUP fails to publish.
+# The bot times out trying to click  #ad-shipping-enabled-no on the WANTED publish form.
+# Use with: pdm run verify-dom-assumptions run --ad-file <this-file>
+active: false
+type: WANTED
+title: "Hilfe für die Ukraine"
+description: |-
+  Hallo an alle,
+
+  ich sammele für die Ukraine im Raum ...
+
+  Ich komme gerne bei Ihnen vorbei.
+description_prefix:
+description_suffix:
+category: 17/258
+price:
+price_type: GIVE_AWAY
+auto_price_reduction:
+repost_count: 0
+price_reduction_count: 0
+shipping_type: PICKUP
+shipping_costs:
+shipping_options:
+sell_directly: false
+images: []
+
+contact:
+  name: 'Demo User B'
+  street:
+  zipcode: '20095'
+  location: Hamburg - Innenstadt
+  phone:
+
+republication_interval: 4
+id: 9100034
+content_hash: 500b30e76303d16dd1f411dd1453bef08ad7776759d0670d5b6c4612bdec52ab
+created_on: '2026-05-01T12:33:00+00:00'
+updated_on: '2026-05-01T12:33:00+00:00'

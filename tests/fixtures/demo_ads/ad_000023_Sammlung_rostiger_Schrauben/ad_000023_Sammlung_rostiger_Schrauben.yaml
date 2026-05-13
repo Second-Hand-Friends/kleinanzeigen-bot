@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+active: true
+type: OFFER
+title: Sammlung rostiger Schrauben
+description: |-
+  Mischung verschiedener Schrauben, alle rostig, Dose inklusive.
+category: 80/84
+price: 5
+price_type: NEGOTIABLE
+shipping_type: PICKUP
+shipping_costs:
+shipping_options:
+sell_directly:
+images: [ad_000023__img1.jpg]
+
+contact:
+  name: Demo User G
+  street: Übungsstraße 9
+  zipcode: '28195'
+  location: Bremen - Zentrum
+  phone:
+
+republication_interval: 3
+id: 9100023
+content_hash: 1416d2e325f7026b41e78cb1a7444bd41c4e0bf2d4eb5e4f41eb99c500cb0bdf
+updated_on: '2026-05-01T12:22:00+00:00'
+created_on: '2026-05-01T12:22:00+00:00'
+repost_count: 0

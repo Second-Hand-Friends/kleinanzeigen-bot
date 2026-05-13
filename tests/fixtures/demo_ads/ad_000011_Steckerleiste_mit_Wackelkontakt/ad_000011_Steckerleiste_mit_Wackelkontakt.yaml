@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+active: true
+type: OFFER
+title: Steckerleiste mit Wackelkontakt
+description: |-
+  Mehrfachstecker, 2 Steckdosen wackeln, Kabel geknickt.
+category: 161/225/sonstiges
+price: 2
+price_type: NEGOTIABLE
+shipping_type: PICKUP
+shipping_costs:
+shipping_options:
+sell_directly:
+images: [ad_000011__img1.jpg]
+
+contact:
+  name: Demo User C
+  street: Beispielweg 12
+  zipcode: '50667'
+  location: Köln - Altstadt
+  phone: '+490000000003'
+
+republication_interval: 1
+id: 9100011
+content_hash: c534f69d8b75b839e40027b15f1332231307d1f6f8cc0638062bc8aabc669a57
+updated_on: '2026-05-01T12:10:00+00:00'
+created_on: '2026-05-01T12:10:00+00:00'
+repost_count: 0

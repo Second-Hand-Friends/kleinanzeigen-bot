@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+active: true
+type: OFFER
+title: Malen-nach-Zahlen, Ruiniert
+description: |-
+  Set, Farben getrocknet, Teile bereits gemalt, unvollständig.
+category: 185/282
+price: 4
+price_type: NEGOTIABLE
+shipping_type: PICKUP
+shipping_costs:
+shipping_options:
+sell_directly:
+images: [ad_000017__img1.jpg]
+
+contact:
+  name: Demo User A
+  street: Musterstraße 1
+  zipcode: '10115'
+  location: Berlin - Mitte
+  phone: '+490000000001'
+
+republication_interval: 7
+id: 9100017
+content_hash: 204d54f63f55010c8ad06f6172ef3b0ad8049a33e40e4411442b3acdd8ff722f
+updated_on: '2026-05-01T12:16:00+00:00'
+created_on: '2026-05-01T12:16:00+00:00'
+repost_count: 0

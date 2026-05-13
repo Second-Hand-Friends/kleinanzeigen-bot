@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+active: true
+type: OFFER
+title: Rostiger Gemüsehobel
+description: |-
+  Alter Gemüsehobel mit Rost, Messer stumpf.
+category: 80/86/kuechengeraete
+price: 4
+price_type: NEGOTIABLE
+shipping_type: PICKUP
+shipping_costs:
+shipping_options:
+sell_directly:
+images: [ad_000005__img1.jpg]
+
+contact:
+  name: Demo User E
+  street:
+  zipcode: '01067'
+  location: Dresden - Altstadt
+  phone: '+490000000005'
+
+republication_interval: 5
+id: 9100005
+content_hash: e25e6d66a385939423dd92002117c9a348c26a123ce23a8e4795bc3487118356
+updated_on: '2026-05-01T12:04:00+00:00'
+created_on: '2026-05-01T12:04:00+00:00'
+repost_count: 0

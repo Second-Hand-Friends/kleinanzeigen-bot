@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+active: true
+type: OFFER
+title: Unvollständiges Puzzle, Fehlende Teile
+description: |-
+  1000 Teile Puzzle, ca. 30 Stück fehlen.
+category: 185/234/sonstige
+price: 5
+price_type: NEGOTIABLE
+shipping_type: PICKUP
+shipping_costs:
+shipping_options:
+sell_directly:
+images: [ad_000012__img1.jpg, ad_000012__img2.jpg]
+
+contact:
+  name: Demo User D
+  street: Testallee 5
+  zipcode: '80331'
+  location: München - Maxvorstadt
+  phone:
+
+republication_interval: 2
+id: 9100012
+content_hash: e0420331b29d9177a043a3ce57bd609bc9bef4772a9497b81e6caf3c3169349c
+updated_on: '2026-05-01T12:11:00+00:00'
+created_on: '2026-05-01T12:11:00+00:00'
+repost_count: 0

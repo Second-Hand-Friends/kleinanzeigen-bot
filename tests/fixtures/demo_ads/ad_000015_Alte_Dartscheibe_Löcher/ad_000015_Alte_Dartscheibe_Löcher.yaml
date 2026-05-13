@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+active: true
+type: OFFER
+title: Alte Dartscheibe, Löcher
+description: |-
+  Scheibe sehr gebraucht, Löcher überall, Draht gerissen.
+category: 185/234/sonstige
+price: 7
+price_type: NEGOTIABLE
+shipping_type: PICKUP
+shipping_costs:
+shipping_options:
+sell_directly:
+images: [ad_000015__img1.jpg]
+
+contact:
+  name: Demo User G
+  street: Übungsstraße 9
+  zipcode: '28195'
+  location: Bremen - Zentrum
+  phone:
+
+republication_interval: 5
+id: 9100015
+content_hash: 0128ab9922bdad454b934f395744e9ba47f1d5aa09b5ed9bcd39466642fc02e5
+updated_on: '2026-05-01T12:14:00+00:00'
+created_on: '2026-05-01T12:14:00+00:00'
+repost_count: 0

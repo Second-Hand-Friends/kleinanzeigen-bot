@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+active: false
+type: OFFER
+title: Modellauto
+description: |-
+  Verkaufe ein altes Modellauto im Maßstab 1:18. Das Modell ist
+  benutzt und alt.
+
+  • Maßstab: 1:18
+  • Material: Druckguss/Zinklegierung
+  • Originalverpackung nicht vorhanden
+  • Viele Gebrauchsspuren
+description_prefix:
+description_suffix:
+category: 185/249
+
+special_attributes:
+  condition_s: ok
+
+price: 25
+price_type: NEGOTIABLE
+shipping_type: PICKUP
+shipping_costs:
+shipping_options:
+sell_directly:
+images: [ad_000100__img1.png]
+
+contact:
+  name: Demo User G
+  street: Übungsstraße 9
+  zipcode: '28195'
+  location: Bremen - Zentrum
+  phone:
+
+republication_interval: 1
+id: 9100031
+content_hash: 31812de7b1362a2399af4f68a6940787944a0716407e27211259598e930f21f4
+updated_on: '2026-05-01T12:30:00+00:00'
+created_on: '2026-05-01T12:30:00+00:00'
+repost_count: 0

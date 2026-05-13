@@ -86,6 +86,7 @@ write_template = "__version__ = '{}'\n"
 [tool.pdm.scripts]  # https://pdm-project.org/latest/usage/scripts/
 app   = "python -m kleinanzeigen_bot"
 debug = "python -m pdb -m kleinanzeigen_bot"
+verify-dom-assumptions = "python scripts/verify_dom_assumptions.py"
 
 # build & packaging
 generate-schemas = "python scripts/generate_schemas.py"

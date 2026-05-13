@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+active: true
+type: OFFER
+title: Alte Zeitschriften, 90er Jahre
+description: |-
+  5 Magazine, 1995-1999, abgegriffen, interessant für Sammler.
+category: 185/234/sonstige
+price: 8
+price_type: NEGOTIABLE
+shipping_type: PICKUP
+shipping_costs:
+shipping_options:
+sell_directly:
+images: [ad_000029__img1.jpg]
+
+contact:
+  name: Demo User E
+  street:
+  zipcode: '01067'
+  location: Dresden - Altstadt
+  phone: '+490000000005'
+
+republication_interval: 9
+id: 9100029
+content_hash: 1213bb26cb6917dd803c00d9cd5b42db2107fa80afbcb49bf990c4f0a02858e6
+updated_on: '2026-05-01T12:28:00+00:00'
+created_on: '2026-05-01T12:28:00+00:00'
+repost_count: 0

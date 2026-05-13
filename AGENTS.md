@@ -37,6 +37,13 @@ Before making non-trivial changes, review:
 - Tests belong in `tests/unit/`, `tests/integration/`, or `tests/smoke/`.
 - Use the repo's registered pytest markers.
 
+### Developer Tools
+
+- `pdm run verify-dom-assumptions` runs `scripts/verify_dom_assumptions.py`, a maintainer-owned local-only live DOM diagnostic for kleinanzeigen.de.
+- It touches the live site, is not part of the test suite, and should never be run from CI.
+- It defaults to the tracked demo ad fixture set in `tests/fixtures/demo_ads/`.
+- Treat it as a diagnostic aid, not a supported test surface.
+
 ## Testing Guidance
 
 Add or update tests when changing observable behavior, business logic, error handling, or fixing bugs.

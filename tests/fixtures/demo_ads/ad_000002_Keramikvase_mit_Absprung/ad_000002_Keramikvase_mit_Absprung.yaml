@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+active: true
+type: OFFER
+title: Keramikvase mit Absprung
+description: |-
+  Weiße Vase mit kleinem Absprung am Rand, sonst okay.
+category: 80/246/vasen
+price: 3
+price_type: NEGOTIABLE
+shipping_type: PICKUP
+shipping_costs:
+shipping_options:
+sell_directly:
+images: [ad_000002__img1.jpg]
+
+contact:
+  name: Demo User B
+  street:
+  zipcode: '20095'
+  location: Hamburg - Innenstadt
+  phone:
+
+republication_interval: 2
+id: 9100002
+content_hash: dfb85ddcb0df939bee60506940045cd63c5a9beaeeb26ffbd3474a49394be914
+updated_on: '2026-05-01T12:01:00+00:00'
+created_on: '2026-05-01T12:01:00+00:00'
+repost_count: 0

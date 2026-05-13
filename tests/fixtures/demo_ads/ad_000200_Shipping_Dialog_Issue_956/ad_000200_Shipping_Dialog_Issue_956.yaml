@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+# Reproduction case for Issue  #956: Versanddialog konnte nicht geschlossen werden!
+# shipping_type: SHIPPING with shipping_options: [Hermes_Päckchen], sell_directly: false
+# The bot fails to close the shipping dialog after selecting shipping options.
+# Use with: pdm run verify-dom-assumptions run --ad-file <this-file>
+active: false
+type: OFFER
+title: "Shipping Dialog Issue 956"
+description: |-
+  ad to reproduce issue  #956.
+  Shipping dialog fails to close with Hermes_Päckchen option.
+description_prefix:
+description_suffix:
+category: 185/249
+
+special_attributes:
+  condition_s: new
+
+price: 10
+price_type: NEGOTIABLE
+shipping_type: SHIPPING
+shipping_costs: 4.89
+shipping_options:
+sell_directly: false
+images: []
+
+contact:
+  name: 'Demo User H'
+  street:
+  zipcode: '04109'
+  location: Leipzig - Zentrum
+  phone: '+490000000008'
+
+republication_interval: 2
+id: 9100032
+content_hash: 9cf62a1b163baf9118b64949079183167a714e79b5e8585dfc6481c736a6711d
+created_on: '2026-05-01T12:31:00+00:00'
+updated_on: '2026-05-01T12:31:00+00:00'
+repost_count: 0

@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+active: true
+type: OFFER
+title: Gebrauchte Fernbedienung, Klemmt
+description: |-
+  RC, die rote Taste klemmt, Batteriefach etwas korrodiert.
+category: 161/175/weitere
+price: 2
+price_type: NEGOTIABLE
+shipping_type: PICKUP
+shipping_costs:
+shipping_options:
+sell_directly:
+images: [ad_000008__img1.jpg]
+
+contact:
+  name: Demo User H
+  street:
+  zipcode: '04109'
+  location: Leipzig - Zentrum
+  phone: '+490000000008'
+
+republication_interval: 8
+id: 9100008
+content_hash: 63d09b749d14ae682918089f4a7fc755aa6123ca85efea923d8983a23ce21e49
+updated_on: '2026-05-01T12:07:00+00:00'
+created_on: '2026-05-01T12:07:00+00:00'
+repost_count: 0

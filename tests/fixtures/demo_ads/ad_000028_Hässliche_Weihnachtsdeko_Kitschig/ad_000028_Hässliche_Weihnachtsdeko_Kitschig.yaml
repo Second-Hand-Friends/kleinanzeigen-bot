@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+active: true
+type: OFFER
+title: Hässliche Weihnachtsdeko, Kitschig
+description: |-
+  Plastik Elch, Farbe abgeblättert, sehr geschmacklos.
+category: 185/234/sonstige
+price: 4
+price_type: NEGOTIABLE
+shipping_type: PICKUP
+shipping_costs:
+shipping_options:
+sell_directly:
+images: [ad_000028__img1.jpg]
+
+contact:
+  name: Demo User D
+  street: Testallee 5
+  zipcode: '80331'
+  location: München - Maxvorstadt
+  phone:
+
+republication_interval: 8
+id: 9100028
+content_hash: d5b1edbb5ac63783a24dbe68a2a80b4518e93570f2ce23d716c444073957fe68
+updated_on: '2026-05-01T12:27:00+00:00'
+created_on: '2026-05-01T12:27:00+00:00'
+repost_count: 0

@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+active: true
+type: OFFER
+title: Verzogene Plastikdosen
+description: |-
+  4 alte Plastikbehälter, durch die Spülmaschine verzogen, Deckel passen nicht mehr.
+category: 80/86/kuechengeraete
+price: 1
+price_type: NEGOTIABLE
+shipping_type: PICKUP
+shipping_costs:
+shipping_options:
+sell_directly:
+images: [ad_000004__img1.jpg, ad_000004__img2.jpg]
+
+contact:
+  name: Demo User D
+  street: Testallee 5
+  zipcode: '80331'
+  location: München - Maxvorstadt
+  phone:
+
+republication_interval: 4
+id: 9100004
+content_hash: d1b16d8796b90641fdc2c6e35a3723812b88378dcaa3ca10b44727882892c9e6
+updated_on: '2026-05-01T12:03:00+00:00'
+created_on: '2026-05-01T12:03:00+00:00'
+repost_count: 0

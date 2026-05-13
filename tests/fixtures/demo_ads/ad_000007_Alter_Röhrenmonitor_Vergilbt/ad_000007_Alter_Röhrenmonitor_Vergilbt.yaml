@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json
+active: true
+type: OFFER
+title: Alter Röhrenmonitor, Vergilbt
+description: |-
+  CRT Monitor, vergilbtes Gehäuse, Bildschirm geht manchmal an.
+category: 161/225/monitore
+price: 10
+price_type: NEGOTIABLE
+shipping_type: PICKUP
+shipping_costs:
+shipping_options:
+sell_directly:
+images: [ad_000007__img1.jpg, ad_000007__img2.jpg]
+
+contact:
+  name: Demo User G
+  street: Übungsstraße 9
+  zipcode: '28195'
+  location: Bremen - Zentrum
+  phone:
+
+republication_interval: 7
+id: 9100007
+content_hash: ca780a9eda570f29491077ba8522bf52e53c49a6b098584665a53222c69b9054
+updated_on: '2026-05-01T12:06:00+00:00'
+created_on: '2026-05-01T12:06:00+00:00'
+repost_count: 0
