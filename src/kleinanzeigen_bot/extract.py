@@ -51,6 +51,7 @@ validate_condition_api_mapping("_CONDITION_DISPLAY_TO_API", _CONDITION_DISPLAY_T
 _LABEL_TO_KEY:Final[dict[str, str]] = {
     "zustand": "condition_s",
 }
+DOWNLOAD_CREATION_DATE_SELECTOR:Final[str] = "#viewad-extra-info > div:nth-child(1) > span:nth-child(2)"
 
 
 def _is_retryable_rmtree_error(error:BaseException) -> bool:
@@ -365,7 +366,9 @@ class AdExtractor(WebScrapingMixin):
         img_paths = []
         try:
             # download all images from box
-            image_box = await self.web_find(By.CLASS_NAME, "galleryimage-large")
+            image_box = await self.web_probe(By.CLASS_NAME, "galleryimage-large")
+            if image_box is None:
+                raise TimeoutError("No image area found.")
 
             images = await self.web_find_all(By.CSS_SELECTOR, ".galleryimage-element[data-ix] > img", parent = image_box)
             n_images = len(images)
@@ -502,14 +505,11 @@ class AdExtractor(WebScrapingMixin):
             return False
 
         # close (warning) popup, if given
-        try:
-            await self.web_find(By.ID, "vap-ovrly-secure")
+        popup = await self.web_probe(By.ID, "vap-ovrly-secure")
+        if popup is not None:
             LOG.warning("A popup appeared!")
             await self.web_click(By.CLASS_NAME, "mfp-close")
             await self.web_sleep()
-        except TimeoutError:
-            # Popup did not appear within timeout.
-            pass
         return True
 
     async def _extract_title_from_ad_page(self) -> str:
@@ -585,10 +585,7 @@ class AdExtractor(WebScrapingMixin):
         info["contact"] = await self._extract_contact_from_ad_page()
         info["id"] = ad_id
 
-        try:  # try different locations known for creation date element
-            creation_date = await self.web_text(By.XPATH, "/html/body/div[1]/div[2]/div/section[2]/section/section/article/div[3]/div[2]/div[2]/div[1]/span")
-        except TimeoutError:
-            creation_date = await self.web_text(By.CSS_SELECTOR, "#viewad-extra-info > div:nth-child(1) > span:nth-child(2)")
+        creation_date = await self.web_text(By.CSS_SELECTOR, DOWNLOAD_CREATION_DATE_SELECTOR)
 
         # convert creation date to ISO format
         created_parts = creation_date.split(".")
@@ -912,10 +909,11 @@ class AdExtractor(WebScrapingMixin):
         contact:dict[str, (str | None)] = {}
         address_text = await self.web_text(By.ID, "viewad-locality")
         # format: e.g. (Beispiel Allee 42,) 12345 Bundesland - Stadt
-        try:
-            street = (await self.web_text(By.ID, "street-address"))[:-1]  # trailing comma
+        street_element = await self.web_probe(By.ID, "street-address")
+        if street_element is not None:
+            street = (await self._extract_visible_text(street_element))[:-1]  # trailing comma
             contact["street"] = street
-        except TimeoutError:
+        else:
             LOG.info("No street given in the contact.")
 
         (zipcode, location) = address_text.split(" ", maxsplit = 1)
@@ -932,11 +930,11 @@ class AdExtractor(WebScrapingMixin):
 
         if "street" not in contact:
             contact["street"] = None
-        try:  # phone number is unusual for non-professional sellers today
-            phone_element = await self.web_find(By.ID, "viewad-contact-phone")
+        phone_element = await self.web_probe(By.ID, "viewad-contact-phone")
+        if phone_element is not None:
             phone_number = await self.web_text(By.TAG_NAME, "a", parent = phone_element)
             contact["phone"] = "".join(phone_number.replace("-", " ").split(" ")).replace("+49(0)", "0")
-        except TimeoutError:
+        else:
             contact["phone"] = None  # phone seems to be a deprecated feature (for non-professional users)
         # also see 'https://themen.kleinanzeigen.de/hilfe/deine-anzeigen/Telefon/
 
