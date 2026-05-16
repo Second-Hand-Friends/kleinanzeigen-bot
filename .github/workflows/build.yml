@@ -488,21 +488,28 @@ jobs:
         # We reuse the moving "latest"/"preview" tags for releases. GitHub's generate-notes compares
         # tag_name -> previous_tag_name. If we pass the moving tag as tag_name before it moves, the
         # comparison is old -> old (empty notes). We avoid this by using a fake tag_name (not created)
-        # and anchoring previous_tag_name to the current moving tag. This yields old -> new notes
-        # without creating or pushing any tags (important: pushes can be blocked for workflow files).
+        # and anchoring previous_tag_name to the prior release tag. Preview releases compare against
+        # the last stable "latest" release so their changelog shows stable -> preview changes.
+        # This yields old -> new notes without creating or pushing any tags (important: pushes can
+        # be blocked for workflow files).
         if ! gh release view "$RELEASE_NAME" --json tagName --jq '.tagName' >/dev/null 2>&1; then
           echo "ERROR: Failed to query existing '$RELEASE_NAME' release; cannot generate release notes." >&2
           exit 1
         fi
 
+        PREVIOUS_TAG_NAME="$RELEASE_NAME"
+        if [[ "$RELEASE_NAME" == "preview" ]]; then
+          PREVIOUS_TAG_NAME="latest"
+        fi
+
         NOTES_TAG="${RELEASE_NAME}-notes-${GITHUB_RUN_ID}"
-        echo "Generating notes: tag_name=${NOTES_TAG}, previous_tag_name=${RELEASE_NAME}, target_commitish=${GITHUB_SHA}"
+        echo "Generating notes: tag_name=${NOTES_TAG}, previous_tag_name=${PREVIOUS_TAG_NAME}, target_commitish=${GITHUB_SHA}"
 
         # Prefer GitHub's generate-notes API so we get PR links and @mentions
         gh api -X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
           -f tag_name="$NOTES_TAG" \
           -f target_commitish="$GITHUB_SHA" \
-          -f previous_tag_name="$RELEASE_NAME" \
+          -f previous_tag_name="$PREVIOUS_TAG_NAME" \
           --jq '.body' > release-notes.md
 
         if ! grep -q '[^[:space:]]' release-notes.md; then
