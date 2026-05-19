@@ -110,7 +110,7 @@ jobs:
 
 
     - name: Configure Fast APT Mirror
-      uses: vegardit/fast-apt-mirror.sh@c02f624f2c4108687b16f980a2c9e10d82bdace6 # v1.4.4
+      uses: vegardit/fast-apt-mirror.sh@806c59276adfff2df420124ad5e4587f018c358a # v1.4.5
 
 
     - name: Git Checkout
@@ -329,7 +329,7 @@ jobs:
 
 
     - name: Publish unit-test coverage
-      uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v5.0.0
+      uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v5.0.0
       # https://github.com/codecov/codecov-action
       with:
         slug: ${{ github.repository }}
@@ -342,7 +342,7 @@ jobs:
 
 
     - name: Publish integration-test coverage
-      uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v5.0.0
+      uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v5.0.0
       # https://github.com/codecov/codecov-action
       with:
         slug: ${{ github.repository }}
@@ -355,7 +355,7 @@ jobs:
 
 
     - name: Publish smoke-test coverage
-      uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v5.0.0
+      uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v5.0.0
       # https://github.com/codecov/codecov-action
       with:
         slug: ${{ github.repository }}
@@ -402,7 +402,7 @@ jobs:
 
 
     - name: Configure Fast APT Mirror
-      uses: vegardit/fast-apt-mirror.sh@c02f624f2c4108687b16f980a2c9e10d82bdace6 # v1.4.4
+      uses: vegardit/fast-apt-mirror.sh@806c59276adfff2df420124ad5e4587f018c358a # v1.4.5
 
 
     - name: Git Checkout
