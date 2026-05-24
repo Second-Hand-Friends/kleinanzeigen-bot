@@ -195,6 +195,7 @@ select = [
   "PYI",   # flake8-pyi
   "Q",     # flake8-quotes
   "RET",   # flake8-return
+  "PLW0717",  # Try clause contains too many statements
   "RSE",   # flake8-raise
   "S",     # flake8-bandit
   "SIM",   # flake8-simplify
@@ -246,6 +247,7 @@ ignore = [
   "FIX002",  # Line contains TODO, consider resolving the issue
   "PERF203",  # `try`-`except` within a loop incurs performance overhead
   "RET504",  # Unnecessary assignment to `...` before `return` statement
+  "PLW0717",  # Try clause contains too many statements
   "PLR6301",  # Method `...` could be a function, class method, or static method
   "PLR0913",  # Too many arguments in function definition (needed to match parent signature)
   "PYI041",  # Use `float` instead of `int | float`

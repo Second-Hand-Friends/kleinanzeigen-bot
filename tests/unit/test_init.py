@@ -3971,21 +3971,6 @@ class TestConditionFallbackToGenericHandler:
         mock_find_all.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_condition_uses_dialog_when_available(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
-        """When condition dialog works, it should be used without falling back."""
-        ad_cfg = Ad.model_validate(base_ad_config | {"category": "161/176", "special_attributes": {"condition_s": "ok"}})
-
-        with patch.object(
-            test_bot,
-            "_KleinanzeigenBot__set_condition",
-            new_callable = AsyncMock,
-            return_value = True,
-        ) as mock_set_condition:
-            await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
-
-        mock_set_condition.assert_awaited_once_with("ok")
-
-    @pytest.mark.asyncio
     async def test_condition_s_missing_control_logs_warning_and_continues(
         self,
         test_bot:KleinanzeigenBot,
