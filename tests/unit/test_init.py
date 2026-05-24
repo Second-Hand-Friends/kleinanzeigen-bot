@@ -13,7 +13,6 @@ import pytest
 from nodriver.core.connection import ProtocolException
 from pydantic import ValidationError
 
-import kleinanzeigen_bot
 from kleinanzeigen_bot import (
     LOG,
     SUBMISSION_MAX_RETRIES,
@@ -21,6 +20,8 @@ from kleinanzeigen_bot import (
     KleinanzeigenBot,
     LoginDetectionReason,
     LoginDetectionResult,
+    _rename_path_if_target_is_free,  # noqa: PLC2701
+    _replace_template_id_slot,  # noqa: PLC2701
     misc,
 )
 from kleinanzeigen_bot._version import __version__
@@ -159,11 +160,11 @@ def _login_detection_result(is_logged_in:bool, reason:LoginDetectionReason) -> L
     ],
 )
 def test_replace_template_id_slot_preserves_non_id_text(template:str, name:str, expected:str) -> None:
-    assert kleinanzeigen_bot._replace_template_id_slot(template, name, 123, 456) == expected
+    assert _replace_template_id_slot(template, name, 123, 456) == expected
 
 
 def test_replace_template_id_slot_skips_non_matching_name() -> None:
-    assert kleinanzeigen_bot._replace_template_id_slot("ad_{id}_{title}", "manual_123_Title", 123, 456) is None
+    assert _replace_template_id_slot("ad_{id}_{title}", "manual_123_Title", 123, 456) is None
 
 
 def test_rename_local_ad_file_and_folder_after_id_change_is_disabled_by_default(test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
@@ -348,7 +349,7 @@ def test_rename_path_if_target_is_free_treats_broken_symlink_as_collision(tmp_pa
     source.write_text("source", encoding = "utf-8")
     target.symlink_to(tmp_path / "missing.txt")
 
-    renamed_path = kleinanzeigen_bot._rename_path_if_target_is_free(source, target, label = "test file")
+    renamed_path = _rename_path_if_target_is_free(source, target, label = "test file")
 
     assert renamed_path == source
     assert source.exists()
