@@ -2440,7 +2440,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if renamed_path == image_path:
             return image_ref
 
-        return str(original_path.with_name(renamed_name))
+        return original_path.with_name(renamed_name).as_posix()
 
     def _rename_local_ad_folder_after_id_change(self, ad_file:Path, *, old_id:int, new_id:int, folder_name_template:str) -> Path:
         parent = ad_file.parent
