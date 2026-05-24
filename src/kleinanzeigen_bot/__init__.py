@@ -67,6 +67,14 @@ validate_condition_api_mapping("_CONDITION_GERMAN_TO_API", _CONDITION_GERMAN_TO_
 
 
 def _normalize_condition(condition_value:str) -> tuple[str, str | None]:
+    """Return the normalized condition value and legacy input.
+
+    Returns ``(canonical_value, legacy_value)`` where ``canonical_value`` is the
+    API form from ``_CONDITION_GERMAN_TO_API`` and ``legacy_value`` is the original
+    input only when a mapping was applied, otherwise ``None``. Unmapped inputs are
+    returned unchanged. Example: ``neu`` -> ``("new", "neu")``; ``new`` ->
+    ``("new", None)``.
+    """
     canonical_value = _CONDITION_GERMAN_TO_API.get(condition_value, condition_value)
     if canonical_value != condition_value:
         return canonical_value, condition_value
