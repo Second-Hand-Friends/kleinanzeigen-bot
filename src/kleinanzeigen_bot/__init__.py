@@ -3404,13 +3404,16 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def __set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         short_timeout = self._timeout("quick_dom")
         if ad_cfg.shipping_type == "PICKUP":
-            # Some categories (notably books 76/77 and comics 76/77/15156) render the
-            # "Eigenschaften und Versand" fieldset without a shipping enable/disable toggle —
-            # those ads are PICKUP-only by site convention, so the absence of the radio is
-            # the expected state and matches the configured shipping_type.
             pickup_radio = await self.web_probe(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
             if pickup_radio is None:
-                LOG.debug("PICKUP: no shipping toggle for this category; treating as already PICKUP.")
+                shipping_fieldset = await self.web_probe(By.ID, "ad-shipping-enabled", timeout = short_timeout)
+                if shipping_fieldset is not None:
+                    raise TimeoutError(
+                        _("Shipping fieldset is rendered, but the pickup radio is missing; page may not be fully loaded.")
+                    )
+                # Some categories (notably books 76/77 and comics 76/77/15156) render no
+                # shipping fieldset at all — those ads are PICKUP-only by site convention.
+                LOG.debug("PICKUP: no shipping fieldset for this category; treating as already PICKUP.")
                 return
             try:
                 if not await self.web_check(By.ID, "ad-shipping-enabled-no", Is.SELECTED, timeout = short_timeout):

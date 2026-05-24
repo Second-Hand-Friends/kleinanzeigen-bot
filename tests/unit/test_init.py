@@ -4234,12 +4234,14 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()) as mock_probe,
             patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = selected),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
 
+        mock_probe.assert_awaited_once()
+        assert mock_probe.call_args.args[:2] == (By.ID, "ad-shipping-enabled-no")
         if selected:
             mock_click.assert_not_awaited()
         else:
@@ -4264,20 +4266,46 @@ class TestShippingDialogFlow:
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
-        """Categories without a shipping toggle (e.g. books 76/77, comics 76/77/15156) are
-        PICKUP-only by site convention — the absence of ``ad-shipping-enabled-no`` should
+        """Categories without a shipping fieldset (e.g. books 76/77, comics 76/77/15156)
+        are PICKUP-only by site convention — the absence of both shipping selectors should
         short-circuit without calling ``web_check``/``web_click``."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None) as mock_probe,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, None]),
             patch.object(test_bot, "web_check", new_callable = AsyncMock) as mock_check,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
 
-        mock_probe.assert_awaited_once()
-        assert mock_probe.call_args.args[:2] == (By.ID, "ad-shipping-enabled-no")
+        mock_check.assert_not_awaited()
+        mock_click.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_pickup_shipping_raises_when_fieldset_rendered_but_pickup_radio_missing(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """A rendered shipping fieldset without the pickup radio should be treated as an error."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, MagicMock()]) as mock_probe,
+            patch.object(test_bot, "web_check", new_callable = AsyncMock) as mock_check,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            pytest.raises(
+                TimeoutError,
+                match = "Shipping fieldset is rendered, but the pickup radio is missing; page may not be fully loaded.",
+            ),
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_shipping")(ad_cfg)
+
+        assert mock_probe.await_count == 2
+        assert [call.args[:2] for call in mock_probe.await_args_list] == [
+            (By.ID, "ad-shipping-enabled-no"),
+            (By.ID, "ad-shipping-enabled"),
+        ]
         mock_check.assert_not_awaited()
         mock_click.assert_not_awaited()
 
