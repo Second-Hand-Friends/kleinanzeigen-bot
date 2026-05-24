@@ -64,6 +64,15 @@ _CONDITION_GERMAN_TO_API:Final[dict[str, str]] = {
     "defekt": "defect",
 }
 validate_condition_api_mapping("_CONDITION_GERMAN_TO_API", _CONDITION_GERMAN_TO_API)
+
+
+def _normalize_condition(condition_value:str) -> tuple[str, str | None]:
+    canonical_value = _CONDITION_GERMAN_TO_API.get(condition_value, condition_value)
+    if canonical_value != condition_value:
+        return canonical_value, condition_value
+    return condition_value, None
+
+
 _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
     (By.ID, "user-email"),
@@ -3026,9 +3035,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         Returns True when dialog handling succeeded, otherwise False to indicate
         that caller should use generic special-attribute handling.
         """
-        mapped_value = _CONDITION_GERMAN_TO_API.get(condition_value)
-        if mapped_value and mapped_value != condition_value:
-            LOG.warning("Condition value [%s] is deprecated; update your config to [%s].", condition_value, mapped_value)
+        canonical_value, legacy_value = _normalize_condition(condition_value)
+        if legacy_value is not None:
+            LOG.warning("Condition value [%s] is deprecated; update your config to [%s].", legacy_value, canonical_value)
 
         short_timeout = self._timeout("quick_dom")
         condition_trigger_xpath = "//label[contains(@for, '.condition')]/following::button[@aria-haspopup='dialog' or @aria-haspopup='true'][1]"
@@ -3056,11 +3065,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Kleinanzeigen changed dialog radio values from German tokens to English API codes
         # (e.g. "wie_neu" -> "like_new", "sehr_gut" -> "like_new"). Prefer the mapped
         # API value first for legacy configs, then fall back to the configured value if needed.
-        candidate_values:list[str] = []
-        if mapped_value and mapped_value != condition_value:
-            candidate_values.append(mapped_value)
-        if condition_value not in candidate_values:
-            candidate_values.append(condition_value)
+        candidate_values:list[str] = [canonical_value]
+        if legacy_value is not None:
+            candidate_values.append(legacy_value)
 
         try:
             await condition_trigger.click()
@@ -3262,7 +3269,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     continue
 
                 LOG.info("Condition dialog not available, falling back to generic attribute handler for [%s]...", special_attribute_key)
-                special_attribute_value_str = _CONDITION_GERMAN_TO_API.get(special_attribute_value_str, special_attribute_value_str)
+                special_attribute_value_str = _normalize_condition(special_attribute_value_str)[0]
 
             LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
             id_suffix_literal = _xpath_literal(f".{normalized_special_attribute_key}")
