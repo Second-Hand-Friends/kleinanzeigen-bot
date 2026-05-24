@@ -567,6 +567,26 @@
       "title": "DownloadConfig",
       "type": "object"
     },
+    "LocalPathRenamingConfig": {
+      "properties": {
+        "mode": {
+          "default": "OFF",
+          "description": "rename local ad files/folders after a successful publish changes the ad ID. OFF keeps existing paths unchanged. TEMPLATE_MATCH only replaces the old ID in the ID slot defined by the configured download naming templates",
+          "enum": [
+            "OFF",
+            "TEMPLATE_MATCH"
+          ],
+          "examples": [
+            "OFF",
+            "TEMPLATE_MATCH"
+          ],
+          "title": "Mode",
+          "type": "string"
+        }
+      },
+      "title": "LocalPathRenamingConfig",
+      "type": "object"
+    },
     "LoginConfig": {
       "properties": {
         "username": {
@@ -619,6 +639,10 @@
           "description": "match old ads by title when deleting (only works with BEFORE_PUBLISH)",
           "title": "Delete Old Ads By Title",
           "type": "boolean"
+        },
+        "local_path_renaming": {
+          "$ref": "#/$defs/LocalPathRenamingConfig",
+          "description": "local file and folder rename behavior after a successful publish changes the ad ID"
         }
       },
       "title": "PublishingConfig",

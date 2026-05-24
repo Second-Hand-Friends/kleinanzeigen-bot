@@ -204,6 +204,12 @@ kleinanzeigen_bot/__init__.py:
     "Auto price reduction preview for [%s] (%s): disabled (on_update=false, effective_price=%s)": "Vorschau automatische Preisreduzierung für [%s] (%s): deaktiviert (on_update=false, effektiver Preis=%s)"
     "Auto price reduction preview for [%s] (%s): %s -> %s (cycle %s)": "Vorschau automatische Preisreduzierung für [%s] (%s): %s -> %s (Zyklus %s)"
     "Auto price reduction preview for [%s] (%s): no new reduction (effective_price=%s, reason=%s)": "Vorschau automatische Preisreduzierung für [%s] (%s): keine neue Reduktion (effektiver Preis=%s, Grund=%s)"
+
+  _rename_path_if_target_is_free:
+    "Skipping local %s rename because target already exists: %s": "Lokale %s-Umbenennung übersprungen, da das Ziel bereits existiert: %s"
+    "Could not rename local %s from %s to %s: %s": "Lokale %s konnte nicht von %s nach %s umbenannt werden: %s"
+    "Renamed local %s from %s to %s": "Lokale %s von %s nach %s umbenannt"
+
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
     "Updating ad '%s'...": "Aktualisiere Anzeige '%s'..."

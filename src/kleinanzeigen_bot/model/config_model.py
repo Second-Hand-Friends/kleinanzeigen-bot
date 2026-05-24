@@ -235,11 +235,26 @@ class LoginConfig(ContextualModel):
     password:str = Field(..., min_length = 1, description = "kleinanzeigen.de login password")
 
 
+class LocalPathRenamingConfig(ContextualModel):
+    mode:Literal["OFF", "TEMPLATE_MATCH"] = Field(
+        default = "OFF",
+        description=(
+            "rename local ad files/folders after a successful publish changes the ad ID. "
+            "OFF keeps existing paths unchanged. TEMPLATE_MATCH only replaces the old ID in the ID slot defined by the configured download naming templates"
+        ),
+        examples = ["OFF", "TEMPLATE_MATCH"],
+    )
+
+
 class PublishingConfig(ContextualModel):
     delete_old_ads:Literal["BEFORE_PUBLISH", "AFTER_PUBLISH", "NEVER"] | None = Field(
         default = "AFTER_PUBLISH", description = "when to delete old versions of republished ads", examples = ["BEFORE_PUBLISH", "AFTER_PUBLISH", "NEVER"]
     )
     delete_old_ads_by_title:bool = Field(default = True, description = "match old ads by title when deleting (only works with BEFORE_PUBLISH)")
+    local_path_renaming:LocalPathRenamingConfig = Field(
+        default_factory = LocalPathRenamingConfig,
+        description = "local file and folder rename behavior after a successful publish changes the ad ID",
+    )
 
 
 class DeletingConfig(ContextualModel):
