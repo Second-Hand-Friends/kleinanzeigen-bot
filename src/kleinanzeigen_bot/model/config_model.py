@@ -240,7 +240,12 @@ class LocalPathRenamingConfig(ContextualModel):
         default = "OFF",
         description=(
             "rename local ad files/folders after a successful publish changes the ad ID. "
-            "OFF keeps existing paths unchanged. TEMPLATE_MATCH only replaces the old ID in the ID slot defined by the configured download naming templates"
+            "OFF keeps existing paths unchanged. "
+            "TEMPLATE_MATCH only renames paths whose names match the structure defined by "
+            "download.folder_name_template and download.ad_file_name_template. "
+            "It replaces only the old ID value inside the {id} slot and preserves all other text "
+            "(including user-edited or previously truncated titles), "
+            "so changing the download templates also controls which local paths are eligible for renaming."
         ),
         examples = ["OFF", "TEMPLATE_MATCH"],
     )
@@ -253,7 +258,12 @@ class PublishingConfig(ContextualModel):
     delete_old_ads_by_title:bool = Field(default = True, description = "match old ads by title when deleting (only works with BEFORE_PUBLISH)")
     local_path_renaming:LocalPathRenamingConfig = Field(
         default_factory = LocalPathRenamingConfig,
-        description = "local file and folder rename behavior after a successful publish changes the ad ID",
+        description = (
+            "local file and folder rename behavior after a successful publish changes the ad ID. "
+            "When TEMPLATE_MATCH is enabled, the download.folder_name_template and "
+            "download.ad_file_name_template are used to determine which paths qualify for renaming — "
+            "only paths whose names match the template structure are updated."
+        ),
     )
 
 
