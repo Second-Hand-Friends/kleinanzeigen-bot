@@ -2900,7 +2900,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # value, accept it instead of trying (and failing) to open a combobox.
         if city_tag == "input" and "readonly" in city_attrs and selected_city:
             LOG.info(
-                _("ad-city is a <input readonly> with value '%s' (zip-derived) - accepting instead of combobox selection."),
+                "ad-city is a <input readonly> with value '%s' (zip-derived) - accepting instead of combobox selection.",
                 selected_city,
             )
             return
