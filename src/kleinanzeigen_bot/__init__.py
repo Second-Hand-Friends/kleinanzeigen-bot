@@ -2891,7 +2891,20 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if city_element is None:
             raise TimeoutError(_("Unsupported city element type while setting contact location: <%s>") % "missing")
         city_tag = city_element.local_name
-        city_role = str(city_element.attrs.get("role") or "").casefold()
+        city_attrs = getattr(city_element, "attrs", {}) or {}
+        city_role = str(city_attrs.get("role") or "").casefold()
+
+        # kleinanzeigen.de switched the city field to a read-only <input> whose
+        # value is derived from the entered zip code; it is no longer a
+        # selectable combobox. When the page already prefilled a non-empty
+        # value, accept it instead of trying (and failing) to open a combobox.
+        if city_tag == "input" and "readonly" in city_attrs and selected_city:
+            LOG.info(
+                "ad-city is a <input readonly> with value '%s' (zip-derived) — accepting instead of combobox selection.",
+                selected_city,
+            )
+            return
+
         if city_tag != "button" or city_role != "combobox":
             raise TimeoutError(_("Unsupported city element type while setting contact location: <%s>") % city_tag)
 
