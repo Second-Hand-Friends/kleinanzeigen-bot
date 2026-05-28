@@ -2594,6 +2594,21 @@ class TestKleinanzeigenBotContactLocationHardening:
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_contact_location")("10115 - Metroville")
 
+    @pytest.mark.asyncio
+    async def test_set_contact_location_accepts_readonly_input_with_zip_derived_value(self, test_bot:KleinanzeigenBot) -> None:
+        """When ad-city is a readonly <input> with a non-empty prefilled value (zip-derived), accept it."""
+        city_input = MagicMock(spec = Element)
+        city_input.local_name = "input"
+        city_input.attrs = {"readonly": "", "value": "Metroville - Riverside"}
+
+        with (
+            patch.object(test_bot, "_KleinanzeigenBot__read_city_selection_text", new_callable = AsyncMock, return_value = "Metroville - Riverside"),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
+            patch.object(test_bot, "_KleinanzeigenBot__select_city_combobox_option", new_callable = AsyncMock) as combobox_mock,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_location")("Metroville")
+            combobox_mock.assert_not_called()
+
 
 class TestKleinanzeigenBotArgParsing:
     """Tests for command line argument parsing."""
