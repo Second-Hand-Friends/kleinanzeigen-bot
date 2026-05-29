@@ -1050,6 +1050,7 @@ class TestKleinanzeigenBotInitialization:
         assert config_path.exists()
         content = config_path.read_text()
         assert "username: changeme" in content
+        assert "password: changeme" in content
 
 
 class TestKleinanzeigenBotLogging:
@@ -1165,8 +1166,10 @@ class TestKleinanzeigenBotCommandLine:
 class TestKleinanzeigenBotConfiguration:
     """Tests for configuration loading and validation."""
 
-    def test_load_config_handles_missing_file(self, test_bot:KleinanzeigenBot, test_data_dir:str) -> None:
+    def test_load_config_handles_missing_file(self, test_bot:KleinanzeigenBot, test_data_dir:str, monkeypatch:pytest.MonkeyPatch) -> None:
         """Verify that loading a missing config file creates default config. No info log is expected anymore."""
+        monkeypatch.setenv("KLEINANZEIGEN_BOT_USERNAME", "dummy_user")
+        monkeypatch.setenv("KLEINANZEIGEN_BOT_PASSWORD", "dummy_pass")
         config_path = Path(test_data_dir) / "missing_config.yaml"
         config_path.unlink(missing_ok = True)
         test_bot.config_file_path = str(config_path)
@@ -1189,6 +1192,128 @@ login:
             test_bot.load_config()
         assert "login.username" not in str(exc_info.value)
         assert "login.password" in str(exc_info.value)
+
+
+class TestResolveLoginCredentials:
+    """Tests for _resolve_login_credentials env var resolution."""
+    # ruff: noqa: S105 test strings are not real passwords
+
+    def test_resolves_var_from_environment(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        """${VAR} is replaced by the env var value."""
+        monkeypatch.setenv("TEST_BOT_USER", "resolved_user")
+        monkeypatch.setenv("TEST_BOT_PASS", "resolved_pass")
+        config:dict[str, Any] = {
+            "login": {
+                "username": "${TEST_BOT_USER}",
+                "password": "${TEST_BOT_PASS}",
+            },
+        }
+        KleinanzeigenBot._resolve_login_credentials(config)
+        assert config["login"]["username"] == "resolved_user"
+        assert config["login"]["password"] == "resolved_pass"
+
+    def test_uses_fallback_when_var_unset(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        """${VAR:-default} uses the default when VAR is not set."""
+        monkeypatch.delenv("OPTIONAL_USER", raising = False)
+        monkeypatch.delenv("OPTIONAL_PASS", raising = False)
+        config:dict[str, Any] = {
+            "login": {
+                "username": "${OPTIONAL_USER:-fallback_user}",
+                "password": "${OPTIONAL_PASS:-fallback_pass}",
+            },
+        }
+        KleinanzeigenBot._resolve_login_credentials(config)
+        assert config["login"]["username"] == "fallback_user"
+        assert config["login"]["password"] == "fallback_pass"
+
+    def test_raises_value_error_when_required_var_unset(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        """${VAR} raises ValueError when VAR is not set and no default."""
+        monkeypatch.delenv("MUST_HAVE_USER", raising = False)
+        config:dict[str, Any] = {
+            "login": {
+                "username": "${MUST_HAVE_USER}",
+                "password": "${MUST_HAVE_PASS}",
+            },
+        }
+        with pytest.raises(ValueError, match = "Environment variable MUST_HAVE_USER is required for login"):
+            KleinanzeigenBot._resolve_login_credentials(config)
+
+    def test_leaves_plain_text_values_unchanged(self) -> None:
+        """Non-placeholder values are not modified."""
+        config:dict[str, Any] = {
+            "login": {
+                "username": "real_user",
+                "password": "real_pass",
+            },
+        }
+        KleinanzeigenBot._resolve_login_credentials(config)
+        assert config["login"]["username"] == "real_user"
+        assert config["login"]["password"] == "real_pass"
+
+    def test_handles_missing_login_key(self) -> None:
+        """Missing 'login' key does nothing."""
+        config:dict[str, Any] = {}
+        KleinanzeigenBot._resolve_login_credentials(config)
+        assert "login" not in config
+
+    def test_handles_login_as_non_dict(self) -> None:
+        """Login being a non-dict (e.g. str) does nothing."""
+        config:dict[str, Any] = {"login": "some_string"}
+        KleinanzeigenBot._resolve_login_credentials(config)
+        assert config["login"] == "some_string"
+
+    def test_handles_non_string_field_values(self) -> None:
+        """Non-string values like None or int are left untouched."""
+        config:dict[str, Any] = {
+            "login": {
+                "username": None,
+                "password": 12345,
+            },
+        }
+        KleinanzeigenBot._resolve_login_credentials(config)
+        assert config["login"]["username"] is None
+        assert config["login"]["password"] == 12345
+
+    def test_resolves_only_username_and_password(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        """Arbitrary login fields (like api_key) are NOT resolved."""
+        monkeypatch.setenv("USER", "user1")
+        monkeypatch.setenv("PASS", "pass1")
+        monkeypatch.setenv("API_KEY", "secret123")
+        config:dict[str, Any] = {
+            "login": {
+                "username": "${USER}",
+                "password": "${PASS}",
+                "api_key": "${API_KEY}",
+            },
+        }
+        KleinanzeigenBot._resolve_login_credentials(config)
+        assert config["login"]["username"] == "user1"
+        assert config["login"]["password"] == "pass1"
+        assert config["login"]["api_key"] == "${API_KEY}"  # unchanged
+
+    def test_load_config_resolves_env_vars_in_login(self, test_bot:KleinanzeigenBot, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        """load_config resolves ${VAR} placeholders from environment into the Config object."""
+        monkeypatch.setenv("BOT_USERNAME", "env_user")
+        monkeypatch.setenv("BOT_PASSWORD", "env_pass")
+
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text("""
+login:
+  username: ${BOT_USERNAME}
+  password: ${BOT_PASSWORD}
+ad_defaults:
+  contact:
+    name: Test User
+    zipcode: "12345"
+publishing:
+  delete_old_ads: BEFORE_PUBLISH
+  delete_old_ads_by_title: false
+""")
+        test_bot.config_file_path = str(config_path)
+        test_bot.load_config()
+
+        assert test_bot.config.login.username == "env_user"
+        assert test_bot.config.login.password == "env_pass"
 
 
 class TestKleinanzeigenBotAuthentication:
@@ -2846,6 +2971,21 @@ class TestKleinanzeigenBotContactLocationHardening:
             pytest.raises(TimeoutError, match = "City selection did not converge"),
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_contact_location")("10115 - Metroville")
+
+    @pytest.mark.asyncio
+    async def test_set_contact_location_accepts_readonly_input_with_zip_derived_value(self, test_bot:KleinanzeigenBot) -> None:
+        """When ad-city is a readonly <input> with a non-empty prefilled value (zip-derived), accept it."""
+        city_input = MagicMock(spec = Element)
+        city_input.local_name = "input"
+        city_input.attrs = {"readonly": "", "value": "Metroville - Riverside"}
+
+        with (
+            patch.object(test_bot, "_KleinanzeigenBot__read_city_selection_text", new_callable = AsyncMock, return_value = "Metroville - Riverside"),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
+            patch.object(test_bot, "_KleinanzeigenBot__select_city_combobox_option", new_callable = AsyncMock) as combobox_mock,
+        ):
+            await getattr(test_bot, "_KleinanzeigenBot__set_contact_location")("Metroville")
+            combobox_mock.assert_not_called()
 
 
 class TestKleinanzeigenBotArgParsing:

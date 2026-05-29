@@ -315,6 +315,21 @@ login:
   password: "your_password"
 ```
 
+To avoid storing credentials in the config file, use environment variable substitution:
+
+```yaml
+login:
+  username: "${KLEINANZEIGEN_BOT_USERNAME}"
+  password: "${KLEINANZEIGEN_BOT_PASSWORD}"
+```
+
+```bash
+export KLEINANZEIGEN_BOT_USERNAME=your@email.com
+export KLEINANZEIGEN_BOT_PASSWORD=your_password
+```
+
+Plain-text values in config.yaml are still fully supported.
+
 📖 **[Complete Configuration Reference →](docs/CONFIGURATION.md)**
 
 Full documentation including timeout tuning, browser settings, ad defaults, diagnostics, and all available options.
