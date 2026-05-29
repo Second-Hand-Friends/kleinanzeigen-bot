@@ -120,6 +120,36 @@ def _xpath_literal(value:str) -> str:
     return "concat(" + ', "\'", '.join(f"'{part}'" for part in value.split("'")) + ")"
 
 
+_TEMPLATE_ID_REGEX_CACHE:dict[str, re.Pattern[str]] = {}
+
+
+def _build_id_slot_regex(template:str) -> re.Pattern[str]:
+    """Build a compiled regex from a download template with named groups.
+
+    Returns a regex where {id} captures any digit run as group 'id'
+    and {title} matches any text non-greedily.
+    """
+    if template not in _TEMPLATE_ID_REGEX_CACHE:
+        regex_parts:list[str] = []
+        parsed_template = list(Formatter().parse(template))
+        for literal_text, field_name, _format_spec, _conversion in parsed_template:
+            regex_parts.append(re.escape(literal_text))
+            if field_name == "id":
+                regex_parts.append(r"(?P<id>\d+)")
+            elif field_name == "title":
+                regex_parts.append(".*?")
+        _TEMPLATE_ID_REGEX_CACHE[template] = re.compile("".join(regex_parts))
+    return _TEMPLATE_ID_REGEX_CACHE[template]
+
+
+def _extract_id_from_template_slot(template:str, name:str) -> int | None:
+    """Return the digit run found in the template-defined {id} slot, or None."""
+    match = _build_id_slot_regex(template).fullmatch(name)
+    if match is None:
+        return None
+    return int(match.group("id"))
+
+
 def _replace_template_id_slot(template:str, name:str, new_id:int) -> str | None:
     """Replace the numeric ID in the template-defined {id} slot with new_id.
 
@@ -129,17 +159,7 @@ def _replace_template_id_slot(template:str, name:str, new_id:int) -> str | None:
     when {title} and {id} are adjacent in the template.  This preserves
     user-edited or previously truncated title fragments instead of re-rendering.
     """
-    regex_parts:list[str] = []
-    parsed_template = list(Formatter().parse(template))
-
-    for literal_text, field_name, _format_spec, _conversion in parsed_template:
-        regex_parts.append(re.escape(literal_text))
-        if field_name == "id":
-            regex_parts.append(r"(?P<id>\d+)")
-        elif field_name == "title":
-            regex_parts.append(".*?")
-
-    match = re.fullmatch("".join(regex_parts), name)
+    match = _build_id_slot_regex(template).fullmatch(name)
     if match is None:
         return None
 
@@ -2882,6 +2902,22 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # saved file itself may move as part of this opt-in local migration.
         renamed_ad_file, file_renamed, folder_renamed = self._rename_local_ad_file_and_folder_after_id_change(Path(ad_file), old_ad_id, ad_id)
 
+        # Derive the actual old ID found in the file/folder names from the
+        # template-defined {id} slot instead of ad_cfg.id (YAML-stored ID).
+        # The two can diverge when a previous republish already updated the
+        # YAML id but the old naming was never migrated.
+        path_old_id = old_ad_id
+        ad_file_stem = Path(ad_file).stem
+        extracted = _extract_id_from_template_slot(
+            self.config.download.ad_file_name_template, ad_file_stem,
+        )
+        if extracted is not None:
+            path_old_id = extracted
+
+        id_label = f"ID {path_old_id} -> ID {ad_id}"
+        if extracted is not None and extracted != old_ad_id:
+            id_label += f" (YAML had ID {old_ad_id})"
+
         # Log a summary when local paths were renamed
         if renamed_image_count > 0 or file_renamed or folder_renamed:
             renamed:list[str] = []
@@ -2891,11 +2927,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 renamed.append("ad file")
             if renamed_image_count > 0:
                 renamed.append(f"{renamed_image_count} image(s)")
-            LOG.info("Local path renaming (ID %s -> ID %s): %s", old_ad_id, ad_id, ", ".join(renamed))
+            LOG.info("Local path renaming (%s): %s", id_label, ", ".join(renamed))
             if file_renamed or folder_renamed:
                 LOG.info("Updated ad file: %s", renamed_ad_file)
         elif old_ad_id is not None and old_ad_id != ad_id and self.config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH":
-            LOG.info("Local path renaming (ID %s -> ID %s): no paths matched the configured templates", old_ad_id, ad_id)
+            LOG.info("Local path renaming (%s): no paths matched the configured templates", id_label)
         # NOTE: renamed_ad_file may differ from ad_file after the call above.
         # ad_file is stale at this point (pointing to the pre-rename path), but
         # no code in publish_ad() dereferences it after this line, so the drift
