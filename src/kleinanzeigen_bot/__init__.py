@@ -119,25 +119,30 @@ def _xpath_literal(value:str) -> str:
     return "concat(" + ', "\'", '.join(f"'{part}'" for part in value.split("'")) + ")"
 
 
-def _replace_template_id_slot(template:str, name:str, old_id:int, new_id:int) -> str | None:
-    """Replace old_id only when it appears in the template-defined {id} slot.
+def _replace_template_id_slot(template:str, name:str, new_id:int) -> str | None:
+    """Replace the numeric ID in the template-defined {id} slot with new_id.
 
-    The {title} slot intentionally matches any existing text so user-edited or
-    previously truncated title fragments are preserved instead of being re-rendered.
+    The {id} slot matches any sequence of digits; renaming is skipped if the
+    matched ID already equals new_id.  {title} intentionally matches any
+    existing text so user-edited or previously truncated title fragments are
+    preserved instead of being re-rendered.
     """
-    old_id_text = str(old_id)
     regex_parts:list[str] = []
     parsed_template = list(Formatter().parse(template))
 
     for literal_text, field_name, _format_spec, _conversion in parsed_template:
         regex_parts.append(re.escape(literal_text))
         if field_name == "id":
-            regex_parts.append(f"(?P<id>{re.escape(old_id_text)})")
+            regex_parts.append(r"(?P<id>\d+)")
         elif field_name == "title":
             regex_parts.append(".*")
 
     match = re.fullmatch("".join(regex_parts), name)
     if match is None:
+        return None
+
+    old_id_in_path = int(match.group("id"))
+    if old_id_in_path == new_id:
         return None
 
     id_start, id_end = match.span("id")
@@ -2357,19 +2362,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         download_config = self.config.download
         current_ad_file = self._rename_local_ad_file_after_id_change(
             ad_file,
-            old_id = old_id,
             new_id = new_id,
             ad_file_name_template = download_config.ad_file_name_template,
         )
         return self._rename_local_ad_folder_after_id_change(
             current_ad_file,
-            old_id = old_id,
             new_id = new_id,
             folder_name_template = download_config.folder_name_template,
         )
 
-    def _rename_local_ad_file_after_id_change(self, ad_file:Path, *, old_id:int, new_id:int, ad_file_name_template:str) -> Path:
-        renamed_stem = _replace_template_id_slot(ad_file_name_template, ad_file.stem, old_id, new_id)
+    def _rename_local_ad_file_after_id_change(self, ad_file:Path, *, new_id:int, ad_file_name_template:str) -> Path:
+        renamed_stem = _replace_template_id_slot(ad_file_name_template, ad_file.stem, new_id)
         if renamed_stem is None:
             LOG.debug("Skipping local ad file rename because name does not match configured template: %s", ad_file)
             return ad_file
@@ -2395,7 +2398,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             updated_image_ref = self._rename_referenced_local_image_file_after_id_change(
                 ad_file,
                 image_ref,
-                old_id = old_id,
                 new_id = new_id,
                 ad_file_name_template = self.config.download.ad_file_name_template,
             )
@@ -2410,7 +2412,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         ad_file:Path,
         image_ref:Any,
         *,
-        old_id:int,
         new_id:int,
         ad_file_name_template:str,
     ) -> Any:
@@ -2431,7 +2432,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if match is None:
             return image_ref
 
-        renamed_prefix = _replace_template_id_slot(ad_file_name_template, match.group("prefix"), old_id, new_id)
+        renamed_prefix = _replace_template_id_slot(ad_file_name_template, match.group("prefix"), new_id)
         if renamed_prefix is None:
             return image_ref
 
@@ -2442,9 +2443,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return original_path.with_name(renamed_name).as_posix()
 
-    def _rename_local_ad_folder_after_id_change(self, ad_file:Path, *, old_id:int, new_id:int, folder_name_template:str) -> Path:
+    def _rename_local_ad_folder_after_id_change(self, ad_file:Path, *, new_id:int, folder_name_template:str) -> Path:
         parent = ad_file.parent
-        renamed_folder_name = _replace_template_id_slot(folder_name_template, parent.name, old_id, new_id)
+        renamed_folder_name = _replace_template_id_slot(folder_name_template, parent.name, new_id)
         if renamed_folder_name is None:
             LOG.debug("Skipping local ad folder rename because name does not match configured template: %s", parent)
             return ad_file

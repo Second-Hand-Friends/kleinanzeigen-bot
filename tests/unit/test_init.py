@@ -160,11 +160,11 @@ def _login_detection_result(is_logged_in:bool, reason:LoginDetectionReason) -> L
     ],
 )
 def test_replace_template_id_slot_preserves_non_id_text(template:str, name:str, expected:str) -> None:
-    assert _replace_template_id_slot(template, name, 123, 456) == expected
+    assert _replace_template_id_slot(template, name, 456) == expected
 
 
 def test_replace_template_id_slot_skips_non_matching_name() -> None:
-    assert _replace_template_id_slot("ad_{id}_{title}", "manual_123_Title", 123, 456) is None
+    assert _replace_template_id_slot("ad_{id}_{title}", "manual_123_Title", 456) is None
 
 
 def test_rename_local_ad_file_and_folder_after_id_change_is_disabled_by_default(test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
