@@ -157,6 +157,9 @@ def _login_detection_result(is_logged_in:bool, reason:LoginDetectionReason) -> L
         ("ad_{id}_{title}", "ad_123_User edited title", "ad_456_User edited title"),
         ("{title} ({id})", "User edited title (123)", "User edited title (456)"),
         ("{id}", "123", "456"),
+        ("{title}{id}", "Bike123", "Bike456"),
+        ("{title}{id}", "123", "456"),
+        ("{id}{title}", "123Bike", "456Bike"),
     ],
 )
 def test_replace_template_id_slot_preserves_non_id_text(template:str, name:str, expected:str) -> None:
@@ -173,7 +176,7 @@ def test_rename_local_ad_file_and_folder_after_id_change_is_disabled_by_default(
     ad_file = folder / "ad_123.yaml"
     ad_file.write_text("id: 456\n", encoding = "utf-8")
 
-    renamed_path = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
+    renamed_path = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)[0]
 
     assert renamed_path == ad_file
     assert ad_file.exists()
@@ -196,7 +199,7 @@ def test_rename_local_ad_file_and_folder_after_id_change_renames_template_matche
     image_file.write_bytes(b"img")
     unrelated_file.write_text("keep", encoding = "utf-8")
 
-    renamed_path = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
+    renamed_path = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)[0]
 
     renamed_folder = tmp_path / "ad_456_User edited title"
     assert renamed_path == renamed_folder / "ad_456.yaml"
@@ -370,7 +373,7 @@ def test_rename_local_ad_file_and_folder_after_id_change_skips_manual_names(test
     ad_file.write_text("id: 456\n", encoding = "utf-8")
     image_file.write_bytes(b"img")
 
-    renamed_path = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
+    renamed_path = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)[0]
 
     assert renamed_path == ad_file
     assert ad_file.exists()
@@ -392,7 +395,7 @@ def test_rename_local_ad_file_and_folder_after_id_change_skips_collisions(test_b
     ad_file.write_text("id: 456\n", encoding = "utf-8")
     target_file.write_text("existing", encoding = "utf-8")
 
-    renamed_path = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
+    renamed_path = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)[0]
 
     renamed_folder = tmp_path / "ad_456_Title"
     assert renamed_path == renamed_folder / "ad_123.yaml"

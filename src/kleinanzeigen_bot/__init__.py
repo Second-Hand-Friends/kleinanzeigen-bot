@@ -124,9 +124,10 @@ def _replace_template_id_slot(template:str, name:str, new_id:int) -> str | None:
     """Replace the numeric ID in the template-defined {id} slot with new_id.
 
     The {id} slot matches any sequence of digits; renaming is skipped if the
-    matched ID already equals new_id.  {title} intentionally matches any
-    existing text so user-edited or previously truncated title fragments are
-    preserved instead of being re-rendered.
+    matched ID already equals new_id.  The {title} slot uses non-greedy
+    matching so the {id} slot greedily captures the maximal digit run — even
+    when {title} and {id} are adjacent in the template.  This preserves
+    user-edited or previously truncated title fragments instead of re-rendering.
     """
     regex_parts:list[str] = []
     parsed_template = list(Formatter().parse(template))
@@ -136,7 +137,7 @@ def _replace_template_id_slot(template:str, name:str, new_id:int) -> str | None:
         if field_name == "id":
             regex_parts.append(r"(?P<id>\d+)")
         elif field_name == "title":
-            regex_parts.append(".*")
+            regex_parts.append(".*?")
 
     match = re.fullmatch("".join(regex_parts), name)
     if match is None:
@@ -154,14 +155,14 @@ def _rename_path_if_target_is_free(source:Path, target:Path, *, label:str) -> Pa
     if source == target:
         return source
     if target.exists() or target.is_symlink():
-        LOG.warning("Skipping local %s rename because target already exists: %s", label, target)
+        LOG.debug("Skipping local %s rename because target already exists: %s", label, target)
         return source
     try:
         source.rename(target)
     except OSError as ex:
-        LOG.warning("Could not rename local %s from %s to %s: %s", label, source, target, ex)
+        LOG.debug("Could not rename local %s from %s to %s: %s", label, source, target, ex)
         return source
-    LOG.info("Renamed local %s from %s to %s", label, source, target)
+    LOG.debug("Renamed local %s from %s to %s", label, source, target)
     return target
 
 
@@ -2398,29 +2399,31 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Check for success messages
         return await self.web_check(By.ID, "checking-done", Is.DISPLAYED) or await self.web_check(By.ID, "not-completed", Is.DISPLAYED)
 
-    def _rename_local_ad_file_and_folder_after_id_change(self, ad_file:Path, old_id:int | None, new_id:int) -> Path:
+    def _rename_local_ad_file_and_folder_after_id_change(self, ad_file:Path, old_id:int | None, new_id:int) -> tuple[Path, bool, bool]:
         if old_id is None or old_id == new_id or self.config.publishing.local_path_renaming.mode != "TEMPLATE_MATCH":
-            return ad_file
+            return ad_file, False, False
 
         ad_file = ad_file.resolve()
         download_config = self.config.download
-        current_ad_file = self._rename_local_ad_file_after_id_change(
+        current_ad_file, file_renamed = self._rename_local_ad_file_after_id_change(
             ad_file,
             new_id = new_id,
             ad_file_name_template = download_config.ad_file_name_template,
         )
-        return self._rename_local_ad_folder_after_id_change(
+        final_ad_file, folder_renamed = self._rename_local_ad_folder_after_id_change(
             current_ad_file,
             new_id = new_id,
             folder_name_template = download_config.folder_name_template,
         )
+        return final_ad_file, file_renamed, folder_renamed
 
-    def _rename_local_ad_file_after_id_change(self, ad_file:Path, *, new_id:int, ad_file_name_template:str) -> Path:
+    def _rename_local_ad_file_after_id_change(self, ad_file:Path, *, new_id:int, ad_file_name_template:str) -> tuple[Path, bool]:
         renamed_stem = _replace_template_id_slot(ad_file_name_template, ad_file.stem, new_id)
         if renamed_stem is None:
             LOG.debug("Skipping local ad file rename because name does not match configured template: %s", ad_file)
-            return ad_file
-        return _rename_path_if_target_is_free(ad_file, ad_file.with_name(f"{renamed_stem}{ad_file.suffix}"), label = "ad file")
+            return ad_file, False
+        renamed_file = _rename_path_if_target_is_free(ad_file, ad_file.with_name(f"{renamed_stem}{ad_file.suffix}"), label = "ad file")
+        return renamed_file, renamed_file != ad_file
 
     def _rename_referenced_local_image_files_after_id_change(
         self,
@@ -2428,16 +2431,16 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         ad_cfg_orig:dict[str, Any],
         old_id:int | None,
         new_id:int,
-    ) -> None:
+    ) -> int:
         if old_id is None or old_id == new_id or self.config.publishing.local_path_renaming.mode != "TEMPLATE_MATCH":
-            return
+            return 0
 
         images = ad_cfg_orig.get("images")
         if not isinstance(images, list):
-            return
+            return 0
 
         updated_images:list[Any] = []
-        changed = False
+        renamed_count = 0
         for image_ref in images:
             updated_image_ref = self._rename_referenced_local_image_file_after_id_change(
                 ad_file,
@@ -2446,10 +2449,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 ad_file_name_template = self.config.download.ad_file_name_template,
             )
             updated_images.append(updated_image_ref)
-            changed = changed or updated_image_ref != image_ref
+            if updated_image_ref != image_ref:
+                renamed_count += 1
 
-        if changed:
+        if renamed_count > 0:
             ad_cfg_orig["images"] = updated_images
+
+        return renamed_count
 
     def _rename_referenced_local_image_file_after_id_change(
         self,
@@ -2487,17 +2493,17 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return original_path.with_name(renamed_name).as_posix()
 
-    def _rename_local_ad_folder_after_id_change(self, ad_file:Path, *, new_id:int, folder_name_template:str) -> Path:
+    def _rename_local_ad_folder_after_id_change(self, ad_file:Path, *, new_id:int, folder_name_template:str) -> tuple[Path, bool]:
         parent = ad_file.parent
         renamed_folder_name = _replace_template_id_slot(folder_name_template, parent.name, new_id)
         if renamed_folder_name is None:
             LOG.debug("Skipping local ad folder rename because name does not match configured template: %s", parent)
-            return ad_file
+            return ad_file, False
 
         renamed_parent = _rename_path_if_target_is_free(parent, parent.with_name(renamed_folder_name), label = "ad folder")
         if renamed_parent == parent:
-            return ad_file
-        return renamed_parent / ad_file.name
+            return ad_file, False
+        return renamed_parent / ad_file.name, True
 
     async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
@@ -2578,7 +2584,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    async def publish_ad(  # noqa: PLR0915
+    async def publish_ad(  # noqa: PLR0915 PLR0914 PLR0912
         self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[dict[str, Any]], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE
     ) -> None:
         """Publish or update an ad on Kleinanzeigen.
@@ -2842,7 +2848,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         ad_cfg_orig["id"] = ad_id
         # Rename referenced images before hashing/saving so the YAML content and
         # content_hash reflect only image file renames that actually succeeded.
-        self._rename_referenced_local_image_files_after_id_change(Path(ad_file), ad_cfg_orig, old_ad_id, ad_id)
+        renamed_image_count = self._rename_referenced_local_image_files_after_id_change(Path(ad_file), ad_cfg_orig, old_ad_id, ad_id)
 
         # Update content hash after successful publication
         # Calculate hash on original config to ensure consistent comparison on restart
@@ -2874,7 +2880,26 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         dicts.save_dict(ad_file, ad_cfg_orig)
         # Rename the YAML file and containing folder after saving, because the
         # saved file itself may move as part of this opt-in local migration.
-        self._rename_local_ad_file_and_folder_after_id_change(Path(ad_file), old_ad_id, ad_id)
+        renamed_ad_file, file_renamed, folder_renamed = self._rename_local_ad_file_and_folder_after_id_change(Path(ad_file), old_ad_id, ad_id)
+
+        # Log a summary when local paths were renamed
+        if renamed_image_count > 0 or file_renamed or folder_renamed:
+            renamed:list[str] = []
+            if folder_renamed:
+                renamed.append("folder")
+            if file_renamed:
+                renamed.append("ad file")
+            if renamed_image_count > 0:
+                renamed.append(f"{renamed_image_count} image(s)")
+            LOG.info("Local path renaming (ID %s → ID %s): %s", old_ad_id, ad_id, ", ".join(renamed))
+            if file_renamed or folder_renamed:
+                LOG.info("Updated ad file: %s", renamed_ad_file)
+        elif old_ad_id is not None and old_ad_id != ad_id and self.config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH":
+            LOG.info("Local path renaming (ID %s → ID %s): no paths matched the configured templates", old_ad_id, ad_id)
+        # NOTE: renamed_ad_file may differ from ad_file after the call above.
+        # ad_file is stale at this point (pointing to the pre-rename path), but
+        # no code in publish_ad() dereferences it after this line, so the drift
+        # has no runtime impact.
 
     async def _try_recover_ad_id_from_redirect(self) -> int | None:
         """Try to extract the published ad ID from page tracking data.

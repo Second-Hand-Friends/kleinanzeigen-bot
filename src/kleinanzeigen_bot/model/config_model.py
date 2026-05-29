@@ -243,7 +243,7 @@ class LocalPathRenamingConfig(ContextualModel):
             "OFF keeps existing paths unchanged. "
             "TEMPLATE_MATCH only renames paths whose names match the structure defined by "
             "download.folder_name_template and download.ad_file_name_template. "
-            "It replaces only the old ID value inside the {id} slot and preserves all other text "
+            "It replaces any numeric value inside the {id} slot and preserves all other text "
             "(including user-edited or previously truncated titles), "
             "so changing the download templates also controls which local paths are eligible for renaming."
         ),
