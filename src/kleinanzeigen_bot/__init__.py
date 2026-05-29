@@ -2891,11 +2891,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 renamed.append("ad file")
             if renamed_image_count > 0:
                 renamed.append(f"{renamed_image_count} image(s)")
-            LOG.info("Local path renaming (ID %s → ID %s): %s", old_ad_id, ad_id, ", ".join(renamed))
+            LOG.info("Local path renaming (ID %s -> ID %s): %s", old_ad_id, ad_id, ", ".join(renamed))
             if file_renamed or folder_renamed:
                 LOG.info("Updated ad file: %s", renamed_ad_file)
         elif old_ad_id is not None and old_ad_id != ad_id and self.config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH":
-            LOG.info("Local path renaming (ID %s → ID %s): no paths matched the configured templates", old_ad_id, ad_id)
+            LOG.info("Local path renaming (ID %s -> ID %s): no paths matched the configured templates", old_ad_id, ad_id)
         # NOTE: renamed_ad_file may differ from ad_file after the call above.
         # ad_file is stale at this point (pointing to the pre-rename path), but
         # no code in publish_ad() dereferences it after this line, so the drift
