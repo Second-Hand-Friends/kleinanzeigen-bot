@@ -50,13 +50,23 @@ login:
 #   shipping_type: SHIPPING
 #   republication_interval: 7
 ```
-> **To keep credentials out of config.yaml**, replace values with environment variable references:
+>
+> **To keep credentials out of config.yaml**, use environment variable references instead of plain text:
+>
 > ```yaml
 > login:
 >   username: "${KLEINANZEIGEN_BOT_USERNAME}"
 >   password: "${KLEINANZEIGEN_BOT_PASSWORD}"
 > ```
-> Then set them in your environment: `export KLEINANZEIGEN_BOT_USERNAME=...`
+>
+> Then set both variables in your environment:
+>
+> ```bash
+> export KLEINANZEIGEN_BOT_USERNAME=your@email.com
+> export KLEINANZEIGEN_BOT_PASSWORD=your_password
+> ```
+>
+> Never commit plaintext credentials to version control — environment variable references make your `config.yaml` safe to share.
 
 Run `kleinanzeigen-bot create-config` to generate a complete configuration with all available options and their default values.
 
