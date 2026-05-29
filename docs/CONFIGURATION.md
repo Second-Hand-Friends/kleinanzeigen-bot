@@ -50,6 +50,13 @@ login:
 #   shipping_type: SHIPPING
 #   republication_interval: 7
 ```
+> **To keep credentials out of config.yaml**, replace values with environment variable references:
+> ```yaml
+> login:
+>   username: "${KLEINANZEIGEN_BOT_USERNAME}"
+>   password: "${KLEINANZEIGEN_BOT_PASSWORD}"
+> ```
+> Then set them in your environment: `export KLEINANZEIGEN_BOT_USERNAME=...`
 
 Run `kleinanzeigen-bot create-config` to generate a complete configuration with all available options and their default values.
 
@@ -324,11 +331,11 @@ Login credentials.
 
 ```yaml
 login:
-  username: ""
-  password: ""
+  username: "${KLEINANZEIGEN_BOT_USERNAME}"
+  password: "${KLEINANZEIGEN_BOT_PASSWORD}"
 ```
 
-> **Security Note:** Never commit your credentials to version control. Keep your `config.yaml` secure and exclude it from git if it contains sensitive information.
+> **Security Note:** Never commit your credentials to version control. Use environment variables (`${KLEINANZEIGEN_BOT_USERNAME}`, `${KLEINANZEIGEN_BOT_PASSWORD}`) to keep credentials out of `config.yaml`. Plain-text values without `${}` are still supported for local-only use.
 
 ### diagnostics
 

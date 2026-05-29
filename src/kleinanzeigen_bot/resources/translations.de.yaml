@@ -75,6 +75,9 @@ kleinanzeigen_bot/__init__.py:
     "Loaded %s categories in total": "%s Kategorien insgesamt geladen"
     "No categories loaded - category files may be missing or empty": "Keine Kategorien geladen - Kategorie-Dateien fehlen oder sind leer"
 
+  _resolve_login_credentials:
+    "Environment variable %s is required for login.%s but is not set": "Umgebungsvariable %s ist für login.%s erforderlich, ist aber nicht gesetzt"
+
   check_and_wait_for_captcha:
     "# Captcha present! Please solve the captcha.": "# Captcha vorhanden! Bitte lösen Sie das Captcha."
     "Captcha recognized - auto-restart enabled, abort run...": "Captcha erkannt - Auto-Neustart aktiviert, Durchlauf wird beendet..."
