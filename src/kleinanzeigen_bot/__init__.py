@@ -47,6 +47,7 @@ LOG.setLevel(loggers.INFO)
 SUBMISSION_MAX_RETRIES:Final[int] = 3
 _NUMERIC_IDS_RE:Final[re.Pattern[str]] = re.compile(r"^\d+(,\d+)*$")
 _SPECIAL_ATTRIBUTE_TOKEN_RE:Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_]+$")
+_LOGIN_ENV_PATTERN:Final[re.Pattern[str]] = re.compile(r"^\$\{(?P<var>\w+)(?::-(?P<default>.*))?\}$")
 # See issue #930 for migrating __select_button_combobox to web_select_button_combobox
 _WANTED_SHIPPING_LABELS:Final[dict[str, str]] = {
     "SHIPPING": "Versand möglich",
@@ -1257,6 +1258,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             self.create_default_config()
 
         config_yaml = dicts.load_dict_if_exists(self.config_file_path, _("config"))
+        if isinstance(config_yaml, dict):
+            self._resolve_login_credentials(config_yaml)
         self.config = Config.model_validate(config_yaml, strict = True, context = self.config_file_path)
 
         timing_enabled = self.config.diagnostics.timing_collection
@@ -1292,6 +1295,47 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         elif self.workspace:
             self.browser_config.user_data_dir = str(self.workspace.browser_profile_dir)
         self.browser_config.profile_name = self.config.browser.profile_name
+
+    @staticmethod
+    def _resolve_login_credentials(config_yaml:dict[str, Any]) -> None:
+        """Resolve ``login.username`` and ``login.password`` from environment variables.
+
+        Supports two patterns:
+        - ``${VAR}`` : required — raises if VAR is unset
+        - ``${VAR:-default}`` : optional — uses *default* when VAR is unset
+
+        Non-placeholder values are left unchanged.
+
+        Note:
+            Mutates *config_yaml* in place. Caller must ensure *config_yaml* is a
+            dict before calling — the method is a no-op on non-dict values.
+        """
+        if not isinstance(config_yaml, dict):
+            return
+
+        login = config_yaml.get("login")
+        if not isinstance(login, dict):
+            return
+
+        for field in ("username", "password"):
+            value = login.get(field)
+            if not isinstance(value, str):
+                continue
+
+            m = _LOGIN_ENV_PATTERN.match(value)
+            if not m:
+                continue
+
+            var_name = m.group("var")
+            resolved = os.environ.get(var_name)
+            if resolved is not None:
+                login[field] = resolved
+            elif m.group("default") is not None:
+                login[field] = m.group("default")
+            else:
+                raise ValueError(
+                    _("Environment variable %s is required for login.%s but is not set") % (var_name, field)
+                )
 
     def __check_ad_republication(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
         """
