@@ -2258,7 +2258,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if _apply_after_delete_policy(ad_cfg, ad_cfg_orig, mode = after_delete):
                     dicts.save_dict(ad_file, ad_cfg_orig)
             await self.web_sleep()
-            await self.web_sleep()
 
         LOG.info("############################################")
         LOG.info("DONE: Deleted %s of %s", deleted_count, pluralize("ad", count))
