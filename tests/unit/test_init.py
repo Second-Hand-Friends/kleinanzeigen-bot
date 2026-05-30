@@ -17,6 +17,7 @@ from kleinanzeigen_bot import (
     LOG,
     SUBMISSION_MAX_RETRIES,
     AdUpdateStrategy,
+    ImageRenameResult,  # noqa: F401
     KleinanzeigenBot,
     LocalPathRenameResult,  # noqa: F401
     LoginDetectionReason,
@@ -231,14 +232,14 @@ def test_rename_referenced_local_image_files_after_id_change_updates_config_path
     (folder / "manual_123__img3.jpeg").write_bytes(b"manual")
     ad_cfg_orig:dict[str, Any] = {"images": ["ad_123__img1.jpeg", "nested/ad_123__img2.png", "manual_123__img3.jpeg"]}
 
-    renamed_count, skipped_count = test_bot._rename_referenced_local_image_files_after_id_change(ad_file, ad_cfg_orig, 123, 456)
+    image_result = test_bot._rename_referenced_local_image_files_after_id_change(ad_file, ad_cfg_orig, 123, 456)
 
     assert ad_cfg_orig["images"] == ["ad_456__img1.jpeg", "nested/ad_456__img2.png", "manual_123__img3.jpeg"]
     assert (folder / "ad_456__img1.jpeg").exists()
     assert (nested / "ad_456__img2.png").exists()
     assert (folder / "manual_123__img3.jpeg").exists()
-    assert renamed_count == 2
-    assert skipped_count == 0
+    assert image_result.renamed_count == 2
+    assert image_result.blocked_count == 0
 
 
 def test_rename_referenced_local_image_files_after_id_change_ignores_unreferenced_images(test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
@@ -255,13 +256,13 @@ def test_rename_referenced_local_image_files_after_id_change_ignores_unreference
     (folder / "ad_123__img2.jpeg").write_bytes(b"unreferenced")
     ad_cfg_orig:dict[str, Any] = {"images": ["ad_123__img1.jpeg"]}
 
-    renamed_count, skipped_count = test_bot._rename_referenced_local_image_files_after_id_change(ad_file, ad_cfg_orig, 123, 456)
+    image_result = test_bot._rename_referenced_local_image_files_after_id_change(ad_file, ad_cfg_orig, 123, 456)
 
     assert ad_cfg_orig["images"] == ["ad_456__img1.jpeg"]
     assert (folder / "ad_456__img1.jpeg").exists()
     assert (folder / "ad_123__img2.jpeg").exists()
-    assert renamed_count == 1
-    assert skipped_count == 0
+    assert image_result.renamed_count == 1
+    assert image_result.blocked_count == 0
 
 
 @pytest.mark.parametrize(
@@ -307,18 +308,18 @@ def test_rename_referenced_local_image_files_skips_when_unsafe(
         raise AssertionError(f"Unknown scenario: {scenario}")
 
     ad_cfg_orig:dict[str, object] = {"images": images_config}
-    renamed_count, skipped_count = test_bot._rename_referenced_local_image_files_after_id_change(ad_file, ad_cfg_orig, 123, 456)
+    image_result = test_bot._rename_referenced_local_image_files_after_id_change(ad_file, ad_cfg_orig, 123, 456)
 
     assert ad_cfg_orig["images"] == images_config
     assert source_file is not None
     assert source_file.exists()
     if target_file is not None:
         assert target_file.exists()
-    assert renamed_count == 0
+    assert image_result.renamed_count == 0
     if scenario == "target_exists":
-        assert skipped_count == 1
+        assert image_result.blocked_count == 1
     else:
-        assert skipped_count == 0
+        assert image_result.blocked_count == 0
 
 
 def test_rename_path_if_target_is_free_treats_broken_symlink_as_collision(tmp_path:Path) -> None:
