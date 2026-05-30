@@ -59,6 +59,31 @@ def test_minimal_config_validation() -> None:
     assert config.login.password == "dummy"  # noqa: S105
 
 
+def test_publishing_local_path_renaming_defaults_to_off() -> None:
+    config = Config.model_validate({"login": {"username": "dummy", "password": "dummy"}})  # noqa: S106
+    assert config.publishing.local_path_renaming.mode == "OFF"
+
+
+def test_publishing_local_path_renaming_accepts_template_match() -> None:
+    config = Config.model_validate(
+        {
+            "login": {"username": "dummy", "password": "dummy"},  # noqa: S106
+            "publishing": {"local_path_renaming": {"mode": "TEMPLATE_MATCH"}},
+        }
+    )
+    assert config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH"
+
+
+def test_publishing_local_path_renaming_rejects_unknown_mode() -> None:
+    with pytest.raises(ValueError, match = "TEMPLATE_MATCH"):
+        Config.model_validate(
+            {
+                "login": {"username": "dummy", "password": "dummy"},  # noqa: S106
+                "publishing": {"local_path_renaming": {"mode": "ID_TOKEN"}},
+            }
+        )
+
+
 def test_timeout_config_defaults_and_effective_values() -> None:
     cfg = Config.model_validate(
         {

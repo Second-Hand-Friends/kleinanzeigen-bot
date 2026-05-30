@@ -207,6 +207,21 @@ kleinanzeigen_bot/__init__.py:
     "Auto price reduction preview for [%s] (%s): disabled (on_update=false, effective_price=%s)": "Vorschau automatische Preisreduzierung für [%s] (%s): deaktiviert (on_update=false, effektiver Preis=%s)"
     "Auto price reduction preview for [%s] (%s): %s -> %s (cycle %s)": "Vorschau automatische Preisreduzierung für [%s] (%s): %s -> %s (Zyklus %s)"
     "Auto price reduction preview for [%s] (%s): no new reduction (effective_price=%s, reason=%s)": "Vorschau automatische Preisreduzierung für [%s] (%s): keine neue Reduktion (effektiver Preis=%s, Grund=%s)"
+
+  _rename_path_if_target_is_free:
+    "Skipping local %s rename because target already exists: %s": "Lokale %s-Umbenennung übersprungen, da das Ziel bereits existiert: %s"
+    "Could not rename local %s from %s to %s: %s": "Lokale %s konnte nicht von %s nach %s umbenannt werden: %s"
+    "Renamed local %s from %s to %s": "Lokale %s von %s nach %s umbenannt"
+
+  _rename_local_ad_file_after_id_change:
+    "ad file": "Anzeigendatei"
+
+  _rename_referenced_local_image_file_after_id_change:
+    "image file": "Bilddatei"
+
+  _rename_local_ad_folder_after_id_change:
+    "ad folder": "Anzeigenordner"
+
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
     "Updating ad '%s'...": "Aktualisiere Anzeige '%s'..."
@@ -219,11 +234,22 @@ kleinanzeigen_bot/__init__.py:
     "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
     " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
     " -> SUCCESS: ad updated with ID %s": " -> ERFOLG: Anzeige mit ID %s aktualisiert"
+    "Failed to rollback image rename: %s -> %s": "Fehler beim Rückgängigmachen der Bildumbenennung: %s -> %s"
     " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
     " -> removed %d existing image(s) before upload": " -> %d vorhandene Bilder vor dem Hochladen entfernt"
     "Confirmation page redirected too fast; extracted ad ID %s from page tracking data": "Bestätigungsseite wurde zu schnell weitergeleitet; Anzeigen-ID %s aus Seiten-Trackingdaten extrahiert"
     "ad_id is unexpectedly None after confirmation flow for %s": "ad_id ist unerwartet None nach dem Bestätigungsablauf für %s"
+
+  _log_local_path_rename_result:
+    "Local path renaming (%s): %s": "Lokale Pfadumbenennung (%s): %s"
+    "Updated ad file: %s": "Aktualisierte Anzeigendatei: %s"
+    "Local path renaming (%s): no local paths needed renaming": "Lokale Pfadumbenennung (%s): keine lokalen Pfade mussten umbenannt werden"
+    "Local path renaming (%s): could not rename %s (target exists or error)": "Lokale Pfadumbenennung (%s): %s konnte nicht umbenannt werden (Ziel existiert oder Fehler)"
+    "folder": "Ordner"
+    "ad file": "Anzeigendatei"
+    "image(s)": "Bild(er)"
+    "ad folder": "Anzeigenordner"
 
   update_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
