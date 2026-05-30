@@ -5,6 +5,7 @@ import atexit, asyncio, enum, functools, json, os, re, signal, sys, textwrap  # 
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 from dataclasses import dataclass, replace
+from dataclasses import field as dc_field  # noqa: I001
 from datetime import datetime
 from gettext import gettext as _
 from pathlib import Path
@@ -196,6 +197,7 @@ class ImageRenameResult:
     renamed_count:int = 0
     blocked_count:int = 0
     updated_images:list[object] | None = None
+    renamed_paths:list[tuple[Path, Path]] = dc_field(default_factory = list)
 
 
 def _rename_path_if_target_is_free(source:Path, target:Path, *, label:str) -> RenamePathResult:
@@ -2256,6 +2258,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if _apply_after_delete_policy(ad_cfg, ad_cfg_orig, mode = after_delete):
                     dicts.save_dict(ad_file, ad_cfg_orig)
             await self.web_sleep()
+            await self.web_sleep()
 
         LOG.info("############################################")
         LOG.info("DONE: Deleted %s of %s", deleted_count, pluralize("ad", count))
@@ -2507,6 +2510,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         updated_images:list[object] = []
         renamed_count = 0
         blocked_count = 0
+        renamed_paths:list[tuple[Path, Path]] = []
         for image_ref in images:
             updated_image_ref, status = self._rename_referenced_local_image_file_after_id_change(
                 ad_file,
@@ -2517,11 +2521,19 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             updated_images.append(updated_image_ref)
             if status == RenameStatus.RENAMED:
                 renamed_count += 1
+                renamed_paths.append(
+                    (ad_file.parent / Path(str(image_ref)), ad_file.parent / Path(str(updated_image_ref)))
+                )
             elif status in {RenameStatus.TARGET_EXISTS, RenameStatus.ERROR}:
                 blocked_count += 1
 
         if renamed_count > 0:
-            return ImageRenameResult(renamed_count = renamed_count, blocked_count = blocked_count, updated_images = updated_images)
+            return ImageRenameResult(
+                renamed_count = renamed_count,
+                blocked_count = blocked_count,
+                updated_images = updated_images,
+                renamed_paths = renamed_paths,
+            )
 
         return ImageRenameResult(renamed_count = renamed_count, blocked_count = blocked_count)
 
@@ -2986,7 +2998,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         else:
             LOG.info(" -> SUCCESS: ad updated with ID %s", ad_id)
 
-        dicts.save_dict(ad_file, ad_cfg_orig)
+        try:
+            dicts.save_dict(ad_file, ad_cfg_orig)
+        except Exception:
+            for old_path, new_path in image_result.renamed_paths:
+                try:
+                    new_path.rename(old_path)
+                except OSError:
+                    LOG.warning("Failed to rollback image rename: %s -> %s", new_path, old_path)
+            raise
         # Rename the YAML file and containing folder after saving, because the
         # saved file itself may move as part of this opt-in local migration.
         file_folder_result = self._rename_local_ad_file_and_folder_after_id_change(Path(ad_file), old_ad_id, ad_id)

@@ -234,6 +234,7 @@ kleinanzeigen_bot/__init__.py:
     "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
     " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
     " -> SUCCESS: ad updated with ID %s": " -> ERFOLG: Anzeige mit ID %s aktualisiert"
+    "Failed to rollback image rename: %s -> %s": "Fehler beim Rückgängigmachen der Bildumbenennung: %s -> %s"
     " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
     " -> removed %d existing image(s) before upload": " -> %d vorhandene Bilder vor dem Hochladen entfernt"

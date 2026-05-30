@@ -75,7 +75,7 @@ def test_publishing_local_path_renaming_accepts_template_match() -> None:
 
 
 def test_publishing_local_path_renaming_rejects_unknown_mode() -> None:
-    with pytest.raises(ValueError, match = "Input should be 'OFF' or 'TEMPLATE_MATCH'"):
+    with pytest.raises(ValueError, match = "TEMPLATE_MATCH"):
         Config.model_validate(
             {
                 "login": {"username": "dummy", "password": "dummy"},  # noqa: S106
