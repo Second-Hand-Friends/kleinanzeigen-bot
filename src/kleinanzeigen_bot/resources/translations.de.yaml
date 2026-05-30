@@ -213,6 +213,15 @@ kleinanzeigen_bot/__init__.py:
     "Could not rename local %s from %s to %s: %s": "Lokale %s konnte nicht von %s nach %s umbenannt werden: %s"
     "Renamed local %s from %s to %s": "Lokale %s von %s nach %s umbenannt"
 
+  _rename_local_ad_file_after_id_change:
+    "ad file": "Anzeigendatei"
+
+  _rename_referenced_local_image_file_after_id_change:
+    "image file": "Bilddatei"
+
+  _rename_local_ad_folder_after_id_change:
+    "ad folder": "Anzeigenordner"
+
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
     "Updating ad '%s'...": "Aktualisiere Anzeige '%s'..."
@@ -233,6 +242,12 @@ kleinanzeigen_bot/__init__.py:
     "Local path renaming (%s): %s": "Lokale Pfadumbenennung (%s): %s"
     "Updated ad file: %s": "Aktualisierte Anzeigendatei: %s"
     "Local path renaming (%s): no paths matched the configured templates": "Lokale Pfadumbenennung (%s): keine Pfade entsprachen den konfigurierten Vorlagen"
+    "Local path renaming (%s): matched paths could not be renamed (target exists or error)": "Lokale Pfadumbenennung (%s): passende Pfade konnten nicht umbenannt werden (Ziel existiert oder Fehler)"
+    "Local path renaming (%s): could not rename %s (target exists or error)": "Lokale Pfadumbenennung (%s): %s konnte nicht umbenannt werden (Ziel existiert oder Fehler)"
+    "folder": "Ordner"
+    "ad file": "Anzeigendatei"
+    "image(s)": "Bild(er)"
+    "ad folder": "Anzeigenordner"
 
   update_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
