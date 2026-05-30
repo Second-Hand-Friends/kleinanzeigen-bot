@@ -195,6 +195,7 @@ class ImageRenameResult:
     """Outcome of renaming referenced local image files."""
     renamed_count:int = 0
     blocked_count:int = 0
+    updated_images:list[object] | None = None
 
 
 def _rename_path_if_target_is_free(source:Path, target:Path, *, label:str) -> RenamePathResult:
@@ -2520,7 +2521,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 blocked_count += 1
 
         if renamed_count > 0:
-            ad_cfg_orig["images"] = updated_images
+            return ImageRenameResult(renamed_count = renamed_count, blocked_count = blocked_count, updated_images = updated_images)
 
         return ImageRenameResult(renamed_count = renamed_count, blocked_count = blocked_count)
 
@@ -2602,15 +2603,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         if blocked:
             LOG.warning("Local path renaming (%s): could not rename %s (target exists or error)", id_label, ", ".join(blocked))
-        elif result.yaml_old_id is not None and result.yaml_old_id != ad_id and self.config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH":
-            all_no_match = (
-                result.file_status == RenameStatus.NO_MATCH
-                and result.folder_status == RenameStatus.NO_MATCH
-            )
-            if all_no_match and result.renamed_image_count == 0 and result.blocked_image_count == 0:
-                LOG.info("Local path renaming (%s): no paths matched the configured templates", id_label)
-            else:
-                LOG.info("Local path renaming (%s): matched paths could not be renamed (target exists or error)", id_label)
+
+        if not renamed and not blocked:
+            if (
+                result.yaml_old_id is not None
+                and result.yaml_old_id != ad_id
+                and self.config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH"
+            ):
+                LOG.info("Local path renaming (%s): no local paths needed renaming", id_label)
 
     async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
@@ -2956,6 +2956,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Rename referenced images before hashing/saving so the YAML content and
         # content_hash reflect only image file renames that actually succeeded.
         image_result = self._rename_referenced_local_image_files_after_id_change(Path(ad_file), ad_cfg_orig, old_ad_id, ad_id)
+        if image_result.updated_images is not None:
+            ad_cfg_orig["images"] = image_result.updated_images
 
         # Update content hash after successful publication
         # Calculate hash on original config to ensure consistent comparison on restart

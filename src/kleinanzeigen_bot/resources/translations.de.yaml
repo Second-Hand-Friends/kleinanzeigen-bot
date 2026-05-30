@@ -243,8 +243,7 @@ kleinanzeigen_bot/__init__.py:
   _log_local_path_rename_result:
     "Local path renaming (%s): %s": "Lokale Pfadumbenennung (%s): %s"
     "Updated ad file: %s": "Aktualisierte Anzeigendatei: %s"
-    "Local path renaming (%s): no paths matched the configured templates": "Lokale Pfadumbenennung (%s): keine Pfade entsprachen den konfigurierten Vorlagen"
-    "Local path renaming (%s): matched paths could not be renamed (target exists or error)": "Lokale Pfadumbenennung (%s): passende Pfade konnten nicht umbenannt werden (Ziel existiert oder Fehler)"
+    "Local path renaming (%s): no local paths needed renaming": "Lokale Pfadumbenennung (%s): keine lokalen Pfade mussten umbenannt werden"
     "Local path renaming (%s): could not rename %s (target exists or error)": "Lokale Pfadumbenennung (%s): %s konnte nicht umbenannt werden (Ziel existiert oder Fehler)"
     "folder": "Ordner"
     "ad file": "Anzeigendatei"

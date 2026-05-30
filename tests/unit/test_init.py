@@ -234,7 +234,7 @@ def test_rename_referenced_local_image_files_after_id_change_updates_config_path
 
     image_result = test_bot._rename_referenced_local_image_files_after_id_change(ad_file, ad_cfg_orig, 123, 456)
 
-    assert ad_cfg_orig["images"] == ["ad_456__img1.jpeg", "nested/ad_456__img2.png", "manual_123__img3.jpeg"]
+    assert image_result.updated_images == ["ad_456__img1.jpeg", "nested/ad_456__img2.png", "manual_123__img3.jpeg"]
     assert (folder / "ad_456__img1.jpeg").exists()
     assert (nested / "ad_456__img2.png").exists()
     assert (folder / "manual_123__img3.jpeg").exists()
@@ -258,7 +258,7 @@ def test_rename_referenced_local_image_files_after_id_change_ignores_unreference
 
     image_result = test_bot._rename_referenced_local_image_files_after_id_change(ad_file, ad_cfg_orig, 123, 456)
 
-    assert ad_cfg_orig["images"] == ["ad_456__img1.jpeg"]
+    assert image_result.updated_images == ["ad_456__img1.jpeg"]
     assert (folder / "ad_456__img1.jpeg").exists()
     assert (folder / "ad_123__img2.jpeg").exists()
     assert image_result.renamed_count == 1
@@ -310,7 +310,7 @@ def test_rename_referenced_local_image_files_skips_when_unsafe(
     ad_cfg_orig:dict[str, object] = {"images": images_config}
     image_result = test_bot._rename_referenced_local_image_files_after_id_change(ad_file, ad_cfg_orig, 123, 456)
 
-    assert ad_cfg_orig["images"] == images_config
+    assert image_result.updated_images is None
     assert source_file is not None
     assert source_file.exists()
     if target_file is not None:
@@ -326,7 +326,10 @@ def test_rename_path_if_target_is_free_treats_broken_symlink_as_collision(tmp_pa
     source = tmp_path / "source.txt"
     target = tmp_path / "target.txt"
     source.write_text("source", encoding = "utf-8")
-    target.symlink_to(tmp_path / "missing.txt")
+    try:
+        target.symlink_to(tmp_path / "missing.txt")
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink not supported on this platform")
 
     result = _rename_path_if_target_is_free(source, target, label = "test file")
 
