@@ -18,6 +18,7 @@ from kleinanzeigen_bot import (
     SUBMISSION_MAX_RETRIES,
     AdUpdateStrategy,
     KleinanzeigenBot,
+    LocalPathRenameResult,  # noqa: F401
     LoginDetectionReason,
     LoginDetectionResult,
     RenameStatus,
@@ -164,11 +165,11 @@ def _login_detection_result(is_logged_in:bool, reason:LoginDetectionReason) -> L
     ],
 )
 def test_replace_template_id_slot_preserves_non_id_text(template:str, name:str, expected:str) -> None:
-    assert _replace_template_id_slot(template, name, 456) == expected
+    assert _replace_template_id_slot(template, name, 456)[0] == expected
 
 
 def test_replace_template_id_slot_skips_non_matching_name() -> None:
-    assert _replace_template_id_slot("ad_{id}_{title}", "manual_123_Title", 456) is None
+    assert _replace_template_id_slot("ad_{id}_{title}", "manual_123_Title", 456)[0] is None
 
 
 def test_rename_local_ad_file_and_folder_after_id_change_is_disabled_by_default(test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
@@ -177,11 +178,11 @@ def test_rename_local_ad_file_and_folder_after_id_change_is_disabled_by_default(
     ad_file = folder / "ad_123.yaml"
     ad_file.write_text("id: 456\n", encoding = "utf-8")
 
-    renamed_path, file_status, folder_status = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
+    result = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
 
-    assert renamed_path == ad_file
-    assert file_status == RenameStatus.SAME
-    assert folder_status == RenameStatus.SAME
+    assert result.ad_file == ad_file
+    assert result.file_status == RenameStatus.SAME
+    assert result.folder_status == RenameStatus.SAME
     assert ad_file.exists()
     assert folder.exists()
 
@@ -202,13 +203,13 @@ def test_rename_local_ad_file_and_folder_after_id_change_renames_template_matche
     image_file.write_bytes(b"img")
     unrelated_file.write_text("keep", encoding = "utf-8")
 
-    renamed_path, file_status, folder_status = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
+    result = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
 
     renamed_folder = tmp_path / "ad_456_User edited title"
-    assert renamed_path == renamed_folder / "ad_456.yaml"
-    assert file_status == RenameStatus.RENAMED
-    assert folder_status == RenameStatus.RENAMED
-    assert renamed_path.exists()
+    assert result.ad_file == renamed_folder / "ad_456.yaml"
+    assert result.file_status == RenameStatus.RENAMED
+    assert result.folder_status == RenameStatus.RENAMED
+    assert result.ad_file.exists()
     assert (renamed_folder / "ad_123__img1.jpeg").exists()
     assert (renamed_folder / "manual_123.txt").exists()
     assert not folder.exists()
@@ -348,11 +349,11 @@ def test_rename_local_ad_file_and_folder_after_id_change_skips_manual_names(test
     ad_file.write_text("id: 456\n", encoding = "utf-8")
     image_file.write_bytes(b"img")
 
-    renamed_path, file_status, folder_status = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
+    result = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
 
-    assert renamed_path == ad_file
-    assert file_status == RenameStatus.NO_MATCH
-    assert folder_status == RenameStatus.NO_MATCH
+    assert result.ad_file == ad_file
+    assert result.file_status == RenameStatus.NO_MATCH
+    assert result.folder_status == RenameStatus.NO_MATCH
     assert ad_file.exists()
     assert image_file.exists()
     assert folder.exists()
@@ -372,13 +373,13 @@ def test_rename_local_ad_file_and_folder_after_id_change_skips_collisions(test_b
     ad_file.write_text("id: 456\n", encoding = "utf-8")
     target_file.write_text("existing", encoding = "utf-8")
 
-    renamed_path, file_status, folder_status = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
+    result = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
 
     renamed_folder = tmp_path / "ad_456_Title"
-    assert renamed_path == renamed_folder / "ad_123.yaml"
-    assert file_status == RenameStatus.TARGET_EXISTS
-    assert folder_status == RenameStatus.RENAMED
-    assert renamed_path.exists()
+    assert result.ad_file == renamed_folder / "ad_123.yaml"
+    assert result.file_status == RenameStatus.TARGET_EXISTS
+    assert result.folder_status == RenameStatus.RENAMED
+    assert result.ad_file.exists()
     assert (renamed_folder / "ad_456.yaml").exists()
     assert not folder.exists()
 

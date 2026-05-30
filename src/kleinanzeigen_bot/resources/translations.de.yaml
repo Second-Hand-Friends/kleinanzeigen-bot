@@ -239,6 +239,8 @@ kleinanzeigen_bot/__init__.py:
     " -> removed %d existing image(s) before upload": " -> %d vorhandene Bilder vor dem Hochladen entfernt"
     "Confirmation page redirected too fast; extracted ad ID %s from page tracking data": "Bestätigungsseite wurde zu schnell weitergeleitet; Anzeigen-ID %s aus Seiten-Trackingdaten extrahiert"
     "ad_id is unexpectedly None after confirmation flow for %s": "ad_id ist unerwartet None nach dem Bestätigungsablauf für %s"
+
+  _log_local_path_rename_result:
     "Local path renaming (%s): %s": "Lokale Pfadumbenennung (%s): %s"
     "Updated ad file: %s": "Aktualisierte Anzeigendatei: %s"
     "Local path renaming (%s): no paths matched the configured templates": "Lokale Pfadumbenennung (%s): keine Pfade entsprachen den konfigurierten Vorlagen"

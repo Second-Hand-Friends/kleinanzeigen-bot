@@ -4,7 +4,7 @@
 import atexit, asyncio, enum, functools, json, os, re, signal, sys, textwrap  # isort: skip
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from gettext import gettext as _
 from pathlib import Path
@@ -138,15 +138,7 @@ def _build_id_slot_regex(template:str) -> re.Pattern[str]:
     return re.compile("".join(regex_parts))
 
 
-def _extract_id_from_template_slot(template:str, name:str) -> int | None:
-    """Return the digit run found in the template-defined {id} slot, or None."""
-    match = _build_id_slot_regex(template).fullmatch(name)
-    if match is None:
-        return None
-    return int(match.group("id"))
-
-
-def _replace_template_id_slot(template:str, name:str, new_id:int) -> str | None:
+def _replace_template_id_slot(template:str, name:str, new_id:int) -> tuple[str | None, int | None]:
     """Replace the numeric ID in the template-defined {id} slot with new_id.
 
     The {id} slot matches any sequence of digits; renaming is skipped if the
@@ -154,17 +146,20 @@ def _replace_template_id_slot(template:str, name:str, new_id:int) -> str | None:
     matching so the {id} slot greedily captures the maximal digit run — even
     when {title} and {id} are adjacent in the template.  This preserves
     user-edited or previously truncated title fragments instead of re-rendering.
+
+    Returns ``(new_name, old_id)`` where ``new_name`` is None when no rename
+    is needed and ``old_id`` is the integer ID extracted from the path.
     """
     match = _build_id_slot_regex(template).fullmatch(name)
     if match is None:
-        return None
+        return None, None
 
     old_id_in_path = int(match.group("id"))
     if old_id_in_path == new_id:
-        return None
+        return None, old_id_in_path
 
     id_start, id_end = match.span("id")
-    return f"{name[:id_start]}{new_id}{name[id_end:]}"
+    return f"{name[:id_start]}{new_id}{name[id_end:]}", old_id_in_path
 
 
 class RenameStatus(enum.Enum):
@@ -181,6 +176,18 @@ class RenamePathResult:
     """Result of a local path rename operation."""
     path:Path
     status:RenameStatus
+
+
+@dataclass(frozen = True)
+class LocalPathRenameResult:
+    """Aggregate result of local path renaming after a successful republish."""
+    ad_file:Path
+    file_status:RenameStatus
+    folder_status:RenameStatus
+    renamed_image_count:int = 0
+    blocked_image_count:int = 0
+    path_old_id:int | None = None
+    yaml_old_id:int | None = None
 
 
 def _rename_path_if_target_is_free(source:Path, target:Path, *, label:str) -> RenamePathResult:
@@ -2431,15 +2438,26 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Check for success messages
         return await self.web_check(By.ID, "checking-done", Is.DISPLAYED) or await self.web_check(By.ID, "not-completed", Is.DISPLAYED)
 
-    def _rename_local_ad_file_and_folder_after_id_change(self, ad_file:Path, old_id:int | None, new_id:int) -> tuple[Path, RenameStatus, RenameStatus]:
+    def _rename_local_ad_file_and_folder_after_id_change(self, ad_file:Path, old_id:int | None, new_id:int) -> LocalPathRenameResult:
         if old_id is None or old_id == new_id or self.config.publishing.local_path_renaming.mode != "TEMPLATE_MATCH":
-            return ad_file, RenameStatus.SAME, RenameStatus.SAME
+            return LocalPathRenameResult(
+                ad_file = ad_file,
+                file_status = RenameStatus.SAME,
+                folder_status = RenameStatus.SAME,
+            )
 
         # resolve() is used intentionally: if the ad file path contains symlinks,
         # we rename the actual target path, not the symlink. This is the expected
         # behavior for local ad file management — we want to manage real files.
         ad_file = ad_file.resolve()
         download_config = self.config.download
+
+        # Extract the old ID from the path before renaming (used for logging provenance).
+        # Try the file stem first; fall back to the parent folder name.
+        __, path_old_id = _replace_template_id_slot(download_config.ad_file_name_template, ad_file.stem, new_id)
+        if path_old_id is None:
+            __, path_old_id = _replace_template_id_slot(download_config.folder_name_template, ad_file.parent.name, new_id)
+
         file_result = self._rename_local_ad_file_after_id_change(
             ad_file,
             new_id = new_id,
@@ -2450,10 +2468,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             new_id = new_id,
             folder_name_template = download_config.folder_name_template,
         )
-        return folder_result.path, file_result.status, folder_result.status
+        return LocalPathRenameResult(
+            ad_file = folder_result.path,
+            file_status = file_result.status,
+            folder_status = folder_result.status,
+            path_old_id = path_old_id,
+        )
 
     def _rename_local_ad_file_after_id_change(self, ad_file:Path, *, new_id:int, ad_file_name_template:str) -> RenamePathResult:
-        renamed_stem = _replace_template_id_slot(ad_file_name_template, ad_file.stem, new_id)
+        renamed_stem, __ = _replace_template_id_slot(ad_file_name_template, ad_file.stem, new_id)
         if renamed_stem is None:
             LOG.debug("Skipping local ad file rename because name does not match configured template: %s", ad_file)
             return RenamePathResult(ad_file, RenameStatus.NO_MATCH)
@@ -2519,7 +2542,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if match is None:
             return image_ref, None
 
-        renamed_prefix = _replace_template_id_slot(ad_file_name_template, match.group("prefix"), new_id)
+        renamed_prefix, __ = _replace_template_id_slot(ad_file_name_template, match.group("prefix"), new_id)
         if renamed_prefix is None:
             return image_ref, None
 
@@ -2532,7 +2555,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     def _rename_local_ad_folder_after_id_change(self, ad_file:Path, *, new_id:int, folder_name_template:str) -> RenamePathResult:
         parent = ad_file.parent
-        renamed_folder_name = _replace_template_id_slot(folder_name_template, parent.name, new_id)
+        renamed_folder_name, __ = _replace_template_id_slot(folder_name_template, parent.name, new_id)
         if renamed_folder_name is None:
             LOG.debug("Skipping local ad folder rename because name does not match configured template: %s", parent)
             return RenamePathResult(ad_file, RenameStatus.NO_MATCH)
@@ -2541,6 +2564,46 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if result.status != RenameStatus.RENAMED:
             return RenamePathResult(ad_file, result.status)
         return RenamePathResult(result.path / ad_file.name, RenameStatus.RENAMED)
+
+    def _log_local_path_rename_result(self, result:LocalPathRenameResult, ad_id:int) -> None:
+        """Log a human-readable summary of local path renaming after a republish."""
+        path_old_id = result.path_old_id if result.path_old_id is not None else result.yaml_old_id
+        id_label = f"ID {path_old_id} -> ID {ad_id}"
+        if result.path_old_id is not None and result.yaml_old_id is not None and result.path_old_id != result.yaml_old_id:
+            id_label += f" (YAML had ID {result.yaml_old_id})"
+
+        renamed:list[str] = []
+        if result.folder_status == RenameStatus.RENAMED:
+            renamed.append(_("folder"))
+        if result.file_status == RenameStatus.RENAMED:
+            renamed.append(_("ad file"))
+        if result.renamed_image_count > 0:
+            renamed.append(f"{result.renamed_image_count} {_('image(s)')}")
+
+        blocked:list[str] = []
+        if result.file_status in {RenameStatus.TARGET_EXISTS, RenameStatus.ERROR}:
+            blocked.append(_("ad file"))
+        if result.folder_status in {RenameStatus.TARGET_EXISTS, RenameStatus.ERROR}:
+            blocked.append(_("ad folder"))
+        if result.blocked_image_count > 0:
+            blocked.append(f"{result.blocked_image_count} {_('image(s)')}")
+
+        if renamed:
+            LOG.info("Local path renaming (%s): %s", id_label, ", ".join(renamed))
+            if RenameStatus.RENAMED in {result.file_status, result.folder_status}:
+                LOG.info("Updated ad file: %s", result.ad_file)
+
+        if blocked:
+            LOG.warning("Local path renaming (%s): could not rename %s (target exists or error)", id_label, ", ".join(blocked))
+        elif result.yaml_old_id is not None and result.yaml_old_id != ad_id and self.config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH":
+            all_no_match = (
+                result.file_status == RenameStatus.NO_MATCH
+                and result.folder_status == RenameStatus.NO_MATCH
+            )
+            if all_no_match and result.renamed_image_count == 0 and result.blocked_image_count == 0:
+                LOG.info("Local path renaming (%s): no paths matched the configured templates", id_label)
+            else:
+                LOG.info("Local path renaming (%s): matched paths could not be renamed (target exists or error)", id_label)
 
     async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
@@ -2917,65 +2980,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         dicts.save_dict(ad_file, ad_cfg_orig)
         # Rename the YAML file and containing folder after saving, because the
         # saved file itself may move as part of this opt-in local migration.
-        renamed_ad_file, file_status, folder_status = self._rename_local_ad_file_and_folder_after_id_change(Path(ad_file), old_ad_id, ad_id)
-
-        # Derive the actual old ID from the file or folder name using the
-        # template-defined {id} slot. Falls back to ad_cfg.id (YAML-stored ID)
-        # when neither name matches the configured templates. The two can
-        # diverge when a previous republish updated the YAML id but the old
-        # naming was never migrated.
-        path_old_id = old_ad_id
-        ad_file_path = Path(ad_file)
-
-        # Try the ad file stem first; fall back to the parent folder name.
-        extracted = _extract_id_from_template_slot(
-            self.config.download.ad_file_name_template, ad_file_path.stem,
+        file_folder_result = self._rename_local_ad_file_and_folder_after_id_change(Path(ad_file), old_ad_id, ad_id)
+        rename_result = replace(
+            file_folder_result,
+            renamed_image_count = renamed_image_count,
+            blocked_image_count = skipped_image_count,
+            yaml_old_id = old_ad_id,
         )
-        if extracted is None:
-            extracted = _extract_id_from_template_slot(
-                self.config.download.folder_name_template, ad_file_path.parent.name,
-            )
-        if extracted is not None:
-            path_old_id = extracted
-
-        id_label = f"ID {path_old_id} -> ID {ad_id}"
-        if extracted is not None and extracted != old_ad_id:
-            id_label += f" (YAML had ID {old_ad_id})"
-
-        # Log a summary when local paths were renamed
-        renamed:list[str] = []
-        if folder_status == RenameStatus.RENAMED:
-            renamed.append(_("folder"))
-        if file_status == RenameStatus.RENAMED:
-            renamed.append(_("ad file"))
-        if renamed_image_count > 0:
-            renamed.append(f"{renamed_image_count} {_('image(s)')}")
-
-        blocked:list[str] = []
-        if file_status in {RenameStatus.TARGET_EXISTS, RenameStatus.ERROR}:
-            blocked.append(_("ad file"))
-        if folder_status in {RenameStatus.TARGET_EXISTS, RenameStatus.ERROR}:
-            blocked.append(_("ad folder"))
-        if skipped_image_count > 0:
-            blocked.append(f"{skipped_image_count} {_('image(s)')}")
-
-        if renamed:
-            LOG.info("Local path renaming (%s): %s", id_label, ", ".join(renamed))
-            if RenameStatus.RENAMED in {file_status, folder_status}:
-                LOG.info("Updated ad file: %s", renamed_ad_file)
-
-        if blocked:
-            LOG.warning("Local path renaming (%s): could not rename %s (target exists or error)", id_label, ", ".join(blocked))
-        elif old_ad_id is not None and old_ad_id != ad_id and self.config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH":
-            all_no_match = (
-                file_status == RenameStatus.NO_MATCH
-                and folder_status == RenameStatus.NO_MATCH
-            )
-            if all_no_match and renamed_image_count == 0 and skipped_image_count == 0:
-                LOG.info("Local path renaming (%s): no paths matched the configured templates", id_label)
-            else:
-                LOG.info("Local path renaming (%s): matched paths could not be renamed (target exists or error)", id_label)
-        # NOTE: renamed_ad_file may differ from ad_file after the call above.
+        self._log_local_path_rename_result(rename_result, ad_id)
+        # NOTE: ad_file string may differ from rename_result.ad_file after the call above.
         # ad_file is stale at this point (pointing to the pre-rename path), but
         # no code in publish_ad() dereferences it after this line, so the drift
         # has no runtime impact.
