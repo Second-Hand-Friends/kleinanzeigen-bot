@@ -2489,8 +2489,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     def _rename_local_ad_file_after_id_change(self, ad_file:Path, *, new_id:int, ad_file_name_template:str) -> RenamePathResult:
         renamed_stem, path_id = _replace_template_id_slot(ad_file_name_template, ad_file.stem, new_id)
         if renamed_stem is None:
+            if path_id == new_id:
+                LOG.debug("Skipping local ad file rename because name already contains new ID: %s", ad_file)
+                return RenamePathResult(ad_file, RenameStatus.SAME)
             LOG.debug("Skipping local ad file rename because name does not match configured template: %s", ad_file)
-            return RenamePathResult(ad_file, RenameStatus.SAME if path_id == new_id else RenameStatus.NO_MATCH)
+            return RenamePathResult(ad_file, RenameStatus.NO_MATCH)
         return _rename_path_if_target_is_free(ad_file, ad_file.with_name(f"{renamed_stem}{ad_file.suffix}"), label = _("ad file"))
 
     def _rename_referenced_local_image_files_after_id_change(
@@ -2577,8 +2580,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         parent = ad_file.parent
         renamed_folder_name, path_id = _replace_template_id_slot(folder_name_template, parent.name, new_id)
         if renamed_folder_name is None:
+            if path_id == new_id:
+                LOG.debug("Skipping local ad folder rename because name already contains new ID: %s", parent)
+                return RenamePathResult(ad_file, RenameStatus.SAME)
             LOG.debug("Skipping local ad folder rename because name does not match configured template: %s", parent)
-            return RenamePathResult(ad_file, RenameStatus.SAME if path_id == new_id else RenameStatus.NO_MATCH)
+            return RenamePathResult(ad_file, RenameStatus.NO_MATCH)
 
         result = _rename_path_if_target_is_free(parent, parent.with_name(renamed_folder_name), label = _("ad folder"))
         if result.status != RenameStatus.RENAMED:
