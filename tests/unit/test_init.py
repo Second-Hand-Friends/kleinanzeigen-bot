@@ -16,7 +16,10 @@ from pydantic import ValidationError
 from kleinanzeigen_bot import (
     LOG,
     SUBMISSION_MAX_RETRIES,
+    AdUpdateStrategy,
     KleinanzeigenBot,
+    LoginDetectionReason,
+    LoginDetectionResult,
     PriceReductionDecision,
     RenameStatus,
     _rename_path_if_target_is_free,  # noqa: PLC2701
@@ -25,17 +28,9 @@ from kleinanzeigen_bot import (
     evaluate_auto_price_reduction,
     misc,
 )
-from kleinanzeigen_bot import (
-    AdUpdateStrategy as _AdUpdateStrategy_root,
-)
-from kleinanzeigen_bot import (
-    LoginDetectionReason as _LoginDetectionReason_root,
-)
-from kleinanzeigen_bot import (
-    LoginDetectionResult as _LoginDetectionResult_root,
-)
 from kleinanzeigen_bot._version import __version__
-from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
+from kleinanzeigen_bot.model.ad_model import Ad
+from kleinanzeigen_bot.model.ad_model import AdUpdateStrategy as _AdUpdateStrategy_src
 from kleinanzeigen_bot.model.config_model import (
     AdDefaults,
     AutoPriceReductionConfig,
@@ -46,7 +41,8 @@ from kleinanzeigen_bot.model.config_model import (
 from kleinanzeigen_bot.price_reduction import PriceReductionDecision as _PriceReductionDecision_src
 from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
-from kleinanzeigen_bot.utils.login_mixin import LoginDetectionReason, LoginDetectionResult
+from kleinanzeigen_bot.utils.login_mixin import LoginDetectionReason as _LoginDetectionReason_src
+from kleinanzeigen_bot.utils.login_mixin import LoginDetectionResult as _LoginDetectionResult_src
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
@@ -164,12 +160,12 @@ def _login_detection_result(is_logged_in:bool, reason:LoginDetectionReason) -> L
 
 def test_root_re_exports_resolve_correctly() -> None:
     """Root-package re-exports must remain importable from kleinanzeigen_bot."""
-    assert _AdUpdateStrategy_root is AdUpdateStrategy
+    assert AdUpdateStrategy is _AdUpdateStrategy_src
     assert callable(apply_auto_price_reduction)
     assert callable(evaluate_auto_price_reduction)
     assert PriceReductionDecision is _PriceReductionDecision_src
-    assert _LoginDetectionReason_root is LoginDetectionReason
-    assert _LoginDetectionResult_root is LoginDetectionResult
+    assert LoginDetectionReason is _LoginDetectionReason_src
+    assert LoginDetectionResult is _LoginDetectionResult_src
 
 
 @pytest.mark.parametrize(
