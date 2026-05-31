@@ -374,6 +374,9 @@ kleinanzeigen_bot/__init__.py:
 #################################################
 kleinanzeigen_bot/price_reduction.py:
 #################################################
+  is_auto_price_reduction_due:
+    "Pending auto price reduction detected for ad [%s]": "Ausstehende automatische Preisreduzierung für Anzeige [%s] erkannt"
+
   _log_auto_price_reduction_preview:
     "publish": "veröffentlichen"
     "update": "aktualisieren"

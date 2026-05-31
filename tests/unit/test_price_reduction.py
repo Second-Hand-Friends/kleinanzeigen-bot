@@ -778,6 +778,192 @@ def test_apply_with_null_config_does_not_crash(
 
 
 @pytest.mark.unit
+def test_is_auto_price_reduction_due_is_false_when_no_ad_id() -> None:
+    """is_auto_price_reduction_due returns False when ad has no id (new ad)."""
+    ad_cfg = SimpleNamespace(
+        id = None,
+        price = 100,
+        auto_price_reduction = None,
+        price_reduction_count = 0,
+        repost_count = 0,
+        updated_on = None,
+        created_on = None,
+    )
+    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "ad_new.yaml") is False  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_is_auto_price_reduction_due_is_false_when_not_enabled(
+    monkeypatch:pytest.MonkeyPatch,
+) -> None:
+    """is_auto_price_reduction_due returns False when auto_price_reduction is not enabled."""
+    ad_cfg = SimpleNamespace(
+        id = 12345,
+        price = 100,
+        auto_price_reduction = None,
+        price_reduction_count = 0,
+        repost_count = 0,
+        updated_on = None,
+        created_on = None,
+    )
+
+    monkeypatch.setattr(
+        "kleinanzeigen_bot.price_reduction.evaluate_auto_price_reduction",
+        lambda *args, **kwargs: SimpleNamespace(
+            enabled = False,
+            next_cycle = 1,
+            cycle_advanced = True,
+        ),
+    )
+
+    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "ad_disabled.yaml") is False  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_is_auto_price_reduction_due_is_false_when_next_cycle_is_none(
+    monkeypatch:pytest.MonkeyPatch,
+) -> None:
+    """is_auto_price_reduction_due returns False when next_cycle is None."""
+    ad_cfg = SimpleNamespace(
+        id = 12345,
+        price = 100,
+        auto_price_reduction = None,
+        price_reduction_count = 0,
+        repost_count = 0,
+        updated_on = None,
+        created_on = None,
+    )
+
+    monkeypatch.setattr(
+        "kleinanzeigen_bot.price_reduction.evaluate_auto_price_reduction",
+        lambda *args, **kwargs: SimpleNamespace(
+            enabled = True,
+            next_cycle = None,
+            cycle_advanced = True,
+        ),
+    )
+
+    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "ad_no_next_cycle.yaml") is False  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_is_auto_price_reduction_due_is_false_when_cycle_not_advanced(
+    monkeypatch:pytest.MonkeyPatch,
+) -> None:
+    """is_auto_price_reduction_due returns False when cycle_advanced is False."""
+    ad_cfg = SimpleNamespace(
+        id = 12345,
+        price = 100,
+        auto_price_reduction = None,
+        price_reduction_count = 0,
+        repost_count = 0,
+        updated_on = None,
+        created_on = None,
+    )
+
+    monkeypatch.setattr(
+        "kleinanzeigen_bot.price_reduction.evaluate_auto_price_reduction",
+        lambda *args, **kwargs: SimpleNamespace(
+            enabled = True,
+            next_cycle = 1,
+            cycle_advanced = False,
+        ),
+    )
+
+    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "ad_no_cycle_advance.yaml") is False  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_is_auto_price_reduction_due_returns_true_when_reduction_due(
+    monkeypatch:pytest.MonkeyPatch,
+) -> None:
+    """is_auto_price_reduction_due returns True when a reduction is actually due (enabled, next_cycle set, cycle_advanced)."""
+    ad_cfg = SimpleNamespace(
+        id = 12345,
+        price = 100,
+        auto_price_reduction = None,
+        price_reduction_count = 0,
+        repost_count = 0,
+        updated_on = None,
+        created_on = None,
+    )
+
+    monkeypatch.setattr(
+        "kleinanzeigen_bot.price_reduction.evaluate_auto_price_reduction",
+        lambda *args, **kwargs: SimpleNamespace(
+            enabled = True,
+            next_cycle = 1,
+            cycle_advanced = True,
+        ),
+    )
+
+    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "ad_reduction_due.yaml") is True  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_is_price_reduction_due_returns_true_when_eligible_real(
+    monkeypatch:pytest.MonkeyPatch,
+) -> None:
+    """is_auto_price_reduction_due returns True when eligible (exercises real evaluate_auto_price_reduction)."""
+    now_dt = datetime(2024, 6, 1, tzinfo = timezone.utc)
+    monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: now_dt)
+
+    price_cfg = _price_cfg(on_update = True, delay_days = 0)
+    ad_cfg = SimpleNamespace(
+        id = "123",
+        price = 100,
+        auto_price_reduction = price_cfg,
+        price_reduction_count = 0,
+        updated_on = datetime(2024, 1, 1, tzinfo = timezone.utc),
+        repost_count = 5,
+    )
+
+    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "test.yaml") is True  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_is_price_reduction_due_returns_false_when_delay_not_satisfied_real(
+    monkeypatch:pytest.MonkeyPatch,
+) -> None:
+    """is_auto_price_reduction_due returns False when day-delay is not satisfied (exercises real evaluate_auto_price_reduction)."""
+    now_dt = datetime(2024, 1, 1, 12, 0, 0, tzinfo = timezone.utc)
+    monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: now_dt)
+
+    price_cfg = _price_cfg(on_update = True, delay_days = 1)
+    ad_cfg = SimpleNamespace(
+        id = "123",
+        price = 100,
+        auto_price_reduction = price_cfg,
+        price_reduction_count = 0,
+        updated_on = datetime(2024, 1, 1, tzinfo = timezone.utc),
+        repost_count = 5,
+    )
+
+    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "test.yaml") is False  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_is_price_reduction_due_returns_false_when_on_update_disabled_real(
+    monkeypatch:pytest.MonkeyPatch,
+) -> None:
+    """is_auto_price_reduction_due returns False when on_update is False (exercises real evaluate_auto_price_reduction)."""
+    now_dt = datetime(2024, 6, 1, tzinfo = timezone.utc)
+    monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: now_dt)
+
+    price_cfg = _price_cfg(on_update = False, delay_days = 0)
+    ad_cfg = SimpleNamespace(
+        id = "123",
+        price = 100,
+        auto_price_reduction = price_cfg,
+        price_reduction_count = 0,
+        updated_on = datetime(2024, 1, 1, tzinfo = timezone.utc),
+        repost_count = 5,
+    )
+
+    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "test.yaml") is False  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
 def test_evaluate_with_null_config_returns_disabled(
 ) -> None:
     """evaluate_auto_price_reduction must return a disabled decision for None config."""
