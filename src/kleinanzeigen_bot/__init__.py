@@ -2273,7 +2273,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # Always run restore-first when enabled so previously applied reductions
             # are restored even when on_update is false.  The evaluator handles
             # the on_update guard internally (returns early without advancing).
-            if ad_cfg.auto_price_reduction.enabled:
+            if ad_cfg.auto_price_reduction and ad_cfg.auto_price_reduction.enabled:
                 apply_auto_price_reduction(ad_cfg, ad_cfg_orig, _relative_ad_path(ad_file, self.config_file_path), mode = AdUpdateStrategy.MODIFY)
 
             LOG.info("Updating ad '%s'...", ad_cfg.title)

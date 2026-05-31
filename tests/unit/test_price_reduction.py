@@ -752,3 +752,44 @@ def test_modify_on_update_false_restores_price(
     assert ad_cfg.price == 180
     # Counter must NOT advance (on_update is false)
     assert ad_cfg.price_reduction_count == 1
+
+
+@pytest.mark.unit
+def test_apply_with_null_config_does_not_crash(
+    apply_auto_price_reduction:_ApplyAutoPriceReduction,
+) -> None:
+    """apply_auto_price_reduction must handle Ad configs with auto_price_reduction=None.
+
+    Regression test: the internal evaluate_auto_price_reduction accesses cfg attributes
+    (delay_reposts, delay_days, enabled) through helper functions _repost_delay_state
+    and _day_delay_state, which crash on None without an early guard.
+    """
+    ad_cfg = SimpleNamespace(
+        price = 100,
+        auto_price_reduction = None,
+        price_reduction_count = 0,
+        repost_count = 5,
+        updated_on = None,
+        created_on = None,
+    )
+    # Must not raise AttributeError
+    apply_auto_price_reduction(ad_cfg, {}, "ad_no_cfg.yaml", mode = AdUpdateStrategy.REPLACE)
+    assert ad_cfg.price == 100  # unchanged, no reduction to apply
+
+
+@pytest.mark.unit
+def test_evaluate_with_null_config_returns_disabled(
+) -> None:
+    """evaluate_auto_price_reduction must return a disabled decision for None config."""
+    ad_cfg = SimpleNamespace(
+        price = 150,
+        auto_price_reduction = None,
+        price_reduction_count = 0,
+        repost_count = 3,
+        updated_on = None,
+        created_on = None,
+    )
+    decision = kleinanzeigen_bot.evaluate_auto_price_reduction(ad_cfg, "ad_null.yaml")  # type: ignore[arg-type]
+    assert decision.enabled is False
+    assert decision.reason == "not_configured"
+    assert decision.base_price == 150

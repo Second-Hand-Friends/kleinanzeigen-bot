@@ -90,6 +90,26 @@ def evaluate_auto_price_reduction(ad_cfg:Ad, _ad_file_relative:str, *, mode:AdUp
         with :func:`apply_auto_price_reduction`.
     """
     cfg = ad_cfg.auto_price_reduction
+    if cfg is None:
+        return PriceReductionDecision(
+            mode = mode,
+            enabled = False,
+            on_update = False,
+            base_price = ad_cfg.price,
+            restored_price = None,
+            result_price = None,
+            applied_cycles = 0,
+            next_cycle = None,
+            cycle_advanced = False,
+            reason = "not_configured",
+            total_reposts = ad_cfg.repost_count or 0,
+            delay_reposts = 0,
+            eligible_cycles = 0,
+            delay_days = 0,
+            elapsed_days = None,
+            reference = None,
+            delay_reposts_ignored = False,
+        )
     on_update = bool(getattr(cfg, "on_update", False))
     base_price = ad_cfg.price
     total_reposts, delay_reposts, applied_cycles, eligible_cycles = _repost_delay_state(ad_cfg)
