@@ -334,7 +334,7 @@ class LoginMixin:
             LOG.debug("No email verification prompt detected after login")
             return
         LOG.warning("############################################")
-        LOG.warning("# Device verification message detected. Please follow the instruction displayed in the Browser.")
+        LOG.warning("# Email verification message detected. Please check your email for the verification link/code and follow the instructions.")
         LOG.warning("############################################")
         await ainput(_("Press ENTER when done..."))
 

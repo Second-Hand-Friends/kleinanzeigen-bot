@@ -57,7 +57,7 @@ kleinanzeigen_bot/utils/login_mixin.py:
     "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
 
   _check_email_verification:
-    "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
+    "# Email verification message detected. Please check your email for the verification link/code and follow the instructions.": "# E-Mail-Verifizierungsnachricht erkannt. Bitte überprüfe deine E-Mails auf den Verifizierungslink/-code und folge den Anweisungen."
     "############################################": "############################################"
     "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
 
