@@ -498,10 +498,12 @@ def apply_auto_price_reduction(
 
     next_cycle = decision.next_cycle
     if next_cycle is None:
+        LOG.debug("Auto price reduction for [%s]: no next_cycle determined, skipping", ad_file_relative)
         return
 
     aprc = ad_cfg.auto_price_reduction
     if aprc is None:
+        LOG.debug("Auto price reduction for [%s]: auto_price_reduction config is unexpectedly None, skipping", ad_file_relative)
         return
 
     if loggers.is_debug(LOG):
