@@ -17,8 +17,6 @@ from kleinanzeigen_bot import (
     LOG,
     SUBMISSION_MAX_RETRIES,
     KleinanzeigenBot,
-    LoginDetectionReason,
-    LoginDetectionResult,
     PriceReductionDecision,
     RenameStatus,
     _rename_path_if_target_is_free,  # noqa: PLC2701
@@ -29,6 +27,12 @@ from kleinanzeigen_bot import (
 )
 from kleinanzeigen_bot import (
     AdUpdateStrategy as _AdUpdateStrategy_root,
+)
+from kleinanzeigen_bot import (
+    LoginDetectionReason as _LoginDetectionReason_root,
+)
+from kleinanzeigen_bot import (
+    LoginDetectionResult as _LoginDetectionResult_root,
 )
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
@@ -42,6 +46,7 @@ from kleinanzeigen_bot.model.config_model import (
 from kleinanzeigen_bot.price_reduction import PriceReductionDecision as _PriceReductionDecision_src
 from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
+from kleinanzeigen_bot.utils.login_mixin import LoginDetectionReason, LoginDetectionResult
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
@@ -158,11 +163,13 @@ def _login_detection_result(is_logged_in:bool, reason:LoginDetectionReason) -> L
 
 
 def test_root_re_exports_resolve_correctly() -> None:
-    """Step 1 root-package re-exports must remain importable from kleinanzeigen_bot."""
+    """Root-package re-exports must remain importable from kleinanzeigen_bot."""
     assert _AdUpdateStrategy_root is AdUpdateStrategy
     assert callable(apply_auto_price_reduction)
     assert callable(evaluate_auto_price_reduction)
     assert PriceReductionDecision is _PriceReductionDecision_src
+    assert _LoginDetectionReason_root is LoginDetectionReason
+    assert _LoginDetectionResult_root is LoginDetectionResult
 
 
 @pytest.mark.parametrize(
@@ -1547,7 +1554,7 @@ class TestKleinanzeigenBotAuthentication:
             ),
             patch.object(test_bot, "web_find_first_available", side_effect = TimeoutError()),
             patch("kleinanzeigen_bot.sys.stdin", stdin_mock),
-            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+            patch("kleinanzeigen_bot.utils.login_mixin.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
             first_result = await test_bot.get_login_state()
             assert first_result.is_logged_in is False
@@ -1579,7 +1586,7 @@ class TestKleinanzeigenBotAuthentication:
             patch.object(test_bot, "web_text_first_available", side_effect = [TimeoutError(), TimeoutError(), TimeoutError(), TimeoutError()]),
             patch.object(test_bot, "web_find_first_available", side_effect = TimeoutError()),
             patch("kleinanzeigen_bot.sys.stdin", stdin_mock),
-            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+            patch("kleinanzeigen_bot.utils.login_mixin.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
             result = await test_bot.get_login_state()
             assert result.is_logged_in is False
@@ -1808,7 +1815,7 @@ class TestKleinanzeigenBotAuthentication:
         """Verify that captcha detection works correctly."""
         with (
             patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
-            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+            patch("kleinanzeigen_bot.utils.login_mixin.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
             # Test case 1: Captcha found
             mock_probe.return_value = MagicMock()
@@ -1975,7 +1982,7 @@ class TestKleinanzeigenBotAuthentication:
         with (
             patch.object(test_bot, "_timeout", return_value = 3.0) as mock_timeout,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = mock_element) as mock_probe,
-            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+            patch("kleinanzeigen_bot.utils.login_mixin.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
             await test_bot._check_sms_verification()
 
@@ -1990,7 +1997,7 @@ class TestKleinanzeigenBotAuthentication:
         with (
             patch.object(test_bot, "_timeout", return_value = 3.0),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None) as mock_probe,
-            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+            patch("kleinanzeigen_bot.utils.login_mixin.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
             await test_bot._check_sms_verification()
 
@@ -2003,7 +2010,7 @@ class TestKleinanzeigenBotAuthentication:
         with (
             patch.object(test_bot, "_timeout", return_value = 4.0) as mock_timeout,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = mock_element) as mock_probe,
-            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+            patch("kleinanzeigen_bot.utils.login_mixin.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
             await test_bot._check_email_verification()
 
@@ -2018,7 +2025,7 @@ class TestKleinanzeigenBotAuthentication:
         with (
             patch.object(test_bot, "_timeout", return_value = 4.0),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None) as mock_probe,
-            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
+            patch("kleinanzeigen_bot.utils.login_mixin.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
             await test_bot._check_email_verification()
 

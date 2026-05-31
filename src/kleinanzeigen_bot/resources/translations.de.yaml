@@ -19,6 +19,49 @@ kleinanzeigen_bot/__main__.py:
     "[INFO] Captcha detected. Sleeping %s before restart...": "[INFO] Captcha erkannt. Warte %s h bis zum Neustart..."
 
 #################################################
+kleinanzeigen_bot/utils/login_mixin.py:
+#################################################
+  check_and_wait_for_captcha:
+    "# Captcha present! Please solve the captcha.": "# Captcha vorhanden! Bitte lösen Sie das Captcha."
+    "############################################": "############################################"
+    "Captcha recognized - auto-restart enabled, abort run...": "Captcha erkannt - Auto-Neustart aktiviert, Durchlauf wird beendet..."
+    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
+
+  _capture_login_detection_diagnostics_if_enabled:
+    "############################################": "############################################"
+    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
+
+  login:
+    "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
+    "Already logged in. Skipping login.": "Bereits eingeloggt. Überspringe Anmeldung."
+    "Timeout navigating to SSO login page after %.1fs": "Zeitüberschreitung beim Navigieren zur SSO-Anmeldeseite nach %.1fs"
+    "Login confirmed.": "Anmeldung bestätigt."
+    "Login could not be confirmed after Auth0 flow (url=%s)": "Anmeldung nach Auth0-Flow konnte nicht bestätigt werden (URL=%s)"
+    "Login could not be confirmed after Auth0 flow (reason=%s, url=%s)": "Anmeldung nach Auth0-Flow konnte nicht bestätigt werden (Grund=%s, URL=%s)"
+
+  _wait_for_auth0_login_context:
+    "Auth0 redirect not detected (url=%s)": "Auth0-Weiterleitung nicht erkannt (URL=%s)"
+
+  _wait_for_auth0_password_step:
+    "Auth0 password step not reached (url=%s)": "Auth0-Passwortschritt nicht erreicht (URL=%s)"
+
+  _wait_for_post_auth0_submit_transition:
+    "Auth0 post-submit verification remained inconclusive (url=%s)": "Auth0-Verifikation nach Absenden blieb unklar (URL=%s)"
+
+  fill_login_data_and_send:
+    "Logging in...": "Anmeldung..."
+
+  _check_sms_verification:
+    "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
+    "############################################": "############################################"
+    "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
+
+  _check_email_verification:
+    "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
+    "############################################": "############################################"
+    "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
+
+#################################################
 kleinanzeigen_bot/__init__.py:
 #################################################
   module:
@@ -78,57 +121,8 @@ kleinanzeigen_bot/__init__.py:
   _resolve_login_credentials:
     "Environment variable %s is required for login.%s but is not set": "Umgebungsvariable %s ist für login.%s erforderlich, ist aber nicht gesetzt"
 
-  check_and_wait_for_captcha:
-    "# Captcha present! Please solve the captcha.": "# Captcha vorhanden! Bitte lösen Sie das Captcha."
-    "Captcha recognized - auto-restart enabled, abort run...": "Captcha erkannt - Auto-Neustart aktiviert, Durchlauf wird beendet..."
-    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
-
-  _capture_login_detection_diagnostics_if_enabled:
-    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
-
   _capture_publish_error_diagnostics_if_enabled:
     "Diagnostics capture failed during publish error handling: %s": "Diagnose-Erfassung fehlgeschlagen während der Veröffentlichung-Fehlerbehandlung: %s"
-
-  login:
-    "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
-    "Already logged in. Skipping login.": "Bereits eingeloggt. Überspringe Anmeldung."
-    "Navigating to SSO login page (Auth0)...": "Navigiere zur SSO-Anmeldeseite (Auth0)..."
-    "Timeout navigating to SSO login page after %.1fs": "Zeitüberschreitung beim Navigieren zur SSO-Anmeldeseite nach %.1fs"
-    "Login confirmed.": "Anmeldung bestätigt."
-    "Login could not be confirmed after Auth0 flow (url=%s)": "Anmeldung nach Auth0-Flow konnte nicht bestätigt werden (URL=%s)"
-    "Login could not be confirmed after Auth0 flow (reason=%s, url=%s)": "Anmeldung nach Auth0-Flow konnte nicht bestätigt werden (Grund=%s, URL=%s)"
-
-  _wait_for_auth0_login_context:
-    "Auth0 redirect not detected (url=%s)": "Auth0-Weiterleitung nicht erkannt (URL=%s)"
-
-  _wait_for_auth0_password_step:
-    "Auth0 password step not reached (url=%s)": "Auth0-Passwortschritt nicht erreicht (URL=%s)"
-
-  _wait_for_post_auth0_submit_transition:
-    "Auth0 post-submit verification remained inconclusive (url=%s)": "Auth0-Verifikation nach Absenden blieb unklar (URL=%s)"
-
-  fill_login_data_and_send:
-    "Logging in...": "Anmeldung..."
-    "Auth0 Step 1: entering email...": "Auth0 Schritt 1: E-Mail wird eingegeben..."
-    "Waiting for Auth0 password page...": "Warte auf Auth0-Passwortseite..."
-    "Auth0 Step 2: entering password...": "Auth0 Schritt 2: Passwort wird eingegeben..."
-    "Auth0 login submitted.": "Auth0-Anmeldung abgesendet."
-
-  _check_sms_verification:
-    "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
-    "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
-
-  _check_email_verification:
-    "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
-    "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
-
-  _has_logged_in_marker:
-    "Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)": "Starte Login-Erkennung (Timeout: %.1fs Basis, %.1fs effektiv mit Multiplikator/Backoff)"
-    "Login detected via login detection selector '%s'": "Login erkannt über Login-Erkennungs-Selektor '%s'"
-    "Timeout waiting for login detection selector group after %.1fs": "Timeout beim Warten auf die Login-Erkennungs-Selektorgruppe nach %.1fs"
-
-  handle_after_login_logic:
-    "Handling GDPR disclaimer...": "Verarbeite DSGVO-Hinweis..."
 
   delete_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
