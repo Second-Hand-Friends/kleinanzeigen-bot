@@ -212,6 +212,7 @@ kleinanzeigen_bot/__init__.py:
     "Failed to set shipping attribute for type '%s'!": "Fehler beim setzen des Versandattributs für den Typ '%s'!"
     "Shipping step skipped - reason: NOT_APPLICABLE": "Versandschritt übersprungen: Versand nicht anwendbar (Status = NOT_APPLICABLE)"
     "Shipping combobox button has no id attribute": "Versand-Combobox-Button hat kein ID-Attribut"
+    "Dismissing 'Effektiver verkaufen' upsell dialog...": "'Effektiver verkaufen'-Dialog schließen..."
     "Direct-buy (sell_directly) is not available for the selected category. Skipping.": "Direktkauf (sell_directly) ist für die ausgewählte Kategorie nicht verfügbar. Überspringe."
     "Image cleanup failed before upload. Removed %(removed)d of %(total)d existing images.": "Bildbereinigung vor dem Hochladen fehlgeschlagen. %(removed)d von %(total)d vorhandenen Bildern wurden entfernt."
     "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
