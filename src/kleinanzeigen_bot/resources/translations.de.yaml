@@ -387,8 +387,8 @@ kleinanzeigen_bot/price_reduction.py:
     "Auto price reduction already applied for [%s]: price %s -> %s; %s reductions match %s eligible reposts": "Automatische Preisreduzierung für [%s] bereits angewendet: Preis %s -> %s; %s Reduktionen entsprechen %s berechtigten erneuten Veröffentlichungen"
     "Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)": "Automatische Preisreduzierung für [%s] verzögert: Warte %s Tage (vergangen %s)"
     "Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing": "Automatische Preisreduzierung für [%s] verzögert: Warte %s Tage, aber Zeitstempel der Veröffentlichung fehlt"
-    "Auto price reduction applied: %s -> %s after %s reduction cycles": "Automatische Preisreduzierung angewendet: %s -> %s nach %s Reduktionszyklen"
-    "Auto price reduction kept price %s after attempting %s reduction cycles": "Automatische Preisreduzierung hat Preis %s beibehalten nach dem Versuch von %s Reduktionszyklen"
+    "Auto price reduction applied for [%s]: %s -> %s after %s reduction cycles": "Automatische Preisreduzierung für [%s] angewendet: %s -> %s nach %s Reduktionszyklen"
+    "Auto price reduction kept price %s for [%s] after attempting %s reduction cycles": "Automatische Preisreduzierung hat Preis %s für [%s] beibehalten nach dem Versuch von %s Reduktionszyklen"
 
 #################################################
 kleinanzeigen_bot/extract.py:

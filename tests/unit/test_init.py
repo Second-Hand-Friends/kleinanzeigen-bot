@@ -29,6 +29,9 @@ from kleinanzeigen_bot import (
     evaluate_auto_price_reduction,
     misc,
 )
+from kleinanzeigen_bot import (
+    AdUpdateStrategy as _AdUpdateStrategy_root,
+)
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import (
@@ -158,7 +161,7 @@ def _login_detection_result(is_logged_in:bool, reason:LoginDetectionReason) -> L
 
 def test_root_re_exports_resolve_correctly() -> None:
     """Step 1 root-package re-exports must remain importable from kleinanzeigen_bot."""
-    assert AdUpdateStrategy is not None
+    assert _AdUpdateStrategy_root is AdUpdateStrategy
     assert callable(apply_auto_price_reduction)
     assert callable(evaluate_auto_price_reduction)
     assert PriceReductionDecision is _PriceReductionDecision_src

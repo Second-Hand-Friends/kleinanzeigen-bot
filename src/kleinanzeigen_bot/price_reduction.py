@@ -452,7 +452,7 @@ def apply_auto_price_reduction(
             LOG.debug("Auto price reduction skipped for [%s]: missing next_cycle for no_visible_change", ad_file_relative)
             return
         ad_cfg.price_reduction_count = next_cycle
-        LOG.info("Auto price reduction kept price %s after attempting %s reduction cycles", decision.restored_price, next_cycle)
+        LOG.info("Auto price reduction kept price %s for [%s] after attempting %s reduction cycles", decision.restored_price, ad_file_relative, next_cycle)
         return
 
     LOG.debug(
@@ -500,6 +500,7 @@ def apply_auto_price_reduction(
 
     ad_cfg.price = effective_price
 
-    LOG.info("Auto price reduction applied: %s -> %s after %s reduction cycles", decision.restored_price, effective_price, next_cycle)
+    LOG.info("Auto price reduction applied for [%s]: %s -> %s after %s reduction cycles",
+             ad_file_relative, decision.restored_price, effective_price, next_cycle)
     ad_cfg.price_reduction_count = next_cycle
     # Note: price_reduction_count is persisted to ad_cfg_orig only after successful publish
