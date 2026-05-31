@@ -16,9 +16,7 @@ from pydantic import ValidationError
 from kleinanzeigen_bot import (
     LOG,
     SUBMISSION_MAX_RETRIES,
-    ImageRenameResult,  # noqa: F401
     KleinanzeigenBot,
-    LocalPathRenameResult,  # noqa: F401
     LoginDetectionReason,
     LoginDetectionResult,
     PriceReductionDecision,
