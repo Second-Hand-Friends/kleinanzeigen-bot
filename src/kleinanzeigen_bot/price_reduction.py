@@ -4,6 +4,13 @@
 
 """Auto price reduction logic for Kleinanzeigen ads."""
 
+__all__ = [
+    "PriceReductionDecision",
+    "_log_auto_price_reduction_preview",
+    "apply_auto_price_reduction",
+    "evaluate_auto_price_reduction",
+]
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -31,6 +38,7 @@ def _repost_delay_state(ad_cfg:Ad) -> tuple[int, int, int, int]:
         tuple[int, int, int, int]:
             (total_reposts, delay_reposts, applied_cycles, eligible_cycles)
     """
+    assert ad_cfg.auto_price_reduction is not None, "auto_price_reduction must not be None"  # noqa: S101 — invariant contract, not debug-only
     total_reposts = ad_cfg.repost_count or 0
     delay_reposts = ad_cfg.auto_price_reduction.delay_reposts
     applied_cycles = ad_cfg.price_reduction_count or 0
@@ -45,6 +53,7 @@ def _day_delay_state(ad_cfg:Ad) -> tuple[bool, int | None, datetime | None]:
         tuple[bool, int | None, datetime | None]:
             (ready_flag, elapsed_days_or_none, reference_timestamp_or_none)
     """
+    assert ad_cfg.auto_price_reduction is not None, "auto_price_reduction must not be None"  # noqa: S101 — invariant contract, not debug-only
     delay_days = ad_cfg.auto_price_reduction.delay_days
     # Use getattr to support lightweight test doubles without these attributes.
     reference = getattr(ad_cfg, "updated_on", None) or getattr(ad_cfg, "created_on", None)

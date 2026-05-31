@@ -39,6 +39,9 @@ from .model.ad_model import (
     calculate_auto_price_with_trace as calculate_auto_price_with_trace,
 )
 from .model.config_model import DEFAULT_DOWNLOAD_DIR, Config
+
+# Re-export for backward compatibility. The `as X as X` pattern
+# keeps each symbol explicitly named so linters can trace the re-export.
 from .price_reduction import (
     PriceReductionDecision as PriceReductionDecision,
 )
