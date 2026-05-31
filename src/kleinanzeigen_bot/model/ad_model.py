@@ -3,6 +3,8 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 from __future__ import annotations
 
+import enum
+
 import hashlib, json  # isort: skip
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -18,6 +20,14 @@ from kleinanzeigen_bot.model.config_model import AdDefaults, AutoPriceReductionC
 from kleinanzeigen_bot.utils import dicts
 from kleinanzeigen_bot.utils.misc import parse_datetime, parse_decimal
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
+
+
+class AdUpdateStrategy(enum.Enum):
+    """Strategy for ad creation vs. modification on publish."""
+
+    REPLACE = enum.auto()
+    MODIFY = enum.auto()
+
 
 MIN_TITLE_LENGTH:Final[int] = 10
 MAX_TITLE_LENGTH:Final[int] = 65

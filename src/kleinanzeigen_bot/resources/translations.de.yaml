@@ -191,23 +191,6 @@ kleinanzeigen_bot/__init__.py:
     "DONE: (Re-)published %s": "FERTIG: %s (erneut) veröffentlicht"
     "ad": "Anzeige"
 
-  apply_auto_price_reduction:
-    "Auto price reduction is enabled for [%s] but no price is configured.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber es wurde kein Preis konfiguriert."
-    "Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber min_price entspricht dem Preis (%s) - es werden keine Reduktionen auftreten."
-    "Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)": "Automatische Preisreduzierung für [%s] verzögert: Warte %s weitere erneute Veröffentlichungen (abgeschlossen %s, angewendet %s Reduktionen)"
-    "Auto price reduction already applied for [%s]: price %s -> %s; %s reductions match %s eligible reposts": "Automatische Preisreduzierung für [%s] bereits angewendet: Preis %s -> %s; %s Reduktionen entsprechen %s berechtigten erneuten Veröffentlichungen"
-    "Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)": "Automatische Preisreduzierung für [%s] verzögert: Warte %s Tage (vergangen %s)"
-    "Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing": "Automatische Preisreduzierung für [%s] verzögert: Warte %s Tage, aber Zeitstempel der Veröffentlichung fehlt"
-    "Auto price reduction applied: %s -> %s after %s reduction cycles": "Automatische Preisreduzierung angewendet: %s -> %s nach %s Reduktionszyklen"
-    "Auto price reduction kept price %s after attempting %s reduction cycles": "Automatische Preisreduzierung hat Preis %s beibehalten nach dem Versuch von %s Reduktionszyklen"
-
-  _log_auto_price_reduction_preview:
-    "Auto price reduction preview for [%s] (%s): disabled": "Vorschau automatische Preisreduzierung für [%s] (%s): deaktiviert"
-    "Auto price reduction preview for [%s] (%s): missing price": "Vorschau automatische Preisreduzierung für [%s] (%s): Preis fehlt"
-    "Auto price reduction preview for [%s] (%s): disabled (on_update=false, effective_price=%s)": "Vorschau automatische Preisreduzierung für [%s] (%s): deaktiviert (on_update=false, effektiver Preis=%s)"
-    "Auto price reduction preview for [%s] (%s): %s -> %s (cycle %s)": "Vorschau automatische Preisreduzierung für [%s] (%s): %s -> %s (Zyklus %s)"
-    "Auto price reduction preview for [%s] (%s): no new reduction (effective_price=%s, reason=%s)": "Vorschau automatische Preisreduzierung für [%s] (%s): keine neue Reduktion (effektiver Preis=%s, Grund=%s)"
-
   _rename_path_if_target_is_free:
     "Skipping local %s rename because target already exists: %s": "Lokale %s-Umbenennung übersprungen, da das Ziel bereits existiert: %s"
     "Could not rename local %s from %s to %s: %s": "Lokale %s konnte nicht von %s nach %s umbenannt werden: %s"
@@ -386,6 +369,29 @@ kleinanzeigen_bot/__init__.py:
     "DONE: Updated [content_hash] in %s": "FERTIG: [content_hash] in %s aktualisiert."
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "ad": "Anzeige"
+
+#################################################
+kleinanzeigen_bot/price_reduction.py:
+#################################################
+  _log_auto_price_reduction_preview:
+    "publish": "veröffentlichen"
+    "update": "aktualisieren"
+    "Auto price reduction preview for [%s] (%s): disabled": "Vorschau automatische Preisreduzierung für [%s] (%s): deaktiviert"
+    "Auto price reduction preview for [%s] (%s): missing price": "Vorschau automatische Preisreduzierung für [%s] (%s): Preis fehlt"
+    "Auto price reduction preview for [%s] (%s): disabled (on_update=false, effective_price=%s)": "Vorschau automatische Preisreduzierung für [%s] (%s): deaktiviert (on_update=false, effektiver Preis=%s)"
+    "Auto price reduction preview for [%s] (%s): %s -> %s (cycle %s)": "Vorschau automatische Preisreduzierung für [%s] (%s): %s -> %s (Zyklus %s)"
+    "Auto price reduction preview for [%s] (%s): no new reduction (effective_price=%s, reason=%s)": "Vorschau automatische Preisreduzierung für [%s] (%s): keine neue Reduktion (effektiver Preis=%s, Grund=%s)"
+
+  apply_auto_price_reduction:
+    "Auto price reduction is enabled for [%s] but no price is configured.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber es wurde kein Preis konfiguriert."
+    "Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber min_price entspricht dem Preis (%s) - es werden keine Reduktionen auftreten."
+    "Auto price reduction delayed for [%s]: waiting %s more reposts (completed %s, applied %s reductions)": "Automatische Preisreduzierung für [%s] verzögert: Warte %s weitere erneute Veröffentlichungen (abgeschlossen %s, angewendet %s Reduktionen)"
+    "Auto price reduction already applied for [%s]: price %s -> %s; %s reductions match %s eligible reposts": "Automatische Preisreduzierung für [%s] bereits angewendet: Preis %s -> %s; %s Reduktionen entsprechen %s berechtigten erneuten Veröffentlichungen"
+    "Auto price reduction delayed for [%s]: waiting %s days (elapsed %s)": "Automatische Preisreduzierung für [%s] verzögert: Warte %s Tage (vergangen %s)"
+    "Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing": "Automatische Preisreduzierung für [%s] verzögert: Warte %s Tage, aber Zeitstempel der Veröffentlichung fehlt"
+    "Auto price reduction applied for [%s]: %s -> %s after %s reduction cycles": "Automatische Preisreduzierung für [%s] angewendet: %s -> %s nach %s Reduktionszyklen"
+    "Auto price reduction kept price %s for [%s] after attempting %s reduction cycles": "Automatische Preisreduzierung hat Preis %s für [%s] beibehalten nach dem Versuch von %s Reduktionszyklen"
+    "Auto price reduction failed for [%s]: could not calculate price for cycle %s from base price %s": "Automatische Preisreduzierung für [%s] fehlgeschlagen: Konnte Preis für Zyklus %s aus Grundpreis %s nicht berechnen"
 
 #################################################
 kleinanzeigen_bot/extract.py:

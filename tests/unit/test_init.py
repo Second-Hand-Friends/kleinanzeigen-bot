@@ -16,19 +16,22 @@ from pydantic import ValidationError
 from kleinanzeigen_bot import (
     LOG,
     SUBMISSION_MAX_RETRIES,
-    AdUpdateStrategy,
-    ImageRenameResult,  # noqa: F401
     KleinanzeigenBot,
-    LocalPathRenameResult,  # noqa: F401
     LoginDetectionReason,
     LoginDetectionResult,
+    PriceReductionDecision,
     RenameStatus,
     _rename_path_if_target_is_free,  # noqa: PLC2701
     _replace_template_id_slot,  # noqa: PLC2701
+    apply_auto_price_reduction,
+    evaluate_auto_price_reduction,
     misc,
 )
+from kleinanzeigen_bot import (
+    AdUpdateStrategy as _AdUpdateStrategy_root,
+)
 from kleinanzeigen_bot._version import __version__
-from kleinanzeigen_bot.model.ad_model import Ad
+from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import (
     AdDefaults,
     AutoPriceReductionConfig,
@@ -36,6 +39,7 @@ from kleinanzeigen_bot.model.config_model import (
     DiagnosticsConfig,
     PublishingConfig,
 )
+from kleinanzeigen_bot.price_reduction import PriceReductionDecision as _PriceReductionDecision_src
 from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
@@ -151,6 +155,14 @@ def _make_fake_resolve_workspace(
 
 def _login_detection_result(is_logged_in:bool, reason:LoginDetectionReason) -> LoginDetectionResult:
     return LoginDetectionResult(is_logged_in = is_logged_in, reason = reason)
+
+
+def test_root_re_exports_resolve_correctly() -> None:
+    """Step 1 root-package re-exports must remain importable from kleinanzeigen_bot."""
+    assert _AdUpdateStrategy_root is AdUpdateStrategy
+    assert callable(apply_auto_price_reduction)
+    assert callable(evaluate_auto_price_reduction)
+    assert PriceReductionDecision is _PriceReductionDecision_src
 
 
 @pytest.mark.parametrize(
