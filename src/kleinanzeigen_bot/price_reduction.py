@@ -500,17 +500,21 @@ def apply_auto_price_reduction(
     if next_cycle is None:
         return
 
+    aprc = ad_cfg.auto_price_reduction
+    if aprc is None:
+        return
+
     if loggers.is_debug(LOG):
         effective_price, reduction_steps, price_floor = calculate_auto_price_with_trace(
             base_price = base_price,
-            auto_price_reduction = ad_cfg.auto_price_reduction,
+            auto_price_reduction = aprc,
             target_reduction_cycle = next_cycle,
         )
         LOG.debug(
             "Auto price reduction trace for [%s]: strategy=%s amount=%s floor=%s target_cycle=%s base_price=%s",
             ad_file_relative,
-            ad_cfg.auto_price_reduction.strategy,
-            ad_cfg.auto_price_reduction.amount,
+            aprc.strategy,
+            aprc.amount,
             price_floor,
             next_cycle,
             base_price,
