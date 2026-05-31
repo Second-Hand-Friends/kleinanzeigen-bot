@@ -374,6 +374,8 @@ kleinanzeigen_bot/__init__.py:
 kleinanzeigen_bot/price_reduction.py:
 #################################################
   _log_auto_price_reduction_preview:
+    "publish": "veröffentlichen"
+    "update": "aktualisieren"
     "Auto price reduction preview for [%s] (%s): disabled": "Vorschau automatische Preisreduzierung für [%s] (%s): deaktiviert"
     "Auto price reduction preview for [%s] (%s): missing price": "Vorschau automatische Preisreduzierung für [%s] (%s): Preis fehlt"
     "Auto price reduction preview for [%s] (%s): disabled (on_update=false, effective_price=%s)": "Vorschau automatische Preisreduzierung für [%s] (%s): deaktiviert (on_update=false, effektiver Preis=%s)"
@@ -389,6 +391,7 @@ kleinanzeigen_bot/price_reduction.py:
     "Auto price reduction delayed for [%s]: waiting %s days but publish timestamp missing": "Automatische Preisreduzierung für [%s] verzögert: Warte %s Tage, aber Zeitstempel der Veröffentlichung fehlt"
     "Auto price reduction applied for [%s]: %s -> %s after %s reduction cycles": "Automatische Preisreduzierung für [%s] angewendet: %s -> %s nach %s Reduktionszyklen"
     "Auto price reduction kept price %s for [%s] after attempting %s reduction cycles": "Automatische Preisreduzierung hat Preis %s für [%s] beibehalten nach dem Versuch von %s Reduktionszyklen"
+    "Auto price reduction failed for [%s]: could not calculate price for cycle %s from base price %s": "Automatische Preisreduzierung für [%s] fehlgeschlagen: Konnte Preis für Zyklus %s aus Grundpreis %s nicht berechnen"
 
 #################################################
 kleinanzeigen_bot/extract.py:

@@ -13,6 +13,7 @@ __all__ = [
 
 from dataclasses import dataclass
 from datetime import datetime
+from gettext import gettext as _
 from typing import Any
 
 from kleinanzeigen_bot.model.ad_model import (
@@ -297,7 +298,7 @@ def evaluate_auto_price_reduction(ad_cfg:Ad, _ad_file_relative:str, *, mode:AdUp
 
 
 def _log_auto_price_reduction_preview(ad_file_relative:str, decision:PriceReductionDecision) -> None:
-    mode_label = "publish" if decision.mode == AdUpdateStrategy.REPLACE else "update"
+    mode_label = _("publish") if decision.mode == AdUpdateStrategy.REPLACE else _("update")
     if not decision.enabled:
         LOG.info("Auto price reduction preview for [%s] (%s): disabled", ad_file_relative, mode_label)
         return
@@ -394,6 +395,8 @@ def apply_auto_price_reduction(
         return
 
     if decision.reason == "calculation_failed":
+        LOG.warning("Auto price reduction failed for [%s]: could not calculate price for cycle %s from base price %s",
+                    ad_file_relative, decision.next_cycle, base_price)
         return
 
     if decision.reason in {"repost_delay_waiting", "repost_delay_applied"}:
