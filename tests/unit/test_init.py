@@ -13,7 +13,6 @@ import pytest
 from nodriver.core.connection import ProtocolException
 from pydantic import ValidationError
 
-import kleinanzeigen_bot
 from kleinanzeigen_bot import (
     LOG,
     SUBMISSION_MAX_RETRIES,
@@ -22,9 +21,12 @@ from kleinanzeigen_bot import (
     LocalPathRenameResult,  # noqa: F401
     LoginDetectionReason,
     LoginDetectionResult,
+    PriceReductionDecision,
     RenameStatus,
     _rename_path_if_target_is_free,  # noqa: PLC2701
     _replace_template_id_slot,  # noqa: PLC2701
+    apply_auto_price_reduction,
+    evaluate_auto_price_reduction,
     misc,
 )
 from kleinanzeigen_bot._version import __version__
@@ -36,6 +38,7 @@ from kleinanzeigen_bot.model.config_model import (
     DiagnosticsConfig,
     PublishingConfig,
 )
+from kleinanzeigen_bot.price_reduction import PriceReductionDecision as _PriceReductionDecision_src
 from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
@@ -155,10 +158,10 @@ def _login_detection_result(is_logged_in:bool, reason:LoginDetectionReason) -> L
 
 def test_root_re_exports_resolve_correctly() -> None:
     """Step 1 root-package re-exports must remain importable from kleinanzeigen_bot."""
-    assert kleinanzeigen_bot.AdUpdateStrategy is not None
-    assert callable(kleinanzeigen_bot.apply_auto_price_reduction)
-    assert callable(kleinanzeigen_bot.evaluate_auto_price_reduction)
-    assert kleinanzeigen_bot.PriceReductionDecision is kleinanzeigen_bot.price_reduction.PriceReductionDecision
+    assert AdUpdateStrategy is not None
+    assert callable(apply_auto_price_reduction)
+    assert callable(evaluate_auto_price_reduction)
+    assert PriceReductionDecision is _PriceReductionDecision_src
 
 
 @pytest.mark.parametrize(
