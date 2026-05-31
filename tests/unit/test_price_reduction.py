@@ -9,7 +9,7 @@ from typing import Any, Protocol, runtime_checkable
 import pytest
 
 import kleinanzeigen_bot
-from kleinanzeigen_bot.model.ad_model import calculate_auto_price
+from kleinanzeigen_bot.model.ad_model import AdUpdateStrategy, calculate_auto_price
 from kleinanzeigen_bot.model.config_model import AutoPriceReductionConfig
 from kleinanzeigen_bot.utils.pydantics import ContextualValidationError
 
@@ -22,7 +22,7 @@ class _ApplyAutoPriceReduction(Protocol):
         _ad_cfg_orig:dict[str, Any],
         ad_file_relative:str,
         *,
-        mode:kleinanzeigen_bot.AdUpdateStrategy = kleinanzeigen_bot.AdUpdateStrategy.REPLACE,
+        mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE,
     ) -> None:
         pass
 
@@ -592,7 +592,7 @@ def test_apply_modify_mode_on_update_false_leaves_base_price_when_no_prior_reduc
         created_on = None,
     )
 
-    apply_auto_price_reduction(ad_cfg, {}, "ad_no_update.yaml", mode = kleinanzeigen_bot.AdUpdateStrategy.MODIFY)
+    apply_auto_price_reduction(ad_cfg, {}, "ad_no_update.yaml", mode = AdUpdateStrategy.MODIFY)
 
     assert ad_cfg.price == 200
     assert ad_cfg.price_reduction_count == 0
@@ -620,7 +620,7 @@ def test_apply_modify_mode_applies_reduction_when_on_update_true_and_day_delay_s
 
     monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: reference)
 
-    apply_auto_price_reduction(ad_cfg, {}, "ad_modify.yaml", mode = kleinanzeigen_bot.AdUpdateStrategy.MODIFY)
+    apply_auto_price_reduction(ad_cfg, {}, "ad_modify.yaml", mode = AdUpdateStrategy.MODIFY)
 
     assert ad_cfg.price == 150  # 200 * 0.75
     assert ad_cfg.price_reduction_count == 1
@@ -644,7 +644,7 @@ def test_apply_modify_mode_skips_new_cycle_when_day_delay_not_satisfied(
 
     monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: reference)
 
-    apply_auto_price_reduction(ad_cfg, {}, "ad_delay_not_met.yaml", mode = kleinanzeigen_bot.AdUpdateStrategy.MODIFY)
+    apply_auto_price_reduction(ad_cfg, {}, "ad_delay_not_met.yaml", mode = AdUpdateStrategy.MODIFY)
 
     assert ad_cfg.price == 200
     assert ad_cfg.price_reduction_count == 0
@@ -669,7 +669,7 @@ def test_apply_modify_mode_restores_reduced_price_with_prior_reductions(
         created_on = None,
     )
 
-    apply_auto_price_reduction(ad_cfg, {}, "ad_restore.yaml", mode = kleinanzeigen_bot.AdUpdateStrategy.MODIFY)
+    apply_auto_price_reduction(ad_cfg, {}, "ad_restore.yaml", mode = AdUpdateStrategy.MODIFY)
 
     # base=100, 2 cycles of 10%: 100*0.9=90 → 90*0.9=81
     assert ad_cfg.price == 81  # restored to reduced price, not left at base 100
@@ -700,7 +700,7 @@ def test_cross_mode_update_then_publish_preserves_reduced_price(
         updated_on = None,
         created_on = None,
     )
-    apply_auto_price_reduction(ad_cfg, {}, "ad_cross.yaml", mode = kleinanzeigen_bot.AdUpdateStrategy.MODIFY)
+    apply_auto_price_reduction(ad_cfg, {}, "ad_cross.yaml", mode = AdUpdateStrategy.MODIFY)
     assert ad_cfg.price == 90
     assert ad_cfg.price_reduction_count == 1
 
@@ -711,7 +711,7 @@ def test_cross_mode_update_then_publish_preserves_reduced_price(
     ad_cfg.price_reduction_count = 1
 
     # --- Step 3: REPLACE mode, no new repost cycle eligible ---
-    apply_auto_price_reduction(ad_cfg, {}, "ad_cross.yaml", mode = kleinanzeigen_bot.AdUpdateStrategy.REPLACE)
+    apply_auto_price_reduction(ad_cfg, {}, "ad_cross.yaml", mode = AdUpdateStrategy.REPLACE)
 
     # Restore-first: keep the single previously applied cycle from base 100 → 90
     assert ad_cfg.price == 90
@@ -746,7 +746,7 @@ def test_modify_on_update_false_restores_price(
         created_on = None,
     )
 
-    apply_auto_price_reduction(ad_cfg, {}, "ad_restore.yaml", mode = kleinanzeigen_bot.AdUpdateStrategy.MODIFY)
+    apply_auto_price_reduction(ad_cfg, {}, "ad_restore.yaml", mode = AdUpdateStrategy.MODIFY)
 
     # Price must be restored from base 200 with one 10% reduction → 180
     assert ad_cfg.price == 180

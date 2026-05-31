@@ -13,10 +13,10 @@ import pytest
 from nodriver.core.connection import ProtocolException
 from pydantic import ValidationError
 
+import kleinanzeigen_bot
 from kleinanzeigen_bot import (
     LOG,
     SUBMISSION_MAX_RETRIES,
-    AdUpdateStrategy,
     ImageRenameResult,  # noqa: F401
     KleinanzeigenBot,
     LocalPathRenameResult,  # noqa: F401
@@ -28,7 +28,7 @@ from kleinanzeigen_bot import (
     misc,
 )
 from kleinanzeigen_bot._version import __version__
-from kleinanzeigen_bot.model.ad_model import Ad
+from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import (
     AdDefaults,
     AutoPriceReductionConfig,
@@ -151,6 +151,14 @@ def _make_fake_resolve_workspace(
 
 def _login_detection_result(is_logged_in:bool, reason:LoginDetectionReason) -> LoginDetectionResult:
     return LoginDetectionResult(is_logged_in = is_logged_in, reason = reason)
+
+
+def test_root_re_exports_resolve_correctly() -> None:
+    """Step 1 root-package re-exports must remain importable from kleinanzeigen_bot."""
+    assert kleinanzeigen_bot.AdUpdateStrategy is not None
+    assert callable(kleinanzeigen_bot.apply_auto_price_reduction)
+    assert callable(kleinanzeigen_bot.evaluate_auto_price_reduction)
+    assert kleinanzeigen_bot.PriceReductionDecision is kleinanzeigen_bot.price_reduction.PriceReductionDecision
 
 
 @pytest.mark.parametrize(
