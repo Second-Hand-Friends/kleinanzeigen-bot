@@ -19,6 +19,8 @@ from kleinanzeigen_bot.utils.misc import ainput, parse_duration
 from kleinanzeigen_bot.utils.web_scraping_mixin import By
 
 if TYPE_CHECKING:
+    from nodriver.core.tab import Tab as Page
+
     from kleinanzeigen_bot.model.config_model import Config
 
 LOG:Final = get_logger(__name__)
@@ -70,19 +72,18 @@ class LoginMixin:
     """Browser login, auth detection, GDPR banners, Captcha handling."""
 
     if TYPE_CHECKING:
-        # Host class attributes/methods that LoginMixin accesses, provided by
-        # KleinanzeigenBot and WebScrapingMixin. Declared as Any to satisfy mypy
-        # without reproducing full signatures from the host mixin.
+        # Host attributes and methods provided by KleinanzeigenBot
+        # and WebScrapingMixin. Declared minimally for mypy.
         config:"Config"
         root_url:str
-        page:Any
+        page:"Page"
         log_file_path:str | None
-        _timeout:Any  # callable, not float
         _login_detection_diagnostics_captured:bool
 
+        _diagnostics_output_dir:Any  # def _diagnostics_output_dir(self) -> Path
         _effective_timeout:Any
-        _diagnostics_output_dir:Any
         _extract_visible_text:Any
+        _timeout:Any  # callable
         web_await:Any
         web_click:Any
         web_find_first_available:Any
