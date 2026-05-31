@@ -54,6 +54,9 @@ from .price_reduction import (
 from .price_reduction import (
     evaluate_auto_price_reduction as evaluate_auto_price_reduction,
 )
+from .price_reduction import (
+    is_auto_price_reduction_due as is_auto_price_reduction_due,
+)
 from .update_checker import UpdateChecker
 from .utils import diagnostics, dicts, error_handlers, loggers, misc, xdg_paths
 from .utils.exceptions import CaptchaEncountered, CategoryResolutionError, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
@@ -1083,6 +1086,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
                 # Check for 'changed' selector
                 if "changed" in selectors and self.__check_ad_changed(ad_cfg, ad_cfg_orig, ad_file_relative):
+                    should_include = True
+                elif "changed" in selectors and self.command == "update" and is_auto_price_reduction_due(ad_cfg, ad_file_relative):
                     should_include = True
 
                 # Check for 'new' selector

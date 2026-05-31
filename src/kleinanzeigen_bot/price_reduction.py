@@ -9,6 +9,7 @@ __all__ = [
     "_log_auto_price_reduction_preview",
     "apply_auto_price_reduction",
     "evaluate_auto_price_reduction",
+    "is_auto_price_reduction_due",
 ]
 
 from dataclasses import dataclass
@@ -295,6 +296,45 @@ def evaluate_auto_price_reduction(ad_cfg:Ad, _ad_file_relative:str, *, mode:AdUp
         reference = reference,
         delay_reposts_ignored = delay_reposts_ignored,
     )
+
+
+def is_auto_price_reduction_due(ad_cfg:Ad, ad_file_relative:str) -> bool:
+    """Check if an ad has a pending auto price reduction that should trigger an update.
+
+    Evaluates the auto price reduction in MODIFY mode without mutating the ad.
+    A reduction is 'due' when it is enabled, the delay criteria are satisfied,
+    a next cycle is calculated, and the result price differs from the restored price.
+
+    Note:
+        ``no_visible_change`` reductions (where the calculated price does not
+        change, but ``price_reduction_count`` would still advance) are not
+        considered 'due' here, since only visible price changes warrant a
+        browser update.
+
+    Args:
+        ad_cfg: The ad configuration to evaluate.
+        ad_file_relative: Relative path to the ad file (for logging context).
+
+    Returns:
+        True if a price reduction is due for this ad.
+    """
+    if not ad_cfg.id:
+        # New ads don't have pending reductions
+        return False
+
+    decision = evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = AdUpdateStrategy.MODIFY)
+
+    if not decision.enabled:
+        return False
+
+    if decision.next_cycle is None:
+        return False
+
+    if not decision.cycle_advanced:
+        return False
+
+    LOG.info("Pending auto price reduction detected for ad [%s]", ad_file_relative)
+    return True
 
 
 def _log_auto_price_reduction_preview(ad_file_relative:str, decision:PriceReductionDecision) -> None:

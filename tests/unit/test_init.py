@@ -5485,6 +5485,178 @@ class TestKleinanzeigenBotChangedAds:
                 # The changed ad should be loaded with 'due' selector because it's due for republication
                 assert len(ads_to_publish) == 1
 
+    def test_load_ads_with_changed_selector_and_pending_price_reduction(self, test_bot_config:Config, base_ad_config:dict[str, Any]) -> None:
+        """Test that 'changed' selector also loads ads with pending auto price reductions."""
+        test_bot = KleinanzeigenBot()
+        test_bot.ads_selector = "changed"
+        test_bot.command = "update"
+        test_bot.config = test_bot_config.with_values({"ad_defaults": {"description": {"prefix": "", "suffix": ""}}})
+
+        # Create an ad with auto_price_reduction configured and ready to trigger
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "id": "12345",
+                "title": "Ad With Price Reduction",
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+                "price": 100,
+                "price_reduction_count": 0,
+                "repost_count": 1,
+                "active": True,
+                "auto_price_reduction": {
+                    "enabled": True,
+                    "on_update": True,
+                    "strategy": "FIXED",
+                    "amount": 10,
+                    "min_price": 1,
+                    "delay_days": 0,
+                    "delay_reposts": 0,
+                },
+            }
+        )
+
+        # Store the content hash so __check_ad_changed sees no change
+        ad_dict = ad_cfg.model_dump()
+        ad_dict["content_hash"] = ad_cfg.update_content_hash().content_hash
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            ad_dir = temp_path / "ads"
+            ad_dir.mkdir()
+
+            dicts.save_dict(ad_dir / "ad_with_reduction.yaml", ad_dict)
+
+            test_bot.config_file_path = str(temp_path / "config.yaml")
+            test_bot.config.ad_files = ["ads/*.yaml"]
+
+            with patch(
+                "kleinanzeigen_bot.utils.dicts.load_dict",
+                side_effect = [
+                    ad_dict,  # First call returns the ad
+                    {},  # Second call for ad_fields.yaml
+                ],
+            ):
+                ads_to_publish = test_bot.load_ads()
+
+                # The ad should be loaded because a price reduction is pending
+                assert len(ads_to_publish) == 1
+                assert ads_to_publish[0][1].title == "Ad With Price Reduction"
+
+    def test_load_ads_with_changed_selector_no_price_reduction_when_not_configured(self, test_bot_config:Config, base_ad_config:dict[str, Any]) -> None:
+        """Test that 'changed' selector does not load an unchanged ad when auto_price_reduction is disabled."""
+        test_bot = KleinanzeigenBot()
+        test_bot.ads_selector = "changed"
+        test_bot.command = "update"
+        test_bot.config = test_bot_config.with_values({"ad_defaults": {"description": {"prefix": "", "suffix": ""}}})
+
+        # Create an ad with auto_price_reduction disabled
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "id": "12345",
+                "title": "Unchanged Ad",
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+                "price": 100,
+                "repost_count": 1,
+                "active": True,
+                "auto_price_reduction": {
+                    "enabled": False,
+                    "on_update": True,
+                    "strategy": "FIXED",
+                    "amount": 10,
+                    "min_price": 1,
+                    "delay_days": 0,
+                    "delay_reposts": 0,
+                },
+            }
+        )
+
+        # Store the content hash so __check_ad_changed sees no change
+        ad_dict = ad_cfg.model_dump()
+        ad_dict["content_hash"] = ad_cfg.update_content_hash().content_hash
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            ad_dir = temp_path / "ads"
+            ad_dir.mkdir()
+
+            dicts.save_dict(ad_dir / "unchanged_ad.yaml", ad_dict)
+
+            test_bot.config_file_path = str(temp_path / "config.yaml")
+            test_bot.config.ad_files = ["ads/*.yaml"]
+
+            with patch(
+                "kleinanzeigen_bot.utils.dicts.load_dict",
+                side_effect = [
+                    ad_dict,  # First call returns the ad
+                    {},  # Second call for ad_fields.yaml
+                ],
+            ):
+                ads_to_publish = test_bot.load_ads()
+
+                # The ad should NOT be loaded because it's unchanged and auto_price_reduction is disabled
+                assert len(ads_to_publish) == 0
+
+    def test_load_ads_with_changed_selector_does_not_include_price_reduction_in_publish_mode(
+            self, test_bot_config:Config, base_ad_config:dict[str, Any]) -> None:
+        """Test that 'changed' selector in publish mode skips unchanged ads even when price reduction is pending."""
+        test_bot = KleinanzeigenBot()
+        test_bot.ads_selector = "changed"
+        test_bot.command = "publish"
+        test_bot.config = test_bot_config.with_values({"ad_defaults": {"description": {"prefix": "", "suffix": ""}}})
+
+        # Create an ad with auto_price_reduction configured and ready to trigger
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "id": "12345",
+                "title": "Ad With Price Reduction",
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+                "price": 100,
+                "price_reduction_count": 0,
+                "repost_count": 1,
+                "active": True,
+                "auto_price_reduction": {
+                    "enabled": True,
+                    "on_update": True,
+                    "strategy": "FIXED",
+                    "amount": 10,
+                    "min_price": 1,
+                    "delay_days": 0,
+                    "delay_reposts": 0,
+                },
+            }
+        )
+
+        # Store the content hash so __check_ad_changed sees no change
+        ad_dict = ad_cfg.model_dump()
+        ad_dict["content_hash"] = ad_cfg.update_content_hash().content_hash
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            ad_dir = temp_path / "ads"
+            ad_dir.mkdir()
+
+            dicts.save_dict(ad_dir / "ad_with_reduction.yaml", ad_dict)
+
+            test_bot.config_file_path = str(temp_path / "config.yaml")
+            test_bot.config.ad_files = ["ads/*.yaml"]
+
+            with patch(
+                "kleinanzeigen_bot.utils.dicts.load_dict",
+                side_effect = [
+                    ad_dict,  # First call returns the ad
+                    {},  # Second call for ad_fields.yaml
+                ],
+            ):
+                ads_to_publish = test_bot.load_ads()
+
+                # The ad should NOT be loaded because price reduction is only applied in update mode
+                assert len(ads_to_publish) == 0
+
 
 def test_file_logger_writes_message(tmp_path:Path, caplog:pytest.LogCaptureFixture) -> None:
     """
