@@ -155,6 +155,10 @@ jobs:
         pdm sync --clean -v
 
 
+    - name: "Verify: nodriver import"
+      if: runner.os == 'Linux'
+      run: pdm run python -c "import nodriver.cdp.network"
+
     - name: Display project metadata
       run: pdm show
 

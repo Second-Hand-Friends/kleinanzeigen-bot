@@ -38,7 +38,7 @@ dependencies = [
   "certifi",
   "colorama",
   "jaraco.text", # required by pkg_resources during runtime
-  "nodriver @ git+https://github.com/Second-Hand-Friends/nodriver.git@b0d1f0a59cd16e0d9001f32f35a663129e403efd", # Temporary fork pin; track in #1036; review again on 2026-06-15
+  "nodriver==0.50.3",
   "platformdirs>=2.1.0",
   "pydantic>=2.11.0",
   "ruamel.yaml",
@@ -94,6 +94,7 @@ generate-artifacts = { composite = ["generate-schemas", "generate-config"] }
 compile.cmd = "python -O -m PyInstaller pyinstaller.spec --clean --workpath .temp"
 compile.env = {PYTHONHASHSEED = "1", SOURCE_DATE_EPOCH = "0"}  # https://pyinstaller.org/en/stable/advanced-topics.html#creating-a-reproducible-build
 
+post_install        = "python scripts/fix_nodriver_encoding.py"
 deps                = "pdm list --fields name,version,groups"
 "deps:tree"         = "pdm list --tree"
 "deps:runtime"      = "pdm list --fields name,version,groups --include default"
