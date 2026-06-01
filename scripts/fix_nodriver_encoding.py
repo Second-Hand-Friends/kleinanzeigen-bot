@@ -46,8 +46,12 @@ def _fix_file(path:Path) -> str:
     """
     try:
         raw = path.read_bytes()
-    except OSError:
-        return "skipped"
+    except OSError as exc:
+        print(
+            f"fix_nodriver_encoding: cannot read {path}: {exc}",
+            file = sys.stderr,
+        )
+        sys.exit(1)
 
     # Known bad pattern in nodriver 0.50.3:
     #   ``b"    #: JSON (\xb1Inf).\r\n"`` (line 1345)
