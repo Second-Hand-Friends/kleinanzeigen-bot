@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:253dbcd64dd8909f6d6bb516cf684ac98255b6a5e7df6ebfd359a56fc5d873a8"
+content_hash = "sha256:67c78edd313e8b850010d552efb91c3df81034ae9c28adbccc56a739ee785afe"
 
 [[metadata.targets]]
 requires_python = ">=3.10,<3.15"
@@ -1127,17 +1127,18 @@ files = [
 
 [[package]]
 name = "nodriver"
-version = "0.48.1.post1"
-requires_python = ">=3.10"
-git = "https://github.com/Second-Hand-Friends/nodriver.git"
-ref = "b0d1f0a59cd16e0d9001f32f35a663129e403efd"
-revision = "b0d1f0a59cd16e0d9001f32f35a663129e403efd"
-summary = "Asynchronous browser automation and web scraping for Chromium-based browsers."
+version = "0.50.3"
+requires_python = ">=3.9"
+summary = "[Docs here](https://ultrafunkamsterdam.github.io/nodriver)"
 groups = ["default"]
 dependencies = [
     "deprecated",
     "mss",
-    "websockets>=16.0",
+    "websockets>=14",
+]
+files = [
+    {file = "nodriver-0.50.3-py3-none-any.whl", hash = "sha256:a053533108c14c309a7613445e6c7fb460b6b165c144a062e1b2f39e4f7b396b"},
+    {file = "nodriver-0.50.3.tar.gz", hash = "sha256:24ca688d8646ef8ffad5c8ce65804e5e7671a779ad26a24d76f6465d5666c631"},
 ]
 
 [[package]]
@@ -1187,13 +1188,13 @@ files = [
 
 [[package]]
 name = "pip"
-version = "26.1.1"
+version = "26.1.2"
 requires_python = ">=3.10"
 summary = "The PyPA recommended tool for installing Python packages."
 groups = ["dev"]
 files = [
-    {file = "pip-26.1.1-py3-none-any.whl", hash = "sha256:99cb1c2899893b075ff56e4ed0af55669a955b49ad7fb8d8603ecdaf4ed653fb"},
-    {file = "pip-26.1.1.tar.gz", hash = "sha256:d36762751d156a4ee895de8af39aa0abeeeb577f93a2eca6ab62467bbf0f8a78"},
+    {file = "pip-26.1.2-py3-none-any.whl", hash = "sha256:382ff9f685ee3bc25864f820aa50505825f10f5458ffff07e30a6d96e5715cab"},
+    {file = "pip-26.1.2.tar.gz", hash = "sha256:f49cd134c61cf2fd75e0ce2676db03e4054504a5a4986d00f8299ae632dc4605"},
 ]
 
 [[package]]

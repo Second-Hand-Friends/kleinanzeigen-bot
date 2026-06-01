@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, TypeGuard
 
 from nodriver.core.browser import Browser
 from nodriver.core.config import Config as NodriverConfig
+from nodriver.core.connection import ProtocolException
 from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
 
@@ -876,6 +877,17 @@ class WebScrapingMixin:
                 result:T = cast(T, await result_raw if inspect.isawaitable(result_raw) else result_raw)
                 if result:
                     return result
+            except ProtocolException as ex1:  # pragma: no cover — needs live CDP session
+                if ex1.code == -32601:  # noqa: PLR2004
+                    # Chromium 148+ rejects DOM commands on stale flat-mode
+                    # sessions.  Re-attach and retry.
+                    LOG.debug("Re-attaching CDP session after -32601")
+                    try:
+                        await self.page.attach()
+                    except Exception as re_exc:  # noqa: S110
+                        LOG.debug("Re-attach failed: %s", re_exc)
+                    continue
+                ex = ex1
             except Exception as ex1:
                 ex = ex1
             elapsed = loop.time() - start_at
