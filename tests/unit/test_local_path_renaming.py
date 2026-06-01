@@ -14,6 +14,7 @@ from kleinanzeigen_bot.local_path_renaming import (
     rename_local_ad_file_after_id_change,
     rename_local_ad_folder_after_id_change,
     rename_path_if_target_is_free,
+    rename_referenced_local_image_file_after_id_change,
     rename_referenced_local_image_files_after_id_change,
     replace_template_id_slot,
 )
@@ -293,3 +294,72 @@ def test_rename_referenced_local_image_files_old_id_none_returns_empty(tmp_path:
     assert result.renamed_count == 0
     assert result.blocked_count == 0
     assert result.updated_images is None
+
+
+def test_rename_path_if_target_is_free_skips_when_source_equals_target(tmp_path:Path) -> None:
+    source = tmp_path / "file.txt"
+    source.write_text("data", encoding = "utf-8")
+
+    result = rename_path_if_target_is_free(source, source, label = "test")
+
+    assert result.status == RenameStatus.SAME
+    assert result.path == source
+
+
+def test_rename_referenced_local_image_file_skips_non_string_ref(tmp_path:Path) -> None:
+    folder = tmp_path / "ad_123_Title"
+    folder.mkdir()
+    ad_file = folder / "ad_123.yaml"
+
+    result, status = rename_referenced_local_image_file_after_id_change(
+        ad_file, 42, new_id = 456, ad_file_name_template = "ad_{id}",
+    )
+
+    assert result == 42
+    assert status is None
+
+
+def test_rename_referenced_local_image_file_skips_non_matching_filename(tmp_path:Path) -> None:
+    folder = tmp_path / "ad_123_Title"
+    folder.mkdir()
+    ad_file = folder / "ad_123.yaml"
+    (folder / "manual.txt").write_bytes(b"data")
+
+    result, status = rename_referenced_local_image_file_after_id_change(
+        ad_file, "manual.txt", new_id = 456, ad_file_name_template = "ad_{id}",
+    )
+
+    assert result == "manual.txt"
+    assert status is None
+
+
+def test_rename_referenced_local_image_files_skips_non_list_images(tmp_path:Path) -> None:
+    folder = tmp_path / "ad_123_Title"
+    folder.mkdir()
+
+    result = rename_referenced_local_image_files_after_id_change(
+        folder / "ad_123.yaml",
+        "not_a_list",
+        old_id = 123,
+        new_id = 456,
+        ad_file_name_template = "ad_{id}",
+        enabled = True,
+    )
+
+    assert result.renamed_count == 0
+    assert result.blocked_count == 0
+    assert result.updated_images is None
+
+
+def test_rename_local_ad_folder_change_skips_when_target_exists(tmp_path:Path) -> None:
+    folder = tmp_path / "ad_123_Title"
+    folder.mkdir()
+    ad_file = folder / "ad_123.yaml"
+    ad_file.write_text("id: 456\n", encoding = "utf-8")
+    (tmp_path / "ad_456_Title").mkdir()
+
+    result = rename_local_ad_folder_after_id_change(ad_file, new_id = 456, folder_name_template = "ad_{id}_{title}")
+
+    assert result.status == RenameStatus.TARGET_EXISTS
+    assert result.path == ad_file
+    assert folder.exists()
