@@ -173,8 +173,13 @@ def main() -> int:
         ("nodriver/core/connection.py", _fix_connection_send),
     ]:
         path = _locate_file(rel)
-        if path and path.is_file():
-            print(f"fix_nodriver_encoding: {path} -> {fix(path)}")
+        if path is None:
+            print(f"fix_nodriver_encoding: nodriver not installed, cannot patch {rel}", file = sys.stderr)
+            return 1
+        if not path.is_file():
+            print(f"fix_nodriver_encoding: {path} not found, cannot patch", file = sys.stderr)
+            return 1
+        print(f"fix_nodriver_encoding: {path} -> {fix(path)}")
     return 0
 
 
