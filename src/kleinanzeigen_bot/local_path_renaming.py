@@ -12,7 +12,7 @@ from pathlib import Path
 from string import Formatter
 from typing import Final
 
-from .utils import loggers
+from kleinanzeigen_bot.utils import loggers
 
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 

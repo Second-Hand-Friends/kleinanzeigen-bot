@@ -13,8 +13,7 @@ import pytest
 from nodriver.core.connection import ProtocolException
 from pydantic import ValidationError
 
-import kleinanzeigen_bot
-from kleinanzeigen_bot import (
+from kleinanzeigen_bot import (  # type: ignore[attr-defined]
     LOG,
     SUBMISSION_MAX_RETRIES,
     KleinanzeigenBot,
@@ -22,6 +21,8 @@ from kleinanzeigen_bot import (
     LoginDetectionResult,
     PriceReductionDecision,
     RenameStatus,
+    _rename_path_if_target_is_free,  # noqa: PLC2701
+    _replace_template_id_slot,  # noqa: PLC2701
     apply_auto_price_reduction,
     evaluate_auto_price_reduction,
     misc,
@@ -258,20 +259,18 @@ def test_rename_local_ad_file_and_folder_after_id_change_skips_collisions(test_b
 
 def test_replace_template_id_slot_underscore_alias_works() -> None:
     """Underscored root-package alias _replace_template_id_slot is callable for backward compat."""
-    func = getattr(kleinanzeigen_bot, "_replace_template_id_slot")
-    result, old_id = func("ad_{id}", "ad_123", 456)
+    result, old_id = _replace_template_id_slot("ad_{id}", "ad_123", 456)
     assert result == "ad_456"
     assert old_id == 123
 
 
 def test_rename_path_if_target_is_free_underscore_alias_works(tmp_path:Path) -> None:
     """Underscored root-package alias _rename_path_if_target_is_free is callable."""
-    func = getattr(kleinanzeigen_bot, "_rename_path_if_target_is_free")
     source = tmp_path / "a.txt"
     target = tmp_path / "b.txt"
     source.write_text("hello", encoding = "utf-8")
 
-    result = func(source, target, label = "test item")
+    result = _rename_path_if_target_is_free(source, target, label = "test item")
 
     assert result.path == target
     assert result.status == RenameStatus.RENAMED
