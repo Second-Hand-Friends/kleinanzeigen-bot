@@ -10,7 +10,7 @@ import sys
 import urllib.parse as urllib_parse
 from dataclasses import dataclass
 from gettext import gettext as _
-from typing import TYPE_CHECKING, Any, Final, Sequence
+from typing import TYPE_CHECKING, Final, Sequence
 
 from kleinanzeigen_bot.utils import diagnostics
 from kleinanzeigen_bot.utils.exceptions import CaptchaEncountered
@@ -19,9 +19,95 @@ from kleinanzeigen_bot.utils.misc import ainput, parse_duration
 from kleinanzeigen_bot.utils.web_scraping_mixin import By
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+    from typing import Protocol
+
+    from nodriver.core.element import Element
     from nodriver.core.tab import Tab as Page
 
     from kleinanzeigen_bot.model.config_model import Config
+
+    class _LoginMixinHost(Protocol):
+        config:Config
+        root_url:str
+        page:Page
+        log_file_path:str | None
+        _login_detection_diagnostics_captured:bool
+
+        def _diagnostics_output_dir(self) -> Path:
+            ...
+
+        def _timeout(self, key:str = "default", override:float | None = None) -> float:
+            ...
+
+        def _effective_timeout(self, key:str = "default", override:float | None = None, *, attempt:int = 0) -> float:
+            ...
+
+        async def _extract_visible_text(self, element:Element) -> str:
+            ...
+
+        async def web_await(
+            self,
+            condition:Callable[[], object],
+            *,
+            timeout:int | float | None = None,
+            timeout_error_message:str = "",
+            apply_multiplier:bool = True,
+        ) -> object:
+            ...
+
+        async def web_click(self, selector_type:By, selector_value:str, *, timeout:int | float | None = None) -> Element:
+            ...
+
+        async def web_find_first_available(
+            self,
+            selectors:Sequence[tuple[By, str]],
+            *,
+            parent:Element | None = None,
+            timeout:int | float | None = None,
+            key:str = "default",
+            description:str | None = None,
+        ) -> tuple[Element, int]:
+            ...
+
+        async def web_input(self, selector_type:By, selector_value:str, text:str | int, *, timeout:int | float | None = None) -> Element:
+            ...
+
+        async def web_open(self, url:str, *, timeout:int | float | None = None, reload_if_already_open:bool = False) -> None:
+            ...
+
+        async def web_probe(
+            self,
+            selector_type:By,
+            selector_value:str,
+            *,
+            parent:Element | None = None,
+            timeout:int | float | None = None,
+        ) -> Element | None:
+            ...
+
+        async def web_scroll_page_down(self, scroll_length:int = 10, scroll_speed:int = 10_000, *, scroll_back_top:bool = False) -> None:
+            ...
+
+        async def web_sleep(self, min_ms:int = 1_000, max_ms:int = 2_500) -> None:
+            ...
+
+        async def web_text_first_available(
+            self,
+            selectors:Sequence[tuple[By, str]],
+            *,
+            parent:Element | None = None,
+            timeout:int | float | None = None,
+            key:str = "default",
+            description:str | None = None,
+        ) -> tuple[str, int]:
+            ...
+
+else:
+
+    class _LoginMixinHost:
+        pass
 
 LOG:Final = get_logger(__name__)
 
@@ -68,31 +154,8 @@ class LoginDetectionResult:
             raise ValueError("is_logged_in=False requires reason=CTA_MATCH or SELECTOR_TIMEOUT")
 
 
-class LoginMixin:
+class LoginMixin(_LoginMixinHost):
     """Browser login, auth detection, GDPR banners, Captcha handling."""
-
-    if TYPE_CHECKING:
-        # Host attributes and methods provided by KleinanzeigenBot
-        # and WebScrapingMixin. Declared minimally for mypy.
-        config:"Config"
-        root_url:str
-        page:"Page"
-        log_file_path:str | None
-        _login_detection_diagnostics_captured:bool
-
-        _diagnostics_output_dir:Any  # def _diagnostics_output_dir(self) -> Path
-        _effective_timeout:Any
-        _extract_visible_text:Any
-        _timeout:Any  # callable
-        web_await:Any
-        web_click:Any
-        web_find_first_available:Any
-        web_input:Any
-        web_open:Any
-        web_probe:Any
-        web_scroll_page_down:Any
-        web_sleep:Any
-        web_text_first_available:Any
 
     async def check_and_wait_for_captcha(self, *, is_login_page:bool = True, page_context:str | None = None) -> None:
         captcha_elem = await self.web_probe(
