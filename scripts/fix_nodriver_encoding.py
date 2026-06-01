@@ -1,20 +1,19 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""Post-install fixes for installed nodriver that upstream does not accept.
+"""Post-install fixes for installed nodriver.
 
-1. **Encoding fix** — ``cdp/network.py`` ISO-8859-1 ``±`` byte without
-   encoding declaration → add UTF-8 header + fix the byte.
+1. **Encoding fix** — ``cdp/network.py`` contains a lone ISO-8859-1 ``±``
+   byte (0xb1) without an encoding declaration. Python 3.12+ rejects this
+   at import time. The fix adds a ``# -*- coding: utf-8 -*-`` header and
+   replaces the byte with proper UTF-8.
 
-2. **Send retry** — nodriver 0.50.3+ flat-mode ``sessionId`` can go stale
-   after complex navigations (category flow). Edge 148 rejects stale-session
-   commands with ``-32601``. Wraps ``send`` to re-attach and retry once.
-
-3. **DOM.enable routing** — ``tab`` methods call ``send(cdp.dom.enable(),
-   _attach=True)``, which sends the command at browser level without
-   ``sessionId``. Edge 148 does not accept ``DOM.enable`` on the browser
-   target. Removes the ``_attach`` flag so the command reaches the page
-   target (with ``sessionId``).
+2. **Flat-mode session retry** — nodriver 0.50.3+ uses flat-mode CDP
+   (browser-level WebSocket + per-target ``sessionId``). Chromium 148+
+   rejects ``DOM.enable`` when sent to the browser target without a
+   ``sessionId``, and rejects stale-session commands with ``-32601``.
+   Wraps ``Connection.send`` to re-attach and retry once on that code,
+   switching ``_attach=True`` commands to include ``sessionId``.
 
 Designed as a PDM ``post_install`` hook. All patches are idempotent.
 """
@@ -48,14 +47,19 @@ def _fix_network_encoding(path:Path) -> str:
     except OSError as exc:
         print(f"fix_nodriver_encoding: cannot read {path}: {exc}", file = sys.stderr)
         sys.exit(1)
+
     bad = b"(\xb1Inf)"
     if bad not in raw:
         try:
             raw.decode("utf-8")
             return "already-ok"
-        except UnicodeDecodeError:
-            print(f"fix_nodriver_encoding: {path}: unexpected content", file = sys.stderr)
+        except UnicodeDecodeError as exc:
+            print(
+                f"fix_nodriver_encoding: {path}: unexpected content: {exc}",
+                file = sys.stderr,
+            )
             sys.exit(1)
+
     fixed = raw.replace(bad, b"(\xc2\xb1Inf)")
     if not fixed.startswith(b"# -*- coding: utf-8 -*-"):
         fixed = b"# -*- coding: utf-8 -*-\n" + fixed
@@ -63,13 +67,13 @@ def _fix_network_encoding(path:Path) -> str:
     try:
         fixed.decode("utf-8")
     except UnicodeDecodeError as exc:
-        print(f"fix_nodriver_encoding: {path}: invalid UTF-8 after patch: {exc}", file = sys.stderr)
+        print(f"fix_nodriver_encoding: {path}: invalid UTF-8: {exc}", file = sys.stderr)
         sys.exit(1)
     path.write_bytes(fixed)
     return "fixed"
 
 
-# ── connection.py send retry on stale session ──────────────────────────────
+# ── connection.py flat-mode session retry ──────────────────────────────────
 
 _SEND_START = "        if not _attach:"
 _SEND_ERR_END = "            raise exception"
@@ -122,8 +126,8 @@ _NEW_SEND = """\
 
             if "error" in response_message:
                 if _retry == 0 and response_message["error"].get("code") == -32601:
-                    # If the command was sent without sessionId (_attach=True),
-                    # re-attach and retry WITH sessionId so it reaches the page.
+                    # Chromium 148+: switch from browser-level to page-target
+                    # routing when the command is rejected without sessionId.
                     _attach = False
                     await self.attach()
                     continue
@@ -139,60 +143,38 @@ def _fix_connection_send(path:Path) -> str:
     except OSError as exc:
         print(f"fix_nodriver_encoding: cannot read {path}: {exc}", file = sys.stderr)
         sys.exit(1)
+
     if "for _retry in range(2):" in text:
         return "already-ok"
+
     start = text.find(_SEND_START)
     if start == -1:
         print("fix_nodriver_encoding: send start marker not found", file = sys.stderr)
         sys.exit(1)
+
     err = text.find(_SEND_ERR_END, start)
     if err == -1:
-        print("fix_nodriver_encoding: send error end marker not found", file = sys.stderr)
+        print("fix_nodriver_encoding: send error end not found", file = sys.stderr)
         sys.exit(1)
+
     err_end = text.index("\n", err)
     indent = text[text.rfind("\n", 0, start) + 1: start]
-    new_body = textwrap.indent(_NEW_SEND, indent).removeprefix("\n")
-    result = text[:start] + new_body + text[err_end:]
+    body = textwrap.indent(_NEW_SEND, indent).removeprefix("\n")
+    result = text[:start] + body + text[err_end:]
     path.write_text(result, "utf-8")
     return "fixed"
-
-
-# ── tab.py: remove _attach flag from DOM.enable/disable ────────────────────
-
-_TAB_PATCHES = [
-    ("self.send(cdp.dom.enable(), True)", "self.send(cdp.dom.enable())"),
-    ("self.send(cdp.dom.disable(), True)", "self.send(cdp.dom.disable())"),
-]
-
-
-def _fix_tab_dom_calls(path:Path) -> str:
-    try:
-        text = path.read_text("utf-8")
-    except OSError as exc:
-        print(f"fix_nodriver_encoding: cannot read {path}: {exc}", file = sys.stderr)
-        sys.exit(1)
-    changed = False
-    for old, new in _TAB_PATCHES:
-        # Only patch the first occurrence (find_all/find methods); the others
-        # (in query_selector etc.) don't have the _attach flag.
-        if old in text:
-            text = text.replace(old, new, 1)
-            changed = True
-    return "fixed" if changed else "already-ok"
 
 
 # ── main ───────────────────────────────────────────────────────────────────
 
 def main() -> int:
-    patches = [
+    for rel, fix in [
         ("nodriver/cdp/network.py", _fix_network_encoding),
         ("nodriver/core/connection.py", _fix_connection_send),
-        ("nodriver/core/tab.py", _fix_tab_dom_calls),
-    ]
-    for rel, fix in patches:
-        p = _locate_file(rel)
-        if p and p.is_file():
-            print(f"fix_nodriver_encoding: {p} -> {fix(p)}")
+    ]:
+        path = _locate_file(rel)
+        if path and path.is_file():
+            print(f"fix_nodriver_encoding: {path} -> {fix(path)}")
     return 0
 
 
