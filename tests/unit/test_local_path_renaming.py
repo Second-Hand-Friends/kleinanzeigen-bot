@@ -20,27 +20,21 @@ from kleinanzeigen_bot.local_path_renaming import (
 )
 
 
-def test_replace_template_id_slot_basic_usage() -> None:
-    """Internal helper replace_template_id_slot works with valid templates."""
-    result, old_id = replace_template_id_slot("ad_{id}_{title}", "ad_123_My Title", 456)
-    assert result == "ad_456_My Title"
-    assert old_id == 123
-
-
 @pytest.mark.parametrize(
-    ("template", "name", "expected"),
+    ("template", "name", "new_id", "expected_name", "expected_old_id"),
     [
-        ("ad_{id}", "ad_123", "ad_456"),
-        ("ad_{id}_{title}", "ad_123_User edited title", "ad_456_User edited title"),
-        ("{title} ({id})", "User edited title (123)", "User edited title (456)"),
-        ("{id}", "123", "456"),
-        ("{title}{id}", "Bike123", "Bike456"),
-        ("{title}{id}", "123", "456"),
-        ("{id}{title}", "123Bike", "456Bike"),
+        ("ad_{id}", "ad_123", 456, "ad_456", 123),
+        ("ad_{id}_{title}", "ad_123_User edited title", 789, "ad_789_User edited title", 123),
+        ("{title} ({id})", "User edited title (123)", 456, "User edited title (456)", 123),
+        ("{id}", "123", 456, "456", 123),
+        ("{title}{id}", "Bike123", 456, "Bike456", 123),
+        ("{title}{id}", "123", 456, "456", 123),
+        ("{id}{title}", "123Bike", 456, "456Bike", 123),
     ],
 )
-def test_replace_template_id_slot_preserves_non_id_text(template:str, name:str, expected:str) -> None:
-    assert replace_template_id_slot(template, name, 456)[0] == expected
+def test_replace_template_id_slot(template:str, name:str, new_id:int, expected_name:str, expected_old_id:int) -> None:
+    result = replace_template_id_slot(template, name, new_id)
+    assert result == (expected_name, expected_old_id)
 
 
 def test_replace_template_id_slot_skips_non_matching_name() -> None:
@@ -72,8 +66,8 @@ def test_download_image_filename_re_matches_image_suffix() -> None:
     assert DOWNLOAD_IMAGE_FILENAME_RE.fullmatch("ad_123.jpeg") is None
 
 
-def test_public_types_are_importable() -> None:
-    """All public types are importable from kleinanzeigen_bot.local_path_renaming."""
+def test_public_api_types_are_exported() -> None:
+    """All result types are importable from kleinanzeigen_bot.local_path_renaming."""
     assert RenameStatus.RENAMED is not None
     assert RenamePathResult is not None
     assert LocalPathRenameResult is not None

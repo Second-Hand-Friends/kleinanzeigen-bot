@@ -257,11 +257,11 @@ def test_rename_local_ad_file_and_folder_after_id_change_skips_collisions(test_b
     assert not folder.exists()
 
 
-def test_replace_template_id_slot_underscore_alias_works() -> None:
-    """Underscored root-package alias _replace_template_id_slot is callable for backward compat."""
-    result, old_id = _replace_template_id_slot("ad_{id}", "ad_123", 456)
-    assert result == "ad_456"
-    assert old_id == 123
+def test_replace_template_id_slot_underscore_alias_is_same_object() -> None:
+    """Root-package alias _replace_template_id_slot resolves to the module function."""
+    from kleinanzeigen_bot.local_path_renaming import replace_template_id_slot  # noqa: PLC0415
+
+    assert _replace_template_id_slot is replace_template_id_slot
 
 
 def test_rename_path_if_target_is_free_underscore_alias_works(tmp_path:Path) -> None:
