@@ -13,7 +13,7 @@ import pytest
 from nodriver.core.connection import ProtocolException
 from pydantic import ValidationError
 
-from kleinanzeigen_bot import (
+from kleinanzeigen_bot import (  # type: ignore[attr-defined]
     LOG,
     SUBMISSION_MAX_RETRIES,
     KleinanzeigenBot,
@@ -165,26 +165,6 @@ def test_root_re_exports_resolve_correctly() -> None:
     assert PriceReductionDecision is _PriceReductionDecision_src
 
 
-@pytest.mark.parametrize(
-    ("template", "name", "expected"),
-    [
-        ("ad_{id}", "ad_123", "ad_456"),
-        ("ad_{id}_{title}", "ad_123_User edited title", "ad_456_User edited title"),
-        ("{title} ({id})", "User edited title (123)", "User edited title (456)"),
-        ("{id}", "123", "456"),
-        ("{title}{id}", "Bike123", "Bike456"),
-        ("{title}{id}", "123", "456"),
-        ("{id}{title}", "123Bike", "456Bike"),
-    ],
-)
-def test_replace_template_id_slot_preserves_non_id_text(template:str, name:str, expected:str) -> None:
-    assert _replace_template_id_slot(template, name, 456)[0] == expected
-
-
-def test_replace_template_id_slot_skips_non_matching_name() -> None:
-    assert _replace_template_id_slot("ad_{id}_{title}", "manual_123_Title", 456)[0] is None
-
-
 def test_rename_local_ad_file_and_folder_after_id_change_is_disabled_by_default(test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
     folder = tmp_path / "ad_123_Title"
     folder.mkdir()
@@ -226,129 +206,6 @@ def test_rename_local_ad_file_and_folder_after_id_change_renames_template_matche
     assert (renamed_folder / "ad_123__img1.jpeg").exists()
     assert (renamed_folder / "manual_123.txt").exists()
     assert not folder.exists()
-
-
-def test_rename_referenced_local_image_files_after_id_change_updates_config_paths(test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-    test_bot.config = Config.model_validate(
-        {
-            "login": {"username": "dummy", "password": "dummy"},  # noqa: S106
-            "publishing": {"local_path_renaming": {"mode": "TEMPLATE_MATCH"}},
-        }
-    )
-    folder = tmp_path / "ad_123_Title"
-    nested = folder / "nested"
-    nested.mkdir(parents = True)
-    ad_file = folder / "ad_123.yaml"
-    (folder / "ad_123__img1.jpeg").write_bytes(b"img1")
-    (nested / "ad_123__img2.png").write_bytes(b"img2")
-    (folder / "manual_123__img3.jpeg").write_bytes(b"manual")
-    ad_cfg_orig:dict[str, Any] = {"images": ["ad_123__img1.jpeg", "nested/ad_123__img2.png", "manual_123__img3.jpeg"]}
-
-    image_result = test_bot._rename_referenced_local_image_files_after_id_change(ad_file, ad_cfg_orig, 123, 456)
-
-    assert image_result.updated_images == ["ad_456__img1.jpeg", "nested/ad_456__img2.png", "manual_123__img3.jpeg"]
-    assert (folder / "ad_456__img1.jpeg").exists()
-    assert (nested / "ad_456__img2.png").exists()
-    assert (folder / "manual_123__img3.jpeg").exists()
-    assert image_result.renamed_count == 2
-    assert image_result.blocked_count == 0
-
-
-def test_rename_referenced_local_image_files_after_id_change_ignores_unreferenced_images(test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-    test_bot.config = Config.model_validate(
-        {
-            "login": {"username": "dummy", "password": "dummy"},  # noqa: S106
-            "publishing": {"local_path_renaming": {"mode": "TEMPLATE_MATCH"}},
-        }
-    )
-    folder = tmp_path / "ad_123_Title"
-    folder.mkdir()
-    ad_file = folder / "ad_123.yaml"
-    (folder / "ad_123__img1.jpeg").write_bytes(b"referenced")
-    (folder / "ad_123__img2.jpeg").write_bytes(b"unreferenced")
-    ad_cfg_orig:dict[str, Any] = {"images": ["ad_123__img1.jpeg"]}
-
-    image_result = test_bot._rename_referenced_local_image_files_after_id_change(ad_file, ad_cfg_orig, 123, 456)
-
-    assert image_result.updated_images == ["ad_456__img1.jpeg"]
-    assert (folder / "ad_456__img1.jpeg").exists()
-    assert (folder / "ad_123__img2.jpeg").exists()
-    assert image_result.renamed_count == 1
-    assert image_result.blocked_count == 0
-
-
-@pytest.mark.parametrize(
-    "scenario",
-    ["target_exists", "absolute_path", "outside_ad_folder"],
-)
-def test_rename_referenced_local_image_files_skips_when_unsafe(
-    test_bot:KleinanzeigenBot,
-    tmp_path:Path,
-    scenario:str,
-) -> None:
-    """Image renames that could affect non-owned files are safely skipped."""
-    test_bot.config = Config.model_validate(
-        {
-            "login": {"username": "dummy", "password": "dummy"},  # noqa: S106
-            "publishing": {"local_path_renaming": {"mode": "TEMPLATE_MATCH"}},
-        }
-    )
-    folder = tmp_path / "ad_123_Title"
-    folder.mkdir()
-    ad_file = folder / "ad_123.yaml"
-
-    source_file:Path | None = None
-    target_file:Path | None = None
-    if scenario == "target_exists":
-        (folder / "ad_123__img1.jpeg").write_bytes(b"old")
-        (folder / "ad_456__img1.jpeg").write_bytes(b"existing")
-        images_config = ["ad_123__img1.jpeg"]
-        source_file = folder / "ad_123__img1.jpeg"
-        target_file = folder / "ad_456__img1.jpeg"
-    elif scenario == "absolute_path":
-        img = tmp_path / "ad_123__img1.jpeg"
-        img.write_bytes(b"img")
-        images_config = [str(img)]
-        source_file = img
-    elif scenario == "outside_ad_folder":
-        img = tmp_path / "other" / "ad_123__img1.jpeg"
-        img.parent.mkdir(parents = True)
-        img.write_bytes(b"img")
-        images_config = ["../other/ad_123__img1.jpeg"]
-        source_file = img
-    else:
-        raise AssertionError(f"Unknown scenario: {scenario}")
-
-    ad_cfg_orig:dict[str, object] = {"images": images_config}
-    image_result = test_bot._rename_referenced_local_image_files_after_id_change(ad_file, ad_cfg_orig, 123, 456)
-
-    assert image_result.updated_images is None
-    assert source_file is not None
-    assert source_file.exists()
-    if target_file is not None:
-        assert target_file.exists()
-    assert image_result.renamed_count == 0
-    if scenario == "target_exists":
-        assert image_result.blocked_count == 1
-    else:
-        assert image_result.blocked_count == 0
-
-
-def test_rename_path_if_target_is_free_treats_broken_symlink_as_collision(tmp_path:Path) -> None:
-    source = tmp_path / "source.txt"
-    target = tmp_path / "target.txt"
-    source.write_text("source", encoding = "utf-8")
-    try:
-        target.symlink_to(tmp_path / "missing.txt")
-    except (OSError, NotImplementedError):
-        pytest.skip("symlink not supported on this platform")
-
-    result = _rename_path_if_target_is_free(source, target, label = "test file")
-
-    assert result.path == source
-    assert result.status == RenameStatus.TARGET_EXISTS
-    assert source.exists()
-    assert target.is_symlink()
 
 
 def test_rename_local_ad_file_and_folder_after_id_change_skips_manual_names(test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
@@ -398,6 +255,27 @@ def test_rename_local_ad_file_and_folder_after_id_change_skips_collisions(test_b
     assert result.ad_file.exists()
     assert (renamed_folder / "ad_456.yaml").exists()
     assert not folder.exists()
+
+
+def test_replace_template_id_slot_underscore_alias_is_same_object() -> None:
+    """Root-package alias _replace_template_id_slot resolves to the module function."""
+    from kleinanzeigen_bot.local_path_renaming import replace_template_id_slot  # noqa: PLC0415
+
+    assert _replace_template_id_slot is replace_template_id_slot
+
+
+def test_rename_path_if_target_is_free_underscore_alias_works(tmp_path:Path) -> None:
+    """Underscored root-package alias _rename_path_if_target_is_free is callable."""
+    source = tmp_path / "a.txt"
+    target = tmp_path / "b.txt"
+    source.write_text("hello", encoding = "utf-8")
+
+    result = _rename_path_if_target_is_free(source, target, label = "test item")
+
+    assert result.path == target
+    assert result.status == RenameStatus.RENAMED
+    assert target.read_text(encoding = "utf-8") == "hello"
+    assert not source.exists()
 
 
 class TestKleinanzeigenBotInitialization:
