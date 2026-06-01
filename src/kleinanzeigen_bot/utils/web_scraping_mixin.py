@@ -888,7 +888,6 @@ class WebScrapingMixin:
                         LOG.debug("Re-attach failed: %s", re_exc)
                     continue
                 ex = ex1
-                ex = ex1
             except Exception as ex1:
                 ex = ex1
             elapsed = loop.time() - start_at
