@@ -36,16 +36,16 @@ if TYPE_CHECKING:
         _login_detection_diagnostics_captured:bool
 
         def _diagnostics_output_dir(self) -> Path:
-            ...
+            raise NotImplementedError
 
         def _timeout(self, key:str = "default", override:float | None = None) -> float:
-            ...
+            raise NotImplementedError
 
         def _effective_timeout(self, key:str = "default", override:float | None = None, *, attempt:int = 0) -> float:
-            ...
+            raise NotImplementedError
 
         async def _extract_visible_text(self, element:Element) -> str:
-            ...
+            raise NotImplementedError
 
         async def web_await(
             self,
@@ -55,10 +55,10 @@ if TYPE_CHECKING:
             timeout_error_message:str = "",
             apply_multiplier:bool = True,
         ) -> object:
-            ...
+            raise NotImplementedError
 
         async def web_click(self, selector_type:By, selector_value:str, *, timeout:int | float | None = None) -> Element:
-            ...
+            raise NotImplementedError
 
         async def web_find_first_available(
             self,
@@ -69,13 +69,13 @@ if TYPE_CHECKING:
             key:str = "default",
             description:str | None = None,
         ) -> tuple[Element, int]:
-            ...
+            raise NotImplementedError
 
         async def web_input(self, selector_type:By, selector_value:str, text:str | int, *, timeout:int | float | None = None) -> Element:
-            ...
+            raise NotImplementedError
 
         async def web_open(self, url:str, *, timeout:int | float | None = None, reload_if_already_open:bool = False) -> None:
-            ...
+            raise NotImplementedError
 
         async def web_probe(
             self,
@@ -85,13 +85,13 @@ if TYPE_CHECKING:
             parent:Element | None = None,
             timeout:int | float | None = None,
         ) -> Element | None:
-            ...
+            raise NotImplementedError
 
         async def web_scroll_page_down(self, scroll_length:int = 10, scroll_speed:int = 10_000, *, scroll_back_top:bool = False) -> None:
-            ...
+            raise NotImplementedError
 
         async def web_sleep(self, min_ms:int = 1_000, max_ms:int = 2_500) -> None:
-            ...
+            raise NotImplementedError
 
         async def web_text_first_available(
             self,
@@ -102,7 +102,7 @@ if TYPE_CHECKING:
             key:str = "default",
             description:str | None = None,
         ) -> tuple[str, int]:
-            ...
+            raise NotImplementedError
 
 else:
 
