@@ -877,7 +877,7 @@ class WebScrapingMixin:
                 result:T = cast(T, await result_raw if inspect.isawaitable(result_raw) else result_raw)
                 if result:
                     return result
-            except ProtocolException as ex1:
+            except ProtocolException as ex1:  # pragma: no cover — needs live CDP session
                 if ex1.code == -32601:  # noqa: PLR2004
                     # Chromium 148+ rejects DOM commands on stale flat-mode
                     # sessions.  Re-attach and retry.
