@@ -43,6 +43,15 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch
 
 
+# Serialize runs per branch so concurrent main merges can't race on the shared
+# ghcr.io :latest tag (and its per-arch inputs). On main we queue rather than
+# cancel so a publishing run is never killed mid-stitch; on PR/feature branches
+# we cancel older runs when new commits land.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+
 defaults:
   run:
     shell: bash
@@ -309,9 +318,12 @@ jobs:
 
         echo "${{ github.token }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
 
+        # Push a per-arch tag so the multi-arch :latest can be stitched together later.
         image_name="second-hand-friends/kleinanzeigen-bot"
-        docker image tag $image_name ghcr.io/$image_name
-        docker push ghcr.io/$image_name
+        arch=$(docker image inspect $image_name --format '{{.Architecture}}')
+
+        docker image tag $image_name ghcr.io/$image_name:latest-$arch
+        docker push ghcr.io/$image_name:latest-$arch
 
 
     - name: Collect coverage reports
@@ -322,6 +334,42 @@ jobs:
         include-hidden-files: true
         path: .temp/coverage-*.xml
         if-no-files-found: error
+
+
+  ###########################################################
+  publish-docker-manifest:
+  ###########################################################
+    # Combine the per-arch :latest-amd64 and :latest-arm64 tags that the matrix
+    # jobs pushed into a single multi-arch :latest manifest list. Without this,
+    # whichever matrix job finished second would silently overwrite the other
+    # and :latest would be single-arch. See issue #1077.
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.repository_owner == 'Second-Hand-Friends' && github.ref_name == 'main' && !github.event.act
+
+    permissions:
+      packages: write
+
+    steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+    - name: Create and push multi-arch manifest
+      run: |
+        set -eux
+
+        echo "${{ github.token }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
+
+        image=ghcr.io/second-hand-friends/kleinanzeigen-bot
+
+        docker buildx imagetools create \
+          --tag $image:latest \
+          $image:latest-amd64 \
+          $image:latest-arm64
+
+        # Print the resulting manifest list for the run log.
+        docker buildx imagetools inspect $image:latest
 
 
   ###########################################################
