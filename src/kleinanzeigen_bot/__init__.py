@@ -2772,9 +2772,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             )
             return False
 
-        # Kleinanzeigen changed dialog radio values from German tokens to English API codes
-        # (e.g. "wie_neu" -> "like_new", "sehr_gut" -> "like_new"). Keep legacy probing
-        # first to preserve existing behavior, then fall back to the mapped API value.
+        # CONDITION_GERMAN_TO_API maps German legacy condition tiers to English API
+        # values. Some legacy tiers are intentionally collapsed by the API
+        # (e.g. "sehr_gut" / legacy "very good" maps to "like_new").
+        # Build candidate_values by probing legacy_value first, then canonical_value,
+        # to preserve existing behavior while still falling back to the API value.
         candidate_values:list[str] = []
         if legacy_value is not None:
             candidate_values.append(legacy_value)
