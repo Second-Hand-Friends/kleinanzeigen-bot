@@ -309,9 +309,12 @@ jobs:
 
         echo "${{ github.token }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
 
+        # Push a per-arch tag so the multi-arch :latest can be stitched together later.
+        arch=$(dpkg --print-architecture)
+
         image_name="second-hand-friends/kleinanzeigen-bot"
-        docker image tag $image_name ghcr.io/$image_name
-        docker push ghcr.io/$image_name
+        docker image tag $image_name ghcr.io/$image_name:latest-$arch
+        docker push ghcr.io/$image_name:latest-$arch
 
 
     - name: Collect coverage reports
@@ -322,6 +325,39 @@ jobs:
         include-hidden-files: true
         path: .temp/coverage-*.xml
         if-no-files-found: error
+
+
+  ###########################################################
+  publish-docker-manifest:
+  ###########################################################
+    # Combine the per-arch :latest-amd64 and :latest-arm64 tags that the matrix
+    # jobs pushed into a single multi-arch :latest manifest list. Without this,
+    # whichever matrix job finished second would silently overwrite the other
+    # and :latest would be single-arch. See issue #1077.
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.repository_owner == 'Second-Hand-Friends' && github.ref_name == 'main' && !github.event.act
+
+    permissions:
+      packages: write
+
+    steps:
+    - name: Create and push multi-arch manifest
+      run: |
+        set -eux
+
+        echo "${{ github.token }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
+
+        image=ghcr.io/second-hand-friends/kleinanzeigen-bot
+
+        docker buildx imagetools create \
+          --tag $image:latest \
+          $image:latest-amd64 \
+          $image:latest-arm64
+
+        # Print the resulting manifest list for the run log.
+        docker buildx imagetools inspect $image:latest
 
 
   ###########################################################
