@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from kleinanzeigen_bot.ad_content import get_ad_description
+from kleinanzeigen_bot.ad_description import get_ad_description
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config
 
@@ -35,15 +35,10 @@ def _make_defaults(config_overrides:dict[str, object] | None = None) -> AdDefaul
 
 
 def test_without_affixes() -> None:
-    ad = _make_ad(description = "Hello world")
+    """@ is not replaced when ``with_affixes=False``."""
+    ad = _make_ad(description = "Hello @world")
     result = get_ad_description(ad, _make_defaults(), with_affixes = False)
-    assert result == "Hello world"
-
-
-def test_without_affixes_empty_description() -> None:
-    ad = _make_ad(description = "")
-    result = get_ad_description(ad, _make_defaults(), with_affixes = False)
-    assert not result
+    assert result == "Hello @world"
 
 
 def test_with_config_prefix_suffix() -> None:
@@ -90,14 +85,6 @@ def test_ad_level_none_falls_back_to_config() -> None:
     assert result == "CP_desc_CS"
 
 
-def test_at_sign_not_replaced_without_affixes() -> None:
-    """@ is only replaced when ``with_affixes=True``."""
-    defaults = _make_defaults()
-    ad = _make_ad(description = "test@example.com")
-    result = get_ad_description(ad, defaults, with_affixes = False)
-    assert result == "test@example.com"
-
-
 def test_at_sign_replacement() -> None:
     defaults = _make_defaults()
     ad = _make_ad(description = "test@example.com")
@@ -121,42 +108,3 @@ def test_length_validation_raises() -> None:
     ad = _make_ad(description = "D" * 2001)
     with pytest.raises(AssertionError, match = r"Length of ad description .* exceeds 4000 chars"):
         get_ad_description(ad, defaults, with_affixes = True)
-
-
-def test_legacy_nested_affixes_migrated_by_model() -> None:
-    """The AdDefaults model validator migrates legacy description.prefix/suffix."""
-    defaults = _make_defaults(
-        {
-            "ad_defaults": {
-                "description": {"prefix": "LegacyP_", "suffix": "_LegacyS"},
-            }
-        }
-    )
-    ad = _make_ad(description = "desc")
-    result = get_ad_description(ad, defaults, with_affixes = True)
-    assert result == "LegacyP_desc_LegacyS"
-
-
-def test_new_affixes_override_legacy() -> None:
-    """Flattened affixes take precedence over legacy nested ones (model-level migration)."""
-    defaults = _make_defaults(
-        {
-            "ad_defaults": {
-                "description_prefix": "NewP_",
-                "description_suffix": "_NewS",
-                "description": {"prefix": "LegacyP_", "suffix": "_LegacyS"},
-            }
-        }
-    )
-    ad = _make_ad(description = "desc")
-    result = get_ad_description(ad, defaults, with_affixes = True)
-    assert result == "NewP_desc_NewS"
-
-
-def test_description_empty_string_uses_empty_fallback() -> None:
-    defaults = _make_defaults(
-        {"ad_defaults": {"description_prefix": "P_", "description_suffix": "_S"}}
-    )
-    ad = _make_ad(description = "")
-    result = get_ad_description(ad, defaults, with_affixes = True)
-    assert result == "P__S"

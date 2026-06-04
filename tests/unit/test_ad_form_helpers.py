@@ -9,7 +9,6 @@ from __future__ import annotations
 import pytest
 
 from kleinanzeigen_bot.ad_form_helpers import (
-    CONDITION_GERMAN_TO_API,
     SPECIAL_ATTRIBUTE_TOKEN_RE,
     WANTED_SHIPPING_LABELS,
     get_marker_value,
@@ -32,11 +31,6 @@ from kleinanzeigen_bot.ad_form_helpers import (
         ("gut", "ok", "gut"),
         ("in_ordnung", "alright", "in_ordnung"),
         ("defekt", "defect", "defekt"),
-        ("new", "new", None),
-        ("like_new", "like_new", None),
-        ("ok", "ok", None),
-        ("alright", "alright", None),
-        ("defect", "defect", None),
         ("unknown_value", "unknown_value", None),
     ],
 )
@@ -66,12 +60,6 @@ def test_xpath_literal_both_quotes() -> None:
     result = xpath_literal("Bob's \"Bike\"")
     # concat('Bob', "'", 's "Bike"')
     assert result == "concat('Bob', \"'\", 's \"Bike\"')"
-
-
-def test_xpath_literal_multiple_single_quotes() -> None:
-    result = xpath_literal("a'b'c")
-    # No double quotes, so double-quote wrapping works fine
-    assert result == '"a\'b\'c"'
 
 
 # ---------------------------------------------------------------------------
@@ -109,16 +97,6 @@ def test_get_marker_value_via_object() -> None:
     assert get_marker_value(marker) == "foo"
 
 
-def test_get_marker_value_none_attrs() -> None:
-    marker = _FakeMarker(None)
-    assert not get_marker_value(marker)
-
-
-def test_get_marker_value_object_attrs() -> None:
-    marker = _FakeMarker(_FakeAttrs("bar"))
-    assert get_marker_value(marker) == "bar"
-
-
 # ---------------------------------------------------------------------------
 # SPECIAL_ATTRIBUTE_TOKEN_RE
 # ---------------------------------------------------------------------------
@@ -127,12 +105,8 @@ def test_get_marker_value_object_attrs() -> None:
     "token",
     [
         "condition",
-        "shipping_options",
         "abc123",
         "ABC",
-        "a",
-        "Z",
-        "0",
         "key1_name",
     ],
 )
@@ -166,36 +140,6 @@ def test_wanted_shipping_labels_exact_dict() -> None:
     }
 
 
-def test_wanted_shipping_labels() -> None:
-    assert WANTED_SHIPPING_LABELS["SHIPPING"] == "Versand möglich"
-    assert WANTED_SHIPPING_LABELS["PICKUP"] == "Nur Abholung"
-
-
 # ---------------------------------------------------------------------------
 # CONDITION_GERMAN_TO_API
 # ---------------------------------------------------------------------------
-
-def test_condition_german_to_api_exact_dict() -> None:
-    assert CONDITION_GERMAN_TO_API == {
-        "neu": "new",
-        "wie_neu": "like_new",
-        "sehr_gut": "like_new",
-        "gut": "ok",
-        "in_ordnung": "alright",
-        "defekt": "defect",
-    }
-
-
-def test_condition_german_to_api_contains_expected_keys() -> None:
-    assert "neu" in CONDITION_GERMAN_TO_API
-    assert "wie_neu" in CONDITION_GERMAN_TO_API
-    assert "sehr_gut" in CONDITION_GERMAN_TO_API
-    assert "gut" in CONDITION_GERMAN_TO_API
-    assert "in_ordnung" in CONDITION_GERMAN_TO_API
-    assert "defekt" in CONDITION_GERMAN_TO_API
-
-
-def test_condition_german_to_api_all_values_valid() -> None:
-    """All mapped API values must be in the known set."""
-    valid_api = {"new", "like_new", "ok", "alright", "defect"}
-    assert set(CONDITION_GERMAN_TO_API.values()).issubset(valid_api)

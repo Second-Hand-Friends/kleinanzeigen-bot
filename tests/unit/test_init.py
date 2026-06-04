@@ -31,7 +31,7 @@ from kleinanzeigen_bot import (
     AdUpdateStrategy as _AdUpdateStrategy_root,
 )
 from kleinanzeigen_bot._version import __version__
-from kleinanzeigen_bot.ad_content import get_ad_description
+from kleinanzeigen_bot.ad_description import get_ad_description
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import (
     AdDefaults,

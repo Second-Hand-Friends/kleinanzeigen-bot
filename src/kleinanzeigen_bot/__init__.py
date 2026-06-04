@@ -17,7 +17,7 @@ from wcmatch import glob
 
 from . import extract, resources
 from ._version import __version__
-from .ad_content import (
+from .ad_description import (
     get_ad_description as get_ad_description,
 )
 from .ad_form_helpers import (
