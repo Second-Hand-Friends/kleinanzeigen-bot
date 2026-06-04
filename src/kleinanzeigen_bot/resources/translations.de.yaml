@@ -62,6 +62,7 @@ kleinanzeigen_bot/__init__.py:
     " -> SKIPPED: inactive ad [%s]": " -> ÜBERSPRUNGEN: inaktive Anzeige [%s]"
     " -> SKIPPED: ad [%s] is not in list of given ids.": " -> ÜBERSPRUNGEN: Anzeige [%s] ist nicht in der Liste der angegebenen IDs."
     " -> SKIPPED: ad [%s] is not new. already has an id assigned.": " -> ÜBERSPRUNGEN: Anzeige [%s] ist nicht neu. Eine ID wurde bereits zugewiesen."
+    "-> property [description] not specified @ [%s]": "-> Eigenschaft [description] nicht angegeben @ [%s]"
     "Category [%s] unknown. Using category [%s] with ID [%s] instead.": "Kategorie [%s] unbekannt. Verwende stattdessen Kategorie [%s] mit ID [%s]."
     " -> LOADED: ad [%s]": " -> GELADEN: Anzeige [%s]"
     "Loaded %s": "%s geladen"

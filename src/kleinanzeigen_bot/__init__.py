@@ -1002,7 +1002,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if not should_include:
                     continue
 
-            ensure(get_ad_description(ad_cfg, self.config.ad_defaults, with_affixes = False), f"-> property [description] not specified @ [{ad_file}]")
+            ensure(get_ad_description(ad_cfg, self.config.ad_defaults, with_affixes = False), _("-> property [description] not specified @ [%s]") % ad_file)
             get_ad_description(ad_cfg, self.config.ad_defaults, with_affixes = True)  # validates complete description
 
             if ad_cfg.category:
@@ -1023,7 +1023,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 for image_pattern in ad_cfg.images:
                     pattern_images = set()
                     for image_file in glob.glob(image_pattern, root_dir = ad_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
-                        _, image_file_ext = os.path.splitext(image_file)
+                        image_file_ext = os.path.splitext(image_file)[1]
                         ensure(image_file_ext.lower() in {".gif", ".jpg", ".jpeg", ".png"}, f"Unsupported image file type [{image_file}]")
                         if os.path.isabs(image_file):
                             pattern_images.add(image_file)
