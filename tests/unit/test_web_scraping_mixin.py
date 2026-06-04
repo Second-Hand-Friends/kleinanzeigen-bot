@@ -1285,6 +1285,7 @@ class TestWebScrapingBrowserConfiguration:
         # Mock os.path.exists to return True for the browser binary and use real exists for Preferences file (and Edge)
         edge_path = "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
         chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        chromium_path = "/Applications/Chromium.app/Contents/MacOS/Chromium"
         real_exists = os.path.exists
 
         def mock_exists_sync(path:str) -> bool:
@@ -1299,6 +1300,7 @@ class TestWebScrapingBrowserConfiguration:
                 # macOS paths
                 edge_path,
                 chrome_path,
+                chromium_path,
                 # Windows paths
                 "C:\\Users\\runneradmin\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe",
                 "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",

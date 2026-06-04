@@ -4035,8 +4035,8 @@ class TestConditionSelector:
             assert len(warning_messages) == 1
             assert configured in warning_messages[0]
             assert expected_api_value in warning_messages[0]
-            # Legacy German values should prefer the mapped API code and stop once it is found.
-            assert probed_values == [expected_api_value]
+            # Legacy German values should keep the legacy radio probe first and stop once it is found.
+            assert probed_values == [configured]
         else:
             assert warning_messages == []
             assert probed_values == [configured]
@@ -4044,12 +4044,12 @@ class TestConditionSelector:
         assert any(f"radio-condition-{expected_api_value}" in selector for selector in clicked_xpath_selectors)
 
     @pytest.mark.asyncio
-    async def test_condition_legacy_value_falls_back_when_mapped_value_is_missing(
+    async def test_condition_legacy_value_falls_back_to_mapped_value_when_legacy_is_missing(
         self,
         test_bot:KleinanzeigenBot,
         caplog:pytest.LogCaptureFixture,
     ) -> None:
-        """Legacy values should still work if the mapped API radio is unavailable."""
+        """Legacy values should still work if only the mapped API radio is available."""
         caplog.set_level(logging.WARNING, logger = LOG.name)
         dialog = MagicMock()
         trigger = MagicMock()
@@ -4057,8 +4057,8 @@ class TestConditionSelector:
         trigger.click = AsyncMock()
         radio = MagicMock()
         radio_attrs = MagicMock()
-        radio_attrs.id = "radio-condition-wie_neu"
-        radio_attrs.get.side_effect = lambda key, default = None: "radio-condition-wie_neu" if key == "id" else default
+        radio_attrs.id = "radio-condition-like_new"
+        radio_attrs.get.side_effect = lambda key, default = None: "radio-condition-like_new" if key == "id" else default
         radio.attrs = radio_attrs
         radio.click = AsyncMock()
 
@@ -4070,10 +4070,10 @@ class TestConditionSelector:
             if selector_type == By.XPATH and "@type='radio'" in selector_value:
                 if "@value='like_new'" in selector_value:
                     probed_values.append("like_new")
-                    return None
+                    return radio
                 if "@value='wie_neu'" in selector_value:
                     probed_values.append("wie_neu")
-                    return radio
+                    return None
             return None
 
         with (
@@ -4088,9 +4088,9 @@ class TestConditionSelector:
         assert len(warning_messages) == 1
         assert "wie_neu" in warning_messages[0]
         assert "like_new" in warning_messages[0]
-        assert probed_values == ["like_new", "wie_neu"]
+        assert probed_values == ["wie_neu", "like_new"]
         clicked_xpath_selectors = [str(call.args[1]) for call in mock_click.await_args_list if len(call.args) > 1]
-        assert any("radio-condition-wie_neu" in selector for selector in clicked_xpath_selectors)
+        assert any("radio-condition-like_new" in selector for selector in clicked_xpath_selectors)
 
     @pytest.mark.asyncio
     async def test_condition_legacy_value_warns_even_when_not_handled(

@@ -6,6 +6,8 @@
 
 __all__ = ["get_ad_description"]
 
+from gettext import gettext as _
+
 from kleinanzeigen_bot.model.ad_model import MAX_DESCRIPTION_LENGTH, Ad
 from kleinanzeigen_bot.model.config_model import AdDefaults
 from kleinanzeigen_bot.utils.misc import ensure
@@ -39,7 +41,7 @@ def get_ad_description(ad:Ad, defaults:AdDefaults, *, with_affixes:bool) -> str:
 
     ensure(
         len(final_description) <= MAX_DESCRIPTION_LENGTH,
-        f"Length of ad description including prefix and suffix exceeds {MAX_DESCRIPTION_LENGTH} chars. Description length: {len(final_description)} chars.",
+        _(f"Length of ad description including prefix and suffix exceeds {MAX_DESCRIPTION_LENGTH} chars. Description length: {len(final_description)} chars."),  # noqa: INT001
     )
 
     return final_description
