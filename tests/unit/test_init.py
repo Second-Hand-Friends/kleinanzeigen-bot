@@ -7,7 +7,7 @@ from contextlib import ExitStack, contextmanager, redirect_stdout
 from datetime import timedelta
 from pathlib import Path, PureWindowsPath
 from typing import Any, Awaitable, Iterator, cast
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, call, patch
 
 import pytest
 from nodriver.core.connection import ProtocolException
@@ -31,6 +31,7 @@ from kleinanzeigen_bot import (
     AdUpdateStrategy as _AdUpdateStrategy_root,
 )
 from kleinanzeigen_bot._version import __version__
+from kleinanzeigen_bot.ad_content import get_ad_description
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import (
     AdDefaults,
@@ -5102,167 +5103,30 @@ class TestWantedShippingSelection:
                 await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
 
 
-class TestKleinanzeigenBotPrefixSuffix:
-    """Tests for description prefix and suffix functionality."""
+def test_get_description_thin_wrapper_delegates_to_module(
+    test_bot_config:Config, monkeypatch:pytest.MonkeyPatch
+) -> None:
+    """Verify ``KleinanzeigenBot.__get_description`` delegates to ``kleinanzeigen_bot.get_ad_description``."""
+    test_bot = KleinanzeigenBot()
+    test_bot.config = test_bot_config.with_values(
+        {"ad_defaults": {"description_prefix": "P_", "description_suffix": "_S"}}
+    )
+    ad_cfg = test_bot.load_ad(
+        {
+            "description": "desc",
+            "active": True,
+            "title": "0123456789",
+            "category": "whatever",
+        }
+    )
 
-    # pylint: disable=protected-access
+    spy = Mock(wraps = get_ad_description)
+    monkeypatch.setattr("kleinanzeigen_bot.get_ad_description", spy)
 
-    def test_description_prefix_suffix_handling(self, test_bot_config:Config, description_test_cases:list[tuple[dict[str, Any], str, str]]) -> None:
-        """Test handling of description prefix/suffix in various configurations."""
-        for config, raw_description, expected_description in description_test_cases:
-            test_bot = KleinanzeigenBot()
-            test_bot.config = test_bot_config.with_values(config)
-            ad_cfg = test_bot.load_ad(
-                {
-                    "description": raw_description,
-                    "active": True,
-                    "title": "0123456789",
-                    "category": "whatever",
-                }
-            )
+    via_bot = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
+    assert via_bot == "P_desc_S"
 
-            # Access private method using the correct name mangling
-            description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
-            assert description == expected_description
-
-    def test_description_length_validation(self, test_bot_config:Config) -> None:
-        """Test that long descriptions with affixes raise appropriate error."""
-        test_bot = KleinanzeigenBot()
-        test_bot.config = test_bot_config.with_values({"ad_defaults": {"description_prefix": "P" * 1000, "description_suffix": "S" * 1000}})
-        ad_cfg = test_bot.load_ad(
-            {
-                "description": "D" * 2001,  # This plus affixes will exceed 4000 chars
-                "active": True,
-                "title": "0123456789",
-                "category": "whatever",
-            }
-        )
-
-        with pytest.raises(AssertionError) as exc_info:
-            getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
-
-        assert "Length of ad description including prefix and suffix exceeds 4000 chars" in str(exc_info.value)
-        assert "Description length: 4001" in str(exc_info.value)
-
-
-class TestKleinanzeigenBotDescriptionHandling:
-    """Tests for description handling functionality."""
-
-    def test_description_without_main_config_description(self, test_bot_config:Config) -> None:
-        """Test that description works correctly when description is missing from main config."""
-        test_bot = KleinanzeigenBot()
-        test_bot.config = test_bot_config
-
-        # Test with a simple ad config
-        ad_cfg = test_bot.load_ad(
-            {
-                "description": "Test Description",
-                "active": True,
-                "title": "0123456789",
-                "category": "whatever",
-            }
-        )
-
-        # The description should be returned as-is without any prefix/suffix
-        description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
-        assert description == "Test Description"
-
-    def test_description_with_only_new_format_affixes(self, test_bot_config:Config) -> None:
-        """Test that description works with only new format affixes in config."""
-        test_bot = KleinanzeigenBot()
-        test_bot.config = test_bot_config.with_values({"ad_defaults": {"description_prefix": "Prefix: ", "description_suffix": " :Suffix"}})
-
-        ad_cfg = test_bot.load_ad(
-            {
-                "description": "Test Description",
-                "active": True,
-                "title": "0123456789",
-                "category": "whatever",
-            }
-        )
-
-        description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
-        assert description == "Prefix: Test Description :Suffix"
-
-    def test_description_with_mixed_config_formats(self, test_bot_config:Config) -> None:
-        """Test that description works with both old and new format affixes in config."""
-        test_bot = KleinanzeigenBot()
-        test_bot.config = test_bot_config.with_values(
-            {
-                "ad_defaults": {
-                    "description_prefix": "New Prefix: ",
-                    "description_suffix": " :New Suffix",
-                    "description": {"prefix": "Old Prefix: ", "suffix": " :Old Suffix"},
-                }
-            }
-        )
-
-        ad_cfg = test_bot.load_ad(
-            {
-                "description": "Test Description",
-                "active": True,
-                "title": "0123456789",
-                "category": "whatever",
-            }
-        )
-
-        description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
-        assert description == "New Prefix: Test Description :New Suffix"
-
-    def test_description_with_ad_level_affixes(self, test_bot_config:Config) -> None:
-        """Test that ad-level affixes take precedence over config affixes."""
-        test_bot = KleinanzeigenBot()
-        test_bot.config = test_bot_config.with_values({"ad_defaults": {"description_prefix": "Config Prefix: ", "description_suffix": " :Config Suffix"}})
-
-        ad_cfg = test_bot.load_ad(
-            {
-                "description": "Test Description",
-                "description_prefix": "Ad Prefix: ",
-                "description_suffix": " :Ad Suffix",
-                "active": True,
-                "title": "0123456789",
-                "category": "whatever",
-            }
-        )
-
-        description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
-        assert description == "Ad Prefix: Test Description :Ad Suffix"
-
-    def test_description_with_none_values(self, test_bot_config:Config) -> None:
-        """Test that None values in affixes are handled correctly."""
-        test_bot = KleinanzeigenBot()
-        test_bot.config = test_bot_config.with_values(
-            {"ad_defaults": {"description_prefix": None, "description_suffix": None, "description": {"prefix": None, "suffix": None}}}
-        )
-
-        ad_cfg = test_bot.load_ad(
-            {
-                "description": "Test Description",
-                "active": True,
-                "title": "0123456789",
-                "category": "whatever",
-            }
-        )
-
-        description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
-        assert description == "Test Description"
-
-    def test_description_with_email_replacement(self, test_bot_config:Config) -> None:
-        """Test that @ symbols in description are replaced with (at)."""
-        test_bot = KleinanzeigenBot()
-        test_bot.config = test_bot_config
-
-        ad_cfg = test_bot.load_ad(
-            {
-                "description": "Contact: test@example.com",
-                "active": True,
-                "title": "0123456789",
-                "category": "whatever",
-            }
-        )
-
-        description = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
-        assert description == "Contact: test(at)example.com"
+    spy.assert_called_once_with(ad_cfg, test_bot.config.ad_defaults, with_affixes = True)
 
 
 class TestKleinanzeigenBotChangedAds:
