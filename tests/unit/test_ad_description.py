@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 
-"""Tests for ad_content — description composition with prefix/suffix affixes."""
+"""Tests for ad_description: description composition with prefix/suffix affixes."""
 
 from __future__ import annotations
 

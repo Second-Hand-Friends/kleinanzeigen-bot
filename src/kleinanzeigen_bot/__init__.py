@@ -1002,8 +1002,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if not should_include:
                     continue
 
-            ensure(self.__get_description(ad_cfg, with_affixes = False), f"-> property [description] not specified @ [{ad_file}]")
-            self.__get_description(ad_cfg, with_affixes = True)  # validates complete description
+            ensure(get_ad_description(ad_cfg, self.config.ad_defaults, with_affixes = False), f"-> property [description] not specified @ [{ad_file}]")
+            get_ad_description(ad_cfg, self.config.ad_defaults, with_affixes = True)  # validates complete description
 
             if ad_cfg.category:
                 resolved_category_id = self.categories.get(ad_cfg.category)
@@ -2162,7 +2162,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # set description
         #############################
-        description = self.__get_description(ad_cfg, with_affixes = True)
+        description = get_ad_description(ad_cfg, self.config.ad_defaults, with_affixes = True)
         await self.__set_input_value("ad-description", description)
 
         await self.__set_contact_fields(ad_cfg.contact)
@@ -3469,10 +3469,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     LOG.info("Downloaded ad with id %d", ad_id)
                 else:
                     LOG.error("The page with the id %d does not exist!", ad_id)
-
-    def __get_description(self, ad_cfg:Ad, *, with_affixes:bool) -> str:
-        """Build the final ad description, delegating to :func:`get_ad_description`."""
-        return get_ad_description(ad_cfg, self.config.ad_defaults, with_affixes = with_affixes)
 
     def update_content_hashes(self, ads:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         changed = 0

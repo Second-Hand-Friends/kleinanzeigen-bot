@@ -7,7 +7,7 @@ from contextlib import ExitStack, contextmanager, redirect_stdout
 from datetime import timedelta
 from pathlib import Path, PureWindowsPath
 from typing import Any, Awaitable, Iterator, cast
-from unittest.mock import AsyncMock, MagicMock, Mock, call, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from nodriver.core.connection import ProtocolException
@@ -31,7 +31,6 @@ from kleinanzeigen_bot import (
     AdUpdateStrategy as _AdUpdateStrategy_root,
 )
 from kleinanzeigen_bot._version import __version__
-from kleinanzeigen_bot.ad_description import get_ad_description
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import (
     AdDefaults,
@@ -3009,7 +3008,7 @@ login:
             encoding = "utf-8",
         )
         test_bot.config_file_path = str(config_path)
-        await test_bot.run(["script.py", "verify"])
+        await test_bot.run(["script.py", "verify", "--config", str(config_path), "--workspace-mode", "portable"])
         assert test_bot.config.login.username == "test"
 
 
@@ -5107,32 +5106,6 @@ class TestWantedShippingSelection:
             mock_find.side_effect = find_side_effect
             with pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'SHIPPING'!"):
                 await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
-
-
-def test_get_description_thin_wrapper_delegates_to_module(
-    test_bot_config:Config, monkeypatch:pytest.MonkeyPatch
-) -> None:
-    """Verify ``KleinanzeigenBot.__get_description`` delegates to ``kleinanzeigen_bot.get_ad_description``."""
-    test_bot = KleinanzeigenBot()
-    test_bot.config = test_bot_config.with_values(
-        {"ad_defaults": {"description_prefix": "P_", "description_suffix": "_S"}}
-    )
-    ad_cfg = test_bot.load_ad(
-        {
-            "description": "desc",
-            "active": True,
-            "title": "0123456789",
-            "category": "whatever",
-        }
-    )
-
-    spy = Mock(wraps = get_ad_description)
-    monkeypatch.setattr("kleinanzeigen_bot.get_ad_description", spy)
-
-    via_bot = getattr(test_bot, "_KleinanzeigenBot__get_description")(ad_cfg, with_affixes = True)
-    assert via_bot == "P_desc_S"
-
-    spy.assert_called_once_with(ad_cfg, test_bot.config.ad_defaults, with_affixes = True)
 
 
 class TestKleinanzeigenBotChangedAds:
