@@ -2775,12 +2775,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # CONDITION_GERMAN_TO_API maps German legacy condition tiers to English API
         # values. Some legacy tiers are intentionally collapsed by the API
         # (e.g. "sehr_gut" / legacy "very good" maps to "like_new").
-        # Build candidate_values by probing legacy_value first, then canonical_value,
-        # to preserve existing behavior while still falling back to the API value.
-        candidate_values:list[str] = []
+        # Build candidate_values by probing canonical_value first to avoid quick_dom
+        # timeout delays on the current API-valued dialog, then legacy_value as fallback.
+        candidate_values:list[str] = [canonical_value]
         if legacy_value is not None:
             candidate_values.append(legacy_value)
-        candidate_values.append(canonical_value)
 
         try:
             await condition_trigger.click()

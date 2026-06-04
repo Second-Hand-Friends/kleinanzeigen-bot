@@ -43,16 +43,18 @@ class TestExtendCommand:
     """Tests for the extend command functionality."""
 
     @pytest.mark.asyncio
-    async def test_run_extend_command_no_ads(self, test_bot:KleinanzeigenBot) -> None:
+    async def test_run_extend_command_no_ads(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
         """Test running extend command with no ads."""
+        test_bot.config_file_path = str(tmp_path / "config.yaml")
         with patch.object(test_bot, "load_config"), patch.object(test_bot, "load_ads", return_value = []), patch("kleinanzeigen_bot.UpdateChecker"):
             await test_bot.run(["script.py", "extend"])
             assert test_bot.command == "extend"
             assert test_bot.ads_selector == "all"
 
     @pytest.mark.asyncio
-    async def test_run_extend_command_with_specific_ids(self, test_bot:KleinanzeigenBot) -> None:
+    async def test_run_extend_command_with_specific_ids(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
         """Test running extend command with specific ad IDs."""
+        test_bot.config_file_path = str(tmp_path / "config.yaml")
         with (
             patch.object(test_bot, "load_config"),
             patch.object(test_bot, "load_ads", return_value = []),

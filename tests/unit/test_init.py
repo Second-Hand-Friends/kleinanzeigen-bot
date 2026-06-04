@@ -120,9 +120,10 @@ def minimal_ad_config(base_ad_config:dict[str, Any]) -> dict[str, Any]:
 
 
 @pytest.fixture
-def mock_config_setup(test_bot:KleinanzeigenBot) -> Generator[None]:
+def mock_config_setup(test_bot:KleinanzeigenBot, tmp_path:Path) -> Generator[None]:
     """Provide a centralized mock configuration setup for tests.
     This fixture mocks load_config and other essential configuration-related methods."""
+    test_bot.config_file_path = str(tmp_path / "config.yaml")
     with (
         patch.object(test_bot, "load_config"),
         patch.object(test_bot, "create_browser_session", new_callable = AsyncMock),
@@ -282,8 +283,9 @@ def test_rename_path_if_target_is_free_underscore_alias_works(tmp_path:Path) -> 
 class TestKleinanzeigenBotInitialization:
     """Tests for KleinanzeigenBot initialization and basic functionality."""
 
-    def test_constructor_initializes_default_values(self) -> None:
+    def test_constructor_initializes_default_values(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Verify that constructor sets all default values correctly."""
+        monkeypatch.chdir(tmp_path)
         bot = KleinanzeigenBot()
         assert bot.root_url == "https://www.kleinanzeigen.de"
         assert bot.command == "help"
@@ -2411,16 +2413,20 @@ class TestKleinanzeigenBotBasics:
         test_bot.parse_args(["script.py", "-v"])
         assert loggers.is_debug(LOG)
 
-    def test_get_config_file_path(self, test_bot:KleinanzeigenBot) -> None:
+    def test_get_config_file_path(self, test_bot:KleinanzeigenBot, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test config file path handling."""
+        monkeypatch.chdir(tmp_path)
+        test_bot.config_file_path = os.path.abspath("config.yaml")
         default_path = os.path.abspath("config.yaml")
         assert test_bot.config_file_path == default_path
         test_path = os.path.abspath("custom_config.yaml")
         test_bot.config_file_path = test_path
         assert test_bot.config_file_path == test_path
 
-    def test_get_log_file_path(self, test_bot:KleinanzeigenBot) -> None:
+    def test_get_log_file_path(self, test_bot:KleinanzeigenBot, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test log file path handling."""
+        monkeypatch.chdir(tmp_path)
+        test_bot.log_file_path = os.path.abspath("kleinanzeigen_bot.log")
         default_path = os.path.abspath("kleinanzeigen_bot.log")
         assert test_bot.log_file_path == default_path
         test_path = os.path.abspath("custom.log")
@@ -2887,11 +2893,11 @@ class TestKleinanzeigenBotArgParsing:
         test_bot.parse_args(["script.py", "--config=test.yaml", "help"])
         assert test_bot.config_file_path.endswith("test.yaml")
 
-    def test_parse_args_logfile(self, test_bot:KleinanzeigenBot) -> None:
+    def test_parse_args_logfile(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
         """Test parsing log file path."""
-        test_bot.parse_args(["script.py", "--logfile=test.log", "help"])
-        assert test_bot.log_file_path is not None
-        assert "test.log" in test_bot.log_file_path
+        log_path = tmp_path / "test.log"
+        test_bot.parse_args(["script.py", f"--logfile={log_path}", "help"])
+        assert test_bot.log_file_path == str(log_path.absolute())
 
     def test_parse_args_workspace_mode(self, test_bot:KleinanzeigenBot) -> None:
         """Test parsing workspace mode option."""
@@ -4035,8 +4041,8 @@ class TestConditionSelector:
             assert len(warning_messages) == 1
             assert configured in warning_messages[0]
             assert expected_api_value in warning_messages[0]
-            # Legacy German values should keep the legacy radio probe first and stop once it is found.
-            assert probed_values == [configured]
+            # Legacy German values should prefer the mapped API code and stop once it is found.
+            assert probed_values == [expected_api_value]
         else:
             assert warning_messages == []
             assert probed_values == [configured]
@@ -4044,12 +4050,12 @@ class TestConditionSelector:
         assert any(f"radio-condition-{expected_api_value}" in selector for selector in clicked_xpath_selectors)
 
     @pytest.mark.asyncio
-    async def test_condition_legacy_value_falls_back_to_mapped_value_when_legacy_is_missing(
+    async def test_condition_legacy_value_falls_back_when_mapped_value_is_missing(
         self,
         test_bot:KleinanzeigenBot,
         caplog:pytest.LogCaptureFixture,
     ) -> None:
-        """Legacy values should still work if only the mapped API radio is available."""
+        """Legacy values should still work if the mapped API radio is unavailable."""
         caplog.set_level(logging.WARNING, logger = LOG.name)
         dialog = MagicMock()
         trigger = MagicMock()
@@ -4057,8 +4063,8 @@ class TestConditionSelector:
         trigger.click = AsyncMock()
         radio = MagicMock()
         radio_attrs = MagicMock()
-        radio_attrs.id = "radio-condition-like_new"
-        radio_attrs.get.side_effect = lambda key, default = None: "radio-condition-like_new" if key == "id" else default
+        radio_attrs.id = "radio-condition-wie_neu"
+        radio_attrs.get.side_effect = lambda key, default = None: "radio-condition-wie_neu" if key == "id" else default
         radio.attrs = radio_attrs
         radio.click = AsyncMock()
 
@@ -4070,10 +4076,10 @@ class TestConditionSelector:
             if selector_type == By.XPATH and "@type='radio'" in selector_value:
                 if "@value='like_new'" in selector_value:
                     probed_values.append("like_new")
-                    return radio
+                    return None
                 if "@value='wie_neu'" in selector_value:
                     probed_values.append("wie_neu")
-                    return None
+                    return radio
             return None
 
         with (
@@ -4088,9 +4094,9 @@ class TestConditionSelector:
         assert len(warning_messages) == 1
         assert "wie_neu" in warning_messages[0]
         assert "like_new" in warning_messages[0]
-        assert probed_values == ["wie_neu", "like_new"]
+        assert probed_values == ["like_new", "wie_neu"]
         clicked_xpath_selectors = [str(call.args[1]) for call in mock_click.await_args_list if len(call.args) > 1]
-        assert any("radio-condition-like_new" in selector for selector in clicked_xpath_selectors)
+        assert any("radio-condition-wie_neu" in selector for selector in clicked_xpath_selectors)
 
     @pytest.mark.asyncio
     async def test_condition_legacy_value_warns_even_when_not_handled(

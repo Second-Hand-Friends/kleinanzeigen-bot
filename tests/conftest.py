@@ -16,6 +16,7 @@ Fixture Organization:
 """
 import os
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any, Final, cast
 from unittest.mock import MagicMock
 
@@ -74,7 +75,7 @@ def test_bot_config() -> Config:
 
 
 @pytest.fixture
-def test_bot(test_bot_config:Config) -> KleinanzeigenBot:
+def test_bot(test_bot_config:Config, tmp_path:Path) -> KleinanzeigenBot:
     """Provides a fresh KleinanzeigenBot instance for all test methods.
 
     Dependencies:
@@ -82,6 +83,7 @@ def test_bot(test_bot_config:Config) -> KleinanzeigenBot:
     """
     bot_instance = KleinanzeigenBot()
     bot_instance.config = test_bot_config
+    bot_instance.log_file_path = str(tmp_path / "kleinanzeigen_bot.log")
     return bot_instance
 
 
