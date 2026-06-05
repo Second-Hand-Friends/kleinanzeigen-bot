@@ -24,9 +24,8 @@ from kleinanzeigen_bot.model.ad_model import (
     calculate_auto_price_with_trace,
 )
 
-# Import 'misc' as a module (not functions directly) to preserve monkeypatch
-# compatibility in tests — patches to 'kleinanzeigen_bot.misc.now' must affect
-# the module object that callers reference.
+# Import 'misc' as a module (not functions directly) so tests can monkeypatch
+# `kleinanzeigen_bot.utils.misc.now` and affect the module object callers use.
 from kleinanzeigen_bot.utils import loggers, misc
 from kleinanzeigen_bot.utils.loggers import get_logger
 

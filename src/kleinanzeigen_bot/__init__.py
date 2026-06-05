@@ -15,62 +15,15 @@ from nodriver.core.connection import ProtocolException
 from ruamel.yaml import YAML
 from wcmatch import glob
 
-from . import download_selection, extract, local_path_renaming, resources
+from . import ad_form_helpers as _ad_form_helpers
+from . import ad_state as _ad_state
+from . import download_selection as _download_selection
+from . import extract
+from . import local_path_renaming as _local_path_renaming
+from . import price_reduction as _price_reduction
+from . import resources as _resources
 from ._version import __version__
-from .ad_description import (
-    get_ad_description as get_ad_description,
-)
-from .ad_form_helpers import (
-    SPECIAL_ATTRIBUTE_TOKEN_RE as SPECIAL_ATTRIBUTE_TOKEN_RE,
-)
-from .ad_form_helpers import (
-    WANTED_SHIPPING_LABELS as WANTED_SHIPPING_LABELS,
-)
-from .ad_form_helpers import (
-    get_marker_value as get_marker_value,
-)
-from .ad_form_helpers import (
-    get_marker_value_from_attrs as get_marker_value_from_attrs,  # noqa: F401
-)
-from .ad_form_helpers import (
-    normalize_condition as normalize_condition,
-)
-from .ad_form_helpers import (
-    xpath_literal as xpath_literal,
-)
-from .ad_state import (  # noqa: F401
-    RESET_FIELDS as _RESET_FIELDS,
-)
-from .ad_state import (
-    apply_after_delete_policy as _apply_after_delete_policy,
-)
-from .ad_state import (
-    relative_ad_path as _relative_ad_path,
-)
-from .download_selection import (
-    ResolvedAdState as ResolvedAdState,
-)
-from .local_path_renaming import (
-    DOWNLOAD_IMAGE_FILENAME_RE as _DOWNLOAD_IMAGE_FILENAME_RE,  # noqa: F401
-)
-from .local_path_renaming import (
-    ImageRenameResult as ImageRenameResult,
-)
-from .local_path_renaming import (
-    LocalPathRenameResult as LocalPathRenameResult,
-)
-from .local_path_renaming import (
-    RenamePathResult as RenamePathResult,
-)
-from .local_path_renaming import (
-    RenameStatus as RenameStatus,
-)
-from .local_path_renaming import (
-    rename_path_if_target_is_free as _rename_path_if_target_is_free,  # noqa: F401
-)
-from .local_path_renaming import (
-    replace_template_id_slot as _replace_template_id_slot,  # noqa: F401
-)
+from .ad_description import get_ad_description
 from .model.ad_model import (
     CARRIER_CODE_BY_OPTION,
     CARRIER_CODES_BY_SIZE,
@@ -89,26 +42,14 @@ from .model.ad_model import (
     calculate_auto_price_with_trace as calculate_auto_price_with_trace,
 )
 from .model.config_model import DEFAULT_DOWNLOAD_DIR, Config
-
-# Re-export for backward compatibility. The `as X as X` pattern
-# keeps each symbol explicitly named so linters can trace the re-export.
-from .price_reduction import (
-    PriceReductionDecision as PriceReductionDecision,
-)
-from .price_reduction import (
-    _log_auto_price_reduction_preview as _log_auto_price_reduction_preview,
-)
-from .price_reduction import (
-    apply_auto_price_reduction as apply_auto_price_reduction,
-)
-from .price_reduction import (
-    evaluate_auto_price_reduction as evaluate_auto_price_reduction,
-)
-from .price_reduction import (
-    is_auto_price_reduction_due as is_auto_price_reduction_due,
-)
+from .price_reduction import _log_auto_price_reduction_preview
 from .update_checker import UpdateChecker
-from .utils import diagnostics, dicts, error_handlers, loggers, misc, xdg_paths
+from .utils import diagnostics as _diagnostics
+from .utils import dicts as _dicts
+from .utils import error_handlers as _error_handlers
+from .utils import loggers as _loggers
+from .utils import misc as _misc
+from .utils import xdg_paths as _xdg_paths
 from .utils.exceptions import CaptchaEncountered, CategoryResolutionError, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
 from .utils.files import abspath
 from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
@@ -118,8 +59,8 @@ from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
-LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
-LOG.setLevel(loggers.INFO)
+LOG:Final[_loggers.Logger] = _loggers.get_logger(__name__)
+LOG.setLevel(_loggers.INFO)
 
 SUBMISSION_MAX_RETRIES:Final[int] = 3
 _LOGIN_ENV_PATTERN:Final[re.Pattern[str]] = re.compile(r"^\$\{(?P<var>\w+)(?::-(?P<default>.*))?\}$")
@@ -180,13 +121,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         self.config:Config
         self.config_file_path = abspath("config.yaml")
-        self.workspace:xdg_paths.Workspace | None = None
+        self.workspace:_xdg_paths.Workspace | None = None
         self._config_arg:str | None = None
-        self._workspace_mode_arg:xdg_paths.InstallationMode | None = None
+        self._workspace_mode_arg:_xdg_paths.InstallationMode | None = None
 
         self.categories:dict[str, str] = {}
 
-        self.file_log:loggers.LogFileHandle | None = None
+        self.file_log:_loggers.LogFileHandle | None = None
         self._log_basename = os.path.splitext(os.path.basename(sys.executable))[0] if is_frozen() else self.__module__
         self.log_file_path:str | None = abspath(f"{self._log_basename}.log")
         self._logfile_arg:str | None = None
@@ -209,7 +150,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     def get_version(self) -> str:
         return __version__
 
-    def _workspace_or_raise(self) -> xdg_paths.Workspace:
+    def _workspace_or_raise(self) -> _xdg_paths.Workspace:
         if self.workspace is None:
             raise AssertionError(_("Workspace must be resolved before command execution"))
         return self.workspace
@@ -243,7 +184,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             The numeric selector does NOT use this helper because it has different
             warning message semantics (foreign ads are expected, not anomalies).
         """
-        resolved = download_selection.resolve_download_ad_activity(ad_id, published_ads_by_id)
+        resolved = _download_selection.resolve_download_ad_activity(ad_id, published_ads_by_id)
 
         if not resolved.owned:
             # Ad not in user's published profile - unexpected for "all"/"new" selectors
@@ -272,11 +213,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     # Backward compatibility for tests/programmatic assignment of config_file_path:
                     # infer a stable default from the configured path location.
                     config_path = Path(self.config_file_path).resolve()
-                    xdg_config_dir = xdg_paths.get_xdg_base_dir("config").resolve()
+                    xdg_config_dir = _xdg_paths.get_xdg_base_dir("config").resolve()
                     effective_workspace_mode = "xdg" if config_path.is_relative_to(xdg_config_dir) else "portable"
 
         try:
-            self.workspace = xdg_paths.resolve_workspace(
+            self.workspace = _xdg_paths.resolve_workspace(
                 config_arg = effective_config_arg,
                 logfile_arg = self._logfile_arg,
                 workspace_mode = effective_workspace_mode,
@@ -287,7 +228,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.error(str(exc))
             sys.exit(2)
 
-        xdg_paths.ensure_directory(self.workspace.config_file.parent, "config directory")
+        _xdg_paths.ensure_directory(self.workspace.config_file.parent, "config directory")
 
         self.config_file_path = str(self.workspace.config_file)
         self.log_file_path = str(self.workspace.log_file) if self.workspace.log_file else None
@@ -295,7 +236,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.info("Config:    %s", self.workspace.config_file)
         LOG.info("Workspace mode: %s", self.workspace.mode)
         LOG.info("Workspace: %s", self.workspace.config_dir)
-        if loggers.is_debug(LOG):
+        if _loggers.is_debug(LOG):
             LOG.debug("Log file:        %s", self.workspace.log_file)
             LOG.debug("State dir:       %s", self.workspace.state_dir)
             LOG.debug("Download dir:    %s", self.workspace.download_dir)
@@ -329,11 +270,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     self.ads_selector = "all"
                     if ads := self.load_ads(exclude_ads_with_id = False):
                         for ad_file, ad_cfg, _ad_cfg_orig in ads:
-                            ad_file_relative = _relative_ad_path(ad_file, self.config_file_path)
-                            publish_decision = evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = AdUpdateStrategy.REPLACE)
+                            ad_file_relative = _ad_state.relative_ad_path(ad_file, self.config_file_path)
+                            publish_decision = _price_reduction.evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = AdUpdateStrategy.REPLACE)
                             _log_auto_price_reduction_preview(ad_file_relative, publish_decision)
 
-                            update_decision = evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = AdUpdateStrategy.MODIFY)
+                            update_decision = _price_reduction.evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = AdUpdateStrategy.MODIFY)
                             _log_auto_price_reduction_preview(ad_file_relative, update_decision)
                     LOG.info("############################################")
                     LOG.info("DONE: No configuration errors found.")
@@ -593,7 +534,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         return (
             self.ads_selector in valid_keywords
             or all(s.strip() in valid_keywords for s in self.ads_selector.split(","))
-            or download_selection.is_numeric_ids_selector(self.ads_selector)
+            or _download_selection.is_numeric_ids_selector(self.ads_selector)
         )
 
     def parse_args(self, args:list[str]) -> None:
@@ -628,7 +569,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     if mode not in {"portable", "xdg"}:
                         LOG.error("Invalid --workspace-mode '%s'. Use 'portable' or 'xdg'.", value)
                         sys.exit(2)
-                    self._workspace_mode_arg = cast(xdg_paths.InstallationMode, mode)
+                    self._workspace_mode_arg = cast(_xdg_paths.InstallationMode, mode)
                 case "--ads":
                     self.ads_selector = value.strip().lower()
                     self._ads_selector_explicit = True
@@ -640,8 +581,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 case "--lang":
                     set_current_locale(Locale.of(value))
                 case "-v" | "--verbose":
-                    LOG.setLevel(loggers.DEBUG)
-                    loggers.get_logger("nodriver").setLevel(loggers.INFO)
+                    LOG.setLevel(_loggers.DEBUG)
+                    _loggers.get_logger("nodriver").setLevel(_loggers.INFO)
 
         match len(arguments):
             case 0:
@@ -659,10 +600,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return
 
         if self.workspace and self.workspace.log_file:
-            xdg_paths.ensure_directory(self.workspace.log_file.parent, "log directory")
+            _xdg_paths.ensure_directory(self.workspace.log_file.parent, "log directory")
 
         LOG.info("Logging to [%s]...", self.log_file_path)
-        self.file_log = loggers.configure_file_logging(self.log_file_path)
+        self.file_log = _loggers.configure_file_logging(self.log_file_path)
 
         LOG.info("App version: %s", self.get_version())
         LOG.info("Python version: %s", sys.version)
@@ -676,11 +617,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.error("Config file %s already exists. Aborting creation.", self.config_file_path)
             return
         config_parent = self.workspace.config_file.parent if self.workspace else Path(self.config_file_path).parent
-        xdg_paths.ensure_directory(config_parent, "config directory")
+        _xdg_paths.ensure_directory(config_parent, "config directory")
         default_config = Config.model_construct()
         default_config.login.username = "changeme"  # noqa: S105 placeholder for default config, not a real username
         default_config.login.password = "changeme"  # noqa: S105 placeholder for default config, not a real password
-        dicts.save_commented_model(
+        _dicts.save_commented_model(
             self.config_file_path,
             default_config,
             header = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json",
@@ -694,7 +635,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if not os.path.exists(self.config_file_path):
             self.create_default_config()
 
-        config_yaml = dicts.load_dict_if_exists(self.config_file_path, _("config"))
+        config_yaml = _dicts.load_dict_if_exists(self.config_file_path, _("config"))
         if isinstance(config_yaml, dict):
             self._resolve_login_credentials(config_yaml)
         self.config = Config.model_validate(config_yaml, strict = True, context = self.config_file_path)
@@ -707,9 +648,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             self._timing_collector = None
 
         # load built-in category mappings
-        self.categories = dicts.load_dict_from_module(resources, "categories.yaml", "")
+        self.categories = _dicts.load_dict_from_module(_resources, "categories.yaml", "")
         LOG.debug("Loaded %s categories from categories.yaml", len(self.categories))
-        deprecated_categories = dicts.load_dict_from_module(resources, "categories_old.yaml", "")
+        deprecated_categories = _dicts.load_dict_from_module(_resources, "categories_old.yaml", "")
         LOG.debug("Loaded %s categories from categories_old.yaml", len(deprecated_categories))
         self.categories.update(deprecated_categories)
         custom_count = 0
@@ -793,7 +734,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return True
 
         # Check republication interval
-        ad_age = misc.now() - last_updated_on
+        ad_age = _misc.now() - last_updated_on
         if ad_age.days <= ad_cfg.republication_interval:
             LOG.info(
                 " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
@@ -862,7 +803,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         use_specific_ads = False
         selectors = self.ads_selector.split(",")
 
-        if download_selection.is_numeric_ids_selector(self.ads_selector):
+        if _download_selection.is_numeric_ids_selector(self.ads_selector):
             ids = [int(n) for n in self.ads_selector.split(",")]
             use_specific_ads = True
             LOG.info("Start fetch task for the ad(s) with id(s):")
@@ -870,7 +811,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         ads = []
         for ad_file, ad_file_relative in sorted(ad_files.items()):
-            ad_cfg_orig:dict[str, Any] = dicts.load_dict(ad_file, "ad")
+            ad_cfg_orig:dict[str, Any] = _dicts.load_dict(ad_file, "ad")
             ad_cfg:Ad = self.load_ad(ad_cfg_orig)
 
             if ignore_inactive and not ad_cfg.active:
@@ -888,7 +829,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # Check for 'changed' selector
                 if "changed" in selectors and self.__check_ad_changed(ad_cfg, ad_cfg_orig, ad_file_relative):
                     should_include = True
-                elif "changed" in selectors and self.command == "update" and is_auto_price_reduction_due(ad_cfg, ad_file_relative):
+                elif "changed" in selectors and self.command == "update" and _price_reduction.is_auto_price_reduction_due(ad_cfg, ad_file_relative):
                     should_include = True
 
                 # Check for 'new' selector
@@ -964,7 +905,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         if not is_login_page and self.config.captcha.auto_restart:
             LOG.warning("Captcha recognized - auto-restart enabled, abort run...")
-            raise CaptchaEncountered(misc.parse_duration(self.config.captcha.restart_delay))
+            raise CaptchaEncountered(_misc.parse_duration(self.config.captcha.restart_delay))
 
         LOG.warning("############################################")
         LOG.warning("# Captcha present! Please solve the captcha.")
@@ -1233,7 +1174,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return Path(abspath(diagnostics.output_dir, relative_to = self.config_file_path)).resolve()
 
         workspace = self._workspace_or_raise()
-        xdg_paths.ensure_directory(workspace.diagnostics_dir, "diagnostics directory")
+        _xdg_paths.ensure_directory(workspace.diagnostics_dir, "diagnostics directory")
         return workspace.diagnostics_dir
 
     async def _capture_login_detection_diagnostics_if_enabled(
@@ -1258,7 +1199,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return
 
         try:
-            await diagnostics.capture_diagnostics(
+            await _diagnostics.capture_diagnostics(
                 output_dir = output_dir,
                 base_prefix = base_prefix,
                 page = page,
@@ -1308,7 +1249,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         ad_file_stem = Path(ad_file).stem
 
         json_payload = {
-            "timestamp": misc.now().isoformat(timespec = "seconds"),
+            "timestamp": _misc.now().isoformat(timespec = "seconds"),
             "attempt": attempt,
             "page_url": getattr(page, "url", None),
             "exception": {
@@ -1323,7 +1264,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         }
 
         try:
-            await diagnostics.capture_diagnostics(
+            await _diagnostics.capture_diagnostics(
                 output_dir = self._diagnostics_output_dir(),
                 base_prefix = "publish_error",
                 attempt = attempt,
@@ -1537,8 +1478,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 break
 
             # Use only real API fields (confirmed from production data)
-            current_page_num = misc.coerce_page_number(paging.get("pageNum"))
-            total_pages = misc.coerce_page_number(paging.get("last"))
+            current_page_num = _misc.coerce_page_number(paging.get("pageNum"))
+            total_pages = _misc.coerce_page_number(paging.get("last"))
 
             if current_page_num is None:
                 LOG.warning("Invalid 'pageNum' in paging info: %s, stopping pagination", paging.get("pageNum"))
@@ -1558,7 +1499,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.debug("Page %s: fetched %s ads (numFound=%s)", page, len(page_ads), paging.get("numFound"))
 
             # Use API's next field for navigation (more robust than our counter)
-            next_page = misc.coerce_page_number(paging.get("next"))
+            next_page = _misc.coerce_page_number(paging.get("next"))
             if next_page is None:
                 if total_pages is not None:
                     LOG.warning("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
@@ -1597,8 +1538,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             delete_attempted = deleted or (id_before is not None and ad_cfg.id is None)
 
             if delete_attempted and after_delete != "NONE":
-                if _apply_after_delete_policy(ad_cfg, ad_cfg_orig, mode = after_delete):
-                    dicts.save_dict(ad_file, ad_cfg_orig)
+                if _ad_state.apply_after_delete_policy(ad_cfg, ad_cfg_orig, mode = after_delete):
+                    _dicts.save_dict(ad_file, ad_cfg_orig)
             await self.web_sleep()
 
         LOG.info("############################################")
@@ -1705,7 +1646,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             # Intentionally parsing naive datetime from kleinanzeigen API's German date format, timezone not relevant for date-only comparison
             end_date = datetime.strptime(end_date_str, "%d.%m.%Y")  # noqa: DTZ007
-            days_until_expiry = (end_date.date() - misc.now().date()).days
+            days_until_expiry = (end_date.date() - _misc.now().date()).days
 
             # Magic value 8 is kleinanzeigen.de's platform policy: extensions only possible within 8 days of expiry
             if days_until_expiry <= 8:  # noqa: PLR2004
@@ -1773,8 +1714,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             # Update metadata in YAML file
             # Update updated_on to track when ad was extended
-            ad_cfg_orig["updated_on"] = misc.now().isoformat(timespec = "seconds")
-            dicts.save_dict(ad_file, ad_cfg_orig)
+            ad_cfg_orig["updated_on"] = _misc.now().isoformat(timespec = "seconds")
+            _dicts.save_dict(ad_file, ad_cfg_orig)
 
             LOG.info(" -> SUCCESS: ad extended with ID %s", ad_cfg.id)
             return True
@@ -1790,7 +1731,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Check for success messages
         return await self.web_check(By.ID, "checking-done", Is.DISPLAYED) or await self.web_check(By.ID, "not-completed", Is.DISPLAYED)
 
-    def _log_local_path_rename_result(self, result:LocalPathRenameResult, ad_id:int) -> None:
+    def _log_local_path_rename_result(self, result:_local_path_renaming.LocalPathRenameResult, ad_id:int) -> None:
         """Log a human-readable summary of local path renaming after a republish."""
         path_old_id = result.path_old_id if result.path_old_id is not None else result.yaml_old_id
         id_label = f"ID {path_old_id} -> ID {ad_id}"
@@ -1798,24 +1739,24 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             id_label += f" (YAML had ID {result.yaml_old_id})"
 
         renamed:list[str] = []
-        if result.folder_status == RenameStatus.RENAMED:
+        if result.folder_status == _local_path_renaming.RenameStatus.RENAMED:
             renamed.append(_("folder"))
-        if result.file_status == RenameStatus.RENAMED:
+        if result.file_status == _local_path_renaming.RenameStatus.RENAMED:
             renamed.append(_("ad file"))
         if result.renamed_image_count > 0:
             renamed.append(f"{result.renamed_image_count} {_('image(s)')}")
 
         blocked:list[str] = []
-        if result.file_status in {RenameStatus.TARGET_EXISTS, RenameStatus.ERROR}:
+        if result.file_status in {_local_path_renaming.RenameStatus.TARGET_EXISTS, _local_path_renaming.RenameStatus.ERROR}:
             blocked.append(_("ad file"))
-        if result.folder_status in {RenameStatus.TARGET_EXISTS, RenameStatus.ERROR}:
+        if result.folder_status in {_local_path_renaming.RenameStatus.TARGET_EXISTS, _local_path_renaming.RenameStatus.ERROR}:
             blocked.append(_("ad folder"))
         if result.blocked_image_count > 0:
             blocked.append(f"{result.blocked_image_count} {_('image(s)')}")
 
         if renamed:
             LOG.info("Local path renaming (%s): %s", id_label, ", ".join(renamed))
-            if RenameStatus.RENAMED in {result.file_status, result.folder_status}:
+            if _local_path_renaming.RenameStatus.RENAMED in {result.file_status, result.folder_status}:
                 LOG.info("Updated ad file: %s", result.ad_file)
 
         if blocked:
@@ -1932,7 +1873,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 await self.delete_ad(ad_cfg, published_ads, delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title)
 
             # Apply auto price reduction in REPLACE mode (republish flow)
-            apply_auto_price_reduction(ad_cfg, ad_cfg_orig, _relative_ad_path(ad_file, self.config_file_path), mode = AdUpdateStrategy.REPLACE)
+            _price_reduction.apply_auto_price_reduction(
+                ad_cfg, ad_cfg_orig, _ad_state.relative_ad_path(
+                    ad_file, self.config_file_path), mode = AdUpdateStrategy.REPLACE)
 
             LOG.info("Publishing ad '%s'...", ad_cfg.title)
             await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html", reload_if_already_open = True)
@@ -1941,14 +1884,16 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # are restored even when on_update is false.  The evaluator handles
             # the on_update guard internally (returns early without advancing).
             if ad_cfg.auto_price_reduction and ad_cfg.auto_price_reduction.enabled:
-                apply_auto_price_reduction(ad_cfg, ad_cfg_orig, _relative_ad_path(ad_file, self.config_file_path), mode = AdUpdateStrategy.MODIFY)
+                _price_reduction.apply_auto_price_reduction(
+                    ad_cfg, ad_cfg_orig, _ad_state.relative_ad_path(
+                        ad_file, self.config_file_path), mode = AdUpdateStrategy.MODIFY)
 
             LOG.info("Updating ad '%s'...", ad_cfg.title)
             await self.web_open(f"{self.root_url}/p-anzeige-bearbeiten.html?adId={ad_cfg.id}", reload_if_already_open = True)
 
         await self._dismiss_consent_banner()
 
-        if loggers.is_debug(LOG):
+        if _loggers.is_debug(LOG):
             LOG.debug(" -> effective ad meta:")
             YAML().dump(ad_cfg.model_dump(), sys.stdout)
 
@@ -1976,7 +1921,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # not as radio buttons.  Select by display text using the standard
                 # DOM-based web_select_button_combobox (no React fiber internals).
                 # See issue #930 for broader React fiber migration.
-                display_text = WANTED_SHIPPING_LABELS.get(shipping_type)
+                display_text = _ad_form_helpers.WANTED_SHIPPING_LABELS.get(shipping_type)
                 if display_text:
                     try:
                         shipping_btn = await self.web_find(
@@ -2055,7 +2000,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         try:
             existing_markers = await self._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom)
-            existing_image_count = sum(1 for marker in existing_markers if get_marker_value(marker))
+            existing_image_count = sum(1 for marker in existing_markers if _ad_form_helpers.get_marker_value(marker))
         except TimeoutError:
             existing_image_count = 0
 
@@ -2187,7 +2132,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         ad_cfg_orig["id"] = ad_id
         # Rename referenced images before hashing/saving so the YAML content and
         # content_hash reflect only image file renames that actually succeeded.
-        image_result = local_path_renaming.rename_referenced_local_image_files_after_id_change(
+        image_result = _local_path_renaming.rename_referenced_local_image_files_after_id_change(
             Path(ad_file),
             ad_cfg_orig.get("images"),
             old_id = old_ad_id,
@@ -2201,7 +2146,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Update content hash after successful publication
         # Calculate hash on original config to ensure consistent comparison on restart
         ad_cfg_orig["content_hash"] = AdPartial.model_validate(ad_cfg_orig).update_content_hash().content_hash
-        ad_cfg_orig["updated_on"] = misc.now().isoformat(timespec = "seconds")
+        ad_cfg_orig["updated_on"] = _misc.now().isoformat(timespec = "seconds")
         if not ad_cfg.created_on and not ad_cfg.id:
             ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
 
@@ -2226,7 +2171,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.info(" -> SUCCESS: ad updated with ID %s", ad_id)
 
         try:
-            dicts.save_dict(ad_file, ad_cfg_orig)
+            _dicts.save_dict(ad_file, ad_cfg_orig)
         except Exception:
             for old_path, new_path in image_result.renamed_paths:
                 try:
@@ -2236,7 +2181,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             raise
         # Rename the YAML file and containing folder after saving, because the
         # saved file itself may move as part of this opt-in local migration.
-        file_folder_result = local_path_renaming.rename_local_ad_file_and_folder_after_id_change(
+        file_folder_result = _local_path_renaming.rename_local_ad_file_and_folder_after_id_change(
             Path(ad_file),
             old_id = old_ad_id,
             new_id = ad_id,
@@ -2635,7 +2580,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         Returns True when dialog handling succeeded, otherwise False to indicate
         that caller should use generic special-attribute handling.
         """
-        canonical_value, legacy_value = normalize_condition(condition_value)
+        canonical_value, legacy_value = _ad_form_helpers.normalize_condition(condition_value)
         if legacy_value is not None:
             LOG.warning("Condition value [%s] is deprecated; update your config to [%s].", legacy_value, canonical_value)
 
@@ -2678,7 +2623,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             for candidate in candidate_values:
                 condition_radio = await self.web_probe(
                     By.XPATH,
-                    f"//*[self::dialog or @role='dialog']//input[@type='radio' and @value={xpath_literal(candidate)}]",
+                    f"//*[self::dialog or @role='dialog']//input[@type='radio' and @value={_ad_form_helpers.xpath_literal(candidate)}]",
                     timeout = short_timeout,
                 )
                 if condition_radio is not None:
@@ -2688,7 +2633,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             condition_radio_id = str(condition_radio.attrs.get("id") or "")
             if condition_radio_id:
                 try:
-                    await self.web_click(By.XPATH, f"//*[self::dialog or @role='dialog']//label[@for={xpath_literal(condition_radio_id)}]")
+                    await self.web_click(By.XPATH, f"//*[self::dialog or @role='dialog']//label[@for={_ad_form_helpers.xpath_literal(condition_radio_id)}]")
                 except TimeoutError:
                     await condition_radio.click()
             else:
@@ -2784,7 +2729,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if radio_id:
                     await self.web_click(
                         By.XPATH,
-                        f"//fieldset[@id='ad-category-picker']//label[@for={xpath_literal(radio_id)}]",
+                        f"//fieldset[@id='ad-category-picker']//label[@for={_ad_form_helpers.xpath_literal(radio_id)}]",
                         timeout = picker_timeout,
                     )
                 else:
@@ -2856,7 +2801,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # Ensure special_attribute_value is treated as a string
             special_attribute_value_str = str(special_attribute_value)
             normalized_special_attribute_key = re.sub(r"_[a-z]+$", "", special_attribute_key).rsplit(".", maxsplit = 1)[-1]
-            if not SPECIAL_ATTRIBUTE_TOKEN_RE.fullmatch(normalized_special_attribute_key):
+            if not _ad_form_helpers.SPECIAL_ATTRIBUTE_TOKEN_RE.fullmatch(normalized_special_attribute_key):
                 LOG.debug(
                     "Attribute field '%s' has unsupported normalized key '%s'.",
                     special_attribute_key,
@@ -2871,22 +2816,22 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     continue
 
                 LOG.info("Condition dialog not available, falling back to generic attribute handler for [%s]...", special_attribute_key)
-                special_attribute_value_str = normalize_condition(special_attribute_value_str)[0]
+                special_attribute_value_str = _ad_form_helpers.normalize_condition(special_attribute_value_str)[0]
 
             LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
-            id_suffix_literal = xpath_literal(f".{normalized_special_attribute_key}")
-            name_suffix_literal = xpath_literal(f".{normalized_special_attribute_key}]")
-            name_plus_literal = xpath_literal(f".{normalized_special_attribute_key}+")
-            bare_id_literal = xpath_literal(normalized_special_attribute_key)
-            bare_name_literal = xpath_literal(f"attributeMap[{normalized_special_attribute_key}]")
-            original_key_literal = xpath_literal(special_attribute_key)
+            id_suffix_literal = _ad_form_helpers.xpath_literal(f".{normalized_special_attribute_key}")
+            name_suffix_literal = _ad_form_helpers.xpath_literal(f".{normalized_special_attribute_key}]")
+            name_plus_literal = _ad_form_helpers.xpath_literal(f".{normalized_special_attribute_key}+")
+            bare_id_literal = _ad_form_helpers.xpath_literal(normalized_special_attribute_key)
+            bare_name_literal = _ad_form_helpers.xpath_literal(f"attributeMap[{normalized_special_attribute_key}]")
+            original_key_literal = _ad_form_helpers.xpath_literal(special_attribute_key)
             # Match attribute fields by five patterns:
             # 1) exact id                 -> @id={bare_id_literal}
             # 2) dotted id suffix         -> ... = {id_suffix_literal}
             # 3) exact attributeMap name  -> @name={bare_name_literal}
             # 4) dotted name suffix       -> ... = {name_suffix_literal}
             # 5) compound key marker      -> contains(@name, {name_plus_literal})
-            # Literals are derived via xpath_literal from normalized_special_attribute_key.
+            # Literals are derived via _ad_form_helpers.xpath_literal from normalized_special_attribute_key.
             # 6) original config key      -> contains(@name, {original_key_literal}) for compound keys
             special_attr_xpath = (
                 "//*["
@@ -3201,7 +3146,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         baseline_marker_count = 0
         try:
             baseline_markers = await self._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom_timeout)
-            baseline_marker_count = sum(1 for marker in baseline_markers if get_marker_value(marker))
+            baseline_marker_count = sum(1 for marker in baseline_markers if _ad_form_helpers.get_marker_value(marker))
         except TimeoutError:
             baseline_marker_count = 0
 
@@ -3222,7 +3167,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         async def count_processed_images() -> int:
             try:
                 markers = await self._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom_timeout)
-                marker_count = sum(1 for marker in markers if get_marker_value(marker))
+                marker_count = sum(1 for marker in markers if _ad_form_helpers.get_marker_value(marker))
             except TimeoutError:
                 marker_count = 0
 
@@ -3263,7 +3208,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Fetch published ads once from manage-ads JSON to avoid repetitive API calls during extraction
         # Build lookup dict inline and pass directly to extractor (no cache abstraction needed)
         LOG.info("Fetching ad metadata (status, expiry dates)...")
-        published_ads = await self._fetch_published_ads(strict = download_selection.is_numeric_ids_selector(effective_selector))
+        published_ads = await self._fetch_published_ads(strict = _download_selection.is_numeric_ids_selector(effective_selector))
         published_ads_by_id:dict[int, dict[str, Any]] = {}
         for published_ad in published_ads:
             try:
@@ -3275,7 +3220,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.info("Loaded metadata for %s published ads.", len(published_ads_by_id))
 
         download_dir = self._resolve_download_dir()
-        xdg_paths.ensure_directory(download_dir, "downloaded ads directory")
+        _xdg_paths.ensure_directory(download_dir, "downloaded ads directory")
         LOG.info("Ads download directory: %s", download_dir)
         ad_extractor = extract.AdExtractor(self.browser, self.config, download_dir, published_ads_by_id = published_ads_by_id)
 
@@ -3341,7 +3286,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         new_count += 1
                 LOG.info("%s were downloaded from your profile.", pluralize("new ad", new_count))
 
-        elif download_selection.is_numeric_ids_selector(effective_selector):  # download ad(s) with specific id(s)
+        elif _download_selection.is_numeric_ids_selector(effective_selector):  # download ad(s) with specific id(s)
             ids = [int(n) for n in effective_selector.split(",")]
             LOG.info("Starting download of ad(s) with the id(s):")
             LOG.info(" | ".join([str(ad_id) for ad_id in ids]))
@@ -3350,7 +3295,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.info("Downloading %d/%d ads...", idx, len(ids))
                 exists = await ad_extractor.navigate_to_ad_page(ad_id)
                 if exists:
-                    resolved = download_selection.resolve_download_ad_activity(ad_id, published_ads_by_id)
+                    resolved = _download_selection.resolve_download_ad_activity(ad_id, published_ads_by_id)
                     if not resolved.owned:
                         # Foreign ad - expected for numeric IDs (can download any public ad)
                         LOG.warning("Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.", ad_id)
@@ -3369,7 +3314,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             if ad_cfg.content_hash != ad_cfg_orig["content_hash"]:
                 changed += 1
                 ad_cfg_orig["content_hash"] = ad_cfg.content_hash
-                dicts.save_dict(ad_file, ad_cfg_orig)
+                _dicts.save_dict(ad_file, ad_cfg_orig)
 
         LOG.info("############################################")
         LOG.info("DONE: Updated [content_hash] in %s", pluralize("ad", changed))
@@ -3397,16 +3342,16 @@ def main(args:list[str]) -> None:
             flush = True,
         )  # [1:] removes the first empty blank line
 
-    loggers.configure_console_logging()
+    _loggers.configure_console_logging()
 
-    signal.signal(signal.SIGINT, error_handlers.on_sigint)  # capture CTRL+C
+    signal.signal(signal.SIGINT, _error_handlers.on_sigint)  # capture CTRL+C
 
-    # sys.excepthook = error_handlers.on_exception
+    # sys.excepthook = _error_handlers.on_exception
     # -> commented out because it causes PyInstaller to log "[PYI-28040:ERROR] Failed to execute script '__main__' due to unhandled exception!",
-    #    despite the exceptions being properly processed by our custom error_handlers.on_exception callback.
+    #    despite the exceptions being properly processed by our custom _error_handlers.on_exception callback.
     #    We now handle exceptions explicitly using a top-level try/except block.
 
-    atexit.register(loggers.flush_all_handlers)
+    atexit.register(_loggers.flush_all_handlers)
 
     try:
         bot = KleinanzeigenBot()
@@ -3415,10 +3360,10 @@ def main(args:list[str]) -> None:
     except CaptchaEncountered as ex:
         raise ex
     except Exception:
-        error_handlers.on_exception(*sys.exc_info())
+        _error_handlers.on_exception(*sys.exc_info())
 
 
 if __name__ == "__main__":
-    loggers.configure_console_logging()
+    _loggers.configure_console_logging()
     LOG.error("Direct execution not supported. Use 'pdm run app'")
     sys.exit(1)
