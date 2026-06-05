@@ -43,12 +43,12 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch
 
 
-# Serialize runs per branch so concurrent main merges cannot race on the shared
-# ghcr.io :latest tag. Main queues publishing runs; non-main runs cancel older
-# attempts when new commits land.
+# Serialize runs per branch so concurrent main/release merges cannot race on
+# their shared ghcr.io channel tags. Publishing branches queue runs; other
+# branches cancel older attempts when new commits land.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/release' }}
 
 
 env:
@@ -322,16 +322,25 @@ jobs:
 
 
     - name: Publish Docker image
-      if: github.repository_owner == 'Second-Hand-Friends' && github.ref_name == 'main' && matrix.PUBLISH_RELEASE && startsWith(matrix.os, 'ubuntu') && !env.ACT
+      if: github.repository_owner == 'Second-Hand-Friends' && (github.ref_name == 'main' || github.ref_name == 'release') && matrix.PUBLISH_RELEASE && startsWith(matrix.os, 'ubuntu') && !env.ACT
       run: |
         set -eux
 
         echo "${{ github.token }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
 
+        case "$GITHUB_REF_NAME" in
+          main)
+            docker_channel=preview
+            ;;
+          release)
+            docker_channel=latest
+            ;;
+        esac
+
         arch=$(docker image inspect "$IMAGE_NAME" --format '{{.Architecture}}')
 
-        docker image tag "$IMAGE_NAME" "$REGISTRY_IMAGE:latest-$arch"
-        docker push "$REGISTRY_IMAGE:latest-$arch"
+        docker image tag "$IMAGE_NAME" "$REGISTRY_IMAGE:$docker_channel-$arch"
+        docker push "$REGISTRY_IMAGE:$docker_channel-$arch"
 
 
     - name: Collect coverage reports
@@ -347,12 +356,12 @@ jobs:
   ###########################################################
   publish-docker-manifest:
   ###########################################################
-    # Combine the per-arch tags from the matrix into one multi-arch :latest
-    # manifest. Without this, the last matrix push wins and :latest is single-arch.
+    # Combine the per-arch tags from the matrix into one multi-arch channel
+    # manifest. Without this, the last matrix push wins and the channel is single-arch.
     needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: github.repository_owner == 'Second-Hand-Friends' && github.ref_name == 'main' && !github.event.act
+    if: github.repository_owner == 'Second-Hand-Friends' && (github.ref_name == 'main' || github.ref_name == 'release') && !github.event.act
 
     permissions:
       # Required to publish the stitched multi-arch manifest to ghcr.io.
@@ -368,13 +377,22 @@ jobs:
 
         echo "${{ github.token }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
 
+        case "$GITHUB_REF_NAME" in
+          main)
+            docker_channel=preview
+            ;;
+          release)
+            docker_channel=latest
+            ;;
+        esac
+
         docker buildx imagetools create \
-          --tag "$REGISTRY_IMAGE:latest" \
-          "$REGISTRY_IMAGE:latest-amd64" \
-          "$REGISTRY_IMAGE:latest-arm64"
+          --tag "$REGISTRY_IMAGE:$docker_channel" \
+          "$REGISTRY_IMAGE:$docker_channel-amd64" \
+          "$REGISTRY_IMAGE:$docker_channel-arm64"
 
         # Print the resulting manifest list for the run log.
-        docker buildx imagetools inspect "$REGISTRY_IMAGE:latest"
+        docker buildx imagetools inspect "$REGISTRY_IMAGE:$docker_channel"
 
 
   ###########################################################
