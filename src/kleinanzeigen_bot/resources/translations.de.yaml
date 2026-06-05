@@ -379,7 +379,7 @@ kleinanzeigen_bot/price_reduction.py:
   is_auto_price_reduction_due:
     "Pending auto price reduction detected for ad [%s]": "Ausstehende automatische Preisreduzierung für Anzeige [%s] erkannt"
 
-  _log_auto_price_reduction_preview:
+  log_auto_price_reduction_preview:
     "publish": "veröffentlichen"
     "update": "aktualisieren"
     "Auto price reduction preview for [%s] (%s): disabled": "Vorschau automatische Preisreduzierung für [%s] (%s): deaktiviert"

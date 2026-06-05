@@ -6,10 +6,10 @@
 
 __all__ = [
     "PriceReductionDecision",
-    "_log_auto_price_reduction_preview",
     "apply_auto_price_reduction",
     "evaluate_auto_price_reduction",
     "is_auto_price_reduction_due",
+    "log_auto_price_reduction_preview",
 ]
 
 from dataclasses import dataclass
@@ -336,7 +336,7 @@ def is_auto_price_reduction_due(ad_cfg:Ad, ad_file_relative:str) -> bool:
     return True
 
 
-def _log_auto_price_reduction_preview(ad_file_relative:str, decision:PriceReductionDecision) -> None:
+def log_auto_price_reduction_preview(ad_file_relative:str, decision:PriceReductionDecision) -> None:
     mode_label = _("publish") if decision.mode == AdUpdateStrategy.REPLACE else _("update")
     if not decision.enabled:
         LOG.info("Auto price reduction preview for [%s] (%s): disabled", ad_file_relative, mode_label)
