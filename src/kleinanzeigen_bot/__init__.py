@@ -17,6 +17,27 @@ from wcmatch import glob
 
 from . import extract, resources
 from ._version import __version__
+from .ad_description import (
+    get_ad_description as get_ad_description,
+)
+from .ad_form_helpers import (
+    SPECIAL_ATTRIBUTE_TOKEN_RE as SPECIAL_ATTRIBUTE_TOKEN_RE,
+)
+from .ad_form_helpers import (
+    WANTED_SHIPPING_LABELS as WANTED_SHIPPING_LABELS,
+)
+from .ad_form_helpers import (
+    get_marker_value as get_marker_value,
+)
+from .ad_form_helpers import (
+    get_marker_value_from_attrs as get_marker_value_from_attrs,  # noqa: F401
+)
+from .ad_form_helpers import (
+    normalize_condition as normalize_condition,
+)
+from .ad_form_helpers import (
+    xpath_literal as xpath_literal,
+)
 from .local_path_renaming import (
     DOWNLOAD_IMAGE_FILENAME_RE as _DOWNLOAD_IMAGE_FILENAME_RE,  # noqa: F401
 )
@@ -53,12 +74,10 @@ from .local_path_renaming import (
 from .model.ad_model import (
     CARRIER_CODE_BY_OPTION,
     CARRIER_CODES_BY_SIZE,
-    MAX_DESCRIPTION_LENGTH,
     SIZE_INFO_BY_CARRIER_CODE,
     Ad,
     AdPartial,
     Contact,
-    validate_condition_api_mapping,
 )
 from .model.ad_model import (
     AdUpdateStrategy as AdUpdateStrategy,
@@ -104,42 +123,7 @@ LOG.setLevel(loggers.INFO)
 
 SUBMISSION_MAX_RETRIES:Final[int] = 3
 _NUMERIC_IDS_RE:Final[re.Pattern[str]] = re.compile(r"^\d+(,\d+)*$")
-_SPECIAL_ATTRIBUTE_TOKEN_RE:Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_]+$")
 _LOGIN_ENV_PATTERN:Final[re.Pattern[str]] = re.compile(r"^\$\{(?P<var>\w+)(?::-(?P<default>.*))?\}$")
-# See issue #930 for migrating __select_button_combobox to web_select_button_combobox
-_WANTED_SHIPPING_LABELS:Final[dict[str, str]] = {
-    "SHIPPING": "Versand möglich",
-    "PICKUP": "Nur Abholung",
-}
-# Kleinanzeigen migrated condition dialog radio values from German tokens to English
-# API codes. Existing ad YAMLs use the legacy German tokens; map them at publish time
-# so both old and new values work against the current DOM.
-_CONDITION_GERMAN_TO_API:Final[dict[str, str]] = {
-    "neu": "new",
-    "wie_neu": "like_new",
-    "sehr_gut": "like_new",  # legacy "very good" tier collapses to like_new
-    "gut": "ok",
-    "in_ordnung": "alright",
-    "defekt": "defect",
-}
-validate_condition_api_mapping("_CONDITION_GERMAN_TO_API", _CONDITION_GERMAN_TO_API)
-
-
-def _normalize_condition(condition_value:str) -> tuple[str, str | None]:
-    """Return the normalized condition value and legacy input.
-
-    Returns ``(canonical_value, legacy_value)`` where ``canonical_value`` is the
-    API form from ``_CONDITION_GERMAN_TO_API`` and ``legacy_value`` is the original
-    input only when a mapping was applied, otherwise ``None``. Unmapped inputs are
-    returned unchanged. Example: ``neu`` -> ``("new", "neu")``; ``new`` ->
-    ``("new", None)``.
-    """
-    canonical_value = _CONDITION_GERMAN_TO_API.get(condition_value, condition_value)
-    if canonical_value != condition_value:
-        return canonical_value, condition_value
-    return condition_value, None
-
-
 _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
     (By.ID, "user-email"),
@@ -154,26 +138,6 @@ colorama.just_fix_windows_console()
 
 def _format_login_detection_selectors(selectors:Sequence[tuple["By", str]]) -> str:
     return ", ".join(f"{selector_type.name}={selector_value}" for selector_type, selector_value in selectors)
-
-
-def _xpath_literal(value:str) -> str:
-    """Return an XPath-safe string literal for *value*.
-
-    Strategy:
-    - no single quotes -> wrap in single quotes
-    - no double quotes -> wrap in double quotes
-    - contains both -> use concat('part1', "'", 'part2', ...)
-
-    Example:
-    - value = Bob's "Bike" -> concat('Bob', "'", 's "Bike"')
-
-    This avoids quote-escaping issues in dynamic XPath expressions.
-    """
-    if "'" not in value:
-        return f"'{value}'"
-    if '"' not in value:
-        return f'"{value}"'
-    return "concat(" + ', "\'", '.join(f"'{part}'" for part in value.split("'")) + ")"
 
 
 class LoginDetectionReason(enum.Enum):
@@ -272,13 +236,6 @@ def _apply_after_delete_policy(
         return True
 
     return False
-
-
-def _get_marker_value(marker:Element) -> str:
-    """Extract and normalize a hidden image marker value from a DOM element."""
-    attrs = marker.attrs
-    raw_value = attrs.get("value", "") if isinstance(attrs, dict) else getattr(attrs, "value", "")
-    return str(raw_value or "").strip()
 
 
 class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
@@ -1045,8 +1002,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if not should_include:
                     continue
 
-            ensure(self.__get_description(ad_cfg, with_affixes = False), f"-> property [description] not specified @ [{ad_file}]")
-            self.__get_description(ad_cfg, with_affixes = True)  # validates complete description
+            ensure(get_ad_description(ad_cfg, self.config.ad_defaults, with_affixes = False), _("-> property [description] not specified @ [%s]") % ad_file)
+            get_ad_description(ad_cfg, self.config.ad_defaults, with_affixes = True)  # validates complete description
 
             if ad_cfg.category:
                 resolved_category_id = self.categories.get(ad_cfg.category)
@@ -1066,7 +1023,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 for image_pattern in ad_cfg.images:
                     pattern_images = set()
                     for image_file in glob.glob(image_pattern, root_dir = ad_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
-                        _, image_file_ext = os.path.splitext(image_file)
+                        image_file_ext = os.path.splitext(image_file)[1]
                         ensure(image_file_ext.lower() in {".gif", ".jpg", ".jpeg", ".png"}, f"Unsupported image file type [{image_file}]")
                         if os.path.isabs(image_file):
                             pattern_images.add(image_file)
@@ -2143,7 +2100,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # not as radio buttons.  Select by display text using the standard
                 # DOM-based web_select_button_combobox (no React fiber internals).
                 # See issue #930 for broader React fiber migration.
-                display_text = _WANTED_SHIPPING_LABELS.get(shipping_type)
+                display_text = WANTED_SHIPPING_LABELS.get(shipping_type)
                 if display_text:
                     try:
                         shipping_btn = await self.web_find(
@@ -2205,7 +2162,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # set description
         #############################
-        description = self.__get_description(ad_cfg, with_affixes = True)
+        description = get_ad_description(ad_cfg, self.config.ad_defaults, with_affixes = True)
         await self.__set_input_value("ad-description", description)
 
         await self.__set_contact_fields(ad_cfg.contact)
@@ -2222,7 +2179,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         try:
             existing_markers = await self._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom)
-            existing_image_count = sum(1 for marker in existing_markers if _get_marker_value(marker))
+            existing_image_count = sum(1 for marker in existing_markers if get_marker_value(marker))
         except TimeoutError:
             existing_image_count = 0
 
@@ -2788,7 +2745,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         Returns True when dialog handling succeeded, otherwise False to indicate
         that caller should use generic special-attribute handling.
         """
-        canonical_value, legacy_value = _normalize_condition(condition_value)
+        canonical_value, legacy_value = normalize_condition(condition_value)
         if legacy_value is not None:
             LOG.warning("Condition value [%s] is deprecated; update your config to [%s].", legacy_value, canonical_value)
 
@@ -2815,9 +2772,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             )
             return False
 
-        # Kleinanzeigen changed dialog radio values from German tokens to English API codes
-        # (e.g. "wie_neu" -> "like_new", "sehr_gut" -> "like_new"). Prefer the mapped
-        # API value first for legacy configs, then fall back to the configured value if needed.
+        # CONDITION_GERMAN_TO_API maps German legacy condition tiers to English API
+        # values. Some legacy tiers are intentionally collapsed by the API
+        # (e.g. "sehr_gut" / legacy "very good" maps to "like_new").
+        # Build candidate_values by probing canonical_value first to avoid quick_dom
+        # timeout delays on the current API-valued dialog, then legacy_value as fallback.
         candidate_values:list[str] = [canonical_value]
         if legacy_value is not None:
             candidate_values.append(legacy_value)
@@ -2829,7 +2788,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             for candidate in candidate_values:
                 condition_radio = await self.web_probe(
                     By.XPATH,
-                    f"//*[self::dialog or @role='dialog']//input[@type='radio' and @value={_xpath_literal(candidate)}]",
+                    f"//*[self::dialog or @role='dialog']//input[@type='radio' and @value={xpath_literal(candidate)}]",
                     timeout = short_timeout,
                 )
                 if condition_radio is not None:
@@ -2839,7 +2798,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             condition_radio_id = str(condition_radio.attrs.get("id") or "")
             if condition_radio_id:
                 try:
-                    await self.web_click(By.XPATH, f"//*[self::dialog or @role='dialog']//label[@for={_xpath_literal(condition_radio_id)}]")
+                    await self.web_click(By.XPATH, f"//*[self::dialog or @role='dialog']//label[@for={xpath_literal(condition_radio_id)}]")
                 except TimeoutError:
                     await condition_radio.click()
             else:
@@ -2935,7 +2894,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if radio_id:
                     await self.web_click(
                         By.XPATH,
-                        f"//fieldset[@id='ad-category-picker']//label[@for={_xpath_literal(radio_id)}]",
+                        f"//fieldset[@id='ad-category-picker']//label[@for={xpath_literal(radio_id)}]",
                         timeout = picker_timeout,
                     )
                 else:
@@ -3007,7 +2966,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # Ensure special_attribute_value is treated as a string
             special_attribute_value_str = str(special_attribute_value)
             normalized_special_attribute_key = re.sub(r"_[a-z]+$", "", special_attribute_key).rsplit(".", maxsplit = 1)[-1]
-            if not _SPECIAL_ATTRIBUTE_TOKEN_RE.fullmatch(normalized_special_attribute_key):
+            if not SPECIAL_ATTRIBUTE_TOKEN_RE.fullmatch(normalized_special_attribute_key):
                 LOG.debug(
                     "Attribute field '%s' has unsupported normalized key '%s'.",
                     special_attribute_key,
@@ -3022,22 +2981,22 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     continue
 
                 LOG.info("Condition dialog not available, falling back to generic attribute handler for [%s]...", special_attribute_key)
-                special_attribute_value_str = _normalize_condition(special_attribute_value_str)[0]
+                special_attribute_value_str = normalize_condition(special_attribute_value_str)[0]
 
             LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
-            id_suffix_literal = _xpath_literal(f".{normalized_special_attribute_key}")
-            name_suffix_literal = _xpath_literal(f".{normalized_special_attribute_key}]")
-            name_plus_literal = _xpath_literal(f".{normalized_special_attribute_key}+")
-            bare_id_literal = _xpath_literal(normalized_special_attribute_key)
-            bare_name_literal = _xpath_literal(f"attributeMap[{normalized_special_attribute_key}]")
-            original_key_literal = _xpath_literal(special_attribute_key)
+            id_suffix_literal = xpath_literal(f".{normalized_special_attribute_key}")
+            name_suffix_literal = xpath_literal(f".{normalized_special_attribute_key}]")
+            name_plus_literal = xpath_literal(f".{normalized_special_attribute_key}+")
+            bare_id_literal = xpath_literal(normalized_special_attribute_key)
+            bare_name_literal = xpath_literal(f"attributeMap[{normalized_special_attribute_key}]")
+            original_key_literal = xpath_literal(special_attribute_key)
             # Match attribute fields by five patterns:
             # 1) exact id                 -> @id={bare_id_literal}
             # 2) dotted id suffix         -> ... = {id_suffix_literal}
             # 3) exact attributeMap name  -> @name={bare_name_literal}
             # 4) dotted name suffix       -> ... = {name_suffix_literal}
             # 5) compound key marker      -> contains(@name, {name_plus_literal})
-            # Literals are derived via _xpath_literal from normalized_special_attribute_key.
+            # Literals are derived via xpath_literal from normalized_special_attribute_key.
             # 6) original config key      -> contains(@name, {original_key_literal}) for compound keys
             special_attr_xpath = (
                 "//*["
@@ -3352,7 +3311,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         baseline_marker_count = 0
         try:
             baseline_markers = await self._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom_timeout)
-            baseline_marker_count = sum(1 for marker in baseline_markers if _get_marker_value(marker))
+            baseline_marker_count = sum(1 for marker in baseline_markers if get_marker_value(marker))
         except TimeoutError:
             baseline_marker_count = 0
 
@@ -3373,7 +3332,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         async def count_processed_images() -> int:
             try:
                 markers = await self._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom_timeout)
-                marker_count = sum(1 for marker in markers if _get_marker_value(marker))
+                marker_count = sum(1 for marker in markers if get_marker_value(marker))
             except TimeoutError:
                 marker_count = 0
 
@@ -3510,58 +3469,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     LOG.info("Downloaded ad with id %d", ad_id)
                 else:
                     LOG.error("The page with the id %d does not exist!", ad_id)
-
-    def __get_description(self, ad_cfg:Ad, *, with_affixes:bool) -> str:
-        """Get the ad description optionally with prefix and suffix applied.
-
-        Precedence(highest to lowest):
-        1. Direct ad - level affixes(description_prefix / suffix)
-        2. Global flattened affixes(ad_defaults.description_prefix / suffix)
-        3. Legacy global nested affixes(ad_defaults.description.prefix / suffix)
-
-        Args:
-            ad_cfg: The ad configuration dictionary
-
-        Returns:
-            The raw or complete description with prefix and suffix applied
-        """
-        # Get the main description text
-        description_text = ""
-        if ad_cfg.description:
-            description_text = ad_cfg.description
-
-        if with_affixes:
-            # Get prefix with precedence
-            prefix = (
-                # 1. Direct ad-level prefix
-                ad_cfg.description_prefix
-                if ad_cfg.description_prefix is not None
-                # 2. Global prefix from config
-                else self.config.ad_defaults.description_prefix or ""  # Default to empty string if all sources are None
-            )
-
-            # Get suffix with precedence
-            suffix = (
-                # 1. Direct ad-level suffix
-                ad_cfg.description_suffix
-                if ad_cfg.description_suffix is not None
-                # 2. Global suffix from config
-                else self.config.ad_defaults.description_suffix or ""  # Default to empty string if all sources are None
-            )
-
-            # Combine the parts and replace @ with (at)
-            final_description = str(prefix) + str(description_text) + str(suffix)
-            final_description = final_description.replace("@", "(at)")
-        else:
-            final_description = description_text
-
-        # Validate length
-        ensure(
-            len(final_description) <= MAX_DESCRIPTION_LENGTH,
-            f"Length of ad description including prefix and suffix exceeds {MAX_DESCRIPTION_LENGTH} chars. Description length: {len(final_description)} chars.",
-        )
-
-        return final_description
 
     def update_content_hashes(self, ads:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         changed = 0
