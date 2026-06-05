@@ -274,7 +274,7 @@ jobs:
 
         echo "Extracting upx zip..."
         mkdir /tmp/upx
-        7z e /tmp/upx.zip -o/tmp/upx -- ./*.exe -r
+        7z e /tmp/upx.zip -o/tmp/upx -- '*.exe' -r
         cygpath -wa /tmp/upx >> "$GITHUB_PATH"
 
         /tmp/upx/upx.exe --version
