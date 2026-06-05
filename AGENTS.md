@@ -42,11 +42,13 @@ Before making non-trivial changes, review:
 Add or update tests when changing observable behavior, business logic, error handling, or fixing bugs.
 
 Tests may be skipped for:
+
 - log-only wording changes
 - diagnostic-only changes with no behavior impact
 - trivial wrappers already covered elsewhere
 
 Testing rules:
+
 - Test behavior, not implementation details.
 - Prefer extending existing tests over adding duplicates.
 - If you touch nearby tests, clean up obvious stale or duplicate coverage when it is cheap and in scope.
