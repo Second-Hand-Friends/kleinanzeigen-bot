@@ -15,7 +15,7 @@ from nodriver.core.connection import ProtocolException
 from ruamel.yaml import YAML
 from wcmatch import glob
 
-from . import extract, resources
+from . import extract, local_path_renaming, resources
 from ._version import __version__
 from .ad_description import (
     get_ad_description as get_ad_description,
@@ -72,19 +72,7 @@ from .local_path_renaming import (
     RenameStatus as RenameStatus,
 )
 from .local_path_renaming import (
-    rename_local_ad_file_after_id_change as _rename_local_ad_file_after_id_change_impl,
-)
-from .local_path_renaming import (
-    rename_local_ad_file_and_folder_after_id_change as _rename_local_ad_file_and_folder_after_id_change_impl,
-)
-from .local_path_renaming import (
-    rename_local_ad_folder_after_id_change as _rename_local_ad_folder_after_id_change_impl,
-)
-from .local_path_renaming import (
     rename_path_if_target_is_free as _rename_path_if_target_is_free,  # noqa: F401
-)
-from .local_path_renaming import (
-    rename_referenced_local_image_files_after_id_change as _rename_referenced_local_image_files_after_id_change_impl,
 )
 from .local_path_renaming import (
     replace_template_id_slot as _replace_template_id_slot,  # noqa: F401
@@ -1808,38 +1796,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Check for success messages
         return await self.web_check(By.ID, "checking-done", Is.DISPLAYED) or await self.web_check(By.ID, "not-completed", Is.DISPLAYED)
 
-    def _rename_local_ad_file_and_folder_after_id_change(self, ad_file:Path, old_id:int | None, new_id:int) -> LocalPathRenameResult:
-        return _rename_local_ad_file_and_folder_after_id_change_impl(
-            ad_file,
-            old_id = old_id,
-            new_id = new_id,
-            ad_file_name_template = self.config.download.ad_file_name_template,
-            folder_name_template = self.config.download.folder_name_template,
-            enabled = self.config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH",
-        )
-
-    def _rename_local_ad_file_after_id_change(self, ad_file:Path, *, new_id:int, ad_file_name_template:str) -> RenamePathResult:
-        return _rename_local_ad_file_after_id_change_impl(ad_file, new_id = new_id, ad_file_name_template = ad_file_name_template)
-
-    def _rename_referenced_local_image_files_after_id_change(
-        self,
-        ad_file:Path,
-        ad_cfg_orig:dict[str, Any],
-        old_id:int | None,
-        new_id:int,
-    ) -> ImageRenameResult:
-        return _rename_referenced_local_image_files_after_id_change_impl(
-            ad_file,
-            ad_cfg_orig.get("images"),
-            old_id = old_id,
-            new_id = new_id,
-            ad_file_name_template = self.config.download.ad_file_name_template,
-            enabled = self.config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH",
-        )
-
-    def _rename_local_ad_folder_after_id_change(self, ad_file:Path, *, new_id:int, folder_name_template:str) -> RenamePathResult:
-        return _rename_local_ad_folder_after_id_change_impl(ad_file, new_id = new_id, folder_name_template = folder_name_template)
-
     def _log_local_path_rename_result(self, result:LocalPathRenameResult, ad_id:int) -> None:
         """Log a human-readable summary of local path renaming after a republish."""
         path_old_id = result.path_old_id if result.path_old_id is not None else result.yaml_old_id
@@ -2237,7 +2193,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         ad_cfg_orig["id"] = ad_id
         # Rename referenced images before hashing/saving so the YAML content and
         # content_hash reflect only image file renames that actually succeeded.
-        image_result = self._rename_referenced_local_image_files_after_id_change(Path(ad_file), ad_cfg_orig, old_ad_id, ad_id)
+        image_result = local_path_renaming.rename_referenced_local_image_files_after_id_change(
+            Path(ad_file),
+            ad_cfg_orig.get("images"),
+            old_id = old_ad_id,
+            new_id = ad_id,
+            ad_file_name_template = self.config.download.ad_file_name_template,
+            enabled = self.config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH",
+        )
         if image_result.updated_images is not None:
             ad_cfg_orig["images"] = image_result.updated_images
 
@@ -2279,7 +2242,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             raise
         # Rename the YAML file and containing folder after saving, because the
         # saved file itself may move as part of this opt-in local migration.
-        file_folder_result = self._rename_local_ad_file_and_folder_after_id_change(Path(ad_file), old_ad_id, ad_id)
+        file_folder_result = local_path_renaming.rename_local_ad_file_and_folder_after_id_change(
+            Path(ad_file),
+            old_id = old_ad_id,
+            new_id = ad_id,
+            ad_file_name_template = self.config.download.ad_file_name_template,
+            folder_name_template = self.config.download.folder_name_template,
+            enabled = self.config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH",
+        )
         rename_result = replace(
             file_folder_result,
             renamed_image_count = image_result.renamed_count,

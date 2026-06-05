@@ -6,6 +6,12 @@ from __future__ import annotations
 import re
 from typing import Any, Final, Mapping, NamedTuple
 
+__all__ = [
+    "NUMERIC_IDS_RE",
+    "ResolvedAdState",
+    "resolve_download_ad_activity",
+]
+
 NUMERIC_IDS_RE:Final[re.Pattern[str]] = re.compile(r"^\d+(,\d+)*$")
 
 
