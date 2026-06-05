@@ -5,7 +5,7 @@ import ctypes, gettext, inspect, locale, logging, os, sys  # isort: skip
 from collections.abc import Sized
 from typing import Any, Final, NamedTuple
 
-from kleinanzeigen_bot import resources
+from kleinanzeigen_bot import resources as _resources
 
 from . import dicts, reflect
 
@@ -98,7 +98,7 @@ def translate(text:object, caller:inspect.FrameInfo | None) -> str:
     global _TRANSLATIONS  # noqa: PLW0603 Using the global statement to update `...` is discouraged
     if _TRANSLATIONS is None:
         try:
-            _TRANSLATIONS = dicts.load_dict_from_module(resources, f"translations.{_CURRENT_LOCALE[0]}.yaml")
+            _TRANSLATIONS = dicts.load_dict_from_module(_resources, f"translations.{_CURRENT_LOCALE[0]}.yaml")
         except FileNotFoundError:
             _TRANSLATIONS = {}
 

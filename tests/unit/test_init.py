@@ -13,22 +13,12 @@ import pytest
 from nodriver.core.connection import ProtocolException
 from pydantic import ValidationError
 
-from kleinanzeigen_bot import (  # type: ignore[attr-defined]
+from kleinanzeigen_bot import (
     LOG,
     SUBMISSION_MAX_RETRIES,
     KleinanzeigenBot,
     LoginDetectionReason,
     LoginDetectionResult,
-    PriceReductionDecision,
-    RenameStatus,
-    _rename_path_if_target_is_free,  # noqa: PLC2701
-    _replace_template_id_slot,  # noqa: PLC2701
-    apply_auto_price_reduction,
-    evaluate_auto_price_reduction,
-    misc,
-)
-from kleinanzeigen_bot import (
-    AdUpdateStrategy as _AdUpdateStrategy_root,
 )
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
@@ -39,8 +29,7 @@ from kleinanzeigen_bot.model.config_model import (
     DiagnosticsConfig,
     PublishingConfig,
 )
-from kleinanzeigen_bot.price_reduction import PriceReductionDecision as _PriceReductionDecision_src
-from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
+from kleinanzeigen_bot.utils import dicts, loggers, misc, xdg_paths
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
@@ -158,35 +147,6 @@ def _login_detection_result(is_logged_in:bool, reason:LoginDetectionReason) -> L
     return LoginDetectionResult(is_logged_in = is_logged_in, reason = reason)
 
 
-def test_root_re_exports_resolve_correctly() -> None:
-    """Step 1 root-package re-exports must remain importable from kleinanzeigen_bot."""
-    assert _AdUpdateStrategy_root is AdUpdateStrategy
-    assert callable(apply_auto_price_reduction)
-    assert callable(evaluate_auto_price_reduction)
-    assert PriceReductionDecision is _PriceReductionDecision_src
-
-
-def test_replace_template_id_slot_underscore_alias_is_same_object() -> None:
-    """Root-package alias _replace_template_id_slot resolves to the module function."""
-    from kleinanzeigen_bot.local_path_renaming import replace_template_id_slot  # noqa: PLC0415
-
-    assert _replace_template_id_slot is replace_template_id_slot
-
-
-def test_rename_path_if_target_is_free_underscore_alias_works(tmp_path:Path) -> None:
-    """Underscored root-package alias _rename_path_if_target_is_free is callable."""
-    source = tmp_path / "a.txt"
-    target = tmp_path / "b.txt"
-    source.write_text("hello", encoding = "utf-8")
-
-    result = _rename_path_if_target_is_free(source, target, label = "test item")
-
-    assert result.path == target
-    assert result.status == RenameStatus.RENAMED
-    assert target.read_text(encoding = "utf-8") == "hello"
-    assert not source.exists()
-
-
 class TestKleinanzeigenBotInitialization:
     """Tests for KleinanzeigenBot initialization and basic functionality."""
 
@@ -214,7 +174,7 @@ class TestKleinanzeigenBotInitialization:
         test_bot.command = "verify"
 
         with (
-            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", side_effect = ValueError("workspace error")),
+            patch("kleinanzeigen_bot.utils.xdg_paths.resolve_workspace", side_effect = ValueError("workspace error")),
             pytest.raises(SystemExit) as exc_info,
         ):
             test_bot._resolve_workspace()
@@ -227,8 +187,8 @@ class TestKleinanzeigenBotInitialization:
         workspace = xdg_paths.Workspace.for_config(tmp_path / "blocked" / "config.yaml", "kleinanzeigen-bot")
 
         with (
-            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", return_value = workspace),
-            patch("kleinanzeigen_bot.xdg_paths.ensure_directory", side_effect = OSError("mkdir denied")),
+            patch("kleinanzeigen_bot.utils.xdg_paths.resolve_workspace", return_value = workspace),
+            patch("kleinanzeigen_bot.utils.xdg_paths.ensure_directory", side_effect = OSError("mkdir denied")),
             pytest.raises(OSError, match = "mkdir denied"),
         ):
             test_bot._resolve_workspace()
@@ -251,9 +211,9 @@ class TestKleinanzeigenBotInitialization:
         captured_mode:dict[str, xdg_paths.InstallationMode | None] = {"value": None}
 
         with (
-            patch("kleinanzeigen_bot.xdg_paths.get_xdg_base_dir", side_effect = lambda category: xdg_dirs[category]),
-            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", side_effect = _make_fake_resolve_workspace(captured_mode, workspace)),
-            patch("kleinanzeigen_bot.xdg_paths.ensure_directory"),
+            patch("kleinanzeigen_bot.utils.xdg_paths.get_xdg_base_dir", side_effect = lambda category: xdg_dirs[category]),
+            patch("kleinanzeigen_bot.utils.xdg_paths.resolve_workspace", side_effect = _make_fake_resolve_workspace(captured_mode, workspace)),
+            patch("kleinanzeigen_bot.utils.xdg_paths.ensure_directory"),
         ):
             test_bot._resolve_workspace()
 
@@ -278,9 +238,9 @@ class TestKleinanzeigenBotInitialization:
         captured_mode:dict[str, xdg_paths.InstallationMode | None] = {"value": None}
 
         with (
-            patch("kleinanzeigen_bot.xdg_paths.get_xdg_base_dir", side_effect = lambda category: xdg_dirs[category]),
-            patch("kleinanzeigen_bot.xdg_paths.resolve_workspace", side_effect = _make_fake_resolve_workspace(captured_mode, workspace)),
-            patch("kleinanzeigen_bot.xdg_paths.ensure_directory"),
+            patch("kleinanzeigen_bot.utils.xdg_paths.get_xdg_base_dir", side_effect = lambda category: xdg_dirs[category]),
+            patch("kleinanzeigen_bot.utils.xdg_paths.resolve_workspace", side_effect = _make_fake_resolve_workspace(captured_mode, workspace)),
+            patch("kleinanzeigen_bot.utils.xdg_paths.ensure_directory"),
         ):
             test_bot._resolve_workspace()
 
@@ -1449,7 +1409,7 @@ class TestKleinanzeigenBotAuthentication:
         page = MagicMock()
         test_bot.page = page
 
-        with patch("kleinanzeigen_bot.diagnostics.capture_diagnostics", new_callable = AsyncMock) as mock_capture:
+        with patch("kleinanzeigen_bot.utils.diagnostics.capture_diagnostics", new_callable = AsyncMock) as mock_capture:
             await test_bot._capture_login_detection_diagnostics_if_enabled(base_prefix = "login_detection_test")
 
             mock_capture.assert_awaited_once()
@@ -1472,7 +1432,7 @@ class TestKleinanzeigenBotAuthentication:
         test_bot._login_detection_diagnostics_captured = False
         test_bot.page = cast(Any, None)
 
-        with patch("kleinanzeigen_bot.diagnostics.capture_diagnostics", new_callable = AsyncMock) as mock_capture:
+        with patch("kleinanzeigen_bot.utils.diagnostics.capture_diagnostics", new_callable = AsyncMock) as mock_capture:
             await test_bot._capture_login_detection_diagnostics_if_enabled(base_prefix = "login_detection_test")
 
             mock_capture.assert_awaited_once()
@@ -1496,7 +1456,7 @@ class TestKleinanzeigenBotAuthentication:
 
         with (
             patch.object(test_bot, "_diagnostics_output_dir", side_effect = RuntimeError("dir error")),
-            patch("kleinanzeigen_bot.diagnostics.capture_diagnostics", new_callable = AsyncMock) as mock_capture,
+            patch("kleinanzeigen_bot.utils.diagnostics.capture_diagnostics", new_callable = AsyncMock) as mock_capture,
         ):
             await test_bot._capture_login_detection_diagnostics_if_enabled(base_prefix = "login_detection_test")
 
@@ -1516,7 +1476,7 @@ class TestKleinanzeigenBotAuthentication:
         test_bot.page = MagicMock()
 
         with patch(
-            "kleinanzeigen_bot.diagnostics.capture_diagnostics",
+            "kleinanzeigen_bot.utils.diagnostics.capture_diagnostics",
             new_callable = AsyncMock,
             side_effect = RuntimeError("capture error"),
         ):
@@ -2180,7 +2140,7 @@ class TestKleinanzeigenBotBasics:
         ]
 
         if include_success_mocks:
-            common_patches.append(patch("kleinanzeigen_bot.dicts.save_dict"))
+            common_patches.append(patch("kleinanzeigen_bot.utils.dicts.save_dict"))
 
         with ExitStack() as stack:
             for p in common_patches:
@@ -3518,7 +3478,7 @@ class TestKleinanzeigenBotShippingOptions:
         # Mock Path to use PureWindowsPath for testing cross-drive behavior
         with (
             patch("kleinanzeigen_bot.Path", PureWindowsPath),
-            patch("kleinanzeigen_bot.apply_auto_price_reduction", side_effect = mock_apply_auto_price_reduction),
+            patch("kleinanzeigen_bot.price_reduction.apply_auto_price_reduction", side_effect = mock_apply_auto_price_reduction),
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "delete_ad", new_callable = AsyncMock),
         ):
@@ -3575,7 +3535,7 @@ class TestKleinanzeigenBotShippingOptions:
             return None
 
         with (
-            patch("kleinanzeigen_bot.apply_auto_price_reduction") as mock_apply,
+            patch("kleinanzeigen_bot.price_reduction.apply_auto_price_reduction") as mock_apply,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = mock_web_probe),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
@@ -5932,7 +5892,7 @@ class TestDeleteAdsAfterDeletePolicy:
             patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "delete_ad", new_callable = AsyncMock, side_effect = fake_delete),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.dicts.save_dict") as mock_save,
+            patch("kleinanzeigen_bot.utils.dicts.save_dict") as mock_save,
         ):
             await test_bot.delete_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
@@ -5952,7 +5912,7 @@ class TestDeleteAdsAfterDeletePolicy:
             patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "delete_ad", new_callable = AsyncMock, return_value = False),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.dicts.save_dict") as mock_save,
+            patch("kleinanzeigen_bot.utils.dicts.save_dict") as mock_save,
         ):
             await test_bot.delete_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 

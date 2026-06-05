@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kleinanzeigen_bot import KleinanzeigenBot, misc
+from kleinanzeigen_bot import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad
-from kleinanzeigen_bot.utils import dicts
+from kleinanzeigen_bot.utils import dicts, misc
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
@@ -283,7 +283,7 @@ class TestExtendAdMethod:
         with (
             patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate,
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.misc.now") as mock_now,
+            patch("kleinanzeigen_bot.utils.misc.now") as mock_now,
         ):
             # Test mock datetime - timezone not relevant for timestamp formatting test
             mock_now.return_value = datetime(2025, 1, 28, 14, 30, 0)  # noqa: DTZ001
@@ -329,7 +329,7 @@ class TestExtendAdMethod:
         with (
             patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch("kleinanzeigen_bot.misc.now") as mock_now,
+            patch("kleinanzeigen_bot.utils.misc.now") as mock_now,
         ):
             # Test mock datetime - timezone not relevant for timestamp formatting test
             mock_now.return_value = datetime(2025, 1, 28, 14, 30, 0)  # noqa: DTZ001
@@ -373,7 +373,7 @@ class TestExtendAdMethod:
         with (
             patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate,
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.misc.now") as mock_now,
+            patch("kleinanzeigen_bot.utils.misc.now") as mock_now,
         ):
             # Test mock datetime - timezone not relevant for timestamp formatting test
             mock_now.return_value = datetime(2025, 1, 28, 14, 30, 0)  # noqa: DTZ001
@@ -428,7 +428,7 @@ class TestExtendAdMethod:
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "_timeout", return_value = 10),
-            patch("kleinanzeigen_bot.misc.now") as mock_now,
+            patch("kleinanzeigen_bot.utils.misc.now") as mock_now,
         ):
             # Test mock datetime - timezone not relevant for timestamp formatting test
             mock_now.return_value = datetime(2025, 1, 28, 15, 0, 0)  # noqa: DTZ001
@@ -515,7 +515,7 @@ class TestExtendEdgeCases:
             patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
-            patch("kleinanzeigen_bot.misc.now") as mock_now,
+            patch("kleinanzeigen_bot.utils.misc.now") as mock_now,
         ):
             # Mock now() to return a date where 05.02.2026 would be within 8 days
             # Test mock datetime - timezone not relevant for date comparison test

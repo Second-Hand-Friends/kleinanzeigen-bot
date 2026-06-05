@@ -27,6 +27,25 @@ Before making non-trivial changes, review:
 - Never hardcode credentials or secrets.
 - Prefer small, simple changes over speculative abstractions.
 
+## Project Contract
+
+`kleinanzeigen-bot` is a CLI application, not a supported Python library API.
+
+Keep stable from a user perspective:
+
+- CLI commands, options, and exit behavior
+- Config files and config defaults
+- Generated YAML behavior and persisted ad file mutations
+- Runtime/user-facing messages and translation behavior
+- Browser workflows and automation outcomes
+
+Do not preserve accidental internal compatibility:
+
+- Package-root imports for helpers, models, or extracted modules
+- Monkeypatch paths in tests
+- Compatibility aliases for internal helpers
+- Wrapper methods or re-exports whose only purpose is preserving old internal import paths
+
 ## Repo Patterns
 
 - Browser automation: follow existing `WebScrapingMixin` patterns and use `ensure()` for validation.

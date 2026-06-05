@@ -8,7 +8,7 @@ from typing import Any, Protocol, runtime_checkable
 
 import pytest
 
-import kleinanzeigen_bot
+from kleinanzeigen_bot import price_reduction
 from kleinanzeigen_bot.model.ad_model import AdUpdateStrategy, calculate_auto_price
 from kleinanzeigen_bot.model.config_model import AutoPriceReductionConfig
 from kleinanzeigen_bot.utils.pydantics import ContextualValidationError
@@ -30,7 +30,7 @@ class _ApplyAutoPriceReduction(Protocol):
 @pytest.fixture
 def apply_auto_price_reduction() -> _ApplyAutoPriceReduction:
     # Return the module-level function directly (no more name-mangling!)
-    return kleinanzeigen_bot.apply_auto_price_reduction
+    return price_reduction.apply_auto_price_reduction
 
 
 def _price_cfg(*, on_update:bool = False, **overrides:Any) -> AutoPriceReductionConfig:
@@ -364,7 +364,7 @@ def test_apply_auto_price_reduction_respects_day_delay(
         created_on = reference,
     )
 
-    monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: reference + timedelta(days = 1))
+    monkeypatch.setattr("kleinanzeigen_bot.utils.misc.now", lambda: reference + timedelta(days = 1))
 
     ad_orig:dict[str, Any] = {}
 
@@ -394,7 +394,7 @@ def test_apply_auto_price_reduction_runs_after_delays(monkeypatch:pytest.MonkeyP
         created_on = reference - timedelta(days = 10),
     )
 
-    monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: reference)
+    monkeypatch.setattr("kleinanzeigen_bot.utils.misc.now", lambda: reference)
 
     ad_orig:dict[str, Any] = {}
     apply_auto_price_reduction(ad_cfg, ad_orig, "ad_ready.yaml")
@@ -618,7 +618,7 @@ def test_apply_modify_mode_applies_reduction_when_on_update_true_and_day_delay_s
         created_on = reference - timedelta(days = 10),
     )
 
-    monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: reference)
+    monkeypatch.setattr("kleinanzeigen_bot.utils.misc.now", lambda: reference)
 
     apply_auto_price_reduction(ad_cfg, {}, "ad_modify.yaml", mode = AdUpdateStrategy.MODIFY)
 
@@ -642,7 +642,7 @@ def test_apply_modify_mode_skips_new_cycle_when_day_delay_not_satisfied(
         created_on = reference - timedelta(days = 10),
     )
 
-    monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: reference)
+    monkeypatch.setattr("kleinanzeigen_bot.utils.misc.now", lambda: reference)
 
     apply_auto_price_reduction(ad_cfg, {}, "ad_delay_not_met.yaml", mode = AdUpdateStrategy.MODIFY)
 
@@ -789,7 +789,7 @@ def test_is_auto_price_reduction_due_is_false_when_no_ad_id() -> None:
         updated_on = None,
         created_on = None,
     )
-    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "ad_new.yaml") is False  # type: ignore[arg-type]
+    assert price_reduction.is_auto_price_reduction_due(ad_cfg, "ad_new.yaml") is False  # type: ignore[arg-type]
 
 
 @pytest.mark.unit
@@ -816,7 +816,7 @@ def test_is_auto_price_reduction_due_is_false_when_not_enabled(
         ),
     )
 
-    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "ad_disabled.yaml") is False  # type: ignore[arg-type]
+    assert price_reduction.is_auto_price_reduction_due(ad_cfg, "ad_disabled.yaml") is False  # type: ignore[arg-type]
 
 
 @pytest.mark.unit
@@ -843,7 +843,7 @@ def test_is_auto_price_reduction_due_is_false_when_next_cycle_is_none(
         ),
     )
 
-    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "ad_no_next_cycle.yaml") is False  # type: ignore[arg-type]
+    assert price_reduction.is_auto_price_reduction_due(ad_cfg, "ad_no_next_cycle.yaml") is False  # type: ignore[arg-type]
 
 
 @pytest.mark.unit
@@ -870,7 +870,7 @@ def test_is_auto_price_reduction_due_is_false_when_cycle_not_advanced(
         ),
     )
 
-    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "ad_no_cycle_advance.yaml") is False  # type: ignore[arg-type]
+    assert price_reduction.is_auto_price_reduction_due(ad_cfg, "ad_no_cycle_advance.yaml") is False  # type: ignore[arg-type]
 
 
 @pytest.mark.unit
@@ -897,7 +897,7 @@ def test_is_auto_price_reduction_due_returns_true_when_reduction_due(
         ),
     )
 
-    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "ad_reduction_due.yaml") is True  # type: ignore[arg-type]
+    assert price_reduction.is_auto_price_reduction_due(ad_cfg, "ad_reduction_due.yaml") is True  # type: ignore[arg-type]
 
 
 @pytest.mark.unit
@@ -906,7 +906,7 @@ def test_is_price_reduction_due_returns_true_when_eligible_real(
 ) -> None:
     """is_auto_price_reduction_due returns True when eligible (exercises real evaluate_auto_price_reduction)."""
     now_dt = datetime(2024, 6, 1, tzinfo = timezone.utc)
-    monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: now_dt)
+    monkeypatch.setattr("kleinanzeigen_bot.utils.misc.now", lambda: now_dt)
 
     price_cfg = _price_cfg(on_update = True, delay_days = 0)
     ad_cfg = SimpleNamespace(
@@ -918,7 +918,7 @@ def test_is_price_reduction_due_returns_true_when_eligible_real(
         repost_count = 5,
     )
 
-    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "test.yaml") is True  # type: ignore[arg-type]
+    assert price_reduction.is_auto_price_reduction_due(ad_cfg, "test.yaml") is True  # type: ignore[arg-type]
 
 
 @pytest.mark.unit
@@ -927,7 +927,7 @@ def test_is_price_reduction_due_returns_false_when_delay_not_satisfied_real(
 ) -> None:
     """is_auto_price_reduction_due returns False when day-delay is not satisfied (exercises real evaluate_auto_price_reduction)."""
     now_dt = datetime(2024, 1, 1, 12, 0, 0, tzinfo = timezone.utc)
-    monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: now_dt)
+    monkeypatch.setattr("kleinanzeigen_bot.utils.misc.now", lambda: now_dt)
 
     price_cfg = _price_cfg(on_update = True, delay_days = 1)
     ad_cfg = SimpleNamespace(
@@ -939,7 +939,7 @@ def test_is_price_reduction_due_returns_false_when_delay_not_satisfied_real(
         repost_count = 5,
     )
 
-    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "test.yaml") is False  # type: ignore[arg-type]
+    assert price_reduction.is_auto_price_reduction_due(ad_cfg, "test.yaml") is False  # type: ignore[arg-type]
 
 
 @pytest.mark.unit
@@ -948,7 +948,7 @@ def test_is_price_reduction_due_returns_false_when_on_update_disabled_real(
 ) -> None:
     """is_auto_price_reduction_due returns False when on_update is False (exercises real evaluate_auto_price_reduction)."""
     now_dt = datetime(2024, 6, 1, tzinfo = timezone.utc)
-    monkeypatch.setattr("kleinanzeigen_bot.misc.now", lambda: now_dt)
+    monkeypatch.setattr("kleinanzeigen_bot.utils.misc.now", lambda: now_dt)
 
     price_cfg = _price_cfg(on_update = False, delay_days = 0)
     ad_cfg = SimpleNamespace(
@@ -960,7 +960,7 @@ def test_is_price_reduction_due_returns_false_when_on_update_disabled_real(
         repost_count = 5,
     )
 
-    assert kleinanzeigen_bot.is_auto_price_reduction_due(ad_cfg, "test.yaml") is False  # type: ignore[arg-type]
+    assert price_reduction.is_auto_price_reduction_due(ad_cfg, "test.yaml") is False  # type: ignore[arg-type]
 
 
 @pytest.mark.unit
@@ -975,7 +975,7 @@ def test_evaluate_with_null_config_returns_disabled(
         updated_on = None,
         created_on = None,
     )
-    decision = kleinanzeigen_bot.evaluate_auto_price_reduction(ad_cfg, "ad_null.yaml")  # type: ignore[arg-type]
+    decision = price_reduction.evaluate_auto_price_reduction(ad_cfg, "ad_null.yaml")  # type: ignore[arg-type]
     assert decision.enabled is False
     assert decision.reason == "not_configured"
     assert decision.base_price == 150
