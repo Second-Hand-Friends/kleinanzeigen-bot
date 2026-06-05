@@ -15,7 +15,7 @@ from nodriver.core.connection import ProtocolException
 from ruamel.yaml import YAML
 from wcmatch import glob
 
-from . import extract, local_path_renaming, resources
+from . import download_selection, extract, local_path_renaming, resources
 from ._version import __version__
 from .ad_description import (
     get_ad_description as get_ad_description,
@@ -47,14 +47,8 @@ from .ad_state import (
 from .ad_state import (
     relative_ad_path as _relative_ad_path,
 )
-from .download_selection import (  # noqa: F401
-    NUMERIC_IDS_RE as _NUMERIC_IDS_RE,
-)
 from .download_selection import (
     ResolvedAdState as ResolvedAdState,
-)
-from .download_selection import (
-    resolve_download_ad_activity as _resolve_download_ad_activity,
 )
 from .local_path_renaming import (
     DOWNLOAD_IMAGE_FILENAME_RE as _DOWNLOAD_IMAGE_FILENAME_RE,  # noqa: F401
@@ -249,7 +243,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             The numeric selector does NOT use this helper because it has different
             warning message semantics (foreign ads are expected, not anomalies).
         """
-        resolved = _resolve_download_ad_activity(ad_id, published_ads_by_id)
+        resolved = download_selection.resolve_download_ad_activity(ad_id, published_ads_by_id)
 
         if not resolved.owned:
             # Ad not in user's published profile - unexpected for "all"/"new" selectors
@@ -599,7 +593,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         return (
             self.ads_selector in valid_keywords
             or all(s.strip() in valid_keywords for s in self.ads_selector.split(","))
-            or bool(_NUMERIC_IDS_RE.match(self.ads_selector))
+            or download_selection.is_numeric_ids_selector(self.ads_selector)
         )
 
     def parse_args(self, args:list[str]) -> None:
@@ -868,7 +862,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         use_specific_ads = False
         selectors = self.ads_selector.split(",")
 
-        if _NUMERIC_IDS_RE.match(self.ads_selector):
+        if download_selection.is_numeric_ids_selector(self.ads_selector):
             ids = [int(n) for n in self.ads_selector.split(",")]
             use_specific_ads = True
             LOG.info("Start fetch task for the ad(s) with id(s):")
@@ -3269,7 +3263,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Fetch published ads once from manage-ads JSON to avoid repetitive API calls during extraction
         # Build lookup dict inline and pass directly to extractor (no cache abstraction needed)
         LOG.info("Fetching ad metadata (status, expiry dates)...")
-        published_ads = await self._fetch_published_ads(strict = bool(_NUMERIC_IDS_RE.match(effective_selector)))
+        published_ads = await self._fetch_published_ads(strict = download_selection.is_numeric_ids_selector(effective_selector))
         published_ads_by_id:dict[int, dict[str, Any]] = {}
         for published_ad in published_ads:
             try:
@@ -3347,7 +3341,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         new_count += 1
                 LOG.info("%s were downloaded from your profile.", pluralize("new ad", new_count))
 
-        elif _NUMERIC_IDS_RE.match(effective_selector):  # download ad(s) with specific id(s)
+        elif download_selection.is_numeric_ids_selector(effective_selector):  # download ad(s) with specific id(s)
             ids = [int(n) for n in effective_selector.split(",")]
             LOG.info("Starting download of ad(s) with the id(s):")
             LOG.info(" | ".join([str(ad_id) for ad_id in ids]))
@@ -3356,7 +3350,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.info("Downloading %d/%d ads...", idx, len(ids))
                 exists = await ad_extractor.navigate_to_ad_page(ad_id)
                 if exists:
-                    resolved = _resolve_download_ad_activity(ad_id, published_ads_by_id)
+                    resolved = download_selection.resolve_download_ad_activity(ad_id, published_ads_by_id)
                     if not resolved.owned:
                         # Foreign ad - expected for numeric IDs (can download any public ad)
                         LOG.warning("Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.", ad_id)

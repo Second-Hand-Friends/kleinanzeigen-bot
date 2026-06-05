@@ -9,6 +9,7 @@ from typing import Any, Final, Mapping, NamedTuple
 __all__ = [
     "NUMERIC_IDS_RE",
     "ResolvedAdState",
+    "is_numeric_ids_selector",
     "resolve_download_ad_activity",
 ]
 
@@ -20,6 +21,11 @@ class ResolvedAdState(NamedTuple):
 
     active:bool
     owned:bool
+
+
+def is_numeric_ids_selector(selector:str) -> bool:
+    """Return whether selector is a comma-separated list of numeric ad IDs."""
+    return bool(NUMERIC_IDS_RE.match(selector))
 
 
 def resolve_download_ad_activity(ad_id:int, published_ads_by_id:Mapping[int, Mapping[str, Any]]) -> ResolvedAdState:

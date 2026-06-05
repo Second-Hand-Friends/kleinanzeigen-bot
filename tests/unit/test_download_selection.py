@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-from kleinanzeigen_bot.download_selection import NUMERIC_IDS_RE, resolve_download_ad_activity
+from kleinanzeigen_bot.download_selection import NUMERIC_IDS_RE, is_numeric_ids_selector, resolve_download_ad_activity
 
 
 def test_resolve_download_ad_activity_reports_owned_active_ad() -> None:
@@ -30,7 +30,9 @@ def test_resolve_download_ad_activity_reports_unknown_ad_as_not_owned() -> None:
 
 def test_numeric_ids_regex_accepts_comma_separated_numbers() -> None:
     assert NUMERIC_IDS_RE.match("123,456")
+    assert is_numeric_ids_selector("123,456")
 
 
 def test_numeric_ids_regex_rejects_mixed_selectors() -> None:
     assert NUMERIC_IDS_RE.match("123,abc") is None
+    assert not is_numeric_ids_selector("123,abc")
