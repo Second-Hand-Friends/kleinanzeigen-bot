@@ -30,7 +30,7 @@ jobs:
     - name: "Show: GitHub context"
       env:
         GITHUB_CONTEXT: ${{ toJSON(github) }}
-      run: echo $GITHUB_CONTEXT
+      run: printf '%s\n' "$GITHUB_CONTEXT"
 
 
     - name: "Show: environment variables"

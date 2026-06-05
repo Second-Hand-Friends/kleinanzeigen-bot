@@ -5,10 +5,20 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:67c78edd313e8b850010d552efb91c3df81034ae9c28adbccc56a739ee785afe"
+content_hash = "sha256:ff9fbc3702aa72a482278cda7ef68dbff9c97cfefe9526851bbe071e6a6280f0"
 
 [[metadata.targets]]
 requires_python = ">=3.10,<3.15"
+
+[[package]]
+name = "actionlint-py"
+version = "1.7.12.24"
+requires_python = ">=3.7"
+summary = "Python wrapper around invoking actionlint (https://github.com/rhysd/actionlint)"
+groups = ["dev"]
+files = [
+    {file = "actionlint_py-1.7.12.24.tar.gz", hash = "sha256:7571b0724fde79b2572b98b2b53792c470249d4db29951b57fc49b9cd3eaf11e"},
+]
 
 [[package]]
 name = "altgraph"
