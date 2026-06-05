@@ -8,7 +8,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from gettext import gettext as _
 from pathlib import Path
-from typing import Any, Final, Literal, NamedTuple, Sequence, cast
+from typing import Any, Final, Sequence, cast
 
 import certifi, colorama, nodriver  # isort: skip
 from nodriver.core.connection import ProtocolException
@@ -37,6 +37,24 @@ from .ad_form_helpers import (
 )
 from .ad_form_helpers import (
     xpath_literal as xpath_literal,
+)
+from .ad_state import (  # noqa: F401
+    RESET_FIELDS as _RESET_FIELDS,
+)
+from .ad_state import (
+    apply_after_delete_policy as _apply_after_delete_policy,
+)
+from .ad_state import (
+    relative_ad_path as _relative_ad_path,
+)
+from .download_selection import (  # noqa: F401
+    NUMERIC_IDS_RE as _NUMERIC_IDS_RE,
+)
+from .download_selection import (
+    ResolvedAdState as ResolvedAdState,
+)
+from .download_selection import (
+    resolve_download_ad_activity as _resolve_download_ad_activity,
 )
 from .local_path_renaming import (
     DOWNLOAD_IMAGE_FILENAME_RE as _DOWNLOAD_IMAGE_FILENAME_RE,  # noqa: F401
@@ -122,7 +140,6 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 LOG.setLevel(loggers.INFO)
 
 SUBMISSION_MAX_RETRIES:Final[int] = 3
-_NUMERIC_IDS_RE:Final[re.Pattern[str]] = re.compile(r"^\d+(,\d+)*$")
 _LOGIN_ENV_PATTERN:Final[re.Pattern[str]] = re.compile(r"^\$\{(?P<var>\w+)(?::-(?P<default>.*))?\}$")
 _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
@@ -167,75 +184,6 @@ class LoginDetectionResult:
             raise ValueError("is_logged_in=True requires reason=USER_INFO_MATCH")
         if not self.is_logged_in and self.reason == LoginDetectionReason.USER_INFO_MATCH:
             raise ValueError("is_logged_in=False requires reason=CTA_MATCH or SELECTOR_TIMEOUT")
-
-
-class ResolvedAdState(NamedTuple):
-    """Resolution result for ad download state.
-
-    Used by _resolve_download_ad_activity to return both the activity state
-    and ownership status of an ad being downloaded.
-
-    Attributes:
-        active: Whether the ad should be saved as active (True) or inactive (False).
-            Only ads with state="active" in the published profile are marked as active.
-        owned: Whether the ad belongs to the current user (True) or is foreign (False).
-            For "all"/"new" selectors this is typically True; for numeric IDs it may be False.
-    """
-
-    active:bool
-    owned:bool
-
-
-def _relative_ad_path(ad_file:str, config_file_path:str) -> str:
-    """Compute an ad file path relative to the config directory, falling back to the absolute path."""
-    try:
-        return str(Path(ad_file).relative_to(Path(config_file_path).parent))
-    except ValueError:
-        return ad_file
-
-
-_RESET_FIELDS:Final[frozenset[str]] = frozenset({
-    "id", "created_on", "updated_on", "content_hash",
-    "repost_count", "price_reduction_count",
-})
-
-
-def _apply_after_delete_policy(
-    ad_cfg:Ad,
-    ad_cfg_orig:dict[str, Any],
-    *,
-    mode:Literal["NONE", "RESET", "DISABLE"],
-) -> bool:
-    """Apply post-delete cleanup to in-memory and dict state.
-
-    Called only from ``delete_ads`` — not from publish-time ``delete_ad`` call sites.
-    ``ad_cfg.id`` may already be ``None`` from ``delete_ad`` clearing it;
-    the helper only needs to handle ``ad_cfg_orig`` and remaining ``ad_cfg`` fields.
-
-    Returns:
-        True if state was mutated (caller should persist with ``save_dict``).
-    """
-    if mode == "NONE":
-        return False
-
-    if mode == "RESET":
-        for key in _RESET_FIELDS:
-            ad_cfg_orig.pop(key, None)
-        # ad_cfg.id may already be None from delete_ad — setting again is harmless
-        ad_cfg.id = None
-        ad_cfg.created_on = None
-        ad_cfg.updated_on = None
-        ad_cfg.content_hash = None
-        ad_cfg.repost_count = 0
-        ad_cfg.price_reduction_count = 0
-        return True
-
-    if mode == "DISABLE":
-        ad_cfg.active = False
-        ad_cfg_orig["active"] = False
-        return True
-
-    return False
 
 
 class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
@@ -295,28 +243,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return workspace.download_dir
         return Path(abspath(trimmed_dir, relative_to = str(Path(self.config_file_path).parent))).resolve()
 
-    def _resolve_download_ad_activity(self, ad_id:int, published_ads_by_id:dict[int, dict[str, Any]]) -> ResolvedAdState:
-        """Resolve downloaded ad activity and ownership for download selectors.
-
-        Looks up the ad in the published profile and determines its activity state
-        and ownership status. Used by "all", "new", and numeric ID selectors.
-
-        Args:
-            ad_id: The ad ID to look up in the published profile.
-            published_ads_by_id: Dict mapping ad IDs to published ad data from the
-                Kleinanzeigen API. Contains only the current user's own ads.
-
-        Returns:
-            ResolvedAdState with:
-            - active=True if ad exists and state=="active", otherwise False
-            - owned=True if ad exists in published_ads_by_id, otherwise False
-        """
-        published_ad = published_ads_by_id.get(ad_id)
-        if published_ad is None:
-            return ResolvedAdState(active = False, owned = False)
-
-        return ResolvedAdState(active = published_ad.get("state") == "active", owned = True)
-
     async def _download_ad_with_resolved_state(self, ad_extractor:extract.AdExtractor, ad_id:int, published_ads_by_id:dict[int, dict[str, Any]]) -> None:
         """Download an ad with proper active state resolution and logging.
 
@@ -335,7 +261,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             The numeric selector does NOT use this helper because it has different
             warning message semantics (foreign ads are expected, not anomalies).
         """
-        resolved = self._resolve_download_ad_activity(ad_id, published_ads_by_id)
+        resolved = _resolve_download_ad_activity(ad_id, published_ads_by_id)
 
         if not resolved.owned:
             # Ad not in user's published profile - unexpected for "all"/"new" selectors
@@ -3460,7 +3386,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.info("Downloading %d/%d ads...", idx, len(ids))
                 exists = await ad_extractor.navigate_to_ad_page(ad_id)
                 if exists:
-                    resolved = self._resolve_download_ad_activity(ad_id, published_ads_by_id)
+                    resolved = _resolve_download_ad_activity(ad_id, published_ads_by_id)
                     if not resolved.owned:
                         # Foreign ad - expected for numeric IDs (can download any public ad)
                         LOG.warning("Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.", ad_id)
