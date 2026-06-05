@@ -43,6 +43,19 @@ on:  # https://docs.github.com/en/actions/reference/workflows-and-actions/events
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch
 
 
+# Serialize runs per branch so concurrent main merges cannot race on the shared
+# ghcr.io :latest tag. Main queues publishing runs; non-main runs cancel older
+# attempts when new commits land.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+
+env:
+  IMAGE_NAME: second-hand-friends/kleinanzeigen-bot
+  REGISTRY_IMAGE: ghcr.io/second-hand-friends/kleinanzeigen-bot
+
+
 defaults:
   run:
     shell: bash
@@ -57,6 +70,7 @@ jobs:
     # Skip push runs for non-main/release branches in the main repo; allow forks to run on feature branches.
     if: github.event_name != 'push' || github.ref_name == 'main' || github.ref_name == 'release' || github.repository != 'Second-Hand-Friends/kleinanzeigen-bot'
     permissions:
+      # Required to publish per-arch Docker images to ghcr.io.
       packages: write
 
     strategy:
@@ -168,6 +182,11 @@ jobs:
       run: pdm run python scripts/check_generated_artifacts.py
 
 
+    - name: Check GitHub Actions workflows
+      if: matrix.os == 'ubuntu-latest' && matrix.PYTHON_VERSION == '3.14'
+      run: pdm run lint:actions
+
+
     - name: Check with pip-audit
       # until https://github.com/astral-sh/ruff/issues/8277
       run:
@@ -251,12 +270,12 @@ jobs:
 
         upx_download_url=$(curl -fsSL -H "Authorization: token ${{ github.token }}" https://api.github.com/repos/upx/upx/releases/latest | grep browser_download_url | grep win64.zip | cut "-d\"" -f4)
         echo "Downloading [$upx_download_url]..."
-        curl -fL -o /tmp/upx.zip $upx_download_url
+        curl -fL -o /tmp/upx.zip "$upx_download_url"
 
         echo "Extracting upx zip..."
         mkdir /tmp/upx
-        7z e /tmp/upx.zip -o/tmp/upx *.exe -r
-        echo "$(cygpath -wa /tmp/upx)" >> $GITHUB_PATH
+        7z e /tmp/upx.zip -o/tmp/upx '*.exe' -r
+        cygpath -wa /tmp/upx >> "$GITHUB_PATH"
 
         /tmp/upx/upx.exe --version
 
@@ -309,9 +328,10 @@ jobs:
 
         echo "${{ github.token }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
 
-        image_name="second-hand-friends/kleinanzeigen-bot"
-        docker image tag $image_name ghcr.io/$image_name
-        docker push ghcr.io/$image_name
+        arch=$(docker image inspect "$IMAGE_NAME" --format '{{.Architecture}}')
+
+        docker image tag "$IMAGE_NAME" "$REGISTRY_IMAGE:latest-$arch"
+        docker push "$REGISTRY_IMAGE:latest-$arch"
 
 
     - name: Collect coverage reports
@@ -322,6 +342,39 @@ jobs:
         include-hidden-files: true
         path: .temp/coverage-*.xml
         if-no-files-found: error
+
+
+  ###########################################################
+  publish-docker-manifest:
+  ###########################################################
+    # Combine the per-arch tags from the matrix into one multi-arch :latest
+    # manifest. Without this, the last matrix push wins and :latest is single-arch.
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.repository_owner == 'Second-Hand-Friends' && github.ref_name == 'main' && !github.event.act
+
+    permissions:
+      # Required to publish the stitched multi-arch manifest to ghcr.io.
+      packages: write
+
+    steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+    - name: Create and push multi-arch manifest
+      run: |
+        set -eux
+
+        echo "${{ github.token }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
+
+        docker buildx imagetools create \
+          --tag "$REGISTRY_IMAGE:latest" \
+          "$REGISTRY_IMAGE:latest-amd64" \
+          "$REGISTRY_IMAGE:latest-arm64"
+
+        # Print the resulting manifest list for the run log.
+        docker buildx imagetools inspect "$REGISTRY_IMAGE:latest"
 
 
   ###########################################################
@@ -349,7 +402,7 @@ jobs:
 
 
     - name: List coverage reports
-      run: find . -name coverage-*.xml
+      run: find . -name 'coverage-*.xml'
 
 
     - name: Publish unit-test coverage
@@ -422,7 +475,7 @@ jobs:
     - name: "Show: GitHub context"
       env:
         GITHUB_CONTEXT: ${{ toJSON(github) }}
-      run: echo $GITHUB_CONTEXT
+      run: printf '%s\n' "$GITHUB_CONTEXT"
 
 
     - name: "Show: environment variables"

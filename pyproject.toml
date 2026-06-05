@@ -64,6 +64,7 @@ dev = [
     "types-requests>=2.32.0.20250515",
     "pytest-mock>=3.14.0",
     "jsonschema>=4.26.0",
+    "actionlint-py>=1.7.12.24",
 ]
 
 [project.urls]
@@ -105,10 +106,11 @@ format        = { composite = ["format:py", "format:yaml"] }
 "format:py"   = { shell = "autopep8 --recursive --in-place scripts src tests --verbose && python scripts/post_autopep8.py scripts src tests" }
 "format:yaml" = "yamlfix scripts/ src/ tests/"
 
-lint = { composite = ["lint:ruff", "lint:mypy", "lint:pyright"] }
+lint = { composite = ["lint:ruff", "lint:mypy", "lint:pyright", "lint:actions"] }
 "lint:ruff"    = "ruff check --preview"
 "lint:mypy"    = "mypy"
 "lint:pyright" = "basedpyright"
+"lint:actions" = "actionlint"
 "lint:fix"     = {shell = "ruff check --preview --fix" }
 
 # tests

@@ -35,7 +35,7 @@ jobs:
     - name: "Show: GitHub context"
       env:
         GITHUB_CONTEXT: ${{ toJSON(github) }}
-      run: echo $GITHUB_CONTEXT
+      run: printf '%s\n' "$GITHUB_CONTEXT"
 
 
     - name: "Show: environment variables"
@@ -100,9 +100,11 @@ jobs:
           fi
           # https://github.com/orgs/community/discussions/26288#discussioncomment-3876281
           delimiter="$(openssl rand -hex 8)"
-          echo "updates<<${delimiter}" >> "${GITHUB_OUTPUT}"
-          echo "$updates" >> "${GITHUB_OUTPUT}"
-          echo "${delimiter}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "updates<<${delimiter}"
+            echo "$updates"
+            echo "${delimiter}"
+          } >> "${GITHUB_OUTPUT}"
         fi
 
 
