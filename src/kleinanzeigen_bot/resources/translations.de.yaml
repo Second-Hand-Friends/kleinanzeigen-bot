@@ -251,7 +251,7 @@ kleinanzeigen_bot/__init__.py:
   __set_contact_fields:
     "Could not set contact street.": "Kontaktstraße konnte nicht gesetzt werden."
     "Could not set contact name.": "Kontaktname konnte nicht gesetzt werden."
-    "Could not set contact zipcode: %s (%s)": "Kontakt-PLZ konnte nicht gesetzt werden: %s (%s)"
+    "Could not set contact zipcode: %s": "Kontakt-PLZ konnte nicht gesetzt werden: %s"
     "Failed to set contact zipcode: %s": "Kontakt-PLZ konnte nicht gesetzt werden: %s"
     "Could not set contact phone despite visible phone field: %s": "Telefonnummer konnte trotz sichtbarem Feld nicht gesetzt werden: %s"
     ? "Phone number field not present on page. This is expected for many private accounts; commercial accounts may still support phone numbers."

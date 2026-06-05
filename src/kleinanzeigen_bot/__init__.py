@@ -2607,7 +2607,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             try:
                 await self.web_input(By.ID, "ad-zip-code", str(contact.zipcode))
             except TimeoutError as ex:
-                LOG.warning("Could not set contact zipcode: %s (%s)", contact.zipcode, ex)
+                LOG.warning("Could not set contact zipcode: %s", ex)
                 raise TimeoutError(_("Failed to set contact zipcode: %s") % contact.zipcode) from ex
 
             if contact.location:
