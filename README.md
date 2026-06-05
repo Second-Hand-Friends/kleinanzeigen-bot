@@ -103,9 +103,11 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
      --shm-size=256m \
      -e DISPLAY=$X11_DISPLAY \
      -v $DATA_DIR:/mnt/data \
-     ghcr.io/second-hand-friends/kleinanzeigen-bot \
+     ghcr.io/second-hand-friends/kleinanzeigen-bot:latest \
      --help
    ```
+
+   Use `ghcr.io/second-hand-friends/kleinanzeigen-bot:preview` for the preview channel.
 
 ### Installation from source
 
