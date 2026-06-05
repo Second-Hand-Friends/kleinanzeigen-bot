@@ -45,7 +45,7 @@ def _fix_network_encoding(path:Path) -> str:
     try:
         raw = path.read_bytes()
     except OSError as exc:
-        print(f"fix_nodriver_encoding: cannot read {path}: {exc}", file = sys.stderr)
+        print(f"fix_nodriver: cannot read {path}: {exc}", file = sys.stderr)
         sys.exit(1)
 
     bad = b"(\xb1Inf)"
@@ -55,7 +55,7 @@ def _fix_network_encoding(path:Path) -> str:
             return "already-ok"
         except UnicodeDecodeError as exc:
             print(
-                f"fix_nodriver_encoding: {path}: unexpected content: {exc}",
+                f"fix_nodriver: {path}: unexpected content: {exc}",
                 file = sys.stderr,
             )
             sys.exit(1)
@@ -67,7 +67,7 @@ def _fix_network_encoding(path:Path) -> str:
     try:
         fixed.decode("utf-8")
     except UnicodeDecodeError as exc:
-        print(f"fix_nodriver_encoding: {path}: invalid UTF-8: {exc}", file = sys.stderr)
+        print(f"fix_nodriver: {path}: invalid UTF-8: {exc}", file = sys.stderr)
         sys.exit(1)
     path.write_bytes(fixed)
     return "fixed"
@@ -141,7 +141,7 @@ def _fix_connection_send(path:Path) -> str:
     try:
         text = path.read_text("utf-8")
     except OSError as exc:
-        print(f"fix_nodriver_encoding: cannot read {path}: {exc}", file = sys.stderr)
+        print(f"fix_nodriver: cannot read {path}: {exc}", file = sys.stderr)
         sys.exit(1)
 
     if "for _retry in range(2):" in text:
@@ -149,12 +149,12 @@ def _fix_connection_send(path:Path) -> str:
 
     start = text.find(_SEND_START)
     if start == -1:
-        print("fix_nodriver_encoding: send start marker not found", file = sys.stderr)
+        print("fix_nodriver: send start marker not found", file = sys.stderr)
         sys.exit(1)
 
     err = text.find(_SEND_ERR_END, start)
     if err == -1:
-        print("fix_nodriver_encoding: send error end not found", file = sys.stderr)
+        print("fix_nodriver: send error end not found", file = sys.stderr)
         sys.exit(1)
 
     err_end = text.index("\n", err)
@@ -174,12 +174,12 @@ def main() -> int:
     ]:
         path = _locate_file(rel)
         if path is None:
-            print(f"fix_nodriver_encoding: nodriver not installed, cannot patch {rel}", file = sys.stderr)
+            print(f"fix_nodriver: nodriver not installed, cannot patch {rel}", file = sys.stderr)
             return 1
         if not path.is_file():
-            print(f"fix_nodriver_encoding: {path} not found, cannot patch", file = sys.stderr)
+            print(f"fix_nodriver: {path} not found, cannot patch", file = sys.stderr)
             return 1
-        print(f"fix_nodriver_encoding: {path} -> {fix(path)}")
+        print(f"fix_nodriver: {path} -> {fix(path)}")
     return 0
 
 
