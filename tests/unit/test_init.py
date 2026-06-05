@@ -166,98 +166,6 @@ def test_root_re_exports_resolve_correctly() -> None:
     assert PriceReductionDecision is _PriceReductionDecision_src
 
 
-def test_rename_local_ad_file_and_folder_after_id_change_is_disabled_by_default(test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-    folder = tmp_path / "ad_123_Title"
-    folder.mkdir()
-    ad_file = folder / "ad_123.yaml"
-    ad_file.write_text("id: 456\n", encoding = "utf-8")
-
-    result = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
-
-    assert result.ad_file == ad_file
-    assert result.file_status == RenameStatus.SAME
-    assert result.folder_status == RenameStatus.SAME
-    assert ad_file.exists()
-    assert folder.exists()
-
-
-def test_rename_local_ad_file_and_folder_after_id_change_renames_template_matches(test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-    test_bot.config = Config.model_validate(
-        {
-            "login": {"username": "dummy", "password": "dummy"},  # noqa: S106
-            "publishing": {"local_path_renaming": {"mode": "TEMPLATE_MATCH"}},
-        }
-    )
-    folder = tmp_path / "ad_123_User edited title"
-    folder.mkdir()
-    ad_file = folder / "ad_123.yaml"
-    image_file = folder / "ad_123__img1.jpeg"
-    unrelated_file = folder / "manual_123.txt"
-    ad_file.write_text("id: 456\n", encoding = "utf-8")
-    image_file.write_bytes(b"img")
-    unrelated_file.write_text("keep", encoding = "utf-8")
-
-    result = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
-
-    renamed_folder = tmp_path / "ad_456_User edited title"
-    assert result.ad_file == renamed_folder / "ad_456.yaml"
-    assert result.file_status == RenameStatus.RENAMED
-    assert result.folder_status == RenameStatus.RENAMED
-    assert result.ad_file.exists()
-    assert (renamed_folder / "ad_123__img1.jpeg").exists()
-    assert (renamed_folder / "manual_123.txt").exists()
-    assert not folder.exists()
-
-
-def test_rename_local_ad_file_and_folder_after_id_change_skips_manual_names(test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-    test_bot.config = Config.model_validate(
-        {
-            "login": {"username": "dummy", "password": "dummy"},  # noqa: S106
-            "publishing": {"local_path_renaming": {"mode": "TEMPLATE_MATCH"}},
-        }
-    )
-    folder = tmp_path / "manual folder 123"
-    folder.mkdir()
-    ad_file = folder / "manual_123.yaml"
-    image_file = folder / "manual_123__img1.jpeg"
-    ad_file.write_text("id: 456\n", encoding = "utf-8")
-    image_file.write_bytes(b"img")
-
-    result = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
-
-    assert result.ad_file == ad_file
-    assert result.file_status == RenameStatus.NO_MATCH
-    assert result.folder_status == RenameStatus.NO_MATCH
-    assert ad_file.exists()
-    assert image_file.exists()
-    assert folder.exists()
-
-
-def test_rename_local_ad_file_and_folder_after_id_change_skips_collisions(test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-    test_bot.config = Config.model_validate(
-        {
-            "login": {"username": "dummy", "password": "dummy"},  # noqa: S106
-            "publishing": {"local_path_renaming": {"mode": "TEMPLATE_MATCH"}},
-        }
-    )
-    folder = tmp_path / "ad_123_Title"
-    folder.mkdir()
-    ad_file = folder / "ad_123.yaml"
-    target_file = folder / "ad_456.yaml"
-    ad_file.write_text("id: 456\n", encoding = "utf-8")
-    target_file.write_text("existing", encoding = "utf-8")
-
-    result = test_bot._rename_local_ad_file_and_folder_after_id_change(ad_file, 123, 456)
-
-    renamed_folder = tmp_path / "ad_456_Title"
-    assert result.ad_file == renamed_folder / "ad_123.yaml"
-    assert result.file_status == RenameStatus.TARGET_EXISTS
-    assert result.folder_status == RenameStatus.RENAMED
-    assert result.ad_file.exists()
-    assert (renamed_folder / "ad_456.yaml").exists()
-    assert not folder.exists()
-
-
 def test_replace_template_id_slot_underscore_alias_is_same_object() -> None:
     """Root-package alias _replace_template_id_slot resolves to the module function."""
     from kleinanzeigen_bot.local_path_renaming import replace_template_id_slot  # noqa: PLC0415
@@ -494,29 +402,6 @@ class TestKleinanzeigenBotInitialization:
 
         mock_extractor.assert_called_once()
         assert mock_extractor.call_args.args[2] == (tmp_path / "ads").resolve()
-
-    @pytest.mark.parametrize(
-        ("published_ads_by_id", "ad_id", "expected_active", "expected_owned"),
-        [
-            ({123: {"id": 123, "state": "active"}}, 123, True, True),
-            ({123: {"id": 123, "state": "inactive"}}, 123, False, True),
-            ({123: {"id": 123, "state": "paused"}}, 123, False, True),
-            ({123: {"id": 123}}, 123, False, True),  # Missing "state" key - treated as inactive
-            ({}, 123, False, False),
-        ],
-    )
-    def test_resolve_download_ad_activity(
-        self,
-        test_bot:KleinanzeigenBot,
-        published_ads_by_id:dict[int, dict[str, Any]],
-        ad_id:int,
-        expected_active:bool,
-        expected_owned:bool,
-    ) -> None:
-        resolved = test_bot._resolve_download_ad_activity(ad_id, published_ads_by_id)
-
-        assert resolved.active is expected_active
-        assert resolved.owned is expected_owned
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -6030,47 +5915,6 @@ class TestDeleteAdsAfterDeletePolicy:
             "content_hash": "abc123", "repost_count": 3, "price_reduction_count": 1,
         })
         return str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg.model_dump()
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(("mode", "expected_active", "expect_metadata_cleared"), [
-        ("RESET", True, True),
-        ("DISABLE", False, False),
-        ("NONE", True, False),
-    ])
-    async def test_after_delete_policy_applied(
-        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any],
-        tmp_path:Path, mode:str, expected_active:bool, expect_metadata_cleared:bool,
-    ) -> None:
-        """Each mode applies correct mutations and persistence behavior after successful delete."""
-        test_bot.config.deleting.after_delete = mode  # type: ignore[assignment]
-        ad_file, ad_cfg, ad_cfg_orig = self._make_ad(minimal_ad_config, tmp_path)
-
-        async def fake_delete(ad:Ad, _published:list[dict[str, Any]], **__:Any) -> bool:
-            ad.id = None  # real delete_ad clears id on attempted deletion
-            return True
-
-        with (
-            patch.object(test_bot, "_fetch_published_ads", new_callable = AsyncMock, return_value = []),
-            patch.object(test_bot, "delete_ad", new_callable = AsyncMock, side_effect = fake_delete),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.dicts.save_dict") as mock_save,
-        ):
-            await test_bot.delete_ads([(ad_file, ad_cfg, ad_cfg_orig)])
-
-        assert ad_cfg.active == expected_active
-        assert ad_cfg_orig.get("active", True) == expected_active
-        if expect_metadata_cleared:
-            assert ad_cfg.id is None
-            assert ad_cfg.repost_count == 0
-            assert "id" not in ad_cfg_orig
-            mock_save.assert_called_once()
-        else:
-            assert "id" in ad_cfg_orig
-            assert ad_cfg.repost_count == 3
-            if mode == "NONE":
-                mock_save.assert_not_called()
-            else:  # DISABLE
-                mock_save.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_cleanup_on_404_detection(

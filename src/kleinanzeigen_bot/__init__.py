@@ -8,14 +8,14 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from gettext import gettext as _
 from pathlib import Path
-from typing import Any, Final, Literal, NamedTuple, Sequence, cast
+from typing import Any, Final, Sequence, cast
 
 import certifi, colorama, nodriver  # isort: skip
 from nodriver.core.connection import ProtocolException
 from ruamel.yaml import YAML
 from wcmatch import glob
 
-from . import extract, resources
+from . import download_selection, extract, local_path_renaming, resources
 from ._version import __version__
 from .ad_description import (
     get_ad_description as get_ad_description,
@@ -38,6 +38,18 @@ from .ad_form_helpers import (
 from .ad_form_helpers import (
     xpath_literal as xpath_literal,
 )
+from .ad_state import (  # noqa: F401
+    RESET_FIELDS as _RESET_FIELDS,
+)
+from .ad_state import (
+    apply_after_delete_policy as _apply_after_delete_policy,
+)
+from .ad_state import (
+    relative_ad_path as _relative_ad_path,
+)
+from .download_selection import (
+    ResolvedAdState as ResolvedAdState,
+)
 from .local_path_renaming import (
     DOWNLOAD_IMAGE_FILENAME_RE as _DOWNLOAD_IMAGE_FILENAME_RE,  # noqa: F401
 )
@@ -54,19 +66,7 @@ from .local_path_renaming import (
     RenameStatus as RenameStatus,
 )
 from .local_path_renaming import (
-    rename_local_ad_file_after_id_change as _rename_local_ad_file_after_id_change_impl,
-)
-from .local_path_renaming import (
-    rename_local_ad_file_and_folder_after_id_change as _rename_local_ad_file_and_folder_after_id_change_impl,
-)
-from .local_path_renaming import (
-    rename_local_ad_folder_after_id_change as _rename_local_ad_folder_after_id_change_impl,
-)
-from .local_path_renaming import (
     rename_path_if_target_is_free as _rename_path_if_target_is_free,  # noqa: F401
-)
-from .local_path_renaming import (
-    rename_referenced_local_image_files_after_id_change as _rename_referenced_local_image_files_after_id_change_impl,
 )
 from .local_path_renaming import (
     replace_template_id_slot as _replace_template_id_slot,  # noqa: F401
@@ -122,7 +122,6 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 LOG.setLevel(loggers.INFO)
 
 SUBMISSION_MAX_RETRIES:Final[int] = 3
-_NUMERIC_IDS_RE:Final[re.Pattern[str]] = re.compile(r"^\d+(,\d+)*$")
 _LOGIN_ENV_PATTERN:Final[re.Pattern[str]] = re.compile(r"^\$\{(?P<var>\w+)(?::-(?P<default>.*))?\}$")
 _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
@@ -167,75 +166,6 @@ class LoginDetectionResult:
             raise ValueError("is_logged_in=True requires reason=USER_INFO_MATCH")
         if not self.is_logged_in and self.reason == LoginDetectionReason.USER_INFO_MATCH:
             raise ValueError("is_logged_in=False requires reason=CTA_MATCH or SELECTOR_TIMEOUT")
-
-
-class ResolvedAdState(NamedTuple):
-    """Resolution result for ad download state.
-
-    Used by _resolve_download_ad_activity to return both the activity state
-    and ownership status of an ad being downloaded.
-
-    Attributes:
-        active: Whether the ad should be saved as active (True) or inactive (False).
-            Only ads with state="active" in the published profile are marked as active.
-        owned: Whether the ad belongs to the current user (True) or is foreign (False).
-            For "all"/"new" selectors this is typically True; for numeric IDs it may be False.
-    """
-
-    active:bool
-    owned:bool
-
-
-def _relative_ad_path(ad_file:str, config_file_path:str) -> str:
-    """Compute an ad file path relative to the config directory, falling back to the absolute path."""
-    try:
-        return str(Path(ad_file).relative_to(Path(config_file_path).parent))
-    except ValueError:
-        return ad_file
-
-
-_RESET_FIELDS:Final[frozenset[str]] = frozenset({
-    "id", "created_on", "updated_on", "content_hash",
-    "repost_count", "price_reduction_count",
-})
-
-
-def _apply_after_delete_policy(
-    ad_cfg:Ad,
-    ad_cfg_orig:dict[str, Any],
-    *,
-    mode:Literal["NONE", "RESET", "DISABLE"],
-) -> bool:
-    """Apply post-delete cleanup to in-memory and dict state.
-
-    Called only from ``delete_ads`` — not from publish-time ``delete_ad`` call sites.
-    ``ad_cfg.id`` may already be ``None`` from ``delete_ad`` clearing it;
-    the helper only needs to handle ``ad_cfg_orig`` and remaining ``ad_cfg`` fields.
-
-    Returns:
-        True if state was mutated (caller should persist with ``save_dict``).
-    """
-    if mode == "NONE":
-        return False
-
-    if mode == "RESET":
-        for key in _RESET_FIELDS:
-            ad_cfg_orig.pop(key, None)
-        # ad_cfg.id may already be None from delete_ad — setting again is harmless
-        ad_cfg.id = None
-        ad_cfg.created_on = None
-        ad_cfg.updated_on = None
-        ad_cfg.content_hash = None
-        ad_cfg.repost_count = 0
-        ad_cfg.price_reduction_count = 0
-        return True
-
-    if mode == "DISABLE":
-        ad_cfg.active = False
-        ad_cfg_orig["active"] = False
-        return True
-
-    return False
 
 
 class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
@@ -295,28 +225,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return workspace.download_dir
         return Path(abspath(trimmed_dir, relative_to = str(Path(self.config_file_path).parent))).resolve()
 
-    def _resolve_download_ad_activity(self, ad_id:int, published_ads_by_id:dict[int, dict[str, Any]]) -> ResolvedAdState:
-        """Resolve downloaded ad activity and ownership for download selectors.
-
-        Looks up the ad in the published profile and determines its activity state
-        and ownership status. Used by "all", "new", and numeric ID selectors.
-
-        Args:
-            ad_id: The ad ID to look up in the published profile.
-            published_ads_by_id: Dict mapping ad IDs to published ad data from the
-                Kleinanzeigen API. Contains only the current user's own ads.
-
-        Returns:
-            ResolvedAdState with:
-            - active=True if ad exists and state=="active", otherwise False
-            - owned=True if ad exists in published_ads_by_id, otherwise False
-        """
-        published_ad = published_ads_by_id.get(ad_id)
-        if published_ad is None:
-            return ResolvedAdState(active = False, owned = False)
-
-        return ResolvedAdState(active = published_ad.get("state") == "active", owned = True)
-
     async def _download_ad_with_resolved_state(self, ad_extractor:extract.AdExtractor, ad_id:int, published_ads_by_id:dict[int, dict[str, Any]]) -> None:
         """Download an ad with proper active state resolution and logging.
 
@@ -335,7 +243,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             The numeric selector does NOT use this helper because it has different
             warning message semantics (foreign ads are expected, not anomalies).
         """
-        resolved = self._resolve_download_ad_activity(ad_id, published_ads_by_id)
+        resolved = download_selection.resolve_download_ad_activity(ad_id, published_ads_by_id)
 
         if not resolved.owned:
             # Ad not in user's published profile - unexpected for "all"/"new" selectors
@@ -685,7 +593,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         return (
             self.ads_selector in valid_keywords
             or all(s.strip() in valid_keywords for s in self.ads_selector.split(","))
-            or bool(_NUMERIC_IDS_RE.match(self.ads_selector))
+            or download_selection.is_numeric_ids_selector(self.ads_selector)
         )
 
     def parse_args(self, args:list[str]) -> None:
@@ -954,7 +862,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         use_specific_ads = False
         selectors = self.ads_selector.split(",")
 
-        if _NUMERIC_IDS_RE.match(self.ads_selector):
+        if download_selection.is_numeric_ids_selector(self.ads_selector):
             ids = [int(n) for n in self.ads_selector.split(",")]
             use_specific_ads = True
             LOG.info("Start fetch task for the ad(s) with id(s):")
@@ -1882,38 +1790,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Check for success messages
         return await self.web_check(By.ID, "checking-done", Is.DISPLAYED) or await self.web_check(By.ID, "not-completed", Is.DISPLAYED)
 
-    def _rename_local_ad_file_and_folder_after_id_change(self, ad_file:Path, old_id:int | None, new_id:int) -> LocalPathRenameResult:
-        return _rename_local_ad_file_and_folder_after_id_change_impl(
-            ad_file,
-            old_id = old_id,
-            new_id = new_id,
-            ad_file_name_template = self.config.download.ad_file_name_template,
-            folder_name_template = self.config.download.folder_name_template,
-            enabled = self.config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH",
-        )
-
-    def _rename_local_ad_file_after_id_change(self, ad_file:Path, *, new_id:int, ad_file_name_template:str) -> RenamePathResult:
-        return _rename_local_ad_file_after_id_change_impl(ad_file, new_id = new_id, ad_file_name_template = ad_file_name_template)
-
-    def _rename_referenced_local_image_files_after_id_change(
-        self,
-        ad_file:Path,
-        ad_cfg_orig:dict[str, Any],
-        old_id:int | None,
-        new_id:int,
-    ) -> ImageRenameResult:
-        return _rename_referenced_local_image_files_after_id_change_impl(
-            ad_file,
-            ad_cfg_orig.get("images"),
-            old_id = old_id,
-            new_id = new_id,
-            ad_file_name_template = self.config.download.ad_file_name_template,
-            enabled = self.config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH",
-        )
-
-    def _rename_local_ad_folder_after_id_change(self, ad_file:Path, *, new_id:int, folder_name_template:str) -> RenamePathResult:
-        return _rename_local_ad_folder_after_id_change_impl(ad_file, new_id = new_id, folder_name_template = folder_name_template)
-
     def _log_local_path_rename_result(self, result:LocalPathRenameResult, ad_id:int) -> None:
         """Log a human-readable summary of local path renaming after a republish."""
         path_old_id = result.path_old_id if result.path_old_id is not None else result.yaml_old_id
@@ -2311,7 +2187,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         ad_cfg_orig["id"] = ad_id
         # Rename referenced images before hashing/saving so the YAML content and
         # content_hash reflect only image file renames that actually succeeded.
-        image_result = self._rename_referenced_local_image_files_after_id_change(Path(ad_file), ad_cfg_orig, old_ad_id, ad_id)
+        image_result = local_path_renaming.rename_referenced_local_image_files_after_id_change(
+            Path(ad_file),
+            ad_cfg_orig.get("images"),
+            old_id = old_ad_id,
+            new_id = ad_id,
+            ad_file_name_template = self.config.download.ad_file_name_template,
+            enabled = self.config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH",
+        )
         if image_result.updated_images is not None:
             ad_cfg_orig["images"] = image_result.updated_images
 
@@ -2353,7 +2236,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             raise
         # Rename the YAML file and containing folder after saving, because the
         # saved file itself may move as part of this opt-in local migration.
-        file_folder_result = self._rename_local_ad_file_and_folder_after_id_change(Path(ad_file), old_ad_id, ad_id)
+        file_folder_result = local_path_renaming.rename_local_ad_file_and_folder_after_id_change(
+            Path(ad_file),
+            old_id = old_ad_id,
+            new_id = ad_id,
+            ad_file_name_template = self.config.download.ad_file_name_template,
+            folder_name_template = self.config.download.folder_name_template,
+            enabled = self.config.publishing.local_path_renaming.mode == "TEMPLATE_MATCH",
+        )
         rename_result = replace(
             file_folder_result,
             renamed_image_count = image_result.renamed_count,
@@ -3373,7 +3263,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Fetch published ads once from manage-ads JSON to avoid repetitive API calls during extraction
         # Build lookup dict inline and pass directly to extractor (no cache abstraction needed)
         LOG.info("Fetching ad metadata (status, expiry dates)...")
-        published_ads = await self._fetch_published_ads(strict = bool(_NUMERIC_IDS_RE.match(effective_selector)))
+        published_ads = await self._fetch_published_ads(strict = download_selection.is_numeric_ids_selector(effective_selector))
         published_ads_by_id:dict[int, dict[str, Any]] = {}
         for published_ad in published_ads:
             try:
@@ -3451,7 +3341,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         new_count += 1
                 LOG.info("%s were downloaded from your profile.", pluralize("new ad", new_count))
 
-        elif _NUMERIC_IDS_RE.match(effective_selector):  # download ad(s) with specific id(s)
+        elif download_selection.is_numeric_ids_selector(effective_selector):  # download ad(s) with specific id(s)
             ids = [int(n) for n in effective_selector.split(",")]
             LOG.info("Starting download of ad(s) with the id(s):")
             LOG.info(" | ".join([str(ad_id) for ad_id in ids]))
@@ -3460,7 +3350,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.info("Downloading %d/%d ads...", idx, len(ids))
                 exists = await ad_extractor.navigate_to_ad_page(ad_id)
                 if exists:
-                    resolved = self._resolve_download_ad_activity(ad_id, published_ads_by_id)
+                    resolved = download_selection.resolve_download_ad_activity(ad_id, published_ads_by_id)
                     if not resolved.owned:
                         # Foreign ad - expected for numeric IDs (can download any public ad)
                         LOG.warning("Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.", ad_id)
