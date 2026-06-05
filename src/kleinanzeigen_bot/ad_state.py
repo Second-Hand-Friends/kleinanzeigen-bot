@@ -28,7 +28,7 @@ RESET_FIELDS:Final[frozenset[str]] = frozenset({
 def relative_ad_path(ad_file:str | Path, config_file_path:str | Path) -> str:
     """Return `ad_file` relative to the config directory when possible."""
     try:
-        return str(Path(ad_file).relative_to(Path(config_file_path).parent))
+        return Path(ad_file).relative_to(Path(config_file_path).parent).as_posix()
     except ValueError:
         return str(ad_file)
 
