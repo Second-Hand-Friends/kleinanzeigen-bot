@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from kleinanzeigen_bot import cli
+from kleinanzeigen_bot import cli, runtime_config
 from kleinanzeigen_bot.utils import i18n, loggers
 
 pytestmark = pytest.mark.unit
@@ -47,10 +47,16 @@ class TestCliParseArgs:
         assert parsed.log_file_path == str(log_path.resolve())
         assert parsed.command == "help"
 
-    def test_verbose_flag_enables_debug_logging(self) -> None:
+    def test_verbose_flag_enables_debug_logging(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        package_logger = loggers.get_logger("kleinanzeigen_bot")
+        runtime_logger = loggers.get_logger(runtime_config.__name__)
+        monkeypatch.setattr(package_logger, "level", loggers.INFO)
+        monkeypatch.setattr(runtime_logger, "level", loggers.INFO)
+
         cli.parse_args(["script.py", "-v", "help"])
 
-        assert loggers.is_debug(loggers.get_logger("kleinanzeigen_bot"))
+        assert loggers.is_debug(package_logger)
+        assert loggers.is_debug(runtime_logger)
 
     def test_help_prints_and_exits(self, capsys:pytest.CaptureFixture[str]) -> None:
         with pytest.raises(SystemExit) as exc_info:

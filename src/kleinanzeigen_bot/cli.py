@@ -10,7 +10,7 @@ import signal
 import sys
 import textwrap
 from dataclasses import dataclass
-from typing import Final, Sequence, cast
+from typing import Final, Sequence
 
 import colorama
 import nodriver
@@ -196,7 +196,7 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
                 if mode not in {"portable", "xdg"}:
                     LOG.error("Invalid --workspace-mode '%s'. Use 'portable' or 'xdg'.", value)
                     sys.exit(2)
-                parsed.workspace_mode = cast(str, mode)
+                parsed.workspace_mode = mode
             case "--ads":
                 parsed.ads_selector = value.strip().lower()
                 parsed.ads_selector_explicit = True
@@ -210,6 +210,7 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
             case "-v" | "--verbose":
                 LOG.setLevel(_loggers.DEBUG)
                 _loggers.get_logger("kleinanzeigen_bot").setLevel(_loggers.DEBUG)
+                _loggers.get_logger("kleinanzeigen_bot.runtime_config").setLevel(_loggers.DEBUG)
                 _loggers.get_logger("nodriver").setLevel(_loggers.INFO)
 
     match len(arguments):
