@@ -253,3 +253,4 @@ def main(args:Sequence[str]) -> None:
         raise ex
     except Exception:
         _error_handlers.on_exception(*sys.exc_info())
+        sys.exit(1)

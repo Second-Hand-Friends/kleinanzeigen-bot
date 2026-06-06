@@ -222,7 +222,7 @@ publishing:
         assert captured["config_arg"] == str(config_path)
         assert captured["workspace_mode"] == "portable"
 
-    def test_resolve_workspace_emits_debug_paths_when_debug_enabled(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+    def test_resolve_workspace_works_with_debug_enabled(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         config_path = tmp_path / "config.yaml"
         monkeypatch.setattr(runtime_config.LOG, "level", loggers.DEBUG)
 

@@ -149,10 +149,12 @@ class TestCliMain:
         monkeypatch.setattr(cli, "KleinanzeigenBot", self._fake_bot)
         monkeypatch.setattr("kleinanzeigen_bot.cli._error_handlers.on_exception", handle_exception)
 
-        cli.main(["script.py", "version"])
+        with pytest.raises(SystemExit) as exc_info:
+            cli.main(["script.py", "version"])
 
         assert handled["exc_type"] is RuntimeError
         assert str(handled["exc"]) == "boom"
+        assert exc_info.value.code == 1
 
     def test_main_reraises_captcha(self, monkeypatch:pytest.MonkeyPatch) -> None:
         captcha = CaptchaEncountered(timedelta(seconds = 1))
