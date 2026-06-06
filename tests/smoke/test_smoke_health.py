@@ -111,6 +111,7 @@ def _xdg_env_overrides(base_path:Path) -> dict[str, str]:
         "USERPROFILE": os.fspath(home),
         "APPDATA": os.fspath(appdata_roaming),
         "LOCALAPPDATA": os.fspath(appdata_local),
+        "WIN_PD_OVERRIDE_LOCAL_APPDATA": os.fspath(appdata_local),
         "XDG_CONFIG_HOME": os.fspath(xdg_config),
         "XDG_STATE_HOME": os.fspath(xdg_state),
         "XDG_CACHE_HOME": os.fspath(xdg_cache),
