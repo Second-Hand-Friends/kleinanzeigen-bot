@@ -30,6 +30,15 @@ LOG.setLevel(_loggers.INFO)
 
 _LOGIN_ENV_PATTERN:Final[re.Pattern[str]] = re.compile(r"^\$\{(?P<var>\w+)(?::-(?P<default>.*))?\}$")
 
+# Commands that do not need workspace / filesystem state.
+WORKSPACE_FREE_COMMANDS:Final[frozenset[str]] = frozenset({"help", "version", "create-config"})
+# All valid CLI commands.  Keep in sync with the dispatch in __init__.py.
+VALID_COMMANDS:Final[frozenset[str]] = frozenset({
+    "help", "version", "create-config", "diagnose", "verify",
+    "update-check", "update-content-hash",
+    "publish", "update", "delete", "extend", "download",
+})
+
 
 @dataclass(slots = True)
 class RuntimeState:
@@ -183,7 +192,7 @@ def resolve_workspace(
     Typical input: `command="verify"`, `config_file_path="config.yaml"`.
     Typical output: a workspace rooted under the configured mode, or `None` for help/version.
     """
-    if command in {"help", "version", "create-config"}:
+    if command in WORKSPACE_FREE_COMMANDS:
         return None
 
     effective_config_arg = config_arg

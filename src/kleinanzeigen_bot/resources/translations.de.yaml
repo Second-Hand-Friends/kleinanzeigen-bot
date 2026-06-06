@@ -23,6 +23,7 @@ kleinanzeigen_bot/cli.py:
 #################################################
   parse_args:
     "Use --help to display available options.": "Mit --help können die verfügbaren Optionen angezeigt werden."
+    "Unknown command: %s": "Unbekannter Befehl: %s"
     "More than one command given: %s": "Mehr als ein Befehl angegeben: %s"
     "Invalid --workspace-mode '%s'. Use 'portable' or 'xdg'.": "Ungültiger --workspace-mode '%s'. Verwenden Sie 'portable' oder 'xdg'."
 

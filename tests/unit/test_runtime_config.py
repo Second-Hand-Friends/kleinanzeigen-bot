@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
@@ -18,7 +20,6 @@ from kleinanzeigen_bot.utils.timing_collector import TimingCollector
 pytestmark = pytest.mark.unit
 
 if TYPE_CHECKING:
-    from pathlib import Path
     from types import ModuleType
 
 
@@ -304,3 +305,19 @@ publishing:
             )
 
         assert exc_info.value.code == 2
+
+
+def _extract_match_cases() -> frozenset[str]:
+    """Parse case statements from KleinanzeigenBot.run() in __init__.py."""
+    init_path = Path(__file__).resolve().parent.parent.parent / "src" / "kleinanzeigen_bot" / "__init__.py"
+    source = init_path.read_text()
+    return frozenset(re.findall(r'^\s+case\s+"([^"]+)"', source, flags = re.MULTILINE))
+
+
+def test_valid_commands_matches_dispatch_cases() -> None:
+    """VALID_COMMANDS must stay in sync with the match cases in run().
+
+    Failures mean a command was added/removed from the dispatch without
+    updating runtime_config.VALID_COMMANDS.
+    """
+    assert _extract_match_cases() == runtime_config.VALID_COMMANDS

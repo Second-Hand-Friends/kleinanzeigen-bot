@@ -232,6 +232,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             _runtime_config.apply_browser_config(self.browser_config, self.config, self.workspace, self.config_file_path)
 
         try:
+            # When adding/removing a case, also update runtime_config.VALID_COMMANDS.
             match self.command:
                 case "help":
                     _cli.show_help()
@@ -242,7 +243,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     if self.workspace is None and self._workspace_mode_arg is not None:
                         try:
                             workspace = _xdg_paths.resolve_workspace(
-                                config_arg = None,
+                                config_arg = self._config_arg,
                                 logfile_arg = self._logfile_arg,
                                 workspace_mode = self._workspace_mode_arg,
                                 logfile_explicitly_provided = self._logfile_explicitly_provided,

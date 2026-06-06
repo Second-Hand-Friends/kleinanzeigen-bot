@@ -25,6 +25,7 @@ import nodriver
 
 from kleinanzeigen_bot import KleinanzeigenBot
 from kleinanzeigen_bot._version import __version__
+from kleinanzeigen_bot.runtime_config import VALID_COMMANDS
 from kleinanzeigen_bot.utils import error_handlers as _error_handlers
 from kleinanzeigen_bot.utils import loggers as _loggers
 from kleinanzeigen_bot.utils.exceptions import CaptchaEncountered
@@ -230,6 +231,9 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
             parsed.command = "help"
         case 1:
             parsed.command = arguments[0]
+            if parsed.command not in VALID_COMMANDS:
+                LOG.error("Unknown command: %s", parsed.command)
+                sys.exit(2)
         case _:
             LOG.error("More than one command given: %s", arguments)
             sys.exit(2)
@@ -259,7 +263,6 @@ def main(args:Sequence[str]) -> None:
 
     try:
         bot = KleinanzeigenBot()
-        atexit.register(bot.close_browser_session)
         nodriver.loop().run_until_complete(bot.run(list(args)))  # type: ignore[attr-defined]
     except CaptchaEncountered:
         raise
