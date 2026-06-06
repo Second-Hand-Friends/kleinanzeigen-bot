@@ -1,6 +1,12 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+"""Runtime configuration and bootstrap helpers.
+
+Provides config loading, default generation, workspace resolution,
+browser config application, and file-logging setup. Central types:
+:class:`RuntimeState` and :func:`load_config`.
+"""
 from __future__ import annotations
 
 import os
