@@ -35,14 +35,7 @@ from .model.ad_model import (
 from .model.ad_model import (
     AdUpdateStrategy as AdUpdateStrategy,
 )
-from .model.ad_model import (
-    calculate_auto_price as calculate_auto_price,
-)
-from .model.ad_model import (
-    calculate_auto_price_with_trace as calculate_auto_price_with_trace,
-)
 from .model.config_model import DEFAULT_DOWNLOAD_DIR, Config
-from .price_reduction import _log_auto_price_reduction_preview
 from .update_checker import UpdateChecker
 from .utils import diagnostics as _diagnostics
 from .utils import dicts as _dicts
@@ -272,10 +265,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         for ad_file, ad_cfg, _ad_cfg_orig in ads:
                             ad_file_relative = _ad_state.relative_ad_path(ad_file, self.config_file_path)
                             publish_decision = _price_reduction.evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = AdUpdateStrategy.REPLACE)
-                            _log_auto_price_reduction_preview(ad_file_relative, publish_decision)
+                            _price_reduction.log_auto_price_reduction_preview(ad_file_relative, publish_decision)
 
                             update_decision = _price_reduction.evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = AdUpdateStrategy.MODIFY)
-                            _log_auto_price_reduction_preview(ad_file_relative, update_decision)
+                            _price_reduction.log_auto_price_reduction_preview(ad_file_relative, update_decision)
                     LOG.info("############################################")
                     LOG.info("DONE: No configuration errors found.")
                     LOG.info("############################################")
