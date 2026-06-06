@@ -56,29 +56,6 @@ kleinanzeigen_bot/__init__.py:
     "Direct execution not supported. Use 'pdm run app'": "Direkte Ausführung nicht unterstützt. Bitte 'pdm run app' verwenden"
   _workspace_or_raise:
     "Workspace must be resolved before command execution": "Arbeitsbereich muss vor der Befehlsausführung aufgelöst werden"
-  create_default_config:
-    "Config file %s already exists. Aborting creation.": "Konfigurationsdatei %s existiert bereits. Erstellung abgebrochen."
-  configure_file_logging:
-    "Logging to [%s]...": "Protokollierung in [%s]..."
-    "App version: %s": "App Version: %s"
-    "Python version: %s": "Python Version: %s"
-  load_config:
-    "config": "Konfiguration"
-    "Loaded %s categories from categories.yaml": "%s Kategorien aus categories.yaml geladen"
-    "Loaded %s categories from categories_old.yaml": "%s Kategorien aus categories_old.yaml geladen"
-    "Loaded %s categories from config.yaml (custom)": "%s Kategorien aus config.yaml geladen (benutzerdefiniert)"
-    "Loaded %s categories in total": "%s Kategorien insgesamt geladen"
-    "No categories loaded - category files may be missing or empty": "Keine Kategorien geladen - Kategorie-Dateien fehlen oder sind leer"
-  _resolve_login_credentials:
-    "Environment variable %s is required for login.%s but is not set": "Umgebungsvariable %s ist für login.%s erforderlich, ist aber nicht gesetzt"
-  _resolve_workspace:
-    "Config:    %s": "Konfiguration: %s"
-    "Workspace mode: %s": "Arbeitsmodus: %s"
-    "Workspace: %s": "Arbeitsverzeichnis: %s"
-  parse_args:
-    "Use --help to display available options.": "Mit --help können die verfügbaren Optionen angezeigt werden."
-    "More than one command given: %s": "Mehr als ein Befehl angegeben: %s"
-    "Invalid --workspace-mode '%s'. Use 'portable' or 'xdg'.": "Ungültiger --workspace-mode '%s'. Verwenden Sie 'portable' oder 'xdg'."
 
   _fetch_published_ads:
     "Empty JSON response content on page %s": "Leerer JSON-Antwortinhalt auf Seite %s"

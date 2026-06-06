@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio, copy, fnmatch, gc, io, json, logging, os, tempfile  # isort: skip
+import asyncio, copy, fnmatch, json, logging, os, tempfile  # isort: skip
 from collections.abc import Callable, Generator
-from contextlib import ExitStack, contextmanager, redirect_stdout
+from contextlib import ExitStack, contextmanager
 from datetime import timedelta
 from pathlib import Path, PureWindowsPath
 from typing import Any, Awaitable, Iterator, cast
@@ -30,7 +30,7 @@ from kleinanzeigen_bot.model.config_model import (
     DiagnosticsConfig,
     PublishingConfig,
 )
-from kleinanzeigen_bot.utils import dicts, loggers, misc, xdg_paths
+from kleinanzeigen_bot.utils import dicts, misc, xdg_paths
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
@@ -131,139 +131,12 @@ def mock_config_setup(test_bot:KleinanzeigenBot, tmp_path:Path) -> Generator[Non
         yield
 
 
-def _make_fake_resolve_workspace(
-    captured_mode:dict[str, xdg_paths.InstallationMode | None],
-    workspace:xdg_paths.Workspace,
-) -> Callable[..., xdg_paths.Workspace]:
-    """Create a fake resolve_workspace that captures the workspace_mode argument."""
-
-    def fake_resolve_workspace(
-        config_arg:str | None,
-        logfile_arg:str | None,
-        *,
-        workspace_mode:xdg_paths.InstallationMode | None,
-        logfile_explicitly_provided:bool,
-        log_basename:str,
-    ) -> xdg_paths.Workspace:
-        captured_mode["value"] = workspace_mode
-        return workspace
-
-    return fake_resolve_workspace
-
-
 def _login_detection_result(is_logged_in:bool, reason:LoginDetectionReason) -> LoginDetectionResult:
     return LoginDetectionResult(is_logged_in = is_logged_in, reason = reason)
 
 
 class TestKleinanzeigenBotInitialization:
-    """Tests for KleinanzeigenBot initialization and basic functionality."""
-
-    def test_constructor_initializes_default_values(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
-        """Verify that constructor sets all default values correctly."""
-        monkeypatch.chdir(tmp_path)
-        bot = KleinanzeigenBot()
-        assert bot.root_url == "https://www.kleinanzeigen.de"
-        assert bot.command == "help"
-        assert bot.ads_selector == "due"
-        assert bot.keep_old_ads is False
-        assert bot.log_file_path is not None
-        assert bot.file_log is None
-
-    @pytest.mark.parametrize("command", ["help", "create-config", "version"])
-    def test_resolve_workspace_skips_non_workspace_commands(self, test_bot:KleinanzeigenBot, command:str) -> None:
-        """Workspace resolution should remain None for commands that need no workspace."""
-        test_bot.command = command
-        test_bot.workspace = None
-        test_bot._resolve_workspace()
-        assert test_bot.workspace is None
-
-    def test_resolve_workspace_exits_on_workspace_resolution_error(self, test_bot:KleinanzeigenBot) -> None:
-        """Workspace resolution errors should terminate with code 2."""
-        test_bot.command = "verify"
-
-        with (
-            patch("kleinanzeigen_bot.utils.xdg_paths.resolve_workspace", side_effect = ValueError("workspace error")),
-            pytest.raises(SystemExit) as exc_info,
-        ):
-            test_bot._resolve_workspace()
-
-        assert exc_info.value.code == 2
-
-    def test_resolve_workspace_fails_fast_when_config_parent_cannot_be_created(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-        """Workspace resolution should fail immediately when config directory creation fails."""
-        test_bot.command = "verify"
-        workspace = xdg_paths.Workspace.for_config(tmp_path / "blocked" / "config.yaml", "kleinanzeigen-bot")
-
-        with (
-            patch("kleinanzeigen_bot.utils.xdg_paths.resolve_workspace", return_value = workspace),
-            patch("kleinanzeigen_bot.utils.xdg_paths.ensure_directory", side_effect = OSError("mkdir denied")),
-            pytest.raises(OSError, match = "mkdir denied"),
-        ):
-            test_bot._resolve_workspace()
-
-    def test_resolve_workspace_programmatic_config_in_xdg_defaults_to_xdg(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-        """Programmatic config_file_path in XDG config tree should default workspace mode to xdg."""
-        test_bot.command = "verify"
-        xdg_dirs = {
-            "config": tmp_path / "xdg-config" / xdg_paths.APP_NAME,
-            "state": tmp_path / "xdg-state" / xdg_paths.APP_NAME,
-            "cache": tmp_path / "xdg-cache" / xdg_paths.APP_NAME,
-        }
-        for path in xdg_dirs.values():
-            path.mkdir(parents = True, exist_ok = True)
-        config_path = xdg_dirs["config"] / "config.yaml"
-        config_path.touch()
-        test_bot.config_file_path = str(config_path)
-
-        workspace = xdg_paths.Workspace.for_config(tmp_path / "resolved" / "config.yaml", "kleinanzeigen-bot")
-        captured_mode:dict[str, xdg_paths.InstallationMode | None] = {"value": None}
-
-        with (
-            patch("kleinanzeigen_bot.utils.xdg_paths.get_xdg_base_dir", side_effect = lambda category: xdg_dirs[category]),
-            patch("kleinanzeigen_bot.utils.xdg_paths.resolve_workspace", side_effect = _make_fake_resolve_workspace(captured_mode, workspace)),
-            patch("kleinanzeigen_bot.utils.xdg_paths.ensure_directory"),
-        ):
-            test_bot._resolve_workspace()
-
-        assert captured_mode["value"] == "xdg"
-
-    def test_resolve_workspace_programmatic_config_outside_xdg_defaults_to_portable(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-        """Programmatic config_file_path outside XDG config tree should default workspace mode to portable."""
-        test_bot.command = "verify"
-        xdg_dirs = {
-            "config": tmp_path / "xdg-config" / xdg_paths.APP_NAME,
-            "state": tmp_path / "xdg-state" / xdg_paths.APP_NAME,
-            "cache": tmp_path / "xdg-cache" / xdg_paths.APP_NAME,
-        }
-        for path in xdg_dirs.values():
-            path.mkdir(parents = True, exist_ok = True)
-        config_path = tmp_path / "external" / "config.yaml"
-        config_path.parent.mkdir(parents = True, exist_ok = True)
-        config_path.touch()
-        test_bot.config_file_path = str(config_path)
-
-        workspace = xdg_paths.Workspace.for_config(tmp_path / "resolved" / "config.yaml", "kleinanzeigen-bot")
-        captured_mode:dict[str, xdg_paths.InstallationMode | None] = {"value": None}
-
-        with (
-            patch("kleinanzeigen_bot.utils.xdg_paths.get_xdg_base_dir", side_effect = lambda category: xdg_dirs[category]),
-            patch("kleinanzeigen_bot.utils.xdg_paths.resolve_workspace", side_effect = _make_fake_resolve_workspace(captured_mode, workspace)),
-            patch("kleinanzeigen_bot.utils.xdg_paths.ensure_directory"),
-        ):
-            test_bot._resolve_workspace()
-
-        assert captured_mode["value"] == "portable"
-
-    def test_create_default_config_creates_parent_without_workspace(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-        """create_default_config should create parent directories when no workspace is set."""
-        config_path = tmp_path / "nested" / "config.yaml"
-        test_bot.workspace = None
-        test_bot.config_file_path = str(config_path)
-
-        test_bot.create_default_config()
-
-        assert config_path.exists()
-
+    """Tests for run-path initialization and download plumbing."""
     @pytest.mark.asyncio
     @pytest.mark.parametrize("command", ["verify", "update-check", "update-content-hash", "publish", "delete", "download"])
     async def test_run_uses_workspace_state_file_for_update_checker(self, test_bot:KleinanzeigenBot, command:str, tmp_path:Path) -> None:
@@ -763,289 +636,6 @@ class TestKleinanzeigenBotInitialization:
 
         # All non-"active" states should result in active=False
         extractor_mock.download_ad.assert_awaited_once_with(123, active = False)
-
-    def test_create_default_config_preserves_existing_file(self, tmp_path:Path, test_bot:KleinanzeigenBot) -> None:
-        """Test that create_default_config does not overwrite an existing config file."""
-        config_path = tmp_path / "config.yaml"
-        original_content = "dummy: value"
-        config_path.write_text(original_content)
-        test_bot.config_file_path = str(config_path)
-        test_bot.create_default_config()
-        assert config_path.read_text() == original_content
-
-    def test_create_default_config_creates_file(self, tmp_path:Path, test_bot:KleinanzeigenBot) -> None:
-        """Test that create_default_config creates a config file if it does not exist."""
-        config_path = tmp_path / "config.yaml"
-        test_bot.config_file_path = str(config_path)
-        assert not config_path.exists()
-        test_bot.create_default_config()
-        assert config_path.exists()
-        content = config_path.read_text()
-        assert "username: changeme" in content
-        assert "password: changeme" in content
-
-
-class TestKleinanzeigenBotLogging:
-    """Tests for logging functionality."""
-
-    def test_configure_file_logging_adds_and_removes_handlers(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-        """Ensure file logging registers a handler and cleans it up afterward."""
-        log_path = tmp_path / "bot.log"
-        test_bot.log_file_path = str(log_path)
-        root_logger = logging.getLogger()
-        initial_handlers = list(root_logger.handlers)
-
-        test_bot.configure_file_logging()
-
-        assert test_bot.file_log is not None
-        assert log_path.exists()
-        assert len(root_logger.handlers) == len(initial_handlers) + 1
-
-        test_bot.file_log.close()
-        assert test_bot.file_log.is_closed()
-        assert len(root_logger.handlers) == len(initial_handlers)
-
-    def test_configure_file_logging_skips_when_path_missing(self, test_bot:KleinanzeigenBot) -> None:
-        """Ensure no handler is added when no log path is configured."""
-        root_logger = logging.getLogger()
-        initial_handlers = list(root_logger.handlers)
-
-        test_bot.log_file_path = None
-        test_bot.configure_file_logging()
-
-        assert test_bot.file_log is None
-        assert list(root_logger.handlers) == initial_handlers
-
-    def test_file_log_closed_after_bot_shutdown(self, tmp_path:Path) -> None:
-        """Ensure the file log handler is properly closed after the bot is deleted."""
-
-        # Directly instantiate the bot to control its lifecycle within the test
-        bot = KleinanzeigenBot()
-        log_path = tmp_path / "test.log"
-        bot.log_file_path = str(log_path)
-
-        bot.configure_file_logging()
-        file_log = bot.file_log
-        assert file_log is not None
-        assert log_path.exists()
-        assert not file_log.is_closed()
-
-        # Delete and garbage collect the bot instance to ensure the destructor (__del__) is called
-        del bot
-        gc.collect()
-
-        assert file_log.is_closed()
-
-
-class TestKleinanzeigenBotCommandLine:
-    """Tests for command line argument parsing."""
-
-    @pytest.mark.parametrize(
-        ("args", "expected_command", "expected_selector", "expected_keep_old"),
-        [
-            (["publish", "--ads=all"], "publish", "all", False),
-            (["verify"], "verify", "due", False),
-            (["download", "--ads=12345"], "download", "12345", False),
-            (["publish", "--force"], "publish", "all", False),
-            (["publish", "--keep-old"], "publish", "due", True),
-            (["publish", "--ads=all", "--keep-old"], "publish", "all", True),
-            (["download", "--ads=new"], "download", "new", False),
-            (["publish", "--ads=changed"], "publish", "changed", False),
-            (["publish", "--ads=changed,due"], "publish", "changed,due", False),
-            (["publish", "--ads=changed,new"], "publish", "changed,new", False),
-            (["version"], "version", "due", False),
-        ],
-    )
-    def test_parse_args_handles_valid_arguments(
-        self, test_bot:KleinanzeigenBot, args:list[str], expected_command:str, expected_selector:str, expected_keep_old:bool
-    ) -> None:
-        """Verify that valid command line arguments are parsed correctly."""
-        test_bot.parse_args(["dummy"] + args)  # Add dummy arg to simulate sys.argv[0]
-        assert test_bot.command == expected_command
-        assert test_bot.ads_selector == expected_selector
-        assert test_bot.keep_old_ads == expected_keep_old
-
-    def test_parse_args_handles_help_command(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that help command is handled correctly."""
-        buf = io.StringIO()
-        with pytest.raises(SystemExit) as exc_info, redirect_stdout(buf):
-            test_bot.parse_args(["dummy", "--help"])
-        assert exc_info.value.code == 0
-        stdout = buf.getvalue()
-        assert "publish" in stdout
-        assert "verify" in stdout
-        assert "help" in stdout
-        assert "version" in stdout
-        assert "--verbose" in stdout
-
-    def test_parse_args_handles_verbose_flag(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that verbose flag sets correct log level."""
-        test_bot.parse_args(["dummy", "--verbose"])
-        assert loggers.is_debug(LOG)
-
-    def test_parse_args_handles_config_path(self, test_bot:KleinanzeigenBot, test_data_dir:str) -> None:
-        """Verify that config path is set correctly."""
-        config_path = Path(test_data_dir) / "custom_config.yaml"
-        test_bot.parse_args(["dummy", "--config", str(config_path)])
-        assert test_bot.config_file_path == str(config_path.absolute())
-
-    def test_parse_args_create_config(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing of create-config command"""
-        test_bot.parse_args(["app", "create-config"])
-        assert test_bot.command == "create-config"
-
-
-class TestKleinanzeigenBotConfiguration:
-    """Tests for configuration loading and validation."""
-
-    def test_load_config_handles_missing_file(self, test_bot:KleinanzeigenBot, test_data_dir:str, monkeypatch:pytest.MonkeyPatch) -> None:
-        """Verify that loading a missing config file creates default config. No info log is expected anymore."""
-        monkeypatch.setenv("KLEINANZEIGEN_BOT_USERNAME", "dummy_user")
-        monkeypatch.setenv("KLEINANZEIGEN_BOT_PASSWORD", "dummy_pass")
-        config_path = Path(test_data_dir) / "missing_config.yaml"
-        config_path.unlink(missing_ok = True)
-        test_bot.config_file_path = str(config_path)
-        test_bot.load_config()
-        assert config_path.exists()
-
-    def test_load_config_validates_required_fields(self, test_bot:KleinanzeigenBot, test_data_dir:str) -> None:
-        """Verify that config validation checks required fields."""
-        config_path = Path(test_data_dir) / "config.yaml"
-        config_content = """
-login:
-  username: dummy_user
-  # Missing password
-"""
-        with open(config_path, "w", encoding = "utf-8") as f:
-            f.write(config_content)
-        test_bot.config_file_path = str(config_path)
-
-        with pytest.raises(ValidationError) as exc_info:
-            test_bot.load_config()
-        assert "login.username" not in str(exc_info.value)
-        assert "login.password" in str(exc_info.value)
-
-
-class TestResolveLoginCredentials:
-    """Tests for _resolve_login_credentials env var resolution."""
-    # ruff: noqa: S105 test strings are not real passwords
-
-    def test_resolves_var_from_environment(self, monkeypatch:pytest.MonkeyPatch) -> None:
-        """${VAR} is replaced by the env var value."""
-        monkeypatch.setenv("TEST_BOT_USER", "resolved_user")
-        monkeypatch.setenv("TEST_BOT_PASS", "resolved_pass")
-        config:dict[str, Any] = {
-            "login": {
-                "username": "${TEST_BOT_USER}",
-                "password": "${TEST_BOT_PASS}",
-            },
-        }
-        KleinanzeigenBot._resolve_login_credentials(config)
-        assert config["login"]["username"] == "resolved_user"
-        assert config["login"]["password"] == "resolved_pass"
-
-    def test_uses_fallback_when_var_unset(self, monkeypatch:pytest.MonkeyPatch) -> None:
-        """${VAR:-default} uses the default when VAR is not set."""
-        monkeypatch.delenv("OPTIONAL_USER", raising = False)
-        monkeypatch.delenv("OPTIONAL_PASS", raising = False)
-        config:dict[str, Any] = {
-            "login": {
-                "username": "${OPTIONAL_USER:-fallback_user}",
-                "password": "${OPTIONAL_PASS:-fallback_pass}",
-            },
-        }
-        KleinanzeigenBot._resolve_login_credentials(config)
-        assert config["login"]["username"] == "fallback_user"
-        assert config["login"]["password"] == "fallback_pass"
-
-    def test_raises_value_error_when_required_var_unset(self, monkeypatch:pytest.MonkeyPatch) -> None:
-        """${VAR} raises ValueError when VAR is not set and no default."""
-        monkeypatch.delenv("MUST_HAVE_USER", raising = False)
-        config:dict[str, Any] = {
-            "login": {
-                "username": "${MUST_HAVE_USER}",
-                "password": "${MUST_HAVE_PASS}",
-            },
-        }
-        with pytest.raises(ValueError, match = "Environment variable MUST_HAVE_USER is required for login"):
-            KleinanzeigenBot._resolve_login_credentials(config)
-
-    def test_leaves_plain_text_values_unchanged(self) -> None:
-        """Non-placeholder values are not modified."""
-        config:dict[str, Any] = {
-            "login": {
-                "username": "real_user",
-                "password": "real_pass",
-            },
-        }
-        KleinanzeigenBot._resolve_login_credentials(config)
-        assert config["login"]["username"] == "real_user"
-        assert config["login"]["password"] == "real_pass"
-
-    def test_handles_missing_login_key(self) -> None:
-        """Missing 'login' key does nothing."""
-        config:dict[str, Any] = {}
-        KleinanzeigenBot._resolve_login_credentials(config)
-        assert "login" not in config
-
-    def test_handles_login_as_non_dict(self) -> None:
-        """Login being a non-dict (e.g. str) does nothing."""
-        config:dict[str, Any] = {"login": "some_string"}
-        KleinanzeigenBot._resolve_login_credentials(config)
-        assert config["login"] == "some_string"
-
-    def test_handles_non_string_field_values(self) -> None:
-        """Non-string values like None or int are left untouched."""
-        config:dict[str, Any] = {
-            "login": {
-                "username": None,
-                "password": 12345,
-            },
-        }
-        KleinanzeigenBot._resolve_login_credentials(config)
-        assert config["login"]["username"] is None
-        assert config["login"]["password"] == 12345
-
-    def test_resolves_only_username_and_password(self, monkeypatch:pytest.MonkeyPatch) -> None:
-        """Arbitrary login fields (like api_key) are NOT resolved."""
-        monkeypatch.setenv("USER", "user1")
-        monkeypatch.setenv("PASS", "pass1")
-        monkeypatch.setenv("API_KEY", "secret123")
-        config:dict[str, Any] = {
-            "login": {
-                "username": "${USER}",
-                "password": "${PASS}",
-                "api_key": "${API_KEY}",
-            },
-        }
-        KleinanzeigenBot._resolve_login_credentials(config)
-        assert config["login"]["username"] == "user1"
-        assert config["login"]["password"] == "pass1"
-        assert config["login"]["api_key"] == "${API_KEY}"  # unchanged
-
-    def test_load_config_resolves_env_vars_in_login(self, test_bot:KleinanzeigenBot, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
-        """load_config resolves ${VAR} placeholders from environment into the Config object."""
-        monkeypatch.setenv("BOT_USERNAME", "env_user")
-        monkeypatch.setenv("BOT_PASSWORD", "env_pass")
-
-        config_path = tmp_path / "config.yaml"
-        config_path.write_text("""
-login:
-  username: ${BOT_USERNAME}
-  password: ${BOT_PASSWORD}
-ad_defaults:
-  contact:
-    name: Test User
-    zipcode: "12345"
-publishing:
-  delete_old_ads: BEFORE_PUBLISH
-  delete_old_ads_by_title: false
-""")
-        test_bot.config_file_path = str(config_path)
-        test_bot.load_config()
-
-        assert test_bot.config.login.username == "env_user"
-        assert test_bot.config.login.password == "env_pass"
 
 
 class TestKleinanzeigenBotAuthentication:
@@ -1896,28 +1486,6 @@ class TestKleinanzeigenBotDiagnostics:
         assert not json_files
 
 
-class TestKleinanzeigenBotLocalization:
-    """Tests for localization and help text."""
-
-    def test_show_help_displays_german_text(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that help text is displayed in German when language is German."""
-        with patch("kleinanzeigen_bot.get_current_locale") as mock_locale, patch("builtins.print") as mock_print:
-            mock_locale.return_value.language = "de"
-            test_bot.show_help()
-            printed_text = "".join(str(call.args[0]) for call in mock_print.call_args_list)
-            assert "Verwendung:" in printed_text
-            assert "Befehle:" in printed_text
-
-    def test_show_help_displays_english_text(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that help text is displayed in English when language is English."""
-        with patch("kleinanzeigen_bot.get_current_locale") as mock_locale, patch("builtins.print") as mock_print:
-            mock_locale.return_value.language = "en"
-            test_bot.show_help()
-            printed_text = "".join(str(call.args[0]) for call in mock_print.call_args_list)
-            assert "Usage:" in printed_text
-            assert "Commands:" in printed_text
-
-
 class TestKleinanzeigenBotBasics:
     """Basic tests for KleinanzeigenBot."""
 
@@ -2258,14 +1826,6 @@ class TestKleinanzeigenBotBasics:
             pytest.raises(PublishSubmissionUncertainError, match = "submission may have succeeded before failure"),
         ):
             await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
-
-    def test_get_log_level(self, test_bot:KleinanzeigenBot) -> None:
-        """Test log level configuration."""
-        # Reset log level to default
-        LOG.setLevel(loggers.INFO)
-        assert not loggers.is_debug(LOG)
-        test_bot.parse_args(["script.py", "-v"])
-        assert loggers.is_debug(LOG)
 
     def test_get_config_file_path(self, test_bot:KleinanzeigenBot, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test config file path handling."""
@@ -2724,108 +2284,6 @@ class TestKleinanzeigenBotContactLocationHardening:
             combobox_mock.assert_not_called()
 
 
-class TestKleinanzeigenBotArgParsing:
-    """Tests for command line argument parsing."""
-
-    def test_parse_args_help(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing help command."""
-        test_bot.parse_args(["script.py", "help"])
-        assert test_bot.command == "help"
-
-    def test_parse_args_version(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing version command."""
-        test_bot.parse_args(["script.py", "version"])
-        assert test_bot.command == "version"
-
-    def test_parse_args_verbose(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing verbose flag."""
-        test_bot.parse_args(["script.py", "-v", "help"])
-        assert loggers.is_debug(loggers.get_logger("kleinanzeigen_bot"))
-
-    def test_parse_args_config_path(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing config path."""
-        test_bot.parse_args(["script.py", "--config=test.yaml", "help"])
-        assert test_bot.config_file_path.endswith("test.yaml")
-
-    def test_parse_args_logfile(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-        """Test parsing log file path."""
-        log_path = tmp_path / "test.log"
-        test_bot.parse_args(["script.py", f"--logfile={log_path}", "help"])
-        assert test_bot.log_file_path == str(log_path.absolute())
-
-    def test_parse_args_workspace_mode(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing workspace mode option."""
-        test_bot.parse_args(["script.py", "--workspace-mode=xdg", "help"])
-        assert test_bot._workspace_mode_arg == "xdg"
-
-    def test_parse_args_workspace_mode_invalid(self, test_bot:KleinanzeigenBot) -> None:
-        """Test invalid workspace mode exits with error."""
-        with pytest.raises(SystemExit) as exc_info:
-            test_bot.parse_args(["script.py", "--workspace-mode=invalid", "help"])
-        assert exc_info.value.code == 2
-
-    def test_parse_args_ads_selector(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing ads selector."""
-        test_bot.parse_args(["script.py", "--ads=all", "publish"])
-        assert test_bot.ads_selector == "all"
-
-    def test_parse_args_force(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing force flag."""
-        test_bot.parse_args(["script.py", "--force", "publish"])
-        assert test_bot.ads_selector == "all"
-
-    def test_parse_args_keep_old(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing keep-old flag."""
-        test_bot.parse_args(["script.py", "--keep-old", "publish"])
-        assert test_bot.keep_old_ads is True
-
-    def test_parse_args_logfile_empty(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing empty log file path."""
-        test_bot.parse_args(["script.py", "--logfile=", "help"])
-        assert test_bot.log_file_path is None
-
-    def test_parse_args_lang_option(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing language option."""
-        test_bot.parse_args(["script.py", "--lang=en", "help"])
-        assert test_bot.command == "help"
-
-    def test_parse_args_no_arguments(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing no arguments defaults to help."""
-        test_bot.parse_args(["script.py"])
-        assert test_bot.command == "help"
-
-    def test_parse_args_multiple_commands(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing multiple commands raises error."""
-        with pytest.raises(SystemExit) as exc_info:
-            test_bot.parse_args(["script.py", "help", "version"])
-        assert exc_info.value.code == 2
-
-    def test_parse_args_explicit_flags(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
-        """Test that explicit flags are set when config/logfile/workspace options are provided."""
-        config_path = tmp_path / "custom_config.yaml"
-        log_path = tmp_path / "custom.log"
-
-        # Test --config flag stores raw config arg
-        test_bot.parse_args(["script.py", "--config", str(config_path), "help"])
-        assert test_bot._config_arg == str(config_path)
-        assert str(config_path.absolute()) == test_bot.config_file_path
-
-        # Test --logfile flag sets explicit logfile values
-        test_bot.parse_args(["script.py", "--logfile", str(log_path), "help"])
-        assert test_bot._logfile_explicitly_provided is True
-        assert test_bot._logfile_arg == str(log_path)
-        assert str(log_path.absolute()) == test_bot.log_file_path
-
-        # Test both flags together
-        test_bot._config_arg = None
-        test_bot._logfile_explicitly_provided = False
-        test_bot._workspace_mode_arg = None
-        test_bot.parse_args(["script.py", "--config", str(config_path), "--logfile", str(log_path), "--workspace-mode", "portable", "help"])
-        assert test_bot._config_arg == str(config_path)
-        assert test_bot._logfile_explicitly_provided is True
-        assert test_bot._workspace_mode_arg == "portable"
-
-
 class TestKleinanzeigenBotCommands:
     """Tests for command execution."""
 
@@ -2954,22 +2412,6 @@ class TestKleinanzeigenBotAdManagement:
 
 class TestKleinanzeigenBotAdConfiguration:
     """Tests for ad configuration functionality."""
-
-    def test_load_config_with_categories(self, test_bot:KleinanzeigenBot, tmp_path:Any) -> None:
-        """Test loading config with custom categories."""
-        config_path = Path(tmp_path) / "config.yaml"
-        with open(config_path, "w", encoding = "utf-8") as f:
-            f.write("""
-login:
-    username: test
-    password: test
-categories:
-    custom_cat: custom_id
-""")
-        test_bot.config_file_path = str(config_path)
-        test_bot.load_config()
-        assert "custom_cat" in test_bot.categories
-        assert test_bot.categories["custom_cat"] == "custom_id"
 
     def test_load_ads_with_missing_title(self, test_bot:KleinanzeigenBot, tmp_path:Any, minimal_ad_config:dict[str, Any]) -> None:
         """Test loading ads with missing title."""

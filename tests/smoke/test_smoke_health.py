@@ -77,7 +77,7 @@ def invoke_cli(
             os.chdir(os.fspath(cwd))
         logging.getLogger().addHandler(log_handler)
         with contextlib.ExitStack() as stack:
-            stack.enter_context(patch("kleinanzeigen_bot.atexit.register", capture_register))
+            stack.enter_context(patch("atexit.register", capture_register))
             stack.enter_context(contextlib.redirect_stdout(stdout))
             stack.enter_context(contextlib.redirect_stderr(stderr))
             effective_env_overrides = env_overrides if env_overrides is not None else _default_smoke_env(cwd)

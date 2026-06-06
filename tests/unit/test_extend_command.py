@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kleinanzeigen_bot import KleinanzeigenBot
+from kleinanzeigen_bot import KleinanzeigenBot, runtime_config
 from kleinanzeigen_bot.model.ad_model import Ad
-from kleinanzeigen_bot.utils import dicts, misc
+from kleinanzeigen_bot.utils import dicts, misc, xdg_paths
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
@@ -46,7 +46,18 @@ class TestExtendCommand:
     async def test_run_extend_command_no_ads(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
         """Test running extend command with no ads."""
         test_bot.config_file_path = str(tmp_path / "config.yaml")
-        with patch.object(test_bot, "load_config"), patch.object(test_bot, "load_ads", return_value = []), patch("kleinanzeigen_bot.UpdateChecker"):
+        workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
+        with (
+            patch("kleinanzeigen_bot.runtime_config.resolve_workspace", return_value = workspace),
+            patch(
+                "kleinanzeigen_bot.runtime_config.load_config",
+                return_value = runtime_config.RuntimeState(config = test_bot.config, categories = {}, timing_collector = None),
+            ),
+            patch("kleinanzeigen_bot.runtime_config.configure_file_logging", return_value = None),
+            patch("kleinanzeigen_bot.runtime_config.apply_browser_config"),
+            patch.object(test_bot, "load_ads", return_value = []),
+            patch("kleinanzeigen_bot.UpdateChecker"),
+        ):
             await test_bot.run(["script.py", "extend"])
             assert test_bot.command == "extend"
             assert test_bot.ads_selector == "all"
@@ -55,8 +66,15 @@ class TestExtendCommand:
     async def test_run_extend_command_with_specific_ids(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
         """Test running extend command with specific ad IDs."""
         test_bot.config_file_path = str(tmp_path / "config.yaml")
+        workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
         with (
-            patch.object(test_bot, "load_config"),
+            patch("kleinanzeigen_bot.runtime_config.resolve_workspace", return_value = workspace),
+            patch(
+                "kleinanzeigen_bot.runtime_config.load_config",
+                return_value = runtime_config.RuntimeState(config = test_bot.config, categories = {}, timing_collector = None),
+            ),
+            patch("kleinanzeigen_bot.runtime_config.configure_file_logging", return_value = None),
+            patch("kleinanzeigen_bot.runtime_config.apply_browser_config"),
             patch.object(test_bot, "load_ads", return_value = []),
             patch.object(test_bot, "create_browser_session", new_callable = AsyncMock),
             patch.object(test_bot, "login", new_callable = AsyncMock),
