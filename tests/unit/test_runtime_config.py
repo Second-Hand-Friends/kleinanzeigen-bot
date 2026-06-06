@@ -193,10 +193,17 @@ publishing:
             encoding = "utf-8",
         )
 
+        load_dict_from_module = runtime_config._dicts.load_dict_from_module
+
+        def fake_load_dict_from_module(module:object, filename:str, content_label:str = "") -> dict[str, object]:
+            if filename in {"categories.yaml", "categories_old.yaml"}:
+                return {}
+            return load_dict_from_module(module, filename, content_label)
+
         with (
             patch(
                 "kleinanzeigen_bot.runtime_config._dicts.load_dict_from_module",
-                side_effect = [{}, {}],
+                fake_load_dict_from_module,
             ),
             caplog.at_level(logging.WARNING, logger = runtime_config.LOG.name),
         ):

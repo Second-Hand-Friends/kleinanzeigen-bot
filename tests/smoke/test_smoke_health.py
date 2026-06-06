@@ -22,6 +22,7 @@ from ruyaml import YAML
 
 import kleinanzeigen_bot
 from kleinanzeigen_bot.model.config_model import Config
+from kleinanzeigen_bot.utils import xdg_paths
 from kleinanzeigen_bot.utils.i18n import get_current_locale, set_current_locale
 from tests.conftest import SmokeKleinanzeigenBot
 
@@ -102,10 +103,15 @@ def _xdg_env_overrides(base_path:Path) -> dict[str, str]:
     xdg_config = base_path / "xdg" / "config"
     xdg_state = base_path / "xdg" / "state"
     xdg_cache = base_path / "xdg" / "cache"
-    for path in (home, xdg_config, xdg_state, xdg_cache):
+    appdata_roaming = base_path / "appdata" / "roaming"
+    appdata_local = base_path / "appdata" / "local"
+    for path in (home, xdg_config, xdg_state, xdg_cache, appdata_roaming, appdata_local):
         path.mkdir(parents = True, exist_ok = True)
     return {
         "HOME": os.fspath(home),
+        "USERPROFILE": os.fspath(home),
+        "APPDATA": os.fspath(appdata_roaming),
+        "LOCALAPPDATA": os.fspath(appdata_local),
         "XDG_CONFIG_HOME": os.fspath(xdg_config),
         "XDG_STATE_HOME": os.fspath(xdg_state),
         "XDG_CACHE_HOME": os.fspath(xdg_cache),
@@ -178,23 +184,23 @@ def test_cli_subcommands_create_config_creates_file(tmp_path:Path) -> None:
 
 
 @pytest.mark.smoke
-@pytest.mark.parametrize(
-    ("workspace_mode", "expected_config_path"),
-    [
-        ("portable", Path("config.yaml")),
-        ("xdg", Path("xdg") / "config" / "kleinanzeigen-bot" / "config.yaml"),
-    ],
-)
+@pytest.mark.parametrize("workspace_mode", ["portable", "xdg"])
 def test_cli_subcommands_create_config_honors_workspace_mode(
     workspace_mode:str,
-    expected_config_path:Path,
     tmp_path:Path,
 ) -> None:
     """
     Smoke: CLI 'create-config' writes config.yaml into the selected workspace mode.
     """
-    result = invoke_cli(["create-config", "--workspace-mode", workspace_mode], cwd = tmp_path)
-    config_file = tmp_path / expected_config_path
+    env_overrides = _default_smoke_env(tmp_path)
+    if workspace_mode == "portable":
+        config_file = tmp_path / "config.yaml"
+    else:
+        assert env_overrides is not None
+        with patch.dict(os.environ, env_overrides):
+            config_file = xdg_paths.get_xdg_base_dir("config") / "config.yaml"
+
+    result = invoke_cli(["create-config", "--workspace-mode", workspace_mode], cwd = tmp_path, env_overrides = env_overrides)
     assert result.returncode == 0
     assert config_file.exists(), f"config.yaml was not created at {config_file}"
     out = (result.stdout + "\n" + result.stderr).lower()
