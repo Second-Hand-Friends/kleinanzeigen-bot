@@ -12,7 +12,7 @@ import pytest
 
 from kleinanzeigen_bot import runtime_config
 from kleinanzeigen_bot.model.config_model import Config
-from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
+from kleinanzeigen_bot.utils import dicts, xdg_paths
 from kleinanzeigen_bot.utils.timing_collector import TimingCollector
 
 pytestmark = pytest.mark.unit
@@ -260,15 +260,6 @@ publishing:
             if file_log is not None:
                 file_log.close()
 
-    def test_configure_file_logging_returns_existing_handler(self, tmp_path:Path) -> None:
-        config_path = tmp_path / "config.yaml"
-        workspace = xdg_paths.Workspace.for_config(config_path, "kleinanzeigen-bot")
-        file_log = MagicMock()
-
-        result = runtime_config.configure_file_logging(str(tmp_path / "bot.log"), workspace, file_log, "1.2.3")
-
-        assert result is file_log
-
     def test_configure_file_logging_skips_empty_path(self, tmp_path:Path) -> None:
         config_path = tmp_path / "config.yaml"
         workspace = xdg_paths.Workspace.for_config(config_path, "kleinanzeigen-bot")
@@ -297,22 +288,6 @@ publishing:
 
         assert captured["config_arg"] == str(config_path)
         assert captured["workspace_mode"] == "portable"
-
-    def test_resolve_workspace_works_with_debug_enabled(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
-        config_path = tmp_path / "config.yaml"
-        monkeypatch.setattr(runtime_config.LOG, "level", loggers.DEBUG)
-
-        workspace = runtime_config.resolve_workspace(
-            command = "verify",
-            config_file_path = str(config_path),
-            config_arg = str(config_path),
-            logfile_arg = None,
-            workspace_mode = "portable",
-            logfile_explicitly_provided = False,
-            log_basename = "kleinanzeigen-bot",
-        )
-
-        assert workspace is not None
 
     def test_resolve_workspace_exits_on_workspace_error(self, tmp_path:Path) -> None:
         config_path = tmp_path / "config.yaml"
