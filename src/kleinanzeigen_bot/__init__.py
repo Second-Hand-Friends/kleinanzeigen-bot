@@ -22,6 +22,7 @@ from . import extract
 from . import local_path_renaming as _local_path_renaming
 from . import price_reduction as _price_reduction
 from . import resources as _resources
+from . import runtime_config as _runtime_config
 from ._version import __version__
 from .ad_description import get_ad_description
 from .model.ad_model import (
@@ -237,7 +238,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def run(self, args:list[str]) -> None:  # noqa: PLR0915
         _cli = importlib.import_module(".cli", __name__)
-        _runtime_config = importlib.import_module(".runtime_config", __name__)
         parsed = _cli.parse_args(args)
         self.command = parsed.command
         self.ads_selector = parsed.ads_selector
