@@ -240,15 +240,20 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     print(self.get_version())
                 case "create-config":
                     if self.workspace is None and self._workspace_mode_arg is not None:
-                        self.workspace = _xdg_paths.resolve_workspace(
-                            config_arg = None,
-                            logfile_arg = self._logfile_arg,
-                            workspace_mode = self._workspace_mode_arg,
-                            logfile_explicitly_provided = self._logfile_explicitly_provided,
-                            log_basename = self._log_basename,
-                        )
-                        self.config_file_path = str(self.workspace.config_file)
-                        self.log_file_path = str(self.workspace.log_file) if self.workspace.log_file else None
+                        try:
+                            workspace = _xdg_paths.resolve_workspace(
+                                config_arg = None,
+                                logfile_arg = self._logfile_arg,
+                                workspace_mode = self._workspace_mode_arg,
+                                logfile_explicitly_provided = self._logfile_explicitly_provided,
+                                log_basename = self._log_basename,
+                            )
+                            self.workspace = workspace
+                            self.config_file_path = str(workspace.config_file)
+                            self.log_file_path = str(workspace.log_file) if workspace.log_file else None
+                        except ValueError as exc:
+                            LOG.error(str(exc))
+                            sys.exit(2)
                     _runtime_config.create_default_config(self.config_file_path, self.workspace)
                     return
                 case "diagnose":

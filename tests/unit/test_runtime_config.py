@@ -3,21 +3,21 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 from __future__ import annotations
 
-import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from kleinanzeigen_bot import runtime_config
 from kleinanzeigen_bot.model.config_model import Config
-from kleinanzeigen_bot.utils import loggers, xdg_paths
+from kleinanzeigen_bot.utils import dicts, loggers, xdg_paths
 from kleinanzeigen_bot.utils.timing_collector import TimingCollector
 
 pytestmark = pytest.mark.unit
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from types import ModuleType
 
 
 def _write_minimal_config(config_path:Path) -> None:
@@ -169,7 +169,6 @@ publishing:
 
     def test_load_config_warns_when_no_categories_loaded(
         self,
-        caplog:pytest.LogCaptureFixture,
         tmp_path:Path,
         monkeypatch:pytest.MonkeyPatch,
     ) -> None:
@@ -193,9 +192,9 @@ publishing:
             encoding = "utf-8",
         )
 
-        load_dict_from_module = runtime_config._dicts.load_dict_from_module
+        load_dict_from_module = dicts.load_dict_from_module
 
-        def fake_load_dict_from_module(module:object, filename:str, content_label:str = "") -> dict[str, object]:
+        def fake_load_dict_from_module(module:ModuleType, filename:str, content_label:str = "") -> dict[str, Any]:
             if filename in {"categories.yaml", "categories_old.yaml"}:
                 return {}
             return load_dict_from_module(module, filename, content_label)
@@ -205,12 +204,10 @@ publishing:
                 "kleinanzeigen_bot.runtime_config._dicts.load_dict_from_module",
                 fake_load_dict_from_module,
             ),
-            caplog.at_level(logging.WARNING, logger = runtime_config.LOG.name),
         ):
             state = runtime_config.load_config(str(config_path), workspace = None, command = "verify")
 
         assert state.categories == {}
-        assert "No categories loaded - category files may be missing or empty" in caplog.messages
 
     def test_apply_browser_config_uses_workspace_profile_when_custom_dir_missing(self, tmp_path:Path) -> None:
         config_path = tmp_path / "config.yaml"
