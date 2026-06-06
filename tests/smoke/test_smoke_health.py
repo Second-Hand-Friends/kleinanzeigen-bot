@@ -22,7 +22,6 @@ from ruyaml import YAML
 
 import kleinanzeigen_bot
 from kleinanzeigen_bot.model.config_model import Config
-from kleinanzeigen_bot.utils import xdg_paths
 from kleinanzeigen_bot.utils.i18n import get_current_locale, set_current_locale
 from tests.conftest import SmokeKleinanzeigenBot
 
@@ -125,6 +124,13 @@ def _default_smoke_env(cwd:Path | None) -> dict[str, str] | None:
     return _xdg_env_overrides(cwd)
 
 
+def _expected_xdg_config_file(env_overrides:Mapping[str, str]) -> Path:
+    """Derive the config.yaml path used by xdg mode for the active platform."""
+    if os.name == "nt":
+        return Path(env_overrides["LOCALAPPDATA"]) / "kleinanzeigen-bot" / "kleinanzeigen-bot" / "config.yaml"
+    return Path(env_overrides["XDG_CONFIG_HOME"]) / "kleinanzeigen-bot" / "config.yaml"
+
+
 @pytest.fixture(autouse = True)
 def disable_update_checker(monkeypatch:pytest.MonkeyPatch) -> None:
     """Prevent smoke tests from hitting GitHub for update checks."""
@@ -197,8 +203,7 @@ def test_cli_subcommands_create_config_honors_workspace_mode(
         config_file = tmp_path / "config.yaml"
     else:
         assert env_overrides is not None
-        with patch.dict(os.environ, env_overrides):
-            config_file = xdg_paths.get_xdg_base_dir("config") / "config.yaml"
+        config_file = _expected_xdg_config_file(env_overrides)
 
     result = invoke_cli(["create-config", "--workspace-mode", workspace_mode], cwd = tmp_path, env_overrides = env_overrides)
     assert result.returncode == 0

@@ -169,7 +169,7 @@ publishing:
         assert state.timing_collector.output_dir == workspace.diagnostics_dir.parent / "timing"
         assert state.timing_collector.command == "verify"
 
-    def test_load_config_warns_when_no_categories_loaded(
+    def test_load_config_handles_empty_categories(
         self,
         tmp_path:Path,
         monkeypatch:pytest.MonkeyPatch,
