@@ -19,6 +19,7 @@ from kleinanzeigen_bot import (
     KleinanzeigenBot,
     LoginDetectionReason,
     LoginDetectionResult,
+    runtime_config,
 )
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
@@ -112,8 +113,15 @@ def mock_config_setup(test_bot:KleinanzeigenBot, tmp_path:Path) -> Generator[Non
     """Provide a centralized mock configuration setup for tests.
     This fixture mocks load_config and other essential configuration-related methods."""
     test_bot.config_file_path = str(tmp_path / "config.yaml")
+    workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
     with (
-        patch.object(test_bot, "load_config"),
+        patch("kleinanzeigen_bot.runtime_config.resolve_workspace", return_value = workspace),
+        patch(
+            "kleinanzeigen_bot.runtime_config.load_config",
+            return_value = runtime_config.RuntimeState(config = test_bot.config, categories = {}, timing_collector = None),
+        ),
+        patch("kleinanzeigen_bot.runtime_config.apply_browser_config"),
+        patch("kleinanzeigen_bot.runtime_config.configure_file_logging", return_value = None),
         patch.object(test_bot, "create_browser_session", new_callable = AsyncMock),
         patch.object(test_bot, "login", new_callable = AsyncMock),
         patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
@@ -261,6 +269,7 @@ class TestKleinanzeigenBotInitialization:
     async def test_run_uses_workspace_state_file_for_update_checker(self, test_bot:KleinanzeigenBot, command:str, tmp_path:Path) -> None:
         """Ensure UpdateChecker is initialized with the workspace state file."""
         update_checker_calls:list[tuple[Config, Path]] = []
+        workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
 
         class DummyUpdateChecker:
             def __init__(self, config:Config, state_file:Path) -> None:
@@ -269,18 +278,19 @@ class TestKleinanzeigenBotInitialization:
             def check_for_updates(self, *_args:Any, **_kwargs:Any) -> None:
                 return None
 
-        def set_workspace() -> None:
-            test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
-
         with (
-            patch.object(test_bot, "configure_file_logging"),
-            patch.object(test_bot, "load_config"),
+            patch("kleinanzeigen_bot.runtime_config.resolve_workspace", return_value = workspace),
+            patch(
+                "kleinanzeigen_bot.runtime_config.load_config",
+                return_value = runtime_config.RuntimeState(config = test_bot.config, categories = {}, timing_collector = None),
+            ),
+            patch("kleinanzeigen_bot.runtime_config.configure_file_logging", return_value = None),
+            patch("kleinanzeigen_bot.runtime_config.apply_browser_config"),
             patch.object(test_bot, "load_ads", return_value = []),
             patch.object(test_bot, "create_browser_session", new_callable = AsyncMock),
             patch.object(test_bot, "login", new_callable = AsyncMock),
             patch.object(test_bot, "download_ads", new_callable = AsyncMock),
             patch.object(test_bot, "close_browser_session"),
-            patch.object(test_bot, "_resolve_workspace", side_effect = set_workspace),
             patch("kleinanzeigen_bot.UpdateChecker", DummyUpdateChecker),
         ):
             await test_bot.run(["app", command])

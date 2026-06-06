@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import atexit, asyncio, enum, json, os, re, signal, sys, textwrap  # isort: skip
+import atexit, asyncio, enum, importlib, json, os, re, sys, textwrap  # isort: skip  # noqa: F401
 import getopt  # pylint: disable=deprecated-module
 import urllib.parse as urllib_parse
 from dataclasses import dataclass, replace
@@ -10,7 +10,7 @@ from gettext import gettext as _
 from pathlib import Path
 from typing import Any, Final, Sequence, cast
 
-import certifi, colorama, nodriver  # isort: skip
+import certifi, colorama  # isort: skip
 from nodriver.core.connection import ProtocolException
 from ruamel.yaml import YAML
 from wcmatch import glob
@@ -39,7 +39,6 @@ from .model.config_model import DEFAULT_DOWNLOAD_DIR, Config
 from .update_checker import UpdateChecker
 from .utils import diagnostics as _diagnostics
 from .utils import dicts as _dicts
-from .utils import error_handlers as _error_handlers
 from .utils import loggers as _loggers
 from .utils import misc as _misc
 from .utils import xdg_paths as _xdg_paths
@@ -236,27 +235,65 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.debug("Browser profile: %s", self.workspace.browser_profile_dir)
             LOG.debug("Diagnostics dir: %s", self.workspace.diagnostics_dir)
 
-    async def run(self, args:list[str]) -> None:
-        self.parse_args(args)
-        self._resolve_workspace()
+    async def run(self, args:list[str]) -> None:  # noqa: PLR0915
+        _cli = importlib.import_module(".cli", __name__)
+        _runtime_config = importlib.import_module(".runtime_config", __name__)
+        parsed = _cli.parse_args(args)
+        self.command = parsed.command
+        self.ads_selector = parsed.ads_selector
+        self._ads_selector_explicit = parsed.ads_selector_explicit
+        self.keep_old_ads = parsed.keep_old_ads
+        self._config_arg = parsed.config_arg
+        self._workspace_mode_arg = cast(_xdg_paths.InstallationMode, parsed.workspace_mode) if parsed.workspace_mode else None
+        self._logfile_arg = parsed.logfile_arg
+        self._logfile_explicitly_provided = parsed.logfile_explicitly_provided
+        if parsed.config_file_path is not None:
+            self.config_file_path = parsed.config_file_path
+        if parsed.logfile_explicitly_provided:
+            self.log_file_path = parsed.log_file_path
+
+        self.workspace = _runtime_config.resolve_workspace(
+            command = self.command,
+            config_file_path = self.config_file_path,
+            config_arg = self._config_arg,
+            logfile_arg = self._logfile_arg,
+            workspace_mode = self._workspace_mode_arg,
+            logfile_explicitly_provided = self._logfile_explicitly_provided,
+            log_basename = self._log_basename,
+        )
+        if self.workspace is not None:
+            self.config_file_path = str(self.workspace.config_file)
+            self.log_file_path = str(self.workspace.log_file) if self.workspace.log_file else None
+
+        def _bootstrap_runtime() -> None:
+            self.file_log = _runtime_config.configure_file_logging(
+                self.log_file_path,
+                self.workspace,
+                self.file_log,
+                self.get_version(),
+            )
+            runtime_state = _runtime_config.load_config(self.config_file_path, self.workspace, self.command)
+            self.config = runtime_state.config
+            self.categories = runtime_state.categories
+            self._timing_collector = runtime_state.timing_collector
+            _runtime_config.apply_browser_config(self.browser_config, self.config, self.workspace, self.config_file_path)
+
         try:
             match self.command:
                 case "help":
-                    self.show_help()
+                    _cli.show_help()
                     return
                 case "version":
                     print(self.get_version())
                 case "create-config":
-                    self.create_default_config()
+                    _runtime_config.create_default_config(self.config_file_path, self.workspace)
                     return
                 case "diagnose":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
                     self.diagnose_browser_issues()
                     return
                 case "verify":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
                     # Check for updates on startup
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
@@ -273,13 +310,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     LOG.info("DONE: No configuration errors found.")
                     LOG.info("############################################")
                 case "update-check":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates(skip_interval_check = True)
                 case "update-content-hash":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
                     # Check for updates on startup
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
@@ -291,8 +326,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         LOG.info("DONE: No active ads found.")
                         LOG.info("############################################")
                 case "publish":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
                     # Check for updates on startup
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
@@ -315,8 +349,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         LOG.info("DONE: No new/outdated ads found.")
                         LOG.info("############################################")
                 case "update":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
 
                     if not self._is_valid_ads_selector({"all", "changed"}):
                         if self._ads_selector_explicit:
@@ -333,8 +366,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         LOG.info("DONE: No changed ads found.")
                         LOG.info("############################################")
                 case "delete":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
                     # Check for updates on startup
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
@@ -347,8 +379,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         LOG.info("DONE: No ads to delete found.")
                         LOG.info("############################################")
                 case "extend":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
                     # Check for updates on startup
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
@@ -370,14 +401,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         LOG.info("DONE: No ads found to extend.")
                         LOG.info("############################################")
                 case "download":
-                    self.configure_file_logging()
                     # ad IDs depends on selector
                     if not self._is_valid_ads_selector({"all", "new"}):
                         if self._ads_selector_explicit:
                             LOG.error('Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, new) or numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         self.ads_selector = "new"
-                    self.load_config()
+                    _bootstrap_runtime()
                     # Check for updates on startup
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
@@ -3320,40 +3350,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
 
 def main(args:list[str]) -> None:
-    if "version" not in args:
-        print(
-            textwrap.dedent(rf"""
-         _    _      _                           _                       _           _
-        | | _| | ___(_)_ __   __ _ _ __  _______(_) __ _  ___ _ __      | |__   ___ | |_
-        | |/ / |/ _ \ | '_ \ / _` | '_ \|_  / _ \ |/ _` |/ _ \ '_ \ ____| '_ \ / _ \| __|
-        |   <| |  __/ | | | | (_| | | | |/ /  __/ | (_| |  __/ | | |____| |_) | (_) | |_
-        |_|\_\_|\___|_|_| |_|\__,_|_| |_/___\___|_|\__, |\___|_| |_|    |_.__/ \___/ \__|
-                                                   |___/
-                                 https://github.com/Second-Hand-Friends/kleinanzeigen-bot
-                                 Version: {__version__}
-        """)[1:],
-            flush = True,
-        )  # [1:] removes the first empty blank line
-
-    _loggers.configure_console_logging()
-
-    signal.signal(signal.SIGINT, _error_handlers.on_sigint)  # capture CTRL+C
-
-    # sys.excepthook = _error_handlers.on_exception
-    # -> commented out because it causes PyInstaller to log "[PYI-28040:ERROR] Failed to execute script '__main__' due to unhandled exception!",
-    #    despite the exceptions being properly processed by our custom _error_handlers.on_exception callback.
-    #    We now handle exceptions explicitly using a top-level try/except block.
-
-    atexit.register(_loggers.flush_all_handlers)
-
-    try:
-        bot = KleinanzeigenBot()
-        atexit.register(bot.close_browser_session)
-        nodriver.loop().run_until_complete(bot.run(args))  # type: ignore[attr-defined]
-    except CaptchaEncountered as ex:
-        raise ex
-    except Exception:
-        _error_handlers.on_exception(*sys.exc_info())
+    _cli = importlib.import_module(".cli", __name__)
+    _cli.main(args)
 
 
 if __name__ == "__main__":
