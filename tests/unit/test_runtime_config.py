@@ -177,10 +177,12 @@ publishing:
         log_path = tmp_path / "bot.log"
 
         file_log = runtime_config.configure_file_logging(str(log_path), workspace, None, "1.2.3")
-
-        assert file_log is not None
-        assert log_path.exists()
-        file_log.close()
+        try:
+            assert file_log is not None
+            assert log_path.exists()
+        finally:
+            if file_log is not None:
+                file_log.close()
 
     def test_configure_file_logging_returns_existing_handler(self, tmp_path:Path) -> None:
         config_path = tmp_path / "config.yaml"

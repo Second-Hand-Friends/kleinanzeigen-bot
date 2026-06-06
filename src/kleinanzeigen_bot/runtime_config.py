@@ -80,21 +80,41 @@ def _resolve_login_credentials(config_yaml:dict[str, Any]) -> None:
 
 
 def load_config(config_file_path:str, workspace:_xdg_paths.Workspace | None, command:str) -> RuntimeState:
+    """Load the runtime config and derived lookup tables.
+
+    Args:
+        config_file_path: Path to the active config file.
+        workspace: Resolved workspace, if one exists for this command.
+        command: Active CLI command, used for timing collection labels.
+
+    Returns:
+        RuntimeState: Parsed config, merged categories, and optional timing collector.
+
+    Example:
+        `load_config("config.yaml", workspace, "verify")` returns a RuntimeState whose
+        `config`, `categories`, and `timing_collector` fields are ready for the command run.
+    """
     if not os.path.exists(config_file_path):
+        # Keep bootstrapping self-contained: first run must create a usable config file.
         create_default_config(config_file_path, workspace)
 
     config_yaml = _dicts.load_dict_if_exists(config_file_path, _("config"))
     if isinstance(config_yaml, dict):
+        # Resolve ${ENV} placeholders before schema validation so the model sees final values.
         _resolve_login_credentials(config_yaml)
+    # Validate strictly and keep the file path in context so model errors point at the source file.
     config = Config.model_validate(config_yaml, strict = True, context = config_file_path)
 
     timing_enabled = config.diagnostics.timing_collection
     if timing_enabled and workspace:
+        # Diagnostics live under the workspace diagnostics tree; timing data sits next to it.
         timing_dir = workspace.diagnostics_dir.parent / "timing"
         timing_collector:TimingCollector | None = TimingCollector(timing_dir, command)
     else:
+        # No workspace or disabled timing collection means we skip the collector entirely.
         timing_collector = None
 
+    # Merge order matters: bundled defaults first, deprecated aliases second, user overrides last.
     categories:dict[str, str] = _dicts.load_dict_from_module(_resources, "categories.yaml", "")
     LOG.debug("Loaded %s categories from categories.yaml", len(categories))
     deprecated_categories = _dicts.load_dict_from_module(_resources, "categories_old.yaml", "")
@@ -104,6 +124,7 @@ def load_config(config_file_path:str, workspace:_xdg_paths.Workspace | None, com
         categories.update(config.categories)
         LOG.debug("Loaded %s categories from config.yaml (custom)", len(config.categories))
     if not categories:
+        # This should only happen if resources are broken or empty, so surface it loudly.
         LOG.warning("No categories loaded - category files may be missing or empty")
     LOG.debug("Loaded %s categories in total", len(categories))
 
@@ -151,16 +172,23 @@ def resolve_workspace(
     logfile_explicitly_provided:bool,
     log_basename:str,
 ) -> _xdg_paths.Workspace | None:
+    """Resolve the workspace for a command that needs filesystem state.
+
+    Typical input: `command="verify"`, `config_file_path="config.yaml"`.
+    Typical output: a workspace rooted under the configured mode, or `None` for help/version.
+    """
     if command in {"help", "version", "create-config"}:
         return None
 
     effective_config_arg = config_arg
     effective_workspace_mode = workspace_mode
     if not effective_config_arg:
+        # Programmatic callers sometimes set config_file_path directly, so infer the config arg from it.
         default_config = (Path.cwd() / "config.yaml").resolve()
         if Path(config_file_path).resolve() != default_config:
             effective_config_arg = config_file_path
             if effective_workspace_mode is None:
+                # Preserve the old default: infer portable vs xdg from the config location.
                 config_path = Path(config_file_path).resolve()
                 xdg_config_dir = _xdg_paths.get_xdg_base_dir("config").resolve()
                 effective_workspace_mode = "xdg" if config_path.is_relative_to(xdg_config_dir) else "portable"
