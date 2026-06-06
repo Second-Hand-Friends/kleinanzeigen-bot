@@ -178,6 +178,30 @@ def test_cli_subcommands_create_config_creates_file(tmp_path:Path) -> None:
 
 
 @pytest.mark.smoke
+@pytest.mark.parametrize(
+    ("workspace_mode", "expected_config_path"),
+    [
+        ("portable", Path("config.yaml")),
+        ("xdg", Path("xdg") / "config" / "kleinanzeigen-bot" / "config.yaml"),
+    ],
+)
+def test_cli_subcommands_create_config_honors_workspace_mode(
+    workspace_mode:str,
+    expected_config_path:Path,
+    tmp_path:Path,
+) -> None:
+    """
+    Smoke: CLI 'create-config' writes config.yaml into the selected workspace mode.
+    """
+    result = invoke_cli(["create-config", "--workspace-mode", workspace_mode], cwd = tmp_path)
+    config_file = tmp_path / expected_config_path
+    assert result.returncode == 0
+    assert config_file.exists(), f"config.yaml was not created at {config_file}"
+    out = (result.stdout + "\n" + result.stderr).lower()
+    assert str(config_file).lower() in out, f"Expected config path in CLI output.\n{out}"
+
+
+@pytest.mark.smoke
 def test_cli_subcommands_create_config_fails_if_exists(tmp_path:Path) -> None:
     """
     Smoke: CLI 'create-config' does not overwrite config.yaml if it already exists.

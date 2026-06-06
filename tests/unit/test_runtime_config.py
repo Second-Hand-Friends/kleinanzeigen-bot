@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
@@ -11,6 +12,7 @@ import pytest
 from kleinanzeigen_bot import runtime_config
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import loggers, xdg_paths
+from kleinanzeigen_bot.utils.timing_collector import TimingCollector
 
 pytestmark = pytest.mark.unit
 
@@ -134,6 +136,74 @@ publishing:
 
         with pytest.raises(ValueError, match = r"Environment variable BOT_USERNAME is required"):
             runtime_config.load_config(str(config_path), workspace, "verify")
+
+    def test_load_config_enables_timing_collection(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("BOT_USERNAME", "env_user")
+        monkeypatch.setenv("BOT_PASSWORD", "env_pass")
+
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            """
+login:
+  username: ${BOT_USERNAME}
+  password: ${BOT_PASSWORD}
+ad_defaults:
+  contact:
+    name: Test User
+    zipcode: "12345"
+diagnostics:
+  timing_collection: true
+publishing:
+  delete_old_ads: BEFORE_PUBLISH
+  delete_old_ads_by_title: false
+""".strip(),
+            encoding = "utf-8",
+        )
+        workspace = xdg_paths.Workspace.for_config(config_path, "kleinanzeigen-bot")
+
+        state = runtime_config.load_config(str(config_path), workspace, "verify")
+
+        assert isinstance(state.timing_collector, TimingCollector)
+        assert state.timing_collector.output_dir == workspace.diagnostics_dir.parent / "timing"
+        assert state.timing_collector.command == "verify"
+
+    def test_load_config_warns_when_no_categories_loaded(
+        self,
+        caplog:pytest.LogCaptureFixture,
+        tmp_path:Path,
+        monkeypatch:pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("BOT_USERNAME", "env_user")
+        monkeypatch.setenv("BOT_PASSWORD", "env_pass")
+
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            """
+login:
+  username: ${BOT_USERNAME}
+  password: ${BOT_PASSWORD}
+ad_defaults:
+  contact:
+    name: Test User
+    zipcode: "12345"
+publishing:
+  delete_old_ads: BEFORE_PUBLISH
+  delete_old_ads_by_title: false
+""".strip(),
+            encoding = "utf-8",
+        )
+
+        with (
+            patch(
+                "kleinanzeigen_bot.runtime_config._dicts.load_dict_from_module",
+                side_effect = [{}, {}],
+            ),
+            caplog.at_level(logging.WARNING, logger = runtime_config.LOG.name),
+        ):
+            state = runtime_config.load_config(str(config_path), workspace = None, command = "verify")
+
+        assert state.categories == {}
+        assert "No categories loaded - category files may be missing or empty" in caplog.messages
 
     def test_apply_browser_config_uses_workspace_profile_when_custom_dir_missing(self, tmp_path:Path) -> None:
         config_path = tmp_path / "config.yaml"
