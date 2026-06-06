@@ -71,6 +71,14 @@ class TestCliParseArgs:
         assert "Usage:" in stdout
         assert "Commands:" in stdout
 
+    def test_help_respects_language_flag_after_help(self, capsys:pytest.CaptureFixture[str]) -> None:
+        with pytest.raises(SystemExit) as exc_info:
+            cli.parse_args(["script.py", "--help", "--lang=de"])
+
+        assert exc_info.value.code == 0
+        stdout = capsys.readouterr().out
+        assert "Verwendung:" in stdout
+
     def test_invalid_workspace_mode_exits(self) -> None:
         with pytest.raises(SystemExit) as exc_info:
             cli.parse_args(["script.py", "--workspace-mode=invalid", "help"])

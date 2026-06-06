@@ -168,6 +168,7 @@ def show_help() -> None:
 
 def parse_args(args:Sequence[str]) -> ParsedArgs:
     parsed = ParsedArgs()
+    help_requested = False
     try:
         options, arguments = getopt.gnu_getopt(
             list(args)[1:],
@@ -182,8 +183,7 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
     for option, value in options:
         match option:
             case "-h" | "--help":
-                show_help()
-                sys.exit(0)
+                help_requested = True
             case "--config":
                 parsed.config_file_path = abspath(value)
                 parsed.config_arg = value
@@ -212,6 +212,10 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
                 _loggers.get_logger("kleinanzeigen_bot").setLevel(_loggers.DEBUG)
                 _loggers.get_logger("kleinanzeigen_bot.runtime_config").setLevel(_loggers.DEBUG)
                 _loggers.get_logger("nodriver").setLevel(_loggers.INFO)
+
+    if help_requested:
+        show_help()
+        sys.exit(0)
 
     match len(arguments):
         case 0:
