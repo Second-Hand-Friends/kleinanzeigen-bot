@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+"""Unit tests for CLI parsing, help text rendering, and main runtime flow."""
+
 from __future__ import annotations
 
 import runpy

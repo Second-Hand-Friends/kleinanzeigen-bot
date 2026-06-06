@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+"""Unit tests for runtime config loading, validation, workspaces, and env overrides."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
