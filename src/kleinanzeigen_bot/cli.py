@@ -1,6 +1,14 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+"""CLI bootstrap and argument parsing for kleinanzeigen-bot.
+
+Handles argument parsing via :func:`parse_args`, signal handling,
+daemonizing or foreground execution, log and locale setup, and
+dispatches to :class:`KleinanzeigenBot <kleinanzeigen_bot.KleinanzeigenBot>`.
+
+Primary entry point: :func:`main`.
+"""
 from __future__ import annotations
 
 import atexit
