@@ -4,7 +4,7 @@
 import sys, time  # isort: skip
 from gettext import gettext as _
 
-import kleinanzeigen_bot
+from kleinanzeigen_bot.cli import main
 from kleinanzeigen_bot.utils.exceptions import CaptchaEncountered
 from kleinanzeigen_bot.utils.launch_mode_guard import ensure_not_launched_from_windows_explorer
 from kleinanzeigen_bot.utils.misc import format_timedelta
@@ -19,7 +19,7 @@ ensure_not_launched_from_windows_explorer()
 # --------------------------------------------------------------------------- #
 while True:
     try:
-        kleinanzeigen_bot.main(sys.argv)  # runs & returns when finished
+        main(sys.argv)  # runs & returns when finished
         sys.exit(0)  # not using `break` to prevent process closing issues
     except CaptchaEncountered as ex:
         delay = ex.restart_delay

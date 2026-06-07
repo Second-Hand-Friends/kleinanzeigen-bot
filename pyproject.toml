@@ -107,11 +107,11 @@ format        = { composite = ["format:py", "format:yaml"] }
 "format:yaml" = "yamlfix scripts/ src/ tests/"
 
 lint = { composite = ["lint:ruff", "lint:mypy", "lint:pyright", "lint:actions"] }
-"lint:ruff"    = "ruff check --preview"
-"lint:mypy"    = "mypy"
-"lint:pyright" = "basedpyright"
-"lint:actions" = "actionlint"
-"lint:fix"     = {shell = "ruff check --preview --fix" }
+"lint:ruff"    = { shell = "echo [ruff] && ruff check --preview" }
+"lint:mypy"    = { shell = "echo [mypy] && mypy" }
+"lint:pyright" = { shell = "echo [pyright] && basedpyright" }
+"lint:actions" = { shell = "echo [actionlint] && actionlint" }
+"lint:fix"     = { shell = "echo [ruff:fix] && ruff check --preview --fix" }
 
 # tests
 # Public test commands

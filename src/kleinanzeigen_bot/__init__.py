@@ -1,16 +1,15 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import atexit, asyncio, enum, json, os, re, signal, sys, textwrap  # isort: skip
-import getopt  # pylint: disable=deprecated-module
+import asyncio, enum, importlib, json, os, re, sys  # isort: skip
 import urllib.parse as urllib_parse
 from dataclasses import dataclass, replace
 from datetime import datetime
 from gettext import gettext as _
 from pathlib import Path
-from typing import Any, Final, Sequence, cast
+from typing import TYPE_CHECKING, Any, Final, Sequence, cast
 
-import certifi, colorama, nodriver  # isort: skip
+import certifi, colorama  # isort: skip
 from nodriver.core.connection import ProtocolException
 from ruamel.yaml import YAML
 from wcmatch import glob
@@ -21,7 +20,7 @@ from . import download_selection as _download_selection
 from . import extract
 from . import local_path_renaming as _local_path_renaming
 from . import price_reduction as _price_reduction
-from . import resources as _resources
+from . import runtime_config as _runtime_config
 from ._version import __version__
 from .ad_description import get_ad_description
 from .model.ad_model import (
@@ -39,16 +38,17 @@ from .model.config_model import DEFAULT_DOWNLOAD_DIR, Config
 from .update_checker import UpdateChecker
 from .utils import diagnostics as _diagnostics
 from .utils import dicts as _dicts
-from .utils import error_handlers as _error_handlers
 from .utils import loggers as _loggers
 from .utils import misc as _misc
 from .utils import xdg_paths as _xdg_paths
 from .utils.exceptions import CaptchaEncountered, CategoryResolutionError, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
 from .utils.files import abspath
-from .utils.i18n import Locale, get_current_locale, pluralize, set_current_locale
+from .utils.i18n import pluralize
 from .utils.misc import ainput, ensure, is_frozen
-from .utils.timing_collector import TimingCollector
 from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
+
+if TYPE_CHECKING:
+    from .utils.timing_collector import TimingCollector
 
 # W0406: possibly a bug, see https://github.com/PyCQA/pylint/issues/3933
 
@@ -56,7 +56,6 @@ LOG:Final[_loggers.Logger] = _loggers.get_logger(__name__)
 LOG.setLevel(_loggers.INFO)
 
 SUBMISSION_MAX_RETRIES:Final[int] = 3
-_LOGIN_ENV_PATTERN:Final[re.Pattern[str]] = re.compile(r"^\$\{(?P<var>\w+)(?::-(?P<default>.*))?\}$")
 _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
     (By.ID, "user-email"),
@@ -132,7 +131,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self.keep_old_ads = False
 
         self._login_detection_diagnostics_captured:bool = False
-        self._timing_collector:TimingCollector | None = None
+        self._timing_collector:"TimingCollector | None" = None
 
     def __del__(self) -> None:
         if self.file_log:
@@ -190,73 +189,80 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         await ad_extractor.download_ad(ad_id, active = resolved.active)
 
-    def _resolve_workspace(self) -> None:
-        """
-        Resolve workspace paths after CLI args are parsed.
-        """
-        if self.command in {"help", "version", "create-config"}:
-            return
-        effective_config_arg = self._config_arg
-        effective_workspace_mode = self._workspace_mode_arg
-        if not effective_config_arg:
-            default_config = (Path.cwd() / "config.yaml").resolve()
-            if self.config_file_path and Path(self.config_file_path).resolve() != default_config:
-                effective_config_arg = self.config_file_path
-                if effective_workspace_mode is None:
-                    # Backward compatibility for tests/programmatic assignment of config_file_path:
-                    # infer a stable default from the configured path location.
-                    config_path = Path(self.config_file_path).resolve()
-                    xdg_config_dir = _xdg_paths.get_xdg_base_dir("config").resolve()
-                    effective_workspace_mode = "xdg" if config_path.is_relative_to(xdg_config_dir) else "portable"
+    async def run(self, args:list[str]) -> None:  # noqa: PLR0915
+        _cli = importlib.import_module(".cli", __name__)
+        parsed = _cli.parse_args(args)
+        self.command = parsed.command
+        self.ads_selector = parsed.ads_selector
+        self._ads_selector_explicit = parsed.ads_selector_explicit
+        self.keep_old_ads = parsed.keep_old_ads
+        self._config_arg = parsed.config_arg
+        self._workspace_mode_arg = cast(_xdg_paths.InstallationMode, parsed.workspace_mode) if parsed.workspace_mode else None
+        self._logfile_arg = parsed.logfile_arg
+        self._logfile_explicitly_provided = parsed.logfile_explicitly_provided
+        if parsed.config_file_path is not None:
+            self.config_file_path = parsed.config_file_path
+        if parsed.logfile_explicitly_provided:
+            self.log_file_path = parsed.log_file_path
 
-        try:
-            self.workspace = _xdg_paths.resolve_workspace(
-                config_arg = effective_config_arg,
-                logfile_arg = self._logfile_arg,
-                workspace_mode = effective_workspace_mode,
-                logfile_explicitly_provided = self._logfile_explicitly_provided,
-                log_basename = self._log_basename,
+        self.workspace = _runtime_config.resolve_workspace(
+            command = self.command,
+            config_file_path = self.config_file_path,
+            config_arg = self._config_arg,
+            logfile_arg = self._logfile_arg,
+            workspace_mode = self._workspace_mode_arg,
+            logfile_explicitly_provided = self._logfile_explicitly_provided,
+            log_basename = self._log_basename,
+        )
+        if self.workspace is not None:
+            self.config_file_path = str(self.workspace.config_file)
+            self.log_file_path = str(self.workspace.log_file) if self.workspace.log_file else None
+
+        def _bootstrap_runtime() -> None:
+            self.file_log = _runtime_config.configure_file_logging(
+                self.log_file_path,
+                self.workspace,
+                self.file_log,
+                self.get_version(),
             )
-        except ValueError as exc:
-            LOG.error(str(exc))
-            sys.exit(2)
+            runtime_state = _runtime_config.load_config(self.config_file_path, self.workspace, self.command)
+            self.config = runtime_state.config
+            self.categories = runtime_state.categories
+            self._timing_collector = runtime_state.timing_collector
+            _runtime_config.apply_browser_config(self.browser_config, self.config, self.workspace, self.config_file_path)
 
-        _xdg_paths.ensure_directory(self.workspace.config_file.parent, "config directory")
-
-        self.config_file_path = str(self.workspace.config_file)
-        self.log_file_path = str(self.workspace.log_file) if self.workspace.log_file else None
-
-        LOG.info("Config:    %s", self.workspace.config_file)
-        LOG.info("Workspace mode: %s", self.workspace.mode)
-        LOG.info("Workspace: %s", self.workspace.config_dir)
-        if _loggers.is_debug(LOG):
-            LOG.debug("Log file:        %s", self.workspace.log_file)
-            LOG.debug("State dir:       %s", self.workspace.state_dir)
-            LOG.debug("Download dir:    %s", self.workspace.download_dir)
-            LOG.debug("Browser profile: %s", self.workspace.browser_profile_dir)
-            LOG.debug("Diagnostics dir: %s", self.workspace.diagnostics_dir)
-
-    async def run(self, args:list[str]) -> None:
-        self.parse_args(args)
-        self._resolve_workspace()
         try:
+            # When adding/removing a case, also update runtime_config.VALID_COMMANDS.
             match self.command:
                 case "help":
-                    self.show_help()
+                    _cli.show_help()
                     return
                 case "version":
                     print(self.get_version())
                 case "create-config":
-                    self.create_default_config()
+                    if self.workspace is None and self._workspace_mode_arg is not None:
+                        try:
+                            workspace = _xdg_paths.resolve_workspace(
+                                config_arg = self._config_arg,
+                                logfile_arg = self._logfile_arg,
+                                workspace_mode = self._workspace_mode_arg,
+                                logfile_explicitly_provided = self._logfile_explicitly_provided,
+                                log_basename = self._log_basename,
+                            )
+                            self.workspace = workspace
+                            self.config_file_path = str(workspace.config_file)
+                            self.log_file_path = str(workspace.log_file) if workspace.log_file else None
+                        except ValueError as exc:
+                            LOG.error(str(exc))
+                            sys.exit(2)
+                    _runtime_config.create_default_config(self.config_file_path, self.workspace)
                     return
                 case "diagnose":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
                     self.diagnose_browser_issues()
                     return
                 case "verify":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
                     # Check for updates on startup
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
@@ -273,13 +279,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     LOG.info("DONE: No configuration errors found.")
                     LOG.info("############################################")
                 case "update-check":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates(skip_interval_check = True)
                 case "update-content-hash":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
                     # Check for updates on startup
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
@@ -291,8 +295,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         LOG.info("DONE: No active ads found.")
                         LOG.info("############################################")
                 case "publish":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
                     # Check for updates on startup
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
@@ -315,8 +318,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         LOG.info("DONE: No new/outdated ads found.")
                         LOG.info("############################################")
                 case "update":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
 
                     if not self._is_valid_ads_selector({"all", "changed"}):
                         if self._ads_selector_explicit:
@@ -333,8 +335,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         LOG.info("DONE: No changed ads found.")
                         LOG.info("############################################")
                 case "delete":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
                     # Check for updates on startup
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
@@ -347,8 +348,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         LOG.info("DONE: No ads to delete found.")
                         LOG.info("############################################")
                 case "extend":
-                    self.configure_file_logging()
-                    self.load_config()
+                    _bootstrap_runtime()
                     # Check for updates on startup
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
@@ -370,14 +370,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         LOG.info("DONE: No ads found to extend.")
                         LOG.info("############################################")
                 case "download":
-                    self.configure_file_logging()
                     # ad IDs depends on selector
                     if not self._is_valid_ads_selector({"all", "new"}):
                         if self._ads_selector_explicit:
                             LOG.error('Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, new) or numeric IDs.', self.ads_selector)
                             sys.exit(2)
                         self.ads_selector = "new"
-                    self.load_config()
+                    _bootstrap_runtime()
                     # Check for updates on startup
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
@@ -397,127 +396,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 except Exception as exc:  # noqa: BLE001
                     LOG.warning("Timing collector flush failed: %s", exc)
 
-    def show_help(self) -> None:
-        if is_frozen():
-            exe = sys.argv[0]
-        elif os.getenv("PDM_PROJECT_ROOT", ""):
-            exe = "pdm run app"
-        else:
-            exe = "python -m kleinanzeigen_bot"
-
-        if get_current_locale().language == "de":
-            print(
-                textwrap.dedent(
-                    f"""\
-            Verwendung: {colorama.Fore.LIGHTMAGENTA_EX}{exe} BEFEHL [OPTIONEN]{colorama.Style.RESET_ALL}
-
-            Befehle:
-              publish  - (Wieder-)Veröffentlicht Anzeigen
-              verify   - Überprüft die Konfigurationsdateien
-              delete   - Löscht Anzeigen
-              update   - Aktualisiert bestehende Anzeigen
-              extend   - Verlängert Anzeigen innerhalb des 8-Tage-Zeitfensters
-              download - Lädt eine oder mehrere Anzeigen herunter
-              update-check - Prüft auf verfügbare Updates
-              update-content-hash - Berechnet den content_hash aller Anzeigen anhand der aktuellen ad_defaults neu;
-                                    nach Änderungen an den config.yaml/ad_defaults verhindert es, dass alle Anzeigen als
-                                    "geändert" gelten und neu veröffentlicht werden.
-              create-config - Erstellt eine neue Standard-Konfigurationsdatei, falls noch nicht vorhanden
-              diagnose - Diagnostiziert Browser-Verbindungsprobleme und zeigt Troubleshooting-Informationen
-              --
-              help     - Zeigt diese Hilfe an (Standardbefehl)
-              version  - Zeigt die Version der Anwendung an
-
-            Optionen:
-              --ads=all|due|new|changed|<id(s)> (publish) - Gibt an, welche Anzeigen (erneut) veröffentlicht werden sollen (STANDARD: due)
-                    Mögliche Werte:
-                    * all: Veröffentlicht alle Anzeigen erneut, ignoriert republication_interval
-                    * due: Veröffentlicht alle neuen Anzeigen und erneut entsprechend dem republication_interval
-                    * new: Veröffentlicht nur neue Anzeigen (d.h. Anzeigen ohne ID in der Konfigurationsdatei)
-                    * changed: Veröffentlicht nur Anzeigen, die seit der letzten Veröffentlichung geändert wurden
-                    * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs an, die veröffentlicht werden sollen, z. B. "--ads=1,2,3", ignoriert republication_interval
-                    * Kombinationen: Sie können mehrere Selektoren mit Kommas kombinieren, z. B. "--ads=changed,due" um sowohl geänderte als auch
-                      fällige Anzeigen zu veröffentlichen
-              --ads=all|new|<id(s)> (download) - Gibt an, welche Anzeigen heruntergeladen werden sollen (STANDARD: new)
-                    Mögliche Werte:
-                    * all: Lädt alle Anzeigen aus Ihrem Profil herunter
-                    * new: Lädt Anzeigen aus Ihrem Profil herunter, die lokal noch nicht gespeichert sind
-                    * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs zum Herunterladen an, z. B. "--ads=1,2,3"
-              --ads=all|changed|<id(s)> (update) - Gibt an, welche Anzeigen aktualisiert werden sollen (STANDARD: changed)
-                    Mögliche Werte:
-                    * all: Aktualisiert alle Anzeigen
-                    * changed: Aktualisiert nur Anzeigen, die seit der letzten Veröffentlichung geändert wurden
-                    * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs zum Aktualisieren an, z. B. "--ads=1,2,3"
-              --ads=all|<id(s)> (extend) - Gibt an, welche Anzeigen verlängert werden sollen
-                    Mögliche Werte:
-                    * all: Verlängert alle Anzeigen, die innerhalb von 8 Tagen ablaufen
-                    * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
-              --force           - Alias für '--ads=all'
-              --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
-              --config=<PATH>   - Pfad zur YAML- oder JSON-Konfigurationsdatei (ändert den Workspace-Modus nicht implizit)
-              --workspace-mode=portable|xdg - Überschreibt den Workspace-Modus für diesen Lauf
-              --logfile=<PATH>  - Pfad zur Protokolldatei (STANDARD: vom aktiven Workspace-Modus abhängig)
-              --lang=en|de      - Anzeigesprache (STANDARD: Systemsprache, wenn unterstützt, sonst Englisch)
-              -v, --verbose     - Aktiviert detaillierte Ausgabe – nur nützlich zur Fehlerbehebung
-            """.rstrip()
-                )
-            )
-        else:
-            print(
-                textwrap.dedent(
-                    f"""\
-            Usage: {colorama.Fore.LIGHTMAGENTA_EX}{exe} COMMAND [OPTIONS]{colorama.Style.RESET_ALL}
-
-            Commands:
-              publish  - (re-)publishes ads
-              verify   - verifies the configuration files
-              delete   - deletes ads
-              update   - updates published ads
-              extend   - extends ads within the 8-day window before expiry
-              download - downloads one or multiple ads
-              update-check - checks for available updates
-              update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;
-                                    use this after changing config.yaml/ad_defaults to avoid every ad being marked "changed" and republished
-              create-config - creates a new default configuration file if one does not exist
-              diagnose - diagnoses browser connection issues and shows troubleshooting information
-              --
-              help     - displays this help (default command)
-              version  - displays the application version
-
-            Options:
-              --ads=all|due|new|changed|<id(s)> (publish) - specifies which ads to (re-)publish (DEFAULT: due)
-                    Possible values:
-                    * all: (re-)publish all ads ignoring republication_interval
-                    * due: publish all new ads and republish ads according the republication_interval
-                    * new: only publish new ads (i.e. ads that have no id in the config file)
-                    * changed: only publish ads that have been modified since last publication
-                    * <id(s)>: provide one or several ads by ID to (re-)publish, like e.g. "--ads=1,2,3" ignoring republication_interval
-                    * Combinations: You can combine multiple selectors with commas, e.g. "--ads=changed,due" to publish both changed and due ads
-              --ads=all|new|<id(s)> (download) - specifies which ads to download (DEFAULT: new)
-                    Possible values:
-                    * all: downloads all ads from your profile
-                    * new: downloads ads from your profile that are not locally saved yet
-                    * <id(s)>: provide one or several ads by ID to download, like e.g. "--ads=1,2,3"
-              --ads=all|changed|<id(s)> (update) - specifies which ads to update (DEFAULT: changed)
-                    Possible values:
-                    * all: update all ads
-                    * changed: only update ads that have been modified since last publication
-                    * <id(s)>: provide one or several ads by ID to update, like e.g. "--ads=1,2,3"
-              --ads=all|<id(s)> (extend) - specifies which ads to extend
-                    Possible values:
-                    * all: extend all ads expiring within 8 days
-                    * <id(s)>: specify ad IDs to extend, e.g. "--ads=1,2,3"
-              --force           - alias for '--ads=all'
-              --keep-old        - don't delete old ads on republication
-              --config=<PATH>   - path to the config YAML or JSON file (does not implicitly change workspace mode)
-              --workspace-mode=portable|xdg - overrides workspace mode for this run
-              --logfile=<PATH>  - path to the logfile (DEFAULT: depends on active workspace mode)
-              --lang=en|de      - display language (STANDARD: system language if supported, otherwise English)
-              -v, --verbose     - enables verbose output - only useful when troubleshooting issues
-            """.rstrip()
-                )
-            )
-
     def _is_valid_ads_selector(self, valid_keywords:set[str]) -> bool:
         """Check if the current ads_selector is valid for the given set of keyword selectors.
 
@@ -529,184 +407,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             or all(s.strip() in valid_keywords for s in self.ads_selector.split(","))
             or _download_selection.is_numeric_ids_selector(self.ads_selector)
         )
-
-    def parse_args(self, args:list[str]) -> None:
-        try:
-            options, arguments = getopt.gnu_getopt(
-                args[1:],
-                "hv",
-                ["ads=", "config=", "force", "help", "keep-old", "logfile=", "lang=", "verbose", "workspace-mode="],
-            )
-        except getopt.error as ex:
-            LOG.error(ex.msg)
-            LOG.error("Use --help to display available options.")
-            sys.exit(2)
-
-        for option, value in options:
-            match option:
-                case "-h" | "--help":
-                    self.show_help()
-                    sys.exit(0)
-                case "--config":
-                    self.config_file_path = abspath(value)
-                    self._config_arg = value
-                case "--logfile":
-                    if value:
-                        self.log_file_path = abspath(value)
-                    else:
-                        self.log_file_path = None
-                    self._logfile_arg = value
-                    self._logfile_explicitly_provided = True
-                case "--workspace-mode":
-                    mode = value.strip().lower()
-                    if mode not in {"portable", "xdg"}:
-                        LOG.error("Invalid --workspace-mode '%s'. Use 'portable' or 'xdg'.", value)
-                        sys.exit(2)
-                    self._workspace_mode_arg = cast(_xdg_paths.InstallationMode, mode)
-                case "--ads":
-                    self.ads_selector = value.strip().lower()
-                    self._ads_selector_explicit = True
-                case "--force":
-                    self.ads_selector = "all"
-                    self._ads_selector_explicit = True
-                case "--keep-old":
-                    self.keep_old_ads = True
-                case "--lang":
-                    set_current_locale(Locale.of(value))
-                case "-v" | "--verbose":
-                    LOG.setLevel(_loggers.DEBUG)
-                    _loggers.get_logger("nodriver").setLevel(_loggers.INFO)
-
-        match len(arguments):
-            case 0:
-                self.command = "help"
-            case 1:
-                self.command = arguments[0]
-            case _:
-                LOG.error("More than one command given: %s", arguments)
-                sys.exit(2)
-
-    def configure_file_logging(self) -> None:
-        if not self.log_file_path:
-            return
-        if self.file_log:
-            return
-
-        if self.workspace and self.workspace.log_file:
-            _xdg_paths.ensure_directory(self.workspace.log_file.parent, "log directory")
-
-        LOG.info("Logging to [%s]...", self.log_file_path)
-        self.file_log = _loggers.configure_file_logging(self.log_file_path)
-
-        LOG.info("App version: %s", self.get_version())
-        LOG.info("Python version: %s", sys.version)
-
-    def create_default_config(self) -> None:
-        """
-        Create a default config.yaml in the project root if it does not exist.
-        If it exists, log an error and inform the user.
-        """
-        if os.path.exists(self.config_file_path):
-            LOG.error("Config file %s already exists. Aborting creation.", self.config_file_path)
-            return
-        config_parent = self.workspace.config_file.parent if self.workspace else Path(self.config_file_path).parent
-        _xdg_paths.ensure_directory(config_parent, "config directory")
-        default_config = Config.model_construct()
-        default_config.login.username = "changeme"  # noqa: S105 placeholder for default config, not a real username
-        default_config.login.password = "changeme"  # noqa: S105 placeholder for default config, not a real password
-        _dicts.save_commented_model(
-            self.config_file_path,
-            default_config,
-            header = "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/config.schema.json",
-            exclude = {
-                "ad_defaults": {"description"},
-            },
-        )
-
-    def load_config(self) -> None:
-        # write default config.yaml if config file does not exist
-        if not os.path.exists(self.config_file_path):
-            self.create_default_config()
-
-        config_yaml = _dicts.load_dict_if_exists(self.config_file_path, _("config"))
-        if isinstance(config_yaml, dict):
-            self._resolve_login_credentials(config_yaml)
-        self.config = Config.model_validate(config_yaml, strict = True, context = self.config_file_path)
-
-        timing_enabled = self.config.diagnostics.timing_collection
-        if timing_enabled and self.workspace:
-            timing_dir = self.workspace.diagnostics_dir.parent / "timing"
-            self._timing_collector = TimingCollector(timing_dir, self.command)
-        else:
-            self._timing_collector = None
-
-        # load built-in category mappings
-        self.categories = _dicts.load_dict_from_module(_resources, "categories.yaml", "")
-        LOG.debug("Loaded %s categories from categories.yaml", len(self.categories))
-        deprecated_categories = _dicts.load_dict_from_module(_resources, "categories_old.yaml", "")
-        LOG.debug("Loaded %s categories from categories_old.yaml", len(deprecated_categories))
-        self.categories.update(deprecated_categories)
-        custom_count = 0
-        if self.config.categories:
-            custom_count = len(self.config.categories)
-            self.categories.update(self.config.categories)
-            LOG.debug("Loaded %s categories from config.yaml (custom)", custom_count)
-        total_count = len(self.categories)
-        if total_count == 0:
-            LOG.warning("No categories loaded - category files may be missing or empty")
-        LOG.debug("Loaded %s categories in total", total_count)
-
-        # populate browser_config object used by WebScrapingMixin
-        self.browser_config.arguments = self.config.browser.arguments
-        self.browser_config.binary_location = self.config.browser.binary_location
-        self.browser_config.extensions = [abspath(item, relative_to = self.config_file_path) for item in self.config.browser.extensions]
-        self.browser_config.use_private_window = self.config.browser.use_private_window
-        if self.config.browser.user_data_dir:
-            self.browser_config.user_data_dir = abspath(self.config.browser.user_data_dir, relative_to = self.config_file_path)
-        elif self.workspace:
-            self.browser_config.user_data_dir = str(self.workspace.browser_profile_dir)
-        self.browser_config.profile_name = self.config.browser.profile_name
-
-    @staticmethod
-    def _resolve_login_credentials(config_yaml:dict[str, Any]) -> None:
-        """Resolve ``login.username`` and ``login.password`` from environment variables.
-
-        Supports two patterns:
-        - ``${VAR}`` : required — raises if VAR is unset
-        - ``${VAR:-default}`` : optional — uses *default* when VAR is unset
-
-        Non-placeholder values are left unchanged.
-
-        Note:
-            Mutates *config_yaml* in place. Caller must ensure *config_yaml* is a
-            dict before calling — the method is a no-op on non-dict values.
-        """
-        if not isinstance(config_yaml, dict):
-            return
-
-        login = config_yaml.get("login")
-        if not isinstance(login, dict):
-            return
-
-        for field in ("username", "password"):
-            value = login.get(field)
-            if not isinstance(value, str):
-                continue
-
-            m = _LOGIN_ENV_PATTERN.match(value)
-            if not m:
-                continue
-
-            var_name = m.group("var")
-            resolved = os.environ.get(var_name)
-            if resolved is not None:
-                login[field] = resolved
-            elif m.group("default") is not None:
-                login[field] = m.group("default")
-            else:
-                raise ValueError(
-                    _("Environment variable %s is required for login.%s but is not set") % (var_name, field)
-                )
 
     def __check_ad_republication(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
         """
@@ -3320,40 +3020,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
 
 def main(args:list[str]) -> None:
-    if "version" not in args:
-        print(
-            textwrap.dedent(rf"""
-         _    _      _                           _                       _           _
-        | | _| | ___(_)_ __   __ _ _ __  _______(_) __ _  ___ _ __      | |__   ___ | |_
-        | |/ / |/ _ \ | '_ \ / _` | '_ \|_  / _ \ |/ _` |/ _ \ '_ \ ____| '_ \ / _ \| __|
-        |   <| |  __/ | | | | (_| | | | |/ /  __/ | (_| |  __/ | | |____| |_) | (_) | |_
-        |_|\_\_|\___|_|_| |_|\__,_|_| |_/___\___|_|\__, |\___|_| |_|    |_.__/ \___/ \__|
-                                                   |___/
-                                 https://github.com/Second-Hand-Friends/kleinanzeigen-bot
-                                 Version: {__version__}
-        """)[1:],
-            flush = True,
-        )  # [1:] removes the first empty blank line
-
-    _loggers.configure_console_logging()
-
-    signal.signal(signal.SIGINT, _error_handlers.on_sigint)  # capture CTRL+C
-
-    # sys.excepthook = _error_handlers.on_exception
-    # -> commented out because it causes PyInstaller to log "[PYI-28040:ERROR] Failed to execute script '__main__' due to unhandled exception!",
-    #    despite the exceptions being properly processed by our custom _error_handlers.on_exception callback.
-    #    We now handle exceptions explicitly using a top-level try/except block.
-
-    atexit.register(_loggers.flush_all_handlers)
-
-    try:
-        bot = KleinanzeigenBot()
-        atexit.register(bot.close_browser_session)
-        nodriver.loop().run_until_complete(bot.run(args))  # type: ignore[attr-defined]
-    except CaptchaEncountered as ex:
-        raise ex
-    except Exception:
-        _error_handlers.on_exception(*sys.exc_info())
+    _cli = importlib.import_module(".cli", __name__)
+    _cli.main(args)
 
 
 if __name__ == "__main__":

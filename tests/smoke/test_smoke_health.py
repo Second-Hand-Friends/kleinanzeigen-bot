@@ -77,7 +77,7 @@ def invoke_cli(
             os.chdir(os.fspath(cwd))
         logging.getLogger().addHandler(log_handler)
         with contextlib.ExitStack() as stack:
-            stack.enter_context(patch("kleinanzeigen_bot.atexit.register", capture_register))
+            stack.enter_context(patch("atexit.register", capture_register))
             stack.enter_context(contextlib.redirect_stdout(stdout))
             stack.enter_context(contextlib.redirect_stderr(stderr))
             effective_env_overrides = env_overrides if env_overrides is not None else _default_smoke_env(cwd)
@@ -102,10 +102,16 @@ def _xdg_env_overrides(base_path:Path) -> dict[str, str]:
     xdg_config = base_path / "xdg" / "config"
     xdg_state = base_path / "xdg" / "state"
     xdg_cache = base_path / "xdg" / "cache"
-    for path in (home, xdg_config, xdg_state, xdg_cache):
+    appdata_roaming = base_path / "appdata" / "roaming"
+    appdata_local = base_path / "appdata" / "local"
+    for path in (home, xdg_config, xdg_state, xdg_cache, appdata_roaming, appdata_local):
         path.mkdir(parents = True, exist_ok = True)
     return {
         "HOME": os.fspath(home),
+        "USERPROFILE": os.fspath(home),
+        "APPDATA": os.fspath(appdata_roaming),
+        "LOCALAPPDATA": os.fspath(appdata_local),
+        "WIN_PD_OVERRIDE_LOCAL_APPDATA": os.fspath(appdata_local),
         "XDG_CONFIG_HOME": os.fspath(xdg_config),
         "XDG_STATE_HOME": os.fspath(xdg_state),
         "XDG_CACHE_HOME": os.fspath(xdg_cache),
@@ -117,6 +123,13 @@ def _default_smoke_env(cwd:Path | None) -> dict[str, str] | None:
     if cwd is None:
         return None
     return _xdg_env_overrides(cwd)
+
+
+def _expected_xdg_config_file(env_overrides:Mapping[str, str]) -> Path:
+    """Derive the config.yaml path used by xdg mode for the active platform."""
+    if os.name == "nt":
+        return Path(env_overrides["LOCALAPPDATA"]) / "kleinanzeigen-bot" / "kleinanzeigen-bot" / "config.yaml"
+    return Path(env_overrides["XDG_CONFIG_HOME"]) / "kleinanzeigen-bot" / "config.yaml"
 
 
 @pytest.fixture(autouse = True)
@@ -175,6 +188,29 @@ def test_cli_subcommands_create_config_creates_file(tmp_path:Path) -> None:
     out = (result.stdout + "\n" + result.stderr).lower()
     assert "saving" in out, f"Expected saving message in CLI output.\n{out}"
     assert "config.yaml" in out, f"Expected config.yaml in CLI output.\n{out}"
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("workspace_mode", ["portable", "xdg"])
+def test_cli_subcommands_create_config_honors_workspace_mode(
+    workspace_mode:str,
+    tmp_path:Path,
+) -> None:
+    """
+    Smoke: CLI 'create-config' writes config.yaml into the selected workspace mode.
+    """
+    env_overrides = _default_smoke_env(tmp_path)
+    if workspace_mode == "portable":
+        config_file = tmp_path / "config.yaml"
+    else:
+        assert env_overrides is not None
+        config_file = _expected_xdg_config_file(env_overrides)
+
+    result = invoke_cli(["create-config", "--workspace-mode", workspace_mode], cwd = tmp_path, env_overrides = env_overrides)
+    assert result.returncode == 0
+    assert config_file.exists(), f"config.yaml was not created at {config_file}"
+    out = (result.stdout + "\n" + result.stderr).lower()
+    assert str(config_file).lower() in out, f"Expected config path in CLI output.\n{out}"
 
 
 @pytest.mark.smoke

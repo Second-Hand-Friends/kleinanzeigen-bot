@@ -51,7 +51,7 @@ This section provides quick reference commands for common development tasks. See
   pdm run app
    |-> executes 'python -m kleinanzeigen_bot'
        |-> executes 'kleinanzeigen_bot/__main__.py'
-           |-> executes main() function of 'kleinanzeigen_bot/__init__.py'
+           |-> executes main() function of 'kleinanzeigen_bot/cli.py'
                |-> executes KleinanzeigenBot().run()
   ```
 
