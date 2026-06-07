@@ -312,13 +312,19 @@ class AdExtractor(WebScrapingMixin):
                     )
                     # Collect candidate local-only values without mutating ad_cfg yet
                     # to avoid saving partially corrupted state if validation fails.
-                    # dicts.load_dict returns ruamel CommentedMap; convert to plain
-                    # dict and validate explicitly since model_copy won't coerce nested models.
+                    # dicts.load_dict returns ruamel CommentedMap; auto_price_reduction is
+                    # validated independently so a malformed APR doesn't block other fields.
                     preserved:dict[str, Any] = {}
+
                     if "auto_price_reduction" in existing_data:
-                        preserved["auto_price_reduction"] = AutoPriceReductionConfig.model_validate(
-                            dict(existing_data["auto_price_reduction"])
-                        )
+                        try:
+                            preserved["auto_price_reduction"] = AutoPriceReductionConfig.model_validate(
+                                dict(existing_data["auto_price_reduction"])
+                            )
+                        except Exception as apr_ex:
+                            LOG.warning(
+                                "Could not preserve auto_price_reduction from existing ad %d: %s", ad_id, apr_ex
+                            )
                     if "republication_interval" in existing_data:
                         preserved["republication_interval"] = existing_data["republication_interval"]
                     if "repost_count" in existing_data:

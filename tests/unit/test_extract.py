@@ -2814,9 +2814,7 @@ class TestAdExtractorDownload:
             "auto_price_reduction": {"enabled": True, "strategy": "PERCENTAGE", "amount": 10, "min_price": 1},
             "republication_interval": 14,
         }
-        await asyncio.get_running_loop().run_in_executor(
-            None, lambda: dicts.save_dict(str(existing_yaml), existing_data)
-        )
+        await asyncio.to_thread(dicts.save_dict, str(existing_yaml), existing_data)
 
         extractor.config.download.preserve_local_settings = True
 
@@ -2830,9 +2828,7 @@ class TestAdExtractorDownload:
 
             await extractor.download_ad(12345)
 
-        saved_data = await asyncio.get_running_loop().run_in_executor(
-            None, lambda: dicts.load_dict(str(final_dir / "ad_12345.yaml"))
-        )
+        saved_data = await asyncio.to_thread(dicts.load_dict, str(final_dir / "ad_12345.yaml"))
         assert saved_data["repost_count"] == 5
         assert saved_data["price_reduction_count"] == 3
         assert saved_data["auto_price_reduction"]["enabled"] is True
