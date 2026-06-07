@@ -189,6 +189,7 @@ download:
   folder_name_template: "ad_{id}_{title}"  # placeholders: {id}, {title}; each placeholder may appear at most once; must include {id}
   ad_file_name_template: "ad_{id}"  # placeholders: {id}, {title}; each placeholder may appear at most once; must include {id}
   rename_existing_folders: false  # if true, rename existing folders without titles to include titles (default: false)
+  preserve_local_settings: true  # if true, preserve local-only settings when re-downloading an already saved ad (default: true)
 ```
 
 - `download.dir` controls where `download` writes ad files.
@@ -202,6 +203,7 @@ download:
 - `download.ad_file_name_template`: each placeholder may appear at most once.
 - `download.ad_file_name_template` must include `{id}` so downloaded filenames remain stable and unique.
 - `download.folder_name_max_length` limits folder names only; downloaded file stems use a separate filename budget.
+- `download.preserve_local_settings` (default: `true`) keeps local-only per-ad settings (`auto_price_reduction`, `republication_interval`, `repost_count`, `price_reduction_count`) when re-downloading an already saved ad. Set to `false` to reset these to defaults on re-download.
 
 Assume this sample ad:
 
