@@ -413,6 +413,9 @@ kleinanzeigen_bot/extract.py:
     "Could not remove backup directory %s: %s": "Konnte Sicherungsverzeichnis %s nicht entfernen: %s"
     "Failed to restore backup directory %s to %s after download failure: %s": "Konnte Sicherungsverzeichnis %s nach %s nach einem Download-Fehler nicht wiederherstellen: %s"
     "Could not remove staging directory %s: %s": "Konnte Staging-Verzeichnis %s nicht entfernen: %s"
+    "Preserved local-only settings from existing ad %d.": "Lokale Einstellungen von bestehender Anzeige %d beibehalten."
+    "Could not preserve local settings from existing ad %d: %s": "Konnte lokale Einstellungen von bestehender Anzeige %d nicht beibehalten: %s"
+    "Could not preserve auto_price_reduction from existing ad %d: %s": "Konnte auto_price_reduction von bestehender Anzeige %d nicht beibehalten: %s"
 
   _download_and_save_image_sync:
     "Failed to download image %s: %s": "Fehler beim Herunterladen des Bildes %s: %s"

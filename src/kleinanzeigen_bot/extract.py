@@ -19,7 +19,7 @@ from typing import Any, Final
 from kleinanzeigen_bot.model.ad_model import ContactPartial
 
 from .model.ad_model import OPTION_NAME_BY_CARRIER_CODE, AdPartial, validate_condition_api_mapping
-from .model.config_model import Config
+from .model.config_model import AutoPriceReductionConfig, Config
 from .utils import dicts, files, i18n, loggers, misc, reflect
 from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
 
@@ -301,6 +301,57 @@ class AdExtractor(WebScrapingMixin):
         )
 
         loop = asyncio.get_running_loop()
+
+        # Preserve local-only settings when re-downloading an existing ad
+        if self.config.download.preserve_local_settings and await files.exists(final_dir):
+            existing_yaml_path = final_dir / f"{ad_file_stem}.yaml"
+            # Fall back to glob if the rendered stem does not match (e.g. title changed)
+            if not await files.exists(existing_yaml_path):
+                yaml_candidates = await loop.run_in_executor(
+                    None, lambda: sorted(final_dir.glob("*.yaml"))
+                )
+                if len(yaml_candidates) == 1:
+                    existing_yaml_path = yaml_candidates[0]
+            if await files.exists(existing_yaml_path):
+                try:
+                    existing_data = await loop.run_in_executor(
+                        None, lambda: dicts.load_dict(str(existing_yaml_path), content_label = f"existing ad {ad_id}")
+                    )
+                    # Collect candidate local-only values without mutating ad_cfg yet
+                    # to avoid saving partially corrupted state if validation fails.
+                    # dicts.load_dict returns ruamel CommentedMap; auto_price_reduction is
+                    # validated independently so a malformed APR doesn't block other fields.
+                    preserved:dict[str, Any] = {}
+
+                    if "auto_price_reduction" in existing_data:
+                        try:
+                            preserved["auto_price_reduction"] = AutoPriceReductionConfig.model_validate(
+                                dict(existing_data["auto_price_reduction"])
+                            )
+                        except Exception as apr_ex:
+                            LOG.warning(
+                                "Could not preserve auto_price_reduction from existing ad %d: %s", ad_id, apr_ex
+                            )
+                    if "republication_interval" in existing_data:
+                        preserved["republication_interval"] = existing_data["republication_interval"]
+                    if "repost_count" in existing_data:
+                        preserved["repost_count"] = existing_data["repost_count"]
+                    if "price_reduction_count" in existing_data:
+                        preserved["price_reduction_count"] = existing_data["price_reduction_count"]
+
+                    if preserved:
+                        # Build a fully validated instance from merged data,
+                        # then commit only validated attributes back to ad_cfg.
+                        merged = {**ad_cfg.model_dump(), **preserved}
+                        candidate = ad_cfg.model_validate(merged)
+                        candidate.content_hash = candidate.to_ad(self.config.ad_defaults).update_content_hash().content_hash
+                        for key in preserved:
+                            setattr(ad_cfg, key, getattr(candidate, key))
+                        ad_cfg.content_hash = candidate.content_hash
+                        LOG.info("Preserved local-only settings from existing ad %d.", ad_id)
+                except Exception as ex:
+                    LOG.warning("Could not preserve local settings from existing ad %d: %s", ad_id, ex)
+
         backup_dir = final_dir.with_name(f"{_BACKUP_DIR_PREFIX}{ad_file_stem}")
         final_yaml_path = final_dir / f"{ad_file_stem}.yaml"
         backup_created_by_us = False

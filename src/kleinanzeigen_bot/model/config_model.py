@@ -176,6 +176,14 @@ class DownloadConfig(ContextualModel):
         default = False,
         description = "if true, rename existing folders without titles to include titles (default: false)",
     )
+    preserve_local_settings:bool = Field(
+        default = True,
+        description = (
+            "if true, preserves local-only settings (auto_price_reduction, republication_interval, "
+            "repost_count, price_reduction_count) when re-downloading an already saved ad. "
+            "Useful for picking up live changes without losing local configuration."
+        ),
+    )
 
     @field_validator("dir")
     @classmethod

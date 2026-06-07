@@ -109,6 +109,12 @@ class TestCliParseArgs:
 
         assert exc_info.value.code == 2
 
+    def test_parses_preserve_local_settings_flag(self) -> None:
+        parsed = cli.parse_args(["script.py", "--preserve-local-settings", "download"])
+
+        assert parsed.preserve_local_settings is True
+        assert parsed.command == "download"
+
 
 class TestCliHelpText:
     def test_show_help_uses_german_text(self, capsys:pytest.CaptureFixture[str], monkeypatch:pytest.MonkeyPatch) -> None:

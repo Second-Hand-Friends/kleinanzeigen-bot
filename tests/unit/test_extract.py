@@ -18,6 +18,7 @@ from ruamel.yaml import YAML
 import kleinanzeigen_bot.extract as extract_module
 from kleinanzeigen_bot.model.ad_model import OPTION_NAME_BY_CARRIER_CODE, AdPartial, ContactPartial
 from kleinanzeigen_bot.model.config_model import Config, DownloadConfig
+from kleinanzeigen_bot.utils import dicts
 from kleinanzeigen_bot.utils.web_scraping_mixin import Browser, By, Element
 
 SCHEMA_PATH:Final[Path] = Path(__file__).resolve().parents[2] / "schemas" / "ad.schema.json"
@@ -2786,6 +2787,160 @@ class TestAdExtractorDownload:
         assert "12345" in rendered
         assert rendered.endswith("_12345")
         assert len(rendered) <= 20
+
+    @pytest.mark.parametrize(
+        "rendered_stem",
+        [
+            "ad_12345",            # matches saved filename — direct lookup
+            "ad_12345_newtitle",   # mismatched — triggers glob fallback
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_download_ad_preserves_local_settings_when_enabled(
+        self, extractor:extract_module.AdExtractor, tmp_path:Path, rendered_stem:str
+    ) -> None:
+        """Re-downloading an existing ad with preserve_local_settings=True keeps local counters and overrides."""
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+
+        extractor.download_dir = download_base
+        final_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents = True)
+
+        # Write an existing ad YAML with local-only fields set to non-default values
+        existing_yaml = final_dir / "ad_12345.yaml"
+        existing_data:dict[str, Any] = {
+            "title": "Old Advertisement Title",
+            "description": "Old description text",
+            "category": "Garten & Freizeit > Camping",
+            "price": 200,
+            "price_type": "NEGOTIABLE",
+            "repost_count": 5,
+            "price_reduction_count": 3,
+            "auto_price_reduction": {"enabled": True, "strategy": "PERCENTAGE", "amount": 10, "min_price": 1},
+            "republication_interval": 14,
+        }
+        await asyncio.to_thread(dicts.save_dict, str(existing_yaml), existing_data)
+
+        extractor.config.download.preserve_local_settings = True
+
+        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract:
+            mock_extract.return_value = (
+                _create_test_ad_partial(),
+                staging_dir,
+                final_dir,
+                rendered_stem,
+            )
+
+            await extractor.download_ad(12345)
+
+        saved_data = await asyncio.to_thread(dicts.load_dict, str(final_dir / f"{rendered_stem}.yaml"))
+        assert saved_data["title"] == "Test Advertisement Title"
+        assert saved_data["description"] == "Test Description"
+        assert saved_data["category"] == "Dienstleistungen"
+        assert saved_data["price"] == 100
+        assert saved_data["repost_count"] == 5
+        assert saved_data["price_reduction_count"] == 3
+        assert saved_data["auto_price_reduction"]["enabled"] is True
+        assert saved_data["republication_interval"] == 14
+        assert isinstance(saved_data.get("content_hash"), str)
+        assert len(saved_data["content_hash"]) == 64
+
+    @pytest.mark.asyncio
+    async def test_download_ad_logs_warning_when_preservation_fails(
+        self, extractor:extract_module.AdExtractor, tmp_path:Path, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """When preservation validation fails, a warning is logged and the download proceeds normally."""
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+
+        extractor.download_dir = download_base
+        final_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents = True)
+
+        # Write an existing YAML so preservation is triggered
+        existing_yaml = final_dir / "ad_12345.yaml"
+        existing_data:dict[str, Any] = {
+            "title": "Old Advertisement Title",
+            "description": "Old description text",
+            "category": "Dienstleistungen",
+            "price": 100,
+            "price_type": "FIXED",
+            "repost_count": 5,
+        }
+        await asyncio.to_thread(dicts.save_dict, str(existing_yaml), existing_data)
+
+        extractor.config.download.preserve_local_settings = True
+
+        # Create the test ad before patching model_validate (since it uses model_validate internally)
+        ad_cfg = _create_test_ad_partial()
+
+        with (
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract,
+            patch.object(AdPartial, "model_validate", side_effect = ValueError("validation failed")),
+        ):
+            mock_extract.return_value = (
+                ad_cfg,
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            await extractor.download_ad(12345)
+
+        # Download completed normally despite preservation failure
+        assert (final_dir / "ad_12345.yaml").exists()
+        assert not staging_dir.exists()
+        assert any("Could not preserve local settings" in message for message in caplog.messages)
+
+    @pytest.mark.asyncio
+    async def test_download_ad_preserves_other_fields_when_apr_invalid(
+        self, extractor:extract_module.AdExtractor, tmp_path:Path
+    ) -> None:
+        """Malformed auto_price_reduction skips only that field; counters still preserved."""
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+
+        extractor.download_dir = download_base
+        final_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents = True)
+
+        # Write existing YAML with a malformed auto_price_reduction
+        existing_yaml = final_dir / "ad_12345.yaml"
+        existing_data:dict[str, Any] = {
+            "title": "Old Advertisement Title",
+            "description": "Old description text",
+            "category": "Dienstleistungen",
+            "price": 100,
+            "price_type": "FIXED",
+            "repost_count": 5,
+            "price_reduction_count": 3,
+            "republication_interval": 14,
+            "auto_price_reduction": {"enabled": True},  # missing required fields → validation fails
+        }
+        await asyncio.to_thread(dicts.save_dict, str(existing_yaml), existing_data)
+
+        extractor.config.download.preserve_local_settings = True
+
+        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract:
+            mock_extract.return_value = (
+                _create_test_ad_partial(),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            await extractor.download_ad(12345)
+
+        saved_data = await asyncio.to_thread(dicts.load_dict, str(final_dir / "ad_12345.yaml"))
+        assert saved_data["repost_count"] == 5
+        assert saved_data["price_reduction_count"] == 3
+        assert saved_data["republication_interval"] == 14
+        # auto_price_reduction was not preserved (malformed), so it stays at the fresh download's value
+        assert saved_data.get("auto_price_reduction") is None
 
 
 class TestRenderDownloadNameWithBudgetWarnings:
