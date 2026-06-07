@@ -333,8 +333,10 @@ class AdExtractor(WebScrapingMixin):
                         preserved["price_reduction_count"] = existing_data["price_reduction_count"]
 
                     if preserved:
-                        # Validate on a copy before committing to ad_cfg
-                        candidate = ad_cfg.model_copy(update = preserved)
+                        # Build a fully validated instance from merged data,
+                        # then commit only validated attributes back to ad_cfg.
+                        merged = {**ad_cfg.model_dump(), **preserved}
+                        candidate = ad_cfg.model_validate(merged)
                         candidate.content_hash = candidate.to_ad(self.config.ad_defaults).update_content_hash().content_hash
                         for key in preserved:
                             setattr(ad_cfg, key, getattr(candidate, key))

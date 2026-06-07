@@ -2806,9 +2806,9 @@ class TestAdExtractorDownload:
         existing_data:dict[str, Any] = {
             "title": "Old Advertisement Title",
             "description": "Old description text",
-            "category": "Dienstleistungen",
-            "price": 100,
-            "price_type": "FIXED",
+            "category": "Garten & Freizeit > Camping",
+            "price": 200,
+            "price_type": "NEGOTIABLE",
             "repost_count": 5,
             "price_reduction_count": 3,
             "auto_price_reduction": {"enabled": True, "strategy": "PERCENTAGE", "amount": 10, "min_price": 1},
@@ -2831,6 +2831,8 @@ class TestAdExtractorDownload:
         saved_data = await asyncio.to_thread(dicts.load_dict, str(final_dir / "ad_12345.yaml"))
         assert saved_data["title"] == "Test Advertisement Title"
         assert saved_data["description"] == "Test Description"
+        assert saved_data["category"] == "Dienstleistungen"
+        assert saved_data["price"] == 100
         assert saved_data["repost_count"] == 5
         assert saved_data["price_reduction_count"] == 3
         assert saved_data["auto_price_reduction"]["enabled"] is True
@@ -2865,12 +2867,15 @@ class TestAdExtractorDownload:
 
         extractor.config.download.preserve_local_settings = True
 
+        # Create the test ad before patching model_validate (since it uses model_validate internally)
+        ad_cfg = _create_test_ad_partial()
+
         with (
             patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract,
-            patch.object(AdPartial, "model_copy", side_effect = ValueError("validation failed")),
+            patch.object(AdPartial, "model_validate", side_effect = ValueError("validation failed")),
         ):
             mock_extract.return_value = (
-                _create_test_ad_partial(),
+                ad_cfg,
                 staging_dir,
                 final_dir,
                 "ad_12345",
@@ -2878,6 +2883,9 @@ class TestAdExtractorDownload:
 
             await extractor.download_ad(12345)
 
+        # Download completed normally despite preservation failure
+        assert (final_dir / "ad_12345.yaml").exists()
+        assert not staging_dir.exists()
         assert any("Could not preserve local settings" in message for message in caplog.messages)
 
 
