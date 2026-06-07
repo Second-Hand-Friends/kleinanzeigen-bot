@@ -156,7 +156,7 @@ def _help_text() -> str:
                 * all: update all ads
                 * changed: only update ads that have been modified since last publication
                 * <id(s)>: provide one or several ads by ID to update, like e.g. "--ads=1,2,3"
-          --ads=all|<id(s)> (extend) - specifies which ads to extend
+          --ads=all|<id(s)> (extend) - specifies which ads to extend (DEFAULT: all)
                 Possible values:
                 * all: extend all ads expiring within 8 days
                 * <id(s)>: specify ad IDs to extend, e.g. "--ads=1,2,3"
