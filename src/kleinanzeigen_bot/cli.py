@@ -103,7 +103,7 @@ def _help_text() -> str:
                     * all: Aktualisiert alle Anzeigen
                     * changed: Aktualisiert nur Anzeigen, die seit der letzten Veröffentlichung geändert wurden
                     * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs zum Aktualisieren an, z. B. "--ads=1,2,3"
-              --ads=all|<id(s)> (extend) - Gibt an, welche Anzeigen verlängert werden sollen
+              --ads=all|<id(s)> (extend) - Gibt an, welche Anzeigen verlängert werden sollen (STANDARD: all)
                     Mögliche Werte:
                     * all: Verlängert alle Anzeigen, die innerhalb von 8 Tagen ablaufen
                     * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
