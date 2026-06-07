@@ -2895,6 +2895,53 @@ class TestAdExtractorDownload:
         assert not staging_dir.exists()
         assert any("Could not preserve local settings" in message for message in caplog.messages)
 
+    @pytest.mark.asyncio
+    async def test_download_ad_preserves_other_fields_when_apr_invalid(
+        self, extractor:extract_module.AdExtractor, tmp_path:Path
+    ) -> None:
+        """Malformed auto_price_reduction skips only that field; counters still preserved."""
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+
+        extractor.download_dir = download_base
+        final_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents = True)
+
+        # Write existing YAML with a malformed auto_price_reduction
+        existing_yaml = final_dir / "ad_12345.yaml"
+        existing_data:dict[str, Any] = {
+            "title": "Old Advertisement Title",
+            "description": "Old description text",
+            "category": "Dienstleistungen",
+            "price": 100,
+            "price_type": "FIXED",
+            "repost_count": 5,
+            "price_reduction_count": 3,
+            "republication_interval": 14,
+            "auto_price_reduction": {"enabled": True},  # missing required fields → validation fails
+        }
+        await asyncio.to_thread(dicts.save_dict, str(existing_yaml), existing_data)
+
+        extractor.config.download.preserve_local_settings = True
+
+        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract:
+            mock_extract.return_value = (
+                _create_test_ad_partial(),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            await extractor.download_ad(12345)
+
+        saved_data = await asyncio.to_thread(dicts.load_dict, str(final_dir / "ad_12345.yaml"))
+        assert saved_data["repost_count"] == 5
+        assert saved_data["price_reduction_count"] == 3
+        assert saved_data["republication_interval"] == 14
+        # auto_price_reduction was not preserved (malformed), so it stays at the fresh download's value
+        assert saved_data.get("auto_price_reduction") is None
+
 
 class TestRenderDownloadNameWithBudgetWarnings:
     """Tests for truncation warnings in download name rendering."""
