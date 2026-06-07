@@ -19,7 +19,7 @@ from typing import Any, Final
 from kleinanzeigen_bot.model.ad_model import ContactPartial
 
 from .model.ad_model import OPTION_NAME_BY_CARRIER_CODE, AdPartial, validate_condition_api_mapping
-from .model.config_model import Config
+from .model.config_model import AutoPriceReductionConfig, Config
 from .utils import dicts, files, i18n, loggers, misc, reflect
 from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
 
@@ -301,6 +301,42 @@ class AdExtractor(WebScrapingMixin):
         )
 
         loop = asyncio.get_running_loop()
+
+        # Preserve local-only settings when re-downloading an existing ad
+        if self.config.download.preserve_local_settings and await files.exists(final_dir):
+            existing_yaml_path = final_dir / f"{ad_file_stem}.yaml"
+            if await files.exists(existing_yaml_path):
+                try:
+                    existing_data = await loop.run_in_executor(
+                        None, lambda: dicts.load_dict(str(existing_yaml_path), content_label = f"existing ad {ad_id}")
+                    )
+                    # Collect candidate local-only values without mutating ad_cfg yet
+                    # to avoid saving partially corrupted state if validation fails.
+                    # dicts.load_dict returns ruamel CommentedMap; convert to plain
+                    # dict and validate explicitly since model_copy won't coerce nested models.
+                    preserved:dict[str, Any] = {}
+                    if "auto_price_reduction" in existing_data:
+                        preserved["auto_price_reduction"] = AutoPriceReductionConfig.model_validate(
+                            dict(existing_data["auto_price_reduction"])
+                        )
+                    if "republication_interval" in existing_data:
+                        preserved["republication_interval"] = existing_data["republication_interval"]
+                    if "repost_count" in existing_data:
+                        preserved["repost_count"] = existing_data["repost_count"]
+                    if "price_reduction_count" in existing_data:
+                        preserved["price_reduction_count"] = existing_data["price_reduction_count"]
+
+                    if preserved:
+                        # Validate on a copy before committing to ad_cfg
+                        candidate = ad_cfg.model_copy(update = preserved)
+                        candidate.content_hash = candidate.to_ad(self.config.ad_defaults).update_content_hash().content_hash
+                        for key in preserved:
+                            setattr(ad_cfg, key, getattr(candidate, key))
+                        ad_cfg.content_hash = candidate.content_hash
+                        LOG.info("Preserved local-only settings from existing ad %d.", ad_id)
+                except Exception as ex:
+                    LOG.warning("Could not preserve local settings from existing ad %d: %s", ad_id, ex)
+
         backup_dir = final_dir.with_name(f"{_BACKUP_DIR_PREFIX}{ad_file_stem}")
         final_yaml_path = final_dir / f"{ad_file_stem}.yaml"
         backup_created_by_us = False

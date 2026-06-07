@@ -43,6 +43,7 @@ class ParsedArgs:
     ads_selector:str = "due"
     ads_selector_explicit:bool = False
     keep_old_ads:bool = False
+    preserve_local_settings:bool = False
     config_arg:str | None = None
     config_file_path:str | None = None
     logfile_arg:str | None = None
@@ -182,7 +183,7 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
         options, arguments = getopt.gnu_getopt(
             list(args)[1:],
             "hv",
-            ["ads=", "config=", "force", "help", "keep-old", "logfile=", "lang=", "verbose", "workspace-mode="],
+            ["ads=", "config=", "force", "help", "keep-old", "logfile=", "lang=", "preserve-local-settings", "verbose", "workspace-mode="],
         )
     except getopt.error as ex:
         LOG.error(ex.msg)
@@ -214,6 +215,8 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
                 parsed.ads_selector_explicit = True
             case "--keep-old":
                 parsed.keep_old_ads = True
+            case "--preserve-local-settings":
+                parsed.preserve_local_settings = True
             case "--lang":
                 set_current_locale(Locale.of(value))
             case "-v" | "--verbose":

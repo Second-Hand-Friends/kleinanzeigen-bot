@@ -196,6 +196,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self.ads_selector = parsed.ads_selector
         self._ads_selector_explicit = parsed.ads_selector_explicit
         self.keep_old_ads = parsed.keep_old_ads
+        self._preserve_local_settings = parsed.preserve_local_settings
         self._config_arg = parsed.config_arg
         self._workspace_mode_arg = cast(_xdg_paths.InstallationMode, parsed.workspace_mode) if parsed.workspace_mode else None
         self._logfile_arg = parsed.logfile_arg
@@ -377,6 +378,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                             sys.exit(2)
                         self.ads_selector = "new"
                     _bootstrap_runtime()
+                    if self._preserve_local_settings:
+                        self.config.download.preserve_local_settings = True
                     # Check for updates on startup
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()

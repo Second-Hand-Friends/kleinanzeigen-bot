@@ -562,6 +562,12 @@
           "description": "if true, rename existing folders without titles to include titles (default: false)",
           "title": "Rename Existing Folders",
           "type": "boolean"
+        },
+        "preserve_local_settings": {
+          "default": true,
+          "description": "if true, preserves local-only settings (auto_price_reduction, republication_interval, repost_count, price_reduction_count) when re-downloading an already saved ad. Useful for picking up live changes without losing local configuration.",
+          "title": "Preserve Local Settings",
+          "type": "boolean"
         }
       },
       "title": "DownloadConfig",

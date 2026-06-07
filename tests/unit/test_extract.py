@@ -18,6 +18,7 @@ from ruamel.yaml import YAML
 import kleinanzeigen_bot.extract as extract_module
 from kleinanzeigen_bot.model.ad_model import OPTION_NAME_BY_CARRIER_CODE, AdPartial, ContactPartial
 from kleinanzeigen_bot.model.config_model import Config, DownloadConfig
+from kleinanzeigen_bot.utils import dicts
 from kleinanzeigen_bot.utils.web_scraping_mixin import Browser, By, Element
 
 SCHEMA_PATH:Final[Path] = Path(__file__).resolve().parents[2] / "schemas" / "ad.schema.json"
@@ -2786,6 +2787,58 @@ class TestAdExtractorDownload:
         assert "12345" in rendered
         assert rendered.endswith("_12345")
         assert len(rendered) <= 20
+
+    @pytest.mark.asyncio
+    async def test_download_ad_preserves_local_settings_when_enabled(
+        self, extractor:extract_module.AdExtractor, tmp_path:Path
+    ) -> None:
+        """Re-downloading an existing ad with preserve_local_settings=True keeps local counters and overrides."""
+        download_base = tmp_path / "downloaded-ads"
+        final_dir = download_base / "ad_12345_Test Advertisement Title"
+        staging_dir = download_base / ".tmp-ad_12345"
+
+        extractor.download_dir = download_base
+        final_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents = True)
+
+        # Write an existing ad YAML with local-only fields set to non-default values
+        existing_yaml = final_dir / "ad_12345.yaml"
+        existing_data:dict[str, Any] = {
+            "title": "Old Advertisement Title",
+            "description": "Old description text",
+            "category": "Dienstleistungen",
+            "price": 100,
+            "price_type": "FIXED",
+            "repost_count": 5,
+            "price_reduction_count": 3,
+            "auto_price_reduction": {"enabled": True, "strategy": "PERCENTAGE", "amount": 10, "min_price": 1},
+            "republication_interval": 14,
+        }
+        await asyncio.get_running_loop().run_in_executor(
+            None, lambda: dicts.save_dict(str(existing_yaml), existing_data)
+        )
+
+        extractor.config.download.preserve_local_settings = True
+
+        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract:
+            mock_extract.return_value = (
+                _create_test_ad_partial(),
+                staging_dir,
+                final_dir,
+                "ad_12345",
+            )
+
+            await extractor.download_ad(12345)
+
+        saved_data = await asyncio.get_running_loop().run_in_executor(
+            None, lambda: dicts.load_dict(str(final_dir / "ad_12345.yaml"))
+        )
+        assert saved_data["repost_count"] == 5
+        assert saved_data["price_reduction_count"] == 3
+        assert saved_data["auto_price_reduction"]["enabled"] is True
+        assert saved_data["republication_interval"] == 14
+        assert isinstance(saved_data.get("content_hash"), str)
+        assert len(saved_data["content_hash"]) == 64
 
 
 class TestRenderDownloadNameWithBudgetWarnings:
