@@ -305,6 +305,13 @@ class AdExtractor(WebScrapingMixin):
         # Preserve local-only settings when re-downloading an existing ad
         if self.config.download.preserve_local_settings and await files.exists(final_dir):
             existing_yaml_path = final_dir / f"{ad_file_stem}.yaml"
+            # Fall back to glob if the rendered stem does not match (e.g. title changed)
+            if not await files.exists(existing_yaml_path):
+                yaml_candidates = await loop.run_in_executor(
+                    None, lambda: sorted(final_dir.glob("*.yaml"))
+                )
+                if len(yaml_candidates) == 1:
+                    existing_yaml_path = yaml_candidates[0]
             if await files.exists(existing_yaml_path):
                 try:
                     existing_data = await loop.run_in_executor(
