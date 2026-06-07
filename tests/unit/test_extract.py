@@ -2829,6 +2829,8 @@ class TestAdExtractorDownload:
             await extractor.download_ad(12345)
 
         saved_data = await asyncio.to_thread(dicts.load_dict, str(final_dir / "ad_12345.yaml"))
+        assert saved_data["title"] == "Test Advertisement Title"
+        assert saved_data["description"] == "Test Description"
         assert saved_data["repost_count"] == 5
         assert saved_data["price_reduction_count"] == 3
         assert saved_data["auto_price_reduction"]["enabled"] is True
