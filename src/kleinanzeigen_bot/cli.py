@@ -110,6 +110,7 @@ def _help_text() -> str:
                     * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
               --force           - Alias für '--ads=all'
               --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
+              --preserve-local-settings - Behält lokale Einstellungen bei erneutem Download einer bereits gespeicherten Anzeige bei
               --config=<PATH>   - Pfad zur YAML- oder JSON-Konfigurationsdatei (ändert den Workspace-Modus nicht implizit)
               --workspace-mode=portable|xdg - Überschreibt den Workspace-Modus für diesen Lauf
               --logfile=<PATH>  - Pfad zur Protokolldatei (STANDARD: vom aktiven Workspace-Modus abhängig)
@@ -163,6 +164,7 @@ def _help_text() -> str:
                 * <id(s)>: specify ad IDs to extend, e.g. "--ads=1,2,3"
           --force           - alias for '--ads=all'
           --keep-old        - don't delete old ads on republication
+          --preserve-local-settings - preserve local-only settings when re-downloading an already saved ad
           --config=<PATH>   - path to the config YAML or JSON file (does not implicitly change workspace mode)
           --workspace-mode=portable|xdg - overrides workspace mode for this run
           --logfile=<PATH>  - path to the logfile (DEFAULT: depends on active workspace mode)
