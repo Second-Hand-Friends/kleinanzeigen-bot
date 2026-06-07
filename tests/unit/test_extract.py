@@ -2788,9 +2788,16 @@ class TestAdExtractorDownload:
         assert rendered.endswith("_12345")
         assert len(rendered) <= 20
 
+    @pytest.mark.parametrize(
+        "rendered_stem",
+        [
+            "ad_12345",            # matches saved filename — direct lookup
+            "ad_12345_newtitle",   # mismatched — triggers glob fallback
+        ],
+    )
     @pytest.mark.asyncio
     async def test_download_ad_preserves_local_settings_when_enabled(
-        self, extractor:extract_module.AdExtractor, tmp_path:Path
+        self, extractor:extract_module.AdExtractor, tmp_path:Path, rendered_stem:str
     ) -> None:
         """Re-downloading an existing ad with preserve_local_settings=True keeps local counters and overrides."""
         download_base = tmp_path / "downloaded-ads"
@@ -2823,12 +2830,12 @@ class TestAdExtractorDownload:
                 _create_test_ad_partial(),
                 staging_dir,
                 final_dir,
-                "ad_12345",
+                rendered_stem,
             )
 
             await extractor.download_ad(12345)
 
-        saved_data = await asyncio.to_thread(dicts.load_dict, str(final_dir / "ad_12345.yaml"))
+        saved_data = await asyncio.to_thread(dicts.load_dict, str(final_dir / f"{rendered_stem}.yaml"))
         assert saved_data["title"] == "Test Advertisement Title"
         assert saved_data["description"] == "Test Description"
         assert saved_data["category"] == "Dienstleistungen"
