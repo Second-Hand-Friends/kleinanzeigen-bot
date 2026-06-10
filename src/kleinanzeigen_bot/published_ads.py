@@ -125,6 +125,7 @@ async def fetch_published_ads(
         paging = json_data.get("paging")
         if not isinstance(paging, dict):
             LOG.debug("No paging dict found on page %s, assuming single page", page)
+            _handle_incomplete_fetch("No paging dict found on page %s", page)
             break
 
         # Use only real API fields (confirmed from production data)
