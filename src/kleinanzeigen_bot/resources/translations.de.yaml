@@ -307,6 +307,7 @@ kleinanzeigen_bot/extend_flow.py:
     " -> SKIPPED: ad '%s' (ID: %s) not found in published ads": " -> ÜBERSPRUNGEN: Anzeige '%s' (ID: %s) nicht gefunden"
     " -> SKIPPED: ad '%s' is not active (state: %s)": " -> ÜBERSPRUNGEN: Anzeige '%s' ist nicht aktiv (Status: %s)"
     " -> SKIPPED: ad '%s' has no endDate in API response": " -> ÜBERSPRUNGEN: Anzeige '%s' hat kein Ablaufdatum in API-Antwort"
+    " -> SKIPPED: ad '%s' has invalid endDate format: %s": " -> ÜBERSPRUNGEN: Anzeige '%s' hat ungültiges Ablaufdatum-Format: %s"
     " -> ad '%s' expires in %d days, will extend": " -> Anzeige '%s' läuft in %d Tagen ab, wird verlängert"
     " -> SKIPPED: ad '%s' expires in %d days (can only extend within 8 days)": " -> ÜBERSPRUNGEN: Anzeige '%s' läuft in %d Tagen ab (Verlängern nur innerhalb von 8 Tagen möglich)"
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' aus [%s]..."

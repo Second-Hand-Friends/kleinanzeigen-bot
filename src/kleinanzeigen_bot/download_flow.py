@@ -24,6 +24,12 @@ def resolve_download_dir(
     config_file_path:str,
     workspace:_xdg_paths.Workspace,
 ) -> Path:
+    """Resolve the download directory from config and workspace.
+
+    Returns workspace.download_dir when config.download.dir is the literal
+    default; otherwise resolves the configured path (relative to config file
+    or absolute).
+    """
     trimmed_dir = config.download.dir.strip()
     if trimmed_dir == DEFAULT_DOWNLOAD_DIR:
         return workspace.download_dir
