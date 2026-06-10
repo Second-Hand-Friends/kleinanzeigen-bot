@@ -15,7 +15,7 @@ from kleinanzeigen_bot.utils import misc
 
 @pytest.mark.unit
 class TestJSONPagination:
-    """Tests for _coerce_page_number and fetch_published_ads methods."""
+    """Tests for coerce_page_number and fetch_published_ads methods."""
 
     @pytest.fixture
     def bot(self) -> KleinanzeigenBot:

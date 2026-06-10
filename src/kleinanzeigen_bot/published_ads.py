@@ -156,7 +156,6 @@ async def fetch_published_ads(
                 _handle_incomplete_fetch("Invalid 'next' page value in paging info: %s, stopping pagination", paging.get("next"))
             else:
                 LOG.debug("No 'next' in paging on page %s, assuming last page", page)
-                _handle_incomplete_fetch("No 'next' in paging on page %s, assuming last page", page)
             break
         page = next_page
 

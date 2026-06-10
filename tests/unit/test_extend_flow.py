@@ -3,7 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Tests for the extend command and extend_flow module."""
 
-import json  # isort: skip
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
