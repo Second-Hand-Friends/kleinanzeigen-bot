@@ -1618,6 +1618,53 @@ class WebScrapingMixin:
         await self.web_sleep()
         return listbox
 
+    async def _find_associated_button_combobox(self, *, hidden_input_name:str) -> str | None:  # pragma: no cover — browser JS helper
+        """Locate a ``<button role="combobox">`` by walking from its backing hidden input.
+
+        The interesting logic (DOM queries, ``getElementById``, ancestor walk)
+        lives in the inline JavaScript and requires a live browser session for
+        meaningful coverage.  The Python wrapper (``json.dumps``, ``isinstance``
+        check, return) is trivial boilerplate.  Integration-level routing is
+        tested in ``test_init.py`` via the ``__set_special_attributes`` dispatch.
+
+        Anchors to the specific hidden input identified by *hidden_input_name*
+        (e.g. ``attributeMap[baby_kinderkleidung.groesse]``), derives the
+        expected button ID from the ``attributeMap[...]`` value, and tries
+        ``getElementById`` first.  Falls back to walking up the DOM tree from
+        the hidden input to find an associated ``<button role="combobox">``.
+
+        :param hidden_input_name: Exact ``name`` attribute of the matched
+            hidden ``<input>``.
+        :returns: The button's ``id`` attribute, or ``None`` if not found.
+        """
+        js_hidden_name = json.dumps(hidden_input_name)  # pragma: no cover — browser JS helper
+        result = await self.web_execute(f"""(function() {{
+    const name = {js_hidden_name};
+
+    // Find the specific hidden input by exact name.
+    const inp = document.querySelector("input[type='hidden'][name=" + JSON.stringify(name) + "]");
+    if (!inp) return null;
+
+    // Derive expected button ID from attributeMap[VALUE].
+    const match = name.match(/^attributeMap\\[(.+)\\]$/);
+    if (match) {{
+        const btn = document.getElementById(match[1]);
+        if (btn && btn.getAttribute('role') === 'combobox' && btn.tagName === 'BUTTON') return match[1];
+    }}
+
+    // Walk up the DOM tree to find a button[role="combobox"].
+    let parent = inp.parentElement;
+    for (let i = 0; i < 8 && parent; i++, parent = parent.parentElement) {{
+        const btn = parent.querySelector('button[role="combobox"]');
+        if (btn && btn.id) return btn.id;
+    }}
+
+    return null;
+}})()""")  # pragma: no cover — browser JS helper
+        if isinstance(result, str) and result:  # pragma: no cover — browser JS helper
+            return result  # pragma: no cover — browser JS helper
+        return None  # pragma: no cover — browser JS helper
+
     async def _clear_input(self, input_field:Element) -> None:
         """Clear an input field by selecting all text via ``elem.select()`` and deleting it via CDP Backspace.
 

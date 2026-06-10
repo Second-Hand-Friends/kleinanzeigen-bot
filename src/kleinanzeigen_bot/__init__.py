@@ -2569,6 +2569,23 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 elem_selector_type = By.ID if elem_id else By.XPATH
                 elem_selector_value = elem_id or special_attr_xpath
 
+                # If the only match was a hidden backing input, search for the
+                # associated <button role="combobox"> by walking up the DOM tree.
+                if elem_type == "hidden":
+                    LOG.debug("Attribute field '%s': only matched hidden input, searching for associated button combobox...", special_attribute_key)
+                    hidden_input_name = special_attr_elem.attrs.get("name")
+                    if not hidden_input_name:
+                        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
+                    associated_button_id = await self._find_associated_button_combobox(
+                        hidden_input_name = str(hidden_input_name)
+                    )
+                    if associated_button_id is None:
+                        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
+                    LOG.debug("Attribute field '%s': found associated button combobox id='%s'", special_attribute_key, associated_button_id)
+                    await self.__select_button_combobox(associated_button_id, special_attribute_value_str)
+                    LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
+                    continue
+
                 if special_attr_elem.local_name == "select":
                     LOG.debug("Attribute field '%s' seems to be a select...", special_attribute_key)
                     await self.web_select(elem_selector_type, elem_selector_value, special_attribute_value_str)
