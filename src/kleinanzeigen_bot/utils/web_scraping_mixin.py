@@ -1638,7 +1638,7 @@ class WebScrapingMixin:
         :returns: The button's ``id`` attribute, or ``None`` if not found.
         """
         js_hidden_name = json.dumps(hidden_input_name)  # pragma: no cover — browser JS helper
-        result = await self.web_execute(f"""(function() {{  # pragma: no cover — browser JS helper
+        result = await self.web_execute(f"""(function() {{
     const name = {js_hidden_name};
 
     // Find the specific hidden input by exact name.
