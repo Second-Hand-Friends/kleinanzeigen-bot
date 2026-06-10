@@ -169,7 +169,7 @@ class WebScrapingMixin:
             self._default_timeout_config = TimeoutConfig()
         return self._default_timeout_config
 
-    def _timeout(self, key:str = "default", override:float | None = None) -> float:
+    def timeout(self, key:str = "default", override:float | None = None) -> float:
         """
         Return the base timeout (seconds) for a given key without applying multipliers.
         """
@@ -225,7 +225,7 @@ class WebScrapingMixin:
         Execute an async callable with retry/backoff handling for TimeoutError.
         """
         attempts = self._timeout_attempts()
-        configured_timeout = self._timeout(key, override)
+        configured_timeout = self.timeout(key, override)
         loop = asyncio.get_running_loop()
 
         for attempt in range(attempts):
@@ -866,7 +866,7 @@ class WebScrapingMixin:
         """
         loop = asyncio.get_running_loop()
         start_at = loop.time()
-        base_timeout = timeout if timeout is not None else self._timeout()
+        base_timeout = timeout if timeout is not None else self.timeout()
         effective_timeout = self._effective_timeout(override = base_timeout) if apply_multiplier else base_timeout
 
         while True:
@@ -1080,7 +1080,7 @@ class WebScrapingMixin:
         :param timeout: timeout in seconds (defaults to quick_dom when omitted)
         :raises Exception: non-timeout browser/runtime exceptions are propagated
         """
-        probe_timeout = self._timeout("quick_dom", timeout)
+        probe_timeout = self.timeout("quick_dom", timeout)
         try:
             return await self._web_find_once(selector_type, selector_value, probe_timeout, parent = parent)
         except TimeoutError:
@@ -1245,7 +1245,7 @@ class WebScrapingMixin:
         )
         await asyncio.sleep(duration / 1_000)
 
-    async def _navigate_paginated_ad_overview(
+    async def navigate_paginated_ad_overview(
         self,
         page_action:Callable[[int], Awaitable[bool]],
         page_url:str = "https://www.kleinanzeigen.de/m-meine-anzeigen.html",
@@ -1274,7 +1274,7 @@ class WebScrapingMixin:
                     return True
                 return False
 
-            success = await self._navigate_paginated_ad_overview(find_ad_callback)
+            success = await self.navigate_paginated_ad_overview(find_ad_callback)
         """
         try:
             await self.web_open(page_url)
@@ -1298,7 +1298,7 @@ class WebScrapingMixin:
         def is_enabled_next_button(button:Element) -> bool:
             return button.attrs.get("disabled") is None and str(button.attrs.get("aria-disabled", "")).lower() != "true"
 
-        pagination_timeout = self._timeout("pagination_initial")
+        pagination_timeout = self.timeout("pagination_initial")
         try:
             next_buttons = await self.web_find_all(By.CSS_SELECTOR, next_page_selector, timeout = pagination_timeout)
             enabled_next_buttons = [btn for btn in next_buttons if is_enabled_next_button(btn)]
@@ -1329,7 +1329,7 @@ class WebScrapingMixin:
             if not multi_page:
                 break
 
-            follow_up_timeout = self._timeout("pagination_follow_up")
+            follow_up_timeout = self.timeout("pagination_follow_up")
             try:
                 possible_next_buttons = await self.web_find_all(By.CSS_SELECTOR, next_page_selector, timeout = follow_up_timeout)
                 next_button_element = None
@@ -1464,7 +1464,7 @@ class WebScrapingMixin:
         :raises TimeoutError: when the input or matching dropdown option cannot be located
         """
         if timeout is None:
-            timeout = self._timeout("default")
+            timeout = self.timeout("default")
 
         input_field = await self.web_find(selector_type, selector_value, timeout = timeout)
 
@@ -1490,7 +1490,7 @@ class WebScrapingMixin:
         else:
             LOG.debug("Combobox input field does not have 'aria-controls'. Trying listbox lookup by role.")
             try:
-                dropdown_elem = await self.web_find(By.CSS_SELECTOR, '[role="listbox"]', timeout = self._timeout("quick_dom"))
+                dropdown_elem = await self.web_find(By.CSS_SELECTOR, '[role="listbox"]', timeout = self.timeout("quick_dom"))
             except TimeoutError:
                 LOG.debug("No listbox found for combobox. Falling back to ArrowDown + Enter key confirmation.")
                 await self._dispatch_arrow_down_and_enter(input_field)
@@ -1591,7 +1591,7 @@ class WebScrapingMixin:
             attribute handling — see GitHub issue #930.
         """
         if timeout is None:
-            timeout = self._timeout("default")
+            timeout = self.timeout("default")
 
         await self.web_click(By.ID, elem_id, timeout = timeout)
         listbox_id = f"{elem_id}-menu"

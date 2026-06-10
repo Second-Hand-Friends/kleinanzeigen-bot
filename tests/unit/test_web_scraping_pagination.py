@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""Tests for the _navigate_paginated_ad_overview helper method."""
+"""Tests for the navigate_paginated_ad_overview helper method."""
 
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -12,7 +12,7 @@ from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element, WebScrapingM
 
 
 class TestNavigatePaginatedAdOverview:
-    """Tests for _navigate_paginated_ad_overview method."""
+    """Tests for navigate_paginated_ad_overview method."""
 
     @staticmethod
     async def _single_page_find_side_effect(selector_type:By, selector_value:str, **kwargs:Any) -> Element:  # noqa: ARG004
@@ -34,9 +34,9 @@ class TestNavigatePaginatedAdOverview:
             patch.object(mixin, "web_find", new_callable = AsyncMock, side_effect = self._single_page_find_side_effect),
             patch.object(mixin, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError("No pagination")),
             patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(mixin, "_timeout", return_value = 10),
+            patch.object(mixin, "timeout", return_value = 10),
         ):
-            result = await mixin._navigate_paginated_ad_overview(callback)
+            result = await mixin.navigate_paginated_ad_overview(callback)
 
             assert result is True
             callback.assert_awaited_once_with(1)
@@ -55,9 +55,9 @@ class TestNavigatePaginatedAdOverview:
             patch.object(mixin, "web_find", new_callable = AsyncMock, side_effect = self._single_page_find_side_effect),
             patch.object(mixin, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError("No pagination")),
             patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(mixin, "_timeout", return_value = 10),
+            patch.object(mixin, "timeout", return_value = 10),
         ):
-            result = await mixin._navigate_paginated_ad_overview(callback)
+            result = await mixin.navigate_paginated_ad_overview(callback)
 
             assert result is False
             callback.assert_awaited_once_with(1)
@@ -86,9 +86,9 @@ class TestNavigatePaginatedAdOverview:
             patch.object(mixin, "web_find", new_callable = AsyncMock, side_effect = self._single_page_find_side_effect),
             patch.object(mixin, "web_find_all", new_callable = AsyncMock, side_effect = mock_find_all_side_effect),
             patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(mixin, "_timeout", return_value = 10),
+            patch.object(mixin, "timeout", return_value = 10),
         ):
-            result = await mixin._navigate_paginated_ad_overview(callback)
+            result = await mixin.navigate_paginated_ad_overview(callback)
 
             assert result is True
             assert callback.await_count == 2
@@ -102,7 +102,7 @@ class TestNavigatePaginatedAdOverview:
         callback = AsyncMock()
 
         with patch.object(mixin, "web_open", new_callable = AsyncMock, side_effect = TimeoutError("Page load timeout")):
-            result = await mixin._navigate_paginated_ad_overview(callback)
+            result = await mixin.navigate_paginated_ad_overview(callback)
 
             assert result is False
             callback.assert_not_awaited()  # Callback should not be called
@@ -119,7 +119,7 @@ class TestNavigatePaginatedAdOverview:
             patch.object(mixin, "web_sleep", new_callable = AsyncMock),
             patch.object(mixin, "web_find", new_callable = AsyncMock, side_effect = TimeoutError("Container not found")),
         ):
-            result = await mixin._navigate_paginated_ad_overview(callback)
+            result = await mixin.navigate_paginated_ad_overview(callback)
 
             assert result is False
             callback.assert_not_awaited()
@@ -137,9 +137,9 @@ class TestNavigatePaginatedAdOverview:
             patch.object(mixin, "web_find", new_callable = AsyncMock, side_effect = self._single_page_find_side_effect),
             patch.object(mixin, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError("No pagination")),
             patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock, side_effect = TimeoutError("Scroll timeout")),
-            patch.object(mixin, "_timeout", return_value = 10),
+            patch.object(mixin, "timeout", return_value = 10),
         ):
-            result = await mixin._navigate_paginated_ad_overview(callback)
+            result = await mixin.navigate_paginated_ad_overview(callback)
 
             # Should continue and call callback despite scroll timeout
             assert result is True
@@ -158,9 +158,9 @@ class TestNavigatePaginatedAdOverview:
             patch.object(mixin, "web_find", new_callable = AsyncMock, side_effect = self._single_page_find_side_effect),
             patch.object(mixin, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError("No pagination")),
             patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(mixin, "_timeout", return_value = 10),
+            patch.object(mixin, "timeout", return_value = 10),
         ):
-            result = await mixin._navigate_paginated_ad_overview(callback)
+            result = await mixin.navigate_paginated_ad_overview(callback)
 
             assert result is False
             callback.assert_awaited_once_with(1)

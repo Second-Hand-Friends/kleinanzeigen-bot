@@ -531,7 +531,7 @@ class AdExtractor(WebScrapingMixin):
                 LOG.exception("Error extracting refs on page %s: %s", page_num, e)
                 return False  # Continue to next page
 
-        await self._navigate_paginated_ad_overview(extract_page_refs)
+        await self.navigate_paginated_ad_overview(extract_page_refs)
 
         if not refs:
             LOG.warning("No ad URLs were extracted.")

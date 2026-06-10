@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+"""Tests for the extend command and extend_flow module."""
+
 import json  # isort: skip
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -9,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kleinanzeigen_bot import KleinanzeigenBot, runtime_config
+from kleinanzeigen_bot import KleinanzeigenBot, extend_flow, runtime_config
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.utils import dicts, misc, xdg_paths
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
@@ -99,7 +101,7 @@ class TestExtendAdsMethod:
         with patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request, patch.object(test_bot, "web_sleep", new_callable = AsyncMock):
             mock_request.return_value = {"content": '{"ads": []}'}
 
-            await test_bot.extend_ads([("test.yaml", ad_cfg, ad_config)])
+            await extend_flow.extend_ads(web = test_bot, root_url = test_bot.root_url, ad_cfgs = [("test.yaml", ad_cfg, ad_config)])
 
             # Verify no extension was attempted
             mock_request.assert_called_once()  # Only the API call to get published ads
@@ -113,7 +115,7 @@ class TestExtendAdsMethod:
             # Return empty published ads list
             mock_request.return_value = {"content": '{"ads": []}'}
 
-            await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
+            await extend_flow.extend_ads(web = test_bot, root_url = test_bot.root_url, ad_cfgs = [("test.yaml", ad_cfg, base_ad_config_with_id)])
 
             # Verify no extension was attempted
             mock_request.assert_called_once()
@@ -137,11 +139,11 @@ class TestExtendAdsMethod:
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
+            patch("kleinanzeigen_bot.extend_flow._extend_ad", new_callable = AsyncMock) as mock_extend_ad,
         ):
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
 
-            await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
+            await extend_flow.extend_ads(web = test_bot, root_url = test_bot.root_url, ad_cfgs = [("test.yaml", ad_cfg, base_ad_config_with_id)])
 
             # Verify extend_ad was not called
             mock_extend_ad.assert_not_called()
@@ -165,11 +167,11 @@ class TestExtendAdsMethod:
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
+            patch("kleinanzeigen_bot.extend_flow._extend_ad", new_callable = AsyncMock) as mock_extend_ad,
         ):
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
 
-            await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
+            await extend_flow.extend_ads(web = test_bot, root_url = test_bot.root_url, ad_cfgs = [("test.yaml", ad_cfg, base_ad_config_with_id)])
 
             # Verify extend_ad was not called
             mock_extend_ad.assert_not_called()
@@ -188,11 +190,11 @@ class TestExtendAdsMethod:
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
+            patch("kleinanzeigen_bot.extend_flow._extend_ad", new_callable = AsyncMock) as mock_extend_ad,
         ):
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
 
-            await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
+            await extend_flow.extend_ads(web = test_bot, root_url = test_bot.root_url, ad_cfgs = [("test.yaml", ad_cfg, base_ad_config_with_id)])
 
             # Verify extend_ad was not called
             mock_extend_ad.assert_not_called()
@@ -211,12 +213,12 @@ class TestExtendAdsMethod:
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
+            patch("kleinanzeigen_bot.extend_flow._extend_ad", new_callable = AsyncMock) as mock_extend_ad,
         ):
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
             mock_extend_ad.return_value = True
 
-            await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
+            await extend_flow.extend_ads(web = test_bot, root_url = test_bot.root_url, ad_cfgs = [("test.yaml", ad_cfg, base_ad_config_with_id)])
 
             # Verify extend_ad was called
             mock_extend_ad.assert_called_once()
@@ -246,24 +248,27 @@ class TestExtendAdsMethod:
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
+            patch("kleinanzeigen_bot.extend_flow._extend_ad", new_callable = AsyncMock) as mock_extend_ad,
         ):
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
             mock_extend_ad.return_value = True
 
-            await test_bot.extend_ads([("test1.yaml", ad_cfg1, base_ad_config_with_id), ("test2.yaml", ad_cfg2, ad_config2)])
+            await extend_flow.extend_ads(
+                web = test_bot, root_url = test_bot.root_url,
+                ad_cfgs = [("test1.yaml", ad_cfg1, base_ad_config_with_id), ("test2.yaml", ad_cfg2, ad_config2)],
+            )
 
             # Verify extend_ad was called only once (for the ad within window)
             assert mock_extend_ad.call_count == 1
 
 
 class TestExtendAdMethod:
-    """Tests for the extend_ad() method.
+    """Tests for the _extend_ad() method.
 
-    Note: These tests mock `_navigate_paginated_ad_overview` rather than individual browser methods
+    Note: These tests mock `navigate_paginated_ad_overview` rather than individual browser methods
     (web_find, web_click, etc.) because the pagination helper involves complex multi-step browser
     interactions that would require extensive, brittle mock choreography. Mocking at this level
-    keeps tests focused on extend_ad's own logic (dialog handling, YAML persistence, error paths).
+    keeps tests focused on _extend_ad's own logic (dialog handling, YAML persistence, error paths).
     """
 
     @pytest.mark.asyncio
@@ -276,7 +281,7 @@ class TestExtendAdMethod:
         dicts.save_dict(str(ad_file), base_ad_config_with_id)
 
         with (
-            patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate,
+            patch.object(test_bot, "navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate,
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.utils.misc.now") as mock_now,
         ):
@@ -285,7 +290,11 @@ class TestExtendAdMethod:
 
             mock_paginate.return_value = True
 
-            result = await test_bot.extend_ad(str(ad_file), ad_cfg, base_ad_config_with_id)
+            result = await extend_flow._extend_ad(
+                web = test_bot, root_url = test_bot.root_url,
+                ad_file = str(ad_file), ad_cfg = ad_cfg,
+                ad_cfg_orig = base_ad_config_with_id,
+            )
 
             assert result is True
             assert mock_paginate.call_count == 1
@@ -296,25 +305,29 @@ class TestExtendAdMethod:
 
     @pytest.mark.asyncio
     async def test_extend_ad_button_not_found(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path) -> None:
-        """Test extend_ad when the Verlängern button is not found."""
+        """Test _extend_ad when the Verlängern button is not found."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
         # Create temporary YAML file
         ad_file = tmp_path / "test_ad.yaml"
         dicts.save_dict(str(ad_file), base_ad_config_with_id)
 
-        with patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate:
+        with patch.object(test_bot, "navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate:
             # Simulate button not found by having pagination return False (not found on any page)
             mock_paginate.return_value = False
 
-            result = await test_bot.extend_ad(str(ad_file), ad_cfg, base_ad_config_with_id)
+            result = await extend_flow._extend_ad(
+                web = test_bot, root_url = test_bot.root_url,
+                ad_file = str(ad_file), ad_cfg = ad_cfg,
+                ad_cfg_orig = base_ad_config_with_id,
+            )
 
             assert result is False
             assert mock_paginate.call_count == 1
 
     @pytest.mark.asyncio
     async def test_extend_ad_dialog_timeout(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path) -> None:
-        """Test extend_ad when the confirmation dialog times out (no dialog appears)."""
+        """Test _extend_ad when the confirmation dialog times out (no dialog appears)."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
         # Create temporary YAML file
@@ -322,7 +335,7 @@ class TestExtendAdMethod:
         dicts.save_dict(str(ad_file), base_ad_config_with_id)
 
         with (
-            patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate,
+            patch.object(test_bot, "navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch("kleinanzeigen_bot.utils.misc.now") as mock_now,
         ):
@@ -334,30 +347,38 @@ class TestExtendAdMethod:
             # Dialog close button times out
             mock_click.side_effect = TimeoutError("Dialog not found")
 
-            result = await test_bot.extend_ad(str(ad_file), ad_cfg, base_ad_config_with_id)
+            result = await extend_flow._extend_ad(
+                web = test_bot, root_url = test_bot.root_url,
+                ad_file = str(ad_file), ad_cfg = ad_cfg,
+                ad_cfg_orig = base_ad_config_with_id,
+            )
 
             # Should still succeed (dialog might not appear)
             assert result is True
 
     @pytest.mark.asyncio
     async def test_extend_ad_exception_handling(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path) -> None:
-        """Test extend_ad propagates unexpected exceptions."""
+        """Test _extend_ad propagates unexpected exceptions."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
         # Create temporary YAML file
         ad_file = tmp_path / "test_ad.yaml"
         dicts.save_dict(str(ad_file), base_ad_config_with_id)
 
-        with patch.object(test_bot, "_navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate:
+        with patch.object(test_bot, "navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate:
             # Simulate unexpected exception during pagination
             mock_paginate.side_effect = Exception("Unexpected error")
 
             with pytest.raises(Exception, match = "Unexpected error"):
-                await test_bot.extend_ad(str(ad_file), ad_cfg, base_ad_config_with_id)
+                await extend_flow._extend_ad(
+                    web = test_bot, root_url = test_bot.root_url,
+                    ad_file = str(ad_file), ad_cfg = ad_cfg,
+                    ad_cfg_orig = base_ad_config_with_id,
+                )
 
     @pytest.mark.asyncio
     async def test_extend_ad_with_web_mocks(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path) -> None:
-        """Test extend_ad with web-level mocks to exercise the find_and_click_extend_button callback."""
+        """Test _extend_ad with web-level mocks to exercise the find_and_click_extend_button callback."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
         # Create temporary YAML file
@@ -394,13 +415,17 @@ class TestExtendAdMethod:
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "_timeout", return_value = 10),
+            patch.object(test_bot, "timeout", return_value = 10),
             patch("kleinanzeigen_bot.utils.misc.now") as mock_now,
         ):
             # Test mock datetime - timezone not relevant for timestamp formatting test
             mock_now.return_value = datetime(2025, 1, 28, 15, 0, 0)  # noqa: DTZ001
 
-            result = await test_bot.extend_ad(str(ad_file), ad_cfg, base_ad_config_with_id)
+            result = await extend_flow._extend_ad(
+                web = test_bot, root_url = test_bot.root_url,
+                ad_file = str(ad_file), ad_cfg = ad_cfg,
+                ad_cfg_orig = base_ad_config_with_id,
+            )
 
             assert result is True
             # Verify the extend button was found and clicked
@@ -428,12 +453,12 @@ class TestExtendEdgeCases:
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
+            patch("kleinanzeigen_bot.extend_flow._extend_ad", new_callable = AsyncMock) as mock_extend_ad,
         ):
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
             mock_extend_ad.return_value = True
 
-            await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
+            await extend_flow.extend_ads(web = test_bot, root_url = test_bot.root_url, ad_cfgs = [("test.yaml", ad_cfg, base_ad_config_with_id)])
 
             # Verify extend_ad was called (8 days is within the window)
             mock_extend_ad.assert_called_once()
@@ -452,11 +477,11 @@ class TestExtendEdgeCases:
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
+            patch("kleinanzeigen_bot.extend_flow._extend_ad", new_callable = AsyncMock) as mock_extend_ad,
         ):
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
 
-            await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
+            await extend_flow.extend_ads(web = test_bot, root_url = test_bot.root_url, ad_cfgs = [("test.yaml", ad_cfg, base_ad_config_with_id)])
 
             # Verify extend_ad was not called (9 days is outside the window)
             mock_extend_ad.assert_not_called()
@@ -481,7 +506,7 @@ class TestExtendEdgeCases:
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "extend_ad", new_callable = AsyncMock) as mock_extend_ad,
+            patch("kleinanzeigen_bot.extend_flow._extend_ad", new_callable = AsyncMock) as mock_extend_ad,
             patch("kleinanzeigen_bot.utils.misc.now") as mock_now,
         ):
             # Mock now() to return a date where 05.02.2026 would be within 8 days
@@ -490,7 +515,7 @@ class TestExtendEdgeCases:
             mock_request.return_value = {"content": json.dumps(published_ads_json)}
             mock_extend_ad.return_value = True
 
-            await test_bot.extend_ads([("test.yaml", ad_cfg, base_ad_config_with_id)])
+            await extend_flow.extend_ads(web = test_bot, root_url = test_bot.root_url, ad_cfgs = [("test.yaml", ad_cfg, base_ad_config_with_id)])
 
             # Verify extend_ad was called (date was parsed correctly)
             mock_extend_ad.assert_called_once()
