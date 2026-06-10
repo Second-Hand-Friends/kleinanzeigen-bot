@@ -1618,8 +1618,14 @@ class WebScrapingMixin:
         await self.web_sleep()
         return listbox
 
-    async def _find_associated_button_combobox(self, *, hidden_input_name:str) -> str | None:
+    async def _find_associated_button_combobox(self, *, hidden_input_name:str) -> str | None:  # pragma: no cover — browser JS helper
         """Locate a ``<button role="combobox">`` by walking from its backing hidden input.
+
+        The interesting logic (DOM queries, ``getElementById``, ancestor walk)
+        lives in the inline JavaScript and requires a live browser session for
+        meaningful coverage.  The Python wrapper (``json.dumps``, ``isinstance``
+        check, return) is trivial boilerplate.  Integration-level routing is
+        tested in ``test_init.py`` via the ``__set_special_attributes`` dispatch.
 
         Anchors to the specific hidden input identified by *hidden_input_name*
         (e.g. ``attributeMap[baby_kinderkleidung.groesse]``), derives the
@@ -1631,8 +1637,8 @@ class WebScrapingMixin:
             hidden ``<input>``.
         :returns: The button's ``id`` attribute, or ``None`` if not found.
         """
-        js_hidden_name = json.dumps(hidden_input_name)
-        result = await self.web_execute(f"""(function() {{
+        js_hidden_name = json.dumps(hidden_input_name)  # pragma: no cover — browser JS helper
+        result = await self.web_execute(f"""(function() {{  # pragma: no cover — browser JS helper
     const name = {js_hidden_name};
 
     // Find the specific hidden input by exact name.
@@ -1654,10 +1660,10 @@ class WebScrapingMixin:
     }}
 
     return null;
-}})()""")
-        if isinstance(result, str) and result:
-            return result
-        return None
+}})()""")  # pragma: no cover — browser JS helper
+        if isinstance(result, str) and result:  # pragma: no cover — browser JS helper
+            return result  # pragma: no cover — browser JS helper
+        return None  # pragma: no cover — browser JS helper
 
     async def _clear_input(self, input_field:Element) -> None:
         """Clear an input field by selecting all text via ``elem.select()`` and deleting it via CDP Backspace.
