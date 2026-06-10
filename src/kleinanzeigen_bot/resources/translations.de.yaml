@@ -359,6 +359,10 @@ kleinanzeigen_bot/ad_loading.py:
   resolve_ad_category:
     "Category [%s] unknown. Using category [%s] with ID [%s] instead.": "Kategorie [%s] unbekannt. Verwende stattdessen Kategorie [%s] mit ID [%s]."
 
+  resolve_ad_images:
+    "Unsupported image file type [%s]": "Nicht unterstütztes Bildformat [%s]"
+    "No images found for given file patterns %s at %s": "Keine Bilder für die Dateimuster %s in %s gefunden"
+
   update_content_hashes:
     "############################################": "############################################"
     "DONE: Updated [content_hash] in %s": "FERTIG: [content_hash] in %s aktualisiert."

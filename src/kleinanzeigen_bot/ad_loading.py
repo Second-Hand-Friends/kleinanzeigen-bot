@@ -226,7 +226,7 @@ def resolve_ad_images(ad_file:str, image_patterns:list[str]) -> list[str]:
             image_file_ext = os.path.splitext(image_file)[1]
             ensure(
                 image_file_ext.lower() in {".gif", ".jpg", ".jpeg", ".png"},
-                f"Unsupported image file type [{image_file}]",
+                _("Unsupported image file type [%s]") % image_file,
             )
             if os.path.isabs(image_file):
                 pattern_images.add(image_file)
@@ -236,7 +236,7 @@ def resolve_ad_images(ad_file:str, image_patterns:list[str]) -> list[str]:
 
     ensure(
         images or not image_patterns,
-        f"No images found for given file patterns {image_patterns} at {ad_dir}",
+        _("No images found for given file patterns %s at %s") % (image_patterns, ad_dir),
     )
     return list(dict.fromkeys(images))
 
@@ -275,8 +275,8 @@ def load_ads(  # noqa: PLR0915
 
     ids = []
     use_specific_ads = False
-    # Preserve exact tokenization: split without stripping whitespace.
-    selectors = ads_selector.split(",")
+    # Strip whitespace from selector tokens to match is_valid_ads_selector.
+    selectors = [token.strip() for token in ads_selector.split(",") if token.strip()]
 
     if _download_selection.is_numeric_ids_selector(ads_selector):
         ids = [int(n) for n in ads_selector.split(",")]
