@@ -356,5 +356,7 @@ class TestJSONPagination:
         ):
             result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url, strict = True)
 
-        assert len(result) == 1
-        assert result[0]["id"] == 10
+        if len(result) != 1:
+            pytest.fail(f"Expected 1 ad in strict mode single-page response, got {len(result)}")
+        if result[0]["id"] != 10:
+            pytest.fail(f"Expected ad id 10, got {result[0]['id']}")
