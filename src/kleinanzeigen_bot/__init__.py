@@ -2573,7 +2573,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # associated <button role="combobox"> by walking up the DOM tree.
                 if elem_type == "hidden":
                     LOG.debug("Attribute field '%s': only matched hidden input, searching for associated button combobox...", special_attribute_key)
-                    associated_button_id = await self._find_associated_button_combobox(normalized_special_attribute_key)
+                    hidden_input_name = cast(str | None, special_attr_elem.attrs.get("name"))
+                    associated_button_id = await self._find_associated_button_combobox(
+                        normalized_special_attribute_key, hidden_input_name = hidden_input_name
+                    )
                     if associated_button_id is not None:
                         LOG.debug("Attribute field '%s': found associated button combobox id='%s'", special_attribute_key, associated_button_id)
                         await self.__select_button_combobox(associated_button_id, special_attribute_value_str)

@@ -3284,7 +3284,7 @@ class TestKleinanzeigenBotShippingOptions:
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
 
-        mock_find_button.assert_awaited_once_with("groesse")
+        mock_find_button.assert_awaited_once_with("groesse", hidden_input_name = "attributeMap[groesse]")
         mock_select_combobox.assert_awaited_once_with(":r8r7:", "68")
         mock_input.assert_not_awaited()
 
@@ -3331,7 +3331,7 @@ class TestKleinanzeigenBotShippingOptions:
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
 
-        mock_find_button.assert_awaited_once_with("color")
+        mock_find_button.assert_awaited_once_with("color", hidden_input_name = "attributeMap[color]")
         # Falls through to web_input for the hidden element (text input handler)
         mock_input.assert_awaited_once()
 
