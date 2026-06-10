@@ -1618,6 +1618,39 @@ class WebScrapingMixin:
         await self.web_sleep()
         return listbox
 
+    async def _find_associated_button_combobox(self, normalized_key:str) -> str | None:
+        """Locate a ``<button role="combobox">`` by walking from its backing hidden input.
+
+        Searches for hidden inputs with ``name^="attributeMap["`` whose *name*
+        contains *normalized_key*, then walks up the DOM tree to find the
+        associated ``<button role="combobox">``.
+
+        :param normalized_key: Normalized special attribute key (e.g. ``groesse``).
+        :returns: The button's ``id`` attribute, or ``None`` if not found.
+        """
+        js_key = json.dumps(normalized_key)
+        result = await self.web_execute(f"""(function() {{
+    const key = {js_key};
+    const hiddenInputs = document.querySelectorAll("input[type='hidden'][name^='attributeMap[']");
+    for (const inp of hiddenInputs) {{
+        const name = inp.getAttribute('name') || '';
+        const lower = name.toLowerCase();
+        const lowerKey = key.toLowerCase();
+        // match ".key]" or "[key]" in the attributeMap name
+        if (!(lower.includes('.' + lowerKey + ']') || lower.includes('[' + lowerKey + ']'))) continue;
+        // walk up the DOM tree (max 8 levels) to find a button[role="combobox"]
+        let parent = inp.parentElement;
+        for (let i = 0; i < 8 && parent; i++, parent = parent.parentElement) {{
+            const btn = parent.querySelector('button[role="combobox"]');
+            if (btn && btn.id) return btn.id;
+        }}
+    }}
+    return null;
+}})()""")
+        if isinstance(result, str) and result:
+            return result
+        return None
+
     async def _clear_input(self, input_field:Element) -> None:
         """Clear an input field by selecting all text via ``elem.select()`` and deleting it via CDP Backspace.
 
