@@ -12,12 +12,11 @@ from typing import TYPE_CHECKING, Any, Final, Sequence, cast
 import certifi, colorama  # isort: skip
 from nodriver.core.connection import ProtocolException
 from ruamel.yaml import YAML
-from wcmatch import glob
 
 from . import ad_form_helpers as _ad_form_helpers
+from . import ad_loading, extract
 from . import ad_state as _ad_state
 from . import download_selection as _download_selection
-from . import extract
 from . import local_path_renaming as _local_path_renaming
 from . import price_reduction as _price_reduction
 from . import runtime_config as _runtime_config
@@ -290,7 +289,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     checker.check_for_updates()
                     self.ads_selector = "all"
                     if ads := self.load_ads(exclude_ads_with_id = False):
-                        self.update_content_hashes(ads)
+                        ad_loading.update_content_hashes(ads)
                     else:
                         LOG.info("############################################")
                         LOG.info("DONE: No active ads found.")
@@ -301,7 +300,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates()
 
-                    if not self._is_valid_ads_selector({"all", "new", "due", "changed"}):
+                    if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all", "new", "due", "changed"}):
                         if self._ads_selector_explicit:
                             LOG.error(
                                 'Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, new, due, changed) or numeric IDs.',
@@ -321,7 +320,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 case "update":
                     _bootstrap_runtime()
 
-                    if not self._is_valid_ads_selector({"all", "changed"}):
+                    if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all", "changed"}):
                         if self._ads_selector_explicit:
                             LOG.error('Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, changed) or numeric IDs.', self.ads_selector)
                             sys.exit(2)
@@ -355,7 +354,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     checker.check_for_updates()
 
                     # Default to all ads if no selector provided, but reject invalid values
-                    if not self._is_valid_ads_selector({"all"}):
+                    if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all"}):
                         if self._ads_selector_explicit:
                             LOG.error('Invalid --ads selector: "%s". Valid values: all or comma-separated numeric IDs.', self.ads_selector)
                             sys.exit(2)
@@ -372,7 +371,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         LOG.info("############################################")
                 case "download":
                     # ad IDs depends on selector
-                    if not self._is_valid_ads_selector({"all", "new"}):
+                    if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all", "new"}):
                         if self._ads_selector_explicit:
                             LOG.error('Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, new) or numeric IDs.', self.ads_selector)
                             sys.exit(2)
@@ -399,193 +398,24 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 except Exception as exc:  # noqa: BLE001
                     LOG.warning("Timing collector flush failed: %s", exc)
 
-    def _is_valid_ads_selector(self, valid_keywords:set[str]) -> bool:
-        """Check if the current ads_selector is valid for the given set of keyword selectors.
-
-        Accepts a single keyword, a comma-separated list of keywords, or a comma-separated
-        list of numeric IDs. Mixed keyword+numeric selectors are not supported.
-        """
-        return (
-            self.ads_selector in valid_keywords
-            or all(s.strip() in valid_keywords for s in self.ads_selector.split(","))
-            or _download_selection.is_numeric_ids_selector(self.ads_selector)
-        )
-
-    def __check_ad_republication(self, ad_cfg:Ad, ad_file_relative:str) -> bool:
-        """
-        Check if an ad needs to be republished based on republication interval.
-        Note:  This method does not check for content changes. Use __check_ad_changed for that.
-
-        Returns:
-            True if the ad should be republished based on the interval.
-        """
-        if ad_cfg.updated_on:
-            last_updated_on = ad_cfg.updated_on
-        elif ad_cfg.created_on:
-            last_updated_on = ad_cfg.created_on
-        else:
-            return True
-
-        if not last_updated_on:
-            return True
-
-        # Check republication interval
-        ad_age = _misc.now() - last_updated_on
-        if ad_age.days <= ad_cfg.republication_interval:
-            LOG.info(
-                " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
-                ad_file_relative,
-                ad_age.days,
-                ad_cfg.republication_interval,
-            )
-            return False
-
-        return True
-
-    def __check_ad_changed(self, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], ad_file_relative:str) -> bool:
-        """
-        Check if an ad has been changed since last publication.
-
-        Returns:
-            True if the ad has been changed.
-        """
-        if not ad_cfg.id:
-            # New ads are not considered "changed"
-            return False
-
-        # Calculate hash on original config to match what was stored
-        current_hash = AdPartial.model_validate(ad_cfg_orig).update_content_hash().content_hash
-        stored_hash = ad_cfg_orig.get("content_hash")
-
-        LOG.debug("Hash comparison for [%s]:", ad_file_relative)
-        LOG.debug("    Stored hash: %s", stored_hash)
-        LOG.debug("    Current hash: %s", current_hash)
-
-        if stored_hash and current_hash != stored_hash:
-            LOG.info("Changes detected in ad [%s], will republish", ad_file_relative)
-            # Update hash in original configuration
-            ad_cfg_orig["content_hash"] = current_hash
-            return True
-
-        return False
-
     def load_ads(self, *, ignore_inactive:bool = True, exclude_ads_with_id:bool = True) -> list[tuple[str, Ad, dict[str, Any]]]:
+        """Load and validate all ad config files.
+
+        Temporary thin delegator to :func:`ad_loading.load_ads` — kept to
+        avoid churn at 7+ call sites inside :meth:`run` and
+        :meth:`download_ads`.  Will be removed when the bot class itself is
+        decomposed in steps 9–11.
         """
-        Load and validate all ad config files, optionally filtering out inactive or already-published ads.
-
-        Args:
-            ignore_inactive (bool):
-                Skip ads with `active=False`.
-            exclude_ads_with_id (bool):
-                Skip ads whose raw data already contains an `id`, i.e. was published before.
-
-        Returns:
-            list[tuple[str, Ad, dict[str, Any]]]:
-            Tuples of (file_path, validated Ad model, original raw data).
-        """
-        LOG.info("Searching for ad config files...")
-
-        ad_files:dict[str, str] = {}
-        data_root_dir = os.path.dirname(self.config_file_path)
-        for file_pattern in self.config.ad_files:
-            for ad_file in glob.glob(file_pattern, root_dir = data_root_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
-                if not str(ad_file).endswith("ad_fields.yaml"):
-                    ad_files[abspath(ad_file, relative_to = data_root_dir)] = ad_file
-        LOG.info(" -> found %s", pluralize("ad config file", ad_files))
-        if not ad_files:
-            return []
-
-        ids = []
-        use_specific_ads = False
-        selectors = self.ads_selector.split(",")
-
-        if _download_selection.is_numeric_ids_selector(self.ads_selector):
-            ids = [int(n) for n in self.ads_selector.split(",")]
-            use_specific_ads = True
-            LOG.info("Start fetch task for the ad(s) with id(s):")
-            LOG.info(" | ".join([str(id_) for id_ in ids]))
-
-        ads = []
-        for ad_file, ad_file_relative in sorted(ad_files.items()):
-            ad_cfg_orig:dict[str, Any] = _dicts.load_dict(ad_file, "ad")
-            ad_cfg:Ad = self.load_ad(ad_cfg_orig)
-
-            if ignore_inactive and not ad_cfg.active:
-                LOG.info(" -> SKIPPED: inactive ad [%s]", ad_file_relative)
-                continue
-
-            if use_specific_ads:
-                if ad_cfg.id not in ids:
-                    LOG.info(" -> SKIPPED: ad [%s] is not in list of given ids.", ad_file_relative)
-                    continue
-            else:
-                # Check if ad should be included based on selectors
-                should_include = False
-
-                # Check for 'changed' selector
-                if "changed" in selectors and self.__check_ad_changed(ad_cfg, ad_cfg_orig, ad_file_relative):
-                    should_include = True
-                elif "changed" in selectors and self.command == "update" and _price_reduction.is_auto_price_reduction_due(ad_cfg, ad_file_relative):
-                    should_include = True
-
-                # Check for 'new' selector
-                if "new" in selectors and (not ad_cfg.id or not exclude_ads_with_id):
-                    should_include = True
-                elif "new" in selectors and ad_cfg.id and exclude_ads_with_id:
-                    LOG.info(" -> SKIPPED: ad [%s] is not new. already has an id assigned.", ad_file_relative)
-
-                # Check for 'due' selector
-                if "due" in selectors:
-                    # For 'due' selector, check if the ad is due for republication based on interval
-                    if self.__check_ad_republication(ad_cfg, ad_file_relative):
-                        should_include = True
-
-                # Check for 'all' selector (always include)
-                if "all" in selectors:
-                    should_include = True
-
-                if not should_include:
-                    continue
-
-            ensure(get_ad_description(ad_cfg, self.config.ad_defaults, with_affixes = False), _("-> property [description] not specified @ [%s]") % ad_file)
-            get_ad_description(ad_cfg, self.config.ad_defaults, with_affixes = True)  # validates complete description
-
-            if ad_cfg.category:
-                resolved_category_id = self.categories.get(ad_cfg.category)
-                if not resolved_category_id and ">" in ad_cfg.category:
-                    # this maps actually to the sonstiges/weiteres sub-category
-                    parent_category = ad_cfg.category.rpartition(">")[0].strip()
-                    resolved_category_id = self.categories.get(parent_category)
-                    if resolved_category_id:
-                        LOG.warning("Category [%s] unknown. Using category [%s] with ID [%s] instead.", ad_cfg.category, parent_category, resolved_category_id)
-
-                if resolved_category_id:
-                    ad_cfg.category = resolved_category_id
-
-            if ad_cfg.images:
-                images = []
-                ad_dir = os.path.dirname(ad_file)
-                for image_pattern in ad_cfg.images:
-                    pattern_images = set()
-                    for image_file in glob.glob(image_pattern, root_dir = ad_dir, flags = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB):
-                        image_file_ext = os.path.splitext(image_file)[1]
-                        ensure(image_file_ext.lower() in {".gif", ".jpg", ".jpeg", ".png"}, f"Unsupported image file type [{image_file}]")
-                        if os.path.isabs(image_file):
-                            pattern_images.add(image_file)
-                        else:
-                            pattern_images.add(abspath(image_file, relative_to = ad_file))
-                    images.extend(sorted(pattern_images))
-                ensure(images or not ad_cfg.images, f"No images found for given file patterns {ad_cfg.images} at {ad_dir}")
-                ad_cfg.images = list(dict.fromkeys(images))
-
-            LOG.info(" -> LOADED: ad [%s]", ad_file_relative)
-            ads.append((ad_file, ad_cfg, ad_cfg_orig))
-
-        LOG.info("Loaded %s", pluralize("ad", ads))
-        return ads
-
-    def load_ad(self, ad_cfg_orig:dict[str, Any]) -> Ad:
-        return AdPartial.model_validate(ad_cfg_orig).to_ad(self.config.ad_defaults)
+        return ad_loading.load_ads(
+            config_file_path = self.config_file_path,
+            ad_file_patterns = self.config.ad_files,
+            ad_defaults = self.config.ad_defaults,
+            categories = self.categories,
+            ads_selector = self.ads_selector,
+            command = self.command,
+            ignore_inactive = ignore_inactive,
+            exclude_ads_with_id = exclude_ads_with_id,
+        )
 
     async def check_and_wait_for_captcha(self, *, is_login_page:bool = True, page_context:str | None = None) -> None:
         captcha_elem = await self.web_probe(
@@ -3017,21 +2847,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     LOG.info("Downloaded ad with id %d", ad_id)
                 else:
                     LOG.error("The page with the id %d does not exist!", ad_id)
-
-    def update_content_hashes(self, ads:list[tuple[str, Ad, dict[str, Any]]]) -> None:
-        changed = 0
-
-        for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ads, start = 1):
-            LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ads), ad_cfg.title, ad_file)
-            ad_cfg.update_content_hash()
-            if ad_cfg.content_hash != ad_cfg_orig["content_hash"]:
-                changed += 1
-                ad_cfg_orig["content_hash"] = ad_cfg.content_hash
-                _dicts.save_dict(ad_file, ad_cfg_orig)
-
-        LOG.info("############################################")
-        LOG.info("DONE: Updated [content_hash] in %s", pluralize("ad", changed))
-        LOG.info("############################################")
 
 
 #############################

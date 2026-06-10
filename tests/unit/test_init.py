@@ -1,17 +1,15 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio, copy, fnmatch, json, logging, os, tempfile  # isort: skip
+import asyncio, copy, fnmatch, json, logging, os  # isort: skip
 from collections.abc import Callable, Generator
 from contextlib import ExitStack, contextmanager
-from datetime import timedelta
 from pathlib import Path, PureWindowsPath
 from typing import Any, Awaitable, Iterator, cast
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from nodriver.core.connection import ProtocolException
-from pydantic import ValidationError
 
 from kleinanzeigen_bot import (
     LOG,
@@ -24,13 +22,12 @@ from kleinanzeigen_bot import (
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import (
-    AdDefaults,
     AutoPriceReductionConfig,
     Config,
     DiagnosticsConfig,
     PublishingConfig,
 )
-from kleinanzeigen_bot.utils import dicts, misc, xdg_paths
+from kleinanzeigen_bot.utils import xdg_paths
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishedAdsFetchIncompleteError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
@@ -1999,39 +1996,6 @@ class TestDisplayCounterProgression:
     def _build_published_ads(*ad_specs:tuple[int, str]) -> list[dict[str, Any]]:
         return [{"id": ad_id, "state": state} for ad_id, state in ad_specs]
 
-    def test_update_content_hashes_counter_progression(
-        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], caplog:pytest.LogCaptureFixture
-    ) -> None:
-        """Display counter must advance for every ad, even when hash is unchanged."""
-        ads = [
-            self._build_ad(base_ad_config, None, "Unchanged Ad 1"),
-            self._build_ad(base_ad_config, None, "Changed Ad"),
-            self._build_ad(base_ad_config, None, "Unchanged Ad 2"),
-        ]
-
-        # Pre-compute hashes so two match and one differs
-        for _ad_file, ad_cfg, ad_cfg_orig in ads:
-            ad_cfg.update_content_hash()
-            ad_cfg_orig["content_hash"] = ad_cfg.content_hash
-
-        # Make the middle ad's original hash differ
-        ads[1][2]["content_hash"] = "deliberately_wrong_hash"
-
-        with (
-            caplog.at_level(logging.INFO),
-            patch.object(dicts, "save_dict"),
-        ):
-            test_bot.update_content_hashes(ads)
-
-        processing = [r for r in caplog.records if r.message.startswith("Processing")]
-        assert len(processing) == 3
-        assert "1/3" in processing[0].message
-        assert "2/3" in processing[1].message
-        assert "3/3" in processing[2].message
-
-        summary = [r for r in caplog.records if "DONE:" in r.message and "content_hash" in r.message]
-        assert any("1 ad" in r.message for r in summary)
-
     @pytest.mark.asyncio
     async def test_publish_ads_counter_progression_with_paused_ads(
         self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], caplog:pytest.LogCaptureFixture
@@ -2363,12 +2327,6 @@ class TestKleinanzeigenBotAdOperations:
             await test_bot.run(["script.py", "extend"])
             assert test_bot.ads_selector == "all"
 
-    def test_load_ads_no_files(self, test_bot:KleinanzeigenBot) -> None:
-        """Test loading ads with no files."""
-        test_bot.config.ad_files = ["nonexistent/*.yaml"]
-        ads = test_bot.load_ads()
-        assert len(ads) == 0
-
 
 class TestKleinanzeigenBotAdManagement:
     """Tests for ad management functionality."""
@@ -2408,106 +2366,6 @@ class TestKleinanzeigenBotAdManagement:
         with pytest.raises(SystemExit) as exc_info:
             await test_bot.run(["script.py", "extend", "--ads=invalid"])
         assert exc_info.value.code == 2
-
-
-class TestKleinanzeigenBotAdConfiguration:
-    """Tests for ad configuration functionality."""
-
-    def test_load_ads_with_missing_title(self, test_bot:KleinanzeigenBot, tmp_path:Any, minimal_ad_config:dict[str, Any]) -> None:
-        """Test loading ads with missing title."""
-        temp_path = Path(tmp_path)
-        ad_dir = temp_path / "ads"
-        ad_dir.mkdir()
-        ad_file = ad_dir / "test_ad.yaml"
-
-        # Create a minimal config with empty title to trigger validation
-        ad_cfg = minimal_ad_config | {"title": ""}
-        dicts.save_dict(ad_file, ad_cfg)
-
-        # Set config file path to tmp_path and use relative path for ad_files
-        test_bot.config_file_path = str(temp_path / "config.yaml")
-        test_bot.config.ad_files = ["ads/*.yaml"]
-        with pytest.raises(ValidationError) as exc_info:
-            test_bot.load_ads()
-        assert "title" in str(exc_info.value)
-
-    def test_load_ads_with_invalid_price_type(self, test_bot:KleinanzeigenBot, tmp_path:Any, minimal_ad_config:dict[str, Any]) -> None:
-        """Test loading ads with invalid price type."""
-        temp_path = Path(tmp_path)
-        ad_dir = temp_path / "ads"
-        ad_dir.mkdir()
-        ad_file = ad_dir / "test_ad.yaml"
-
-        # Create config with invalid price type
-        ad_cfg = minimal_ad_config | {"price_type": "INVALID_TYPE"}
-        dicts.save_dict(ad_file, ad_cfg)
-
-        # Set config file path to tmp_path and use relative path for ad_files
-        test_bot.config_file_path = str(temp_path / "config.yaml")
-        test_bot.config.ad_files = ["ads/*.yaml"]
-        with pytest.raises(ValidationError) as exc_info:
-            test_bot.load_ads()
-        assert "price_type" in str(exc_info.value)
-
-    def test_load_ads_with_invalid_shipping_type(self, test_bot:KleinanzeigenBot, tmp_path:Any, minimal_ad_config:dict[str, Any]) -> None:
-        """Test loading ads with invalid shipping type."""
-        temp_path = Path(tmp_path)
-        ad_dir = temp_path / "ads"
-        ad_dir.mkdir()
-        ad_file = ad_dir / "test_ad.yaml"
-
-        # Create config with invalid shipping type
-        ad_cfg = minimal_ad_config | {"shipping_type": "INVALID_TYPE"}
-        dicts.save_dict(ad_file, ad_cfg)
-
-        # Set config file path to tmp_path and use relative path for ad_files
-        test_bot.config_file_path = str(temp_path / "config.yaml")
-        test_bot.config.ad_files = ["ads/*.yaml"]
-        with pytest.raises(ValidationError) as exc_info:
-            test_bot.load_ads()
-        assert "shipping_type" in str(exc_info.value)
-
-    def test_load_ads_with_invalid_price_config(self, test_bot:KleinanzeigenBot, tmp_path:Any, minimal_ad_config:dict[str, Any]) -> None:
-        """Test loading ads with invalid price configuration."""
-        temp_path = Path(tmp_path)
-        ad_dir = temp_path / "ads"
-        ad_dir.mkdir()
-        ad_file = ad_dir / "test_ad.yaml"
-
-        # Create config with price for GIVE_AWAY type
-        ad_cfg = minimal_ad_config | {
-            "price_type": "GIVE_AWAY",
-            "price": 100,  # Price should not be set for GIVE_AWAY
-        }
-        dicts.save_dict(ad_file, ad_cfg)
-
-        # Set config file path to tmp_path and use relative path for ad_files
-        test_bot.config_file_path = str(temp_path / "config.yaml")
-        test_bot.config.ad_files = ["ads/*.yaml"]
-        with pytest.raises(ValidationError) as exc_info:
-            test_bot.load_ads()
-        assert "price" in str(exc_info.value)
-
-    def test_load_ads_with_missing_price(self, test_bot:KleinanzeigenBot, tmp_path:Any, minimal_ad_config:dict[str, Any]) -> None:
-        """Test loading ads with missing price for FIXED price type."""
-        temp_path = Path(tmp_path)
-        ad_dir = temp_path / "ads"
-        ad_dir.mkdir()
-        ad_file = ad_dir / "test_ad.yaml"
-
-        # Create config with FIXED price type but no price
-        ad_cfg = minimal_ad_config | {
-            "price_type": "FIXED",
-            "price": None,  # Missing required price for FIXED type
-        }
-        dicts.save_dict(ad_file, ad_cfg)
-
-        # Set config file path to tmp_path and use relative path for ad_files
-        test_bot.config_file_path = str(temp_path / "config.yaml")
-        test_bot.config.ad_files = ["ads/*.yaml"]
-        with pytest.raises(ValidationError) as exc_info:
-            test_bot.load_ads()
-        assert "price is required when price_type is FIXED" in str(exc_info.value)
 
 
 class TestKleinanzeigenBotAdDeletion:
@@ -2711,58 +2569,6 @@ class TestKleinanzeigenBotAdDeletion:
 
         assert ad_cfg.id == 12345  # Preserved — exception prevented clearing
         mock_web_sleep.assert_not_called()
-
-
-class TestKleinanzeigenBotAdRepublication:
-    """Tests for ad republication functionality."""
-
-    def test_check_ad_republication_with_changes(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
-        """Test that ads with changes are marked for republication."""
-        # Mock the description config to prevent modification of the description
-        test_bot.config.ad_defaults = AdDefaults.model_validate({"description": {"prefix": "", "suffix": ""}})
-
-        # Create ad config with all necessary fields for republication
-        ad_cfg = Ad.model_validate(
-            base_ad_config | {"id": "12345", "updated_on": "2024-01-01T00:00:01", "created_on": "2024-01-01T00:00:01", "description": "Changed description"}
-        )
-
-        # Create a temporary directory and file
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            ad_dir = temp_path / "ads"
-            ad_dir.mkdir()
-            ad_file = ad_dir / "test_ad.yaml"
-
-            dicts.save_dict(ad_file, ad_cfg.model_dump())
-
-            # Set config file path and use relative path for ad_files
-            test_bot.config_file_path = str(temp_path / "config.yaml")
-            test_bot.config.ad_files = ["ads/*.yaml"]
-
-            ads_to_publish = test_bot.load_ads()
-            assert len(ads_to_publish) == 1
-
-    def test_check_ad_republication_no_changes(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
-        """Test that unchanged ads within interval are not marked for republication."""
-        current_time = misc.now()
-        three_days_ago = (current_time - timedelta(days = 3)).isoformat()
-
-        # Create ad config with timestamps for republication check
-        ad_cfg = Ad.model_validate(base_ad_config | {"id": "12345", "updated_on": three_days_ago, "created_on": three_days_ago})
-
-        # Calculate hash before making the copy to ensure they match
-        ad_cfg_orig = ad_cfg.model_dump()
-        current_hash = ad_cfg.update_content_hash().content_hash
-        ad_cfg_orig["content_hash"] = current_hash
-
-        # Mock the config to prevent actual file operations
-        test_bot.config.ad_files = ["test.yaml"]
-        with (
-            patch("kleinanzeigen_bot.utils.dicts.load_dict_if_exists", return_value = ad_cfg_orig),
-            patch("kleinanzeigen_bot.utils.dicts.load_dict", return_value = {}),
-        ):  # Mock ad_fields.yaml
-            ads_to_publish = test_bot.load_ads()
-            assert len(ads_to_publish) == 0  # No ads should be marked for republication
 
 
 class TestKleinanzeigenBotShippingOptions:
@@ -4547,277 +4353,6 @@ class TestWantedShippingSelection:
             mock_find.side_effect = find_side_effect
             with pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'SHIPPING'!"):
                 await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
-
-
-class TestKleinanzeigenBotChangedAds:
-    """Tests for the 'changed' ads selector functionality."""
-
-    def test_load_ads_with_changed_selector(self, test_bot_config:Config, base_ad_config:dict[str, Any]) -> None:
-        """Test that only changed ads are loaded when using the 'changed' selector."""
-        # Set up the bot with the 'changed' selector
-        test_bot = KleinanzeigenBot()
-        test_bot.ads_selector = "changed"
-        test_bot.config = test_bot_config.with_values({"ad_defaults": {"description": {"prefix": "", "suffix": ""}}})
-
-        # Create a changed ad
-        ad_cfg = Ad.model_validate(
-            base_ad_config | {"id": "12345", "title": "Changed Ad", "updated_on": "2024-01-01T00:00:00", "created_on": "2024-01-01T00:00:00", "active": True}
-        )
-
-        # Calculate hash for changed_ad and add it to the config
-        # Then modify the ad to simulate a change
-        changed_ad = ad_cfg.model_dump()
-        changed_hash = ad_cfg.update_content_hash().content_hash
-        changed_ad["content_hash"] = changed_hash
-        # Now modify the ad to make it "changed"
-        changed_ad["title"] = "Changed Ad - Modified"
-
-        # Create temporary directory and file
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            ad_dir = temp_path / "ads"
-            ad_dir.mkdir()
-
-            # Write the ad file
-            dicts.save_dict(ad_dir / "changed_ad.yaml", changed_ad)
-
-            # Set config file path and use relative path for ad_files
-            test_bot.config_file_path = str(temp_path / "config.yaml")
-            test_bot.config.ad_files = ["ads/*.yaml"]
-
-            # Mock the loading of the ad configuration
-            with patch(
-                "kleinanzeigen_bot.utils.dicts.load_dict",
-                side_effect = [
-                    changed_ad,  # First call returns the changed ad
-                    {},  # Second call for ad_fields.yaml
-                ],
-            ):
-                ads_to_publish = test_bot.load_ads()
-
-                # The changed ad should be loaded
-                assert len(ads_to_publish) == 1
-                assert ads_to_publish[0][1].title == "Changed Ad - Modified"
-
-    def test_load_ads_with_due_selector_includes_all_due_ads(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
-        """Test that 'due' selector includes all ads that are due for republication, regardless of changes."""
-        # Set up the bot with the 'due' selector
-        test_bot.ads_selector = "due"
-
-        # Create a changed ad that is also due for republication
-        current_time = misc.now()
-        old_date = (current_time - timedelta(days = 10)).isoformat()  # Past republication interval
-
-        ad_cfg = Ad.model_validate(
-            base_ad_config
-            | {
-                "id": "12345",
-                "title": "Changed Ad",
-                "updated_on": old_date,
-                "created_on": old_date,
-                "republication_interval": 7,  # Due for republication after 7 days
-                "active": True,
-            }
-        )
-        changed_ad = ad_cfg.model_dump()
-
-        # Create temporary directory and file
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            ad_dir = temp_path / "ads"
-            ad_dir.mkdir()
-
-            # Write the ad file
-            dicts.save_dict(ad_dir / "changed_ad.yaml", changed_ad)
-
-            # Set config file path and use relative path for ad_files
-            test_bot.config_file_path = str(temp_path / "config.yaml")
-            test_bot.config.ad_files = ["ads/*.yaml"]
-
-            # Mock the loading of the ad configuration
-            with patch(
-                "kleinanzeigen_bot.utils.dicts.load_dict",
-                side_effect = [
-                    changed_ad,  # First call returns the changed ad
-                    {},  # Second call for ad_fields.yaml
-                ],
-            ):
-                ads_to_publish = test_bot.load_ads()
-
-                # The changed ad should be loaded with 'due' selector because it's due for republication
-                assert len(ads_to_publish) == 1
-
-    def test_load_ads_with_changed_selector_and_pending_price_reduction(self, test_bot_config:Config, base_ad_config:dict[str, Any]) -> None:
-        """Test that 'changed' selector also loads ads with pending auto price reductions."""
-        test_bot = KleinanzeigenBot()
-        test_bot.ads_selector = "changed"
-        test_bot.command = "update"
-        test_bot.config = test_bot_config.with_values({"ad_defaults": {"description": {"prefix": "", "suffix": ""}}})
-
-        # Create an ad with auto_price_reduction configured and ready to trigger
-        ad_cfg = Ad.model_validate(
-            base_ad_config
-            | {
-                "id": "12345",
-                "title": "Ad With Price Reduction",
-                "updated_on": "2024-01-01T00:00:00",
-                "created_on": "2024-01-01T00:00:00",
-                "price": 100,
-                "price_reduction_count": 0,
-                "repost_count": 1,
-                "active": True,
-                "auto_price_reduction": {
-                    "enabled": True,
-                    "on_update": True,
-                    "strategy": "FIXED",
-                    "amount": 10,
-                    "min_price": 1,
-                    "delay_days": 0,
-                    "delay_reposts": 0,
-                },
-            }
-        )
-
-        # Store the content hash so __check_ad_changed sees no change
-        ad_dict = ad_cfg.model_dump()
-        ad_dict["content_hash"] = ad_cfg.update_content_hash().content_hash
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            ad_dir = temp_path / "ads"
-            ad_dir.mkdir()
-
-            dicts.save_dict(ad_dir / "ad_with_reduction.yaml", ad_dict)
-
-            test_bot.config_file_path = str(temp_path / "config.yaml")
-            test_bot.config.ad_files = ["ads/*.yaml"]
-
-            with patch(
-                "kleinanzeigen_bot.utils.dicts.load_dict",
-                side_effect = [
-                    ad_dict,  # First call returns the ad
-                    {},  # Second call for ad_fields.yaml
-                ],
-            ):
-                ads_to_publish = test_bot.load_ads()
-
-                # The ad should be loaded because a price reduction is pending
-                assert len(ads_to_publish) == 1
-                assert ads_to_publish[0][1].title == "Ad With Price Reduction"
-
-    def test_load_ads_with_changed_selector_no_price_reduction_when_not_configured(self, test_bot_config:Config, base_ad_config:dict[str, Any]) -> None:
-        """Test that 'changed' selector does not load an unchanged ad when auto_price_reduction is disabled."""
-        test_bot = KleinanzeigenBot()
-        test_bot.ads_selector = "changed"
-        test_bot.command = "update"
-        test_bot.config = test_bot_config.with_values({"ad_defaults": {"description": {"prefix": "", "suffix": ""}}})
-
-        # Create an ad with auto_price_reduction disabled
-        ad_cfg = Ad.model_validate(
-            base_ad_config
-            | {
-                "id": "12345",
-                "title": "Unchanged Ad",
-                "updated_on": "2024-01-01T00:00:00",
-                "created_on": "2024-01-01T00:00:00",
-                "price": 100,
-                "repost_count": 1,
-                "active": True,
-                "auto_price_reduction": {
-                    "enabled": False,
-                    "on_update": True,
-                    "strategy": "FIXED",
-                    "amount": 10,
-                    "min_price": 1,
-                    "delay_days": 0,
-                    "delay_reposts": 0,
-                },
-            }
-        )
-
-        # Store the content hash so __check_ad_changed sees no change
-        ad_dict = ad_cfg.model_dump()
-        ad_dict["content_hash"] = ad_cfg.update_content_hash().content_hash
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            ad_dir = temp_path / "ads"
-            ad_dir.mkdir()
-
-            dicts.save_dict(ad_dir / "unchanged_ad.yaml", ad_dict)
-
-            test_bot.config_file_path = str(temp_path / "config.yaml")
-            test_bot.config.ad_files = ["ads/*.yaml"]
-
-            with patch(
-                "kleinanzeigen_bot.utils.dicts.load_dict",
-                side_effect = [
-                    ad_dict,  # First call returns the ad
-                    {},  # Second call for ad_fields.yaml
-                ],
-            ):
-                ads_to_publish = test_bot.load_ads()
-
-                # The ad should NOT be loaded because it's unchanged and auto_price_reduction is disabled
-                assert len(ads_to_publish) == 0
-
-    def test_load_ads_with_changed_selector_does_not_include_price_reduction_in_publish_mode(
-            self, test_bot_config:Config, base_ad_config:dict[str, Any]) -> None:
-        """Test that 'changed' selector in publish mode skips unchanged ads even when price reduction is pending."""
-        test_bot = KleinanzeigenBot()
-        test_bot.ads_selector = "changed"
-        test_bot.command = "publish"
-        test_bot.config = test_bot_config.with_values({"ad_defaults": {"description": {"prefix": "", "suffix": ""}}})
-
-        # Create an ad with auto_price_reduction configured and ready to trigger
-        ad_cfg = Ad.model_validate(
-            base_ad_config
-            | {
-                "id": "12345",
-                "title": "Ad With Price Reduction",
-                "updated_on": "2024-01-01T00:00:00",
-                "created_on": "2024-01-01T00:00:00",
-                "price": 100,
-                "price_reduction_count": 0,
-                "repost_count": 1,
-                "active": True,
-                "auto_price_reduction": {
-                    "enabled": True,
-                    "on_update": True,
-                    "strategy": "FIXED",
-                    "amount": 10,
-                    "min_price": 1,
-                    "delay_days": 0,
-                    "delay_reposts": 0,
-                },
-            }
-        )
-
-        # Store the content hash so __check_ad_changed sees no change
-        ad_dict = ad_cfg.model_dump()
-        ad_dict["content_hash"] = ad_cfg.update_content_hash().content_hash
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            ad_dir = temp_path / "ads"
-            ad_dir.mkdir()
-
-            dicts.save_dict(ad_dir / "ad_with_reduction.yaml", ad_dict)
-
-            test_bot.config_file_path = str(temp_path / "config.yaml")
-            test_bot.config.ad_files = ["ads/*.yaml"]
-
-            with patch(
-                "kleinanzeigen_bot.utils.dicts.load_dict",
-                side_effect = [
-                    ad_dict,  # First call returns the ad
-                    {},  # Second call for ad_fields.yaml
-                ],
-            ):
-                ads_to_publish = test_bot.load_ads()
-
-                # The ad should NOT be loaded because price reduction is only applied in update mode
-                assert len(ads_to_publish) == 0
 
 
 def test_file_logger_writes_message(tmp_path:Path, caplog:pytest.LogCaptureFixture) -> None:
