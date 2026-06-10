@@ -344,8 +344,8 @@ class TestJSONPagination:
             )
 
     @pytest.mark.asyncio
-    async def test_fetch_published_ads_single_page_no_last_no_next_strict_raises(self, bot:KleinanzeigenBot) -> None:
-        """Strict mode should fail when paging omits both 'last' and 'next'."""
+    async def test_fetch_published_ads_single_page_no_last_no_next_strict_returns_ads(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should NOT raise when a single page has no 'next' and no total_pages — it is a complete response."""
         response_data = {
             "ads": [{"id": 10, "state": "active"}],
             "paging": {"pageNum": 1},
@@ -353,6 +353,8 @@ class TestJSONPagination:
 
         with (
             patch.object(bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps(response_data)}),
-            pytest.raises(PublishedAdsFetchIncompleteError, match = r"No 'next' in paging on page 1"),
         ):
-            await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url, strict = True)
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url, strict = True)
+
+        assert len(result) == 1
+        assert result[0]["id"] == 10
