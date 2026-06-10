@@ -1618,55 +1618,41 @@ class WebScrapingMixin:
         await self.web_sleep()
         return listbox
 
-    async def _find_associated_button_combobox(self, normalized_key:str, *, hidden_input_name:str | None = None) -> str | None:
+    async def _find_associated_button_combobox(self, *, hidden_input_name:str) -> str | None:
         """Locate a ``<button role="combobox">`` by walking from its backing hidden input.
 
-        When *hidden_input_name* is provided (the exact ``name`` attribute of a matched
-        hidden ``<input>``), the lookup is anchored to that specific element.  Otherwise
-        falls back to scanning all ``name^="attributeMap["`` hidden inputs for one whose
-        name contains *normalized_key*.
+        Anchors to the specific hidden input identified by *hidden_input_name*
+        (e.g. ``attributeMap[baby_kinderkleidung.groesse]``), derives the
+        expected button ID from the ``attributeMap[...]`` value, and tries
+        ``getElementById`` first.  Falls back to walking up the DOM tree from
+        the hidden input to find an associated ``<button role="combobox">``.
 
-        In either case, the helper walks up the DOM tree from the hidden input to find
-        the associated ``<button role="combobox">``.
-
-        :param normalized_key: Normalized special attribute key (e.g. ``groesse``).
-        :param hidden_input_name: Exact ``name`` attribute of an already-matched
-            hidden input (e.g. ``attributeMap[baby_kinderkleidung.groesse]``).
+        :param hidden_input_name: Exact ``name`` attribute of the matched
+            hidden ``<input>``.
         :returns: The button's ``id`` attribute, or ``None`` if not found.
         """
-        js_key = json.dumps(normalized_key)
-        js_hidden_name = json.dumps(hidden_input_name) if hidden_input_name else "null"
+        js_hidden_name = json.dumps(hidden_input_name)
         result = await self.web_execute(f"""(function() {{
-    const key = {js_key};
-    const exactName = {js_hidden_name};
+    const name = {js_hidden_name};
 
-    // If an exact hidden-input name was provided, anchor to that element.
-    if (exactName) {{
-        const inp = document.querySelector("input[type='hidden'][name=" + JSON.stringify(exactName) + "]");
-        if (inp) {{
-            let parent = inp.parentElement;
-            for (let i = 0; i < 8 && parent; i++, parent = parent.parentElement) {{
-                const btn = parent.querySelector('button[role="combobox"]');
-                if (btn && btn.id) return btn.id;
-            }}
-        }}
-        return null;
+    // Find the specific hidden input by exact name.
+    const inp = document.querySelector("input[type='hidden'][name=" + JSON.stringify(name) + "]");
+    if (!inp) return null;
+
+    // Derive expected button ID from attributeMap[VALUE].
+    const match = name.match(/^attributeMap\\[(.+)\\]$/);
+    if (match) {{
+        const btn = document.getElementById(match[1]);
+        if (btn && btn.getAttribute('role') === 'combobox' && btn.tagName === 'BUTTON') return match[1];
     }}
 
-    // Fallback: scan all hidden inputs for one whose name contains the key.
-    const hiddenInputs = document.querySelectorAll("input[type='hidden'][name^='attributeMap[']");
-    for (const inp of hiddenInputs) {{
-        const name = inp.getAttribute('name') || '';
-        const lower = name.toLowerCase();
-        const lowerKey = key.toLowerCase();
-        // match ".key]" or "[key]" in the attributeMap name
-        if (!(lower.includes('.' + lowerKey + ']') || lower.includes('[' + lowerKey + ']'))) continue;
-        let parent = inp.parentElement;
-        for (let i = 0; i < 8 && parent; i++, parent = parent.parentElement) {{
-            const btn = parent.querySelector('button[role="combobox"]');
-            if (btn && btn.id) return btn.id;
-        }}
+    // Walk up the DOM tree to find a button[role="combobox"].
+    let parent = inp.parentElement;
+    for (let i = 0; i < 8 && parent; i++, parent = parent.parentElement) {{
+        const btn = parent.querySelector('button[role="combobox"]');
+        if (btn && btn.id) return btn.id;
     }}
+
     return null;
 }})()""")
         if isinstance(result, str) and result:

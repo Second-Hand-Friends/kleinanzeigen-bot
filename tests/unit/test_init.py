@@ -3284,19 +3284,18 @@ class TestKleinanzeigenBotShippingOptions:
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
 
-        mock_find_button.assert_awaited_once_with("groesse", hidden_input_name = "attributeMap[groesse]")
+        mock_find_button.assert_awaited_once_with(hidden_input_name = "attributeMap[groesse]")
         mock_select_combobox.assert_awaited_once_with(":r8r7:", "68")
         mock_input.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_hidden_input_fallback_no_associated_button_falls_through(
+    async def test_hidden_input_fallback_no_associated_button_raises(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
-        """When the fallback cannot find an associated button combobox, the code
-        should fall through to the existing dispatch chain (and likely fail for
-        a hidden input, which is expected)."""
+        """When the fallback cannot find an associated button combobox, a
+        TimeoutError is raised instead of falling through to the text-input handler."""
         ad_cfg = Ad.model_validate(
             base_ad_config
             | {
@@ -3326,14 +3325,11 @@ class TestKleinanzeigenBotShippingOptions:
                 "_find_associated_button_combobox",
                 new_callable = AsyncMock,
                 return_value = None,
-            ) as mock_find_button,
-            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
+            ) as mock_find_button,pytest.raises(TimeoutError)
         ):
             await getattr(test_bot, "_KleinanzeigenBot__set_special_attributes")(ad_cfg)
 
-        mock_find_button.assert_awaited_once_with("color", hidden_input_name = "attributeMap[color]")
-        # Falls through to web_input for the hidden element (text input handler)
-        mock_input.assert_awaited_once()
+        mock_find_button.assert_awaited_once_with(hidden_input_name = "attributeMap[color]")
 
     @pytest.mark.asyncio
     async def test_fallback_not_triggered_when_button_combobox_directly_matched(
