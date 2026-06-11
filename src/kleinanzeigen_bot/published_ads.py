@@ -4,13 +4,12 @@
 """Published ads fetching with API pagination."""
 
 import json
-import logging
 from gettext import gettext as _
 from typing import Any, Final, TypeAlias
 
+from .utils import loggers as _loggers
 from .utils import misc as _misc
 from .utils.exceptions import KleinanzeigenBotError
-from .utils.loggers import get_logger
 from .utils.web_scraping_mixin import WebScrapingMixin
 
 PublishedAd:TypeAlias = dict[str, Any]
@@ -35,8 +34,8 @@ def ad_matches_id(ad:PublishedAd, target_id:int | None) -> bool:
         return False
 
 
-LOG:Final = get_logger(__name__)
-LOG.setLevel(logging.INFO)
+LOG:Final = _loggers.get_logger(__name__)
+LOG.setLevel(_loggers.INFO)
 
 
 class PublishedAdsFetchIncompleteError(KleinanzeigenBotError):
