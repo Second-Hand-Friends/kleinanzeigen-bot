@@ -4,17 +4,25 @@
 """Ad download browser workflow."""
 
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Protocol
 
 from . import download_selection as _download_selection
 from . import extract, published_ads
 from .model.ad_model import Ad
 from .model.config_model import DEFAULT_DOWNLOAD_DIR, Config
+from .published_ads import PublishedAd
 from .utils import loggers as _loggers
 from .utils import xdg_paths as _xdg_paths
 from .utils.files import abspath
 from .utils.i18n import pluralize
 from .utils.web_scraping_mixin import WebScrapingMixin
+
+
+class LoadAdsFunc(Protocol):
+    """Protocol for callable that loads ads, matching ad_loading.load_ads signature."""
+
+    def __call__(self, *, ignore_inactive:bool = True, exclude_ads_with_id:bool = True) -> list[tuple[str, Ad, dict[str, Any]]]: ...
+
 
 LOG:_loggers.Logger = _loggers.get_logger(__name__)
 
@@ -39,7 +47,7 @@ def resolve_download_dir(
 async def _download_ad_with_resolved_state(
     ad_extractor:extract.AdExtractor,
     ad_id:int,
-    published_ads_by_id:dict[int, dict[str, Any]],
+    published_ads_by_id:dict[int, PublishedAd],
 ) -> None:
     """Download an ad with proper active state resolution and logging.
 
@@ -79,7 +87,7 @@ async def download_ads(
     workspace:_xdg_paths.Workspace,
     ads_selector:str,
     *,
-    load_ads_func:Callable[..., list[tuple[str, Ad, dict[str, Any]]]],
+    load_ads_func:LoadAdsFunc,
     root_url:str,
 ) -> None:
     """
@@ -99,7 +107,7 @@ async def download_ads(
     # Build lookup dict inline and pass directly to extractor (no cache abstraction needed)
     LOG.info("Fetching ad metadata (status, expiry dates)...")
     published_ads_list = await published_ads.fetch_published_ads(web, root_url, strict = _download_selection.is_numeric_ids_selector(effective_selector))
-    published_ads_by_id:dict[int, dict[str, Any]] = {}
+    published_ads_by_id:dict[int, PublishedAd] = {}
     for published_ad in published_ads_list:
         try:
             ad_id = published_ad.get("id")

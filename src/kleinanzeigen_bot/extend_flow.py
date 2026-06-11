@@ -3,12 +3,17 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Ad extension browser workflow."""
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from . import published_ads
-from .model.ad_model import Ad
 from .utils import dicts as _dicts
+
+if TYPE_CHECKING:
+    from .model.ad_model import Ad
+    from .published_ads import PublishedAd
 from .utils import loggers as _loggers
 from .utils import misc as _misc
 from .utils.i18n import pluralize
@@ -35,7 +40,7 @@ async def extend_ads(
             continue
 
         # Find ad in published list
-        published_ad = next((ad for ad in published_ads_list if ad["id"] == ad_cfg.id), None)
+        published_ad:PublishedAd | None = next((ad for ad in published_ads_list if ad["id"] == ad_cfg.id), None)
         if not published_ad:
             LOG.warning(" -> SKIPPED: ad '%s' (ID: %s) not found in published ads", ad_cfg.title, ad_cfg.id)
             continue

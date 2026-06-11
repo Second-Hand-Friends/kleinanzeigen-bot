@@ -261,6 +261,35 @@ class TestExtendAdsMethod:
             # Verify extend_ad was called only once (for the ad within window)
             assert mock_extend_ad.call_count == 1
 
+    @pytest.mark.asyncio
+    async def test_extend_ads_skips_ad_with_invalid_enddate(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]) -> None:
+        """Test that extend_ads gracefully skips ads with invalid endDate format instead of crashing."""
+        ad_cfg = Ad.model_validate(base_ad_config_with_id)
+
+        published_ads_json = {
+            "ads": [
+                {
+                    "id": 12345,
+                    "title": "Test Ad Title",
+                    "state": "active",
+                    "endDate": "not-a-date",  # Invalid format
+                }
+            ]
+        }
+
+        with (
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.extend_flow._extend_ad", new_callable = AsyncMock) as mock_extend_ad,
+        ):
+            mock_request.return_value = {"content": json.dumps(published_ads_json)}
+
+            # Should not raise — gracefully skips invalid endDate
+            await extend_flow.extend_ads(web = test_bot, root_url = test_bot.root_url, ad_cfgs = [("test.yaml", ad_cfg, base_ad_config_with_id)])
+
+            # Verify extend_ad was NOT called (invalid endDate → skip)
+            mock_extend_ad.assert_not_called()
+
 
 class TestExtendAdMethod:
     """Tests for the _extend_ad() method.

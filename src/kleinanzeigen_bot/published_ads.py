@@ -6,12 +6,16 @@
 import json
 import logging
 from gettext import gettext as _
-from typing import Any, Final
+from typing import Any, Final, TypeAlias
 
 from .utils import misc as _misc
 from .utils.exceptions import KleinanzeigenBotError
 from .utils.loggers import get_logger
 from .utils.web_scraping_mixin import WebScrapingMixin
+
+PublishedAd:TypeAlias = dict[str, Any]
+"""A raw published ad entry from the Kleinanzeigen manage-ads JSON API."""
+
 
 LOG:Final = get_logger(__name__)
 LOG.setLevel(logging.INFO)
@@ -26,7 +30,7 @@ async def fetch_published_ads(
     root_url:str,
     *,
     strict:bool = False,
-) -> list[dict[str, Any]]:
+) -> list[PublishedAd]:
     """Fetch all published ads, handling API pagination.
 
     Args:
@@ -37,7 +41,7 @@ async def fetch_published_ads(
     Returns:
         List of all published ads across all pages.
     """
-    ads:list[dict[str, Any]] = []
+    ads:list[PublishedAd] = []
     page = 1
     MAX_PAGE_LIMIT:Final[int] = 100
     SNIPPET_LIMIT:Final[int] = 500
@@ -102,7 +106,7 @@ async def fetch_published_ads(
             _handle_incomplete_fetch("Unexpected 'ads' type on page %s: %s value: %s", page, type(page_ads).__name__, preview)
             break
 
-        filtered_page_ads:list[dict[str, Any]] = []
+        filtered_page_ads:list[PublishedAd] = []
         rejected_count = 0
         rejected_preview:str | None = None
         for entry in page_ads:

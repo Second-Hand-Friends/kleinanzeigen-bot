@@ -8,6 +8,7 @@ from typing import Any, Final, Literal
 from . import ad_state as _ad_state
 from . import published_ads
 from .model.ad_model import Ad
+from .published_ads import PublishedAd
 from .utils import dicts as _dicts
 from .utils import loggers as _loggers
 from .utils.i18n import pluralize
@@ -62,7 +63,7 @@ async def delete_ad(
     web:WebScrapingMixin,
     root_url:str,
     ad_cfg:Ad,
-    published_ads_list:list[dict[str, Any]],
+    published_ads_list:list[PublishedAd],
     *,
     delete_old_ads_by_title:bool,
 ) -> bool:
