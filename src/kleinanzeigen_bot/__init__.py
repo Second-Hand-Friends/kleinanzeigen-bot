@@ -1676,7 +1676,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ad_cfgs, start = 1):
             LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ad_cfgs), ad_cfg.title, ad_file)
 
-            ad = next((ad for ad in published_ads if ad_matches_id(ad, ad_cfg.id)), None)
+            ad = next((published_ad for published_ad in published_ads if ad_matches_id(published_ad, ad_cfg.id)), None)
 
             if not ad:
                 LOG.warning(" -> SKIPPED: ad '%s' (ID: %s) not found in published ads", ad_cfg.title, ad_cfg.id)

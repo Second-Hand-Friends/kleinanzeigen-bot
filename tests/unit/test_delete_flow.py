@@ -4,7 +4,6 @@
 """Tests for ad deletion functionality."""
 
 import copy
-import logging
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -121,14 +120,12 @@ class TestKleinanzeigenBotAdDeletion:
         self,
         test_bot:KleinanzeigenBot,
         minimal_ad_config:dict[str, Any],
-        caplog:pytest.LogCaptureFixture,
     ) -> None:
         """When no published ads match, should return False without opening any pages."""
         ad_cfg = Ad.model_validate(minimal_ad_config | {"title": "No Match Title", "id": 99999})
         published_ads = [{"title": "Different Title", "id": 12345}]
 
         with (
-            caplog.at_level(logging.WARNING, logger = "kleinanzeigen_bot"),
             patch.object(test_bot, "web_open", new_callable = AsyncMock) as mock_web_open,
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_web_find,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_web_sleep,
