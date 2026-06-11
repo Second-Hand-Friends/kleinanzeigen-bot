@@ -40,13 +40,15 @@ async def extend_ads(
             continue
 
         # Find ad in published list, normalizing API IDs (can be str/int) for safe comparison
-        def _ad_matches(ad:PublishedAd, target_id:int = ad_cfg.id) -> bool:
+        def _ad_matches(ad:PublishedAd, target_id:int) -> bool:
             try:
                 return int(ad["id"]) == target_id
             except (ValueError, TypeError):
                 return False
 
-        published_ad:PublishedAd | None = next((ad for ad in published_ads_list if _ad_matches(ad)), None)
+        published_ad:PublishedAd | None = next(
+            (ad for ad in published_ads_list if _ad_matches(ad, ad_cfg.id)), None
+        )
         if not published_ad:
             LOG.warning(" -> SKIPPED: ad '%s' (ID: %s) not found in published ads", ad_cfg.title, ad_cfg.id)
             continue
