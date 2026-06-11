@@ -21,7 +21,8 @@ from .utils.web_scraping_mixin import WebScrapingMixin
 class LoadAdsFunc(Protocol):
     """Protocol for callable that loads ads, matching ad_loading.load_ads signature."""
 
-    def __call__(self, *, ignore_inactive:bool = True, exclude_ads_with_id:bool = True) -> list[tuple[str, Ad, dict[str, Any]]]: ...
+    def __call__(self, *, ignore_inactive:bool = True, exclude_ads_with_id:bool = True) -> list[tuple[str, Ad, dict[str, Any]]]:
+        raise NotImplementedError
 
 
 LOG:_loggers.Logger = _loggers.get_logger(__name__)

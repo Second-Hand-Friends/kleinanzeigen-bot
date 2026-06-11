@@ -2132,6 +2132,7 @@ class TestKleinanzeigenBotShippingOptions:
 
         with (
             patch("kleinanzeigen_bot.price_reduction.apply_auto_price_reduction") as mock_apply,
+            patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = mock_web_probe),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
