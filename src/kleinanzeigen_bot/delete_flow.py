@@ -110,7 +110,7 @@ async def delete_ad(
     await web.web_open(f"{root_url}/m-meine-anzeigen.html")
     csrf_token_elem = await web.web_find(By.CSS_SELECTOR, "meta[name=_csrf]")
     csrf_token = csrf_token_elem.attrs.get("content")
-    ensure(csrf_token is not None, "Expected CSRF Token not found in HTML content!")
+    ensure(csrf_token is not None and isinstance(csrf_token, str) and csrf_token.strip(), "Expected CSRF Token not found in HTML content!")
 
     HTTP_OK:Final = 200
     deleted = False

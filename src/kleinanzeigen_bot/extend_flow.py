@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from . import published_ads
+from .published_ads import ad_matches_id
 from .utils import dicts as _dicts
 
 if TYPE_CHECKING:
@@ -39,15 +40,8 @@ async def extend_ads(
             LOG.info(" -> SKIPPED: ad '%s' is not published yet", ad_cfg.title)
             continue
 
-        # Find ad in published list, normalizing API IDs (can be str/int) for safe comparison
-        def _ad_matches(ad:PublishedAd, target_id:int) -> bool:
-            try:
-                return int(ad["id"]) == target_id
-            except (ValueError, TypeError):
-                return False
-
         published_ad:PublishedAd | None = next(
-            (ad for ad in published_ads_list if _ad_matches(ad, ad_cfg.id)), None
+            (ad for ad in published_ads_list if ad_matches_id(ad, ad_cfg.id)), None
         )
         if not published_ad:
             LOG.warning(" -> SKIPPED: ad '%s' (ID: %s) not found in published ads", ad_cfg.title, ad_cfg.id)

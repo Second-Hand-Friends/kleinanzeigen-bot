@@ -17,6 +17,24 @@ PublishedAd:TypeAlias = dict[str, Any]
 """A raw published ad entry from the Kleinanzeigen manage-ads JSON API."""
 
 
+def ad_matches_id(ad:PublishedAd, target_id:int | None) -> bool:
+    """Check if a published ad matches the given target ID.
+
+    Normalizes API IDs (which may be ``str`` or ``int``) for safe comparison.
+    Returns ``False`` when ``target_id`` is ``None`` or the ad's ``id`` key
+    is missing, unparseable, or of an unexpected type.
+    """
+    if target_id is None:
+        return False
+    raw_id = ad.get("id")
+    if raw_id is None:
+        return False
+    try:
+        return int(raw_id) == target_id
+    except (TypeError, ValueError):
+        return False
+
+
 LOG:Final = get_logger(__name__)
 LOG.setLevel(logging.INFO)
 

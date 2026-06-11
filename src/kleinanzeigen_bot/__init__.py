@@ -32,6 +32,7 @@ from .model.ad_model import (
     AdUpdateStrategy as AdUpdateStrategy,
 )
 from .model.config_model import Config  # noqa: TC001 — used at runtime, config injection
+from .published_ads import ad_matches_id
 from .update_checker import UpdateChecker
 from .utils import diagnostics as _diagnostics
 from .utils import dicts as _dicts
@@ -936,7 +937,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ad_cfgs, start = 1):
             LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ad_cfgs), ad_cfg.title, ad_file)
 
-            if [x for x in published_ads if x["id"] == ad_cfg.id and x["state"] == "paused"]:
+            if any(ad_matches_id(x, ad_cfg.id) and x.get("state") == "paused" for x in published_ads):
                 LOG.info("Skipping because ad is reserved")
                 continue
 
@@ -1675,7 +1676,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ad_cfgs, start = 1):
             LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ad_cfgs), ad_cfg.title, ad_file)
 
-            ad = next((ad for ad in published_ads if ad["id"] == ad_cfg.id), None)
+            ad = next((ad for ad in published_ads if ad_matches_id(ad, ad_cfg.id)), None)
 
             if not ad:
                 LOG.warning(" -> SKIPPED: ad '%s' (ID: %s) not found in published ads", ad_cfg.title, ad_cfg.id)
