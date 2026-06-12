@@ -146,21 +146,6 @@ kleinanzeigen_bot/__init__.py:
     "Confirmation page redirected too fast; extracted ad ID %s from page tracking data": "Bestätigungsseite wurde zu schnell weitergeleitet; Anzeigen-ID %s aus Seiten-Trackingdaten extrahiert"
     "ad_id is unexpectedly None after confirmation flow for %s": "ad_id ist unerwartet None nach dem Bestätigungsablauf für %s"
 
-  _persist_published_ad:
-    " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
-    " -> SUCCESS: ad updated with ID %s": " -> ERFOLG: Anzeige mit ID %s aktualisiert"
-    "Failed to rollback image rename: %s -> %s": "Fehler beim Rückgängigmachen der Bildumbenennung: %s -> %s"
-
-  _log_local_path_rename_result:
-    "Local path renaming (%s): %s": "Lokale Pfadumbenennung (%s): %s"
-    "Updated ad file: %s": "Aktualisierte Anzeigendatei: %s"
-    "Local path renaming (%s): no local paths needed renaming": "Lokale Pfadumbenennung (%s): keine lokalen Pfade mussten umbenannt werden"
-    "Local path renaming (%s): could not rename %s (target exists or error)": "Lokale Pfadumbenennung (%s): %s konnte nicht umbenannt werden (Ziel existiert oder Fehler)"
-    "folder": "Ordner"
-    "ad file": "Anzeigendatei"
-    "image(s)": "Bild(er)"
-    "ad folder": "Anzeigenordner"
-
   update_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
@@ -283,6 +268,24 @@ kleinanzeigen_bot/published_ads.py:
     "No ads found on page %s, stopping pagination": "Keine Anzeigen auf Seite %s gefunden, beende Paginierung"
     "Invalid 'next' page value in paging info: %s, stopping pagination": "Ungültiger 'next'-Seitenwert in Paginierungsinfo: %s, beende Paginierung"
     "Invalid 'pageNum' in paging info: %s, stopping pagination": "Ungültiger 'pageNum'-Wert in Paginierungsinfo: %s, beende Paginierung"
+
+#################################################
+kleinanzeigen_bot/publishing_flow.py:
+#################################################
+  persist_published_ad:
+    " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
+    " -> SUCCESS: ad updated with ID %s": " -> ERFOLG: Anzeige mit ID %s aktualisiert"
+    "Failed to rollback image rename: %s -> %s": "Fehler beim Rückgängigmachen der Bildumbenennung: %s -> %s"
+
+  _log_local_path_rename_result:
+    "Local path renaming (%s): %s": "Lokale Pfadumbenennung (%s): %s"
+    "Updated ad file: %s": "Aktualisierte Anzeigendatei: %s"
+    "Local path renaming (%s): no local paths needed renaming": "Lokale Pfadumbenennung (%s): keine lokalen Pfade mussten umbenannt werden"
+    "Local path renaming (%s): could not rename %s (target exists or error)": "Lokale Pfadumbenennung (%s): %s konnte nicht umbenannt werden (Ziel existiert oder Fehler)"
+    "folder": "Ordner"
+    "ad file": "Anzeigendatei"
+    "image(s)": "Bild(er)"
+    "ad folder": "Anzeigenordner"
 
 #################################################
 kleinanzeigen_bot/delete_flow.py:
