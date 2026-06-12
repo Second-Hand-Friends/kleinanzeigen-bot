@@ -128,22 +128,28 @@ kleinanzeigen_bot/__init__.py:
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
     "Updating ad '%s'...": "Aktualisiere Anzeige '%s'..."
+    " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
+
+  _fill_ad_form:
     "Failed to set price type '%s'": "Fehler beim Setzen des Preistyps '%s'"
     "Failed to set shipping attribute for type '%s'!": "Fehler beim setzen des Versandattributs für den Typ '%s'!"
     "Shipping step skipped - reason: NOT_APPLICABLE": "Versandschritt übersprungen: Versand nicht anwendbar (Status = NOT_APPLICABLE)"
     "Shipping combobox button has no id attribute": "Versand-Combobox-Button hat kein ID-Attribut"
-    "Dismissing 'Effektiver verkaufen' upsell dialog...": "'Effektiver verkaufen'-Dialog schließen..."
     "Direct-buy (sell_directly) is not available for the selected category. Skipping.": "Direktkauf (sell_directly) ist für die ausgewählte Kategorie nicht verfügbar. Überspringe."
     "Image cleanup failed before upload. Removed %(removed)d of %(total)d existing images.": "Bildbereinigung vor dem Hochladen fehlgeschlagen. %(removed)d von %(total)d vorhandenen Bildern wurden entfernt."
+    " -> removed %d existing image(s) before upload": " -> %d vorhandene Bilder vor dem Hochladen entfernt"
+
+  _submit_and_confirm_ad:
+    "Dismissing 'Effektiver verkaufen' upsell dialog...": "'Effektiver verkaufen'-Dialog schließen..."
     "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
+    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
+    "Confirmation page redirected too fast; extracted ad ID %s from page tracking data": "Bestätigungsseite wurde zu schnell weitergeleitet; Anzeigen-ID %s aus Seiten-Trackingdaten extrahiert"
+    "ad_id is unexpectedly None after confirmation flow for %s": "ad_id ist unerwartet None nach dem Bestätigungsablauf für %s"
+
+  _persist_published_ad:
     " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"
     " -> SUCCESS: ad updated with ID %s": " -> ERFOLG: Anzeige mit ID %s aktualisiert"
     "Failed to rollback image rename: %s -> %s": "Fehler beim Rückgängigmachen der Bildumbenennung: %s -> %s"
-    " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
-    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
-    " -> removed %d existing image(s) before upload": " -> %d vorhandene Bilder vor dem Hochladen entfernt"
-    "Confirmation page redirected too fast; extracted ad ID %s from page tracking data": "Bestätigungsseite wurde zu schnell weitergeleitet; Anzeigen-ID %s aus Seiten-Trackingdaten extrahiert"
-    "ad_id is unexpectedly None after confirmation flow for %s": "ad_id ist unerwartet None nach dem Bestätigungsablauf für %s"
 
   _log_local_path_rename_result:
     "Local path renaming (%s): %s": "Lokale Pfadumbenennung (%s): %s"
