@@ -36,7 +36,7 @@ async def extend_ads(
     ads_to_extend:list[tuple[str, Ad, dict[str, Any]]] = []
     for ad_file, ad_cfg, ad_cfg_orig in ad_cfgs:
         # Skip unpublished ads (no ID)
-        if not ad_cfg.id:
+        if ad_cfg.id is None:
             LOG.info(" -> SKIPPED: ad '%s' is not published yet", ad_cfg.title)
             continue
 
