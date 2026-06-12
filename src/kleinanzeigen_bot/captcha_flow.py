@@ -3,13 +3,12 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 from gettext import gettext as _
 
-from kleinanzeigen_bot.model.config_model import CaptchaConfig
-from kleinanzeigen_bot.utils.web_scraping_mixin import By, WebScrapingMixin
-
+from .model.config_model import CaptchaConfig
 from .utils import loggers as _loggers
 from .utils import misc as _misc
 from .utils.exceptions import CaptchaEncountered
 from .utils.misc import ainput
+from .utils.web_scraping_mixin import By, WebScrapingMixin
 
 LOG = _loggers.get_logger(__name__)
 

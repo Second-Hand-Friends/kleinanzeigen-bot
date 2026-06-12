@@ -1295,8 +1295,8 @@ class TestKleinanzeigenBotBasics:
         ad_cfg, ad_cfg_orig = self._build_publish_ad_cfg(base_ad_config)
 
         # web_await succeeds (confirmation URL was seen during polling), but the page
-        # redirects before line 2479 can extract the URL, causing IndexError in the
-        # extraction which falls into the except block and triggers the fallback.
+        # redirects before submit_and_confirm_ad can extract the URL, causing IndexError
+        # in the extraction which falls into the except block and triggers the fallback.
         with self._mock_post_submit_dependencies(
             test_bot, mock_page,
             redirect_recovery_return = 55667788,
