@@ -13,9 +13,10 @@ from nodriver.core.connection import ProtocolException
 from ruamel.yaml import YAML
 
 from . import ad_form_helpers as _ad_form_helpers
-from . import ad_loading, delete_flow, download_flow, extend_flow, published_ads, publishing_flow
+from . import ad_loading, delete_flow, download_flow, extend_flow, published_ads
 from . import ad_state as _ad_state
 from . import price_reduction as _price_reduction
+from . import publishing_flow as _publishing_flow
 from . import runtime_config as _runtime_config
 from ._version import __version__
 from .ad_description import get_ad_description
@@ -1294,7 +1295,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         ad_id = await self._submit_and_confirm_ad(ad_file, ad_cfg, mode)
 
         try:
-            publishing_flow.persist_published_ad(ad_file, ad_cfg, ad_cfg_orig, old_ad_id, ad_id, mode, config = self.config)
+            _publishing_flow.persist_published_ad(ad_file, ad_cfg, ad_cfg_orig, old_ad_id, ad_id, mode, config = self.config)
         except Exception:
             LOG.error(  # noqa: G201 — must use .error(exc_info=True) for translation lookup to resolve publish_ad
                 "Post-publish persistence failed for '%s' (ad ID %s - ad is live on Kleinanzeigen but local YAML may be out of sync)",
