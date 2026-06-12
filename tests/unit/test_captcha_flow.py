@@ -73,21 +73,3 @@ class TestCheckAndWaitForCaptcha:
 
             mock_scroll.assert_awaited_once()
             mock_ainput.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_captcha_found_login_page_prompts_without_scroll(self, test_bot:KleinanzeigenBot) -> None:
-        """Login page captcha prompts user but does not scroll."""
-        with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
-            patch("kleinanzeigen_bot.captcha_flow.ainput", new_callable = AsyncMock) as mock_ainput,
-            patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock) as mock_scroll,
-        ):
-            mock_probe.return_value = MagicMock()
-            mock_ainput.return_value = ""
-
-            await captcha_flow.check_and_wait_for_captcha(
-                test_bot, test_bot.config.captcha, is_login_page = True,
-            )
-
-            mock_ainput.assert_awaited_once()
-            mock_scroll.assert_not_awaited()

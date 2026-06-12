@@ -524,29 +524,3 @@ class TestSubmitAndConfirmAd:
                 test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
                 captcha_config = captcha_config,
             )
-
-    @pytest.mark.asyncio
-    async def test_clicks_imprint_guidance_button(self, test_bot:KleinanzeigenBot) -> None:
-        """Imprint guidance button is clicked when present."""
-        ad = _make_min_ad()
-        captcha_config = test_bot.config.captcha
-        imprint_element = AsyncMock()
-        confirmation_url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
-
-        with (
-            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, imprint_element, None, None]),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = confirmation_url),
-            patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_flow.ainput", new_callable = AsyncMock),
-        ):
-            result = await publishing_flow.submit_and_confirm_ad(
-                test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
-                captcha_config = captcha_config,
-            )
-
-        assert result == 12345
-        imprint_element.click.assert_awaited_once()

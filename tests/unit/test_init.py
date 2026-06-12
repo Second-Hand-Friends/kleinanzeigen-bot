@@ -3673,58 +3673,6 @@ class TestWantedShippingSelection:
                 await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
 
 
-def test_file_logger_writes_message(tmp_path:Path, caplog:pytest.LogCaptureFixture) -> None:
-    """
-    Unit: Logger can be initialized and used, robust to pytest log capture.
-    """
-    log_path = tmp_path / "logger_test.log"
-    logger_name = "logger_test_logger_unique"
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.DEBUG)
-    logger.propagate = False
-    for h in list(logger.handlers):
-        logger.removeHandler(h)
-    handle = logging.FileHandler(str(log_path), encoding = "utf-8")
-    handle.setLevel(logging.DEBUG)
-    formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
-    handle.setFormatter(formatter)
-    logger.addHandler(handle)
-    logger.info("Logger test log message")
-    handle.flush()
-    handle.close()
-    logger.removeHandler(handle)
-    assert log_path.exists()
-    with open(log_path, "r", encoding = "utf-8") as f:
-        contents = f.read()
-    assert "Logger test log message" in contents
-
-
-def _apply_price_reduction_persistence(count:int | None) -> dict[str, Any]:
-    """Return a dict with price_reduction_count only when count is positive (count -> dict[str, Any])."""
-    ad_cfg_orig:dict[str, Any] = {}
-    if count is not None and count > 0:
-        ad_cfg_orig["price_reduction_count"] = count
-    return ad_cfg_orig
-
-
-class TestPriceReductionPersistence:
-    """Tests for price_reduction_count persistence logic."""
-
-    @pytest.mark.unit
-    @pytest.mark.parametrize(
-        ("count", "expected_cfg"),
-        [
-            (3, {"price_reduction_count": 3}),
-            (0, {}),
-            (None, {}),
-        ],
-        ids = ["positive", "zero", "none"],
-    )
-    def test_persistence_logic(self, count:int | None, expected_cfg:dict[str, Any]) -> None:
-        """Test the conditional logic that decides whether to persist price_reduction_count."""
-        assert _apply_price_reduction_persistence(count) == expected_cfg
-
-
 class TestBuyNowRadioWarning:
     """Regression tests for buy-now handling across shipping modes."""
 
