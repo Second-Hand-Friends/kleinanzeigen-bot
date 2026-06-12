@@ -1587,7 +1587,7 @@ class WebScrapingMixin:
             This method uses standard DOM APIs (``querySelectorAll``,
             ``textContent``, ``click()``) and does **not** depend on React
             fiber internals.  It is intended as the future replacement for
-            the React-fiber-based ``__select_button_combobox`` used in special
+            the React-fiber-based ``_select_button_combobox`` used in special
             attribute handling — see GitHub issue #930.
         """
         if timeout is None:
@@ -1625,7 +1625,7 @@ class WebScrapingMixin:
         lives in the inline JavaScript and requires a live browser session for
         meaningful coverage.  The Python wrapper (``json.dumps``, ``isinstance``
         check, return) is trivial boilerplate.  Integration-level routing is
-        tested in ``test_init.py`` via the ``__set_special_attributes`` dispatch.
+        tested in ``test_init.py`` via the ``_set_special_attributes`` dispatch.
 
         Anchors to the specific hidden input identified by *hidden_input_name*
         (e.g. ``attributeMap[baby_kinderkleidung.groesse]``), derives the

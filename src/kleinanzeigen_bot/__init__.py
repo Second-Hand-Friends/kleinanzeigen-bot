@@ -880,11 +880,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return False
 
-    async def _fetch_published_ads(self, *, strict:bool = False) -> list[PublishedAd]:
-        """Temporary delegator to published_ads.fetch_published_ads."""
-        return await published_ads.fetch_published_ads(self, self.root_url, strict = strict)
-
-    async def __check_publishing_result(self) -> bool:
+    async def _check_publishing_result(self) -> bool:
         # Check for success messages
         return await self.web_check(By.ID, "checking-done", Is.DISPLAYED) or await self.web_check(By.ID, "not-completed", Is.DISPLAYED)
 
@@ -932,12 +928,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         failed_count = 0
         max_retries = SUBMISSION_MAX_RETRIES
 
-        published_ads = await self._fetch_published_ads()
+        published_ads_list = await published_ads.fetch_published_ads(self, self.root_url)
 
         for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ad_cfgs, start = 1):
             LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ad_cfgs), ad_cfg.title, ad_file)
 
-            if any(ad_matches_id(x, ad_cfg.id) and x.get("state") == "paused" for x in published_ads):
+            if any(ad_matches_id(x, ad_cfg.id) and x.get("state") == "paused" for x in published_ads_list):
                 LOG.info("Skipping because ad is reserved")
                 continue
 
@@ -952,7 +948,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     # remain idempotent for a single eligible reduction cycle.
                     ad_cfg.price = baseline_price
                     ad_cfg.price_reduction_count = baseline_price_reduction_count
-                    await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.REPLACE)
+                    await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads_list, AdUpdateStrategy.REPLACE)
                     success = True
                     break  # Publish succeeded, exit retry loop
                 except asyncio.CancelledError:
@@ -992,7 +988,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             if success:
                 try:
                     publish_timeout = self.timeout("publishing_result")
-                    await self.web_await(self.__check_publishing_result, timeout = publish_timeout)
+                    await self.web_await(self._check_publishing_result, timeout = publish_timeout)
                 except TimeoutError:
                     LOG.warning(" -> Could not confirm publishing for '%s', but ad may be online", ad_cfg.title)
 
@@ -1000,7 +996,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 await delete_flow.delete_ad(
                     web = self, root_url = self.root_url,
                     ad_cfg = ad_cfg,
-                    published_ads_list = published_ads,
+                    published_ads_list = published_ads_list,
                     delete_old_ads_by_title = False,
                 )
 
@@ -1070,13 +1066,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # set category (before title to avoid form reset clearing title)
         #############################
-        await self.__set_category(ad_cfg.category, ad_file)
+        await self._set_category(ad_cfg.category, ad_file)
         await self.web_sleep()  # wait for category-dependent fields to render before setting attributes
 
         #############################
         # set special attributes
         #############################
-        await self.__set_special_attributes(ad_cfg)
+        await self._set_special_attributes(ad_cfg)
 
         #############################
         # set shipping type/options/costs
@@ -1104,7 +1100,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         LOG.warning("Failed to set shipping attribute for type '%s'!", shipping_type)
                         raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % shipping_type) from ex
             else:
-                await self.__set_shipping(ad_cfg, mode)
+                await self._set_shipping(ad_cfg, mode)
         else:
             LOG.debug("Shipping step skipped - reason: NOT_APPLICABLE")
 
@@ -1122,7 +1118,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 except TimeoutError as ex:
                     raise TimeoutError(_("Failed to set price type '%s'") % price_type) from ex
             if ad_cfg.price is not None:
-                await self.__set_input_value("ad-price-amount", str(ad_cfg.price))
+                await self._set_input_value("ad-price-amount", str(ad_cfg.price))
 
         #############################
         # set sell_directly
@@ -1151,9 +1147,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # set description
         #############################
         description = get_ad_description(ad_cfg, self.config.ad_defaults, with_affixes = True)
-        await self.__set_input_value("ad-description", description)
+        await self._set_input_value("ad-description", description)
 
-        await self.__set_contact_fields(ad_cfg.contact)
+        await self._set_contact_fields(ad_cfg.contact)
 
         #############################
         # delete previous images to ensure a clean slate
@@ -1191,7 +1187,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # upload images
         #############################
-        await self.__upload_images(ad_cfg)
+        await self._upload_images(ad_cfg)
 
         #############################
         # wait for captcha
@@ -1206,7 +1202,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # set title (right before submit to prevent React re-render clearing it)
         #############################
         LOG.debug("Setting title '%s' (deferred to prevent React re-render clearing it)", ad_cfg.title)
-        await self.__set_input_value("ad-title", ad_cfg.title)
+        await self._set_input_value("ad-title", ad_cfg.title)
 
         #############################
         # submit
@@ -1413,7 +1409,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return None
 
-    async def __set_input_value(self, element_id:str, value:str) -> None:
+    async def _set_input_value(self, element_id:str, value:str) -> None:
         """Sets a framework-controlled input value using the native DOM setter to trigger onChange."""
         await self.web_find(By.ID, element_id)  # raises TimeoutError if element is absent
         js_element_id = json.dumps(element_id)
@@ -1432,7 +1428,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         )
 
     @staticmethod
-    def __location_matches_target(target:str, candidate:str | None) -> bool:
+    def _location_matches_target(target:str, candidate:str | None) -> bool:
         if not candidate:
             return False
 
@@ -1453,7 +1449,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         candidate_city = normalized_candidate.rsplit(" - ", maxsplit = 1)[-1]
         return normalized_target == candidate_city
 
-    async def __city_option_text(self, option:Element) -> str:
+    async def _city_option_text(self, option:Element) -> str:
         text = str(getattr(option, "text", "") or "").strip()
         if text:
             return text
@@ -1462,7 +1458,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         except TimeoutError:
             return ""
 
-    async def __read_city_selection_text(self) -> str | None:
+    async def _read_city_selection_text(self) -> str | None:
         city_timeout = self.timeout("default")
         quick_dom_timeout = self.timeout("quick_dom")
         try:
@@ -1497,7 +1493,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return None
         return None
 
-    async def __select_city_combobox_option(self, target:str) -> None:
+    async def _select_city_combobox_option(self, target:str) -> None:
         quick_dom_timeout = self.timeout("quick_dom")
         city_flow_timeout = self.timeout("default")
 
@@ -1538,7 +1534,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return " ".join(value.split()).casefold()
 
         target_norm = normalize(target)
-        option_entries = [(candidate, normalize(await self.__city_option_text(candidate))) for candidate in candidates]
+        option_entries = [(candidate, normalize(await self._city_option_text(candidate))) for candidate in candidates]
 
         exact_match = next((entry[0] for entry in option_entries if entry[1] == target_norm), None)
         city_matches:list[Element] = []
@@ -1560,21 +1556,21 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         await selected_option.click()
 
         async def _selection_converged() -> bool:
-            selected_city = await self.__read_city_selection_text()
-            return self.__location_matches_target(target, selected_city)
+            selected_city = await self._read_city_selection_text()
+            return self._location_matches_target(target, selected_city)
 
         try:
             await self.web_await(_selection_converged, timeout = city_flow_timeout)
         except TimeoutError as ex:
             raise TimeoutError(_("City selection did not converge for location: %s") % target) from ex
 
-    async def __set_contact_location(self, location:str) -> None:
+    async def _set_contact_location(self, location:str) -> None:
         target = location.strip()
         if not target:
             return
 
-        selected_city = await self.__read_city_selection_text()
-        if self.__location_matches_target(target, selected_city):
+        selected_city = await self._read_city_selection_text()
+        if self._location_matches_target(target, selected_city):
             return
 
         city_timeout = self.timeout("default")
@@ -1599,9 +1595,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if city_tag != "button" or city_role != "combobox":
             raise TimeoutError(_("Unsupported city element type while setting contact location: <%s>") % city_tag)
 
-        await self.__select_city_combobox_option(target)
+        await self._select_city_combobox_option(target)
 
-    async def __set_contact_fields(self, contact:Contact) -> None:
+    async def _set_contact_fields(self, contact:Contact) -> None:
         #############################
         # set contact zipcode + location
         #############################
@@ -1613,7 +1609,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 raise TimeoutError(_("Failed to set contact zipcode: %s") % contact.zipcode) from ex
 
             if contact.location:
-                await self.__set_contact_location(contact.location)
+                await self._set_contact_location(contact.location)
 
         #############################
         # set contact street
@@ -1623,7 +1619,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if await self.web_check(By.ID, "ad-street", Is.DISABLED):
                     await self.web_click(By.ID, "ad-address-visibility")
                     await self.web_sleep()
-                await self.__set_input_value("ad-street", contact.street)
+                await self._set_input_value("ad-street", contact.street)
             except TimeoutError:
                 LOG.warning("Could not set contact street.")
 
@@ -1633,7 +1629,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if contact.name:
             try:
                 if not await self.web_check(By.ID, "ad-name", Is.READONLY):
-                    await self.__set_input_value("ad-name", contact.name)
+                    await self._set_input_value("ad-name", contact.name)
             except TimeoutError:
                 LOG.warning("Could not set contact name.")
 
@@ -1651,7 +1647,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     if await self.web_check(By.ID, "ad-phone", Is.DISABLED, timeout = self.timeout("quick_dom")):
                         await self.web_click(By.ID, "ad-phone-visibility", timeout = self.timeout("quick_dom"))
                         await self.web_sleep()
-                    await self.__set_input_value("ad-phone", contact.phone)
+                    await self._set_input_value("ad-phone", contact.phone)
                 except TimeoutError as ex:
                     LOG.warning("Could not set contact phone despite visible phone field: %s", ex)
 
@@ -1671,12 +1667,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         failed_count = 0
         max_retries = SUBMISSION_MAX_RETRIES
 
-        published_ads = await self._fetch_published_ads()
+        published_ads_list = await published_ads.fetch_published_ads(self, self.root_url)
 
         for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ad_cfgs, start = 1):
             LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ad_cfgs), ad_cfg.title, ad_file)
 
-            ad = next((published_ad for published_ad in published_ads if ad_matches_id(published_ad, ad_cfg.id)), None)
+            ad = next((published_ad for published_ad in published_ads_list if ad_matches_id(published_ad, ad_cfg.id)), None)
 
             if not ad:
                 LOG.warning(" -> SKIPPED: ad '%s' (ID: %s) not found in published ads", ad_cfg.title, ad_cfg.id)
@@ -1695,7 +1691,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 try:
                     ad_cfg.price = baseline_price
                     ad_cfg.price_reduction_count = baseline_price_reduction_count
-                    await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads, AdUpdateStrategy.MODIFY)
+                    await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads_list, AdUpdateStrategy.MODIFY)
                     success = True
                     break
                 except asyncio.CancelledError:
@@ -1730,7 +1726,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             if success:
                 try:
                     publish_timeout = self.timeout("publishing_result")
-                    await self.web_await(self.__check_publishing_result, timeout = publish_timeout)
+                    await self.web_await(self._check_publishing_result, timeout = publish_timeout)
                 except TimeoutError:
                     LOG.warning(" -> Could not confirm update for '%s', but changes may be online", ad_cfg.title)
 
@@ -1741,7 +1737,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.info("DONE: updated %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    async def __set_condition(self, condition_value:str) -> bool:
+    async def _set_condition(self, condition_value:str) -> bool:
         """Try to set condition via dialog path.
 
         Returns True when dialog handling succeeded, otherwise False to indicate
@@ -1817,7 +1813,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return True
 
-    async def __set_category(self, category:str | None, ad_file:str) -> None:
+    async def _set_category(self, category:str | None, ad_file:str) -> None:
         # click on something to trigger automatic category detection
         await self.web_click(By.ID, "ad-description")
 
@@ -1838,11 +1834,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             # When the configured path cannot be resolved (e.g. outdated or ambiguous),
             # the site falls back to a React category-suggestion radio picker. Handle it
             # by matching a path segment against one of the offered suggestions.
-            await self.__resolve_category_suggestions(category)
+            await self._resolve_category_suggestions(category)
         else:
             ensure(is_category_auto_selected, f"No category specified in [{ad_file}] and automatic category detection failed")
 
-    async def __resolve_category_suggestions(self, category:str) -> None:
+    async def _resolve_category_suggestions(self, category:str) -> None:
         """Handle Kleinanzeigen's post-redesign category-suggestion picker.
 
         If ``fieldset#ad-category-picker`` is rendered after the category change
@@ -1911,7 +1907,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         raise CategoryResolutionError(message % {"category": category, "offered": offered})
 
     @staticmethod
-    def __special_attribute_candidate_priority(elem:Element) -> tuple[int, int]:
+    def _special_attribute_candidate_priority(elem:Element) -> tuple[int, int]:
         local_name = elem.local_name
         elem_type = str(cast(Any, elem.attrs.get("type")) or "").lower()
         role = str(cast(Any, elem.attrs.get("role")) or "").lower()
@@ -1931,35 +1927,35 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         return (8, 0)
 
     @staticmethod
-    def __describe_special_attribute_candidate(elem:Element) -> str:
+    def _describe_special_attribute_candidate(elem:Element) -> str:
         elem_id = cast(str | None, elem.attrs.get("id"))
         elem_name = cast(str | None, elem.attrs.get("name"))
         elem_type = cast(str | None, elem.attrs.get("type"))
         elem_role = cast(str | None, elem.attrs.get("role"))
         return f"{elem.local_name}#'{elem_id}' name='{elem_name}' type='{elem_type}' role='{elem_role}'"
 
-    def __pick_special_attribute_candidate(self, candidates:Sequence[Element], special_attribute_key:str) -> Element:
+    def _pick_special_attribute_candidate(self, candidates:Sequence[Element], special_attribute_key:str) -> Element:
         ensure(candidates, f"No candidates found for special attribute [{special_attribute_key}]")
         ranked_candidates = sorted(
             enumerate(candidates),
-            key = lambda entry: (self.__special_attribute_candidate_priority(entry[1]), entry[0]),
+            key = lambda entry: (self._special_attribute_candidate_priority(entry[1]), entry[0]),
         )
         selected_idx, selected = ranked_candidates[0]
 
         if len(candidates) > 1:
-            debug_candidates = ", ".join(f"#{idx}:{self.__describe_special_attribute_candidate(candidate)}" for idx, candidate in enumerate(candidates))
+            debug_candidates = ", ".join(f"#{idx}:{self._describe_special_attribute_candidate(candidate)}" for idx, candidate in enumerate(candidates))
             LOG.debug(
                 "Attribute field '%s' matched %s elements. Selected #%s: %s. Candidates: %s",
                 special_attribute_key,
                 len(candidates),
                 selected_idx,
-                self.__describe_special_attribute_candidate(selected),
+                self._describe_special_attribute_candidate(selected),
                 debug_candidates,
             )
 
         return selected
 
-    async def __set_special_attributes(self, ad_cfg:Ad) -> None:
+    async def _set_special_attributes(self, ad_cfg:Ad) -> None:
         if not ad_cfg.special_attributes:
             return
 
@@ -1978,7 +1974,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
             if normalized_special_attribute_key == "condition":
                 LOG.debug("Special attribute [%s]: trying dedicated condition dialog path", special_attribute_key)
-                if await self.__set_condition(special_attribute_value_str):
+                if await self._set_condition(special_attribute_value_str):
                     LOG.debug("Special attribute [%s]: condition dialog path succeeded", special_attribute_key)
                     continue
 
@@ -2021,7 +2017,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     By.XPATH,
                     special_attr_xpath,
                 )
-                special_attr_elem = self.__pick_special_attribute_candidate(special_attr_candidates, special_attribute_key)
+                special_attr_elem = self._pick_special_attribute_candidate(special_attr_candidates, special_attribute_key)
             except AssertionError as ex:
                 LOG.debug(
                     "Attribute field '%s' (normalized: '%s') could not be found.",
@@ -2053,7 +2049,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     if associated_button_id is None:
                         raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
                     LOG.debug("Attribute field '%s': found associated button combobox id='%s'", special_attribute_key, associated_button_id)
-                    await self.__select_button_combobox(associated_button_id, special_attribute_value_str)
+                    await self._select_button_combobox(associated_button_id, special_attribute_value_str)
                     LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
                     continue
 
@@ -2089,7 +2085,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 elif special_attr_elem.local_name == "button" and elem_role == "combobox":
                     LOG.debug("Attribute field '%s' seems to be a button combobox (click-to-open dropdown)...", special_attribute_key)
                     ensure(elem_id, f"No id available for button combobox special attribute [{special_attribute_key}]")
-                    await self.__select_button_combobox(cast(str, elem_id), special_attribute_value_str)
+                    await self._select_button_combobox(cast(str, elem_id), special_attribute_value_str)
                 elif elem_role == "combobox" and elem_type in {"text", ""} and special_attr_elem.local_name == "input":
                     LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
                     await self.web_select_combobox(elem_selector_type, elem_selector_value, special_attribute_value_str)
@@ -2102,7 +2098,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
 
     # TODO: Issue #930 — migrate to web_select_button_combobox (display-text-based, no React fiber)
-    async def __select_button_combobox(self, elem_id:str, value:str) -> None:
+    async def _select_button_combobox(self, elem_id:str, value:str) -> None:
         """Select an option from a <button role="combobox"> dropdown by its API value.
 
         Clicks the button to open the listbox, reads the options data from the React fiber
@@ -2139,7 +2135,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if not ok:
             raise TimeoutError(_("Option '%(value)s' not found in button combobox '%(id)s'") % {"value": value, "id": elem_id})
 
-    async def __set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
+    async def _set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         short_timeout = self.timeout("quick_dom")
         if ad_cfg.shipping_type == "PICKUP":
             pickup_radio = await self.web_probe(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
@@ -2182,7 +2178,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                         await self.web_click(By.XPATH, '//button[contains(., "Zurück")]')
 
             await self.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
-            await self.__set_shipping_options(ad_cfg, mode)
+            await self._set_shipping_options(ad_cfg, mode)
         else:
             # Ensure shipping is enabled before opening the dialog (may already be selected)
             try:
@@ -2221,15 +2217,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 price_str = str(ad_cfg.shipping_costs).replace(".", ",")
                 # Native DOM setter + React-aware events: send_keys gets wiped by
                 # React re-render after the ad-individual-shipping-checkbox-control click.
-                # A re-render between web_find and web_execute inside __set_input_value can
+                # A re-render between web_find and web_execute inside _set_input_value can
                 # also leave the write as a silent no-op, so verify and retry before "Fertig".
                 max_attempts = 3
                 for attempt in range(1, max_attempts + 1):
                     try:
-                        await self.__set_input_value("ad-individual-shipping-price", price_str)
+                        await self._set_input_value("ad-individual-shipping-price", price_str)
                         actual = await self.web_execute("document.getElementById('ad-individual-shipping-price')?.value")
                     except TimeoutError as ex:
-                        # A re-render landing on web_find inside __set_input_value or on the
+                        # A re-render landing on web_find inside _set_input_value or on the
                         # readback web_execute can raise here; treat either as a transient
                         # failure so the outer loop can retry instead of bailing.
                         LOG.debug(ex, exc_info = True)
@@ -2255,7 +2251,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.debug(ex, exc_info = True)
                 raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 
-    async def __set_shipping_options(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
+    async def _set_shipping_options(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         if not ad_cfg.shipping_options:
             raise ValueError(_("shipping_options must be provided"))
 
@@ -2318,7 +2314,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         except TimeoutError as ex:
             raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 
-    async def __upload_images(self, ad_cfg:Ad) -> None:
+    async def _upload_images(self, ad_cfg:Ad) -> None:
         if not ad_cfg.images:
             return
 
