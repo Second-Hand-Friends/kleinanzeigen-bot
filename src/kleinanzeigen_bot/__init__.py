@@ -1361,7 +1361,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # has no runtime impact.
 
     async def publish_ad(
-        self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[PublishedAd], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE
+        self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads_list:list[PublishedAd], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE
     ) -> None:
         """Publish or update an ad on Kleinanzeigen.
 
@@ -1369,7 +1369,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             ad_file: Path to the ad configuration YAML file.
             ad_cfg: The effective ad configuration with default values applied.
             ad_cfg_orig: The original ad configuration as present in the YAML file.
-            published_ads: List of published ads from the API, used for deduplication
+            published_ads_list: List of published ads from the API, used for deduplication
                 and old ad deletion.
             mode: The ad editing strategy. REPLACE creates a new ad (full republish),
                 MODIFY updates an existing ad in-place.
@@ -1380,7 +1380,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         old_ad_id = ad_cfg.id
 
         if mode == AdUpdateStrategy.REPLACE:
-            await self._delete_old_ad_if_needed(ad_cfg, published_ads, timing = "BEFORE_PUBLISH")
+            await self._delete_old_ad_if_needed(ad_cfg, published_ads_list, timing = "BEFORE_PUBLISH")
 
             # Apply auto price reduction in REPLACE mode (republish flow)
             _price_reduction.apply_auto_price_reduction(
