@@ -372,3 +372,36 @@ class TestDeleteAdsAfterDeletePolicy:
 
         mock_save.assert_not_called()
         assert ad_cfg.id == 12345
+
+    @pytest.mark.asyncio
+    async def test_delete_ads_counts_deletions(
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any], tmp_path:Path,
+    ) -> None:
+        """Orchestrator increments deleted_count when delete_ad returns True."""
+        test_bot.config.deleting.after_delete = "NONE"
+        ad1 = self._make_ad(minimal_ad_config, tmp_path)
+        # Create second ad with different title/id
+        ad_cfg2 = Ad.model_validate(minimal_ad_config | {
+            "id": 67890, "title": "Second Ad Here", "active": True,
+            "created_on": "2024-06-01T12:00:00", "updated_on": "2024-06-10T08:30:00",
+            "content_hash": "def456",
+        })
+        ad2 = (str(tmp_path / "ad2.yaml"), ad_cfg2, ad_cfg2.model_dump())
+
+        with (
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = []),
+            patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock, return_value = True) as mock_delete_ad,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.utils.dicts.save_dict") as mock_save,
+        ):
+            await delete_flow.delete_ads(
+                web = test_bot, root_url = test_bot.root_url,
+                after_delete = test_bot.config.deleting.after_delete,
+                delete_old_ads_by_title = test_bot.config.publishing.delete_old_ads_by_title,
+                ad_cfgs = [ad1, ad2],
+            )
+
+        # save_dict not called because after_delete is NONE
+        mock_save.assert_not_called()
+        # delete_ad called twice (once per ad)
+        assert mock_delete_ad.call_count == 2

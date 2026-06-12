@@ -1850,9 +1850,10 @@ class TestKleinanzeigenBotAdOperations:
     @pytest.mark.asyncio
     async def test_run_download_command_default_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
         """Test running download command with default selector."""
-        with patch("kleinanzeigen_bot.download_flow.download_ads", new_callable = AsyncMock):
+        with patch("kleinanzeigen_bot.download_flow.download_ads", new_callable = AsyncMock) as mock_download:
             await test_bot.run(["script.py", "download"])
             assert test_bot.ads_selector == "new"
+            mock_download.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_run_update_default_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
@@ -1876,9 +1877,10 @@ class TestKleinanzeigenBotAdManagement:
     async def test_download_ads_with_specific_ids(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
         """Test downloading ads with specific IDs."""
         test_bot.ads_selector = "123,456"
-        with patch("kleinanzeigen_bot.download_flow.download_ads", new_callable = AsyncMock):
+        with patch("kleinanzeigen_bot.download_flow.download_ads", new_callable = AsyncMock) as mock_download:
             await test_bot.run(["script.py", "download", "--ads=123,456"])
             assert test_bot.ads_selector == "123,456"
+            mock_download.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_run_publish_invalid_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument

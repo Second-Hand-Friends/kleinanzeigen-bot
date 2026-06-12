@@ -360,3 +360,23 @@ class TestJSONPagination:
             pytest.fail(f"Expected 1 ad in strict mode single-page response, got {len(result)}")
         if result[0]["id"] != 10:
             pytest.fail(f"Expected ad id 10, got {result[0]['id']}")
+
+    def test_ad_matches_id(self) -> None:
+        """Shared helper for safe API-ID comparison, used by publish/update/extend/delete."""
+        # Matching int to int
+        assert published_ads.ad_matches_id({"id": 42}, 42) is True
+        # Matching str to int (API returns string IDs)
+        assert published_ads.ad_matches_id({"id": "42"}, 42) is True
+        # Mismatch
+        assert published_ads.ad_matches_id({"id": 99}, 42) is False
+        assert published_ads.ad_matches_id({"id": "99"}, 42) is False
+        # target_id is None → always False
+        assert published_ads.ad_matches_id({"id": 42}, None) is False
+        # ad has no "id" key
+        assert published_ads.ad_matches_id({}, 42) is False
+        # ad has "id": None
+        assert published_ads.ad_matches_id({"id": None}, 42) is False
+        # Unparseable id (not coercible to int)
+        assert published_ads.ad_matches_id({"id": "nope"}, 42) is False
+        # Boolean (True → 1) — accepting bool-to-int coercion is current behavior
+        assert published_ads.ad_matches_id({"id": True}, 1) is True

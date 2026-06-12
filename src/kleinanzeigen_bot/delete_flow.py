@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Ad deletion browser workflow."""
 
+from gettext import gettext as _
 from typing import Any, Final, Literal
 
 from . import ad_state as _ad_state
@@ -110,7 +111,7 @@ async def delete_ad(
     await web.web_open(f"{root_url}/m-meine-anzeigen.html")
     csrf_token_elem = await web.web_find(By.CSS_SELECTOR, "meta[name=_csrf]")
     csrf_token = csrf_token_elem.attrs.get("content")
-    ensure(csrf_token is not None and isinstance(csrf_token, str) and csrf_token.strip(), "Expected CSRF Token not found in HTML content!")
+    ensure(csrf_token is not None and isinstance(csrf_token, str) and csrf_token.strip(), _("Expected CSRF Token not found in HTML content!"))
 
     HTTP_OK:Final = 200
     deleted = False

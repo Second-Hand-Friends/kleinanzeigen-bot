@@ -151,14 +151,14 @@ async def download_ads(
 
         elif effective_selector == "new":  # download only unsaved ads
             # check which ads already saved
-            saved_ad_ids:list[int] = []
+            saved_ad_ids:set[int] = set()
             ads = load_ads_func(ignore_inactive = False, exclude_ads_with_id = False)  # do not skip because of existing IDs
             for ad in ads:
                 saved_ad_id = ad[1].id
                 if saved_ad_id is None:
                     LOG.debug("Skipping saved ad without id (likely unpublished or manually created): %s", ad[0])
                     continue
-                saved_ad_ids.append(int(saved_ad_id))
+                saved_ad_ids.add(int(saved_ad_id))
 
             # determine ad IDs from links
             ad_id_by_url = {url: ad_extractor.extract_ad_id_from_ad_url(url) for url in own_ad_urls}
@@ -203,3 +203,5 @@ async def download_ads(
                 LOG.info("Downloaded ad with id %d", ad_id)
             else:
                 LOG.error("The page with the id %d does not exist!", ad_id)
+    else:
+        LOG.error("Invalid ads selector: %s. Use 'all', 'new', or comma-separated numeric IDs.", effective_selector)
