@@ -1293,7 +1293,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         ad_id = await self._submit_and_confirm_ad(ad_file, ad_cfg, mode)
 
-        publishing_flow.persist_published_ad(ad_file, ad_cfg, ad_cfg_orig, old_ad_id, ad_id, mode, config = self.config)
+        try:
+            publishing_flow.persist_published_ad(ad_file, ad_cfg, ad_cfg_orig, old_ad_id, ad_id, mode, config = self.config)
+        except Exception:
+            LOG.error(  # noqa: G201 — must use .error(exc_info=True) for translation lookup to resolve publish_ad
+                "Post-publish persistence failed for '%s' (ad ID %s — ad is live on Kleinanzeigen but local YAML may be out of sync)",
+                ad_cfg.title, ad_id, exc_info = True,
+            )
 
     async def _try_recover_ad_id_from_redirect(self) -> int | None:
         """Try to extract the published ad ID from page tracking data.
