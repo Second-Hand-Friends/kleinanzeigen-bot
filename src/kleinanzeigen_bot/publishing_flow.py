@@ -250,7 +250,7 @@ async def submit_and_confirm_ad(
         By.XPATH, "//dialog[@open and contains(., 'Effektiver verkaufen')]", timeout = quick_dom
     )
     if upsell_dialog is not None:
-        LOG.info("Dismissing 'Effektiver verkaufen' upsell dialog...")
+        LOG.info("Dismissing upsell dialog...")
         await web.web_click(
             By.XPATH, "//dialog[@open]//button[contains(., 'Ohne Hochschieben weiter')]",
             timeout = quick_dom,

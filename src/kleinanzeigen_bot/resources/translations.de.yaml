@@ -287,7 +287,7 @@ kleinanzeigen_bot/publishing_flow.py:
 
   submit_and_confirm_ad:
     "############################################": "############################################"
-    "Dismissing 'Effektiver verkaufen' upsell dialog...": "'Effektiver verkaufen'-Dialog schließen..."
+    "Dismissing upsell dialog...": "Upsell-Dialog schließen..."
     "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
     "Confirmation page redirected too fast; extracted ad ID %s from page tracking data": "Bestätigungsseite wurde zu schnell weitergeleitet; Anzeigen-ID %s aus Seiten-Trackingdaten extrahiert"

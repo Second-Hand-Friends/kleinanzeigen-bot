@@ -16,13 +16,12 @@ class TestCheckAndWaitForCaptcha:
     """Tests for captcha detection and waiting."""
 
     @pytest.mark.asyncio
-    async def test_check_and_wait_for_captcha(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that captcha detection works correctly."""
+    async def test_captcha_found_prompts_user_on_login_page(self, test_bot:KleinanzeigenBot) -> None:
+        """Captcha found on login page prompts user for manual solving."""
         with (
             patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
             patch("kleinanzeigen_bot.captcha_flow.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
-            # Test case 1: Captcha found
             mock_probe.return_value = MagicMock()
             mock_ainput.return_value = ""
 
@@ -30,9 +29,14 @@ class TestCheckAndWaitForCaptcha:
 
             mock_ainput.assert_awaited_once()
 
-            # Test case 2: No captcha
+    @pytest.mark.asyncio
+    async def test_no_captcha_returns_silently(self, test_bot:KleinanzeigenBot) -> None:
+        """No captcha detected skips prompt and returns silently."""
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
+            patch("kleinanzeigen_bot.captcha_flow.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
             mock_probe.return_value = None
-            mock_ainput.reset_mock()
 
             await captcha_flow.check_and_wait_for_captcha(test_bot, test_bot.config.captcha, is_login_page = True)
 

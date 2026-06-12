@@ -419,10 +419,11 @@ class TestSubmitAndConfirmAd:
 
         assert result == 12345
         assert mock_click.await_count == 2
-        mock_click.assert_any_await(
-            By.XPATH,
-            "//dialog[@open]//button[contains(., 'Ohne Hochschieben weiter')]",
-            timeout = 2.0,
+        # Verify the dismiss button XPath was used (without coupling to internal timeout constant)
+        dismiss_xpath = "//dialog[@open]//button[contains(., 'Ohne Hochschieben weiter')]"
+        assert any(
+            call_args.args[0] == By.XPATH and call_args.args[1] == dismiss_xpath
+            for call_args in mock_click.await_args_list
         )
 
     @pytest.mark.asyncio
