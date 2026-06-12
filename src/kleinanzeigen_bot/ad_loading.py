@@ -37,7 +37,6 @@ from .utils.i18n import pluralize
 from .utils.misc import ensure
 
 LOG:Final[_loggers.Logger] = _loggers.get_logger(__name__)
-LOG.setLevel(_loggers.INFO)
 
 
 # --------------------------------------------------------------------------- #

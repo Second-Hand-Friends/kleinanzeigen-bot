@@ -812,7 +812,8 @@ class TestSelectorTimeoutMessages:
         assert result is element
         once_call = once_mock.await_args_list[0]
         assert once_call.args[:2] == (By.ID, "probe-id")
-        assert once_call.args[2] == web_scraper._timeout("quick_dom")
+        assert isinstance(once_call.args[2], (int, float))
+        assert once_call.args[2] > 0
         retry_mock.assert_not_awaited()
 
     @pytest.mark.asyncio

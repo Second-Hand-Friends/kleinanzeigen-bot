@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+# SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Tests for JSON API pagination helper methods."""
@@ -8,14 +8,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from kleinanzeigen_bot import KleinanzeigenBot
+from kleinanzeigen_bot import KleinanzeigenBot, published_ads
+from kleinanzeigen_bot.published_ads import PublishedAdsFetchIncompleteError
 from kleinanzeigen_bot.utils import misc
-from kleinanzeigen_bot.utils.exceptions import PublishedAdsFetchIncompleteError
 
 
 @pytest.mark.unit
 class TestJSONPagination:
-    """Tests for _coerce_page_number and _fetch_published_ads methods."""
+    """Tests for coerce_page_number and fetch_published_ads methods."""
 
     @pytest.fixture
     def bot(self) -> KleinanzeigenBot:
@@ -97,7 +97,7 @@ class TestJSONPagination:
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": '{"ads": [{"id": 1, "state": "active", "title": "Ad 1"}, {"id": 2, "state": "active", "title": "Ad 2"}]}'}
 
-            result = await bot._fetch_published_ads()
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
 
             if len(result) != 2:
                 pytest.fail(f"Expected 2 results, got {len(result)}")
@@ -115,7 +115,7 @@ class TestJSONPagination:
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": json.dumps(response_data)}
 
-            result = await bot._fetch_published_ads()
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
 
             if len(result) != 1:
                 pytest.fail(f"Expected 1 ad, got {len(result)}")
@@ -137,7 +137,7 @@ class TestJSONPagination:
                 {"content": json.dumps(page3_data)},
             ]
 
-            result = await bot._fetch_published_ads()
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
 
             if len(result) != 6:
                 pytest.fail(f"Expected 6 ads but got {len(result)}")
@@ -157,12 +157,12 @@ class TestJSONPagination:
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": json.dumps(response_data)}
 
-            result = await bot._fetch_published_ads()
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
 
             if not isinstance(result, list):
                 pytest.fail(f"expected result to be list, got {type(result).__name__}")
             if len(result) != 0:
-                pytest.fail(f"expected empty list from _fetch_published_ads, got {len(result)} items")
+                pytest.fail(f"expected empty list from fetch_published_ads, got {len(result)} items")
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_invalid_json(self, bot:KleinanzeigenBot) -> None:
@@ -170,7 +170,7 @@ class TestJSONPagination:
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": "invalid json"}
 
-            result = await bot._fetch_published_ads()
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
             if result != []:
                 pytest.fail(f"Expected empty list on invalid JSON, got {result}")
 
@@ -182,7 +182,7 @@ class TestJSONPagination:
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": json.dumps(response_data)}
 
-            result = await bot._fetch_published_ads()
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
 
             if len(result) != 2:
                 pytest.fail(f"expected 2 ads, got {len(result)}")
@@ -196,7 +196,7 @@ class TestJSONPagination:
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": json.dumps(response_data)}
 
-            result = await bot._fetch_published_ads()
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
 
             # Should return ads from first page and stop due to invalid paging
             if len(result) != 1:
@@ -212,7 +212,7 @@ class TestJSONPagination:
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": json.dumps(response_data)}
 
-            result = await bot._fetch_published_ads()
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
 
             # Should return empty list when ads is not a list
             if not isinstance(result, list):
@@ -228,7 +228,7 @@ class TestJSONPagination:
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": json.dumps(response_data)}
 
-            result = await bot._fetch_published_ads()
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
 
             if result != [{"id": 1, "state": "active"}]:
                 pytest.fail(f"expected malformed entries to be filtered out, got: {result}")
@@ -252,7 +252,7 @@ class TestJSONPagination:
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": json.dumps(response_data)}
 
-            result = await bot._fetch_published_ads()
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
 
             if result != [{"id": 2, "state": "paused"}]:
                 pytest.fail(f"expected only entries with id and state to remain, got: {result}")
@@ -267,7 +267,7 @@ class TestJSONPagination:
             patch.object(bot, "web_request", mock_request),
             pytest.raises(PublishedAdsFetchIncompleteError, match = "Filtered 2 malformed ad entries on page 1"),
         ):
-            await bot._fetch_published_ads(strict = True)
+            await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url, strict = True)
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_timeout(self, bot:KleinanzeigenBot) -> None:
@@ -275,7 +275,7 @@ class TestJSONPagination:
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.side_effect = TimeoutError("timeout")
 
-            result = await bot._fetch_published_ads()
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
 
             if result != []:
                 pytest.fail(f"Expected empty list on timeout, got {result}")
@@ -287,7 +287,7 @@ class TestJSONPagination:
             patch.object(bot, "web_request", new_callable = AsyncMock, side_effect = TimeoutError("timeout")),
             pytest.raises(PublishedAdsFetchIncompleteError, match = "Pagination request failed on page 1"),
         ):
-            await bot._fetch_published_ads(strict = True)
+            await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url, strict = True)
 
     @pytest.mark.asyncio
     async def test_fetch_published_ads_handles_non_string_content_type(self, bot:KleinanzeigenBot) -> None:
@@ -295,7 +295,7 @@ class TestJSONPagination:
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": None}
 
-            result = await bot._fetch_published_ads()
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
 
             if result != []:
                 pytest.fail(f"expected empty result on non-string content, got: {result}")
@@ -312,7 +312,7 @@ class TestJSONPagination:
                 {"content": json.dumps(page2)},
             ]
 
-            result = await bot._fetch_published_ads()
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
 
             if [ad["id"] for ad in result] != [1, 2, 3]:
                 pytest.fail(f"Expected ids [1, 2, 3] but got {[ad['id'] for ad in result]}")
@@ -333,7 +333,7 @@ class TestJSONPagination:
         with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
             mock_request.return_value = {"content": json.dumps(response_data)}
 
-            result = await bot._fetch_published_ads()
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
 
             if len(result) != 2:
                 pytest.fail(f"Expected 2 ads, got {len(result)}")
@@ -344,8 +344,8 @@ class TestJSONPagination:
             )
 
     @pytest.mark.asyncio
-    async def test_fetch_published_ads_single_page_no_last_no_next_strict_raises(self, bot:KleinanzeigenBot) -> None:
-        """Strict mode should fail when paging omits both 'last' and 'next'."""
+    async def test_fetch_published_ads_single_page_no_last_no_next_strict_returns_ads(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should NOT raise when a single page has no 'next' and no total_pages — it is a complete response."""
         response_data = {
             "ads": [{"id": 10, "state": "active"}],
             "paging": {"pageNum": 1},
@@ -353,6 +353,30 @@ class TestJSONPagination:
 
         with (
             patch.object(bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps(response_data)}),
-            pytest.raises(PublishedAdsFetchIncompleteError, match = r"No 'next' in paging on page 1"),
         ):
-            await bot._fetch_published_ads(strict = True)
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url, strict = True)
+
+        if len(result) != 1:
+            pytest.fail(f"Expected 1 ad in strict mode single-page response, got {len(result)}")
+        if result[0]["id"] != 10:
+            pytest.fail(f"Expected ad id 10, got {result[0]['id']}")
+
+    def test_ad_matches_id(self) -> None:
+        """Shared helper for safe API-ID comparison, used by publish/update/extend/delete."""
+        # Matching int to int
+        assert published_ads.ad_matches_id({"id": 42}, 42) is True
+        # Matching str to int (API returns string IDs)
+        assert published_ads.ad_matches_id({"id": "42"}, 42) is True
+        # Mismatch
+        assert published_ads.ad_matches_id({"id": 99}, 42) is False
+        assert published_ads.ad_matches_id({"id": "99"}, 42) is False
+        # target_id is None → always False
+        assert published_ads.ad_matches_id({"id": 42}, None) is False
+        # ad has no "id" key
+        assert published_ads.ad_matches_id({}, 42) is False
+        # ad has "id": None
+        assert published_ads.ad_matches_id({"id": None}, 42) is False
+        # Unparseable id (not coercible to int)
+        assert published_ads.ad_matches_id({"id": "nope"}, 42) is False
+        # Boolean (True → 1) — accepting bool-to-int coercion is current behavior
+        assert published_ads.ad_matches_id({"id": True}, 1) is True

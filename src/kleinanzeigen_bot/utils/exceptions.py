@@ -23,10 +23,6 @@ class PublishSubmissionUncertainError(KleinanzeigenBotError):
         super().__init__(reason)
 
 
-class PublishedAdsFetchIncompleteError(KleinanzeigenBotError):
-    """Raised when published ads cannot be fetched completely for ownership-critical operations."""
-
-
 class CategoryResolutionError(KleinanzeigenBotError):
     """Raised when the ad's configured category cannot be resolved by publish/update flows.
 
