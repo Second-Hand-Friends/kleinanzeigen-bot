@@ -35,7 +35,6 @@ def ad_matches_id(ad:PublishedAd, target_id:int | None) -> bool:
 
 
 LOG:Final = _loggers.get_logger(__name__)
-LOG.setLevel(_loggers.INFO)
 
 
 class PublishedAdsFetchIncompleteError(KleinanzeigenBotError):
