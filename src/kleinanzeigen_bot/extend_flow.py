@@ -61,7 +61,7 @@ async def extend_ads(
         # Intentionally parsing naive datetime from kleinanzeigen API's German date format, timezone not relevant for date-only comparison
         try:
             end_date = datetime.strptime(end_date_str, "%d.%m.%Y")  # noqa: DTZ007
-        except ValueError:
+        except (ValueError, TypeError):
             LOG.warning(" -> SKIPPED: ad '%s' has invalid endDate format: %s", ad_cfg.title, end_date_str)
             continue
         days_until_expiry = (end_date.date() - _misc.now().date()).days

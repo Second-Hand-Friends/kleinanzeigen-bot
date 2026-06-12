@@ -32,7 +32,7 @@ from .model.ad_model import (
     AdUpdateStrategy as AdUpdateStrategy,
 )
 from .model.config_model import Config  # noqa: TC001 — used at runtime, config injection
-from .published_ads import ad_matches_id
+from .published_ads import PublishedAd, ad_matches_id
 from .update_checker import UpdateChecker
 from .utils import diagnostics as _diagnostics
 from .utils import dicts as _dicts
@@ -880,7 +880,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return False
 
-    async def _fetch_published_ads(self, *, strict:bool = False) -> list[dict[str, Any]]:
+    async def _fetch_published_ads(self, *, strict:bool = False) -> list[PublishedAd]:
         """Temporary delegator to published_ads.fetch_published_ads."""
         return await published_ads.fetch_published_ads(self, self.root_url, strict = strict)
 
@@ -1012,7 +1012,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.info("############################################")
 
     async def publish_ad(  # noqa: PLR0915 PLR0914 PLR0912
-        self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[dict[str, Any]], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE
+        self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[PublishedAd], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE
     ) -> None:
         """Publish or update an ad on Kleinanzeigen.
 

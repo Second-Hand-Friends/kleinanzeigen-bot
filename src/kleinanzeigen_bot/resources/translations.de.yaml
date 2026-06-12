@@ -344,6 +344,7 @@ kleinanzeigen_bot/download_flow.py:
     "Starting download of ad(s) with the id(s):": "Starte Download der Anzeige(n) mit den ID(s):"
     "Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.": "Anzeigen-ID %d ist nicht in Ihren veröffentlichten Profilanzeigen. Speichere die heruntergeladene Anzeige als inaktiv."
     "Downloaded ad with id %d": "Anzeige mit der ID %d heruntergeladen"
+    "Invalid ads selector: %s. Use 'all', 'new', or comma-separated numeric IDs.": "Ungültiger Anzeigen-Selektor: %s. Verwende 'all', 'new', oder kommagetrennte numerische IDs."
     "The page with the id %d does not exist!": "Die Seite mit der ID %d existiert nicht!"
     "Skipping saved ad without id (likely unpublished or manually created): %s": "Überspringe gespeicherte Anzeige ohne ID (vermutlich nicht veröffentlicht oder manuell erstellt): %s"
 
