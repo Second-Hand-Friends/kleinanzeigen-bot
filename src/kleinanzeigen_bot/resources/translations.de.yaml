@@ -169,19 +169,19 @@ kleinanzeigen_bot/__init__.py:
     "DONE: updated %s": "FERTIG: %s aktualisiert"
     "ad": "Anzeige"
 
-  __set_condition:
+  _set_condition:
     "Condition value [%s] is deprecated; update your config to [%s].": "Zustandswert [%s] ist veraltet; aktualisieren Sie die Konfiguration auf [%s]."
     "Unable to close condition dialog!": "Kann den Dialog für Artikelzustand nicht schließen!"
     "Unable to select condition [%s]": "Zustand [%s] konnte nicht ausgewählt werden"
     "Failed to set attribute '%s'": "Fehler beim Setzen des Attributs '%s'"
 
-  __resolve_category_suggestions:
+  _resolve_category_suggestions:
     ? "Category suggestion picker shown, but no segment of configured path '%(category)s' matched the offered suggestions [%(offered)s]. Update the ad's 'category' to an offered ID or a valid full path."
     : "Kategorievorschlag-Auswahl wurde angezeigt, aber kein Segment des konfigurierten Pfades '%(category)s' passte zu den angebotenen Vorschlägen [%(offered)s]. Aktualisieren Sie 'category' auf eine angebotene ID oder einen gültigen vollständigen Pfad."
     "Category suggestion picker: selected value=%s (matched path segment).": "Kategorievorschlag-Auswahl: Wert=%s ausgewählt (passendes Pfad-Segment)."
     "Category suggestion picker element found but no radio suggestions rendered after waiting.": "Kategorievorschlag-Auswahl gefunden, aber auch nach dem Warten wurden keine Radio-Vorschläge gerendert."
 
-  __set_contact_fields:
+  _set_contact_fields:
     "Could not set contact street.": "Kontaktstraße konnte nicht gesetzt werden."
     "Could not set contact name.": "Kontaktname konnte nicht gesetzt werden."
     "Could not set contact zipcode: %s": "Kontakt-PLZ konnte nicht gesetzt werden: %s"
@@ -190,17 +190,17 @@ kleinanzeigen_bot/__init__.py:
     ? "Phone number field not present on page. This is expected for many private accounts; commercial accounts may still support phone numbers."
     : "Telefonnummernfeld auf der Seite nicht vorhanden. Dies ist bei vielen privaten Konten zu erwarten; gewerbliche Konten unterstützen Telefonnummern möglicherweise weiterhin."
 
-  __select_city_combobox_option:
+  _select_city_combobox_option:
     "City combobox options did not load for location: %s": "Stadt-Combobox-Optionen für Ort nicht geladen: %s"
     "City combobox options are ambiguous for location: %s": "Stadt-Combobox-Optionen für Ort sind mehrdeutig: %s"
     "No city combobox option matched location: %s": "Keine Stadt-Combobox-Option passt zum Ort: %s"
     "City selection did not converge for location: %s": "Stadtauswahl ist nicht auf den Ort konvergiert: %s"
 
-  __set_contact_location:
+  _set_contact_location:
     "Unsupported city element type while setting contact location: <%s>": "Nicht unterstützter Stadt-Elementtyp beim Setzen des Kontaktorts: <%s>"
     "ad-city is a <input readonly> with value '%s' (zip-derived) - accepting instead of combobox selection.": "ad-city ist ein <input readonly> mit Wert '%s' (aus PLZ abgeleitet) - übernehme statt Combobox-Auswahl."
 
-  __upload_images:
+  _upload_images:
     " -> found %s": "-> %s gefunden"
     "image": "Bild"
     " -> uploading image %s/%s [%s]": " -> Lade Bild %s/%s [%s] hoch"
@@ -212,10 +212,10 @@ kleinanzeigen_bot/__init__.py:
   check_thumbnails_uploaded:
     " -> %d of %d images processed": " -> %d von %d Bildern verarbeitet"
 
-  __select_button_combobox:
+  _select_button_combobox:
     "Option '%(value)s' not found in button combobox '%(id)s'": "Option '%(value)s' nicht in Button-Combobox '%(id)s' gefunden"
 
-  __set_special_attributes:
+  _set_special_attributes:
     "Found %i special attributes": "%i spezielle Attribute gefunden"
     "Setting special attribute [%s] to [%s]...": "Setze spezielles Attribut [%s] auf [%s]..."
     "Successfully set attribute field [%s] to [%s]...": "Attributfeld [%s] erfolgreich auf [%s] gesetzt..."
@@ -243,7 +243,7 @@ kleinanzeigen_bot/__init__.py:
     "Unknown command: %s": "Unbekannter Befehl: %s"
     "Timing collector flush failed: %s": "Zeitmessdaten konnten nicht gespeichert werden: %s"
 
-  __set_shipping:
+  _set_shipping:
     "Failed to set shipping attribute for type '%s'!": "Fehler beim setzen des Versandattributs für den Typ '%s'!"
     "Shipping fieldset is rendered, but the pickup radio is missing; page may not be fully loaded.": "Das Versand-Fieldset wird gerendert, aber die Abholungs-Option fehlt; die Seite wurde möglicherweise nicht vollständig geladen."
     ? "Shipping options dialog entry not found. Legacy '.versand_s' select UI is no longer supported and requires dedicated rebuild."
@@ -253,7 +253,7 @@ kleinanzeigen_bot/__init__.py:
     "Unable to set shipping price!": "Versandpreis konnte nicht gesetzt werden!"
     "Unable to close shipping dialog!": "Versanddialog konnte nicht geschlossen werden!"
 
-  __set_shipping_options:
+  _set_shipping_options:
     "Failed to configure shipping options in dialog!": "Versandoptionen konnten im Dialog nicht konfiguriert werden!"
     "Unable to close shipping dialog!": "Versanddialog konnte nicht geschlossen werden!"
     "shipping_options must be provided": "shipping_options müssen angegeben werden!"
