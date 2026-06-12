@@ -6,7 +6,7 @@ import urllib.parse as urllib_parse
 from dataclasses import dataclass, replace
 from gettext import gettext as _
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Sequence, cast
+from typing import TYPE_CHECKING, Any, Final, Literal, Sequence, cast
 
 import certifi, colorama  # isort: skip
 from nodriver.core.connection import ProtocolException
@@ -923,6 +923,33 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             ):
                 LOG.info("Local path renaming (%s): no local paths needed renaming", id_label)
 
+    async def _delete_old_ad_if_needed(
+        self, ad_cfg:Ad, published_ads_list:list[PublishedAd],
+        *, timing:Literal["BEFORE_PUBLISH", "AFTER_PUBLISH"],
+    ) -> None:
+        """Delete an old ad before or after (re-)publishing, depending on config.
+
+        Skips deletion when keep_old_ads is True or when the configured
+        ``delete_old_ads`` timing does not match *timing*.
+
+        In ``AFTER_PUBLISH`` mode, title-based deletion is always disabled to
+        avoid accidentally removing the newly published ad.
+        """
+        if self.keep_old_ads:
+            return
+        if self.config.publishing.delete_old_ads != timing:
+            return
+        delete_old_ads_by_title = (
+            self.config.publishing.delete_old_ads_by_title
+            if timing == "BEFORE_PUBLISH" else False
+        )
+        await delete_flow.delete_ad(
+            web = self, root_url = self.root_url,
+            ad_cfg = ad_cfg,
+            published_ads_list = published_ads_list,
+            delete_old_ads_by_title = delete_old_ads_by_title,
+        )
+
     async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         count = 0
         failed_count = 0
@@ -992,13 +1019,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 except TimeoutError:
                     LOG.warning(" -> Could not confirm publishing for '%s', but ad may be online", ad_cfg.title)
 
-            if success and self.config.publishing.delete_old_ads == "AFTER_PUBLISH" and not self.keep_old_ads:
-                await delete_flow.delete_ad(
-                    web = self, root_url = self.root_url,
-                    ad_cfg = ad_cfg,
-                    published_ads_list = published_ads_list,
-                    delete_old_ads_by_title = False,
-                )
+                await self._delete_old_ad_if_needed(ad_cfg, published_ads_list, timing = "AFTER_PUBLISH")
 
         LOG.info("############################################")
         if failed_count > 0:
@@ -1027,13 +1048,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         old_ad_id = ad_cfg.id
 
         if mode == AdUpdateStrategy.REPLACE:
-            if self.config.publishing.delete_old_ads == "BEFORE_PUBLISH" and not self.keep_old_ads:
-                await delete_flow.delete_ad(
-                    web = self, root_url = self.root_url,
-                    ad_cfg = ad_cfg,
-                    published_ads_list = published_ads,
-                    delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title,
-                )
+            await self._delete_old_ad_if_needed(ad_cfg, published_ads, timing = "BEFORE_PUBLISH")
 
             # Apply auto price reduction in REPLACE mode (republish flow)
             _price_reduction.apply_auto_price_reduction(
