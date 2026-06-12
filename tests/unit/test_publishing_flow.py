@@ -300,9 +300,63 @@ async def test_publish_ad_survives_persistence_failure() -> None:
         patch.object(bot, "web_open", new_callable = AsyncMock),
         patch.object(bot, "_dismiss_consent_banner", new_callable = AsyncMock),
         patch.object(bot, "_fill_ad_form", new_callable = AsyncMock),
-        patch.object(bot, "_submit_and_confirm_ad", new_callable = AsyncMock, return_value = 12345),
+        patch("kleinanzeigen_bot.publishing_flow.submit_and_confirm_ad", new_callable = AsyncMock, return_value = 12345),
         patch("kleinanzeigen_bot.publishing_flow.persist_published_ad",
               side_effect = RuntimeError("disk full")),
     ):
         # Must not raise — the try/except in publish_ad swallows the error
         await bot.publish_ad("test.yaml", ad, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+
+
+class TestTrackingFallback:
+    """Tests for _try_recover_ad_id_from_redirect helper method."""
+
+    @pytest.mark.asyncio
+    async def test_extract_ad_id_from_referrer(self, test_bot:KleinanzeigenBot) -> None:
+        """Ad ID should be extracted from document.referrer containing the confirmation URL."""
+        referrer_url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=3382410263"
+        with patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = referrer_url):
+            result = await publishing_flow._try_recover_ad_id_from_redirect(test_bot)
+
+        assert result == 3382410263
+
+    @pytest.mark.asyncio
+    async def test_extract_ad_id_from_script_content(self, test_bot:KleinanzeigenBot) -> None:
+        """When referrer has no confirmation URL, ad ID should be extracted from inline script content."""
+        referrer = "https://www.kleinanzeigen.de/m-meine-anzeigen.html"
+        script_content = (
+            'Belen.Tracking.initTrackingData({"page":"p-anzeige-aufgeben-bestaetigung.html?adId=44556677"});'
+        )
+        execute_returns = [referrer, script_content]
+
+        with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
+            result = await publishing_flow._try_recover_ad_id_from_redirect(test_bot)
+
+        assert result == 44556677
+
+    @pytest.mark.asyncio
+    async def test_extract_ad_id_returns_none_when_not_found(self, test_bot:KleinanzeigenBot) -> None:
+        """When neither referrer nor scripts contain a confirmation URL, None should be returned."""
+        execute_returns = [
+            "https://www.kleinanzeigen.de/m-meine-anzeigen.html",  # referrer
+            "var x = 42;",  # script content — no confirmation URL
+        ]
+
+        with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
+            result = await publishing_flow._try_recover_ad_id_from_redirect(test_bot)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("referrer_value", ["", None], ids = ["empty-referrer", "none-referrer"])
+    async def test_extract_ad_id_falls_back_to_script_when_referrer_lacks_confirmation_url(
+        self, test_bot:KleinanzeigenBot, referrer_value:str | None,
+    ) -> None:
+        """When document.referrer is empty or None, the script scan fallback should extract the ad ID."""
+        script_content = 'initTrackingData("p-anzeige-aufgeben-bestaetigung.html?adId=11223344")'
+        execute_returns = [referrer_value, script_content]
+
+        with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
+            result = await publishing_flow._try_recover_ad_id_from_redirect(test_bot)
+
+        assert result == 11223344

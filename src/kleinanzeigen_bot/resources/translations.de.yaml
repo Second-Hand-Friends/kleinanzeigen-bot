@@ -19,6 +19,15 @@ kleinanzeigen_bot/__main__.py:
     "[INFO] Captcha detected. Sleeping %s before restart...": "[INFO] Captcha erkannt. Warte %s h bis zum Neustart..."
 
 #################################################
+kleinanzeigen_bot/captcha_flow.py:
+#################################################
+  check_and_wait_for_captcha:
+    "############################################": "############################################"
+    "# Captcha present! Please solve the captcha.": "# Captcha vorhanden! Bitte lösen Sie das Captcha."
+    "Captcha recognized - auto-restart enabled, abort run...": "Captcha erkannt - Auto-Neustart aktiviert, Durchlauf wird beendet..."
+    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
+
+#################################################
 kleinanzeigen_bot/cli.py:
 #################################################
   parse_args:
@@ -57,11 +66,6 @@ kleinanzeigen_bot/__init__.py:
     "Direct execution not supported. Use 'pdm run app'": "Direkte Ausführung nicht unterstützt. Bitte 'pdm run app' verwenden"
   _workspace_or_raise:
     "Workspace must be resolved before command execution": "Arbeitsbereich muss vor der Befehlsausführung aufgelöst werden"
-
-  check_and_wait_for_captcha:
-    "# Captcha present! Please solve the captcha.": "# Captcha vorhanden! Bitte lösen Sie das Captcha."
-    "Captcha recognized - auto-restart enabled, abort run...": "Captcha erkannt - Auto-Neustart aktiviert, Durchlauf wird beendet..."
-    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
 
   _capture_login_detection_diagnostics_if_enabled:
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
@@ -139,13 +143,6 @@ kleinanzeigen_bot/__init__.py:
     "Direct-buy (sell_directly) is not available for the selected category. Skipping.": "Direktkauf (sell_directly) ist für die ausgewählte Kategorie nicht verfügbar. Überspringe."
     "Image cleanup failed before upload. Removed %(removed)d of %(total)d existing images.": "Bildbereinigung vor dem Hochladen fehlgeschlagen. %(removed)d von %(total)d vorhandenen Bildern wurden entfernt."
     " -> removed %d existing image(s) before upload": " -> %d vorhandene Bilder vor dem Hochladen entfernt"
-
-  _submit_and_confirm_ad:
-    "Dismissing 'Effektiver verkaufen' upsell dialog...": "'Effektiver verkaufen'-Dialog schließen..."
-    "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
-    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
-    "Confirmation page redirected too fast; extracted ad ID %s from page tracking data": "Bestätigungsseite wurde zu schnell weitergeleitet; Anzeigen-ID %s aus Seiten-Trackingdaten extrahiert"
-    "ad_id is unexpectedly None after confirmation flow for %s": "ad_id ist unerwartet None nach dem Bestätigungsablauf für %s"
 
   update_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
@@ -287,6 +284,14 @@ kleinanzeigen_bot/publishing_flow.py:
     "ad file": "Anzeigendatei"
     "image(s)": "Bild(er)"
     "ad folder": "Anzeigenordner"
+
+  submit_and_confirm_ad:
+    "############################################": "############################################"
+    "Dismissing 'Effektiver verkaufen' upsell dialog...": "'Effektiver verkaufen'-Dialog schließen..."
+    "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
+    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
+    "Confirmation page redirected too fast; extracted ad ID %s from page tracking data": "Bestätigungsseite wurde zu schnell weitergeleitet; Anzeigen-ID %s aus Seiten-Trackingdaten extrahiert"
+    "ad_id is unexpectedly None after confirmation flow for %s": "ad_id ist unerwartet None nach dem Bestätigungsablauf für %s"
 
 #################################################
 kleinanzeigen_bot/delete_flow.py:

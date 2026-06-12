@@ -13,7 +13,7 @@ from nodriver.core.connection import ProtocolException
 from ruamel.yaml import YAML
 
 from . import ad_form_helpers as _ad_form_helpers
-from . import ad_loading, delete_flow, download_flow, extend_flow, published_ads
+from . import ad_loading, captcha_flow, delete_flow, download_flow, extend_flow, published_ads
 from . import ad_state as _ad_state
 from . import price_reduction as _price_reduction
 from . import publishing_flow as _publishing_flow
@@ -37,7 +37,7 @@ from .utils import diagnostics as _diagnostics
 from .utils import loggers as _loggers
 from .utils import misc as _misc
 from .utils import xdg_paths as _xdg_paths
-from .utils.exceptions import CaptchaEncountered, CategoryResolutionError, PublishSubmissionUncertainError
+from .utils.exceptions import CategoryResolutionError, PublishSubmissionUncertainError
 from .utils.files import abspath
 from .utils.i18n import pluralize
 from .utils.misc import ainput, ensure, is_frozen
@@ -391,31 +391,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             exclude_ads_with_id = exclude_ads_with_id,
         )
 
-    async def check_and_wait_for_captcha(self, *, is_login_page:bool = True, page_context:str | None = None) -> None:
-        captcha_elem = await self.web_probe(
-            By.CSS_SELECTOR,
-            "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']",
-            timeout = self.timeout("captcha_detection"),
-        )
-
-        context_label = page_context or ("login page" if is_login_page else "publish operation")
-        if captcha_elem is None:
-            LOG.debug("No captcha detected within timeout (page_context=%s)", context_label)
-            return
-
-        if not is_login_page and self.config.captcha.auto_restart:
-            LOG.warning("Captcha recognized - auto-restart enabled, abort run...")
-            raise CaptchaEncountered(_misc.parse_duration(self.config.captcha.restart_delay))
-
-        LOG.warning("############################################")
-        LOG.warning("# Captcha present! Please solve the captcha.")
-        LOG.warning("############################################")
-
-        if not is_login_page:
-            await self.web_scroll_page_down()
-
-        await ainput(_("Press a key to continue..."))
-
     async def login(self) -> None:
         self._login_detection_diagnostics_captured = False
         sso_navigation_timeout = self.timeout("page_load")
@@ -587,7 +562,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         LOG.debug("Auth0 Step 2: entering password...")
         await self.web_input(By.CSS_SELECTOR, "input[type='password']", self.config.login.password)
-        await self.check_and_wait_for_captcha(is_login_page = True)
+        await captcha_flow.check_and_wait_for_captcha(self, self.config.captcha, is_login_page = True)
         await self.web_click(By.CSS_SELECTOR, "button[type='submit']")
         await self._wait_for_post_auth0_submit_transition()
         LOG.debug("Auth0 login submitted.")
@@ -1048,7 +1023,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 except TimeoutError as ex:
                     raise TimeoutError(_("Failed to set price type '%s'") % price_type) from ex
             if ad_cfg.price is not None:
-                await self._set_input_value("ad-price-amount", str(ad_cfg.price))
+                await self.web_set_input_value("ad-price-amount", str(ad_cfg.price))
 
         #############################
         # set sell_directly
@@ -1077,7 +1052,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # set description
         #############################
         description = get_ad_description(ad_cfg, self.config.ad_defaults, with_affixes = True)
-        await self._set_input_value("ad-description", description)
+        await self.web_set_input_value("ad-description", description)
 
         await self._set_contact_fields(ad_cfg.contact)
 
@@ -1118,127 +1093,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # upload images
         #############################
         await self._upload_images(ad_cfg)
-
-    async def _submit_and_confirm_ad(
-        self, ad_file:str, ad_cfg:Ad, mode:AdUpdateStrategy,
-    ) -> int:
-        """Submit the ad form, handle post-submit dialogs, wait for confirmation,
-        and extract the published ad ID.
-
-        Returns:
-            The published ad ID.
-
-        Raises:
-            PublishSubmissionUncertainError: The submission may have succeeded
-                but the ad ID could not be recovered.
-            RuntimeError: An internal invariant was violated (ad_id is None
-                despite the recovery path).
-        """
-
-        #############################
-        # wait for captcha
-        #############################
-        operation_label = {
-            AdUpdateStrategy.REPLACE: "publish",
-            AdUpdateStrategy.MODIFY: "update",
-        }.get(mode, mode.name.lower())
-        await self.check_and_wait_for_captcha(is_login_page = False, page_context = f"{operation_label} operation")
-
-        #############################
-        # set title (right before submit to prevent React re-render clearing it)
-        #############################
-        LOG.debug("Setting title '%s' (deferred to prevent React re-render clearing it)", ad_cfg.title)
-        await self._set_input_value("ad-title", ad_cfg.title)
-
-        #############################
-        # submit
-        #############################
-        # Click is retryable — no submission can have occurred before this point.
-        # Edit page uses 'Änderungen speichern' or 'Anzeige speichern'; publish page uses 'Anzeige aufgeben'
-        await self.web_click(By.XPATH, "//button[contains(., 'Anzeige aufgeben') or contains(., 'Änderungen speichern') or contains(., 'Anzeige speichern')]")
-
-        # PostListingForm v2 may show an "Effektiver verkaufen" upsell
-        # dialog after clicking submit.  Dismiss it so the actual form
-        # POST can proceed.
-        quick_dom = self.timeout("quick_dom")
-        upsell_dialog = await self.web_probe(
-            By.XPATH, "//dialog[@open and contains(., 'Effektiver verkaufen')]", timeout = quick_dom
-        )
-        if upsell_dialog is not None:
-            LOG.info("Dismissing 'Effektiver verkaufen' upsell dialog...")
-            await self.web_click(
-                By.XPATH, "//dialog[@open]//button[contains(., 'Ohne Hochschieben weiter')]",
-                timeout = quick_dom,
-            )
-            await self.web_sleep(500)  # let the dialog close animation finish
-
-        # Everything after the first click is uncertain: the ad may already have been submitted.
-        ad_id:int | None = None
-        try:
-            quick_dom = self.timeout("quick_dom")
-
-            imprint_btn = await self.web_probe(By.ID, "imprint-guidance-submit", timeout = quick_dom)
-            if imprint_btn is not None:
-                await imprint_btn.click()
-
-            # check for no image question
-            if not ad_cfg.images:
-                image_hint_xpath = '//button[contains(., "Ohne Bild veröffentlichen")]'
-                image_hint_button = await self.web_probe(By.XPATH, image_hint_xpath, timeout = quick_dom)
-                if image_hint_button is not None:
-                    await image_hint_button.click()
-
-            #############################
-            # wait for payment form if commercial account is used
-            #############################
-            payment_form = await self.web_probe(By.ID, "myftr-shppngcrt-frm", timeout = quick_dom)
-            if payment_form is not None:
-                LOG.warning("############################################")
-                LOG.warning("# Payment form detected! Please proceed with payment.")
-                LOG.warning("############################################")
-                await self.web_scroll_page_down()
-                await ainput(_("Press a key to continue..."))
-
-            confirmation_timeout = self.timeout("publishing_confirmation")
-
-            async def _check_confirmation_url() -> bool:
-                url = str(await self.web_execute("window.location.href"))
-                return "p-anzeige-aufgeben-bestaetigung.html?adId=" in url
-
-            await self.web_await(_check_confirmation_url, timeout = confirmation_timeout)
-
-            # extract the ad id from the URL's query parameter (use JS for fresh URL, not stale self.page.url)
-            current_url = str(await self.web_execute("window.location.href"))
-            current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(current_url).query)
-            ad_id = int(current_url_query_params.get("adId", [])[0])
-
-        except (TimeoutError, ProtocolException, IndexError, ValueError, TypeError) as ex:
-            # The confirmation page may have auto-redirected before we could poll it,
-            # or the URL was redirected between polling and extraction (race condition).
-            # Try to recover the ad ID from tracking data on the current page.
-            LOG.debug("Confirmation URL polling or extraction failed (%s), attempting tracking data fallback...", type(ex).__name__)
-            try:
-                ad_id = await self._try_recover_ad_id_from_redirect()
-            except Exception as fallback_ex:  # noqa: BLE001
-                LOG.debug("Tracking data fallback failed: %s", fallback_ex)
-
-            if ad_id is None:
-                raise PublishSubmissionUncertainError("submission may have succeeded before failure") from ex
-
-            LOG.warning(
-                "Confirmation page redirected too fast; extracted ad ID %s from page tracking data",
-                ad_id,
-            )
-
-        # Defensive guard: ad_id must be set by now — either from the confirmation URL
-        # (try block) or the tracking fallback (except block). The except block always
-        # either sets ad_id or raises PublishSubmissionUncertainError, making this
-        # unreachable in the current code. Guards against future regressions.
-        if ad_id is None:
-            msg = _("ad_id is unexpectedly None after confirmation flow for %s") % ad_file
-            raise RuntimeError(msg)
-
-        return ad_id
 
     async def publish_ad(
         self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads_list:list[PublishedAd], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE
@@ -1292,7 +1146,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         await self._fill_ad_form(ad_file, ad_cfg, mode)
 
-        ad_id = await self._submit_and_confirm_ad(ad_file, ad_cfg, mode)
+        ad_id = await _publishing_flow.submit_and_confirm_ad(self, ad_file, ad_cfg, mode, captcha_config = self.config.captcha)
 
         try:
             _publishing_flow.persist_published_ad(ad_file, ad_cfg, ad_cfg_orig, old_ad_id, ad_id, mode, config = self.config)
@@ -1301,69 +1155,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 "Post-publish persistence failed for '%s' (ad ID %s - ad is live on Kleinanzeigen but local YAML may be out of sync)",
                 ad_cfg.title, ad_id, exc_info = True,
             )
-
-    async def _try_recover_ad_id_from_redirect(self) -> int | None:
-        """Try to extract the published ad ID from page tracking data.
-
-        Used as a fallback when the confirmation page auto-redirects before
-        the URL can be polled. Checks document.referrer first, then scans
-        inline script content for the confirmation URL containing adId.
-
-        Returns:
-            The extracted ad ID, or None if no ad ID could be found.
-        """
-        # Layer 1: check document.referrer for the confirmation URL.
-        # Note: referrer reflects the most recent navigation, so a stale ID from a
-        # previous publish is not a concern — the publish flow navigates to the edit
-        # page first, resetting the referrer before the confirmation redirect occurs.
-        try:
-            referrer = str(await self.web_execute("document.referrer") or "")
-        except (TimeoutError, ProtocolException) as ex:
-            LOG.debug("document.referrer lookup failed (%s), skipping to script scan", type(ex).__name__)
-            referrer = ""
-
-        if "p-anzeige-aufgeben-bestaetigung.html?adId=" in referrer:
-            try:
-                query = urllib_parse.parse_qs(urllib_parse.urlparse(referrer).query)
-                ad_id_str = query.get("adId", [])[0]
-                ad_id = int(ad_id_str)
-                LOG.debug("Extracted ad ID %s from document.referrer fallback", ad_id)
-                return ad_id
-            except (IndexError, ValueError, TypeError):
-                LOG.debug("Failed to parse ad ID from document.referrer: %s", referrer)
-
-        # Layer 2: scan inline <script> tags for confirmation URL with adId
-        try:
-            script_content = str(await self.web_execute(
-                "[...document.querySelectorAll('script')].map(s => s.textContent).join('\\n')"
-            ) or "")
-            match = re.search(r"p-anzeige-aufgeben-bestaetigung\.html\?adId=(\d+)", script_content)
-            if match:
-                ad_id = int(match.group(1))
-                LOG.debug("Extracted ad ID %s from inline script fallback", ad_id)
-                return ad_id
-        except (TimeoutError, ProtocolException, ValueError, TypeError) as ex:
-            LOG.debug("Script content scan failed (%s): %s", type(ex).__name__, ex)
-
-        return None
-
-    async def _set_input_value(self, element_id:str, value:str) -> None:
-        """Sets a framework-controlled input value using the native DOM setter to trigger onChange."""
-        await self.web_find(By.ID, element_id)  # raises TimeoutError if element is absent
-        js_element_id = json.dumps(element_id)
-        js_value = json.dumps(value)
-        await self.web_execute(
-            f"(function(id,v){{"
-            "var el=document.getElementById(id);"
-            "if(!el)return;"
-            "var tag=el.tagName.toLowerCase();"
-            "var proto=tag==='textarea'?window.HTMLTextAreaElement:window.HTMLInputElement;"
-            "var setter=Object.getOwnPropertyDescriptor(proto.prototype,'value').set;"
-            "setter.call(el,v);"
-            "el.dispatchEvent(new Event('input',{bubbles:true}));"
-            "el.dispatchEvent(new Event('change',{bubbles:true}));"
-            f"}})({js_element_id},{js_value})"
-        )
 
     @staticmethod
     def _location_matches_target(target:str, candidate:str | None) -> bool:
@@ -1557,7 +1348,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if await self.web_check(By.ID, "ad-street", Is.DISABLED):
                     await self.web_click(By.ID, "ad-address-visibility")
                     await self.web_sleep()
-                await self._set_input_value("ad-street", contact.street)
+                await self.web_set_input_value("ad-street", contact.street)
             except TimeoutError:
                 LOG.warning("Could not set contact street.")
 
@@ -1567,7 +1358,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if contact.name:
             try:
                 if not await self.web_check(By.ID, "ad-name", Is.READONLY):
-                    await self._set_input_value("ad-name", contact.name)
+                    await self.web_set_input_value("ad-name", contact.name)
             except TimeoutError:
                 LOG.warning("Could not set contact name.")
 
@@ -1585,7 +1376,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     if await self.web_check(By.ID, "ad-phone", Is.DISABLED, timeout = self.timeout("quick_dom")):
                         await self.web_click(By.ID, "ad-phone-visibility", timeout = self.timeout("quick_dom"))
                         await self.web_sleep()
-                    await self._set_input_value("ad-phone", contact.phone)
+                    await self.web_set_input_value("ad-phone", contact.phone)
                 except TimeoutError as ex:
                     LOG.warning("Could not set contact phone despite visible phone field: %s", ex)
 
@@ -2155,15 +1946,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 price_str = str(ad_cfg.shipping_costs).replace(".", ",")
                 # Native DOM setter + React-aware events: send_keys gets wiped by
                 # React re-render after the ad-individual-shipping-checkbox-control click.
-                # A re-render between web_find and web_execute inside _set_input_value can
+                # A re-render between web_find and web_execute inside web_set_input_value can
                 # also leave the write as a silent no-op, so verify and retry before "Fertig".
                 max_attempts = 3
                 for attempt in range(1, max_attempts + 1):
                     try:
-                        await self._set_input_value("ad-individual-shipping-price", price_str)
+                        await self.web_set_input_value("ad-individual-shipping-price", price_str)
                         actual = await self.web_execute("document.getElementById('ad-individual-shipping-price')?.value")
                     except TimeoutError as ex:
-                        # A re-render landing on web_find inside _set_input_value or on the
+                        # A re-render landing on web_find inside web_set_input_value or on the
                         # readback web_execute can raise here; treat either as a transient
                         # failure so the outer loop can retry instead of bailing.
                         LOG.debug(ex, exc_info = True)
