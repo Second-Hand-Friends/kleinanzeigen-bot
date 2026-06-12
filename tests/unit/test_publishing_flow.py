@@ -52,6 +52,26 @@ def _make_image_rename_result() -> ImageRenameResult:
     )
 
 
+def _make_image_rename_result_with_updates() -> ImageRenameResult:
+    """Build an ImageRenameResult with updated_images set."""
+    return ImageRenameResult(
+        renamed_count = 0,
+        blocked_count = 0,
+        updated_images = ["new_image.jpg"],
+        renamed_paths = [],
+    )
+
+
+def _make_image_rename_result_with_rollback() -> ImageRenameResult:
+    """Build an ImageRenameResult with renamed_paths for rollback testing."""
+    return ImageRenameResult(
+        renamed_count = 1,
+        blocked_count = 0,
+        updated_images = None,
+        renamed_paths = [(Path("old.jpg"), Path("new.jpg"))],
+    )
+
+
 def _make_config() -> Config:
     """Minimal config with TEMPLATE_MATCH enabled for local path renaming."""
     return Config.model_validate({
@@ -205,7 +225,7 @@ class TestPersistPublishedAdSaveRollback:
     """Test that a save failure propagates the exception after rollback."""
 
     def test_propagates_save_error(self) -> None:
-        """When save_dict raises, the exception is re-raised (after rollback)."""
+        """When save_dict raises, the exception is re-raised after rollback."""
         ad = _make_min_ad()
         ad_cfg_orig:dict[str, Any] = {"title": "Test Ad Title", "description": "Test description for the ad listing.", "type": "OFFER", "category": "160"}
         cfg = _make_config()
@@ -213,7 +233,7 @@ class TestPersistPublishedAdSaveRollback:
         with (
             patch("kleinanzeigen_bot.utils.dicts.save_dict", side_effect = RuntimeError("disk full")),
             patch("kleinanzeigen_bot.local_path_renaming.rename_referenced_local_image_files_after_id_change",
-                  return_value = _make_image_rename_result()),
+                  return_value = _make_image_rename_result_with_rollback()),
             patch("kleinanzeigen_bot.local_path_renaming.rename_local_ad_file_and_folder_after_id_change",
                   return_value = _local_path_renaming.LocalPathRenameResult(
                       ad_file = Path("test.yaml"),
@@ -232,6 +252,36 @@ class TestPersistPublishedAdSaveRollback:
                 mode = AdUpdateStrategy.REPLACE,
                 config = cfg,
             )
+
+    def test_updates_images_from_rename_result(self) -> None:
+        """When image_result.updated_images is not None, persist_published_ad writes it to ad_cfg_orig."""
+        ad = _make_min_ad()
+        ad_cfg_orig:dict[str, Any] = {"title": "Test Ad Title", "description": "Test description for the ad listing.", "type": "OFFER", "category": "160"}
+        cfg = _make_config()
+
+        with (
+            patch("kleinanzeigen_bot.utils.dicts.save_dict"),
+            patch("kleinanzeigen_bot.local_path_renaming.rename_referenced_local_image_files_after_id_change",
+                  return_value = _make_image_rename_result_with_updates()),
+            patch("kleinanzeigen_bot.local_path_renaming.rename_local_ad_file_and_folder_after_id_change",
+                  return_value = _local_path_renaming.LocalPathRenameResult(
+                      ad_file = Path("test.yaml"),
+                      file_status = RenameStatus.SAME,
+                      folder_status = RenameStatus.SAME,
+                  )),
+            patch("kleinanzeigen_bot.utils.misc.now"),
+        ):
+            publishing_flow.persist_published_ad(
+                ad_file = "test.yaml",
+                ad_cfg = ad,
+                ad_cfg_orig = ad_cfg_orig,
+                old_ad_id = None,
+                ad_id = 12345,
+                mode = AdUpdateStrategy.REPLACE,
+                config = cfg,
+            )
+
+        assert ad_cfg_orig["images"] == ["new_image.jpg"]
 
 
 @pytest.mark.asyncio
