@@ -1028,55 +1028,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    async def publish_ad(  # noqa: PLR0915 PLR0914 PLR0912
-        self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads:list[PublishedAd], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE
+    async def _fill_ad_form(
+        self, ad_file:str, ad_cfg:Ad, mode:AdUpdateStrategy,
     ) -> None:
-        """Publish or update an ad on Kleinanzeigen.
-
-        Args:
-            ad_file: Path to the ad configuration YAML file.
-            ad_cfg: The effective ad configuration with default values applied.
-            ad_cfg_orig: The original ad configuration as present in the YAML file.
-            published_ads: List of published ads from the API, used for deduplication
-                and old ad deletion.
-            mode: The ad editing strategy. REPLACE creates a new ad (full republish),
-                MODIFY updates an existing ad in-place.
-
-        Returns:
-            None
-        """
-        old_ad_id = ad_cfg.id
-
-        if mode == AdUpdateStrategy.REPLACE:
-            await self._delete_old_ad_if_needed(ad_cfg, published_ads, timing = "BEFORE_PUBLISH")
-
-            # Apply auto price reduction in REPLACE mode (republish flow)
-            _price_reduction.apply_auto_price_reduction(
-                ad_cfg, ad_cfg_orig, _ad_state.relative_ad_path(
-                    ad_file, self.config_file_path), mode = AdUpdateStrategy.REPLACE)
-
-            LOG.info("Publishing ad '%s'...", ad_cfg.title)
-            await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html", reload_if_already_open = True)
-        else:
-            # Always run restore-first when enabled so previously applied reductions
-            # are restored even when on_update is false.  The evaluator handles
-            # the on_update guard internally (returns early without advancing).
-            if ad_cfg.auto_price_reduction and ad_cfg.auto_price_reduction.enabled:
-                _price_reduction.apply_auto_price_reduction(
-                    ad_cfg, ad_cfg_orig, _ad_state.relative_ad_path(
-                        ad_file, self.config_file_path), mode = AdUpdateStrategy.MODIFY)
-
-            LOG.info("Updating ad '%s'...", ad_cfg.title)
-            await self.web_open(f"{self.root_url}/p-anzeige-bearbeiten.html?adId={ad_cfg.id}", reload_if_already_open = True)
-
-        await self._dismiss_consent_banner()
-
-        if _loggers.is_debug(LOG):
-            LOG.debug(" -> effective ad meta:")
-            YAML().dump(ad_cfg.model_dump(), sys.stdout)
-
-        if ad_cfg.type == "WANTED":
-            await self.web_click(By.ID, "ad-type-WANTED")
+        """Fill the ad creation/edit form — category, attributes, shipping, price,
+        sell-directly, description, contact, and images."""
 
         #############################
         # set category (before title to avoid form reset clearing title)
@@ -1204,6 +1160,22 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         await self._upload_images(ad_cfg)
 
+    async def _submit_and_confirm_ad(
+        self, ad_file:str, ad_cfg:Ad, mode:AdUpdateStrategy,
+    ) -> int:
+        """Submit the ad form, handle post-submit dialogs, wait for confirmation,
+        and extract the published ad ID.
+
+        Returns:
+            The published ad ID.
+
+        Raises:
+            PublishSubmissionUncertainError: The submission may have succeeded
+                but the ad ID could not be recovered.
+            RuntimeError: An internal invariant was violated (ad_id is None
+                despite the recovery path).
+        """
+
         #############################
         # wait for captcha
         #############################
@@ -1307,6 +1279,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             msg = _("ad_id is unexpectedly None after confirmation flow for %s") % ad_file
             raise RuntimeError(msg)
 
+        return ad_id
+
+    async def _persist_published_ad(
+        self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any],
+        old_ad_id:int | None, ad_id:int, mode:AdUpdateStrategy,
+    ) -> None:
+        """Write the published ad ID, hash, timestamps, and counters back to the
+        YAML file, then rename local paths to match the new ID."""
+
         ad_cfg_orig["id"] = ad_id
         # Rename referenced images before hashing/saving so the YAML content and
         # content_hash reflect only image file renames that actually succeeded.
@@ -1378,6 +1359,62 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # ad_file is stale at this point (pointing to the pre-rename path), but
         # no code in publish_ad() dereferences it after this line, so the drift
         # has no runtime impact.
+
+    async def publish_ad(
+        self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads_list:list[PublishedAd], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE
+    ) -> None:
+        """Publish or update an ad on Kleinanzeigen.
+
+        Args:
+            ad_file: Path to the ad configuration YAML file.
+            ad_cfg: The effective ad configuration with default values applied.
+            ad_cfg_orig: The original ad configuration as present in the YAML file.
+            published_ads_list: List of published ads from the API, used for deduplication
+                and old ad deletion.
+            mode: The ad editing strategy. REPLACE creates a new ad (full republish),
+                MODIFY updates an existing ad in-place.
+
+        Returns:
+            None
+        """
+        old_ad_id = ad_cfg.id
+
+        if mode == AdUpdateStrategy.REPLACE:
+            await self._delete_old_ad_if_needed(ad_cfg, published_ads_list, timing = "BEFORE_PUBLISH")
+
+            # Apply auto price reduction in REPLACE mode (republish flow)
+            _price_reduction.apply_auto_price_reduction(
+                ad_cfg, ad_cfg_orig, _ad_state.relative_ad_path(
+                    ad_file, self.config_file_path), mode = AdUpdateStrategy.REPLACE)
+
+            LOG.info("Publishing ad '%s'...", ad_cfg.title)
+            await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html", reload_if_already_open = True)
+        else:
+            # Always run restore-first when enabled so previously applied reductions
+            # are restored even when on_update is false.  The evaluator handles
+            # the on_update guard internally (returns early without advancing).
+            if ad_cfg.auto_price_reduction and ad_cfg.auto_price_reduction.enabled:
+                _price_reduction.apply_auto_price_reduction(
+                    ad_cfg, ad_cfg_orig, _ad_state.relative_ad_path(
+                        ad_file, self.config_file_path), mode = AdUpdateStrategy.MODIFY)
+
+            LOG.info("Updating ad '%s'...", ad_cfg.title)
+            await self.web_open(f"{self.root_url}/p-anzeige-bearbeiten.html?adId={ad_cfg.id}", reload_if_already_open = True)
+
+        await self._dismiss_consent_banner()
+
+        if _loggers.is_debug(LOG):
+            LOG.debug(" -> effective ad meta:")
+            YAML().dump(ad_cfg.model_dump(), sys.stdout)
+
+        if ad_cfg.type == "WANTED":
+            await self.web_click(By.ID, "ad-type-WANTED")
+
+        await self._fill_ad_form(ad_file, ad_cfg, mode)
+
+        ad_id = await self._submit_and_confirm_ad(ad_file, ad_cfg, mode)
+
+        await self._persist_published_ad(ad_file, ad_cfg, ad_cfg_orig, old_ad_id, ad_id, mode)
 
     async def _try_recover_ad_id_from_redirect(self) -> int | None:
         """Try to extract the published ad ID from page tracking data.
