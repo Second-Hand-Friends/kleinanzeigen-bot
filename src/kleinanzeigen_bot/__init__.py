@@ -1297,7 +1297,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             publishing_flow.persist_published_ad(ad_file, ad_cfg, ad_cfg_orig, old_ad_id, ad_id, mode, config = self.config)
         except Exception:
             LOG.error(  # noqa: G201 — must use .error(exc_info=True) for translation lookup to resolve publish_ad
-                "Post-publish persistence failed for '%s' (ad ID %s — ad is live on Kleinanzeigen but local YAML may be out of sync)",
+                "Post-publish persistence failed for '%s' (ad ID %s - ad is live on Kleinanzeigen but local YAML may be out of sync)",
                 ad_cfg.title, ad_id, exc_info = True,
             )
 

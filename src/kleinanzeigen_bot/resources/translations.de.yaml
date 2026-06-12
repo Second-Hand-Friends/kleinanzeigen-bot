@@ -129,7 +129,7 @@ kleinanzeigen_bot/__init__.py:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
     "Updating ad '%s'...": "Aktualisiere Anzeige '%s'..."
     " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
-    "Post-publish persistence failed for '%s' (ad ID %s — ad is live on Kleinanzeigen but local YAML may be out of sync)": "Persistenz nach Veröffentlichung fehlgeschlagen für '%s' (Anzeigen-ID %s — Anzeige ist auf Kleinanzeigen live, aber die lokale YAML ist möglicherweise nicht synchron)"
+    "Post-publish persistence failed for '%s' (ad ID %s - ad is live on Kleinanzeigen but local YAML may be out of sync)": "Persistenz nach Veröffentlichung fehlgeschlagen für '%s' (Anzeigen-ID %s - Anzeige ist auf Kleinanzeigen live, aber die lokale YAML ist möglicherweise nicht synchron)"
 
   _fill_ad_form:
     "Failed to set price type '%s'": "Fehler beim Setzen des Preistyps '%s'"
