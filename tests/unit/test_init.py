@@ -666,6 +666,7 @@ class TestKleinanzeigenBotAuthentication:
         """Verify that login form filling works correctly."""
         with (
             patch.object(test_bot, "_wait_for_auth0_login_context", new_callable = AsyncMock) as wait_context,
+            patch.object(test_bot, "_handle_identifier_captcha_state", new_callable = AsyncMock),
             patch.object(test_bot, "_wait_for_auth0_password_step", new_callable = AsyncMock) as wait_password,
             patch.object(test_bot, "_wait_for_post_auth0_submit_transition", new_callable = AsyncMock) as wait_transition,
             patch.object(test_bot, "web_input") as mock_input,
@@ -692,6 +693,7 @@ class TestKleinanzeigenBotAuthentication:
         """Missing Auth0 password step should fail fast."""
         with (
             patch.object(test_bot, "_wait_for_auth0_login_context", new_callable = AsyncMock),
+            patch.object(test_bot, "_handle_identifier_captcha_state", new_callable = AsyncMock),
             patch.object(test_bot, "_wait_for_auth0_password_step", new_callable = AsyncMock, side_effect = AssertionError("missing password")),
             patch.object(test_bot, "web_input") as mock_input,
             patch.object(test_bot, "web_click") as mock_click,

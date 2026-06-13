@@ -544,6 +544,47 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         return "error" not in path
 
+    async def _handle_identifier_captcha_state(self) -> None:
+        """Handle captcha on the Auth0 identifier page and click Weiter if present.
+
+        After submitting the email, a reCAPTCHA may be displayed on the
+        identifier page. If so, this waits for the user to solve it and then
+        probes for a visible Weiter button (not assumed to exist). If present,
+        it is clicked to continue to the password page.
+
+        No-op when the password page is already reached or no captcha is
+        detected, so the normal fast path is unaffected.
+        """
+        if "/u/login/password" in self._current_page_url():
+            return
+
+        captcha_elem = await self.web_probe(
+            By.CSS_SELECTOR,
+            "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']",
+            timeout = self.timeout("captcha_detection"),
+        )
+        if captcha_elem is None:
+            return
+
+        LOG.warning("############################################")
+        LOG.warning("# Captcha detected on Auth0 login page. Please solve it in the browser.")
+        LOG.warning("############################################")
+        await ainput(_("Press a key to continue..."))
+
+        # After captcha solving, probe for a visible Weiter button
+        quick_dom = self.timeout("quick_dom")
+        weiter_xpath = "//button[contains(., 'Weiter')]"
+        weiter = await self.web_probe(
+            By.XPATH, weiter_xpath,
+            timeout = quick_dom,
+        )
+        if weiter is not None and await self.web_check(By.XPATH, weiter_xpath, Is.DISPLAYED, timeout = quick_dom):
+            LOG.info("Auth0 Weiter button present after captcha, clicking it...")
+            await self.web_click(By.XPATH, weiter_xpath, timeout = quick_dom)
+            await self.web_sleep()
+        else:
+            LOG.debug("No Weiter button after captcha — continuing to wait for password page")
+
     async def fill_login_data_and_send(self) -> None:
         """Auth0 2-step login via m-einloggen-sso.html (server-side redirect, no JS needed).
 
@@ -558,6 +599,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.debug("Auth0 Step 1: entering email...")
         await self.web_input(By.ID, "username", self.config.login.username)
         await self.web_click(By.CSS_SELECTOR, "button[type='submit']")
+
+        # Captcha-solving branch: captcha can appear on the identifier page
+        # after email submit. After solving, a visible Weiter button may need
+        # clicking to reach the password page.
+        await self._handle_identifier_captcha_state()
 
         # Step 2: wait for password page then enter password
         LOG.debug("Waiting for Auth0 password page...")
