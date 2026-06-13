@@ -756,6 +756,39 @@ class TestKleinanzeigenBotContactLocationHardening:
             combobox_mock.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_set_contact_location_prefix_matches_ambiguous(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """When multiple options share the same city prefix with different suffixes, selection must fail closed."""
+        city_button = MagicMock(spec = Element)
+        city_button.local_name = "button"
+        city_button.attrs = {"role": "combobox", "aria-controls": "ad-city-menu"}
+
+        option_a = MagicMock(spec = Element)
+        option_a.text = "Berlin - Mitte"
+        option_b = MagicMock(spec = Element)
+        option_b.text = "Berlin - Spandau"
+
+        def _mock_city_option_text(elem:Element) -> str:
+            return str(getattr(elem, "text", "") or "")
+
+        async def _web_await_side_effect(condition:Callable[..., Awaitable[bool] | bool], **_:Any) -> Any:
+            result = condition()
+            return await result if asyncio.iscoroutine(result) else result
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_button),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [option_a, option_b]),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _web_await_side_effect),
+            patch.object(_publishing_flow.PublishingFormFlow, "_read_city_selection_text", new_callable = AsyncMock, return_value = None),
+            patch.object(_publishing_flow.PublishingFormFlow, "_city_option_text", new_callable = AsyncMock, side_effect = _mock_city_option_text),
+            pytest.raises(TimeoutError, match = "City combobox options are ambiguous for location: Berlin"),
+        ):
+            await getattr(_make_flow(test_bot), "_set_contact_location")("Berlin")
+
+    @pytest.mark.asyncio
     async def test_read_city_selection_text_final_fallback_to_ad_city(
         self,
         test_bot:KleinanzeigenBot,
@@ -2664,6 +2697,75 @@ class TestFillAdFormImageCleanup:
             pytest.raises(TimeoutError, match = "Image cleanup failed before upload"),
         ):
             await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
+
+    @pytest.mark.asyncio
+    async def test_image_cleanup_baseline_timeout_does_not_abort(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """When web_find_all_once for existing markers times out, cleanup skips and _upload_images still runs."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "NOT_APPLICABLE"})
+        flow = _make_flow(test_bot)
+
+        with (
+            patch.object(flow, "_set_category", new_callable = AsyncMock),
+            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
+            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
+            patch.object(flow, "_upload_images", new_callable = AsyncMock) as mock_upload,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, side_effect = TimeoutError("marker timeout")),
+        ):
+            await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
+
+        mock_upload.assert_awaited_once()
+
+
+class TestFillAdFormWantedShipping:
+    """Tests for the WANTED shipping combobox path in PublishingFormFlow.fill_ad_form."""
+
+    @pytest.mark.asyncio
+    async def test_wanted_shipping_combobox_happy_path(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """WANTED ads with a mapped shipping_type should select via web_select_button_combobox."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "type": "WANTED",
+                "shipping_type": "PICKUP",
+                "price_type": "NOT_APPLICABLE",
+                "price": None,
+            }
+        )
+        flow = _make_flow(test_bot)
+
+        shipping_btn = MagicMock(spec = Element)
+        shipping_btn.attrs = {"id": "foo.versand"}
+
+        with (
+            patch.object(flow, "_set_category", new_callable = AsyncMock),
+            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
+            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
+            patch.object(flow, "_upload_images", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = shipping_btn),
+            patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock) as mock_select_combobox,
+        ):
+            await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
+
+        mock_select_combobox.assert_awaited_once_with("foo.versand", "Nur Abholung")
 
 
 class TestCityOptionText:
