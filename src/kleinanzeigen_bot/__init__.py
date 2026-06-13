@@ -574,7 +574,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # After captcha solving, probe for a visible Weiter button
         quick_dom = self.timeout("quick_dom")
         weiter = await self.web_probe(
-            By.XPATH, "//button[contains(text(), 'Weiter')]",
+            By.XPATH, "//button[contains(., 'Weiter')]",
             timeout = quick_dom,
         )
         if weiter is not None:
