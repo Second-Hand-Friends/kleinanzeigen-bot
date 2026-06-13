@@ -163,6 +163,7 @@ kleinanzeigen_bot/__init__.py:
     "Unable to close condition dialog!": "Kann den Dialog für Artikelzustand nicht schließen!"
     "Unable to select condition [%s]": "Zustand [%s] konnte nicht ausgewählt werden"
     "Failed to set attribute '%s'": "Fehler beim Setzen des Attributs '%s'"
+    "No condition radio matched values %(values)s": "Keine Zustand-Auswahl passt zu den Werten %(values)s"
 
   _resolve_category_suggestions:
     ? "Category suggestion picker shown, but no segment of configured path '%(category)s' matched the offered suggestions [%(offered)s]. Update the ad's 'category' to an offered ID or a valid full path."
@@ -714,8 +715,14 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "Last page reached (next button is disabled).": "Letzte Seite erreicht (Weiter-Button ist deaktiviert)."
     "No pagination controls found. Assuming last page.": "Keine Paginierungssteuerung gefunden. Es wird von der letzten Seite ausgegangen."
 
+  web_set_input_value:
+    "web_set_input_value: element '%(id)s' not found in DOM (TOCTOU race)": "web_set_input_value: Element '%(id)s' nicht im DOM gefunden (TOCTOU Race)"
+
   _record_timing:
     "Timing collector failed for key=%s operation=%s: %s": "Zeitmessung fehlgeschlagen für key=%s operation=%s: %s"
+
+  _run_with_timeout_retries:
+    "%(desc)s failed without executing operation": "%(desc)s fehlgeschlagen ohne dass die Operation ausgeführt wurde"
 
   _allocate_selector_group_budgets:
     "selector_count must be > 0": "selector_count muss > 0 sein"

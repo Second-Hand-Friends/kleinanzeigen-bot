@@ -1521,7 +1521,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 if condition_radio is not None:
                     break
             if condition_radio is None:
-                raise TimeoutError(f"No condition radio matched values {candidate_values}")
+                raise TimeoutError(_("No condition radio matched values %(values)s") % {"values": candidate_values})
             condition_radio_id = str(condition_radio.attrs.get("id") or "")
             if condition_radio_id:
                 try:

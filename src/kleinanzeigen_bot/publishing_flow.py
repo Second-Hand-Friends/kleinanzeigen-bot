@@ -247,25 +247,24 @@ async def submit_and_confirm_ad(
     # Edit page uses 'Änderungen speichern' or 'Anzeige speichern'; publish page uses 'Anzeige aufgeben'
     await web.web_click(By.XPATH, "//button[contains(., 'Anzeige aufgeben') or contains(., 'Änderungen speichern') or contains(., 'Anzeige speichern')]")
 
-    # PostListingForm v2 may show an "Effektiver verkaufen" upsell
-    # dialog after clicking submit.  Dismiss it so the actual form
-    # POST can proceed.
-    quick_dom = web.timeout("quick_dom")
-    upsell_dialog = await web.web_probe(
-        By.XPATH, "//dialog[@open and contains(., 'Effektiver verkaufen')]", timeout = quick_dom
-    )
-    if upsell_dialog is not None:
-        LOG.info("Dismissing upsell dialog...")
-        await web.web_click(
-            By.XPATH, "//dialog[@open]//button[contains(., 'Ohne Hochschieben weiter')]",
-            timeout = quick_dom,
-        )
-        await web.web_sleep(500)  # let the dialog close animation finish
-
     # Everything after the first click is uncertain: the ad may already have been submitted.
     ad_id:int | None = None
     try:
         quick_dom = web.timeout("quick_dom")
+
+        # PostListingForm v2 may show an "Effektiver verkaufen" upsell
+        # dialog after clicking submit.  Dismiss it so the actual form
+        # POST can proceed.
+        upsell_dialog = await web.web_probe(
+            By.XPATH, "//dialog[@open and contains(., 'Effektiver verkaufen')]", timeout = quick_dom
+        )
+        if upsell_dialog is not None:
+            LOG.info("Dismissing upsell dialog...")
+            await web.web_click(
+                By.XPATH, "//dialog[@open]//button[contains(., 'Ohne Hochschieben weiter')]",
+                timeout = quick_dom,
+            )
+            await web.web_sleep(500)  # let the dialog close animation finish
 
         imprint_btn = await web.web_probe(By.ID, "imprint-guidance-submit", timeout = quick_dom)
         if imprint_btn is not None:

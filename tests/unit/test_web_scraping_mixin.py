@@ -2813,3 +2813,29 @@ class TestWebSelectButtonCombobox:
         web_scraper.web_click.assert_awaited_once()
         web_scraper.web_find.assert_awaited_once()
         web_scraper.web_sleep.assert_not_awaited()
+
+
+class TestWebSetInputValue:
+    """Direct unit tests for the web_set_input_value method (including TOCTOU race)."""
+
+    @pytest.mark.asyncio
+    async def test_sets_value_when_element_present(self, web_scraper:WebScrapingMixin) -> None:
+        """Happy path: web_find succeeds and JS returns non-False (no TOCTOU race)."""
+        web_scraper.web_find = AsyncMock()  # type: ignore[method-assign]
+        page = cast(Any, web_scraper).page
+        page.evaluate = AsyncMock(return_value = None)  # JS IIFE returns undefined → None in Python
+
+        await web_scraper.web_set_input_value("ad-title", "Hello World")
+
+        web_scraper.web_find.assert_awaited_once()
+        page.evaluate.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_raises_timeout_error_on_toctou_race(self, web_scraper:WebScrapingMixin) -> None:
+        """Error path: web_find succeeds but element disappears before JS runs — raise TimeoutError."""
+        web_scraper.web_find = AsyncMock()  # type: ignore[method-assign]
+        page = cast(Any, web_scraper).page
+        page.evaluate = AsyncMock(return_value = False)  # JS returns false (element gone)
+
+        with pytest.raises(TimeoutError, match = "TOCTOU"):
+            await web_scraper.web_set_input_value("ad-title", "Hello World")
