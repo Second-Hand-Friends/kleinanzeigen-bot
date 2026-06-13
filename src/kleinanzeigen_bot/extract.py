@@ -572,7 +572,25 @@ class AdExtractor(WebScrapingMixin):
         """
         return await self.web_text(By.ID, "viewad-title")
 
-    async def _extract_ad_page_info(self, directory:str, ad_id:int, ad_file_stem:str, *, active_override:bool | None = None) -> AdPartial:
+    async def _resolve_download_title(self, ad_id:int) -> str:
+        """Return the canonical title for a downloaded ad."""
+        cached_ad = self.published_ads_by_id.get(ad_id)
+        if cached_ad is not None:
+            title = cached_ad.get("title")
+            if isinstance(title, str) and title.strip():
+                return title.strip()
+
+        return await self._extract_title_from_ad_page()
+
+    async def _extract_ad_page_info(
+        self,
+        directory:str,
+        ad_id:int,
+        ad_file_stem:str,
+        title:str,
+        *,
+        active_override:bool | None = None,
+    ) -> AdPartial:
         """
         Extracts ad information and downloads images to the specified directory.
         NOTE: Requires that the driver session currently is on the ad page.
@@ -580,13 +598,11 @@ class AdExtractor(WebScrapingMixin):
         :param directory: the directory to download images to
         :param ad_id: the ad ID
         :param ad_file_stem: the rendered filename stem shared by the ad config and images
+        :param title: the resolved ad title
         :param active_override: optional override for ad activity state
         :return: an AdPartial object containing the ad information
         """
         info:dict[str, Any] = {"active": active_override if active_override is not None else True}
-
-        # Extract title first (needed for directory creation)
-        title = await self._extract_title_from_ad_page()
 
         # Get BelenConf data which contains accurate ad_type information
         belen_conf = await self.web_execute("window.BelenConf")
@@ -667,8 +683,8 @@ class AdExtractor(WebScrapingMixin):
         :param active_override: optional override for ad activity state
         :return: AdPartial with staging/final directory information and rendered ad file stem
         """
-        title = await self._extract_title_from_ad_page()
-        LOG.info('Extracting title from ad %s: "%s"', ad_id, title)
+        title = await self._resolve_download_title(ad_id)
+        LOG.info('Resolved title for ad %s: "%s"', ad_id, title)
 
         # Determine the final directory path
         ad_file_stem = self._render_download_ad_file_stem(ad_id, title)
@@ -706,7 +722,7 @@ class AdExtractor(WebScrapingMixin):
         LOG.info("Downloading ad to: %s", final_dir)
 
         try:
-            ad_cfg = await self._extract_ad_page_info(str(staging_dir), ad_id, ad_file_stem, active_override = active_override)
+            ad_cfg = await self._extract_ad_page_info(str(staging_dir), ad_id, ad_file_stem, title, active_override = active_override)
         except Exception:
             if await files.exists(staging_dir):
                 try:

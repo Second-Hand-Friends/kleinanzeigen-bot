@@ -876,8 +876,7 @@ class TestAdExtractorContent:
                 test_extractor,
                 web_text = AsyncMock(
                     side_effect = [
-                        "Test Title",  # Title (wrapper's initial extraction)
-                        "Test Title",  # Title (core extraction's call)
+                        "Test Title",  # Title extraction
                         web_description_with_affixes,  # Description with affixes (as it appears on web)
                         "03.02.2025",  # Creation date
                     ]
@@ -911,8 +910,7 @@ class TestAdExtractorContent:
                 test_extractor,
                 web_text = AsyncMock(
                     side_effect = [
-                        "Test Title",  # Title (wrapper's initial extraction)
-                        "Test Title",  # Title (core extraction's call)
+                        "Test Title",  # Title extraction
                         TimeoutError("Timeout"),  # Description times out
                         "03.02.2025",  # Date succeeds (not reached)
                     ]
@@ -947,8 +945,7 @@ class TestAdExtractorContent:
             test_extractor,
             web_text = AsyncMock(
                 side_effect = [
-                    "Test Title",  # Title (wrapper's initial extraction)
-                    "Test Title",  # Title (core extraction's call)
+                    "Test Title",  # Title extraction
                     raw_description,  # Description without affixes
                     "03.02.2025",  # Creation date
                 ]
@@ -995,12 +992,63 @@ class TestAdExtractorContent:
             ),
             patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = None),
         ):
-            mock_web_text.side_effect = ["Test Title", "Test Title", "Description text", "03.02.2025"]
+            mock_web_text.side_effect = ["Test Title", "Description text", "03.02.2025"]
             ad_cfg, _staging_dir, _final_dir, _ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
         mock_web_text.assert_any_await(By.CSS_SELECTOR, extract_module.DOWNLOAD_CREATION_DATE_SELECTOR)
         assert ad_cfg.created_on is not None
         assert ad_cfg.created_on.isoformat().startswith("2025-02-03")
+
+    @pytest.mark.asyncio
+    async def test_resolve_download_title_prefers_published_metadata(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Use the clean manage-ads title for owned ads instead of the page title."""
+        test_extractor.published_ads_by_id = {12345: {"id": 12345, "title": " Clean API Title "}}
+
+        with patch.object(test_extractor, "_extract_title_from_ad_page", new_callable = AsyncMock) as mock_extract_title:
+            title = await test_extractor._resolve_download_title(12345)
+
+        assert title == "Clean API Title"
+        mock_extract_title.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_resolve_download_title_falls_back_to_page_title(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Keep manual page extraction unchanged when manage-ads metadata is missing."""
+        test_extractor.published_ads_by_id = {12345: {"id": 12345, "title": "   "}}
+
+        with patch.object(test_extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Page Title"):
+            title = await test_extractor._resolve_download_title(12345)
+
+        assert title == "Page Title"
+
+    @pytest.mark.asyncio
+    async def test_directory_handling_uses_published_title_for_names_and_ad_info(
+        self,
+        test_extractor:extract_module.AdExtractor,
+        tmp_path:Path,
+    ) -> None:
+        """Use the canonical manage-ads title consistently for paths and persisted ad info."""
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        title = "Beistelltisch aus Holz mit Glaseinsatz und Korb – 67 × 67 × 48 cm"
+        test_extractor.published_ads_by_id = {3421140610: {"id": 3421140610, "title": title}}
+        test_extractor.config.download.ad_file_name_template = "ad_{id}_{title}"
+
+        ad_cfg = _create_test_ad_partial(title = title)
+
+        with (
+            patch.object(test_extractor, "_extract_title_from_ad_page", new_callable = AsyncMock) as mock_extract_title,
+            patch.object(test_extractor, "_extract_ad_page_info", new_callable = AsyncMock, return_value = ad_cfg) as mock_extract_info,
+        ):
+            _cfg, staging_dir, final_dir, ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(
+                base_dir,
+                3421140610,
+            )
+
+        assert ad_file_stem == "ad_3421140610_Beistelltisch aus Holz mit Glaseinsatz und Korb – 67 × 67 × 48 cm"
+        assert staging_dir == base_dir / f".tmp-{ad_file_stem}"
+        assert final_dir == base_dir / f"ad_3421140610_{title}"
+        mock_extract_title.assert_not_called()
+        mock_extract_info.assert_awaited_once_with(str(staging_dir), 3421140610, ad_file_stem, title, active_override = None)
 
     @pytest.mark.asyncio
     async def test_extract_sell_directly_data_hit_true(self, test_extractor:extract_module.AdExtractor) -> None:
@@ -1647,7 +1695,6 @@ class TestAdExtractorDownload:
                 new_callable = AsyncMock,
                 side_effect = [
                     "Test Title",  # Title extraction
-                    "Test Title",  # Second title call for full extraction
                     "Description text",  # Description
                     "03.02.2025",  # Creation date
                 ],
@@ -1712,7 +1759,6 @@ class TestAdExtractorDownload:
                 new_callable = AsyncMock,
                 side_effect = [
                     "Test Title",  # Title extraction
-                    "Test Title",  # Second title call for full extraction
                     "Description text",  # Description
                     "03.02.2025",  # Creation date
                 ],
@@ -1780,7 +1826,6 @@ class TestAdExtractorDownload:
                 new_callable = AsyncMock,
                 side_effect = [
                     "Test Title",  # Title extraction
-                    "Test Title",  # Second title call for full extraction
                     "Description text",  # Description
                     "03.02.2025",  # Creation date
                 ],
@@ -1845,7 +1890,6 @@ class TestAdExtractorDownload:
                 new_callable = AsyncMock,
                 side_effect = [
                     title_with_umlauts,  # Title extraction
-                    title_with_umlauts,  # Second title call for full extraction
                     "Description text",  # Description
                     "03.02.2025",  # Creation date
                 ],
