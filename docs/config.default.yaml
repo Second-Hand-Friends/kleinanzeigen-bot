@@ -356,4 +356,4 @@ diagnostics:
   output_dir:
 
   # If true, collect local timeout timing data and write it to diagnostics JSON for troubleshooting and tuning.
-  timing_collection: true
+  timing_collection: false

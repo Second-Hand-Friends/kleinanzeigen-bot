@@ -485,7 +485,7 @@
           "title": "Output Dir"
         },
         "timing_collection": {
-          "default": true,
+          "default": false,
           "description": "If true, collect local timeout timing data and write it to diagnostics JSON for troubleshooting and tuning.",
           "title": "Timing Collection",
           "type": "boolean"
