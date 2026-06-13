@@ -573,13 +573,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         # After captcha solving, probe for a visible Weiter button
         quick_dom = self.timeout("quick_dom")
+        weiter_xpath = "//button[contains(., 'Weiter')]"
         weiter = await self.web_probe(
-            By.XPATH, "//button[contains(., 'Weiter')]",
+            By.XPATH, weiter_xpath,
             timeout = quick_dom,
         )
-        if weiter is not None:
+        if weiter is not None and await self.web_check(By.XPATH, weiter_xpath, Is.DISPLAYED, timeout = quick_dom):
             LOG.info("Auth0 Weiter button present after captcha, clicking it...")
-            await weiter.click()
+            await self.web_click(By.XPATH, weiter_xpath, timeout = quick_dom)
             await self.web_sleep()
         else:
             LOG.debug("No Weiter button after captcha — continuing to wait for password page")
