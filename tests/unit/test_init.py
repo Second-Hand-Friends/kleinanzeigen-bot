@@ -1199,6 +1199,7 @@ class TestKleinanzeigenBotBasics:
         web_execute_side_effect:list[Any] | None = None,
         redirect_recovery_return:int | None = None,
         redirect_recovery_side_effect:BaseException | None = None,
+        mock_redirect_recovery:bool = True,
         include_success_mocks:bool = False,
     ) -> Iterator[None]:
         """Mock all post-submit publish_ad dependencies for confirmation fallback tests.
@@ -1229,9 +1230,17 @@ class TestKleinanzeigenBotBasics:
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = web_await_side_effect),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect", new_callable = AsyncMock,
-                  return_value = redirect_recovery_return, side_effect = redirect_recovery_side_effect),
         ]
+
+        if mock_redirect_recovery:
+            common_patches.append(
+                patch(
+                    "kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect",
+                    new_callable = AsyncMock,
+                    return_value = redirect_recovery_return,
+                    side_effect = redirect_recovery_side_effect,
+                ),
+            )
 
         if include_success_mocks:
             common_patches.append(patch("kleinanzeigen_bot.utils.dicts.save_dict"))
@@ -1302,6 +1311,7 @@ class TestKleinanzeigenBotBasics:
                 mock_page,
                 web_await_side_effect = TimeoutError("confirmation timeout"),
                 web_execute_side_effect = [stale_confirmation_url, stale_confirmation_url, "var x = 42;"],
+                mock_redirect_recovery = False,
             ),
             patch("kleinanzeigen_bot.publishing_flow.persist_published_ad") as mock_persist,
             pytest.raises(PublishSubmissionUncertainError, match = "submission may have succeeded before failure"),
