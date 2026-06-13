@@ -4,7 +4,7 @@
 """Ad deletion browser workflow."""
 
 from gettext import gettext as _
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, NamedTuple
 
 from . import ad_state as _ad_state
 from . import published_ads
@@ -15,6 +15,20 @@ from .utils import loggers as _loggers
 from .utils.i18n import pluralize
 from .utils.misc import ensure
 from .utils.web_scraping_mixin import By, WebScrapingMixin
+
+
+class DeleteResult(NamedTuple):
+    """Outcome of a delete_ad call.
+
+    :param deleted: True if at least one server response was 200.
+    :param attempted: True if HTTP DELETE requests were actually sent
+        (Phase B ran), regardless of server response codes.
+        Always True when ``deleted`` is True.
+    """
+
+    deleted:bool
+    attempted:bool
+
 
 LOG:_loggers.Logger = _loggers.get_logger(__name__)
 
@@ -36,21 +50,11 @@ async def delete_ads(
         count += 1
         LOG.info("Processing %s/%s: '%s' from [%s]...", count, len(ad_cfgs), ad_cfg.title, ad_file)
 
-        # Record pre-delete id to detect whether delete_ad attempted a deletion.
-        # delete_ad clears ad_cfg.id when targets were found (Phase B ran),
-        # and preserves it on no-match early return.
-        id_before = ad_cfg.id
-        deleted = await delete_ad(web, root_url, ad_cfg, published_ads_list, delete_old_ads_by_title = delete_old_ads_by_title)
-        if deleted:
+        result = await delete_ad(web, root_url, ad_cfg, published_ads_list, delete_old_ads_by_title = delete_old_ads_by_title)
+        if result.deleted:
             deleted_count += 1
 
-        # Apply after_delete policy only when a delete was actually attempted.
-        # Detection: True return (some 200), or id changed from non-None to None (all 404).
-        # When id was already None before the call, only True return is reliable;
-        # a False return could be no-match or title-match all-404, both treated as no cleanup.
-        delete_attempted = deleted or (id_before is not None and ad_cfg.id is None)
-
-        if delete_attempted and after_delete != "NONE":
+        if result.attempted and after_delete != "NONE":
             if _ad_state.apply_after_delete_policy(ad_cfg, ad_cfg_orig, mode = after_delete):
                 _dicts.save_dict(ad_file, ad_cfg_orig)
         await web.web_sleep()
@@ -67,12 +71,12 @@ async def delete_ad(
     published_ads_list:list[PublishedAd],
     *,
     delete_old_ads_by_title:bool,
-) -> bool:
+) -> DeleteResult:
     """Delete an ad from the server.
 
     Returns:
-        True if at least one delete request returned 200 (confirmed deleted).
-        False if no matching ads were found or all returned 404 (already gone).
+        :class:`DeleteResult` with ``deleted`` (at least one 200) and
+        ``attempted`` (HTTP DELETE requests were actually sent).
 
     Side effects:
         Clears ``ad_cfg.id`` whenever a delete was attempted, regardless of
@@ -105,7 +109,7 @@ async def delete_ad(
     # Early return if nothing to delete — skip page open, CSRF fetch, and sleep
     if not ids_to_delete:
         LOG.info(" -> SKIPPED: no published ad matched '%s' for deletion", ad_cfg.title)
-        return False
+        return DeleteResult(deleted = False, attempted = False)
 
     # Phase B: Open manage-ads page, fetch CSRF token, execute deletions
     await web.web_open(f"{root_url}/m-meine-anzeigen.html")
@@ -133,4 +137,4 @@ async def delete_ad(
     # Clear ad_cfg.id whenever a delete was attempted — the old ID is stale
     # regardless of whether the server returned 200 (deleted) or 404 (already gone).
     ad_cfg.id = None
-    return deleted
+    return DeleteResult(deleted = deleted, attempted = True)

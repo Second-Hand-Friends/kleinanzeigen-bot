@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from kleinanzeigen_bot import KleinanzeigenBot, delete_flow
+from kleinanzeigen_bot.delete_flow import DeleteResult
 from kleinanzeigen_bot.model.ad_model import Ad
 
 
@@ -88,7 +89,7 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = True,
             )
 
-        assert result is True
+        assert result == (True, True)
         assert ad_cfg.id is None
 
     @pytest.mark.asyncio
@@ -112,7 +113,7 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = False,
             )
 
-        assert result is True
+        assert result == (True, True)
         assert ad_cfg.id is None
 
     @pytest.mark.asyncio
@@ -138,7 +139,7 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = True,
             )
 
-        assert result is False
+        assert result == (False, False)
         assert ad_cfg.id == 99999  # Preserved — no deletion attempted
         mock_web_open.assert_not_called()
         mock_web_find.assert_not_called()
@@ -169,7 +170,7 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = False,
             )
 
-        assert result is False
+        assert result == (False, True)
         assert ad_cfg.id is None  # Cleared because delete was attempted
 
     @pytest.mark.asyncio
@@ -193,7 +194,7 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = True,
             )
 
-        assert result is False
+        assert result == (False, False)
         mock_web_open.assert_not_called()  # No valid IDs → no page open
 
     @pytest.mark.asyncio
@@ -217,7 +218,7 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = False,
             )
 
-        assert result is True
+        assert result == (True, True)
         assert ad_cfg.id is None
         mock_request.assert_called_once()
         assert "ids=0" in mock_request.call_args[1]["url"]
@@ -252,7 +253,7 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = True,
             )
 
-        assert result is True
+        assert result == (True, True)
         assert ad_cfg.id is None
         assert mock_request.call_count == 3
 
@@ -277,7 +278,7 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = True,
             )
 
-        assert result is True
+        assert result == (True, True)
         assert ad_cfg.id is None
         mock_request.assert_called_once()  # Deduplicated — only one request
 
@@ -328,9 +329,9 @@ class TestDeleteAdsAfterDeletePolicy:
 
         async def fake_delete(
             _web:Any, _root_url:str, ad:Ad, _published:list[dict[str, Any]], **__:Any
-        ) -> bool:
+        ) -> DeleteResult:
             ad.id = None  # Phase B ran and cleared the id
-            return False  # but all responses were 404
+            return DeleteResult(deleted = False, attempted = True)  # all responses were 404 but deletion was attempted
 
         with (
             patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = []),
@@ -359,7 +360,7 @@ class TestDeleteAdsAfterDeletePolicy:
 
         with (
             patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = []),
-            patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock, return_value = False),
+            patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock, return_value = DeleteResult(deleted = False, attempted = False)),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.utils.dicts.save_dict") as mock_save,
         ):
@@ -390,7 +391,9 @@ class TestDeleteAdsAfterDeletePolicy:
 
         with (
             patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = []),
-            patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock, return_value = True) as mock_delete_ad,
+            patch("kleinanzeigen_bot.delete_flow.delete_ad",
+                  new_callable = AsyncMock,
+                  return_value = DeleteResult(deleted = True, attempted = True)) as mock_delete_ad,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.utils.dicts.save_dict") as mock_save,
         ):
@@ -405,3 +408,34 @@ class TestDeleteAdsAfterDeletePolicy:
         mock_save.assert_not_called()
         # delete_ad called twice (once per ad)
         assert mock_delete_ad.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_cleanup_on_title_match_all_404_with_id_none(
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any], tmp_path:Path,
+    ) -> None:
+        """Regression test for #1103: after_delete policy applied when title-mode delete
+        returns all-404 and ad_cfg.id was already None."""
+        test_bot.config.deleting.after_delete = "RESET"
+        minimal_ad_config["id"] = None
+        ad_file, ad_cfg, ad_cfg_orig = self._make_ad(minimal_ad_config, tmp_path)
+        ad_cfg.id = None  # Simulate id was never assigned
+
+        mock_delete = AsyncMock(return_value = DeleteResult(deleted = False, attempted = True))
+
+        with (
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = []),
+            patch("kleinanzeigen_bot.delete_flow.delete_ad", new = mock_delete),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.utils.dicts.save_dict") as mock_save,
+        ):
+            await delete_flow.delete_ads(
+                web = test_bot, root_url = test_bot.root_url,
+                after_delete = test_bot.config.deleting.after_delete,
+                delete_old_ads_by_title = True,
+                ad_cfgs = [(ad_file, ad_cfg, ad_cfg_orig)],
+            )
+
+        # Policy must be applied: deletion was attempted
+        assert ad_cfg.repost_count == 0
+        assert "id" not in ad_cfg_orig
+        mock_save.assert_called_once()
