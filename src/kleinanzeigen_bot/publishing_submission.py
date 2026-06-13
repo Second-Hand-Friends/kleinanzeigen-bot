@@ -1,6 +1,13 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+"""Submit, confirm, and recover published ad IDs.
+
+This module owns the browser-side publish boundary: captcha handling,
+submit click, confirmation polling, and fallback recovery when the
+confirmation page redirects too fast to inspect the URL directly.
+"""
+
 import re
 import urllib.parse as urllib_parse
 from gettext import gettext as _
@@ -18,7 +25,11 @@ from .utils.web_scraping_mixin import By, WebScrapingMixin
 LOG = _loggers.get_logger(__name__)
 
 
-async def _try_recover_ad_id_from_redirect(web:WebScrapingMixin) -> int | None:
+async def _try_recover_ad_id_from_redirect(
+    web:WebScrapingMixin,
+    *,
+    pre_submit_referrer:str | None = None,
+) -> int | None:
     """Try to extract the published ad ID from page tracking data.
 
     Used as a fallback when the confirmation page auto-redirects before
@@ -36,6 +47,10 @@ async def _try_recover_ad_id_from_redirect(web:WebScrapingMixin) -> int | None:
         referrer = str(await web.web_execute("document.referrer") or "")
     except (TimeoutError, ProtocolException) as ex:
         LOG.debug("document.referrer lookup failed (%s), skipping to script scan", type(ex).__name__)
+        referrer = ""
+
+    if pre_submit_referrer is not None and referrer == pre_submit_referrer:
+        LOG.debug("document.referrer did not change after submit; skipping referrer fallback")
         referrer = ""
 
     if "p-anzeige-aufgeben-bestaetigung.html?adId=" in referrer:
@@ -110,6 +125,7 @@ async def submit_and_confirm_ad(
     #############################
     # Click is retryable — no submission can have occurred before this point.
     # Edit page uses 'Änderungen speichern' or 'Anzeige speichern'; publish page uses 'Anzeige aufgeben'
+    pre_submit_referrer = str(await web.web_execute("document.referrer") or "")
     await web.web_click(By.XPATH, "//button[contains(., 'Anzeige aufgeben') or contains(., 'Änderungen speichern') or contains(., 'Anzeige speichern')]")
 
     # Everything after the first click is uncertain: the ad may already have been submitted.
@@ -172,7 +188,7 @@ async def submit_and_confirm_ad(
         # Try to recover the ad ID from tracking data on the current page.
         LOG.debug("Confirmation URL polling or extraction failed (%s), attempting tracking data fallback...", type(ex).__name__)
         try:
-            ad_id = await _try_recover_ad_id_from_redirect(web)
+            ad_id = await _try_recover_ad_id_from_redirect(web, pre_submit_referrer = pre_submit_referrer)
         except Exception as fallback_ex:  # noqa: BLE001
             LOG.debug("Tracking data fallback failed: %s", fallback_ex)
 
