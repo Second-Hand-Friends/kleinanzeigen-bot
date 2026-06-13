@@ -257,7 +257,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                     raise
                 LOG.debug("Retrying %s after TimeoutError (attempt %d/%d, timeout %.1fs)", description, attempt + 1, attempts, effective_timeout)
 
-        raise TimeoutError(f"{description} failed without executing operation")
+        raise TimeoutError(_("%(desc)s failed without executing operation") % {"desc": description})
 
     @staticmethod
     def _allocate_selector_group_budgets(total_timeout:float, selector_count:int) -> list[float]:
@@ -1011,10 +1011,10 @@ class WebScrapingMixin:  # noqa: PLR0904
         await self.web_find(By.ID, element_id)  # raises TimeoutError if element is absent
         js_element_id = json.dumps(element_id)
         js_value = json.dumps(value)
-        await self.web_execute(
+        result = await self.web_execute(
             f"(function(id,v){{"
             "var el=document.getElementById(id);"
-            "if(!el)return;"
+            "if(!el)return false;"
             "var tag=el.tagName.toLowerCase();"
             "var proto=tag==='textarea'?window.HTMLTextAreaElement:window.HTMLInputElement;"
             "var setter=Object.getOwnPropertyDescriptor(proto.prototype,'value').set;"
@@ -1023,6 +1023,10 @@ class WebScrapingMixin:  # noqa: PLR0904
             "el.dispatchEvent(new Event('change',{bubbles:true}));"
             f"}})({js_element_id},{js_value})"
         )
+        if result is False:
+            raise TimeoutError(
+                _("web_set_input_value: element '%(id)s' not found in DOM (TOCTOU race)") % {"id": element_id}
+            )
 
     def _convert_remote_object_value(self, data:Any) -> Any:
         """
