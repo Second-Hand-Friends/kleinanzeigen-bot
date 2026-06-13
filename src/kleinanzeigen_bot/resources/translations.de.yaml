@@ -98,6 +98,11 @@ kleinanzeigen_bot/__init__.py:
     "Auth0 Step 2: entering password...": "Auth0 Schritt 2: Passwort wird eingegeben..."
     "Auth0 login submitted.": "Auth0-Anmeldung abgesendet."
 
+  _handle_identifier_captcha_state:
+    "# Captcha detected on Auth0 login page. Please solve it in the browser.": "# Captcha auf der Auth0-Anmeldeseite erkannt. Bitte loesen Sie das Captcha im Browser."
+    "Auth0 Weiter button present after captcha, clicking it...": "Auth0-Weiter-Button nach Captcha vorhanden, klicke ihn..."
+    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
+
   _check_sms_verification:
     "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
     "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
