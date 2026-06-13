@@ -286,6 +286,9 @@ kleinanzeigen_bot/publishing_flow.py:
     "image(s)": "Bild(er)"
     "ad folder": "Anzeigenordner"
 
+#################################################
+kleinanzeigen_bot/publishing_submission.py:
+#################################################
   submit_and_confirm_ad:
     "############################################": "############################################"
     "Dismissing upsell dialog...": "Upsell-Dialog schließen..."

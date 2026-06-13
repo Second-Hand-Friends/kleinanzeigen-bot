@@ -1228,7 +1228,7 @@ class TestKleinanzeigenBotBasics:
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = web_await_side_effect),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_flow._try_recover_ad_id_from_redirect", new_callable = AsyncMock,
+            patch("kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect", new_callable = AsyncMock,
                   return_value = redirect_recovery_return, side_effect = redirect_recovery_side_effect),
         ]
 
