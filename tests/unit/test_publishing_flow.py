@@ -755,6 +755,45 @@ class TestKleinanzeigenBotContactLocationHardening:
             await getattr(_make_flow(test_bot), "_set_contact_location")("Metroville")
             combobox_mock.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_read_city_selection_text_final_fallback_to_ad_city(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """When web_text(ad-city-selected-option) and textContent are empty, fall back to web_text(ad-city)."""
+        city_element = MagicMock(spec = Element)
+        city_element.local_name = "button"
+        city_element.apply = AsyncMock(return_value = "")
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_element),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock) as web_text_mock,
+        ):
+            web_text_mock.side_effect = ["", "10115 - Berlin"]
+            result = await getattr(_make_flow(test_bot), "_read_city_selection_text")()
+
+        assert result == "10115 - Berlin"
+        assert web_text_mock.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_read_city_selection_text_final_fallback_timeout_returns_none(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """When the final web_text(ad-city) times out, _read_city_selection_text returns None."""
+        city_element = MagicMock(spec = Element)
+        city_element.local_name = "button"
+        city_element.apply = AsyncMock(return_value = "")
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_element),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock) as web_text_mock,
+        ):
+            web_text_mock.side_effect = ["", TimeoutError("ad-city timeout")]
+            result = await getattr(_make_flow(test_bot), "_read_city_selection_text")()
+
+        assert result is None
+
 
 class TestConditionSelector:
     """Regression tests for condition dialog selection."""
@@ -2453,3 +2492,222 @@ class TestFillAdFormSellDirectly:
             len(c.args) >= 2 and c.args[1] == "ad-buy-now-false"
             for c in mock_click.await_args_list
         )
+
+    @pytest.mark.asyncio
+    async def test_sell_directly_shipping_buy_now_true_clicked(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """With SHIPPING and sell_directly=True, click ad-buy-now-true when present and not selected."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"sell_directly": True})
+        flow = _make_flow(test_bot)
+
+        with (
+            patch.object(flow, "_set_category", new_callable = AsyncMock),
+            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
+            patch.object(flow, "_set_shipping", new_callable = AsyncMock),
+            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
+            patch.object(flow, "_upload_images", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = []),
+        ):
+            await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
+
+        assert any(
+            len(c.args) >= 2 and c.args[1] == "ad-buy-now-true"
+            for c in mock_click.await_args_list
+        )
+
+    @pytest.mark.asyncio
+    async def test_sell_directly_shipping_buy_now_false_clicked(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """With SHIPPING and sell_directly=False, click ad-buy-now-false when present and not selected."""
+        ad_cfg = Ad.model_validate(base_ad_config)
+        flow = _make_flow(test_bot)
+
+        with (
+            patch.object(flow, "_set_category", new_callable = AsyncMock),
+            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
+            patch.object(flow, "_set_shipping", new_callable = AsyncMock),
+            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
+            patch.object(flow, "_upload_images", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = []),
+        ):
+            await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
+
+        assert any(
+            len(c.args) >= 2 and c.args[1] == "ad-buy-now-false"
+            for c in mock_click.await_args_list
+        )
+
+
+class TestFillAdFormPriceType:
+    """Tests for the price-type section of PublishingFormFlow.fill_ad_form."""
+
+    @pytest.mark.asyncio
+    async def test_price_type_success(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Fill ad form should click the price-type dropdown, select the option, and set the price amount."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "type": "WANTED",
+                "shipping_type": "NOT_APPLICABLE",
+                "price_type": "FIXED",
+                "price": 10,
+            }
+        )
+        flow = _make_flow(test_bot)
+
+        with (
+            patch.object(flow, "_set_category", new_callable = AsyncMock),
+            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
+            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
+            patch.object(flow, "_upload_images", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_input,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = []),
+        ):
+            await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
+
+        # Verify the price-type dropdown was clicked
+        price_type_clicks = [c for c in mock_click.await_args_list if len(c.args) >= 2 and c.args[1] == "ad-price-type"]
+        assert len(price_type_clicks) == 1
+
+        # Verify the price-type option was clicked
+        option_clicks = [c for c in mock_click.await_args_list if len(c.args) >= 2 and c.args[1] == "ad-price-type-menu-option-0"]
+        assert len(option_clicks) == 1
+
+        # Verify the price amount was set
+        mock_set_input.assert_any_await("ad-price-amount", "10")
+
+    @pytest.mark.asyncio
+    async def test_price_type_click_timeout_wraps_error(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """TimeoutError from the price-type dropdown click should be wrapped with a descriptive message."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "type": "WANTED",
+                "shipping_type": "NOT_APPLICABLE",
+                "price_type": "FIXED",
+            }
+        )
+        flow = _make_flow(test_bot)
+
+        async def click_side_effect(selector_type:By, selector_value:str, **_:Any) -> None:
+            if selector_type == By.ID and selector_value == "ad-price-type":
+                raise TimeoutError("price type dropdown timed out")
+
+        with (
+            patch.object(flow, "_set_category", new_callable = AsyncMock),
+            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
+            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
+            patch.object(flow, "_upload_images", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = []),
+            pytest.raises(TimeoutError, match = "Failed to set price type 'FIXED'"),
+        ):
+            await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
+
+
+class TestFillAdFormImageCleanup:
+    """Tests for the image cleanup section of PublishingFormFlow.fill_ad_form."""
+
+    @pytest.mark.asyncio
+    async def test_image_cleanup_raises_when_remove_button_missing(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """When existing image markers are present but the remove button cannot be found, raise TimeoutError."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "NOT_APPLICABLE"})
+        flow = _make_flow(test_bot)
+
+        marker = MagicMock()
+        marker.attrs.value = "https://img.example/existing.jpg"
+
+        with (
+            patch.object(flow, "_set_category", new_callable = AsyncMock),
+            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
+            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
+            patch.object(flow, "_upload_images", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = [marker]),
+            pytest.raises(TimeoutError, match = "Image cleanup failed before upload"),
+        ):
+            await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
+
+
+class TestCityOptionText:
+    """Tests for _city_option_text helper."""
+
+    @pytest.mark.asyncio
+    async def test_uses_option_text_when_available(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """When option.text is set, _city_option_text returns it without calling extract_visible_text."""
+        option = MagicMock(spec = Element)
+        option.text = "10115 - Berlin"
+
+        with patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock) as mock_extract:
+            result = await getattr(_make_flow(test_bot), "_city_option_text")(option)
+
+        assert result == "10115 - Berlin"
+        mock_extract.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_visible_text(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """When option.text is empty, _city_option_text falls back to extract_visible_text."""
+        option = MagicMock(spec = Element)
+        option.text = None
+
+        with patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = "Berlin"):
+            result = await getattr(_make_flow(test_bot), "_city_option_text")(option)
+
+        assert result == "Berlin"
+
+    @pytest.mark.asyncio
+    async def test_visible_text_timeout_returns_empty(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """When extract_visible_text times out, _city_option_text returns empty string."""
+        option = MagicMock(spec = Element)
+        option.text = ""
+
+        with patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, side_effect = TimeoutError("timeout")):
+            result = await getattr(_make_flow(test_bot), "_city_option_text")(option)
+
+        assert not result
