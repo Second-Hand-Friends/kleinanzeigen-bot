@@ -188,11 +188,16 @@ async def _try_recover_ad_id_from_redirect(web:WebScrapingMixin) -> int | None:
         script_content = str(await web.web_execute(
             "[...document.querySelectorAll('script')].map(s => s.textContent).join('\\n')"
         ) or "")
-        match = re.search(r"p-anzeige-aufgeben-bestaetigung\.html\?adId=(\d+)", script_content)
-        if match:
-            ad_id = int(match.group(1))
+        matches = {
+            int(match)
+            for match in re.findall(r"p-anzeige-aufgeben-bestaetigung\.html\?adId=(\d+)", script_content)
+        }
+        if len(matches) == 1:
+            ad_id = next(iter(matches))
             LOG.debug("Extracted ad ID %s from inline script fallback", ad_id)
             return ad_id
+        if len(matches) > 1:
+            LOG.debug("Inline script fallback was ambiguous; refusing matches: %s", sorted(matches))
     except (TimeoutError, ProtocolException, ValueError, TypeError) as ex:
         LOG.debug("Script content scan failed (%s): %s", type(ex).__name__, ex)
 

@@ -363,6 +363,28 @@ class TestTrackingFallback:
 
         assert result == 11223344
 
+    @pytest.mark.asyncio
+    async def test_referrer_lookup_fails_gracefully_with_timeout(self, test_bot:KleinanzeigenBot) -> None:
+        """When document.referrer lookup raises TimeoutError, script scan is tried as fallback."""
+        script_content = 'initTrackingData("p-anzeige-aufgeben-bestaetigung.html?adId=55556666")'
+        execute_returns:list[object] = [TimeoutError("timed out"), script_content]
+
+        with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
+            result = await publishing_flow._try_recover_ad_id_from_redirect(test_bot)
+
+        assert result == 55556666
+
+    @pytest.mark.asyncio
+    async def test_script_scan_fails_gracefully(self, test_bot:KleinanzeigenBot) -> None:
+        """When script content scan raises TimeoutError, None is returned."""
+        referrer = "https://www.kleinanzeigen.de/m-meine-anzeigen.html"
+        execute_returns:list[object] = [referrer, TimeoutError("timed out")]
+
+        with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
+            result = await publishing_flow._try_recover_ad_id_from_redirect(test_bot)
+
+        assert result is None
+
 
 class TestSubmitAndConfirmAd:
     """Tests for the submit_and_confirm_ad helper."""

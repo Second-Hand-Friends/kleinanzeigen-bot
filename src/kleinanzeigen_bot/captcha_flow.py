@@ -40,6 +40,9 @@ async def check_and_wait_for_captcha(
     LOG.warning("############################################")
 
     if not is_login_page:
-        await web.web_scroll_page_down()
+        try:
+            await web.web_scroll_page_down()
+        except TimeoutError as ex:
+            LOG.debug("Captcha page scroll skipped after timeout: %s", ex)
 
     await ainput(_("Press a key to continue..."))

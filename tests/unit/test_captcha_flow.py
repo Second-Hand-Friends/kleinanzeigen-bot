@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Tests for captcha flow functionality."""
 
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -53,11 +54,12 @@ class TestCheckAndWaitForCaptcha:
             mock_probe.return_value = MagicMock()
             mock_ainput.return_value = ""
 
-            with pytest.raises(CaptchaEncountered):
+            with pytest.raises(CaptchaEncountered) as exc:
                 await captcha_flow.check_and_wait_for_captcha(
                     test_bot, captcha_config, is_login_page = False,
                 )
 
+            assert exc.value.restart_delay == timedelta(hours = 6)
             mock_ainput.assert_not_awaited()
 
     @pytest.mark.asyncio
