@@ -238,7 +238,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     LOG.info("DONE: No configuration errors found.")
                     LOG.info("############################################")
                 case "update-check":
-                    _bootstrap_runtime()
+                    # update-check uses sensible defaults and needs no config files,
+                    # no file logging, and no browser setup — skip bootstrap entirely.
+                    self.config = Config()
                     checker = UpdateChecker(self.config, self._update_check_state_path)
                     checker.check_for_updates(skip_interval_check = True)
                 case "update-content-hash":
