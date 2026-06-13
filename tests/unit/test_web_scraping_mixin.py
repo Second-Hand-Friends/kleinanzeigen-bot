@@ -727,7 +727,7 @@ class TestSelectorTimeoutMessages:
         second_match = MagicMock(spec = Element)
         mock_page.xpath = AsyncMock(return_value = [first_match, None, second_match])
 
-        result = await web_scraper._web_find_all_once(By.XPATH, "//footer", 0.2)
+        result = await web_scraper.web_find_all_once(By.XPATH, "//footer", 0.2)
 
         assert result == [first_match, second_match]
         mock_page.xpath.assert_awaited_once_with("//footer", timeout = 0)
@@ -742,7 +742,7 @@ class TestSelectorTimeoutMessages:
     async def test_web_find_all_once_xpath_rejects_parent(self, web_scraper:WebScrapingMixin) -> None:
         """XPath multi-lookups currently do not support parent-scoped queries."""
         with pytest.raises(AssertionError, match = "Specifying a parent element currently not supported"):
-            await web_scraper._web_find_all_once(By.XPATH, "//div", 0.1, parent = AsyncMock(spec = Element))
+            await web_scraper.web_find_all_once(By.XPATH, "//div", 0.1, parent = AsyncMock(spec = Element))
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -758,12 +758,12 @@ class TestSelectorTimeoutMessages:
     async def test_web_find_all_once_timeout_suffixes(
         self, web_scraper:WebScrapingMixin, selector_type:By, selector_value:str, expected_message:str
     ) -> None:
-        """_web_find_all_once should surface informative timeout errors for each selector."""
+        """web_find_all_once should surface informative timeout errors for each selector."""
         elements = [AsyncMock(spec = Element)]
         mock_wait = AsyncMock(return_value = elements)
         cast(Any, web_scraper).web_await = mock_wait
 
-        result = await web_scraper._web_find_all_once(selector_type, selector_value, 1)
+        result = await web_scraper.web_find_all_once(selector_type, selector_value, 1)
 
         assert result is elements
         call = mock_wait.await_args_list[0]
@@ -784,7 +784,7 @@ class TestSelectorTimeoutMessages:
         retry_mock = AsyncMock(side_effect = fake_retry)
         once_mock = AsyncMock(return_value = elements)
         cast(Any, web_scraper)._run_with_timeout_retries = retry_mock
-        cast(Any, web_scraper)._web_find_all_once = once_mock
+        cast(Any, web_scraper).web_find_all_once = once_mock
 
         result = await web_scraper.web_find_all(By.CLASS_NAME, "hero", timeout = 1.5)
 

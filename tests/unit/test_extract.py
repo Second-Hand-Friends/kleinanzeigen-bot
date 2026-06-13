@@ -1258,7 +1258,7 @@ class TestAdExtractorCategory:
         with (
             patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [detail_item]),
             patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
-            patch.object(extractor, "_extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
         ):
             result = await extractor._extract_special_attributes_from_dom()
 
@@ -1291,7 +1291,7 @@ class TestAdExtractorCategory:
                 return_value = [malformed_item, good_item],
             ),
             patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
-            patch.object(extractor, "_extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
         ):
             result = await extractor._extract_special_attributes_from_dom()
 
@@ -1330,7 +1330,7 @@ class TestAdExtractorCategory:
         with (
             patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [detail_item]),
             patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
-            patch.object(extractor, "_extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
         ):
             result = await extractor._extract_special_attributes_from_dom()
 
@@ -1355,7 +1355,7 @@ class TestAdExtractorCategory:
         with (
             patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [detail_item]),
             patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
-            patch.object(extractor, "_extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
         ):
             result = await extractor._extract_special_attributes_from_dom()
 
@@ -1389,7 +1389,7 @@ class TestAdExtractorContact:
             patch.object(extractor, "web_text", new_callable = AsyncMock) as mock_web_text,
             patch.object(extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
             patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [street_element, None]),
-            patch.object(extractor, "_extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
         ):
             mock_web_text.side_effect = [
                 "12345 Berlin - Mitte",
@@ -1433,7 +1433,7 @@ class TestAdExtractorContact:
             patch.object(extractor, "web_text", new_callable = AsyncMock) as mock_web_text,
             patch.object(extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
             patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [street_element, None]),
-            patch.object(extractor, "_extract_visible_text", new_callable = AsyncMock, side_effect = TimeoutError()),
+            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, side_effect = TimeoutError()),
         ):
             mock_web_text.side_effect = ["12345 Berlin - Mitte", "Test User"]
             mock_web_find.side_effect = [contact_person_element, name_element]

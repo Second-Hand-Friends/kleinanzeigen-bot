@@ -383,10 +383,10 @@ class WebScrapingMixin:  # noqa: PLR0904
             key = key,
             description = description,
         )
-        text = await self._extract_visible_text(element)
+        text = await self.extract_visible_text(element)
         return text, matched_index
 
-    async def _extract_visible_text(self, element:Element) -> str:
+    async def extract_visible_text(self, element:Element) -> str:
         """Return visible text for a DOM element using user-selection extraction."""
         return str(
             await element.apply("""
@@ -1117,7 +1117,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         """
 
         async def attempt(effective_timeout:float) -> list[Element]:
-            return await self._web_find_all_once(selector_type, selector_value, effective_timeout, parent = parent)
+            return await self.web_find_all_once(selector_type, selector_value, effective_timeout, parent = parent)
 
         return await self._run_with_timeout_retries(
             attempt, description = f"web_find_all({selector_type.name}, {selector_value})", key = "default", override = timeout
@@ -1176,7 +1176,22 @@ class WebScrapingMixin:  # noqa: PLR0904
 
         raise AssertionError(_("Unsupported selector type: %s") % selector_type)
 
-    async def _web_find_all_once(self, selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None) -> list[Element]:
+    async def web_find_all_once(self, selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None) -> list[Element]:
+        """Low-level single-attempt element lookup with no retry/backoff.
+
+        This is a bare primitive that performs **one** lookup with the given
+        *timeout* and raises ``TimeoutError`` directly on failure.  It does
+        **not** apply higher-level timeout multipliers, backoff, or retry
+        semantics — callers must pass an already-effective timeout value.
+
+        :param selector_type: The selector strategy (e.g. ``By.CLASS_NAME``).
+        :param selector_value: The selector expression.
+        :param timeout: Effective timeout in seconds (no multiplier applied).
+        :param parent: Optional parent element to scope the query.
+        :returns: A list of matching elements (at least one — times out if none found).
+        :raises TimeoutError: If the element could not be found within the
+            given *timeout*.
+        """
         timeout_suffix = f" within {timeout} seconds."
 
         match selector_type:
@@ -1256,7 +1271,7 @@ class WebScrapingMixin:  # noqa: PLR0904
 
     async def web_text(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> str:
         element = await self.web_find(selector_type, selector_value, parent = parent, timeout = timeout)
-        return await self._extract_visible_text(element)
+        return await self.extract_visible_text(element)
 
     async def web_sleep(self, min_ms:int = 1_000, max_ms:int = 2_500) -> None:
         duration = max_ms <= min_ms and min_ms or secrets.randbelow(max_ms - min_ms) + min_ms
@@ -1639,53 +1654,6 @@ class WebScrapingMixin:  # noqa: PLR0904
 
         await self.web_sleep()
         return listbox
-
-    async def _find_associated_button_combobox(self, *, hidden_input_name:str) -> str | None:  # pragma: no cover — browser JS helper
-        """Locate a ``<button role="combobox">`` by walking from its backing hidden input.
-
-        The interesting logic (DOM queries, ``getElementById``, ancestor walk)
-        lives in the inline JavaScript and requires a live browser session for
-        meaningful coverage.  The Python wrapper (``json.dumps``, ``isinstance``
-        check, return) is trivial boilerplate.  Integration-level routing is
-        tested in ``test_init.py`` via the ``_set_special_attributes`` dispatch.
-
-        Anchors to the specific hidden input identified by *hidden_input_name*
-        (e.g. ``attributeMap[baby_kinderkleidung.groesse]``), derives the
-        expected button ID from the ``attributeMap[...]`` value, and tries
-        ``getElementById`` first.  Falls back to walking up the DOM tree from
-        the hidden input to find an associated ``<button role="combobox">``.
-
-        :param hidden_input_name: Exact ``name`` attribute of the matched
-            hidden ``<input>``.
-        :returns: The button's ``id`` attribute, or ``None`` if not found.
-        """
-        js_hidden_name = json.dumps(hidden_input_name)  # pragma: no cover — browser JS helper
-        result = await self.web_execute(f"""(function() {{
-    const name = {js_hidden_name};
-
-    // Find the specific hidden input by exact name.
-    const inp = document.querySelector("input[type='hidden'][name=" + JSON.stringify(name) + "]");
-    if (!inp) return null;
-
-    // Derive expected button ID from attributeMap[VALUE].
-    const match = name.match(/^attributeMap\\[(.+)\\]$/);
-    if (match) {{
-        const btn = document.getElementById(match[1]);
-        if (btn && btn.getAttribute('role') === 'combobox' && btn.tagName === 'BUTTON') return match[1];
-    }}
-
-    // Walk up the DOM tree to find a button[role="combobox"].
-    let parent = inp.parentElement;
-    for (let i = 0; i < 8 && parent; i++, parent = parent.parentElement) {{
-        const btn = parent.querySelector('button[role="combobox"]');
-        if (btn && btn.id) return btn.id;
-    }}
-
-    return null;
-}})()""")  # pragma: no cover — browser JS helper
-        if isinstance(result, str) and result:  # pragma: no cover — browser JS helper
-            return result  # pragma: no cover — browser JS helper
-        return None  # pragma: no cover — browser JS helper
 
     async def _clear_input(self, input_field:Element) -> None:
         """Clear an input field by selecting all text via ``elem.select()`` and deleting it via CDP Backspace.

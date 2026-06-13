@@ -805,7 +805,7 @@ class AdExtractor(WebScrapingMixin):
         for item in detail_items:
             try:
                 value_text = (await self.web_text(By.CSS_SELECTOR, ".addetailslist--detail--value", parent = item)).strip().lower()
-                full_text = (await self._extract_visible_text(item)).strip().lower()
+                full_text = (await self.extract_visible_text(item)).strip().lower()
             except TimeoutError:
                 LOG.debug("Skipping detail row without extractable value in DOM fallback.")
                 continue
@@ -963,7 +963,7 @@ class AdExtractor(WebScrapingMixin):
         street_element = await self.web_probe(By.ID, "street-address")
         if street_element is not None:
             try:
-                street = (await self._extract_visible_text(street_element))[:-1]  # trailing comma
+                street = (await self.extract_visible_text(street_element))[:-1]  # trailing comma
             except TimeoutError:
                 LOG.debug("Skipping street extraction after timeout.")
             else:
