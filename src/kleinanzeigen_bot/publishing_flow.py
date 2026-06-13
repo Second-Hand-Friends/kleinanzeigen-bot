@@ -565,7 +565,10 @@ class PublishingFormFlow:
             return
 
         offered = ", ".join(sorted(radio_by_value.keys())) or "(none)"
-        message = _("Category suggestion picker shown, but no segment of configured path '%(category)s' matched the offered suggestions [%(offered)s]. Update the ad's 'category' to an offered ID or a valid full path.")  # noqa: E501
+        message = _(
+            "Category suggestion picker shown, but no segment of configured path '%(category)s' matched the offered suggestions [%(offered)s]. "
+            "Update the ad's 'category' to an offered ID or a valid full path."
+        )
         raise CategoryResolutionError(message % {"category": category, "offered": offered})
 
     @staticmethod

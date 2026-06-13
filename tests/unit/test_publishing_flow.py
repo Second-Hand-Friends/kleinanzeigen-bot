@@ -2316,7 +2316,8 @@ class TestSpecialAttributesHandler:
                 "_find_associated_button_combobox",
                 new_callable = AsyncMock,
                 return_value = None,
-            ) as mock_find_button,pytest.raises(TimeoutError)
+            ) as mock_find_button,
+            pytest.raises(TimeoutError),
         ):
             await getattr(_make_flow(test_bot), "_set_special_attributes")(ad_cfg)
 

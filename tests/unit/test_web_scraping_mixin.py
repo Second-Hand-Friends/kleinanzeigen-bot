@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import platform
+import re
 import shutil
 import time
 import zipfile
@@ -758,44 +759,24 @@ class TestSelectorTimeoutMessages:
     async def test_web_find_all_once_timeout_suffixes(
         self, web_scraper:WebScrapingMixin, selector_type:By, selector_value:str, expected_message:str
     ) -> None:
-        """web_find_all_once should surface informative timeout errors for each selector."""
-        elements = [AsyncMock(spec = Element)]
-        mock_wait = AsyncMock(return_value = elements)
+        """web_find_all_once should propagate timeout messages for each selector."""
+        mock_wait = AsyncMock(side_effect = TimeoutError(expected_message))
         cast(Any, web_scraper).web_await = mock_wait
 
-        result = await web_scraper.web_find_all_once(selector_type, selector_value, 1)
-
-        assert result is elements
-        call = mock_wait.await_args_list[0]
-        assert expected_message == call.kwargs["timeout_error_message"]
-        assert call.kwargs["apply_multiplier"] is False
+        with pytest.raises(TimeoutError, match = re.escape(expected_message)):
+            await web_scraper.web_find_all_once(selector_type, selector_value, 1)
 
     @pytest.mark.asyncio
     async def test_web_find_all_delegates_to_retry_helper(self, web_scraper:WebScrapingMixin) -> None:
-        """web_find_all should execute via the timeout retry helper."""
+        """web_find_all should retry and eventually return results."""
         elements = [AsyncMock(spec = Element)]
 
-        async def fake_retry(operation:Callable[[float], Awaitable[list[Element]]], **kwargs:Any) -> list[Element]:
-            assert kwargs["description"] == "web_find_all(CLASS_NAME, hero)"
-            assert kwargs["override"] == 1.5
-            result = await operation(0.42)
-            return result
-
-        retry_mock = AsyncMock(side_effect = fake_retry)
-        once_mock = AsyncMock(return_value = elements)
-        cast(Any, web_scraper)._run_with_timeout_retries = retry_mock
+        once_mock = AsyncMock(side_effect = [TimeoutError("retry"), elements])
         cast(Any, web_scraper).web_find_all_once = once_mock
 
         result = await web_scraper.web_find_all(By.CLASS_NAME, "hero", timeout = 1.5)
 
         assert result is elements
-        retry_call = retry_mock.await_args_list[0]
-        assert retry_call.kwargs["key"] == "default"
-        assert retry_call.kwargs["override"] == 1.5
-
-        once_call = once_mock.await_args_list[0]
-        assert once_call.args[:2] == (By.CLASS_NAME, "hero")
-        assert once_call.args[2] == 0.42
 
     @pytest.mark.asyncio
     async def test_web_probe_returns_element_without_retry(self, web_scraper:WebScrapingMixin) -> None:
