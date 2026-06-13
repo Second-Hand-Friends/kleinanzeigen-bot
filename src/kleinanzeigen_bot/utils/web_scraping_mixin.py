@@ -149,7 +149,7 @@ def _write_initial_prefs(prefs_file:str) -> None:
         )
 
 
-class WebScrapingMixin:
+class WebScrapingMixin:  # noqa: PLR0904
     def __init__(self) -> None:
         self.browser_config:Final[BrowserConfig] = BrowserConfig()
         self.browser:Browser = None  # pyright: ignore[reportAttributeAccessIssue]
@@ -1005,6 +1005,24 @@ class WebScrapingMixin:
         self.__class__.web_execute._prev_jscode = jscode  # type: ignore[attr-defined]  # noqa: SLF001 Private member accessed
 
         return result
+
+    async def web_set_input_value(self, element_id:str, value:str) -> None:
+        """Sets a framework-controlled input value using the native DOM setter to trigger onChange."""
+        await self.web_find(By.ID, element_id)  # raises TimeoutError if element is absent
+        js_element_id = json.dumps(element_id)
+        js_value = json.dumps(value)
+        await self.web_execute(
+            f"(function(id,v){{"
+            "var el=document.getElementById(id);"
+            "if(!el)return;"
+            "var tag=el.tagName.toLowerCase();"
+            "var proto=tag==='textarea'?window.HTMLTextAreaElement:window.HTMLInputElement;"
+            "var setter=Object.getOwnPropertyDescriptor(proto.prototype,'value').set;"
+            "setter.call(el,v);"
+            "el.dispatchEvent(new Event('input',{bubbles:true}));"
+            "el.dispatchEvent(new Event('change',{bubbles:true}));"
+            f"}})({js_element_id},{js_value})"
+        )
 
     def _convert_remote_object_value(self, data:Any) -> Any:
         """

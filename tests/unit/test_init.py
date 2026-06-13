@@ -662,29 +662,6 @@ class TestKleinanzeigenBotAuthentication:
             mock_state.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_check_and_wait_for_captcha(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that captcha detection works correctly."""
-        with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
-            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock) as mock_ainput,
-        ):
-            # Test case 1: Captcha found
-            mock_probe.return_value = MagicMock()
-            mock_ainput.return_value = ""
-
-            await test_bot.check_and_wait_for_captcha(is_login_page = True)
-
-            mock_ainput.assert_awaited_once()
-
-            # Test case 2: No captcha
-            mock_probe.return_value = None
-            mock_ainput.reset_mock()
-
-            await test_bot.check_and_wait_for_captcha(is_login_page = True)
-
-            mock_ainput.assert_not_awaited()
-
-    @pytest.mark.asyncio
     async def test_fill_login_data_and_send(self, test_bot:KleinanzeigenBot) -> None:
         """Verify that login form filling works correctly."""
         with (
@@ -693,14 +670,14 @@ class TestKleinanzeigenBotAuthentication:
             patch.object(test_bot, "_wait_for_post_auth0_submit_transition", new_callable = AsyncMock) as wait_transition,
             patch.object(test_bot, "web_input") as mock_input,
             patch.object(test_bot, "web_click") as mock_click,
-            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock) as mock_captcha,
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock) as mock_captcha,
         ):
             await test_bot.fill_login_data_and_send()
 
             wait_context.assert_awaited_once()
             wait_password.assert_awaited_once()
             wait_transition.assert_awaited_once()
-            mock_captcha.assert_awaited_once_with(is_login_page = True)
+            mock_captcha.assert_awaited_once_with(test_bot, test_bot.config.captcha, is_login_page = True)
             assert mock_input.call_args_list == [
                 call(By.ID, "username", test_bot.config.login.username),
                 call(By.CSS_SELECTOR, "input[type='password']", test_bot.config.login.password),
@@ -1240,7 +1217,7 @@ class TestKleinanzeigenBotBasics:
             patch.object(test_bot, "_set_category", new_callable = AsyncMock),
             patch.object(test_bot, "_set_special_attributes", new_callable = AsyncMock),
             patch.object(test_bot, "_set_contact_fields", new_callable = AsyncMock),
-            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
@@ -1251,8 +1228,8 @@ class TestKleinanzeigenBotBasics:
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = web_await_side_effect),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "_try_recover_ad_id_from_redirect", new_callable = AsyncMock,
-                         return_value = redirect_recovery_return, side_effect = redirect_recovery_side_effect),
+            patch("kleinanzeigen_bot.publishing_flow._try_recover_ad_id_from_redirect", new_callable = AsyncMock,
+                  return_value = redirect_recovery_return, side_effect = redirect_recovery_side_effect),
         ]
 
         if include_success_mocks:
@@ -1318,8 +1295,8 @@ class TestKleinanzeigenBotBasics:
         ad_cfg, ad_cfg_orig = self._build_publish_ad_cfg(base_ad_config)
 
         # web_await succeeds (confirmation URL was seen during polling), but the page
-        # redirects before line 2479 can extract the URL, causing IndexError in the
-        # extraction which falls into the except block and triggers the fallback.
+        # redirects before submit_and_confirm_ad can extract the URL, causing IndexError
+        # in the extraction which falls into the except block and triggers the fallback.
         with self._mock_post_submit_dependencies(
             test_bot, mock_page,
             redirect_recovery_return = 55667788,
@@ -2149,7 +2126,7 @@ class TestKleinanzeigenBotShippingOptions:
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
-            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "_set_contact_fields", new_callable = AsyncMock),
             patch("builtins.input", return_value = ""),
             patch("kleinanzeigen_bot.utils.misc.ainput", new_callable = AsyncMock, return_value = ""),
@@ -3165,7 +3142,7 @@ class TestShippingDialogFlow:
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "_set_input_value", new_callable = AsyncMock) as mock_set_input,
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_input,
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "4,95"),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
@@ -3207,7 +3184,7 @@ class TestShippingDialogFlow:
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "_set_input_value", new_callable = AsyncMock) as mock_set_input,
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_input,
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "4,95"),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
@@ -3227,9 +3204,9 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": [], "shipping_costs": 4.95})
 
         async def set_input_side_effect(element_id:str, value:str) -> None:
-            # Simulate _set_input_value succeeding (no TimeoutError) but
+            # Simulate web_set_input_value succeeding (no TimeoutError) but
             # the JS returning early because the element is null after re-render.
-            # The real _set_input_value does a web_find + web_execute whose JS
+            # The real web_set_input_value does a web_find + web_execute whose JS
             # silently returns on `if(!el) return;`.  By mocking at this level we
             # model the observable effect: the call completes without error, but
             # the DOM value was never written.
@@ -3239,7 +3216,7 @@ class TestShippingDialogFlow:
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "_set_input_value", new_callable = AsyncMock, side_effect = set_input_side_effect),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock, side_effect = set_input_side_effect),
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             pytest.raises(TimeoutError, match = "Unable to set shipping price!"),
@@ -3263,7 +3240,7 @@ class TestShippingDialogFlow:
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "_set_input_value", new_callable = AsyncMock) as mock_set_input,
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_input,
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = [None, "4,95"]),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
         ):
@@ -3296,7 +3273,7 @@ class TestShippingDialogFlow:
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "_set_input_value", new_callable = AsyncMock) as mock_set_input,
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_input,
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = readback_side_effect),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
@@ -3556,8 +3533,8 @@ class TestWantedShippingSelection:
             patch.object(test_bot, "_set_shipping", new_callable = AsyncMock),
             patch.object(test_bot, "_set_contact_fields", new_callable = AsyncMock),
             patch.object(test_bot, "_upload_images", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_input_value", new_callable = AsyncMock),
-            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
@@ -3696,58 +3673,6 @@ class TestWantedShippingSelection:
                 await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
 
 
-def test_file_logger_writes_message(tmp_path:Path, caplog:pytest.LogCaptureFixture) -> None:
-    """
-    Unit: Logger can be initialized and used, robust to pytest log capture.
-    """
-    log_path = tmp_path / "logger_test.log"
-    logger_name = "logger_test_logger_unique"
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.DEBUG)
-    logger.propagate = False
-    for h in list(logger.handlers):
-        logger.removeHandler(h)
-    handle = logging.FileHandler(str(log_path), encoding = "utf-8")
-    handle.setLevel(logging.DEBUG)
-    formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
-    handle.setFormatter(formatter)
-    logger.addHandler(handle)
-    logger.info("Logger test log message")
-    handle.flush()
-    handle.close()
-    logger.removeHandler(handle)
-    assert log_path.exists()
-    with open(log_path, "r", encoding = "utf-8") as f:
-        contents = f.read()
-    assert "Logger test log message" in contents
-
-
-def _apply_price_reduction_persistence(count:int | None) -> dict[str, Any]:
-    """Return a dict with price_reduction_count only when count is positive (count -> dict[str, Any])."""
-    ad_cfg_orig:dict[str, Any] = {}
-    if count is not None and count > 0:
-        ad_cfg_orig["price_reduction_count"] = count
-    return ad_cfg_orig
-
-
-class TestPriceReductionPersistence:
-    """Tests for price_reduction_count persistence logic."""
-
-    @pytest.mark.unit
-    @pytest.mark.parametrize(
-        ("count", "expected_cfg"),
-        [
-            (3, {"price_reduction_count": 3}),
-            (0, {}),
-            (None, {}),
-        ],
-        ids = ["positive", "zero", "none"],
-    )
-    def test_persistence_logic(self, count:int | None, expected_cfg:dict[str, Any]) -> None:
-        """Test the conditional logic that decides whether to persist price_reduction_count."""
-        assert _apply_price_reduction_persistence(count) == expected_cfg
-
-
 class TestBuyNowRadioWarning:
     """Regression tests for buy-now handling across shipping modes."""
 
@@ -3795,7 +3720,7 @@ class TestBuyNowRadioWarning:
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
-            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
         ):
             yield mock_probe, mock_check, mock_click
 
@@ -4270,7 +4195,7 @@ class TestImageCleanupInPublishAd:
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "_set_contact_fields", new_callable = AsyncMock),
             patch.object(test_bot, "_upload_images", new_callable = AsyncMock, side_effect = upload_side_effect) as mock_upload,
-            patch.object(test_bot, "check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, side_effect = find_all_side_effect),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
@@ -4280,57 +4205,3 @@ class TestImageCleanupInPublishAd:
         assert sum(button.click.await_count for button in remove_buttons) == 3
         mock_upload.assert_awaited_once()
         assert event_log == ["remove-1", "remove-2", "remove-3", "upload"]
-
-
-class TestTrackingFallback:
-    """Tests for _try_recover_ad_id_from_redirect helper method."""
-
-    @pytest.mark.asyncio
-    async def test_extract_ad_id_from_referrer(self, test_bot:KleinanzeigenBot) -> None:
-        """Ad ID should be extracted from document.referrer containing the confirmation URL."""
-        referrer_url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=3382410263"
-        with patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = referrer_url):
-            result = await test_bot._try_recover_ad_id_from_redirect()
-
-        assert result == 3382410263
-
-    @pytest.mark.asyncio
-    async def test_extract_ad_id_from_script_content(self, test_bot:KleinanzeigenBot) -> None:
-        """When referrer has no confirmation URL, ad ID should be extracted from inline script content."""
-        referrer = "https://www.kleinanzeigen.de/m-meine-anzeigen.html"
-        script_content = (
-            'Belen.Tracking.initTrackingData({"page":"p-anzeige-aufgeben-bestaetigung.html?adId=44556677"});'
-        )
-        execute_returns = [referrer, script_content]
-
-        with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
-            result = await test_bot._try_recover_ad_id_from_redirect()
-
-        assert result == 44556677
-
-    @pytest.mark.asyncio
-    async def test_extract_ad_id_returns_none_when_not_found(self, test_bot:KleinanzeigenBot) -> None:
-        """When neither referrer nor scripts contain a confirmation URL, None should be returned."""
-        execute_returns = [
-            "https://www.kleinanzeigen.de/m-meine-anzeigen.html",  # referrer
-            "var x = 42;",  # script content — no confirmation URL
-        ]
-
-        with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
-            result = await test_bot._try_recover_ad_id_from_redirect()
-
-        assert result is None
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("referrer_value", ["", None], ids = ["empty-referrer", "none-referrer"])
-    async def test_extract_ad_id_falls_back_to_script_when_referrer_lacks_confirmation_url(
-        self, test_bot:KleinanzeigenBot, referrer_value:str | None,
-    ) -> None:
-        """When document.referrer is empty or None, the script scan fallback should extract the ad ID."""
-        script_content = 'initTrackingData("p-anzeige-aufgeben-bestaetigung.html?adId=11223344")'
-        execute_returns = [referrer_value, script_content]
-
-        with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
-            result = await test_bot._try_recover_ad_id_from_redirect()
-
-        assert result == 11223344
