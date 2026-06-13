@@ -1196,8 +1196,10 @@ class TestKleinanzeigenBotBasics:
         mock_page:MagicMock,
         *,
         web_await_side_effect:BaseException | None = None,
+        web_execute_side_effect:list[Any] | None = None,
         redirect_recovery_return:int | None = None,
         redirect_recovery_side_effect:BaseException | None = None,
+        mock_redirect_recovery:bool = True,
         include_success_mocks:bool = False,
     ) -> Iterator[None]:
         """Mock all post-submit publish_ad dependencies for confirmation fallback tests.
@@ -1222,15 +1224,23 @@ class TestKleinanzeigenBotBasics:
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = web_execute_side_effect),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = web_await_side_effect),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_flow._try_recover_ad_id_from_redirect", new_callable = AsyncMock,
-                  return_value = redirect_recovery_return, side_effect = redirect_recovery_side_effect),
         ]
+
+        if mock_redirect_recovery:
+            common_patches.append(
+                patch(
+                    "kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect",
+                    new_callable = AsyncMock,
+                    return_value = redirect_recovery_return,
+                    side_effect = redirect_recovery_side_effect,
+                ),
+            )
 
         if include_success_mocks:
             common_patches.append(patch("kleinanzeigen_bot.utils.dicts.save_dict"))
@@ -1283,6 +1293,33 @@ class TestKleinanzeigenBotBasics:
             await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
 
         assert ad_cfg_orig["id"] == 99887766
+
+    @pytest.mark.asyncio
+    async def test_publish_ad_ignores_stale_referrer_after_timeout(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+    ) -> None:
+        """A stale pre-submit referrer must not recover the previous ad ID for a new publish attempt."""
+        ad_cfg, ad_cfg_orig = self._build_publish_ad_cfg(base_ad_config)
+        stale_confirmation_url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=99887766"
+
+        with (
+            self._mock_post_submit_dependencies(
+                test_bot,
+                mock_page,
+                web_await_side_effect = TimeoutError("confirmation timeout"),
+                web_execute_side_effect = [stale_confirmation_url, stale_confirmation_url, "var x = 42;"],
+                mock_redirect_recovery = False,
+            ),
+            patch("kleinanzeigen_bot.publishing_flow.persist_published_ad") as mock_persist,
+            pytest.raises(PublishSubmissionUncertainError, match = "submission may have succeeded before failure"),
+        ):
+            await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
+
+        mock_persist.assert_not_called()
+        assert ad_cfg_orig["id"] is None
 
     @pytest.mark.asyncio
     async def test_publish_ad_confirmation_fallback_when_redirect_happens_after_url_poll(

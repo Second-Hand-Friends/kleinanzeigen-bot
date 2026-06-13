@@ -17,6 +17,7 @@ from . import ad_loading, captcha_flow, delete_flow, download_flow, extend_flow,
 from . import ad_state as _ad_state
 from . import price_reduction as _price_reduction
 from . import publishing_flow as _publishing_flow
+from . import publishing_submission as _publishing_submission
 from . import runtime_config as _runtime_config
 from ._version import __version__
 from .ad_description import get_ad_description
@@ -1148,7 +1149,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         await self._fill_ad_form(ad_file, ad_cfg, mode)
 
-        ad_id = await _publishing_flow.submit_and_confirm_ad(self, ad_file, ad_cfg, mode, captcha_config = self.config.captcha)
+        ad_id = await _publishing_submission.submit_and_confirm_ad(self, ad_file, ad_cfg, mode, captcha_config = self.config.captcha)
 
         try:
             _publishing_flow.persist_published_ad(ad_file, ad_cfg, ad_cfg_orig, old_ad_id, ad_id, mode, config = self.config)

@@ -12,6 +12,7 @@ import pytest
 from kleinanzeigen_bot import (
     KleinanzeigenBot,
     publishing_flow,
+    publishing_submission,
 )
 from kleinanzeigen_bot import (
     local_path_renaming as _local_path_renaming,
@@ -302,7 +303,7 @@ async def test_publish_ad_survives_persistence_failure() -> None:
         patch.object(bot, "web_open", new_callable = AsyncMock),
         patch.object(bot, "_dismiss_consent_banner", new_callable = AsyncMock),
         patch.object(bot, "_fill_ad_form", new_callable = AsyncMock),
-        patch("kleinanzeigen_bot.publishing_flow.submit_and_confirm_ad", new_callable = AsyncMock, return_value = 12345),
+        patch("kleinanzeigen_bot.publishing_submission.submit_and_confirm_ad", new_callable = AsyncMock, return_value = 12345),
         patch("kleinanzeigen_bot.publishing_flow.persist_published_ad",
               side_effect = RuntimeError("disk full")),
     ):
@@ -318,7 +319,7 @@ class TestTrackingFallback:
         """Ad ID should be extracted from document.referrer containing the confirmation URL."""
         referrer_url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=3382410263"
         with patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = referrer_url):
-            result = await publishing_flow._try_recover_ad_id_from_redirect(test_bot)
+            result = await publishing_submission._try_recover_ad_id_from_redirect(test_bot)
 
         assert result == 3382410263
 
@@ -332,7 +333,7 @@ class TestTrackingFallback:
         execute_returns = [referrer, script_content]
 
         with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
-            result = await publishing_flow._try_recover_ad_id_from_redirect(test_bot)
+            result = await publishing_submission._try_recover_ad_id_from_redirect(test_bot)
 
         assert result == 44556677
 
@@ -345,7 +346,7 @@ class TestTrackingFallback:
         ]
 
         with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
-            result = await publishing_flow._try_recover_ad_id_from_redirect(test_bot)
+            result = await publishing_submission._try_recover_ad_id_from_redirect(test_bot)
 
         assert result is None
 
@@ -359,7 +360,7 @@ class TestTrackingFallback:
         execute_returns = [referrer_value, script_content]
 
         with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
-            result = await publishing_flow._try_recover_ad_id_from_redirect(test_bot)
+            result = await publishing_submission._try_recover_ad_id_from_redirect(test_bot)
 
         assert result == 11223344
 
@@ -370,7 +371,7 @@ class TestTrackingFallback:
         execute_returns:list[object] = [TimeoutError("timed out"), script_content]
 
         with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
-            result = await publishing_flow._try_recover_ad_id_from_redirect(test_bot)
+            result = await publishing_submission._try_recover_ad_id_from_redirect(test_bot)
 
         assert result == 55556666
 
@@ -381,7 +382,7 @@ class TestTrackingFallback:
         execute_returns:list[object] = [referrer, TimeoutError("timed out")]
 
         with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute_returns):
-            result = await publishing_flow._try_recover_ad_id_from_redirect(test_bot)
+            result = await publishing_submission._try_recover_ad_id_from_redirect(test_bot)
 
         assert result is None
 
@@ -404,9 +405,9 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_await", new_callable = AsyncMock),
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = confirmation_url),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_flow.ainput", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock),
         ):
-            result = await publishing_flow.submit_and_confirm_ad(
+            result = await publishing_submission.submit_and_confirm_ad(
                 test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
                 captcha_config = captcha_config,
             )
@@ -432,9 +433,9 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = confirmation_url),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_flow.ainput", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock),
         ):
-            result = await publishing_flow.submit_and_confirm_ad(
+            result = await publishing_submission.submit_and_confirm_ad(
                 test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
                 captcha_config = captcha_config,
             )
@@ -464,9 +465,9 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_await", new_callable = AsyncMock),
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = confirmation_url),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_flow.ainput", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock),
         ):
-            result = await publishing_flow.submit_and_confirm_ad(
+            result = await publishing_submission.submit_and_confirm_ad(
                 test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
                 captcha_config = captcha_config,
             )
@@ -490,9 +491,9 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_await", new_callable = AsyncMock),
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = confirmation_url),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock) as mock_scroll,
-            patch("kleinanzeigen_bot.publishing_flow.ainput", new_callable = AsyncMock) as mock_ainput,
+            patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
-            result = await publishing_flow.submit_and_confirm_ad(
+            result = await publishing_submission.submit_and_confirm_ad(
                 test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
                 captcha_config = captcha_config,
             )
@@ -515,10 +516,10 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = TimeoutError("timed out")),
             patch.object(test_bot, "web_execute", new_callable = AsyncMock),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_flow._try_recover_ad_id_from_redirect", new_callable = AsyncMock, return_value = 99999),
-            patch("kleinanzeigen_bot.publishing_flow.ainput", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect", new_callable = AsyncMock, return_value = 99999),
+            patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock),
         ):
-            result = await publishing_flow.submit_and_confirm_ad(
+            result = await publishing_submission.submit_and_confirm_ad(
                 test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
                 captcha_config = captcha_config,
             )
@@ -539,11 +540,11 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = TimeoutError("timed out")),
             patch.object(test_bot, "web_execute", new_callable = AsyncMock),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_flow._try_recover_ad_id_from_redirect", new_callable = AsyncMock, return_value = None),
-            patch("kleinanzeigen_bot.publishing_flow.ainput", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect", new_callable = AsyncMock, return_value = None),
+            patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock),
             pytest.raises(PublishSubmissionUncertainError),
         ):
-            await publishing_flow.submit_and_confirm_ad(
+            await publishing_submission.submit_and_confirm_ad(
                 test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
                 captcha_config = captcha_config,
             )
