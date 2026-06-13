@@ -125,7 +125,7 @@ def check_ad_republication(
         now = _misc.now()
 
     ad_age = now - last_updated_on
-    if ad_age.days <= ad_cfg.republication_interval:
+    if ad_age.days < ad_cfg.republication_interval:
         LOG.info(
             " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
             ad_file_relative,
@@ -360,10 +360,10 @@ def update_content_hashes(ads:list[tuple[str, Ad, dict[str, Any]]]) -> int:
 
     for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ads, start = 1):
         LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ads), ad_cfg.title, ad_file)
-        ad_cfg.update_content_hash()
-        if ad_cfg.content_hash != ad_cfg_orig["content_hash"]:
+        current_hash = AdPartial.model_validate(ad_cfg_orig).update_content_hash().content_hash
+        if current_hash != ad_cfg_orig.get("content_hash"):
             changed += 1
-            ad_cfg_orig["content_hash"] = ad_cfg.content_hash
+            ad_cfg_orig["content_hash"] = current_hash
             _dicts.save_dict(ad_file, ad_cfg_orig)
 
     LOG.info("############################################")
