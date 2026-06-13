@@ -21,7 +21,7 @@ from kleinanzeigen_bot.ad_loading import (
     resolve_ad_images,
     update_content_hashes,
 )
-from kleinanzeigen_bot.model.ad_model import Ad
+from kleinanzeigen_bot.model.ad_model import Ad, AdPartial
 from kleinanzeigen_bot.model.config_model import (
     Config,
 )
@@ -290,10 +290,9 @@ class TestUpdateContentHashes:
             _build_ad(base_ad_config, None, "Unchanged Ad 2"),
         ]
 
-        # Pre-compute hashes so two match and one differs
-        for _ad_file, ad_cfg, ad_cfg_orig in ads:
-            ad_cfg.update_content_hash()
-            ad_cfg_orig["content_hash"] = ad_cfg.content_hash
+        # Pre-compute hashes from the raw config dict (matching the production code path)
+        for _ad_file, _ad_cfg, ad_cfg_orig in ads:
+            ad_cfg_orig["content_hash"] = AdPartial.model_validate(ad_cfg_orig).update_content_hash().content_hash
 
         # Make the middle ad's original hash differ
         ads[1][2]["content_hash"] = "deliberately_wrong_hash"
