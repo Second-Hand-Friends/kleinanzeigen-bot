@@ -89,7 +89,8 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = True,
             )
 
-        assert result == (True, True)
+        assert isinstance(result, DeleteResult)
+        assert result == DeleteResult(deleted = True, attempted = True)
         assert ad_cfg.id is None
 
     @pytest.mark.asyncio
@@ -113,7 +114,8 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = False,
             )
 
-        assert result == (True, True)
+        assert isinstance(result, DeleteResult)
+        assert result == DeleteResult(deleted = True, attempted = True)
         assert ad_cfg.id is None
 
     @pytest.mark.asyncio
@@ -139,7 +141,8 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = True,
             )
 
-        assert result == (False, False)
+        assert isinstance(result, DeleteResult)
+        assert result == DeleteResult(deleted = False, attempted = False)
         assert ad_cfg.id == 99999  # Preserved — no deletion attempted
         mock_web_open.assert_not_called()
         mock_web_find.assert_not_called()
@@ -170,7 +173,8 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = False,
             )
 
-        assert result == (False, True)
+        assert isinstance(result, DeleteResult)
+        assert result == DeleteResult(deleted = False, attempted = True)
         assert ad_cfg.id is None  # Cleared because delete was attempted
 
     @pytest.mark.asyncio
@@ -194,7 +198,8 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = True,
             )
 
-        assert result == (False, False)
+        assert isinstance(result, DeleteResult)
+        assert result == DeleteResult(deleted = False, attempted = False)
         mock_web_open.assert_not_called()  # No valid IDs → no page open
 
     @pytest.mark.asyncio
@@ -218,7 +223,8 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = False,
             )
 
-        assert result == (True, True)
+        assert isinstance(result, DeleteResult)
+        assert result == DeleteResult(deleted = True, attempted = True)
         assert ad_cfg.id is None
         mock_request.assert_called_once()
         assert "ids=0" in mock_request.call_args[1]["url"]
@@ -253,7 +259,8 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = True,
             )
 
-        assert result == (True, True)
+        assert isinstance(result, DeleteResult)
+        assert result == DeleteResult(deleted = True, attempted = True)
         assert ad_cfg.id is None
         assert mock_request.call_count == 3
 
@@ -278,7 +285,8 @@ class TestKleinanzeigenBotAdDeletion:
                 delete_old_ads_by_title = True,
             )
 
-        assert result == (True, True)
+        assert isinstance(result, DeleteResult)
+        assert result == DeleteResult(deleted = True, attempted = True)
         assert ad_cfg.id is None
         mock_request.assert_called_once()  # Deduplicated — only one request
 
