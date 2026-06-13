@@ -2820,3 +2820,23 @@ class TestWebSetInputValue:
 
         with pytest.raises(TimeoutError, match = "TOCTOU"):
             await web_scraper.web_set_input_value("ad-title", "Hello World")
+
+
+class TestWebText:
+    """Tests for web_text delegation to extract_visible_text."""
+
+    @pytest.mark.asyncio
+    async def test_web_text_delegates_to_extract_visible_text(self, web_scraper:WebScrapingMixin) -> None:
+        """web_text should find an element and delegate to extract_visible_text."""
+        mock_element = AsyncMock(spec = Element)
+        expected_text = "Visible Content"
+
+        with (
+            patch.object(web_scraper, "web_find", new_callable = AsyncMock, return_value = mock_element) as mock_find,
+            patch.object(web_scraper, "extract_visible_text", new_callable = AsyncMock, return_value = expected_text) as mock_extract,
+        ):
+            result = await web_scraper.web_text(By.ID, "test-element")
+
+        assert result == expected_text
+        mock_find.assert_awaited_once_with(By.ID, "test-element", parent = None, timeout = None)
+        mock_extract.assert_awaited_once_with(mock_element)
