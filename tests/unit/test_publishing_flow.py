@@ -25,7 +25,7 @@ from kleinanzeigen_bot import (
     publishing_flow as _publishing_flow,
 )
 from kleinanzeigen_bot.local_path_renaming import ImageRenameResult, LocalPathRenameResult, RenameStatus
-from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
+from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy, Contact
 from kleinanzeigen_bot.model.config_model import AdDefaults, Config
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
@@ -642,6 +642,26 @@ class TestKleinanzeigenBotContactLocationHardening:
         city_element.apply.assert_called_once_with("(elem) => (elem.textContent || '').trim()")
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("mock_kwargs", "expected"),
+        [
+            pytest.param({"side_effect": TimeoutError("not found")}, None, id = "web_find-times-out"),
+            pytest.param({"return_value": None}, None, id = "web_find-returns-none"),
+        ],
+    )
+    async def test_read_city_selection_text_early_returns_none(
+        self,
+        test_bot:KleinanzeigenBot,
+        mock_kwargs:dict[str, Any],
+        expected:str | None,
+    ) -> None:
+        """When web_find(By.ID, 'ad-city') raises TimeoutError or returns None, return None."""
+        with patch.object(test_bot, "web_find", new_callable = AsyncMock, **mock_kwargs):
+            result = await getattr(_make_flow(test_bot), "_read_city_selection_text")()
+
+        assert result is expected
+
+    @pytest.mark.asyncio
     async def test_set_contact_fields_fails_closed_when_zipcode_cannot_be_set(
         self,
         test_bot:KleinanzeigenBot,
@@ -677,6 +697,86 @@ class TestKleinanzeigenBotContactLocationHardening:
 
         web_input_mock.assert_not_awaited()
         set_location_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_set_contact_fields_happy_path(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """Street/name/phone are set when fields are editable and present."""
+        contact = Contact(
+            name = "Test User",
+            zipcode = "12345",
+            location = "Test City",
+            street = "Main St 1",
+            phone = "555-1234",
+        )
+
+        async def _check_side_effect(selector_type:By, selector_value:str, check_type:Any, **_:Any) -> bool:
+            return False  # not disabled, not readonly
+
+        with (
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
+            patch.object(_publishing_flow.PublishingFormFlow, "_set_contact_location", new_callable = AsyncMock) as mock_set_loc,
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = _check_side_effect),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_input,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(_make_flow(test_bot), "_set_contact_fields")(contact)
+
+        mock_input.assert_awaited_once_with(By.ID, "ad-zip-code", "12345")
+        mock_set_loc.assert_awaited_once_with("Test City")
+        mock_set_input.assert_any_await("ad-street", "Main St 1")
+        mock_set_input.assert_any_await("ad-name", "Test User")
+        mock_set_input.assert_any_await("ad-phone", "555-1234")
+        mock_click.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_set_contact_fields_fallback_paths(
+        self,
+        test_bot:KleinanzeigenBot,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Disabled street triggers visibility click, readonly name skips, missing phone logs info."""
+        caplog.set_level(logging.INFO)
+        contact = Contact(
+            name = "Test User",
+            zipcode = "12345",
+            location = "Test City",
+            street = "Main St 1",
+            phone = "555-1234",
+        )
+
+        async def _check_side_effect(selector_type:By, selector_value:str, check_type:Any, **_:Any) -> bool:
+            return True  # street disabled, name readonly
+
+        with (
+            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch.object(_publishing_flow.PublishingFormFlow, "_set_contact_location", new_callable = AsyncMock),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = _check_side_effect),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_input,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(_make_flow(test_bot), "_set_contact_fields")(contact)
+
+        # Street: disabled → click visibility, then set
+        mock_click.assert_any_await(By.ID, "ad-address-visibility")
+        mock_set_input.assert_any_await("ad-street", "Main St 1")
+
+        # Name: readonly → not set
+        name_calls = [c for c in mock_set_input.await_args_list if c.args[0] == "ad-name"]
+        assert not name_calls
+
+        # Phone: probe returns None → not set, info logged
+        phone_calls = [c for c in mock_set_input.await_args_list if c.args[0] == "ad-phone"]
+        assert not phone_calls
+
+        info_messages = [r.message for r in caplog.records if r.levelno == logging.INFO]
+        assert any("Phone number field not present" in msg for msg in info_messages)
 
     @pytest.mark.asyncio
     async def test_set_contact_location_fails_when_city_suffix_matches_multiple_zip_codes(self, test_bot:KleinanzeigenBot) -> None:
