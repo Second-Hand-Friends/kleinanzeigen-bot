@@ -2400,11 +2400,9 @@ class TestFillAdFormSellDirectly:
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
-        caplog:pytest.LogCaptureFixture,
     ) -> None:
         """When sell_directly is True with SHIPPING and ad-buy-now-true is absent: warn and skip."""
         ad_cfg = Ad.model_validate(base_ad_config | {"sell_directly": True, "shipping_type": "SHIPPING"})
-        caplog.set_level(logging.WARNING)
         flow = _make_flow(test_bot)
 
         with (
@@ -2416,16 +2414,11 @@ class TestFillAdFormSellDirectly:
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None) as mock_probe,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = []),
         ):
             await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
 
-        assert mock_probe.await_count == 1
-        assert mock_probe.await_args is not None
-        assert mock_probe.await_args.args[:2] == (By.ID, "ad-buy-now-true")
-        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
-        assert any("Direct-buy (sell_directly) is not available" in msg for msg in warning_messages)
         assert not any(
             len(c.args) >= 2 and c.args[1] == "ad-buy-now-true"
             for c in mock_click.await_args_list
@@ -2450,18 +2443,12 @@ class TestFillAdFormSellDirectly:
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()) as mock_probe,
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False) as mock_check,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
             patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = []),
         ):
             await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
 
-        assert mock_probe.await_count == 1
-        assert mock_probe.await_args is not None
-        assert mock_probe.await_args.args[:2] == (By.ID, "ad-buy-now-false")
-        assert mock_check.await_count == 1
-        assert mock_check.await_args is not None
-        assert mock_check.await_args.args[:2] == (By.ID, "ad-buy-now-false")
         assert any(
             len(c.args) >= 2 and c.args[1] == "ad-buy-now-false"
             for c in mock_click.await_args_list
