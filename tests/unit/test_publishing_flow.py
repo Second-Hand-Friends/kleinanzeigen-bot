@@ -6,10 +6,10 @@
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Any, Iterator
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -127,6 +127,57 @@ def _make_flow(test_bot:KleinanzeigenBot) -> _publishing_flow.PublishingFormFlow
         root_url = test_bot.root_url,
         ad_defaults = getattr(test_bot.config, "ad_defaults", AdDefaults()),
     )
+
+
+def _fill_ad_form_setup(
+    test_bot:KleinanzeigenBot,
+    **overrides:Any,
+) -> tuple[Any, ExitStack, dict[str, AsyncMock]]:
+    """Set up standard fill_ad_form patches and return (flow, exit_stack, mocks).
+
+    Pass ``web_probe_return=MagicMock()`` or ``web_check_return=False`` etc.
+    to set return_value on the corresponding mock. Use ``_side_effect`` suffix
+    to set side_effect instead.
+
+    Usage::
+
+        flow, stack, m = _fill_ad_form_setup(test_bot, web_probe_return = None)
+        with stack:
+            await flow.fill_ad_form(...)
+        m["web_click"].assert_any_await(...)
+    """
+    flow = _make_flow(test_bot)
+    stack = ExitStack()
+    mocks:dict[str, AsyncMock] = {}
+
+    def _patch(obj:Any, name:str, **kw:Any) -> AsyncMock:
+        m = stack.enter_context(patch.object(obj, name, new_callable = AsyncMock, **kw))
+        mocks[name] = m
+        return m
+
+    _patch(flow, "_set_category")
+    _patch(flow, "_set_special_attributes")
+    _patch(flow, "_set_shipping")
+    _patch(flow, "_set_contact_fields")
+    _patch(flow, "_upload_images")
+    _patch(test_bot, "web_sleep")
+    _patch(test_bot, "web_click")
+    _patch(test_bot, "web_set_input_value")
+    _patch(test_bot, "web_probe")
+    _patch(test_bot, "web_find_all_once", return_value = [])
+
+    for key, value in overrides.items():
+        if key.endswith("_return"):
+            name = key[:-7]
+            (mocks[name] if name in mocks else _patch(test_bot, name)).return_value = value
+        elif key.endswith("_side_effect"):
+            name = key[:-12]
+            (mocks[name] if name in mocks else _patch(test_bot, name)).side_effect = value
+        else:
+            msg = f"Override key must end with _return or _side_effect: {key}"
+            raise ValueError(msg)
+
+    return flow, stack, mocks
 
 
 @pytest.fixture
@@ -777,6 +828,107 @@ class TestKleinanzeigenBotContactLocationHardening:
 
         info_messages = [r.message for r in caplog.records if r.levelno == logging.INFO]
         assert any("Phone number field not present" in msg for msg in info_messages)
+
+    @pytest.mark.asyncio
+    async def test_set_contact_fields_phone_disabled_clicks_visibility(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """When the phone field is disabled, ad-phone-visibility is clicked before setting the value."""
+        contact = Contact(
+            name = "Test User",
+            zipcode = "12345",
+            location = "Test City",
+            street = None,
+            phone = "555-1234",
+        )
+
+        async def _check_side_effect(selector_type:By, selector_value:str, check_type:Any, **_:Any) -> bool:
+            return selector_value == "ad-phone"  # only phone is disabled
+
+        with (
+            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch.object(_publishing_flow.PublishingFormFlow, "_set_contact_location", new_callable = AsyncMock),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = _check_side_effect),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_input,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await getattr(_make_flow(test_bot), "_set_contact_fields")(contact)
+
+        mock_click.assert_any_await(By.ID, "ad-phone-visibility", timeout = ANY)
+        mock_set_input.assert_any_await("ad-phone", "555-1234")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("field", "contact_kwargs", "expected_warning_substr"),
+        [
+            pytest.param(
+                "street",
+                {"name": "Test User", "zipcode": "12345", "street": "Main St 1", "phone": None},
+                "Could not set contact street.",
+                id = "street-timeout",
+            ),
+            pytest.param(
+                "name",
+                {"name": "Test User", "zipcode": "12345", "street": None, "phone": None},
+                "Could not set contact name.",
+                id = "name-timeout",
+            ),
+            pytest.param(
+                "phone",
+                {"name": "Test User", "zipcode": "12345", "street": None, "phone": "555-1234"},
+                "Could not set contact phone",
+                id = "phone-timeout",
+            ),
+        ],
+    )
+    async def test_set_contact_fields_set_input_timeout_logs_warning(
+        self,
+        test_bot:KleinanzeigenBot,
+        caplog:pytest.LogCaptureFixture,
+        field:str,
+        contact_kwargs:dict[str, Any],
+        expected_warning_substr:str,
+    ) -> None:
+        """TimeoutError from web_set_input_value should be caught and logged for all contact fields."""
+        caplog.set_level(logging.WARNING)
+        contact = Contact(**contact_kwargs)
+
+        async def _check_side_effect(selector_type:By, selector_value:str, check_type:Any, **_:Any) -> bool:
+            return False  # not disabled, not readonly
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(test_bot, "web_input", new_callable = AsyncMock))
+            stack.enter_context(patch.object(_publishing_flow.PublishingFormFlow, "_set_contact_location", new_callable = AsyncMock))
+            stack.enter_context(patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = _check_side_effect))
+            stack.enter_context(patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock, side_effect = TimeoutError("timeout")))
+            stack.enter_context(patch.object(test_bot, "web_sleep", new_callable = AsyncMock))
+            if field == "phone":
+                stack.enter_context(patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()))
+            await getattr(_make_flow(test_bot), "_set_contact_fields")(contact)
+
+        warnings = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any(expected_warning_substr in msg for msg in warnings)
+
+    @pytest.mark.asyncio
+    async def test_read_city_selection_text_uses_selected_option_text(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """When web_text(By.ID, 'ad-city-selected-option') returns non-empty text, it is returned directly without fallback."""
+        city_element = MagicMock(spec = Element)
+        city_element.local_name = "button"
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_element),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, return_value = "Berlin"),
+        ):
+            selected = await getattr(_make_flow(test_bot), "_read_city_selection_text")()
+
+        assert selected == "Berlin"
+        city_element.apply.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_set_contact_location_fails_when_city_suffix_matches_multiple_zip_codes(self, test_bot:KleinanzeigenBot) -> None:
@@ -2575,25 +2727,13 @@ class TestFillAdFormSellDirectly:
     ) -> None:
         """When sell_directly is True with SHIPPING and ad-buy-now-true is absent: warn and skip."""
         ad_cfg = Ad.model_validate(base_ad_config | {"sell_directly": True, "shipping_type": "SHIPPING"})
-        flow = _make_flow(test_bot)
-
-        with (
-            patch.object(flow, "_set_category", new_callable = AsyncMock),
-            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
-            patch.object(flow, "_set_shipping", new_callable = AsyncMock),
-            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
-            patch.object(flow, "_upload_images", new_callable = AsyncMock),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = []),
-        ):
+        flow, stack, m = _fill_ad_form_setup(test_bot, web_probe_return = None)
+        with stack:
             await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
 
         assert not any(
             len(c.args) >= 2 and c.args[1] == "ad-buy-now-true"
-            for c in mock_click.await_args_list
+            for c in m["web_click"].await_args_list
         )
 
     @pytest.mark.asyncio
@@ -2604,26 +2744,13 @@ class TestFillAdFormSellDirectly:
     ) -> None:
         """With PICKUP shipping, opt out via ad-buy-now-false when present and not selected."""
         ad_cfg = Ad.model_validate(base_ad_config | {"sell_directly": True, "shipping_type": "PICKUP"})
-        flow = _make_flow(test_bot)
-
-        with (
-            patch.object(flow, "_set_category", new_callable = AsyncMock),
-            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
-            patch.object(flow, "_set_shipping", new_callable = AsyncMock),
-            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
-            patch.object(flow, "_upload_images", new_callable = AsyncMock),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
-            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = []),
-        ):
+        flow, stack, m = _fill_ad_form_setup(test_bot, web_probe_return = MagicMock(), web_check_return = False)
+        with stack:
             await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
 
         assert any(
             len(c.args) >= 2 and c.args[1] == "ad-buy-now-false"
-            for c in mock_click.await_args_list
+            for c in m["web_click"].await_args_list
         )
 
     @pytest.mark.asyncio
@@ -2634,26 +2761,13 @@ class TestFillAdFormSellDirectly:
     ) -> None:
         """With SHIPPING and sell_directly=True, click ad-buy-now-true when present and not selected."""
         ad_cfg = Ad.model_validate(base_ad_config | {"sell_directly": True})
-        flow = _make_flow(test_bot)
-
-        with (
-            patch.object(flow, "_set_category", new_callable = AsyncMock),
-            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
-            patch.object(flow, "_set_shipping", new_callable = AsyncMock),
-            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
-            patch.object(flow, "_upload_images", new_callable = AsyncMock),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
-            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = []),
-        ):
+        flow, stack, m = _fill_ad_form_setup(test_bot, web_probe_return = MagicMock(), web_check_return = False)
+        with stack:
             await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
 
         assert any(
             len(c.args) >= 2 and c.args[1] == "ad-buy-now-true"
-            for c in mock_click.await_args_list
+            for c in m["web_click"].await_args_list
         )
 
     @pytest.mark.asyncio
@@ -2664,26 +2778,13 @@ class TestFillAdFormSellDirectly:
     ) -> None:
         """With SHIPPING and sell_directly=False, click ad-buy-now-false when present and not selected."""
         ad_cfg = Ad.model_validate(base_ad_config)
-        flow = _make_flow(test_bot)
-
-        with (
-            patch.object(flow, "_set_category", new_callable = AsyncMock),
-            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
-            patch.object(flow, "_set_shipping", new_callable = AsyncMock),
-            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
-            patch.object(flow, "_upload_images", new_callable = AsyncMock),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
-            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = []),
-        ):
+        flow, stack, m = _fill_ad_form_setup(test_bot, web_probe_return = MagicMock(), web_check_return = False)
+        with stack:
             await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
 
         assert any(
             len(c.args) >= 2 and c.args[1] == "ad-buy-now-false"
-            for c in mock_click.await_args_list
+            for c in m["web_click"].await_args_list
         )
 
 
@@ -2706,32 +2807,17 @@ class TestFillAdFormPriceType:
                 "price": 10,
             }
         )
-        flow = _make_flow(test_bot)
-
-        with (
-            patch.object(flow, "_set_category", new_callable = AsyncMock),
-            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
-            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
-            patch.object(flow, "_upload_images", new_callable = AsyncMock),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_input,
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = []),
-        ):
+        flow, stack, m = _fill_ad_form_setup(test_bot, web_probe_return = None)
+        with stack:
             await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
 
-        # Verify the price-type dropdown was clicked
-        price_type_clicks = [c for c in mock_click.await_args_list if len(c.args) >= 2 and c.args[1] == "ad-price-type"]
+        price_type_clicks = [c for c in m["web_click"].await_args_list if len(c.args) >= 2 and c.args[1] == "ad-price-type"]
         assert len(price_type_clicks) == 1
 
-        # Verify the price-type option was clicked
-        option_clicks = [c for c in mock_click.await_args_list if len(c.args) >= 2 and c.args[1] == "ad-price-type-menu-option-0"]
+        option_clicks = [c for c in m["web_click"].await_args_list if len(c.args) >= 2 and c.args[1] == "ad-price-type-menu-option-0"]
         assert len(option_clicks) == 1
 
-        # Verify the price amount was set
-        mock_set_input.assert_any_await("ad-price-amount", "10")
+        m["web_set_input_value"].assert_any_await("ad-price-amount", "10")
 
     @pytest.mark.asyncio
     async def test_price_type_click_timeout_wraps_error(
@@ -2748,23 +2834,13 @@ class TestFillAdFormPriceType:
                 "price_type": "FIXED",
             }
         )
-        flow = _make_flow(test_bot)
 
         async def click_side_effect(selector_type:By, selector_value:str, **_:Any) -> None:
             if selector_type == By.ID and selector_value == "ad-price-type":
                 raise TimeoutError("price type dropdown timed out")
 
-        with (
-            patch.object(flow, "_set_category", new_callable = AsyncMock),
-            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
-            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
-            patch.object(flow, "_upload_images", new_callable = AsyncMock),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect),
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = []),
-            pytest.raises(TimeoutError, match = "Failed to set price type 'FIXED'"),
-        ):
+        flow, stack, m = _fill_ad_form_setup(test_bot, web_click_side_effect = click_side_effect)
+        with stack, pytest.raises(TimeoutError, match = "Failed to set price type 'FIXED'"):
             await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
 
 
@@ -2779,23 +2855,12 @@ class TestFillAdFormImageCleanup:
     ) -> None:
         """When existing image markers are present but the remove button cannot be found, raise TimeoutError."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "NOT_APPLICABLE"})
-        flow = _make_flow(test_bot)
-
         marker = MagicMock()
         marker.attrs.value = "https://img.example/existing.jpg"
 
-        with (
-            patch.object(flow, "_set_category", new_callable = AsyncMock),
-            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
-            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
-            patch.object(flow, "_upload_images", new_callable = AsyncMock),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = [marker]),
-            pytest.raises(TimeoutError, match = "Image cleanup failed before upload"),
-        ):
+        flow, stack, m = _fill_ad_form_setup(test_bot, web_probe_return = None)
+        m["web_find_all_once"].return_value = [marker]
+        with stack, pytest.raises(TimeoutError, match = "Image cleanup failed before upload"):
             await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
 
     @pytest.mark.asyncio
@@ -2806,23 +2871,11 @@ class TestFillAdFormImageCleanup:
     ) -> None:
         """When web_find_all_once for existing markers times out, cleanup skips and _upload_images still runs."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "NOT_APPLICABLE"})
-        flow = _make_flow(test_bot)
-
-        with (
-            patch.object(flow, "_set_category", new_callable = AsyncMock),
-            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
-            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
-            patch.object(flow, "_upload_images", new_callable = AsyncMock) as mock_upload,
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, side_effect = TimeoutError("marker timeout")),
-        ):
+        flow, stack, m = _fill_ad_form_setup(test_bot, web_probe_return = None, web_check_return = False)
+        m["web_find_all_once"].side_effect = TimeoutError("marker timeout")
+        with stack:
             await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
-
-        mock_upload.assert_awaited_once()
+        m["_upload_images"].assert_awaited_once()
 
 
 class TestFillAdFormWantedShipping:
@@ -2834,7 +2887,10 @@ class TestFillAdFormWantedShipping:
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
-        """WANTED ads with a mapped shipping_type should select via web_select_button_combobox."""
+        """WANTED ads with a mapped shipping_type should select via web_select_button_combobox.
+
+        Asserts web_find() is only called for the exact selector used by fill_ad_form().
+        """
         ad_cfg = Ad.model_validate(
             base_ad_config
             | {
@@ -2844,28 +2900,20 @@ class TestFillAdFormWantedShipping:
                 "price": None,
             }
         )
-        flow = _make_flow(test_bot)
-
         shipping_btn = MagicMock(spec = Element)
         shipping_btn.attrs = {"id": "foo.versand"}
 
-        with (
-            patch.object(flow, "_set_category", new_callable = AsyncMock),
-            patch.object(flow, "_set_special_attributes", new_callable = AsyncMock),
-            patch.object(flow, "_set_contact_fields", new_callable = AsyncMock),
-            patch.object(flow, "_upload_images", new_callable = AsyncMock),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find_all_once", new_callable = AsyncMock, return_value = []),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = shipping_btn),
-            patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock) as mock_select_combobox,
-        ):
-            await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            assert selector_type == By.CSS_SELECTOR
+            assert selector_value == '[role="combobox"][id$=".versand"]'
+            return shipping_btn
 
-        mock_select_combobox.assert_awaited_once_with("foo.versand", "Nur Abholung")
+        flow, stack, m = _fill_ad_form_setup(test_bot, web_probe_return = None, web_check_return = False)
+        m["web_find"] = stack.enter_context(patch.object(test_bot, "web_find", side_effect = find_side_effect))
+        m["select_combobox"] = stack.enter_context(patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock))
+        with stack:
+            await flow.fill_ad_form("test.yaml", ad_cfg, AdUpdateStrategy.REPLACE)
+        m["select_combobox"].assert_awaited_once_with("foo.versand", "Nur Abholung")
 
 
 class TestCityOptionText:
