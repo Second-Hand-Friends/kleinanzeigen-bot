@@ -61,6 +61,11 @@ _LOGGED_OUT_CTA_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CSS_SELECTOR, 'a[href*="einloggen"]'),
     (By.CSS_SELECTOR, 'a[href*="/m-einloggen"]'),
 ]
+_VERSAND_COMBOBOX_SELECTOR:Final[str] = (
+    'button[role="combobox"][id="versand"], '
+    'button[role="combobox"][id$=".versand"], '
+    'button[role="combobox"][aria-labelledby$="versand-selected-option"]'
+)
 
 colorama.just_fix_windows_console()
 
@@ -1043,7 +1048,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     try:
                         shipping_btn = await self.web_find(
                             By.CSS_SELECTOR,
-                            '[role="combobox"][id$=".versand"]',
+                            _VERSAND_COMBOBOX_SELECTOR,
                             timeout = self.timeout("quick_dom"),
                         )
                         btn_id = cast(str, shipping_btn.attrs.get("id"))
@@ -1915,6 +1920,31 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def _set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         short_timeout = self.timeout("quick_dom")
+
+        # PRO/commercial accounts are expected to render Versand as a custom
+        # special-attribute dropdown (``<button role="combobox">``) from the
+        # PostListingForm Astro island.  In that UI the placeholder ("Bitte wählen")
+        # must be replaced directly with either "Versand möglich" (value "ja") or
+        # "Nur Abholung" (value "nein").
+        shipping_combobox = await self.web_probe(By.CSS_SELECTOR, _VERSAND_COMBOBOX_SELECTOR, timeout = short_timeout)
+        if shipping_combobox is not None:
+            try:
+                btn_id = cast(str, shipping_combobox.attrs.get("id"))
+                if not btn_id:
+                    raise TimeoutError(_("Shipping combobox button has no id attribute"))
+                await self.web_select_button_combobox(btn_id, _ad_form_helpers.WANTED_SHIPPING_LABELS[ad_cfg.shipping_type], timeout = short_timeout)
+                LOG.debug("Selected shipping type via Versand combobox: %s", ad_cfg.shipping_type)
+                return
+            except KeyError as ex:
+                raise ValueError(_("Unsupported shipping_type: %s") % ad_cfg.shipping_type) from ex
+            except TimeoutError as ex:
+                LOG.debug(ex, exc_info = True)
+                raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % ad_cfg.shipping_type) from ex
+
+        # Private/non-commercial accounts are expected to render the radio-button
+        # controls and, for SHIPPING, the shipping-options dialog.  This is the
+        # fallback path when no special-attribute Versand combobox is present
+        # (see #869 vs #1125).
         if ad_cfg.shipping_type == "PICKUP":
             pickup_radio = await self.web_probe(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
             if pickup_radio is None:

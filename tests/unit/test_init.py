@@ -12,6 +12,7 @@ import pytest
 from nodriver.core.connection import ProtocolException
 
 from kleinanzeigen_bot import (
+    _VERSAND_COMBOBOX_SELECTOR,  # noqa: PLC2701 - keep tests aligned with production selector
     LOG,
     SUBMISSION_MAX_RETRIES,
     KleinanzeigenBot,
@@ -3085,6 +3086,43 @@ class TestCategorySuggestionPicker:
 class TestShippingDialogFlow:
     """Regression tests for shipping dialog flow using new radio selectors only."""
 
+    shipping_combobox_selector = _VERSAND_COMBOBOX_SELECTOR  # noqa: SLF001 - intentional single source of truth for selector tests
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("shipping_type", "expected_label"),
+        [("SHIPPING", "Versand möglich"), ("PICKUP", "Nur Abholung")],
+    )
+    async def test_shipping_uses_versand_combobox_when_rendered(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        shipping_type:str,
+        expected_label:str,
+    ) -> None:
+        """Commercial accounts may render Versand as a special-attribute combobox instead of radio buttons."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": shipping_type})
+        shipping_combobox = MagicMock()
+        shipping_combobox.attrs = {"id": "uhren.versand"}
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = shipping_combobox) as mock_probe,
+            patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock) as mock_select_combobox,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await getattr(test_bot, "_set_shipping")(ad_cfg)
+
+        mock_probe.assert_awaited_once()
+        assert mock_probe.await_args is not None
+        assert mock_probe.await_args.args[:2] == (
+            By.CSS_SELECTOR,
+            self.shipping_combobox_selector,
+        )
+        mock_select_combobox.assert_awaited_once()
+        assert mock_select_combobox.await_args is not None
+        assert mock_select_combobox.await_args.args[:2] == ("uhren.versand", expected_label)
+        mock_click.assert_not_awaited()
+
     @pytest.mark.asyncio
     @pytest.mark.parametrize("selected", [False, True])
     async def test_pickup_shipping_radio_selection(
@@ -3097,14 +3135,15 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()) as mock_probe,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, MagicMock()]) as mock_probe,
             patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = selected),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             await getattr(test_bot, "_set_shipping")(ad_cfg)
 
-        mock_probe.assert_awaited_once()
-        assert mock_probe.call_args.args[:2] == (By.ID, "ad-shipping-enabled-no")
+        observed = [call.args[:2] for call in mock_probe.await_args_list]
+        assert (By.CSS_SELECTOR, self.shipping_combobox_selector) in observed
+        assert (By.ID, "ad-shipping-enabled-no") in observed
         if selected:
             mock_click.assert_not_awaited()
         else:
@@ -3117,7 +3156,7 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, MagicMock()]),
             patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = TimeoutError("pickup lookup timed out")),
             pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'PICKUP'!"),
         ):
@@ -3135,7 +3174,7 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, None]),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, None, None]),
             patch.object(test_bot, "web_check", new_callable = AsyncMock) as mock_check,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
@@ -3154,7 +3193,7 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, MagicMock()]) as mock_probe,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, None, MagicMock()]) as mock_probe,
             patch.object(test_bot, "web_check", new_callable = AsyncMock) as mock_check,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             pytest.raises(
@@ -3164,11 +3203,10 @@ class TestShippingDialogFlow:
         ):
             await getattr(test_bot, "_set_shipping")(ad_cfg)
 
-        assert mock_probe.await_count == 2
-        assert [call.args[:2] for call in mock_probe.await_args_list] == [
-            (By.ID, "ad-shipping-enabled-no"),
-            (By.ID, "ad-shipping-enabled"),
-        ]
+        observed = [call.args[:2] for call in mock_probe.await_args_list]
+        assert (By.CSS_SELECTOR, self.shipping_combobox_selector) in observed
+        assert (By.ID, "ad-shipping-enabled-no") in observed
+        assert (By.ID, "ad-shipping-enabled") in observed
         mock_check.assert_not_awaited()
         mock_click.assert_not_awaited()
 
@@ -3221,7 +3259,7 @@ class TestShippingDialogFlow:
 
         with (
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, MagicMock()]),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_input,
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "4,95"),
@@ -3548,6 +3586,8 @@ class TestWantedShippingSelection:
     dispatch happen during ``publish_ad``.
     """
 
+    shipping_combobox_selector = _VERSAND_COMBOBOX_SELECTOR  # noqa: SLF001 - intentional single source of truth for selector tests
+
     @contextmanager
     def _mock_publish_dependencies(
         self,
@@ -3624,7 +3664,7 @@ class TestWantedShippingSelection:
         combobox_btn.attrs = {"id": "babyausstattung.versand"}
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
-            if selector_type == By.CSS_SELECTOR and selector_value == '[role="combobox"][id$=".versand"]':
+            if selector_type == By.CSS_SELECTOR and selector_value == self.shipping_combobox_selector:
                 return combobox_btn
             return MagicMock()
 
@@ -3650,7 +3690,7 @@ class TestWantedShippingSelection:
         ad_file = str(tmp_path / "ad.yaml")
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
-            if selector_type == By.CSS_SELECTOR and selector_value == '[role="combobox"][id$=".versand"]':
+            if selector_type == By.CSS_SELECTOR and selector_value == self.shipping_combobox_selector:
                 raise TimeoutError("combobox not found in DOM")
             return MagicMock()
 
@@ -3702,7 +3742,7 @@ class TestWantedShippingSelection:
         combobox_btn.attrs = {}  # No "id" key
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
-            if selector_type == By.CSS_SELECTOR and selector_value == '[role="combobox"][id$=".versand"]':
+            if selector_type == By.CSS_SELECTOR and selector_value == self.shipping_combobox_selector:
                 return combobox_btn
             return MagicMock()
 
