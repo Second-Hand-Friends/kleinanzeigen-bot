@@ -1915,6 +1915,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def _set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         short_timeout = self.timeout("quick_dom")
+
+        # PRO/commercial accounts are expected to render Versand as the legacy/native
+        # ``versand_s`` select.  In that UI the placeholder ("Bitte wählen") must be
+        # replaced directly with either "Versand möglich" or "Nur Abholung".
         shipping_select_selector = 'select[id$=".versand_s"]'
         shipping_select = await self.web_probe(By.CSS_SELECTOR, shipping_select_selector, timeout = short_timeout)
         if shipping_select is not None:
@@ -1933,6 +1937,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.debug(ex, exc_info = True)
                 raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % ad_cfg.shipping_type) from ex
 
+        # Private/non-commercial accounts are expected to render the newer radio-button
+        # controls and, for SHIPPING, the shipping-options dialog.  This is the fallback
+        # path when no native ``versand_s`` select is present (see #869 vs #1125).
         if ad_cfg.shipping_type == "PICKUP":
             pickup_radio = await self.web_probe(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
             if pickup_radio is None:
