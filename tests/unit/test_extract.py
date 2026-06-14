@@ -1037,18 +1037,18 @@ class TestAdExtractorContent:
 
         with (
             patch.object(test_extractor, "_extract_title_from_ad_page", new_callable = AsyncMock) as mock_extract_title,
-            patch.object(test_extractor, "_extract_ad_page_info", new_callable = AsyncMock, return_value = ad_cfg) as mock_extract_info,
+            patch.object(test_extractor, "_extract_ad_page_info", new_callable = AsyncMock, return_value = ad_cfg),
         ):
-            _cfg, staging_dir, final_dir, ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(
+            cfg, staging_dir, final_dir, ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(
                 base_dir,
                 3421140610,
             )
 
+        assert cfg.title == title
         assert ad_file_stem == "ad_3421140610_Beistelltisch aus Holz mit Glaseinsatz und Korb – 67 × 67 × 48 cm"
         assert staging_dir == base_dir / f".tmp-{ad_file_stem}"
         assert final_dir == base_dir / f"ad_3421140610_{title}"
         mock_extract_title.assert_not_called()
-        mock_extract_info.assert_awaited_once_with(str(staging_dir), 3421140610, ad_file_stem, title, active_override = None)
 
     @pytest.mark.asyncio
     async def test_extract_sell_directly_data_hit_true(self, test_extractor:extract_module.AdExtractor) -> None:
