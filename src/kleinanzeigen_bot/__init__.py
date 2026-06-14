@@ -1915,6 +1915,24 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def _set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         short_timeout = self.timeout("quick_dom")
+        shipping_select_selector = 'select[id$=".versand_s"]'
+        shipping_select = await self.web_probe(By.CSS_SELECTOR, shipping_select_selector, timeout = short_timeout)
+        if shipping_select is not None:
+            try:
+                await self.web_select(
+                    By.CSS_SELECTOR,
+                    shipping_select_selector,
+                    _ad_form_helpers.WANTED_SHIPPING_LABELS[ad_cfg.shipping_type],
+                    timeout = short_timeout,
+                )
+                LOG.debug("Selected shipping type via native versand_s select: %s", ad_cfg.shipping_type)
+                return
+            except KeyError as ex:
+                raise ValueError(_("Unsupported shipping_type: %s") % ad_cfg.shipping_type) from ex
+            except TimeoutError as ex:
+                LOG.debug(ex, exc_info = True)
+                raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % ad_cfg.shipping_type) from ex
+
         if ad_cfg.shipping_type == "PICKUP":
             pickup_radio = await self.web_probe(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
             if pickup_radio is None:

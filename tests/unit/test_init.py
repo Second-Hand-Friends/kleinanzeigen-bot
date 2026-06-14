@@ -3086,6 +3086,37 @@ class TestShippingDialogFlow:
     """Regression tests for shipping dialog flow using new radio selectors only."""
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("shipping_type", "expected_label"),
+        [("SHIPPING", "Versand möglich"), ("PICKUP", "Nur Abholung")],
+    )
+    async def test_shipping_uses_native_versand_select_when_rendered(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        shipping_type:str,
+        expected_label:str,
+    ) -> None:
+        """Commercial accounts may render Versand as a native select instead of radio buttons."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": shipping_type})
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()) as mock_probe,
+            patch.object(test_bot, "web_select", new_callable = AsyncMock) as mock_select,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await getattr(test_bot, "_set_shipping")(ad_cfg)
+
+        mock_probe.assert_awaited_once_with(By.CSS_SELECTOR, 'select[id$=".versand_s"]', timeout = test_bot.timeout("quick_dom"))
+        mock_select.assert_awaited_once_with(
+            By.CSS_SELECTOR,
+            'select[id$=".versand_s"]',
+            expected_label,
+            timeout = test_bot.timeout("quick_dom"),
+        )
+        mock_click.assert_not_awaited()
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("selected", [False, True])
     async def test_pickup_shipping_radio_selection(
         self,
@@ -3097,14 +3128,16 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()) as mock_probe,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, MagicMock()]) as mock_probe,
             patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = selected),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             await getattr(test_bot, "_set_shipping")(ad_cfg)
 
-        mock_probe.assert_awaited_once()
-        assert mock_probe.call_args.args[:2] == (By.ID, "ad-shipping-enabled-no")
+        assert [call.args[:2] for call in mock_probe.await_args_list] == [
+            (By.CSS_SELECTOR, 'select[id$=".versand_s"]'),
+            (By.ID, "ad-shipping-enabled-no"),
+        ]
         if selected:
             mock_click.assert_not_awaited()
         else:
@@ -3117,7 +3150,7 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, MagicMock()]),
             patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = TimeoutError("pickup lookup timed out")),
             pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'PICKUP'!"),
         ):
@@ -3135,7 +3168,7 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, None]),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, None, None]),
             patch.object(test_bot, "web_check", new_callable = AsyncMock) as mock_check,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
@@ -3154,7 +3187,7 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, MagicMock()]) as mock_probe,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, None, MagicMock()]) as mock_probe,
             patch.object(test_bot, "web_check", new_callable = AsyncMock) as mock_check,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             pytest.raises(
@@ -3164,8 +3197,9 @@ class TestShippingDialogFlow:
         ):
             await getattr(test_bot, "_set_shipping")(ad_cfg)
 
-        assert mock_probe.await_count == 2
+        assert mock_probe.await_count == 3
         assert [call.args[:2] for call in mock_probe.await_args_list] == [
+            (By.CSS_SELECTOR, 'select[id$=".versand_s"]'),
             (By.ID, "ad-shipping-enabled-no"),
             (By.ID, "ad-shipping-enabled"),
         ]
@@ -3221,7 +3255,7 @@ class TestShippingDialogFlow:
 
         with (
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, MagicMock()]),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_input,
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "4,95"),
