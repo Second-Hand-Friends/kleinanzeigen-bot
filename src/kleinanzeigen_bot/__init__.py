@@ -1040,10 +1040,15 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 # See issue #930 for broader React fiber migration.
                 display_text = _ad_form_helpers.WANTED_SHIPPING_LABELS.get(shipping_type)
                 if display_text:
+                    shipping_combobox_selector = (
+                        'button[role="combobox"][id="versand"], '
+                        'button[role="combobox"][id$=".versand"], '
+                        'button[role="combobox"][aria-labelledby$="versand-selected-option"]'
+                    )
                     try:
                         shipping_btn = await self.web_find(
                             By.CSS_SELECTOR,
-                            '[role="combobox"][id$=".versand"]',
+                            shipping_combobox_selector,
                             timeout = self.timeout("quick_dom"),
                         )
                         btn_id = cast(str, shipping_btn.attrs.get("id"))
@@ -1921,7 +1926,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # PostListingForm Astro island.  In that UI the placeholder ("Bitte wählen")
         # must be replaced directly with either "Versand möglich" (value "ja") or
         # "Nur Abholung" (value "nein").
-        shipping_combobox_selector = 'button[role="combobox"][id="versand"], button[role="combobox"][id$=".versand"]'
+        shipping_combobox_selector = (
+            'button[role="combobox"][id="versand"], '
+            'button[role="combobox"][id$=".versand"], '
+            'button[role="combobox"][aria-labelledby$="versand-selected-option"]'
+        )
         shipping_combobox = await self.web_probe(By.CSS_SELECTOR, shipping_combobox_selector, timeout = short_timeout)
         if shipping_combobox is not None:
             try:

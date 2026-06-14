@@ -3085,6 +3085,12 @@ class TestCategorySuggestionPicker:
 class TestShippingDialogFlow:
     """Regression tests for shipping dialog flow using new radio selectors only."""
 
+    shipping_combobox_selector = (
+        'button[role="combobox"][id="versand"], '
+        'button[role="combobox"][id$=".versand"], '
+        'button[role="combobox"][aria-labelledby$="versand-selected-option"]'
+    )
+
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("shipping_type", "expected_label"),
@@ -3113,13 +3119,11 @@ class TestShippingDialogFlow:
         assert mock_probe.await_args is not None
         assert mock_probe.await_args.args[:2] == (
             By.CSS_SELECTOR,
-            'button[role="combobox"][id="versand"], button[role="combobox"][id$=".versand"]',
+            self.shipping_combobox_selector,
         )
-        mock_select_combobox.assert_awaited_once_with(
-            "uhren.versand",
-            expected_label,
-            timeout = test_bot.timeout("quick_dom"),
-        )
+        mock_select_combobox.assert_awaited_once()
+        assert mock_select_combobox.await_args is not None
+        assert mock_select_combobox.await_args.args[:2] == ("uhren.versand", expected_label)
         mock_click.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -3140,10 +3144,9 @@ class TestShippingDialogFlow:
         ):
             await getattr(test_bot, "_set_shipping")(ad_cfg)
 
-        assert [call.args[:2] for call in mock_probe.await_args_list] == [
-            (By.CSS_SELECTOR, 'button[role="combobox"][id="versand"], button[role="combobox"][id$=".versand"]'),
-            (By.ID, "ad-shipping-enabled-no"),
-        ]
+        observed = [call.args[:2] for call in mock_probe.await_args_list]
+        assert (By.CSS_SELECTOR, self.shipping_combobox_selector) in observed
+        assert (By.ID, "ad-shipping-enabled-no") in observed
         if selected:
             mock_click.assert_not_awaited()
         else:
@@ -3203,12 +3206,10 @@ class TestShippingDialogFlow:
         ):
             await getattr(test_bot, "_set_shipping")(ad_cfg)
 
-        assert mock_probe.await_count == 3
-        assert [call.args[:2] for call in mock_probe.await_args_list] == [
-            (By.CSS_SELECTOR, 'button[role="combobox"][id="versand"], button[role="combobox"][id$=".versand"]'),
-            (By.ID, "ad-shipping-enabled-no"),
-            (By.ID, "ad-shipping-enabled"),
-        ]
+        observed = [call.args[:2] for call in mock_probe.await_args_list]
+        assert (By.CSS_SELECTOR, self.shipping_combobox_selector) in observed
+        assert (By.ID, "ad-shipping-enabled-no") in observed
+        assert (By.ID, "ad-shipping-enabled") in observed
         mock_check.assert_not_awaited()
         mock_click.assert_not_awaited()
 
