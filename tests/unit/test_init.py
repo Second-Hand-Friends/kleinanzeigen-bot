@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 from nodriver.core.connection import ProtocolException
 
+import kleinanzeigen_bot
 from kleinanzeigen_bot import (
     LOG,
     SUBMISSION_MAX_RETRIES,
@@ -3085,11 +3086,7 @@ class TestCategorySuggestionPicker:
 class TestShippingDialogFlow:
     """Regression tests for shipping dialog flow using new radio selectors only."""
 
-    shipping_combobox_selector = (
-        'button[role="combobox"][id="versand"], '
-        'button[role="combobox"][id$=".versand"], '
-        'button[role="combobox"][aria-labelledby$="versand-selected-option"]'
-    )
+    shipping_combobox_selector = kleinanzeigen_bot._VERSAND_COMBOBOX_SELECTOR  # noqa: SLF001 - keep tests aligned with production selector
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -3589,6 +3586,8 @@ class TestWantedShippingSelection:
     dispatch happen during ``publish_ad``.
     """
 
+    shipping_combobox_selector = kleinanzeigen_bot._VERSAND_COMBOBOX_SELECTOR  # noqa: SLF001 - keep tests aligned with production selector
+
     @contextmanager
     def _mock_publish_dependencies(
         self,
@@ -3665,7 +3664,7 @@ class TestWantedShippingSelection:
         combobox_btn.attrs = {"id": "babyausstattung.versand"}
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
-            if selector_type == By.CSS_SELECTOR and selector_value == '[role="combobox"][id$=".versand"]':
+            if selector_type == By.CSS_SELECTOR and selector_value == self.shipping_combobox_selector:
                 return combobox_btn
             return MagicMock()
 
@@ -3691,7 +3690,7 @@ class TestWantedShippingSelection:
         ad_file = str(tmp_path / "ad.yaml")
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
-            if selector_type == By.CSS_SELECTOR and selector_value == '[role="combobox"][id$=".versand"]':
+            if selector_type == By.CSS_SELECTOR and selector_value == self.shipping_combobox_selector:
                 raise TimeoutError("combobox not found in DOM")
             return MagicMock()
 
@@ -3743,7 +3742,7 @@ class TestWantedShippingSelection:
         combobox_btn.attrs = {}  # No "id" key
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
-            if selector_type == By.CSS_SELECTOR and selector_value == '[role="combobox"][id$=".versand"]':
+            if selector_type == By.CSS_SELECTOR and selector_value == self.shipping_combobox_selector:
                 return combobox_btn
             return MagicMock()
 
