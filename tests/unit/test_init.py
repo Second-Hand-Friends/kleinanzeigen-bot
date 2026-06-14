@@ -3086,7 +3086,7 @@ class TestCategorySuggestionPicker:
 class TestShippingDialogFlow:
     """Regression tests for shipping dialog flow using new radio selectors only."""
 
-    shipping_combobox_selector = _VERSAND_COMBOBOX_SELECTOR
+    shipping_combobox_selector = _VERSAND_COMBOBOX_SELECTOR  # noqa: SLF001 - intentional single source of truth for selector tests
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -3586,7 +3586,7 @@ class TestWantedShippingSelection:
     dispatch happen during ``publish_ad``.
     """
 
-    shipping_combobox_selector = _VERSAND_COMBOBOX_SELECTOR
+    shipping_combobox_selector = _VERSAND_COMBOBOX_SELECTOR  # noqa: SLF001 - intentional single source of truth for selector tests
 
     @contextmanager
     def _mock_publish_dependencies(
