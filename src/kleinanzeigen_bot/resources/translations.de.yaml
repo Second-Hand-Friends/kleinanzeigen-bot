@@ -497,7 +497,7 @@ kleinanzeigen_bot/extract.py:
     "A popup appeared!": "Ein Popup ist erschienen!"
 
   _extract_ad_page_info_with_directory_handling:
-    "Extracting title from ad %s: \"%s\"": "Extrahiere Titel aus Anzeige %s: \"%s\""
+    "Resolved title for ad %s: \"%s\"": "Ermittelter Titel für Anzeige %s: \"%s\""
     "Removing stale staging directory: %s": "Entferne veraltetes Staging-Verzeichnis: %s"
     "Could not remove stale staging directory %s: %s": "Konnte veraltetes Staging-Verzeichnis %s nicht entfernen: %s"
     "Could not remove stale staging directory %s. Aborting extraction to avoid using a dirty staging directory.": "Konnte veraltetes Staging-Verzeichnis %s nicht entfernen. Extraktion wird abgebrochen, um kein verunreinigtes Staging-Verzeichnis zu verwenden."
