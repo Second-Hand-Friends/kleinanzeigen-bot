@@ -3090,27 +3090,33 @@ class TestShippingDialogFlow:
         ("shipping_type", "expected_label"),
         [("SHIPPING", "Versand möglich"), ("PICKUP", "Nur Abholung")],
     )
-    async def test_shipping_uses_native_versand_select_when_rendered(
+    async def test_shipping_uses_versand_combobox_when_rendered(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
         shipping_type:str,
         expected_label:str,
     ) -> None:
-        """Commercial accounts may render Versand as a native select instead of radio buttons."""
+        """Commercial accounts may render Versand as a special-attribute combobox instead of radio buttons."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": shipping_type})
+        shipping_combobox = MagicMock()
+        shipping_combobox.attrs = {"id": "uhren.versand"}
 
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock()) as mock_probe,
-            patch.object(test_bot, "web_select", new_callable = AsyncMock) as mock_select,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = shipping_combobox) as mock_probe,
+            patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock) as mock_select_combobox,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             await getattr(test_bot, "_set_shipping")(ad_cfg)
 
-        mock_probe.assert_awaited_once_with(By.CSS_SELECTOR, 'select[id$=".versand_s"]', timeout = test_bot.timeout("quick_dom"))
-        mock_select.assert_awaited_once_with(
+        mock_probe.assert_awaited_once()
+        assert mock_probe.await_args is not None
+        assert mock_probe.await_args.args[:2] == (
             By.CSS_SELECTOR,
-            'select[id$=".versand_s"]',
+            'button[role="combobox"][id="versand"], button[role="combobox"][id$=".versand"]',
+        )
+        mock_select_combobox.assert_awaited_once_with(
+            "uhren.versand",
             expected_label,
             timeout = test_bot.timeout("quick_dom"),
         )
@@ -3135,7 +3141,7 @@ class TestShippingDialogFlow:
             await getattr(test_bot, "_set_shipping")(ad_cfg)
 
         assert [call.args[:2] for call in mock_probe.await_args_list] == [
-            (By.CSS_SELECTOR, 'select[id$=".versand_s"]'),
+            (By.CSS_SELECTOR, 'button[role="combobox"][id="versand"], button[role="combobox"][id$=".versand"]'),
             (By.ID, "ad-shipping-enabled-no"),
         ]
         if selected:
@@ -3199,7 +3205,7 @@ class TestShippingDialogFlow:
 
         assert mock_probe.await_count == 3
         assert [call.args[:2] for call in mock_probe.await_args_list] == [
-            (By.CSS_SELECTOR, 'select[id$=".versand_s"]'),
+            (By.CSS_SELECTOR, 'button[role="combobox"][id="versand"], button[role="combobox"][id$=".versand"]'),
             (By.ID, "ad-shipping-enabled-no"),
             (By.ID, "ad-shipping-enabled"),
         ]

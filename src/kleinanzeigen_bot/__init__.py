@@ -1916,20 +1916,20 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def _set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
         short_timeout = self.timeout("quick_dom")
 
-        # PRO/commercial accounts are expected to render Versand as the legacy/native
-        # ``versand_s`` select.  In that UI the placeholder ("Bitte wählen") must be
-        # replaced directly with either "Versand möglich" or "Nur Abholung".
-        shipping_select_selector = 'select[id$=".versand_s"]'
-        shipping_select = await self.web_probe(By.CSS_SELECTOR, shipping_select_selector, timeout = short_timeout)
-        if shipping_select is not None:
+        # PRO/commercial accounts are expected to render Versand as a custom
+        # special-attribute dropdown (``<button role="combobox">``) from the
+        # PostListingForm Astro island.  In that UI the placeholder ("Bitte wählen")
+        # must be replaced directly with either "Versand möglich" (value "ja") or
+        # "Nur Abholung" (value "nein").
+        shipping_combobox_selector = 'button[role="combobox"][id="versand"], button[role="combobox"][id$=".versand"]'
+        shipping_combobox = await self.web_probe(By.CSS_SELECTOR, shipping_combobox_selector, timeout = short_timeout)
+        if shipping_combobox is not None:
             try:
-                await self.web_select(
-                    By.CSS_SELECTOR,
-                    shipping_select_selector,
-                    _ad_form_helpers.WANTED_SHIPPING_LABELS[ad_cfg.shipping_type],
-                    timeout = short_timeout,
-                )
-                LOG.debug("Selected shipping type via native versand_s select: %s", ad_cfg.shipping_type)
+                btn_id = cast(str, shipping_combobox.attrs.get("id"))
+                if not btn_id:
+                    raise TimeoutError(_("Shipping combobox button has no id attribute"))
+                await self.web_select_button_combobox(btn_id, _ad_form_helpers.WANTED_SHIPPING_LABELS[ad_cfg.shipping_type], timeout = short_timeout)
+                LOG.debug("Selected shipping type via Versand combobox: %s", ad_cfg.shipping_type)
                 return
             except KeyError as ex:
                 raise ValueError(_("Unsupported shipping_type: %s") % ad_cfg.shipping_type) from ex
@@ -1937,9 +1937,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.debug(ex, exc_info = True)
                 raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % ad_cfg.shipping_type) from ex
 
-        # Private/non-commercial accounts are expected to render the newer radio-button
-        # controls and, for SHIPPING, the shipping-options dialog.  This is the fallback
-        # path when no native ``versand_s`` select is present (see #869 vs #1125).
+        # Private/non-commercial accounts are expected to render the radio-button
+        # controls and, for SHIPPING, the shipping-options dialog.  This is the
+        # fallback path when no special-attribute Versand combobox is present
+        # (see #869 vs #1125).
         if ad_cfg.shipping_type == "PICKUP":
             pickup_radio = await self.web_probe(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
             if pickup_radio is None:
