@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 from nodriver.core.connection import ProtocolException
 
-import kleinanzeigen_bot
 from kleinanzeigen_bot import (
+    _VERSAND_COMBOBOX_SELECTOR,  # noqa: PLC2701 - keep tests aligned with production selector
     LOG,
     SUBMISSION_MAX_RETRIES,
     KleinanzeigenBot,
@@ -3086,7 +3086,7 @@ class TestCategorySuggestionPicker:
 class TestShippingDialogFlow:
     """Regression tests for shipping dialog flow using new radio selectors only."""
 
-    shipping_combobox_selector = kleinanzeigen_bot._VERSAND_COMBOBOX_SELECTOR  # noqa: SLF001 - keep tests aligned with production selector
+    shipping_combobox_selector = _VERSAND_COMBOBOX_SELECTOR
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -3586,7 +3586,7 @@ class TestWantedShippingSelection:
     dispatch happen during ``publish_ad``.
     """
 
-    shipping_combobox_selector = kleinanzeigen_bot._VERSAND_COMBOBOX_SELECTOR  # noqa: SLF001 - keep tests aligned with production selector
+    shipping_combobox_selector = _VERSAND_COMBOBOX_SELECTOR
 
     @contextmanager
     def _mock_publish_dependencies(
