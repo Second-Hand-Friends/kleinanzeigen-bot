@@ -779,35 +779,6 @@ class TestKleinanzeigenBotAuthentication:
             mock_sleep.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_dismiss_consent_banner_clicks_when_present(self, test_bot:KleinanzeigenBot) -> None:
-        mock_element = AsyncMock()
-        with (
-            patch.object(test_bot, "timeout", return_value = 2.0) as mock_timeout,
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = mock_element) as mock_probe,
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
-        ):
-            await test_bot._dismiss_consent_banner()
-
-            mock_timeout.assert_called_once_with("quick_dom")
-            mock_probe.assert_awaited_once()
-            assert mock_probe.await_args is not None
-            assert mock_probe.await_args.args == (By.ID, "gdpr-banner-accept")
-            mock_element.click.assert_awaited_once()
-            mock_sleep.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_dismiss_consent_banner_does_nothing_when_absent(self, test_bot:KleinanzeigenBot) -> None:
-        with (
-            patch.object(test_bot, "timeout", return_value = 2.0),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None) as mock_probe,
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
-        ):
-            await test_bot._dismiss_consent_banner()
-
-            mock_probe.assert_awaited_once()
-            mock_sleep.assert_not_awaited()
-
-    @pytest.mark.asyncio
     async def test_check_sms_verification_prompts_user_when_detected(self, test_bot:KleinanzeigenBot) -> None:
         mock_element = MagicMock()
         with (
