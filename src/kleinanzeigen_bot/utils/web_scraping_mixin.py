@@ -1650,7 +1650,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         banner_timeout = self.timeout("quick_dom")
         element = await self.web_probe(By.ID, "gdpr-banner-accept", timeout = banner_timeout)
         if element is not None:
-            LOG.debug("Consent banner detected, clicking 'Alle akzeptieren'...")
+            LOG.debug("Consent banner detected, clicking accept-all button...")
             await element.click()
             await self.web_sleep()
         else:

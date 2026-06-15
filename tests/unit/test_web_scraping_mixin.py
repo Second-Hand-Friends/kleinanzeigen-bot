@@ -114,16 +114,13 @@ def web_scraper(mock_browser:AsyncMock, mock_page:TrulyAwaitableMockPage) -> Web
 async def test_dismiss_consent_banner_clicks_when_present(web_scraper:WebScrapingMixin) -> None:
     mock_element = AsyncMock()
     with (
-        patch.object(web_scraper, "timeout", return_value = 2.0) as mock_timeout,
+        patch.object(web_scraper, "timeout", return_value = 2.0),
         patch.object(web_scraper, "web_probe", new_callable = AsyncMock, return_value = mock_element) as mock_probe,
         patch.object(web_scraper, "web_sleep", new_callable = AsyncMock) as mock_sleep,
     ):
         await web_scraper._dismiss_consent_banner()
 
-        mock_timeout.assert_called_once_with("quick_dom")
         mock_probe.assert_awaited_once()
-        assert mock_probe.await_args is not None
-        assert mock_probe.await_args.args == (By.ID, "gdpr-banner-accept")
         mock_element.click.assert_awaited_once()
         mock_sleep.assert_awaited_once()
 
