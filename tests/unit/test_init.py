@@ -28,7 +28,13 @@ from kleinanzeigen_bot.model.config_model import (
     DiagnosticsConfig,
     PublishingConfig,
 )
-from kleinanzeigen_bot.publishing_form import resolve_category_suggestions, set_category
+from kleinanzeigen_bot.publishing_form import (
+    read_city_selection_text,
+    resolve_category_suggestions,
+    set_category,
+    set_contact_fields,
+    set_contact_location,
+)
 from kleinanzeigen_bot.utils import xdg_paths
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
@@ -1193,7 +1199,7 @@ class TestKleinanzeigenBotBasics:
             patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_form.set_category", new_callable = AsyncMock),
             patch.object(test_bot, "_set_special_attributes", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_contact_fields", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_contact_fields", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
@@ -1641,7 +1647,7 @@ class TestKleinanzeigenBotContactLocationHardening:
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
             patch.object(test_bot, "web_text", new_callable = AsyncMock) as web_text_mock,
         ):
-            selected = await getattr(test_bot, "_read_city_selection_text")()
+            selected = await read_city_selection_text(test_bot)
 
         assert selected == "Live City"
         web_text_mock.assert_not_awaited()
@@ -1656,10 +1662,10 @@ class TestKleinanzeigenBotContactLocationHardening:
 
         with (
             patch.object(test_bot, "web_input", new_callable = AsyncMock, side_effect = TimeoutError("zip timeout")),
-            patch.object(test_bot, "_set_contact_location", new_callable = AsyncMock) as set_location_mock,
+            patch("kleinanzeigen_bot.publishing_form.set_contact_location", new_callable = AsyncMock) as set_location_mock,
             pytest.raises(TimeoutError, match = "Failed to set contact zipcode"),
         ):
-            await getattr(test_bot, "_set_contact_fields")(ad_cfg.contact)
+            await set_contact_fields(test_bot, ad_cfg.contact)
 
         set_location_mock.assert_not_awaited()
 
@@ -1675,10 +1681,10 @@ class TestKleinanzeigenBotContactLocationHardening:
 
         with (
             patch.object(test_bot, "web_input", new_callable = AsyncMock) as web_input_mock,
-            patch.object(test_bot, "_set_contact_location", new_callable = AsyncMock) as set_location_mock,
+            patch("kleinanzeigen_bot.publishing_form.set_contact_location", new_callable = AsyncMock) as set_location_mock,
             patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
         ):
-            await getattr(test_bot, "_set_contact_fields")(ad_cfg.contact)
+            await set_contact_fields(test_bot, ad_cfg.contact)
 
         web_input_mock.assert_not_awaited()
         set_location_mock.assert_not_awaited()
@@ -1695,7 +1701,7 @@ class TestKleinanzeigenBotContactLocationHardening:
         option_b = MagicMock(spec = Element)
         option_b.text = "12623 - Metroville"
 
-        def _mock_city_option_text(elem:Element) -> str:
+        def _mock_city_option_text(_web:KleinanzeigenBot, elem:Element) -> str:
             return str(getattr(elem, "text", "") or "")
 
         async def _web_await_side_effect(condition:Callable[..., Awaitable[bool] | bool], **_:Any) -> Any:
@@ -1707,11 +1713,11 @@ class TestKleinanzeigenBotContactLocationHardening:
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [option_a, option_b]),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _web_await_side_effect),
-            patch.object(test_bot, "_read_city_selection_text", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "_city_option_text", new_callable = AsyncMock, side_effect = _mock_city_option_text),
+            patch("kleinanzeigen_bot.publishing_form.read_city_selection_text", new_callable = AsyncMock, return_value = None),
+            patch("kleinanzeigen_bot.publishing_form.city_option_text", new_callable = AsyncMock, side_effect = _mock_city_option_text),
             pytest.raises(TimeoutError, match = "City combobox options are ambiguous for location: Metroville"),
         ):
-            await getattr(test_bot, "_set_contact_location")("Metroville")
+            await set_contact_location(test_bot, "Metroville")
 
     @pytest.mark.asyncio
     async def test_set_contact_location_raises_when_selection_does_not_converge(self, test_bot:KleinanzeigenBot) -> None:
@@ -1740,10 +1746,10 @@ class TestKleinanzeigenBotContactLocationHardening:
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [target_option]),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = web_await_side_effect),
-            patch.object(test_bot, "_read_city_selection_text", new_callable = AsyncMock, return_value = "20095 - Rivertown"),
+            patch("kleinanzeigen_bot.publishing_form.read_city_selection_text", new_callable = AsyncMock, return_value = "20095 - Rivertown"),
             pytest.raises(TimeoutError, match = "City selection did not converge"),
         ):
-            await getattr(test_bot, "_set_contact_location")("10115 - Metroville")
+            await set_contact_location(test_bot, "10115 - Metroville")
 
     @pytest.mark.asyncio
     async def test_set_contact_location_accepts_readonly_input_with_zip_derived_value(self, test_bot:KleinanzeigenBot) -> None:
@@ -1753,11 +1759,11 @@ class TestKleinanzeigenBotContactLocationHardening:
         city_input.attrs = {"readonly": "", "value": "Metroville - Riverside"}
 
         with (
-            patch.object(test_bot, "_read_city_selection_text", new_callable = AsyncMock, return_value = "Metroville - Riverside"),
+            patch("kleinanzeigen_bot.publishing_form.read_city_selection_text", new_callable = AsyncMock, return_value = "Metroville - Riverside"),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
-            patch.object(test_bot, "_select_city_combobox_option", new_callable = AsyncMock) as combobox_mock,
+            patch("kleinanzeigen_bot.publishing_form.select_city_combobox_option", new_callable = AsyncMock) as combobox_mock,
         ):
-            await getattr(test_bot, "_set_contact_location")("Metroville")
+            await set_contact_location(test_bot, "Metroville")
             combobox_mock.assert_not_called()
 
 
@@ -1953,7 +1959,7 @@ class TestKleinanzeigenBotShippingOptions:
             patch.object(test_bot, "web_request", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock),
             patch.object(test_bot, "web_await", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_contact_fields", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_contact_fields", new_callable = AsyncMock),
             patch("builtins.input", return_value = ""),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
         ):
@@ -2122,7 +2128,7 @@ class TestKleinanzeigenBotShippingOptions:
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_contact_fields", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_contact_fields", new_callable = AsyncMock),
             patch("builtins.input", return_value = ""),
             patch("kleinanzeigen_bot.utils.misc.ainput", new_callable = AsyncMock, return_value = ""),
         ):
@@ -3565,7 +3571,7 @@ class TestWantedShippingSelection:
             patch("kleinanzeigen_bot.publishing_form.set_category", new_callable = AsyncMock),
             patch.object(test_bot, "_set_special_attributes", new_callable = AsyncMock),
             patch.object(test_bot, "_set_shipping", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_contact_fields", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_contact_fields", new_callable = AsyncMock),
             patch.object(test_bot, "_upload_images", new_callable = AsyncMock),
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
@@ -3749,7 +3755,7 @@ class TestBuyNowRadioWarning:
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_execute", side_effect = execute_side_effect),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_contact_fields", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_contact_fields", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
@@ -4227,7 +4233,7 @@ class TestImageCleanupInPublishAd:
             patch.object(test_bot, "web_execute", side_effect = execute_side_effect),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_contact_fields", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_contact_fields", new_callable = AsyncMock),
             patch.object(test_bot, "_upload_images", new_callable = AsyncMock, side_effect = upload_side_effect) as mock_upload,
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
