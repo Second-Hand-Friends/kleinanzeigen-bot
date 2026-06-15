@@ -12,7 +12,6 @@ import pytest
 from nodriver.core.connection import ProtocolException
 
 from kleinanzeigen_bot import (
-    _VERSAND_COMBOBOX_SELECTOR,  # noqa: PLC2701 - keep tests aligned with production selector
     LOG,
     SUBMISSION_MAX_RETRIES,
     KleinanzeigenBot,
@@ -21,6 +20,7 @@ from kleinanzeigen_bot import (
     runtime_config,
 )
 from kleinanzeigen_bot._version import __version__
+from kleinanzeigen_bot.ad_form_helpers import VERSAND_COMBOBOX_SELECTOR
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import (
     AutoPriceReductionConfig,
@@ -1630,23 +1630,6 @@ class TestDisplayCounterProgression:
 
 
 class TestKleinanzeigenBotContactLocationHardening:
-    @pytest.mark.parametrize(
-        ("target", "candidate", "expected"),
-        [
-            ("10115 - Metroville", "10115 - Metroville", True),
-            ("10115 - Metroville", "12623 - Metroville", False),
-            ("Metroville", "12623 - Metroville", True),
-            ("Berlin", "Berlin - Mitte", True),
-            ("Metroville", None, False),
-            ("Berlin", "Hamburg", False),
-            ("Berlin", "berlin", True),
-            ("Berlin", "  Berlin  ", True),
-        ],
-    )
-    def test_location_matches_target(self, test_bot:KleinanzeigenBot, target:str, candidate:str | None, expected:bool) -> None:
-        matcher = getattr(test_bot, "_location_matches_target")
-        assert matcher(target, candidate) is expected
-
     @pytest.mark.asyncio
     async def test_read_city_selection_text_prefers_live_input_value(self, test_bot:KleinanzeigenBot) -> None:
         city_input = MagicMock(spec = Element)
@@ -3057,7 +3040,7 @@ class TestCategorySuggestionPicker:
 class TestShippingDialogFlow:
     """Regression tests for shipping dialog flow using new radio selectors only."""
 
-    shipping_combobox_selector = _VERSAND_COMBOBOX_SELECTOR  # noqa: SLF001 - intentional single source of truth for selector tests
+    shipping_combobox_selector = VERSAND_COMBOBOX_SELECTOR
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -3557,7 +3540,7 @@ class TestWantedShippingSelection:
     dispatch happen during ``publish_ad``.
     """
 
-    shipping_combobox_selector = _VERSAND_COMBOBOX_SELECTOR  # noqa: SLF001 - intentional single source of truth for selector tests
+    shipping_combobox_selector = VERSAND_COMBOBOX_SELECTOR
 
     @contextmanager
     def _mock_publish_dependencies(

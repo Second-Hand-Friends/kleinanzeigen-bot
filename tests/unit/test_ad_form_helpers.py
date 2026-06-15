@@ -13,6 +13,7 @@ from kleinanzeigen_bot.ad_form_helpers import (
     WANTED_SHIPPING_LABELS,
     get_marker_value,
     get_marker_value_from_attrs,
+    location_matches_target,
     normalize_condition,
     xpath_literal,
 )
@@ -138,6 +139,28 @@ def test_wanted_shipping_labels_exact_dict() -> None:
         "SHIPPING": "Versand möglich",
         "PICKUP": "Nur Abholung",
     }
+
+
+# ---------------------------------------------------------------------------
+# location_matches_target
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("target", "candidate", "expected"),
+    [
+        ("10115 - Metroville", "10115 - Metroville", True),
+        ("10115 - Metroville", "12623 - Metroville", False),
+        ("Metroville", "12623 - Metroville", True),
+        ("Berlin", "Berlin - Mitte", True),
+        ("Metroville", None, False),
+        ("Berlin", "Hamburg", False),
+        ("Berlin", "berlin", True),
+        ("Berlin", "  Berlin  ", True),
+    ],
+)
+def test_location_matches_target(target:str, candidate:str | None, expected:bool) -> None:
+    assert location_matches_target(target, candidate) is expected
 
 
 # ---------------------------------------------------------------------------

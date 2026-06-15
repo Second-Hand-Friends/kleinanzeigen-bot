@@ -61,12 +61,6 @@ _LOGGED_OUT_CTA_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CSS_SELECTOR, 'a[href*="einloggen"]'),
     (By.CSS_SELECTOR, 'a[href*="/m-einloggen"]'),
 ]
-_VERSAND_COMBOBOX_SELECTOR:Final[str] = (
-    'button[role="combobox"][id="versand"], '
-    'button[role="combobox"][id$=".versand"], '
-    'button[role="combobox"][aria-labelledby$="versand-selected-option"]'
-)
-
 colorama.just_fix_windows_console()
 
 
@@ -1032,7 +1026,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     try:
                         shipping_btn = await self.web_find(
                             By.CSS_SELECTOR,
-                            _VERSAND_COMBOBOX_SELECTOR,
+                            _ad_form_helpers.VERSAND_COMBOBOX_SELECTOR,
                             timeout = self.timeout("quick_dom"),
                         )
                         btn_id = cast(str, shipping_btn.attrs.get("id"))
@@ -1194,28 +1188,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 ad_cfg.title, ad_id, exc_info = True,
             )
 
-    @staticmethod
-    def _location_matches_target(target:str, candidate:str | None) -> bool:
-        if not candidate:
-            return False
-
-        normalized_target = " ".join(target.split()).casefold()
-        normalized_candidate = " ".join(candidate.split()).casefold()
-        if not normalized_target or not normalized_candidate:
-            return False
-
-        if normalized_target == normalized_candidate:
-            return True
-
-        if " - " in normalized_target:
-            return False
-
-        if normalized_candidate.startswith(f"{normalized_target} - "):
-            return True
-
-        candidate_city = normalized_candidate.rsplit(" - ", maxsplit = 1)[-1]
-        return normalized_target == candidate_city
-
     async def _city_option_text(self, option:Element) -> str:
         text = str(getattr(option, "text", "") or "").strip()
         if text:
@@ -1324,7 +1296,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
         async def _selection_converged() -> bool:
             selected_city = await self._read_city_selection_text()
-            return self._location_matches_target(target, selected_city)
+            return _ad_form_helpers.location_matches_target(target, selected_city)
 
         try:
             await self.web_await(_selection_converged, timeout = city_flow_timeout)
@@ -1337,7 +1309,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return
 
         selected_city = await self._read_city_selection_text()
-        if self._location_matches_target(target, selected_city):
+        if _ad_form_helpers.location_matches_target(target, selected_city):
             return
 
         city_timeout = self.timeout("default")
@@ -1910,7 +1882,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # PostListingForm Astro island.  In that UI the placeholder ("Bitte wählen")
         # must be replaced directly with either "Versand möglich" (value "ja") or
         # "Nur Abholung" (value "nein").
-        shipping_combobox = await self.web_probe(By.CSS_SELECTOR, _VERSAND_COMBOBOX_SELECTOR, timeout = short_timeout)
+        shipping_combobox = await self.web_probe(By.CSS_SELECTOR, _ad_form_helpers.VERSAND_COMBOBOX_SELECTOR, timeout = short_timeout)
         if shipping_combobox is not None:
             try:
                 btn_id = cast(str, shipping_combobox.attrs.get("id"))
