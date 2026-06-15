@@ -16,6 +16,7 @@ from . import ad_form_helpers as _ad_form_helpers
 from . import ad_loading, captcha_flow, delete_flow, download_flow, extend_flow, published_ads
 from . import ad_state as _ad_state
 from . import price_reduction as _price_reduction
+from . import publishing_form as _publishing_form
 from . import publishing_persistence as _publishing_persistence
 from . import publishing_submission as _publishing_submission
 from . import runtime_config as _runtime_config
@@ -1003,7 +1004,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # set category (before title to avoid form reset clearing title)
         #############################
-        await self._set_category(ad_cfg.category, ad_file)
+        await _publishing_form.set_category(self, root_url = self.root_url, category = ad_cfg.category, ad_file = ad_file)
         await self.web_sleep()  # wait for category-dependent fields to render before setting attributes
 
         #############################
@@ -1551,99 +1552,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             raise TimeoutError(_("Unable to close condition dialog!")) from ex
 
         return True
-
-    async def _set_category(self, category:str | None, ad_file:str) -> None:
-        # click on something to trigger automatic category detection
-        await self.web_click(By.ID, "ad-description")
-
-        is_category_auto_selected = False
-        category_path_elem = await self.web_probe(By.ID, "ad-category-path")
-        if category_path_elem and await self._extract_visible_text(category_path_elem):
-            is_category_auto_selected = True
-
-        if category:
-            await self.web_sleep()  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
-            await self.web_click(By.XPATH, "//a[contains(., 'Kategorie')] | //button[contains(., 'Kategorie')]")
-            await self.web_find(By.XPATH, "//button[contains(., 'Weiter')]")
-
-            category_url = f"{self.root_url}/p-kategorie-aendern.html#?path={category}"
-            await self.web_open(category_url)
-            await self.web_click(By.XPATH, "//button[contains(., 'Weiter')]")
-
-            # When the configured path cannot be resolved (e.g. outdated or ambiguous),
-            # the site falls back to a React category-suggestion radio picker. Handle it
-            # by matching a path segment against one of the offered suggestions.
-            await self._resolve_category_suggestions(category)
-        else:
-            ensure(is_category_auto_selected, f"No category specified in [{ad_file}] and automatic category detection failed")
-
-    async def _resolve_category_suggestions(self, category:str) -> None:
-        """Handle Kleinanzeigen's post-redesign category-suggestion picker.
-
-        If ``fieldset#ad-category-picker`` is rendered after the category change
-        flow (because the configured path could not be resolved), try to click
-        the suggestion whose radio ``value`` matches one of the segments of
-        ``category`` (deepest first). The radio input is ``sr-only``, so clicks
-        go on the associated ``<label for="...">``.
-
-        If the picker shell is present but radios have not rendered yet, retry
-        once after a short pause and then raise ``TimeoutError`` so the caller
-        can treat it as a retryable pre-submit failure. Raises
-        ``CategoryResolutionError`` with the list of offered suggestions if none
-        of the segments match — surfaces an actionable error instead of letting
-        the submit retry loop trip the duplicate-guard.
-        """
-        picker_timeout = self.timeout("quick_dom")
-        picker = await self.web_probe(By.ID, "ad-category-picker", timeout = picker_timeout)
-        if picker is None:
-            return
-
-        radio_selector = "#ad-category-picker input[type='radio'][name='category-suggestions']"
-        radio_by_value:dict[str, Element] = {}
-        for attempt in range(2):
-            try:
-                radios = await self.web_find_all(By.CSS_SELECTOR, radio_selector, timeout = picker_timeout)
-            except TimeoutError:
-                radios = []
-
-            radio_by_value = {}
-            for radio in radios:
-                value = str(cast(Any, radio.attrs.get("value")) or "").strip()
-                if value and value not in radio_by_value:
-                    radio_by_value[value] = radio
-
-            if radio_by_value:
-                break
-
-            if attempt == 0:
-                await self.web_sleep(200, 350)
-
-        if not radio_by_value:
-            raise TimeoutError(_("Category suggestion picker element found but no radio suggestions rendered after waiting."))
-
-        # Try deepest-first segments so "73/76/sachbuecher" first probes the leaf, then 76, then 73.
-        for segment in (seg.strip() for seg in reversed(category.split("/")) if seg.strip()):
-            radio = radio_by_value.get(segment)
-            if radio is None:
-                continue
-            radio_id = str(cast(Any, radio.attrs.get("id")) or "")
-            try:
-                if radio_id:
-                    await self.web_click(
-                        By.XPATH,
-                        f"//fieldset[@id='ad-category-picker']//label[@for={_ad_form_helpers.xpath_literal(radio_id)}]",
-                        timeout = picker_timeout,
-                    )
-                else:
-                    await radio.click()
-            except TimeoutError:
-                await radio.click()
-            LOG.info("Category suggestion picker: selected value=%s (matched path segment).", segment)
-            return
-
-        offered = ", ".join(sorted(radio_by_value.keys())) or "(none)"
-        message = _("Category suggestion picker shown, but no segment of configured path '%(category)s' matched the offered suggestions [%(offered)s]. Update the ad's 'category' to an offered ID or a valid full path.")  # noqa: E501
-        raise CategoryResolutionError(message % {"category": category, "offered": offered})
 
     @staticmethod
     def _special_attribute_candidate_priority(elem:Element) -> tuple[int, int]:

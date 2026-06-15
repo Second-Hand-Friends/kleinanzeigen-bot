@@ -170,12 +170,6 @@ kleinanzeigen_bot/__init__.py:
     "Failed to set attribute '%s'": "Fehler beim Setzen des Attributs '%s'"
     "No condition radio matched values %(values)s": "Keine Zustand-Auswahl passt zu den Werten %(values)s"
 
-  _resolve_category_suggestions:
-    ? "Category suggestion picker shown, but no segment of configured path '%(category)s' matched the offered suggestions [%(offered)s]. Update the ad's 'category' to an offered ID or a valid full path."
-    : "Kategorievorschlag-Auswahl wurde angezeigt, aber kein Segment des konfigurierten Pfades '%(category)s' passte zu den angebotenen Vorschlägen [%(offered)s]. Aktualisieren Sie 'category' auf eine angebotene ID oder einen gültigen vollständigen Pfad."
-    "Category suggestion picker: selected value=%s (matched path segment).": "Kategorievorschlag-Auswahl: Wert=%s ausgewählt (passendes Pfad-Segment)."
-    "Category suggestion picker element found but no radio suggestions rendered after waiting.": "Kategorievorschlag-Auswahl gefunden, aber auch nach dem Warten wurden keine Radio-Vorschläge gerendert."
-
   _set_contact_fields:
     "Could not set contact street.": "Kontaktstraße konnte nicht gesetzt werden."
     "Could not set contact name.": "Kontaktname konnte nicht gesetzt werden."
@@ -274,6 +268,15 @@ kleinanzeigen_bot/published_ads.py:
     "No ads found on page %s, stopping pagination": "Keine Anzeigen auf Seite %s gefunden, beende Paginierung"
     "Invalid 'next' page value in paging info: %s, stopping pagination": "Ungültiger 'next'-Seitenwert in Paginierungsinfo: %s, beende Paginierung"
     "Invalid 'pageNum' in paging info: %s, stopping pagination": "Ungültiger 'pageNum'-Wert in Paginierungsinfo: %s, beende Paginierung"
+
+#################################################
+kleinanzeigen_bot/publishing_form.py:
+#################################################
+  resolve_category_suggestions:
+    ? "Category suggestion picker shown, but no segment of configured path '%(category)s' matched the offered suggestions [%(offered)s]. Update the ad's 'category' to an offered ID or a valid full path."
+    : "Kategorievorschlag-Auswahl wurde angezeigt, aber kein Segment des konfigurierten Pfades '%(category)s' passte zu den angebotenen Vorschlägen [%(offered)s]. Aktualisieren Sie 'category' auf eine angebotene ID oder einen gültigen vollständigen Pfad."
+    "Category suggestion picker: selected value=%s (matched path segment).": "Kategorievorschlag-Auswahl: Wert=%s ausgewählt (passendes Pfad-Segment)."
+    "Category suggestion picker element found but no radio suggestions rendered after waiting.": "Kategorievorschlag-Auswahl gefunden, aber auch nach dem Warten wurden keine Radio-Vorschläge gerendert."
 
 #################################################
 kleinanzeigen_bot/publishing_persistence.py:
