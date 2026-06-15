@@ -638,22 +638,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         LOG.warning("############################################")
         await ainput(_("Press ENTER when done..."))
 
-    async def _dismiss_consent_banner(self) -> None:
-        """Dismiss the GDPR/TCF consent banner if it is present.
-
-        This banner can appear on any page navigation (not just after login) and blocks
-        all form interaction until dismissed. Uses a short timeout to avoid slowing down
-        the flow when the banner is already gone.
-        """
-        banner_timeout = self.timeout("quick_dom")
-        element = await self.web_probe(By.ID, "gdpr-banner-accept", timeout = banner_timeout)
-        if element is not None:
-            LOG.debug("Consent banner detected, clicking 'Alle akzeptieren'...")
-            await element.click()
-            await self.web_sleep()
-        else:
-            LOG.debug("Consent banner not present; continuing without dismissal")
-
     async def _check_email_verification(self) -> None:
         email_timeout = self.timeout("email_verification")
         element = await self.web_probe(By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt", timeout = email_timeout)

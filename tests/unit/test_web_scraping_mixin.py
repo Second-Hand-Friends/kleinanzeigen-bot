@@ -110,6 +110,34 @@ def web_scraper(mock_browser:AsyncMock, mock_page:TrulyAwaitableMockPage) -> Web
     return scraper
 
 
+@pytest.mark.asyncio
+async def test_dismiss_consent_banner_clicks_when_present(web_scraper:WebScrapingMixin) -> None:
+    mock_element = AsyncMock()
+    with (
+        patch.object(web_scraper, "timeout", return_value = 2.0),
+        patch.object(web_scraper, "web_probe", new_callable = AsyncMock, return_value = mock_element) as mock_probe,
+        patch.object(web_scraper, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+    ):
+        await web_scraper._dismiss_consent_banner()
+
+        mock_probe.assert_awaited_once()
+        mock_element.click.assert_awaited_once()
+        mock_sleep.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_dismiss_consent_banner_does_nothing_when_absent(web_scraper:WebScrapingMixin) -> None:
+    with (
+        patch.object(web_scraper, "timeout", return_value = 2.0),
+        patch.object(web_scraper, "web_probe", new_callable = AsyncMock, return_value = None) as mock_probe,
+        patch.object(web_scraper, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+    ):
+        await web_scraper._dismiss_consent_banner()
+
+        mock_probe.assert_awaited_once()
+        mock_sleep.assert_not_awaited()
+
+
 def test_write_initial_prefs(tmp_path:Path) -> None:
     """Test _write_initial_prefs helper function."""
     from kleinanzeigen_bot.utils.web_scraping_mixin import _write_initial_prefs  # noqa: PLC0415, PLC2701

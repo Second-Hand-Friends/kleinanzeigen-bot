@@ -1640,6 +1640,22 @@ class WebScrapingMixin:  # noqa: PLR0904
         await self.web_sleep()
         return listbox
 
+    async def _dismiss_consent_banner(self) -> None:
+        """Dismiss the GDPR/TCF consent banner if it is present.
+
+        This banner can appear on any page navigation (not just after login) and blocks
+        all form interaction until dismissed. Uses a short timeout to avoid slowing down
+        the flow when the banner is already gone.
+        """
+        banner_timeout = self.timeout("quick_dom")
+        element = await self.web_probe(By.ID, "gdpr-banner-accept", timeout = banner_timeout)
+        if element is not None:
+            LOG.debug("Consent banner detected, clicking accept-all button...")
+            await element.click()
+            await self.web_sleep()
+        else:
+            LOG.debug("Consent banner not present; continuing without dismissal")
+
     async def _find_associated_button_combobox(self, *, hidden_input_name:str) -> str | None:  # pragma: no cover — browser JS helper
         """Locate a ``<button role="combobox">`` by walking from its backing hidden input.
 
