@@ -28,6 +28,7 @@ from kleinanzeigen_bot.model.config_model import (
     DiagnosticsConfig,
     PublishingConfig,
 )
+from kleinanzeigen_bot.publishing_form import resolve_category_suggestions, set_category
 from kleinanzeigen_bot.utils import xdg_paths
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
@@ -1149,7 +1150,7 @@ class TestKleinanzeigenBotBasics:
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock) as web_open_mock,
             patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_category", new_callable = AsyncMock, side_effect = TimeoutError("image upload timeout")),
+            patch("kleinanzeigen_bot.publishing_form.set_category", new_callable = AsyncMock, side_effect = TimeoutError("image upload timeout")),
             pytest.raises(TimeoutError, match = "image upload timeout"),
         ):
             await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], mode)
@@ -1190,7 +1191,7 @@ class TestKleinanzeigenBotBasics:
         common_patches:list[Any] = [
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_category", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_category", new_callable = AsyncMock),
             patch.object(test_bot, "_set_special_attributes", new_callable = AsyncMock),
             patch.object(test_bot, "_set_contact_fields", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
@@ -2905,7 +2906,7 @@ class TestCategoryProbeBehavior:
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
-            await getattr(test_bot, "_set_category")("185/249", "data/my_ads/ad.yaml")
+            await set_category(test_bot, root_url = test_bot.root_url, category = "185/249", ad_file = "data/my_ads/ad.yaml")
 
         mock_probe.assert_any_await(By.ID, "ad-category-path")
 
@@ -2917,7 +2918,7 @@ class TestCategoryProbeBehavior:
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             pytest.raises(AssertionError, match = "No category specified"),
         ):
-            await getattr(test_bot, "_set_category")(None, "data/my_ads/ad.yaml")
+            await set_category(test_bot, root_url = test_bot.root_url, category = None, ad_file = "data/my_ads/ad.yaml")
 
 
 class TestCategorySuggestionPicker:
@@ -2953,7 +2954,7 @@ class TestCategorySuggestionPicker:
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock) as mock_find_all,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
-            await getattr(test_bot, "_resolve_category_suggestions")("73/76/sachbuecher")
+            await resolve_category_suggestions(test_bot, "73/76/sachbuecher")
 
         mock_find_all.assert_not_awaited()
         mock_click.assert_not_awaited()
@@ -2968,7 +2969,7 @@ class TestCategorySuggestionPicker:
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             pytest.raises(TimeoutError, match = "Category suggestion picker element found but no radio suggestions rendered after waiting."),
         ):
-            await getattr(test_bot, "_resolve_category_suggestions")("73/76/sachbuecher")
+            await resolve_category_suggestions(test_bot, "73/76/sachbuecher")
 
         assert mock_find_all.await_count == 2
         mock_sleep.assert_awaited_once()
@@ -2988,7 +2989,7 @@ class TestCategorySuggestionPicker:
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = radios),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
-            await getattr(test_bot, "_resolve_category_suggestions")("73/77")
+            await resolve_category_suggestions(test_bot, "73/77")
 
         mock_click.assert_awaited_once()
         selector_type, selector_value = mock_click.call_args.args[:2]
@@ -3011,7 +3012,7 @@ class TestCategorySuggestionPicker:
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             pytest.raises(CategoryResolutionError, match = r"Category suggestion picker shown.*offered") as exc_info,
         ):
-            await getattr(test_bot, "_resolve_category_suggestions")("999/888")
+            await resolve_category_suggestions(test_bot, "999/888")
 
         mock_click.assert_not_awaited()
         error_message = str(exc_info.value)
@@ -3031,7 +3032,7 @@ class TestCategorySuggestionPicker:
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = radios),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
-            await getattr(test_bot, "_resolve_category_suggestions")("76/77")
+            await resolve_category_suggestions(test_bot, "76/77")
 
         mock_click.assert_awaited_once()
         assert "label[@for='id-for-77']" in mock_click.call_args.args[1]
@@ -3561,7 +3562,7 @@ class TestWantedShippingSelection:
             patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock, return_value = ""),
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_category", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_category", new_callable = AsyncMock),
             patch.object(test_bot, "_set_special_attributes", new_callable = AsyncMock),
             patch.object(test_bot, "_set_shipping", new_callable = AsyncMock),
             patch.object(test_bot, "_set_contact_fields", new_callable = AsyncMock),
@@ -3739,7 +3740,7 @@ class TestBuyNowRadioWarning:
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_category", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_category", new_callable = AsyncMock),
             patch.object(test_bot, "_set_special_attributes", new_callable = AsyncMock),
             patch.object(test_bot, "_set_shipping", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
@@ -4216,7 +4217,7 @@ class TestImageCleanupInPublishAd:
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_category", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_category", new_callable = AsyncMock),
             patch.object(test_bot, "_set_special_attributes", new_callable = AsyncMock),
             patch.object(test_bot, "_set_shipping", new_callable = AsyncMock),
             patch.object(test_bot, "web_input", new_callable = AsyncMock),
