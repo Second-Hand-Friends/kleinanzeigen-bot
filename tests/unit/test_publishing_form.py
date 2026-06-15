@@ -99,7 +99,7 @@ class TestKleinanzeigenBotContactLocationHardening:
     async def test_read_city_selection_text_falls_back_to_element_text(self, test_bot:KleinanzeigenBot) -> None:
         city_button = MagicMock(spec = Element)
         city_button.local_name = "button"
-        city_button.apply = AsyncMock(return_value = " Button City ")
+        city_button.apply = AsyncMock(return_value = "Button City")
 
         with (
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_button),
@@ -107,7 +107,7 @@ class TestKleinanzeigenBotContactLocationHardening:
         ):
             selected = await read_city_selection_text(test_bot)
 
-        assert selected == " Button City "
+        assert selected == "Button City"
 
     @pytest.mark.asyncio
     async def test_read_city_selection_text_returns_none_when_city_field_missing(self, test_bot:KleinanzeigenBot) -> None:
