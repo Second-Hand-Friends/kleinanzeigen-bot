@@ -13,14 +13,22 @@ from kleinanzeigen_bot.model.ad_model import validate_condition_api_mapping
 __all__ = [
     "CONDITION_GERMAN_TO_API",
     "SPECIAL_ATTRIBUTE_TOKEN_RE",
+    "VERSAND_COMBOBOX_SELECTOR",
     "WANTED_SHIPPING_LABELS",
     "get_marker_value",
     "get_marker_value_from_attrs",
+    "location_matches_target",
     "normalize_condition",
     "xpath_literal",
 ]
 
 SPECIAL_ATTRIBUTE_TOKEN_RE:Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_]+$")
+
+VERSAND_COMBOBOX_SELECTOR:Final[str] = (
+    'button[role="combobox"][id="versand"], '
+    'button[role="combobox"][id$=".versand"], '
+    'button[role="combobox"][aria-labelledby$="versand-selected-option"]'
+)
 
 WANTED_SHIPPING_LABELS:Final[dict[str, str]] = {
     "SHIPPING": "Versand möglich",
@@ -51,6 +59,41 @@ def normalize_condition(condition_value:str) -> tuple[str, str | None]:
     if canonical_value != condition_value:
         return canonical_value, condition_value
     return condition_value, None
+
+
+def location_matches_target(target:str, candidate:str | None) -> bool:
+    """Check if a city candidate matches the target location.
+
+    Returns ``True`` if the candidate (as displayed in a city combobox) matches
+    the given target location.  Handles zip-code prefixes (``"10115 - Berlin"``),
+    whitespace normalization, and case folding.
+
+    Args:
+        target: The expected location string (e.g. ``"Berlin"`` or ``"10115 - Berlin"``).
+        candidate: The candidate string from a city combobox option, or ``None``.
+
+    Returns:
+        ``True`` if the candidate matches the target.
+    """
+    if not candidate:
+        return False
+
+    normalized_target = " ".join(target.split()).casefold()
+    normalized_candidate = " ".join(candidate.split()).casefold()
+    if not normalized_target or not normalized_candidate:
+        return False
+
+    if normalized_target == normalized_candidate:
+        return True
+
+    if " - " in normalized_target:
+        return False
+
+    if normalized_candidate.startswith(f"{normalized_target} - "):
+        return True
+
+    candidate_city = normalized_candidate.rsplit(" - ", maxsplit = 1)[-1]
+    return normalized_target == candidate_city
 
 
 def xpath_literal(value:str) -> str:
