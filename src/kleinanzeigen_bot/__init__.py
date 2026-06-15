@@ -16,7 +16,7 @@ from . import ad_form_helpers as _ad_form_helpers
 from . import ad_loading, captcha_flow, delete_flow, download_flow, extend_flow, published_ads
 from . import ad_state as _ad_state
 from . import price_reduction as _price_reduction
-from . import publishing_flow as _publishing_flow
+from . import publishing_persistence as _publishing_persistence
 from . import publishing_submission as _publishing_submission
 from . import runtime_config as _runtime_config
 from ._version import __version__
@@ -1203,7 +1203,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         ad_id = await _publishing_submission.submit_and_confirm_ad(self, ad_file, ad_cfg, mode, captcha_config = self.config.captcha)
 
         try:
-            _publishing_flow.persist_published_ad(ad_file, ad_cfg, ad_cfg_orig, old_ad_id, ad_id, mode, config = self.config)
+            _publishing_persistence.persist_published_ad(ad_file, ad_cfg, ad_cfg_orig, old_ad_id, ad_id, mode, config = self.config)
         except Exception:
             LOG.error(  # noqa: G201 — must use .error(exc_info=True) for translation lookup to resolve publish_ad
                 "Post-publish persistence failed for '%s' (ad ID %s - ad is live on Kleinanzeigen but local YAML may be out of sync)",

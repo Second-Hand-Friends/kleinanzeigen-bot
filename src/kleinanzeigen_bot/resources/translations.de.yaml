@@ -276,7 +276,7 @@ kleinanzeigen_bot/published_ads.py:
     "Invalid 'pageNum' in paging info: %s, stopping pagination": "Ungültiger 'pageNum'-Wert in Paginierungsinfo: %s, beende Paginierung"
 
 #################################################
-kleinanzeigen_bot/publishing_flow.py:
+kleinanzeigen_bot/publishing_persistence.py:
 #################################################
   persist_published_ad:
     " -> SUCCESS: ad published with ID %s": " -> ERFOLG: Anzeige mit ID %s veröffentlicht"

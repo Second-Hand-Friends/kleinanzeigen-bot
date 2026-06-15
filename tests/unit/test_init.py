@@ -1316,7 +1316,7 @@ class TestKleinanzeigenBotBasics:
                 web_execute_side_effect = [stale_confirmation_url, stale_confirmation_url, "var x = 42;"],
                 mock_redirect_recovery = False,
             ),
-            patch("kleinanzeigen_bot.publishing_flow.persist_published_ad") as mock_persist,
+            patch("kleinanzeigen_bot.publishing_persistence.persist_published_ad") as mock_persist,
             pytest.raises(PublishSubmissionUncertainError, match = "submission may have succeeded before failure"),
         ):
             await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
