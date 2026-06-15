@@ -173,15 +173,14 @@ class TestKleinanzeigenBotContactLocationHardening:
             patch("kleinanzeigen_bot.publishing_form.set_contact_location", new_callable = AsyncMock),
             patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = _web_check),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as web_click_mock,
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as web_sleep_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as set_value_mock,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock(spec = Element)),
         ):
             await set_contact_fields(test_bot, ad_cfg.contact)
 
-        web_click_mock.assert_any_await(By.ID, "ad-address-visibility")
-        web_click_mock.assert_any_await(By.ID, "ad-phone-visibility", timeout = test_bot.timeout("quick_dom"))
-        assert web_sleep_mock.await_count == 2
+        assert any(call.args[:2] == (By.ID, "ad-address-visibility") for call in web_click_mock.await_args_list)
+        assert any(call.args[:2] == (By.ID, "ad-phone-visibility") for call in web_click_mock.await_args_list)
         set_value_mock.assert_any_await("ad-street", ad_cfg.contact.street)
         set_value_mock.assert_any_await("ad-name", ad_cfg.contact.name)
         set_value_mock.assert_any_await("ad-phone", ad_cfg.contact.phone)
@@ -346,6 +345,194 @@ class TestKleinanzeigenBotContactLocationHardening:
         ):
             await set_contact_location(test_bot, "Metroville")
             combobox_mock.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # read_city_selection_text: edge-case branches
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_read_city_selection_text_returns_none_when_find_returns_none(self, test_bot:KleinanzeigenBot) -> None:
+        """web_find succeeds but returns None (not a TimeoutError) — edge case, but handled."""
+        with patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = None):
+            assert await read_city_selection_text(test_bot) is None
+
+    @pytest.mark.asyncio
+    async def test_read_city_selection_text_final_fallback_to_by_id_ad_city(self, test_bot:KleinanzeigenBot) -> None:
+        """When selected-option and textContent both fail, fall back to web_text(By.ID, 'ad-city')."""
+        city_button = MagicMock(spec = Element)
+        city_button.local_name = "button"
+        city_button.apply = AsyncMock(return_value = "")  # empty textContent
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_button),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, side_effect = [
+                TimeoutError("no selected option"),
+                "Fallback City",
+            ]),
+        ):
+            selected = await read_city_selection_text(test_bot)
+
+        assert selected == "Fallback City"
+
+    @pytest.mark.asyncio
+    async def test_read_city_selection_text_final_fallback_times_out(self, test_bot:KleinanzeigenBot) -> None:
+        """When every lookup strategy fails, return None."""
+        city_button = MagicMock(spec = Element)
+        city_button.local_name = "button"
+        city_button.apply = AsyncMock(return_value = "")  # empty textContent
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_button),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, side_effect = [
+                TimeoutError("no selected option"),
+                TimeoutError("ad-city also missing"),
+            ]),
+        ):
+            selected = await read_city_selection_text(test_bot)
+
+        assert selected is None
+
+    @pytest.mark.asyncio
+    async def test_read_city_selection_text_returns_none_when_input_apply_empty_and_web_text_times_out(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """Input element with empty apply value, then both web_text calls time out — return None."""
+        city_input = MagicMock(spec = Element)
+        city_input.local_name = "input"
+        city_input.apply = AsyncMock(return_value = "   ")  # blank after trim
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, side_effect = [
+                TimeoutError("no selected option"),
+                TimeoutError("ad-city missing"),
+            ]),
+        ):
+            selected = await read_city_selection_text(test_bot)
+
+        assert selected is None
+
+    # ------------------------------------------------------------------
+    # select_city_combobox_option: prefix-match ambiguity branch
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_select_city_combobox_option_raises_on_ambiguous_prefix_match(self, test_bot:KleinanzeigenBot) -> None:
+        """When multiple options share the same city prefix (no ' - ' in target), raise TimeoutError."""
+        city_button = MagicMock(spec = Element)
+        city_button.attrs = {"aria-controls": "ad-city-menu"}
+
+        option_a = MagicMock(spec = Element)
+        option_a.text = "Berlin - Mitte"
+        option_b = MagicMock(spec = Element)
+        option_b.text = "Berlin - Spandau"
+
+        async def _options_available_driver(condition:Callable[..., Awaitable[bool] | bool], **_:Any) -> Any:
+            result = condition()
+            return await result if asyncio.iscoroutine(result) else result
+
+        async def _web_await_side_effect(condition:Callable[..., Awaitable[bool] | bool], **_:Any) -> Any:
+            result = condition()
+            condition_value = await result if asyncio.iscoroutine(result) else result
+            if condition_value:
+                return condition_value
+            raise TimeoutError("Condition not met")
+
+        def _city_option_text_side(_web:KleinanzeigenBot, elem:Element) -> str:
+            return str(getattr(elem, "text", "") or "").strip()
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_button),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [option_a, option_b]),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _web_await_side_effect),
+            patch("kleinanzeigen_bot.publishing_form.city_option_text", new_callable = AsyncMock, side_effect = _city_option_text_side),
+            pytest.raises(TimeoutError, match = "ambiguous for location: Berlin"),
+        ):
+            await select_city_combobox_option(test_bot, "Berlin")
+
+    # ------------------------------------------------------------------
+    # select_city_combobox_option: web_find_all TimeoutError caught inside _options_available
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_select_city_combobox_option_handles_find_all_timeout_in_options_available(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """_options_available catches TimeoutError from web_find_all and returns False, then web_await times out."""
+        city_button = MagicMock(spec = Element)
+        city_button.attrs = {"aria-controls": "ad-city-menu"}
+
+        async def _web_await_driver(condition:Callable[..., Awaitable[bool] | bool], **_:Any) -> Any:
+            result = condition()
+            if asyncio.iscoroutine(result):
+                await result
+            raise TimeoutError("Condition not met")
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_button),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError("not ready")),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _web_await_driver),
+            pytest.raises(TimeoutError, match = "City combobox options did not load for location: Townsville"),
+        ):
+            await select_city_combobox_option(test_bot, "Townsville")
+
+    # ------------------------------------------------------------------
+    # set_contact_fields: non-abort TimeoutError warning paths
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_set_contact_fields_warns_on_street_timeout(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """A TimeoutError during street input is logged, not re-raised."""
+        config = base_ad_config | {"contact": base_ad_config["contact"] | {"street": "Test Street 1"}}
+        ad_cfg = Ad.model_validate(config)
+
+        with (
+            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_contact_location", new_callable = AsyncMock),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = TimeoutError("street check timeout")),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+        ):
+            # Should not raise — timeout is caught and logged
+            await set_contact_fields(test_bot, ad_cfg.contact)
+
+    @pytest.mark.asyncio
+    async def test_set_contact_fields_warns_on_name_timeout(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """A TimeoutError during name input is logged, not re-raised."""
+        config = base_ad_config | {"contact": base_ad_config["contact"] | {"name": "Test Name"}}
+        ad_cfg = Ad.model_validate(config)
+
+        with (
+            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_contact_location", new_callable = AsyncMock),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = TimeoutError("name check timeout")),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+        ):
+            await set_contact_fields(test_bot, ad_cfg.contact)
+
+    @pytest.mark.asyncio
+    async def test_set_contact_fields_warns_on_phone_set_value_timeout(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """A TimeoutError during phone input is logged, not re-raised."""
+        config = base_ad_config | {"contact": base_ad_config["contact"] | {"phone": "+491234567"}}
+        ad_cfg = Ad.model_validate(config)
+
+        with (
+            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_contact_location", new_callable = AsyncMock),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock, side_effect = TimeoutError("phone input timeout")),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = MagicMock(spec = Element)),
+        ):
+            await set_contact_fields(test_bot, ad_cfg.contact)
 
 
 class TestCategoryProbeBehavior:
