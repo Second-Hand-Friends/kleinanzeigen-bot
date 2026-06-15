@@ -37,8 +37,8 @@ def _make_rename_result(*, renamed:bool = False, blocked:bool = False, id_mismat
         ),
         renamed_image_count = 0,
         blocked_image_count = 0,
-        path_old_id = 1 if id_mismatch else 2,
-        yaml_old_id = 1 if id_mismatch else 2,
+        path_old_id = 1,
+        yaml_old_id = 3 if id_mismatch else 1,
     )
 
 
