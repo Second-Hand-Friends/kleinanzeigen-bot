@@ -428,10 +428,6 @@ class TestKleinanzeigenBotContactLocationHardening:
         option_b = MagicMock(spec = Element)
         option_b.text = "Berlin - Spandau"
 
-        async def _options_available_driver(condition:Callable[..., Awaitable[bool] | bool], **_:Any) -> Any:
-            result = condition()
-            return await result if asyncio.iscoroutine(result) else result
-
         async def _web_await_side_effect(condition:Callable[..., Awaitable[bool] | bool], **_:Any) -> Any:
             result = condition()
             condition_value = await result if asyncio.iscoroutine(result) else result
@@ -467,8 +463,9 @@ class TestKleinanzeigenBotContactLocationHardening:
 
         async def _web_await_driver(condition:Callable[..., Awaitable[bool] | bool], **_:Any) -> Any:
             result = condition()
-            if asyncio.iscoroutine(result):
-                await result
+            condition_value = await result if asyncio.iscoroutine(result) else result
+            if condition_value:
+                return condition_value
             raise TimeoutError("Condition not met")
 
         with (
