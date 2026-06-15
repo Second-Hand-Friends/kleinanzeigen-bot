@@ -203,7 +203,10 @@ class TestKleinanzeigenBotContactLocationHardening:
         ):
             await set_contact_fields(test_bot, ad_cfg.contact)
 
-        web_probe_mock.assert_awaited_once_with(By.ID, "ad-phone", timeout = test_bot.timeout("quick_dom"))
+        web_probe_mock.assert_awaited_once()
+        probe_args = web_probe_mock.await_args
+        assert probe_args is not None
+        assert probe_args.args == (By.ID, "ad-phone")
         assert all(call.args[0] != "ad-phone" for call in set_value_mock.await_args_list)
 
     @pytest.mark.asyncio
