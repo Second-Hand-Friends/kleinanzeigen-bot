@@ -21,7 +21,6 @@ from . import publishing_persistence as _publishing_persistence
 from . import publishing_submission as _publishing_submission
 from . import runtime_config as _runtime_config
 from ._version import __version__
-from .ad_description import get_ad_description
 from .model.ad_model import CARRIER_CODE_BY_OPTION, CARRIER_CODES_BY_SIZE, SIZE_INFO_BY_CARRIER_CODE, Ad
 from .model.ad_model import (
     AdUpdateStrategy as AdUpdateStrategy,
@@ -1036,50 +1035,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         else:
             LOG.debug("Shipping step skipped - reason: NOT_APPLICABLE")
 
-        #############################
-        # set price
-        #############################
-        price_type = ad_cfg.price_type
-        if price_type != "NOT_APPLICABLE":
-            price_type_options = {"FIXED": 0, "NEGOTIABLE": 1, "GIVE_AWAY": 2}
-            option_idx = price_type_options.get(price_type)
-            if option_idx is not None:
-                try:
-                    await self.web_click(By.ID, "ad-price-type")
-                    await self.web_click(By.ID, f"ad-price-type-menu-option-{option_idx}")
-                except TimeoutError as ex:
-                    raise TimeoutError(_("Failed to set price type '%s'") % price_type) from ex
-            if ad_cfg.price is not None:
-                await self.web_set_input_value("ad-price-amount", str(ad_cfg.price))
-
-        #############################
-        # set sell_directly
-        #############################
-        if ad_cfg.type != "WANTED":
-            sell_directly = ad_cfg.sell_directly
-            quick_dom = self.timeout("quick_dom")
-            if ad_cfg.shipping_type == "SHIPPING":
-                if sell_directly and price_type in {"FIXED", "NEGOTIABLE"}:
-                    buy_now_true = await self.web_probe(By.ID, "ad-buy-now-true", timeout = quick_dom)
-                    if buy_now_true is None:
-                        LOG.warning("Direct-buy (sell_directly) is not available for the selected category. Skipping.")
-                    elif not await self.web_check(By.ID, "ad-buy-now-true", Is.SELECTED, timeout = quick_dom):
-                        await self.web_click(By.ID, "ad-buy-now-true", timeout = quick_dom)
-                else:
-                    buy_now_false = await self.web_probe(By.ID, "ad-buy-now-false", timeout = quick_dom)
-                    if buy_now_false and not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = quick_dom):
-                        await self.web_click(By.ID, "ad-buy-now-false", timeout = quick_dom)
-            else:
-                # For PICKUP/other types: always opt out of buy-now if the radio exists
-                buy_now_false = await self.web_probe(By.ID, "ad-buy-now-false", timeout = quick_dom)
-                if buy_now_false and not await self.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = quick_dom):
-                    await self.web_click(By.ID, "ad-buy-now-false", timeout = quick_dom)
-
-        #############################
-        # set description
-        #############################
-        description = get_ad_description(ad_cfg, self.config.ad_defaults, with_affixes = True)
-        await self.web_set_input_value("ad-description", description)
+        await _publishing_form.set_pricing_fields(self, ad_cfg, self.config.ad_defaults)
 
         await _publishing_form.set_contact_fields(self, ad_cfg.contact)
 
