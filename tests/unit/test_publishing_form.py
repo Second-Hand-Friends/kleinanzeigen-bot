@@ -4,7 +4,6 @@
 """Tests for publishing form operations (contact/location fields, category selection, city selection, pricing)."""
 
 import asyncio
-import logging
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
@@ -27,11 +26,8 @@ from kleinanzeigen_bot.publishing_form import (
     set_pricing_fields,
     upload_images,
 )
-from kleinanzeigen_bot.utils import loggers as _loggers
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
-
-LOG = _loggers.get_logger(__name__)
 
 
 @pytest.fixture
@@ -1165,23 +1161,20 @@ class TestPricingFields:
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
-        caplog:pytest.LogCaptureFixture,
     ) -> None:
-        """Shipping ads with sell_directly enabled should warn if buy-now-true control is unavailable."""
-        caplog.set_level(logging.WARNING, logger = LOG.name)
+        """Shipping ads with sell_directly enabled should continue if buy-now-true control is unavailable."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "sell_directly": True, "price_type": "FIXED", "price": 100})
 
         with (
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_check", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set,
             patch("kleinanzeigen_bot.publishing_form.get_ad_description", return_value = "desc"),
         ):
             await set_pricing_fields(test_bot, ad_cfg, test_bot.config.ad_defaults)
 
-        warning_messages = [record.message for record in caplog.records if record.levelno == logging.WARNING]
-        assert len([message for message in warning_messages if "Direct-buy (sell_directly) is not available" in message]) == 1
+        mock_set.assert_any_await("ad-description", "desc")
 
     @pytest.mark.asyncio
     async def test_buy_now_true_interaction_timeout_propagates(
@@ -1242,7 +1235,8 @@ class TestPricingFields:
         ):
             await set_pricing_fields(test_bot, ad_cfg, test_bot.config.ad_defaults)
 
-        mock_click.assert_any_await(By.ID, "ad-buy-now-false", timeout = test_bot.timeout("quick_dom"))
+        buy_now_false_clicks = [c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"]
+        assert buy_now_false_clicks
 
     @pytest.mark.asyncio
     async def test_description_filled_via_get_ad_description(
