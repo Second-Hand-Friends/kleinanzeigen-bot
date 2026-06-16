@@ -146,8 +146,6 @@ kleinanzeigen_bot/__init__.py:
     "Shipping step skipped - reason: NOT_APPLICABLE": "Versandschritt übersprungen: Versand nicht anwendbar (Status = NOT_APPLICABLE)"
     "Shipping combobox button has no id attribute": "Versand-Combobox-Button hat kein ID-Attribut"
     "Direct-buy (sell_directly) is not available for the selected category. Skipping.": "Direktkauf (sell_directly) ist für die ausgewählte Kategorie nicht verfügbar. Überspringe."
-    "Image cleanup failed before upload. Removed %(removed)d of %(total)d existing images.": "Bildbereinigung vor dem Hochladen fehlgeschlagen. %(removed)d von %(total)d vorhandenen Bildern wurden entfernt."
-    " -> removed %d existing image(s) before upload": " -> %d vorhandene Bilder vor dem Hochladen entfernt"
 
   update_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
@@ -169,18 +167,6 @@ kleinanzeigen_bot/__init__.py:
     "Unable to select condition [%s]": "Zustand [%s] konnte nicht ausgewählt werden"
     "Failed to set attribute '%s'": "Fehler beim Setzen des Attributs '%s'"
     "No condition radio matched values %(values)s": "Keine Zustand-Auswahl passt zu den Werten %(values)s"
-
-  _upload_images:
-    " -> found %s": "-> %s gefunden"
-    "image": "Bild"
-    " -> uploading image %s/%s [%s]": " -> Lade Bild %s/%s [%s] hoch"
-    " -> waiting for %s to be processed...": " -> Warte auf Verarbeitung von %s..."
-    " -> all images uploaded successfully": " -> Alle Bilder erfolgreich hochgeladen"
-    "Image upload timeout exceeded": "Zeitüberschreitung beim Hochladen der Bilder"
-    "Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d processed images.": "Nicht alle Bilder wurden innerhalb der Zeitüberschreitung hochgeladen. Erwartet: %(expected)d, gefunden: %(found)d verarbeitete Bilder."
-
-  check_thumbnails_uploaded:
-    " -> %d of %d images processed": " -> %d von %d Bildern verarbeitet"
 
   _select_button_combobox:
     "Option '%(value)s' not found in button combobox '%(id)s'": "Option '%(value)s' nicht in Button-Combobox '%(id)s' gefunden"
@@ -277,6 +263,22 @@ kleinanzeigen_bot/publishing_form.py:
     : "Kategorievorschlag-Auswahl wurde angezeigt, aber kein Segment des konfigurierten Pfades '%(category)s' passte zu den angebotenen Vorschlägen [%(offered)s]. Aktualisieren Sie 'category' auf eine angebotene ID oder einen gültigen vollständigen Pfad."
     "Category suggestion picker: selected value=%s (matched path segment).": "Kategorievorschlag-Auswahl: Wert=%s ausgewählt (passendes Pfad-Segment)."
     "Category suggestion picker element found but no radio suggestions rendered after waiting.": "Kategorievorschlag-Auswahl gefunden, aber auch nach dem Warten wurden keine Radio-Vorschläge gerendert."
+
+  fill_image_section:
+    "Image cleanup failed before upload. Removed %(removed)d of %(total)d existing images.": "Bildbereinigung vor dem Hochladen fehlgeschlagen. %(removed)d von %(total)d vorhandenen Bildern wurden entfernt."
+    " -> removed %d existing image(s) before upload": " -> %d vorhandene Bilder vor dem Hochladen entfernt"
+
+  upload_images:
+    " -> found %s": "-> %s gefunden"
+    "image": "Bild"
+    " -> uploading image %s/%s [%s]": " -> Lade Bild %s/%s [%s] hoch"
+    " -> waiting for %s to be processed...": " -> Warte auf Verarbeitung von %s..."
+    " -> all images uploaded successfully": " -> Alle Bilder erfolgreich hochgeladen"
+    "Image upload timeout exceeded": "Zeitüberschreitung beim Hochladen der Bilder"
+    "Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d processed images.": "Nicht alle Bilder wurden innerhalb der Zeitüberschreitung hochgeladen. Erwartet: %(expected)d, gefunden: %(found)d verarbeitete Bilder."
+
+  check_thumbnails_uploaded:
+    " -> %d of %d images processed": " -> %d von %d Bildern verarbeitet"
 
 #################################################
 kleinanzeigen_bot/publishing_persistence.py:

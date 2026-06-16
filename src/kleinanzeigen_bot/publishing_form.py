@@ -7,10 +7,11 @@
 from gettext import gettext as _
 from typing import Any, Final, cast
 
-from .ad_form_helpers import location_matches_target, xpath_literal
-from .model.ad_model import Contact
+from .ad_form_helpers import get_marker_value, location_matches_target, xpath_literal
+from .model.ad_model import Ad, Contact
 from .utils import loggers as _loggers
 from .utils.exceptions import CategoryResolutionError
+from .utils.i18n import pluralize
 from .utils.misc import ensure
 from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
 
@@ -317,3 +318,101 @@ async def set_contact_fields(web:WebScrapingMixin, contact:Contact) -> None:
                 await web.web_set_input_value("ad-phone", contact.phone)
             except TimeoutError as ex:
                 LOG.warning("Could not set contact phone despite visible phone field: %s", ex)
+
+
+async def fill_image_section(web:WebScrapingMixin, ad_cfg:Ad) -> None:
+    #############################
+    # delete previous images to ensure a clean slate
+    # (needed for MODIFY because we don't know which changed,
+    #  and as defensive cleanup when the form is pre-populated with thumbnails)
+    #############################
+    remove_button_selector = "button[aria-label='Bild entfernen']"
+    hidden_marker_selector = "input[name^='adImages'][name$='.url']"
+    quick_dom = web.timeout("quick_dom")
+    removed_count = 0
+
+    try:
+        existing_markers = await web._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom)  # noqa: SLF001 - WebScrapingMixin fast marker probe
+        existing_image_count = sum(1 for marker in existing_markers if get_marker_value(marker))
+    except TimeoutError:
+        existing_image_count = 0
+
+    if existing_image_count:
+        for idx in range(existing_image_count):
+            remove_btn = await web.web_probe(By.CSS_SELECTOR, remove_button_selector, timeout = quick_dom)
+            if remove_btn is None:
+                raise TimeoutError(
+                    _("Image cleanup failed before upload. Removed %(removed)d of %(total)d existing images.")
+                    % {"removed": idx, "total": existing_image_count}
+                )
+            await remove_btn.click()
+            removed_count += 1
+            await web.web_sleep(300, 500)
+
+    if removed_count > 0:
+        LOG.info(" -> removed %d existing image(s) before upload", removed_count)
+        # Let async DOM updates settle before capturing hidden-marker baseline
+        await web.web_sleep(200, 350)
+
+    #############################
+    # upload images
+    #############################
+    await upload_images(web, ad_cfg)
+
+
+async def upload_images(web:WebScrapingMixin, ad_cfg:Ad) -> None:
+    if not ad_cfg.images:
+        return
+
+    LOG.info(" -> found %s", pluralize("image", ad_cfg.images))
+    hidden_marker_selector = "input[name^='adImages'][name$='.url']"
+    quick_dom_timeout = web.timeout("quick_dom")
+
+    # Capture marker baseline before this upload attempt to avoid counting stale values
+    baseline_marker_count = 0
+    try:
+        baseline_markers = await web._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom_timeout)  # noqa: SLF001 - WebScrapingMixin fast marker probe
+        baseline_marker_count = sum(1 for marker in baseline_markers if get_marker_value(marker))
+    except TimeoutError:
+        baseline_marker_count = 0
+
+    if baseline_marker_count:
+        LOG.debug(" -> detected %d pre-existing image marker(s) before upload", baseline_marker_count)
+
+    total_images = len(ad_cfg.images)
+    for index, image in enumerate(ad_cfg.images, start = 1):
+        image_upload:Element = await web.web_find(By.CSS_SELECTOR, "input[type=file]")
+        LOG.info(" -> uploading image %s/%s [%s]", index, total_images, image)
+        await image_upload.send_file(image)
+        await web.web_sleep()
+
+    # Wait for all images to be processed
+    expected_count = len(ad_cfg.images)
+    LOG.info(" -> waiting for %s to be processed...", pluralize("image", ad_cfg.images))
+
+    async def count_processed_images() -> int:
+        try:
+            markers = await web._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom_timeout)  # noqa: SLF001 - WebScrapingMixin fast marker probe
+            marker_count = sum(1 for marker in markers if get_marker_value(marker))
+        except TimeoutError:
+            marker_count = 0
+
+        return max(0, marker_count - baseline_marker_count)
+
+    async def check_thumbnails_uploaded() -> bool:
+        current_count = await count_processed_images()
+        if current_count < expected_count:
+            LOG.debug(" -> %d of %d images processed", current_count, expected_count)
+        return current_count >= expected_count
+
+    try:
+        await web.web_await(check_thumbnails_uploaded, timeout = web.timeout("image_upload"), timeout_error_message = _("Image upload timeout exceeded"))
+    except TimeoutError as ex:
+        # Get current count for better error message
+        current_count = await count_processed_images()
+        raise TimeoutError(
+            _("Not all images were uploaded within timeout. Expected %(expected)d, found %(found)d processed images.")
+            % {"expected": expected_count, "found": current_count}
+        ) from ex
+
+    LOG.info(" -> all images uploaded successfully")

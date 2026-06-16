@@ -5,7 +5,9 @@
 
 import asyncio
 from collections.abc import Callable
-from typing import Any, Awaitable
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Awaitable, Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -14,12 +16,14 @@ from kleinanzeigen_bot import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.publishing_form import (
     city_option_text,
+    fill_image_section,
     read_city_selection_text,
     resolve_category_suggestions,
     select_city_combobox_option,
     set_category,
     set_contact_fields,
     set_contact_location,
+    upload_images,
 )
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
@@ -686,3 +690,300 @@ class TestCategorySuggestionPicker:
 
         mock_click.assert_awaited_once()
         assert "label[@for='id-for-77']" in mock_click.call_args.args[1]
+
+
+class TestImageUploadProcessedMarkerFallback:
+    """Regression tests for image upload completion detection via hidden marker inputs."""
+
+    @staticmethod
+    def _build_two_image_ad(base_ad_config:dict[str, Any], tmp_path:Path) -> tuple[Ad, str, str]:
+        image_a = tmp_path / "img_a.jpg"
+        image_b = tmp_path / "img_b.jpg"
+        image_a.write_bytes(b"")
+        image_b.write_bytes(b"")
+        ad_cfg = Ad.model_validate(base_ad_config | {"images": [str(image_a), str(image_b)]})
+        return ad_cfg, str(image_a), str(image_b)
+
+    @staticmethod
+    def _build_marker(url:str) -> MagicMock:
+        marker = MagicMock()
+        marker.attrs.value = url
+        return marker
+
+    @staticmethod
+    @contextmanager
+    def _mock_upload_dependencies(
+        test_bot:KleinanzeigenBot,
+        file_input:MagicMock,
+        find_all_side_effect:Callable[..., Awaitable[list[MagicMock]]],
+        await_side_effect:Callable[..., Awaitable[Any]],
+    ) -> Iterator[None]:
+        async def find_all_once_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> list[MagicMock]:
+            return await find_all_side_effect(selector_type, selector_value, **__)
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = file_input),
+            patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, side_effect = find_all_once_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_side_effect),
+        ):
+            yield
+
+    @pytest.mark.asyncio
+    async def test_upload_images_succeeds_with_hidden_markers_when_thumbnails_absent(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+    ) -> None:
+        """Hidden adImages markers should satisfy completion when thumbnail list is missing."""
+        ad_cfg, image_a, image_b = self._build_two_image_ad(base_ad_config, tmp_path)
+
+        file_input = MagicMock()
+        file_input.send_file = AsyncMock()
+
+        marker_a = self._build_marker("https://img.example/a.jpg")
+        marker_b = self._build_marker("https://img.example/b.jpg")
+        marker_query_count = 0
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> list[MagicMock]:
+            nonlocal marker_query_count
+            if selector_type == By.CSS_SELECTOR and selector_value == "input[name^='adImages'][name$='.url']":
+                marker_query_count += 1
+                if marker_query_count == 1:
+                    return []
+                return [marker_a, marker_b]
+            return []
+
+        async def await_side_effect(condition:Callable[[], Awaitable[bool]], **_:Any) -> bool:
+            if await condition():
+                return True
+            raise TimeoutError("condition did not pass")
+
+        with self._mock_upload_dependencies(test_bot, file_input, find_all_side_effect, await_side_effect):
+            await upload_images(test_bot, ad_cfg)
+
+        file_input.send_file.assert_any_await(image_a)
+        file_input.send_file.assert_any_await(image_b)
+
+    @pytest.mark.asyncio
+    async def test_upload_images_refetches_file_input_per_image_to_avoid_stale_element(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+    ) -> None:
+        """Each image upload should re-fetch the file input because the DOM replaces it after selection."""
+        ad_cfg, image_a, image_b = self._build_two_image_ad(base_ad_config, tmp_path)
+
+        first_file_input = MagicMock()
+        first_file_input.send_file = AsyncMock()
+        second_file_input = MagicMock()
+        second_file_input.send_file = AsyncMock()
+
+        marker_a = self._build_marker("https://img.example/a.jpg")
+        marker_b = self._build_marker("https://img.example/b.jpg")
+        marker_query_count = 0
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            assert selector_type == By.CSS_SELECTOR
+            assert selector_value == "input[type=file]"
+            if first_file_input.send_file.await_count == 0:
+                return first_file_input
+            return second_file_input
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> list[MagicMock]:
+            nonlocal marker_query_count
+            if selector_type == By.CSS_SELECTOR and selector_value == "input[name^='adImages'][name$='.url']":
+                marker_query_count += 1
+                if marker_query_count == 1:
+                    return []
+                return [marker_a, marker_b]
+            return []
+
+        async def await_side_effect(condition:Callable[[], Awaitable[bool]], **_:Any) -> bool:
+            if await condition():
+                return True
+            raise TimeoutError("condition did not pass")
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect) as mock_find,
+            patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_side_effect),
+        ):
+            await upload_images(test_bot, ad_cfg)
+
+        first_file_input.send_file.assert_awaited_once_with(image_a)
+        second_file_input.send_file.assert_awaited_once_with(image_b)
+        assert mock_find.await_count >= 2
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("baseline_count", "post_count", "expected_found"),
+        [
+            pytest.param(2, 2, 0, id = "stale-only-markers"),
+            pytest.param(0, 1, 1, id = "one-new-marker"),
+        ],
+    )
+    async def test_upload_images_timeout_reports_processed_count(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+        baseline_count:int,
+        post_count:int,
+        expected_found:int,
+    ) -> None:
+        """Upload timeout should report the correct processed-marker count based on baseline vs post-upload markers."""
+        ad_cfg, image_a, image_b = self._build_two_image_ad(base_ad_config, tmp_path)
+
+        file_input = MagicMock()
+        file_input.send_file = AsyncMock()
+
+        marker_query_count = 0
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[MagicMock]:
+            nonlocal marker_query_count
+            if selector_type == By.CSS_SELECTOR and selector_value == "input[name^='adImages'][name$='.url']":
+                marker_query_count += 1
+                if marker_query_count == 1:
+                    return [self._build_marker(f"https://img.example/baseline-{i}.jpg") for i in range(baseline_count)]
+                return [self._build_marker(f"https://img.example/post-{i}.jpg") for i in range(post_count)]
+            return []
+
+        async def await_timeout(*_:Any, **__:Any) -> None:
+            raise TimeoutError("Image upload timeout exceeded")
+
+        with (
+            pytest.raises(TimeoutError, match = rf"Expected 2, found {expected_found} processed"),
+            self._mock_upload_dependencies(test_bot, file_input, find_all_side_effect, await_timeout),
+        ):
+            await upload_images(test_bot, ad_cfg)
+
+        file_input.send_file.assert_any_await(image_a)
+        file_input.send_file.assert_any_await(image_b)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("baseline_count", "post_count"),
+        [
+            pytest.param(0, 2, id = "no_baseline"),
+            pytest.param(1, 3, id = "one_stale_plus_two_new"),
+            pytest.param(2, 4, id = "two_stale_plus_two_new"),
+        ],
+    )
+    async def test_upload_images_marker_delta_determines_completion(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+        baseline_count:int,
+        post_count:int,
+    ) -> None:
+        """Completion should succeed when marker delta reaches expected count."""
+        ad_cfg, image_a, image_b = self._build_two_image_ad(base_ad_config, tmp_path)
+
+        file_input = MagicMock()
+        file_input.send_file = AsyncMock()
+        marker_query_count = 0
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[MagicMock]:
+            nonlocal marker_query_count
+            if selector_type == By.CSS_SELECTOR and selector_value == "input[name^='adImages'][name$='.url']":
+                marker_query_count += 1
+                if marker_query_count == 1:
+                    return [self._build_marker(f"https://img.example/stale-{i}.jpg") for i in range(baseline_count)]
+                return [self._build_marker(f"https://img.example/post-{i}.jpg") for i in range(post_count)]
+            return []
+
+        async def await_side_effect(condition:Callable[[], Awaitable[bool]], **_:Any) -> bool:
+            if await condition():
+                return True
+            raise TimeoutError("condition did not pass")
+
+        with self._mock_upload_dependencies(test_bot, file_input, find_all_side_effect, await_side_effect):
+            await upload_images(test_bot, ad_cfg)
+
+        file_input.send_file.assert_any_await(image_a)
+        file_input.send_file.assert_any_await(image_b)
+
+    @pytest.mark.asyncio
+    async def test_upload_images_baseline_capture_timeout_defaults_to_zero(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+    ) -> None:
+        """If baseline marker lookup times out, marker fallback should still work with baseline=0."""
+        ad_cfg, image_a, image_b = self._build_two_image_ad(base_ad_config, tmp_path)
+        file_input = MagicMock()
+        file_input.send_file = AsyncMock()
+        marker_query_count = 0
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[MagicMock]:
+            nonlocal marker_query_count
+            if selector_type == By.CSS_SELECTOR and selector_value == "input[name^='adImages'][name$='.url']":
+                marker_query_count += 1
+                if marker_query_count == 1:
+                    raise TimeoutError("baseline markers unavailable")
+                return [self._build_marker("https://img.example/a.jpg"), self._build_marker("https://img.example/b.jpg")]
+            return []
+
+        async def await_side_effect(condition:Callable[[], Awaitable[bool]], **_:Any) -> bool:
+            if await condition():
+                return True
+            raise TimeoutError("condition did not pass")
+
+        with self._mock_upload_dependencies(test_bot, file_input, find_all_side_effect, await_side_effect):
+            await upload_images(test_bot, ad_cfg)
+
+        file_input.send_file.assert_any_await(image_a)
+        file_input.send_file.assert_any_await(image_b)
+
+    @pytest.mark.asyncio
+    async def test_fill_image_section_removes_existing_images_before_upload(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        tmp_path:Path,
+    ) -> None:
+        """Cleanup should probe and click remove buttons before upload."""
+        image_path = tmp_path / "img.jpg"
+        image_path.write_bytes(b"\xff\xd8\xff")
+        ad_cfg = Ad.model_validate(base_ad_config | {"images": [str(image_path)]})
+        probe_call_count = 0
+        remove_buttons:list[MagicMock] = []
+        event_log:list[str] = []
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            nonlocal probe_call_count
+            if selector_type == By.CSS_SELECTOR and selector_value == "button[aria-label='Bild entfernen']":
+                probe_call_count += 1
+                if probe_call_count <= 3:
+                    remove_btn = MagicMock()
+                    remove_btn.click = AsyncMock(side_effect = lambda idx = probe_call_count: event_log.append(f"remove-{idx}"))
+                    remove_buttons.append(remove_btn)
+                    return remove_btn
+                return None
+            return None
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> list[MagicMock]:
+            if selector_type == By.CSS_SELECTOR and selector_value == "input[name^='adImages'][name$='.url']":
+                return [self._build_marker(f"https://img.example/{index}.jpg") for index in range(3)]
+            return []
+
+        async def upload_side_effect(*_:Any, **__:Any) -> None:
+            event_log.append("upload")
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.upload_images", new_callable = AsyncMock, side_effect = upload_side_effect) as mock_upload,
+        ):
+            await fill_image_section(test_bot, ad_cfg)
+
+        assert sum(button.click.await_count for button in remove_buttons) == 3
+        mock_upload.assert_awaited_once_with(test_bot, ad_cfg)
+        assert event_log == ["remove-1", "remove-2", "remove-3", "upload"]
