@@ -1095,7 +1095,7 @@ class TestPricingFields:
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
-        """Timeout on price type click should be re-raised with meaningfull message."""
+        """Timeout on price type click should be re-raised with meaningful message."""
         ad_cfg = Ad.model_validate(base_ad_config | {"price_type": "FIXED"})
 
         with (
