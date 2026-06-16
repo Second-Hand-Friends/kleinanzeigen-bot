@@ -7,8 +7,10 @@
 from gettext import gettext as _
 from typing import Any, Final, cast
 
+from .ad_description import get_ad_description
 from .ad_form_helpers import get_marker_value, location_matches_target, xpath_literal
 from .model.ad_model import Ad, Contact
+from .model.config_model import AdDefaults
 from .utils import loggers as _loggers
 from .utils.exceptions import CategoryResolutionError
 from .utils.i18n import pluralize
@@ -416,3 +418,57 @@ async def upload_images(web:WebScrapingMixin, ad_cfg:Ad) -> None:
         ) from ex
 
     LOG.info(" -> all images uploaded successfully")
+
+
+async def set_pricing_fields(web:WebScrapingMixin, ad_cfg:Ad, ad_defaults:AdDefaults) -> None:
+    """Set pricing, direct-buy, and description fields on the ad form.
+
+    Args:
+        web: The web scraping mixin instance.
+        ad_cfg: The effective ad configuration.
+        ad_defaults: The configured defaults (used for description affixes).
+    """
+    #############################
+    # set price
+    #############################
+    price_type = ad_cfg.price_type
+    if price_type != "NOT_APPLICABLE":
+        price_type_options = {"FIXED": 0, "NEGOTIABLE": 1, "GIVE_AWAY": 2}
+        option_idx = price_type_options.get(price_type)
+        if option_idx is not None:
+            try:
+                await web.web_click(By.ID, "ad-price-type")
+                await web.web_click(By.ID, f"ad-price-type-menu-option-{option_idx}")
+            except TimeoutError as ex:
+                raise TimeoutError(_("Failed to set price type '%s'") % price_type) from ex
+        if ad_cfg.price is not None:
+            await web.web_set_input_value("ad-price-amount", str(ad_cfg.price))
+
+    #############################
+    # set sell_directly
+    #############################
+    if ad_cfg.type != "WANTED":
+        sell_directly = ad_cfg.sell_directly
+        quick_dom = web.timeout("quick_dom")
+        if ad_cfg.shipping_type == "SHIPPING":
+            if sell_directly and price_type in {"FIXED", "NEGOTIABLE"}:
+                buy_now_true = await web.web_probe(By.ID, "ad-buy-now-true", timeout = quick_dom)
+                if buy_now_true is None:
+                    LOG.warning("Direct-buy (sell_directly) is not available for the selected category. Skipping.")
+                elif not await web.web_check(By.ID, "ad-buy-now-true", Is.SELECTED, timeout = quick_dom):
+                    await web.web_click(By.ID, "ad-buy-now-true", timeout = quick_dom)
+            else:
+                buy_now_false = await web.web_probe(By.ID, "ad-buy-now-false", timeout = quick_dom)
+                if buy_now_false and not await web.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = quick_dom):
+                    await web.web_click(By.ID, "ad-buy-now-false", timeout = quick_dom)
+        else:
+            # For PICKUP/other types: always opt out of buy-now if the radio exists
+            buy_now_false = await web.web_probe(By.ID, "ad-buy-now-false", timeout = quick_dom)
+            if buy_now_false and not await web.web_check(By.ID, "ad-buy-now-false", Is.SELECTED, timeout = quick_dom):
+                await web.web_click(By.ID, "ad-buy-now-false", timeout = quick_dom)
+
+    #############################
+    # set description
+    #############################
+    description = get_ad_description(ad_cfg, ad_defaults, with_affixes = True)
+    await web.web_set_input_value("ad-description", description)

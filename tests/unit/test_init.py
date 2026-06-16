@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import asyncio, copy, fnmatch, json, logging, os  # isort: skip
-from collections.abc import Callable, Generator
+from collections.abc import Generator
 from contextlib import ExitStack, contextmanager
 from pathlib import Path, PureWindowsPath
-from typing import Any, Awaitable, Iterator, cast
+from typing import Any, Iterator, cast
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
@@ -1191,6 +1191,7 @@ class TestKleinanzeigenBotBasics:
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_form.set_category", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_pricing_fields", new_callable = AsyncMock),
             patch.object(test_bot, "_set_special_attributes", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_form.set_contact_fields", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
@@ -3273,28 +3274,28 @@ class TestWantedShippingSelection:
                 return test_bot.page.url
             return None
 
-        with (
-            patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock, return_value = ""),
-            patch.object(test_bot, "web_open", new_callable = AsyncMock),
-            patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_form.set_category", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_special_attributes", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_shipping", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_form.set_contact_fields", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_form.fill_image_section", new_callable = AsyncMock),
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
-            patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
-            patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
-            patch.object(test_bot, "web_execute", side_effect = execute_side_effect),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock) as mock_select_btn_combo,
-        ):
+        with ExitStack() as stack:
+            mock_find = stack.enter_context(patch.object(test_bot, "web_find", new_callable = AsyncMock))
+            mock_select_btn_combo = stack.enter_context(patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock))
+            stack.enter_context(patch("kleinanzeigen_bot.ainput", new_callable = AsyncMock, return_value = ""))
+            stack.enter_context(patch.object(test_bot, "web_open", new_callable = AsyncMock))
+            stack.enter_context(patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock))
+            stack.enter_context(patch("kleinanzeigen_bot.publishing_form.set_category", new_callable = AsyncMock))
+            stack.enter_context(patch("kleinanzeigen_bot.publishing_form.set_pricing_fields", new_callable = AsyncMock))
+            stack.enter_context(patch.object(test_bot, "_set_special_attributes", new_callable = AsyncMock))
+            stack.enter_context(patch.object(test_bot, "_set_shipping", new_callable = AsyncMock))
+            stack.enter_context(patch("kleinanzeigen_bot.publishing_form.set_contact_fields", new_callable = AsyncMock))
+            stack.enter_context(patch("kleinanzeigen_bot.publishing_form.fill_image_section", new_callable = AsyncMock))
+            stack.enter_context(patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock))
+            stack.enter_context(patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock))
+            stack.enter_context(patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None))
+            stack.enter_context(patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []))
+            stack.enter_context(patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock))
+            stack.enter_context(patch.object(test_bot, "web_sleep", new_callable = AsyncMock))
+            stack.enter_context(patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True))
+            stack.enter_context(patch.object(test_bot, "web_execute", side_effect = execute_side_effect))
+            stack.enter_context(patch.object(test_bot, "web_check", new_callable = AsyncMock))
+            stack.enter_context(patch.object(test_bot, "web_click", new_callable = AsyncMock))
             yield mock_find, mock_select_btn_combo
 
     @staticmethod
@@ -3420,161 +3421,3 @@ class TestWantedShippingSelection:
             mock_find.side_effect = find_side_effect
             with pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'SHIPPING'!"):
                 await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
-
-
-class TestBuyNowRadioWarning:
-    """Regression tests for buy-now handling across shipping modes."""
-
-    @contextmanager
-    def _mock_publish_ad_dependencies(
-        self,
-        test_bot:KleinanzeigenBot,
-        mock_page:MagicMock,
-        probe_side_effect:Callable[[By, str], Awaitable[Element | None]],
-        check_side_effect:Callable[[By, str, Any, Any], Awaitable[bool]],
-    ) -> Iterator[tuple[MagicMock, MagicMock, MagicMock]]:
-        """Context manager that mocks all publish_ad dependencies for buy-now radio tests.
-
-        Args:
-            test_bot: The bot instance to patch methods on.
-            mock_page: Mock page object to assign to test_bot.page.
-            probe_side_effect: Async function defining web_probe behavior.
-            check_side_effect: Async function defining web_check behavior for ad-buy-now-false.
-
-        Yields:
-            Tuple of (mock_probe, mock_check, mock_click) for assertions in the test.
-        """
-        test_bot.page = mock_page
-        test_bot.page.url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
-
-        async def execute_side_effect(script:str) -> Any:
-            if "window.location.href" in script:
-                return test_bot.page.url
-            return None
-
-        with (
-            patch.object(test_bot, "web_open", new_callable = AsyncMock),
-            patch.object(test_bot, "_dismiss_consent_banner", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_form.set_category", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_special_attributes", new_callable = AsyncMock),
-            patch.object(test_bot, "_set_shipping", new_callable = AsyncMock),
-            patch.object(test_bot, "web_input", new_callable = AsyncMock),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect) as mock_probe,
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = check_side_effect) as mock_check,
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_execute", side_effect = execute_side_effect),
-            patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_form.set_contact_fields", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
-            patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
-            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
-        ):
-            yield mock_probe, mock_check, mock_click
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        ("scenario", "expected_click"),
-        [
-            ("radio_absent_swallowed", False),
-            ("radio_visible_needs_click", True),
-            ("radio_already_selected", False),
-        ],
-    )
-    async def test_buy_now_radio_behavior_for_pickup(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-        mock_page:MagicMock,
-        tmp_path:Path,
-        scenario:str,
-        expected_click:bool,
-    ) -> None:
-        """Buy-now radio handling for PICKUP: skips when absent, clicks when needed."""
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP", "price_type": "FIXED", "price": 100})
-        ad_cfg_orig = copy.deepcopy(base_ad_config)
-        ad_file = str(tmp_path / "ad.yaml")
-
-        buy_now_elem = MagicMock()
-
-        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
-            if selector_type == By.ID and selector_value == "ad-buy-now-false":
-                if scenario == "radio_absent_swallowed":
-                    return None
-                return buy_now_elem
-            return None
-
-        async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
-            if selector_type == By.ID and selector_value == "ad-buy-now-false":
-                return scenario == "radio_already_selected"
-            return False
-
-        with self._mock_publish_ad_dependencies(test_bot, mock_page, probe_side_effect, check_side_effect) as (_, _, mock_click):
-            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
-
-        buy_now_clicks = [c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"]
-        if expected_click:
-            assert buy_now_clicks, "web_click should be called for ad-buy-now-false when visible but not selected"
-        else:
-            assert not buy_now_clicks, "web_click should not be called for ad-buy-now-false"
-
-    @pytest.mark.asyncio
-    async def test_buy_now_true_missing_logs_warning_and_continues(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-        mock_page:MagicMock,
-        tmp_path:Path,
-        caplog:pytest.LogCaptureFixture,
-    ) -> None:
-        """Shipping ads with sell_directly enabled should warn if buy-now-true control is unavailable."""
-        caplog.set_level(logging.WARNING, logger = LOG.name)
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "sell_directly": True, "price_type": "FIXED", "price": 100})
-        ad_cfg_orig = copy.deepcopy(base_ad_config)
-        ad_file = str(tmp_path / "ad.yaml")
-
-        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
-            if selector_type == By.ID and selector_value == "ad-buy-now-true":
-                return None
-            return None
-
-        async def check_side_effect(*_:Any, **__:Any) -> bool:
-            return False
-
-        with self._mock_publish_ad_dependencies(test_bot, mock_page, probe_side_effect, check_side_effect):
-            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
-
-        warning_messages = [record.message for record in caplog.records if record.levelno == logging.WARNING]
-        assert len([message for message in warning_messages if "Direct-buy (sell_directly) is not available" in message]) == 1
-
-    @pytest.mark.asyncio
-    async def test_buy_now_true_interaction_timeout_propagates(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-        mock_page:MagicMock,
-        tmp_path:Path,
-    ) -> None:
-        """Existing direct-buy controls should still fail if interaction times out."""
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "sell_directly": True, "price_type": "FIXED", "price": 100})
-        ad_cfg_orig = copy.deepcopy(base_ad_config)
-        ad_file = str(tmp_path / "ad.yaml")
-
-        buy_now_elem = MagicMock()
-
-        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
-            if selector_type == By.ID and selector_value == "ad-buy-now-true":
-                return buy_now_elem
-            return None
-
-        async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
-            if selector_type == By.ID and selector_value == "ad-buy-now-true":
-                raise TimeoutError("check timeout")
-            return False
-
-        with (
-            pytest.raises(TimeoutError, match = "check timeout"),
-            self._mock_publish_ad_dependencies(test_bot, mock_page, probe_side_effect, check_side_effect),
-        ):
-            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)

@@ -1,9 +1,10 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""Tests for publishing form operations (contact/location fields, category selection, city selection)."""
+"""Tests for publishing form operations (contact/location fields, category selection, city selection, pricing)."""
 
 import asyncio
+import logging
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
@@ -23,10 +24,14 @@ from kleinanzeigen_bot.publishing_form import (
     set_category,
     set_contact_fields,
     set_contact_location,
+    set_pricing_fields,
     upload_images,
 )
+from kleinanzeigen_bot.utils import loggers as _loggers
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
+
+LOG = _loggers.get_logger(__name__)
 
 
 @pytest.fixture
@@ -987,3 +992,275 @@ class TestImageUploadProcessedMarkerFallback:
         assert sum(button.click.await_count for button in remove_buttons) == 3
         mock_upload.assert_awaited_once_with(test_bot, ad_cfg)
         assert event_log == ["remove-1", "remove-2", "remove-3", "upload"]
+
+
+class TestPricingFields:
+    """Tests for pricing, direct-buy, and description field filling."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("price_type", "price", "expected_idx"),
+        [
+            ("FIXED", 100, 0),
+            ("NEGOTIABLE", 100, 1),
+            ("GIVE_AWAY", None, 2),
+        ],
+    )
+    async def test_price_type_dropdown_click(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        price_type:str,
+        price:int | None,
+        expected_idx:int,
+    ) -> None:
+        """Price type dropdown should click the correct option index."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"price_type": price_type, "price": price})
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
+            patch("kleinanzeigen_bot.publishing_form.get_ad_description", return_value = "desc"),
+        ):
+            await set_pricing_fields(test_bot, ad_cfg, test_bot.config.ad_defaults)
+
+        mock_click.assert_any_await(By.ID, "ad-price-type")
+        mock_click.assert_any_await(By.ID, f"ad-price-type-menu-option-{expected_idx}")
+
+    @pytest.mark.asyncio
+    async def test_price_type_not_applicable_skips_dropdown(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """NOT_APPLICABLE price type should skip all price interactions."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"price_type": "NOT_APPLICABLE"})
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
+            patch("kleinanzeigen_bot.publishing_form.get_ad_description", return_value = "desc"),
+        ):
+            await set_pricing_fields(test_bot, ad_cfg, test_bot.config.ad_defaults)
+
+        ad_price_type_clicks = [c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[1] == "ad-price-type"]
+        assert not ad_price_type_clicks
+        ad_price_amount_sets = [c for c in mock_set.call_args_list if c.args[0] == "ad-price-amount"]
+        assert not ad_price_amount_sets
+
+    @pytest.mark.asyncio
+    async def test_price_amount_set_when_provided(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Price amount should be set when price is not None."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"price": 42})
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
+            patch("kleinanzeigen_bot.publishing_form.get_ad_description", return_value = "desc"),
+        ):
+            await set_pricing_fields(test_bot, ad_cfg, test_bot.config.ad_defaults)
+
+        mock_set.assert_any_await("ad-price-amount", "42")
+
+    @pytest.mark.asyncio
+    async def test_price_amount_not_set_when_none(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Price amount should not be set when price is None."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"price_type": "NEGOTIABLE", "price": None})
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
+            patch("kleinanzeigen_bot.publishing_form.get_ad_description", return_value = "desc"),
+        ):
+            await set_pricing_fields(test_bot, ad_cfg, test_bot.config.ad_defaults)
+
+        ad_price_amount_sets = [c for c in mock_set.call_args_list if c.args[0] == "ad-price-amount"]
+        assert not ad_price_amount_sets
+
+    @pytest.mark.asyncio
+    async def test_price_type_timeout_raises(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Timeout on price type click should be re-raised with meaningfull message."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"price_type": "FIXED"})
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
+            patch("kleinanzeigen_bot.publishing_form.get_ad_description", return_value = "desc"),
+            pytest.raises(TimeoutError, match = "Failed to set price type 'FIXED'"),
+        ):
+            await set_pricing_fields(test_bot, ad_cfg, test_bot.config.ad_defaults)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("scenario", "expected_click"),
+        [
+            ("radio_absent_swallowed", False),
+            ("radio_visible_needs_click", True),
+            ("radio_already_selected", False),
+        ],
+    )
+    async def test_buy_now_radio_behavior_for_pickup(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        scenario:str,
+        expected_click:bool,
+    ) -> None:
+        """Buy-now radio handling for PICKUP: skips when absent, clicks when needed."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP", "price_type": "FIXED", "price": 100})
+
+        buy_now_elem = MagicMock()
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.ID and selector_value == "ad-buy-now-false":
+                if scenario == "radio_absent_swallowed":
+                    return None
+                return buy_now_elem
+            return None
+
+        async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
+            if selector_type == By.ID and selector_value == "ad-buy-now-false":
+                return scenario == "radio_already_selected"
+            return False
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = check_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.get_ad_description", return_value = "desc"),
+        ):
+            await set_pricing_fields(test_bot, ad_cfg, test_bot.config.ad_defaults)
+
+        buy_now_clicks = [c for c in mock_click.call_args_list if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-buy-now-false"]
+        if expected_click:
+            assert buy_now_clicks, "web_click should be called for ad-buy-now-false when visible but not selected"
+        else:
+            assert not buy_now_clicks, "web_click should not be called for ad-buy-now-false"
+
+    @pytest.mark.asyncio
+    async def test_buy_now_true_missing_logs_warning_and_continues(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Shipping ads with sell_directly enabled should warn if buy-now-true control is unavailable."""
+        caplog.set_level(logging.WARNING, logger = LOG.name)
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "sell_directly": True, "price_type": "FIXED", "price": 100})
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.get_ad_description", return_value = "desc"),
+        ):
+            await set_pricing_fields(test_bot, ad_cfg, test_bot.config.ad_defaults)
+
+        warning_messages = [record.message for record in caplog.records if record.levelno == logging.WARNING]
+        assert len([message for message in warning_messages if "Direct-buy (sell_directly) is not available" in message]) == 1
+
+    @pytest.mark.asyncio
+    async def test_buy_now_true_interaction_timeout_propagates(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Existing direct-buy controls should still fail if interaction times out."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "sell_directly": True, "price_type": "FIXED", "price": 100})
+
+        buy_now_elem = MagicMock()
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.ID and selector_value == "ad-buy-now-true":
+                return buy_now_elem
+            return None
+
+        async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
+            if selector_type == By.ID and selector_value == "ad-buy-now-true":
+                raise TimeoutError("check timeout")
+            return False
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = check_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.get_ad_description", return_value = "desc"),
+            pytest.raises(TimeoutError, match = "check timeout"),
+        ):
+            await set_pricing_fields(test_bot, ad_cfg, test_bot.config.ad_defaults)
+
+    @pytest.mark.asyncio
+    async def test_sell_directly_false_clicks_buy_now_false(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """When sell_directly is False and shipping is SHIPPING, ad-buy-now-false should be clicked."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "sell_directly": False, "price_type": "FIXED", "price": 100})
+
+        buy_now_false_elem = MagicMock()
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.ID and selector_value == "ad-buy-now-false":
+                return buy_now_false_elem
+            return None
+
+        async def check_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> bool:
+            return False  # not already selected
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = check_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.get_ad_description", return_value = "desc"),
+        ):
+            await set_pricing_fields(test_bot, ad_cfg, test_bot.config.ad_defaults)
+
+        mock_click.assert_any_await(By.ID, "ad-buy-now-false", timeout = test_bot.timeout("quick_dom"))
+
+    @pytest.mark.asyncio
+    async def test_description_filled_via_get_ad_description(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Description field should be set using get_ad_description result."""
+        ad_cfg = Ad.model_validate(base_ad_config)
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
+            patch("kleinanzeigen_bot.publishing_form.get_ad_description", return_value = "Expected description text") as mock_desc,
+        ):
+            await set_pricing_fields(test_bot, ad_cfg, test_bot.config.ad_defaults)
+
+        mock_desc.assert_called_once_with(ad_cfg, test_bot.config.ad_defaults, with_affixes = True)
+        mock_set.assert_any_await("ad-description", "Expected description text")
