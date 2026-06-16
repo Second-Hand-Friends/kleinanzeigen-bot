@@ -170,25 +170,6 @@ kleinanzeigen_bot/__init__.py:
     "Failed to set attribute '%s'": "Fehler beim Setzen des Attributs '%s'"
     "No condition radio matched values %(values)s": "Keine Zustand-Auswahl passt zu den Werten %(values)s"
 
-  _set_contact_fields:
-    "Could not set contact street.": "Kontaktstraße konnte nicht gesetzt werden."
-    "Could not set contact name.": "Kontaktname konnte nicht gesetzt werden."
-    "Could not set contact zipcode: %s": "Kontakt-PLZ konnte nicht gesetzt werden: %s"
-    "Failed to set contact zipcode: %s": "Kontakt-PLZ konnte nicht gesetzt werden: %s"
-    "Could not set contact phone despite visible phone field: %s": "Telefonnummer konnte trotz sichtbarem Feld nicht gesetzt werden: %s"
-    ? "Phone number field not present on page. This is expected for many private accounts; commercial accounts may still support phone numbers."
-    : "Telefonnummernfeld auf der Seite nicht vorhanden. Dies ist bei vielen privaten Konten zu erwarten; gewerbliche Konten unterstützen Telefonnummern möglicherweise weiterhin."
-
-  _select_city_combobox_option:
-    "City combobox options did not load for location: %s": "Stadt-Combobox-Optionen für Ort nicht geladen: %s"
-    "City combobox options are ambiguous for location: %s": "Stadt-Combobox-Optionen für Ort sind mehrdeutig: %s"
-    "No city combobox option matched location: %s": "Keine Stadt-Combobox-Option passt zum Ort: %s"
-    "City selection did not converge for location: %s": "Stadtauswahl ist nicht auf den Ort konvergiert: %s"
-
-  _set_contact_location:
-    "Unsupported city element type while setting contact location: <%s>": "Nicht unterstützter Stadt-Elementtyp beim Setzen des Kontaktorts: <%s>"
-    "ad-city is a <input readonly> with value '%s' (zip-derived) - accepting instead of combobox selection.": "ad-city ist ein <input readonly> mit Wert '%s' (aus PLZ abgeleitet) - übernehme statt Combobox-Auswahl."
-
   _upload_images:
     " -> found %s": "-> %s gefunden"
     "image": "Bild"
@@ -272,6 +253,25 @@ kleinanzeigen_bot/published_ads.py:
 #################################################
 kleinanzeigen_bot/publishing_form.py:
 #################################################
+  set_contact_fields:
+    "Could not set contact street.": "Kontaktstraße konnte nicht gesetzt werden."
+    "Could not set contact name.": "Kontaktname konnte nicht gesetzt werden."
+    "Could not set contact zipcode: %s": "Kontakt-PLZ konnte nicht gesetzt werden: %s"
+    "Failed to set contact zipcode: %s": "Kontakt-PLZ konnte nicht gesetzt werden: %s"
+    "Could not set contact phone despite visible phone field: %s": "Telefonnummer konnte trotz sichtbarem Feld nicht gesetzt werden: %s"
+    ? "Phone number field not present on page. This is expected for many private accounts; commercial accounts may still support phone numbers."
+    : "Telefonnummernfeld auf der Seite nicht vorhanden. Dies ist bei vielen privaten Konten zu erwarten; gewerbliche Konten unterstützen Telefonnummern möglicherweise weiterhin."
+
+  select_city_combobox_option:
+    "City combobox options did not load for location: %s": "Stadt-Combobox-Optionen für Ort nicht geladen: %s"
+    "City combobox options are ambiguous for location: %s": "Stadt-Combobox-Optionen für Ort sind mehrdeutig: %s"
+    "No city combobox option matched location: %s": "Keine Stadt-Combobox-Option passt zum Ort: %s"
+    "City selection did not converge for location: %s": "Stadtauswahl ist nicht auf den Ort konvergiert: %s"
+
+  set_contact_location:
+    "Unsupported city element type while setting contact location: <%s>": "Nicht unterstützter Stadt-Elementtyp beim Setzen des Kontaktorts: <%s>"
+    "ad-city is a <input readonly> with value '%s' (zip-derived) - accepting instead of combobox selection.": "ad-city ist ein <input readonly> mit Wert '%s' (aus PLZ abgeleitet) - übernehme statt Combobox-Auswahl."
+
   resolve_category_suggestions:
     ? "Category suggestion picker shown, but no segment of configured path '%(category)s' matched the offered suggestions [%(offered)s]. Update the ad's 'category' to an offered ID or a valid full path."
     : "Kategorievorschlag-Auswahl wurde angezeigt, aber kein Segment des konfigurierten Pfades '%(category)s' passte zu den angebotenen Vorschlägen [%(offered)s]. Aktualisieren Sie 'category' auf eine angebotene ID oder einen gültigen vollständigen Pfad."
