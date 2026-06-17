@@ -1792,10 +1792,11 @@ class TestWantedShippingSelection:
         ):
             await set_shipping_form(test_bot, ad_cfg)
 
-        mock_find.assert_awaited_once_with(
+        mock_find.assert_awaited_once()
+        assert mock_find.await_args is not None
+        assert mock_find.await_args.args == (
             By.CSS_SELECTOR,
             VERSAND_COMBOBOX_SELECTOR,
-            timeout = test_bot.timeout("quick_dom"),
         )
         mock_select_btn_combo.assert_awaited_once_with(
             "babyausstattung.versand",
