@@ -108,7 +108,7 @@ async def login(
     pre_login_gdpr_timeout = web.timeout("quick_dom")
 
     LOG.info("Checking if already logged in...")
-    await web.web_open(f"{root_url}")
+    await web.web_open(root_url)
     await click_gdpr_banner(web, timeout = pre_login_gdpr_timeout)
 
     detection_result = await get_login_state(

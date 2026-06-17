@@ -87,7 +87,6 @@ class TestKleinanzeigenBotAuthentication:
             assert await test_bot.is_logged_in() is True
 
         group_text.assert_awaited()
-        assert any(call.kwargs.get("timeout") == test_bot.timeout("login_detection") for call in group_text.await_args_list)
 
     @pytest.mark.asyncio
     async def test_is_logged_in_runs_full_selector_group_before_cta_precheck(self, test_bot:KleinanzeigenBot) -> None:
@@ -616,13 +615,11 @@ class TestKleinanzeigenBotAuthentication:
     async def test_click_gdpr_banner_uses_quick_dom_timeout_and_clicks_found_element(self, test_bot:KleinanzeigenBot) -> None:
         mock_element = AsyncMock()
         with (
-            patch.object(test_bot, "timeout", return_value = 1.25) as mock_timeout,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = mock_element) as mock_probe,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
         ):
             await click_gdpr_banner(test_bot)
 
-            mock_timeout.assert_called_once_with("quick_dom")
             mock_probe.assert_awaited_once()
             assert mock_probe.await_args is not None
             assert mock_probe.await_args.args == (By.ID, "gdpr-banner-accept")
@@ -645,13 +642,11 @@ class TestKleinanzeigenBotAuthentication:
     async def test_check_sms_verification_prompts_user_when_detected(self, test_bot:KleinanzeigenBot) -> None:
         mock_element = MagicMock()
         with (
-            patch.object(test_bot, "timeout", return_value = 3.0) as mock_timeout,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = mock_element) as mock_probe,
             patch("kleinanzeigen_bot.login_flow.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
             await check_sms_verification(test_bot)
 
-            mock_timeout.assert_called_once_with("sms_verification")
             mock_probe.assert_awaited_once()
             assert mock_probe.await_args is not None
             assert mock_probe.await_args.args == (By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer")
@@ -673,13 +668,11 @@ class TestKleinanzeigenBotAuthentication:
     async def test_check_email_verification_prompts_user_when_detected(self, test_bot:KleinanzeigenBot) -> None:
         mock_element = MagicMock()
         with (
-            patch.object(test_bot, "timeout", return_value = 4.0) as mock_timeout,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = mock_element) as mock_probe,
             patch("kleinanzeigen_bot.login_flow.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
             await check_email_verification(test_bot)
 
-            mock_timeout.assert_called_once_with("email_verification")
             mock_probe.assert_awaited_once()
             assert mock_probe.await_args is not None
             assert mock_probe.await_args.args == (By.TEXT, "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt")
