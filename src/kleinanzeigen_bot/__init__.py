@@ -987,34 +987,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
         LOG.info("############################################")
 
-    async def _fill_ad_form(
-        self, ad_file:str, ad_cfg:Ad, mode:AdUpdateStrategy,
-    ) -> None:
-        """Fill the ad creation/edit form — category, attributes, shipping, price,
-        sell-directly, description, contact, and images."""
-
-        #############################
-        # set category (before title to avoid form reset clearing title)
-        #############################
-        await _publishing_form.set_category(self, root_url = self.root_url, category = ad_cfg.category, ad_file = ad_file)
-        await self.web_sleep()  # wait for category-dependent fields to render before setting attributes
-
-        #############################
-        # set special attributes
-        #############################
-        await _publishing_form.set_special_attributes(self, ad_cfg)
-
-        #############################
-        # set shipping type/options/costs
-        #############################
-        await _publishing_form.set_shipping_form(self, ad_cfg, mode)
-
-        await _publishing_form.set_pricing_fields(self, ad_cfg, self.config.ad_defaults)
-
-        await _publishing_form.set_contact_fields(self, ad_cfg.contact)
-
-        await _publishing_form.fill_image_section(self, ad_cfg)
-
     async def publish_ad(
         self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads_list:list[PublishedAd], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE
     ) -> None:
@@ -1065,7 +1037,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         if ad_cfg.type == "WANTED":
             await self.web_click(By.ID, "ad-type-WANTED")
 
-        await self._fill_ad_form(ad_file, ad_cfg, mode)
+        await _publishing_form.fill_ad_form(self, ad_file, ad_cfg, mode,
+            root_url = self.root_url, ad_defaults = self.config.ad_defaults)
 
         ad_id = await _publishing_submission.submit_and_confirm_ad(self, ad_file, ad_cfg, mode, captcha_config = self.config.captcha)
 

@@ -2027,7 +2027,7 @@ class TestKleinanzeigenBotShippingOptions:
 class TestWantedShippingSelection:
     """Orchestration seam test for WANTED shipping delegation.
 
-    Verifies that ``publish_ad`` / ``_fill_ad_form`` delegates to
+    Verifies that ``publish_ad`` / ``fill_ad_form`` delegates to
     ``kleinanzeigen_bot.publishing_form.set_shipping_form(self, ad_cfg, mode)``
     with the expected bot/ad/mode arguments. Does not validate selector labels
     or error behavior — those are covered by ``tests/unit/test_publishing_form.py``.

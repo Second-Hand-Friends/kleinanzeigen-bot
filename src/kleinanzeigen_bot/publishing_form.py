@@ -1036,3 +1036,38 @@ async def set_special_attributes(web:WebScrapingMixin, ad_cfg:Ad) -> None:
             LOG.debug("Failed to set attribute field '%s' via known input types.", special_attribute_key)
             raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
         LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
+
+
+async def fill_ad_form(
+    web:WebScrapingMixin,
+    ad_file:str,
+    ad_cfg:Ad,
+    mode:AdUpdateStrategy,
+    *,
+    root_url:str,
+    ad_defaults:AdDefaults,
+) -> None:
+    """Fill the ad creation/edit form — category, attributes, shipping, price,
+    sell-directly, description, contact, and images."""
+
+    #############################
+    # set category (before title to avoid form reset clearing title)
+    #############################
+    await set_category(web, root_url = root_url, category = ad_cfg.category, ad_file = ad_file)
+    await web.web_sleep()  # wait for category-dependent fields to render before setting attributes
+
+    #############################
+    # set special attributes
+    #############################
+    await set_special_attributes(web, ad_cfg)
+
+    #############################
+    # set shipping type/options/costs
+    #############################
+    await set_shipping_form(web, ad_cfg, mode)
+
+    await set_pricing_fields(web, ad_cfg, ad_defaults)
+
+    await set_contact_fields(web, ad_cfg.contact)
+
+    await fill_image_section(web, ad_cfg)
