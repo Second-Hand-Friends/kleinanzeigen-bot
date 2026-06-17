@@ -19,6 +19,7 @@ from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.publishing_form import (
     _select_button_combobox,  # noqa: PLC2701 - needed for coverage of React fiber selection
     _set_condition,  # noqa: PLC2701
+    _special_attribute_candidate_priority,  # noqa: PLC2701
     city_option_text,
     fill_image_section,
     read_city_selection_text,
@@ -2439,6 +2440,20 @@ class TestSpecialAttributes:
 
         mock_find_button.assert_not_awaited()
         mock_select_combobox.assert_awaited_once_with(test_bot, "kleidung_herren.type", "accessoires")
+
+    def test_special_attribute_candidate_priority_textarea(self) -> None:
+        """A textarea element should return priority (4, 0)."""
+        elem = MagicMock()
+        elem.local_name = "textarea"
+        elem.attrs = {}
+        assert _special_attribute_candidate_priority(elem) == (4, 0)
+
+    def test_special_attribute_candidate_priority_fallback(self) -> None:
+        """An unrecognized element (e.g. div with no matching attrs) should return priority (8, 0)."""
+        elem = MagicMock()
+        elem.local_name = "div"
+        elem.attrs = {}
+        assert _special_attribute_candidate_priority(elem) == (8, 0)
 
 
 class TestConditionSelector:
