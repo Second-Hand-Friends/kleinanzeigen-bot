@@ -12,7 +12,6 @@ import pytest
 from nodriver.core.connection import ProtocolException
 
 from kleinanzeigen_bot import (
-    SUBMISSION_MAX_RETRIES,
     KleinanzeigenBot,
     LoginDetectionReason,
     LoginDetectionResult,
@@ -26,6 +25,7 @@ from kleinanzeigen_bot.model.config_model import (
     DiagnosticsConfig,
     PublishingConfig,
 )
+from kleinanzeigen_bot.publishing_workflow import SUBMISSION_MAX_RETRIES
 from kleinanzeigen_bot.utils import xdg_paths
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
@@ -881,7 +881,7 @@ class TestKleinanzeigenBotDiagnostics:
 
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ads_response),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
@@ -923,7 +923,7 @@ class TestKleinanzeigenBotDiagnostics:
 
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ads_response),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
@@ -955,7 +955,7 @@ class TestKleinanzeigenBotDiagnostics:
 
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps({"ads": []})}),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
@@ -992,7 +992,7 @@ class TestKleinanzeigenBotBasics:
 
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps(payload)}) as web_request_mock,
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock) as publish_ad_mock,
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock) as publish_ad_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True) as web_await_mock,
             patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock) as delete_ad_mock,
         ):
@@ -1001,7 +1001,12 @@ class TestKleinanzeigenBotBasics:
             # web_request is called once for initial published-ads snapshot
             expected_url = f"{test_bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum=1"
             web_request_mock.assert_awaited_once_with(expected_url)
-            publish_ad_mock.assert_awaited_once_with("ad.yaml", ad_cfgs[0][1], {}, [], AdUpdateStrategy.REPLACE)
+            publish_ad_mock.assert_awaited_once()
+            call_args = publish_ad_mock.call_args
+            assert call_args is not None
+            assert call_args.args[1] == "ad.yaml"
+            assert call_args.args[2] is ad_cfgs[0][1]
+            assert call_args.args[5] == AdUpdateStrategy.REPLACE
             web_await_mock.assert_awaited_once()
             delete_ad_mock.assert_awaited_once_with(
                 web = test_bot, root_url = test_bot.root_url,
@@ -1028,11 +1033,13 @@ class TestKleinanzeigenBotBasics:
         seen_prices:list[tuple[int | None, int | None]] = []
 
         async def publish_side_effect(
+            _web:Any,
             _ad_file:str,
             candidate_cfg:Ad,
             _candidate_orig:dict[str, Any],
             _published_ads:list[dict[str, Any]],
             _mode:AdUpdateStrategy,
+            **kwargs:Any,
         ) -> None:
             seen_prices.append((candidate_cfg.price, candidate_cfg.price_reduction_count))
             if len(seen_prices) == 1:
@@ -1043,7 +1050,7 @@ class TestKleinanzeigenBotBasics:
 
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ads_response),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
         ):
@@ -1075,9 +1082,8 @@ class TestKleinanzeigenBotBasics:
                 new_callable = AsyncMock,
                 return_value = {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})},
             ),
-            patch.object(
-                test_bot,
-                "publish_ad",
+            patch(
+                "kleinanzeigen_bot.publishing_workflow.publish_ad",
                 new_callable = AsyncMock,
                 side_effect = PublishSubmissionUncertainError("submission may have succeeded before failure"),
             ) as publish_mock,
@@ -1109,9 +1115,8 @@ class TestKleinanzeigenBotBasics:
                 new_callable = AsyncMock,
                 return_value = {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})},
             ),
-            patch.object(
-                test_bot,
-                "publish_ad",
+            patch(
+                "kleinanzeigen_bot.publishing_workflow.publish_ad",
                 new_callable = AsyncMock,
                 side_effect = CategoryResolutionError("no suggestion matched"),
             ) as publish_mock,
@@ -1409,26 +1414,28 @@ class TestKleinanzeigenBotUpdateAdsResilience:
         ad_two = self._build_update_ad(base_ad_config, 102, "Success Ad")
 
         async def publish_side_effect(
+            _web:Any,
             _ad_file:str,
             ad_cfg:Ad,
             _ad_cfg_orig:dict[str, Any],
             _published_ads:list[dict[str, Any]],
             _mode:AdUpdateStrategy,
+            **kwargs:Any,
         ) -> None:
             if ad_cfg.id == 101:
                 raise first_failure
 
         with (
             patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = self._build_published_ads(101, 102)),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
         ):
             await test_bot.update_ads([ad_one, ad_two])
 
         assert publish_mock.await_count == SUBMISSION_MAX_RETRIES + 1
-        assert any(call.args[1].id == 102 for call in publish_mock.await_args_list)
-        assert all(call.args[4] == AdUpdateStrategy.MODIFY for call in publish_mock.await_args_list)
+        assert any(call.args[2].id == 102 for call in publish_mock.await_args_list)
+        assert all(call.args[5] == AdUpdateStrategy.MODIFY for call in publish_mock.await_args_list)
         assert sleep_mock.await_count == SUBMISSION_MAX_RETRIES - 1
 
     @pytest.mark.asyncio
@@ -1437,18 +1444,20 @@ class TestKleinanzeigenBotUpdateAdsResilience:
         ad_two = self._build_update_ad(base_ad_config, 302, "Second Update")
 
         async def publish_side_effect(
+            _web:Any,
             _ad_file:str,
             ad_cfg:Ad,
             _ad_cfg_orig:dict[str, Any],
             _published_ads:list[dict[str, Any]],
             _mode:AdUpdateStrategy,
+            **kwargs:Any,
         ) -> None:
             if ad_cfg.id == 301:
                 raise PublishSubmissionUncertainError("submission may have succeeded before failure")
 
         with (
             patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = self._build_published_ads(301, 302)),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
         ):
@@ -1463,24 +1472,26 @@ class TestKleinanzeigenBotUpdateAdsResilience:
         ad_two = self._build_update_ad(base_ad_config, 304, "Second Update")
 
         async def publish_side_effect(
+            _web:Any,
             _ad_file:str,
             ad_cfg:Ad,
             _ad_cfg_orig:dict[str, Any],
             _published_ads:list[dict[str, Any]],
             _mode:AdUpdateStrategy,
+            **kwargs:Any,
         ) -> None:
             if ad_cfg.id == 303:
                 raise CategoryResolutionError("no suggestion matched")
 
         with (
             patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = self._build_published_ads(303, 304)),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
         ):
             await test_bot.update_ads([ad_one, ad_two])
 
-        assert [call.args[1].id for call in publish_mock.await_args_list] == [303, 304]
+        assert [call.args[2].id for call in publish_mock.await_args_list] == [303, 304]
         sleep_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -1490,7 +1501,7 @@ class TestKleinanzeigenBotUpdateAdsResilience:
 
         with (
             patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = self._build_published_ads(401, 402)),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock, side_effect = asyncio.CancelledError()) as publish_mock,
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = asyncio.CancelledError()) as publish_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
             pytest.raises(asyncio.CancelledError),
         ):
@@ -1504,7 +1515,7 @@ class TestKleinanzeigenBotUpdateAdsResilience:
 
         with (
             patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = self._build_published_ads(501)),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock) as publish_mock,
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock) as publish_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = TimeoutError("result timeout")),
         ):
             await test_bot.update_ads([ad_one])
@@ -1539,7 +1550,7 @@ class TestDisplayCounterProgression:
         with (
             caplog.at_level(logging.INFO),
             patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = published_ads),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock) as publish_mock,
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock) as publish_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
         ):
             await test_bot.publish_ads(ad_cfgs)
@@ -1554,7 +1565,7 @@ class TestDisplayCounterProgression:
         assert len(skip_msgs) == 2
 
         publish_mock.assert_awaited_once()
-        assert publish_mock.call_args.args[1].id == 102
+        assert publish_mock.call_args.args[2].id == 102
 
         summary = [r for r in caplog.records if "DONE:" in r.message]
         assert any("1 ad" in r.message for r in summary)
@@ -1574,7 +1585,7 @@ class TestDisplayCounterProgression:
         with (
             caplog.at_level(logging.INFO),
             patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = published_ads),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock) as publish_mock,
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock) as publish_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
         ):
@@ -1590,7 +1601,7 @@ class TestDisplayCounterProgression:
         assert len(skip_msgs) == 2
 
         publish_mock.assert_awaited_once()
-        assert publish_mock.call_args.args[1].id == 202
+        assert publish_mock.call_args.args[2].id == 202
 
         summary = [r for r in caplog.records if "DONE:" in r.message]
         assert any("1 ad" in r.message for r in summary)
@@ -1609,7 +1620,7 @@ class TestDisplayCounterProgression:
         with (
             caplog.at_level(logging.INFO),
             patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = published_ads),
-            patch.object(test_bot, "publish_ad", new_callable = AsyncMock) as publish_mock,
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock) as publish_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
         ):
@@ -1625,7 +1636,7 @@ class TestDisplayCounterProgression:
         assert len(skip_msgs) == 1
 
         publish_mock.assert_awaited_once()
-        assert publish_mock.call_args.args[1].id == 302
+        assert publish_mock.call_args.args[2].id == 302
 
 
 class TestKleinanzeigenBotCommands:
