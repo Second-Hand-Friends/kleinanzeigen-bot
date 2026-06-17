@@ -9,15 +9,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Literal, Sequence, cast
 
 import certifi, colorama  # isort: skip
-from nodriver.core.connection import ProtocolException
-from ruamel.yaml import YAML
-
-from . import ad_loading, captcha_flow, delete_flow, download_flow, extend_flow, published_ads
+from . import ad_loading, captcha_flow, delete_flow, download_flow, extend_flow
 from . import ad_state as _ad_state
 from . import price_reduction as _price_reduction
-from . import publishing_form as _publishing_form
-from . import publishing_persistence as _publishing_persistence
-from . import publishing_submission as _publishing_submission
+from . import publishing_workflow as _publishing_workflow
 from . import runtime_config as _runtime_config
 from ._version import __version__
 from .model.ad_model import Ad
@@ -25,15 +20,13 @@ from .model.ad_model import (
     AdUpdateStrategy as AdUpdateStrategy,
 )
 from .model.config_model import Config  # noqa: TC001 — used at runtime, config injection
-from .published_ads import PublishedAd, ad_matches_id
+from .published_ads import PublishedAd
 from .update_checker import UpdateChecker
 from .utils import diagnostics as _diagnostics
 from .utils import loggers as _loggers
 from .utils import misc as _misc
 from .utils import xdg_paths as _xdg_paths
-from .utils.exceptions import CategoryResolutionError, PublishSubmissionUncertainError
 from .utils.files import abspath
-from .utils.i18n import pluralize
 from .utils.misc import ainput, is_frozen
 from .utils.web_scraping_mixin import By, Is, WebScrapingMixin
 
@@ -45,7 +38,6 @@ if TYPE_CHECKING:
 LOG:Final[_loggers.Logger] = _loggers.get_logger(__name__)
 LOG.setLevel(_loggers.INFO)
 
-SUBMISSION_MAX_RETRIES:Final[int] = 3
 _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
     (By.ID, "user-email"),
@@ -879,8 +871,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         return False
 
     async def _check_publishing_result(self) -> bool:
-        # Check for success messages
-        return await self.web_check(By.ID, "checking-done", Is.DISPLAYED) or await self.web_check(By.ID, "not-completed", Is.DISPLAYED)
+        return await _publishing_workflow.check_publishing_result(self)
 
     async def _delete_old_ad_if_needed(
         self, ad_cfg:Ad, published_ads_list:list[PublishedAd],
@@ -894,98 +885,23 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         In ``AFTER_PUBLISH`` mode, title-based deletion is always disabled to
         avoid accidentally removing the newly published ad.
         """
-        if self.keep_old_ads:
-            return
-        if self.config.publishing.delete_old_ads != timing:
-            return
-        delete_old_ads_by_title = (
-            self.config.publishing.delete_old_ads_by_title
-            if timing == "BEFORE_PUBLISH" else False
-        )
-        await delete_flow.delete_ad(
-            web = self, root_url = self.root_url,
-            ad_cfg = ad_cfg,
-            published_ads_list = published_ads_list,
-            delete_old_ads_by_title = delete_old_ads_by_title,
+        await _publishing_workflow.delete_old_ad_if_needed(
+            self, ad_cfg, published_ads_list,
+            timing = timing,
+            keep_old_ads = self.keep_old_ads,
+            config = self.config,
+            root_url = self.root_url,
         )
 
     async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
-        count = 0
-        failed_count = 0
-        max_retries = SUBMISSION_MAX_RETRIES
-
-        published_ads_list = await published_ads.fetch_published_ads(self, self.root_url)
-
-        for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ad_cfgs, start = 1):
-            LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ad_cfgs), ad_cfg.title, ad_file)
-
-            if any(ad_matches_id(x, ad_cfg.id) and x.get("state") == "paused" for x in published_ads_list):
-                LOG.info("Skipping because ad is reserved")
-                continue
-
-            count += 1
-            success = False
-            baseline_price = ad_cfg.price
-            baseline_price_reduction_count = ad_cfg.price_reduction_count
-
-            for attempt in range(1, max_retries + 1):
-                try:
-                    # publish_ad mutates pricing fields before submit; reset them so retries
-                    # remain idempotent for a single eligible reduction cycle.
-                    ad_cfg.price = baseline_price
-                    ad_cfg.price_reduction_count = baseline_price_reduction_count
-                    await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads_list, AdUpdateStrategy.REPLACE)
-                    success = True
-                    break  # Publish succeeded, exit retry loop
-                except asyncio.CancelledError:
-                    raise  # Respect task cancellation
-                except CategoryResolutionError as ex:
-                    await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
-                    LOG.error("Category resolution failed for '%s': %s. Skipping ad (configuration error, no retry).", ad_cfg.title, ex)
-                    failed_count += 1
-                    break
-                except PublishSubmissionUncertainError as ex:
-                    await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
-                    LOG.warning(
-                        "Attempt %s/%s for '%s' reached submit boundary but failed: %s. Not retrying to prevent duplicate listings.",
-                        attempt,
-                        max_retries,
-                        ad_cfg.title,
-                        ex,
-                    )
-                    LOG.warning("Manual recovery required for '%s'. Check 'Meine Anzeigen' to confirm whether the ad was posted.", ad_cfg.title)
-                    LOG.warning(
-                        "If posted, sync local state with 'kleinanzeigen-bot download --ads=new' or 'kleinanzeigen-bot download --ads=<id>'; "
-                        "otherwise rerun publish for this ad."
-                    )
-                    failed_count += 1
-                    break
-                except (TimeoutError, ProtocolException) as ex:
-                    await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
-                    if attempt >= max_retries:
-                        LOG.error("All %s attempts failed for '%s': %s. Skipping ad.", max_retries, ad_cfg.title, ex)
-                        failed_count += 1
-                        break
-
-                    LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
-                    await self.web_sleep(2_000)  # Wait before retry
-
-            # Check publishing result separately (no retry - ad is already submitted)
-            if success:
-                try:
-                    publish_timeout = self.timeout("publishing_result")
-                    await self.web_await(self._check_publishing_result, timeout = publish_timeout)
-                except TimeoutError:
-                    LOG.warning(" -> Could not confirm publishing for '%s', but ad may be online", ad_cfg.title)
-
-                await self._delete_old_ad_if_needed(ad_cfg, published_ads_list, timing = "AFTER_PUBLISH")
-
-        LOG.info("############################################")
-        if failed_count > 0:
-            LOG.info("DONE: (Re-)published %s (%s failed after retries)", pluralize("ad", count - failed_count), failed_count)
-        else:
-            LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
-        LOG.info("############################################")
+        await _publishing_workflow.publish_ads(
+            self, ad_cfgs,
+            root_url = self.root_url,
+            config = self.config,
+            keep_old_ads = self.keep_old_ads,
+            capture_diagnostics = self._capture_publish_error_diagnostics_if_enabled,
+            config_file_path = self.config_file_path,
+        )
 
     async def publish_ad(
         self, ad_file:str, ad_cfg:Ad, ad_cfg_orig:dict[str, Any], published_ads_list:list[PublishedAd], mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE
@@ -1004,51 +920,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         Returns:
             None
         """
-        old_ad_id = ad_cfg.id
-
-        if mode == AdUpdateStrategy.REPLACE:
-            await self._delete_old_ad_if_needed(ad_cfg, published_ads_list, timing = "BEFORE_PUBLISH")
-
-            # Apply auto price reduction in REPLACE mode (republish flow)
-            _price_reduction.apply_auto_price_reduction(
-                ad_cfg, ad_cfg_orig, _ad_state.relative_ad_path(
-                    ad_file, self.config_file_path), mode = AdUpdateStrategy.REPLACE)
-
-            LOG.info("Publishing ad '%s'...", ad_cfg.title)
-            await self.web_open(f"{self.root_url}/p-anzeige-aufgeben-schritt2.html", reload_if_already_open = True)
-        else:
-            # Always run restore-first when enabled so previously applied reductions
-            # are restored even when on_update is false.  The evaluator handles
-            # the on_update guard internally (returns early without advancing).
-            if ad_cfg.auto_price_reduction and ad_cfg.auto_price_reduction.enabled:
-                _price_reduction.apply_auto_price_reduction(
-                    ad_cfg, ad_cfg_orig, _ad_state.relative_ad_path(
-                        ad_file, self.config_file_path), mode = AdUpdateStrategy.MODIFY)
-
-            LOG.info("Updating ad '%s'...", ad_cfg.title)
-            await self.web_open(f"{self.root_url}/p-anzeige-bearbeiten.html?adId={ad_cfg.id}", reload_if_already_open = True)
-
-        await self._dismiss_consent_banner()
-
-        if _loggers.is_debug(LOG):
-            LOG.debug(" -> effective ad meta:")
-            YAML().dump(ad_cfg.model_dump(), sys.stdout)
-
-        if ad_cfg.type == "WANTED":
-            await self.web_click(By.ID, "ad-type-WANTED")
-
-        await _publishing_form.fill_ad_form(self, ad_file, ad_cfg, mode,
-            root_url = self.root_url, ad_defaults = self.config.ad_defaults)
-
-        ad_id = await _publishing_submission.submit_and_confirm_ad(self, ad_file, ad_cfg, mode, captcha_config = self.config.captcha)
-
-        try:
-            _publishing_persistence.persist_published_ad(ad_file, ad_cfg, ad_cfg_orig, old_ad_id, ad_id, mode, config = self.config)
-        except Exception:
-            LOG.error(  # noqa: G201 — must use .error(exc_info=True) for translation lookup to resolve publish_ad
-                "Post-publish persistence failed for '%s' (ad ID %s - ad is live on Kleinanzeigen but local YAML may be out of sync)",
-                ad_cfg.title, ad_id, exc_info = True,
-            )
+        await _publishing_workflow.publish_ad(
+            self, ad_file, ad_cfg, ad_cfg_orig, published_ads_list, mode,
+            root_url = self.root_url,
+            config = self.config,
+            keep_old_ads = self.keep_old_ads,
+            config_file_path = self.config_file_path,
+        )
 
     async def update_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         """
@@ -1062,79 +940,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         Returns:
             None
         """
-        count = 0
-        failed_count = 0
-        max_retries = SUBMISSION_MAX_RETRIES
-
-        published_ads_list = await published_ads.fetch_published_ads(self, self.root_url)
-
-        for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ad_cfgs, start = 1):
-            LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ad_cfgs), ad_cfg.title, ad_file)
-
-            ad = next((published_ad for published_ad in published_ads_list if ad_matches_id(published_ad, ad_cfg.id)), None)
-
-            if not ad:
-                LOG.warning(" -> SKIPPED: ad '%s' (ID: %s) not found in published ads", ad_cfg.title, ad_cfg.id)
-                continue
-
-            if ad["state"] == "paused":
-                LOG.info("Skipping because ad is reserved")
-                continue
-
-            count += 1
-            success = False
-            baseline_price = ad_cfg.price
-            baseline_price_reduction_count = ad_cfg.price_reduction_count
-
-            for attempt in range(1, max_retries + 1):
-                try:
-                    ad_cfg.price = baseline_price
-                    ad_cfg.price_reduction_count = baseline_price_reduction_count
-                    await self.publish_ad(ad_file, ad_cfg, ad_cfg_orig, published_ads_list, AdUpdateStrategy.MODIFY)
-                    success = True
-                    break
-                except asyncio.CancelledError:
-                    raise
-                except PublishSubmissionUncertainError as ex:
-                    await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
-                    LOG.warning(
-                        "Attempt %s/%s for '%s' reached submit boundary but failed: %s. Not retrying to prevent duplicate modifications.",
-                        attempt,
-                        max_retries,
-                        ad_cfg.title,
-                        ex,
-                    )
-                    LOG.warning("Manual recovery required for '%s'. Check 'Meine Anzeigen' to confirm whether the update was applied.", ad_cfg.title)
-                    failed_count += 1
-                    break
-                except CategoryResolutionError as ex:
-                    await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
-                    LOG.error("Category resolution failed for '%s': %s. Skipping ad (configuration error, no retry).", ad_cfg.title, ex)
-                    failed_count += 1
-                    break
-                except (TimeoutError, ProtocolException) as ex:
-                    await self._capture_publish_error_diagnostics_if_enabled(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
-                    if attempt >= max_retries:
-                        LOG.error("All %s attempts failed for '%s': %s. Skipping ad.", max_retries, ad_cfg.title, ex)
-                        failed_count += 1
-                        break
-
-                    LOG.warning("Attempt %s/%s failed for '%s': %s. Retrying...", attempt, max_retries, ad_cfg.title, ex)
-                    await self.web_sleep(2_000)
-
-            if success:
-                try:
-                    publish_timeout = self.timeout("publishing_result")
-                    await self.web_await(self._check_publishing_result, timeout = publish_timeout)
-                except TimeoutError:
-                    LOG.warning(" -> Could not confirm update for '%s', but changes may be online", ad_cfg.title)
-
-        LOG.info("############################################")
-        if failed_count > 0:
-            LOG.info("DONE: updated %s (%s failed after retries)", pluralize("ad", count - failed_count), failed_count)
-        else:
-            LOG.info("DONE: updated %s", pluralize("ad", count))
-        LOG.info("############################################")
+        await _publishing_workflow.update_ads(
+            self, ad_cfgs,
+            root_url = self.root_url,
+            config = self.config,
+            keep_old_ads = self.keep_old_ads,
+            capture_diagnostics = self._capture_publish_error_diagnostics_if_enabled,
+            config_file_path = self.config_file_path,
+        )
 
 #############################
 # main entry point

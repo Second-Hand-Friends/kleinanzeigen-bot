@@ -1051,6 +1051,12 @@ async def fill_ad_form(
     sell-directly, description, contact, and images."""
 
     #############################
+    # set ad type (WANTED ads need to select the wanted-ad radio before form sections render)
+    #############################
+    if ad_cfg.type == "WANTED":
+        await web.web_click(By.ID, "ad-type-WANTED")
+
+    #############################
     # set category (before title to avoid form reset clearing title)
     #############################
     await set_category(web, root_url = root_url, category = ad_cfg.category, ad_file = ad_file)

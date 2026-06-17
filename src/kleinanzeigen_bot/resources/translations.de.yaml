@@ -119,6 +119,32 @@ kleinanzeigen_bot/__init__.py:
   handle_after_login_logic:
     "Handling GDPR disclaimer...": "Verarbeite DSGVO-Hinweis..."
 
+  run:
+    "DONE: No configuration errors found.": "FERTIG: Keine Konfigurationsfehler gefunden."
+    "DONE: No active ads found.": "FERTIG: Keine aktiven Anzeigen gefunden."
+    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new, due, changed) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new, due, changed) oder numerische IDs."
+    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, changed) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, changed) oder numerische IDs."
+    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new) oder numerische IDs."
+    "Invalid --ads selector: \"%s\". Valid values: all or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
+    "DONE: No new/outdated ads found.": "FERTIG: Keine neuen/veralteten Anzeigen gefunden."
+    "DONE: No ads to delete found.": "FERTIG: Keine zu löschenden Anzeigen gefunden."
+    "DONE: No changed ads found.": "FERTIG: Keine geänderten Anzeigen gefunden."
+    "Extending all ads within 8-day window...": "Verlängere alle Anzeigen innerhalb des 8-Tage-Zeitfensters..."
+    "DONE: No ads found to extend.": "FERTIG: Keine Anzeigen zum Verlängern gefunden."
+    "Unknown command: %s": "Unbekannter Befehl: %s"
+    "Timing collector flush failed: %s": "Zeitmessdaten konnten nicht gespeichert werden: %s"
+
+#################################################
+kleinanzeigen_bot/publishing_workflow.py:
+
+#################################################
+
+  publish_ad:
+    "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
+    "Updating ad '%s'...": "Aktualisiere Anzeige '%s'..."
+    " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
+    "Post-publish persistence failed for '%s' (ad ID %s - ad is live on Kleinanzeigen but local YAML may be out of sync)": "Persistenz nach Veröffentlichung fehlgeschlagen für '%s' (Anzeigen-ID %s - Anzeige ist auf Kleinanzeigen live, aber die lokale YAML ist möglicherweise nicht synchron)"
+
   publish_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
@@ -134,14 +160,6 @@ kleinanzeigen_bot/__init__.py:
     "DONE: (Re-)published %s": "FERTIG: %s (erneut) veröffentlicht"
     "ad": "Anzeige"
 
-  publish_ad:
-    "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
-    "Updating ad '%s'...": "Aktualisiere Anzeige '%s'..."
-    " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
-    "Post-publish persistence failed for '%s' (ad ID %s - ad is live on Kleinanzeigen but local YAML may be out of sync)": "Persistenz nach Veröffentlichung fehlgeschlagen für '%s' (Anzeigen-ID %s - Anzeige ist auf Kleinanzeigen live, aber die lokale YAML ist möglicherweise nicht synchron)"
-
-  _fill_ad_form:
-
   update_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
@@ -155,21 +173,6 @@ kleinanzeigen_bot/__init__.py:
     "DONE: updated %s (%s failed after retries)": "FERTIG: %s aktualisiert (%s nach Wiederholungen fehlgeschlagen)"
     "DONE: updated %s": "FERTIG: %s aktualisiert"
     "ad": "Anzeige"
-
-  run:
-    "DONE: No configuration errors found.": "FERTIG: Keine Konfigurationsfehler gefunden."
-    "DONE: No active ads found.": "FERTIG: Keine aktiven Anzeigen gefunden."
-    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new, due, changed) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new, due, changed) oder numerische IDs."
-    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, changed) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, changed) oder numerische IDs."
-    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new) oder numerische IDs."
-    "Invalid --ads selector: \"%s\". Valid values: all or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
-    "DONE: No new/outdated ads found.": "FERTIG: Keine neuen/veralteten Anzeigen gefunden."
-    "DONE: No ads to delete found.": "FERTIG: Keine zu löschenden Anzeigen gefunden."
-    "DONE: No changed ads found.": "FERTIG: Keine geänderten Anzeigen gefunden."
-    "Extending all ads within 8-day window...": "Verlängere alle Anzeigen innerhalb des 8-Tage-Zeitfensters..."
-    "DONE: No ads found to extend.": "FERTIG: Keine Anzeigen zum Verlängern gefunden."
-    "Unknown command: %s": "Unbekannter Befehl: %s"
-    "Timing collector flush failed: %s": "Zeitmessdaten konnten nicht gespeichert werden: %s"
 
 #################################################
 kleinanzeigen_bot/published_ads.py:

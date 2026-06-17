@@ -27,7 +27,8 @@ from kleinanzeigen_bot import resources
 
 # Messages that are intentionally not translated (internal/debug messages)
 EXCLUDED_MESSAGES:dict[str, set[str]] = {
-    "kleinanzeigen_bot/__init__.py": {"############################################"}
+    "kleinanzeigen_bot/__init__.py": {"############################################"},
+    "kleinanzeigen_bot/publishing_workflow.py": {"############################################"},
 }
 
 # Special modules that are known to be needed even if not in messages_by_file
