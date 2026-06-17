@@ -215,13 +215,13 @@ files = [
 
 [[package]]
 name = "certifi"
-version = "2026.5.20"
+version = "2026.6.17"
 requires_python = ">=3.7"
 summary = "Python package for providing Mozilla's CA Bundle."
 groups = ["default", "dev"]
 files = [
-    {file = "certifi-2026.5.20-py3-none-any.whl", hash = "sha256:3c52e209ba0a4ad7aebe60436a4ab349c39e1e602e8c134221e546902ad25897"},
-    {file = "certifi-2026.5.20.tar.gz", hash = "sha256:69dea482ab64caa7b9f6aba1c6bf48bb6a5448d1c0f1b17ab42ad8c763a5344d"},
+    {file = "certifi-2026.6.17-py3-none-any.whl", hash = "sha256:2227dcbaafe0d2f59279d1762ddddc37783ed4354594f194ffc31d20f41fc3db"},
+    {file = "certifi-2026.6.17.tar.gz", hash = "sha256:024c88eeec92ca068db80f02b8b07c9cef7b9fe261d1d535abfd5abd6f6af432"},
 ]
 
 [[package]]
@@ -593,7 +593,7 @@ files = [
 
 [[package]]
 name = "cyclonedx-python-lib"
-version = "11.10.0"
+version = "11.11.0"
 requires_python = "<4.0,>=3.9"
 summary = "Python library for CycloneDX"
 groups = ["dev"]
@@ -605,8 +605,8 @@ dependencies = [
     "typing-extensions<5.0,>=4.6; python_version < \"3.13\"",
 ]
 files = [
-    {file = "cyclonedx_python_lib-11.10.0-py3-none-any.whl", hash = "sha256:ffb9510b8d00a0896cfbe0a78b97c545d28f7d2a54e9d9dd5e5dc6e91ca9b375"},
-    {file = "cyclonedx_python_lib-11.10.0.tar.gz", hash = "sha256:d03d6ea271e26feaf123b8b1b34468a305f33a338c5763f56e397a8408f9b290"},
+    {file = "cyclonedx_python_lib-11.11.0-py3-none-any.whl", hash = "sha256:3049fc83e06a059b5c5907a527625a8ed5073caab10607ed4c9e5503b590fd44"},
+    {file = "cyclonedx_python_lib-11.11.0.tar.gz", hash = "sha256:4b3194db72b613717f2912447e67ab618c75ff7dcac6c4af3c0e9e1ac617c102"},
 ]
 
 [[package]]
