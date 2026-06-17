@@ -298,7 +298,7 @@ async def test_publish_ad_survives_persistence_failure() -> None:
     with (
         patch("kleinanzeigen_bot.publishing_workflow.delete_old_ad_if_needed", new_callable = AsyncMock),
         patch.object(bot, "web_open", new_callable = AsyncMock),
-        patch.object(bot, "_dismiss_consent_banner", new_callable = AsyncMock),
+        patch.object(bot, "dismiss_consent_banner", new_callable = AsyncMock),
         patch("kleinanzeigen_bot.publishing_form.fill_ad_form", new_callable = AsyncMock),
         patch("kleinanzeigen_bot.publishing_submission.submit_and_confirm_ad", new_callable = AsyncMock, return_value = 12345),
         patch("kleinanzeigen_bot.publishing_persistence.persist_published_ad",

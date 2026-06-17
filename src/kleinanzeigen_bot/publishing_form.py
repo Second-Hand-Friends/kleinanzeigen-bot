@@ -43,7 +43,7 @@ async def set_category(web:WebScrapingMixin, *, root_url:str, category:str | Non
 
     is_category_auto_selected = False
     category_path_elem = await web.web_probe(By.ID, "ad-category-path")
-    if category_path_elem and await web._extract_visible_text(category_path_elem):  # noqa: SLF001 - WebScrapingMixin category marker helper
+    if category_path_elem and await web.extract_visible_text(category_path_elem):
         is_category_auto_selected = True
 
     if category:
@@ -137,7 +137,7 @@ async def city_option_text(web:WebScrapingMixin, option:Element) -> str:
     if text:
         return text
     try:
-        return (await web._extract_visible_text(option)).strip()  # noqa: SLF001 - WebScrapingMixin visible text helper
+        return (await web.extract_visible_text(option)).strip()
     except TimeoutError:
         return ""
 

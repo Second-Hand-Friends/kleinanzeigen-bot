@@ -143,7 +143,7 @@ async def publish_ad(
         LOG.info("Updating ad '%s'...", ad_cfg.title)
         await web.web_open(f"{root_url}/p-anzeige-bearbeiten.html?adId={ad_cfg.id}", reload_if_already_open = True)
 
-    await web._dismiss_consent_banner()  # noqa: SLF001 — called on WebScrapingMixin from same package
+    await web.dismiss_consent_banner()
 
     if _loggers.is_debug(LOG):
         LOG.debug(" -> effective ad meta:")

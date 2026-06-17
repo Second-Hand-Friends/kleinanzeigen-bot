@@ -118,7 +118,7 @@ async def test_dismiss_consent_banner_clicks_when_present(web_scraper:WebScrapin
         patch.object(web_scraper, "web_probe", new_callable = AsyncMock, return_value = mock_element) as mock_probe,
         patch.object(web_scraper, "web_sleep", new_callable = AsyncMock) as mock_sleep,
     ):
-        await web_scraper._dismiss_consent_banner()
+        await web_scraper.dismiss_consent_banner()
 
         mock_probe.assert_awaited_once()
         mock_element.click.assert_awaited_once()
@@ -132,7 +132,7 @@ async def test_dismiss_consent_banner_does_nothing_when_absent(web_scraper:WebSc
         patch.object(web_scraper, "web_probe", new_callable = AsyncMock, return_value = None) as mock_probe,
         patch.object(web_scraper, "web_sleep", new_callable = AsyncMock) as mock_sleep,
     ):
-        await web_scraper._dismiss_consent_banner()
+        await web_scraper.dismiss_consent_banner()
 
         mock_probe.assert_awaited_once()
         mock_sleep.assert_not_awaited()
