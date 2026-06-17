@@ -765,7 +765,7 @@ class AdExtractor(WebScrapingMixin):
 
         # Fallback to legacy selectors in case the breadcrumb structure is unexpected.
         LOG.debug("Falling back to legacy breadcrumb selectors; collected ids: %s", category_ids)
-        fallback_timeout = self._effective_timeout()
+        fallback_timeout = self.effective_timeout()
         try:
             category_first_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
             category_second_part = await self.web_find(By.CSS_SELECTOR, "a:nth-of-type(3)", parent = category_line)
@@ -812,7 +812,7 @@ class AdExtractor(WebScrapingMixin):
             detail_items = await self.web_find_all(
                 By.CSS_SELECTOR,
                 "#viewad-details .addetailslist--detail",
-                timeout = self._effective_timeout(),
+                timeout = self.effective_timeout(),
             )
         except TimeoutError:
             LOG.debug("No ad details section found on view page for DOM-based attribute extraction.")
@@ -821,7 +821,7 @@ class AdExtractor(WebScrapingMixin):
         for item in detail_items:
             try:
                 value_text = (await self.web_text(By.CSS_SELECTOR, ".addetailslist--detail--value", parent = item)).strip().lower()
-                full_text = (await self._extract_visible_text(item)).strip().lower()
+                full_text = (await self.extract_visible_text(item)).strip().lower()
             except TimeoutError:
                 LOG.debug("Skipping detail row without extractable value in DOM fallback.")
                 continue
@@ -979,7 +979,7 @@ class AdExtractor(WebScrapingMixin):
         street_element = await self.web_probe(By.ID, "street-address")
         if street_element is not None:
             try:
-                street = (await self._extract_visible_text(street_element))[:-1]  # trailing comma
+                street = (await self.extract_visible_text(street_element))[:-1]  # trailing comma
             except TimeoutError:
                 LOG.debug("Skipping street extraction after timeout.")
             else:

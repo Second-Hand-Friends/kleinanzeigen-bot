@@ -175,7 +175,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         """
         return self._get_timeout_config().resolve(key, override)
 
-    def _effective_timeout(self, key:str = "default", override:float | None = None, *, attempt:int = 0) -> float:
+    def effective_timeout(self, key:str = "default", override:float | None = None, *, attempt:int = 0) -> float:
         """
         Return the effective timeout (seconds) with multiplier/backoff applied.
         """
@@ -229,7 +229,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         loop = asyncio.get_running_loop()
 
         for attempt in range(attempts):
-            effective_timeout = self._effective_timeout(key, override, attempt = attempt)
+            effective_timeout = self.effective_timeout(key, override, attempt = attempt)
             attempt_started = loop.time()
             try:
                 result = await operation(effective_timeout)
@@ -383,10 +383,10 @@ class WebScrapingMixin:  # noqa: PLR0904
             key = key,
             description = description,
         )
-        text = await self._extract_visible_text(element)
+        text = await self.extract_visible_text(element)
         return text, matched_index
 
-    async def _extract_visible_text(self, element:Element) -> str:
+    async def extract_visible_text(self, element:Element) -> str:
         """Return visible text for a DOM element using user-selection extraction."""
         return str(
             await element.apply("""
@@ -680,7 +680,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 LOG.info("(ok) Remote debugging port is open")
                 # Try to get more information about the debugging endpoint
                 try:
-                    probe_timeout = self._effective_timeout("chrome_remote_probe")
+                    probe_timeout = self.effective_timeout("chrome_remote_probe")
                     response = urllib.request.urlopen(f"http://127.0.0.1:{remote_port}/json/version", timeout = probe_timeout)
                     version_info = json.loads(response.read().decode())
                     LOG.info("(ok) Remote debugging API accessible - Browser: %s", version_info.get("Browser", "Unknown"))
@@ -867,7 +867,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         loop = asyncio.get_running_loop()
         start_at = loop.time()
         base_timeout = timeout if timeout is not None else self.timeout()
-        effective_timeout = self._effective_timeout(override = base_timeout) if apply_multiplier else base_timeout
+        effective_timeout = self.effective_timeout(override = base_timeout) if apply_multiplier else base_timeout
 
         while True:
             await self.page
@@ -1246,7 +1246,7 @@ class WebScrapingMixin:  # noqa: PLR0904
             LOG.debug("  => skipping, [%s] is already open", url)
             return
         self.page = await self.browser.get(url = url, new_tab = False, new_window = False)
-        page_timeout = self._effective_timeout("page_load", timeout)
+        page_timeout = self.effective_timeout("page_load", timeout)
         await self.web_await(
             lambda: self.web_execute("document.readyState == 'complete'"),
             timeout = page_timeout,
@@ -1256,7 +1256,7 @@ class WebScrapingMixin:  # noqa: PLR0904
 
     async def web_text(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> str:
         element = await self.web_find(selector_type, selector_value, parent = parent, timeout = timeout)
-        return await self._extract_visible_text(element)
+        return await self.extract_visible_text(element)
 
     async def web_sleep(self, min_ms:int = 1_000, max_ms:int = 2_500) -> None:
         duration = max_ms <= min_ms and min_ms or secrets.randbelow(max_ms - min_ms) + min_ms
@@ -1640,7 +1640,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         await self.web_sleep()
         return listbox
 
-    async def _dismiss_consent_banner(self) -> None:
+    async def dismiss_consent_banner(self) -> None:
         """Dismiss the GDPR/TCF consent banner if it is present.
 
         This banner can appear on any page navigation (not just after login) and blocks
@@ -1773,7 +1773,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 if port_available:
                     try:
                         version_info = detect_chrome_version_from_remote_debugging(
-                            remote_host, remote_port, timeout = self._effective_timeout("chrome_remote_debugging")
+                            remote_host, remote_port, timeout = self.effective_timeout("chrome_remote_debugging")
                         )
                         if version_info:
                             LOG.debug(" -> Detected version from existing browser: %s", version_info)
@@ -1789,7 +1789,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 binary_path = self.browser_config.binary_location
                 if binary_path:
                     LOG.debug(" -> No remote browser detected, trying binary detection")
-                    version_info = detect_chrome_version_from_binary(binary_path, timeout = self._effective_timeout("chrome_binary_detection"))
+                    version_info = detect_chrome_version_from_binary(binary_path, timeout = self.effective_timeout("chrome_binary_detection"))
 
             # Validate if Chrome 136+ detected
             if version_info and version_info.is_chrome_136_plus:
@@ -1852,8 +1852,8 @@ class WebScrapingMixin:  # noqa: PLR0904
                 binary_path = binary_path,
                 remote_host = "127.0.0.1",
                 remote_port = remote_port if remote_port > 0 else None,
-                remote_timeout = self._effective_timeout("chrome_remote_debugging"),
-                binary_timeout = self._effective_timeout("chrome_binary_detection"),
+                remote_timeout = self.effective_timeout("chrome_remote_debugging"),
+                binary_timeout = self.effective_timeout("chrome_binary_detection"),
             )
 
             # Report binary detection results

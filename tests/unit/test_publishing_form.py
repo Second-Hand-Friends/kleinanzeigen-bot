@@ -67,8 +67,7 @@ class TestKleinanzeigenBotContactLocationHardening:
     async def test_city_option_text_falls_back_to_visible_text(self, test_bot:KleinanzeigenBot) -> None:
         option = MagicMock(spec = Element)
         option.text = ""
-
-        with patch.object(test_bot, "_extract_visible_text", new_callable = AsyncMock, return_value = "  Metroville  "):
+        with patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = "  Metroville  "):
             assert await city_option_text(test_bot, option) == "Metroville"
 
     @pytest.mark.asyncio
@@ -76,7 +75,7 @@ class TestKleinanzeigenBotContactLocationHardening:
         option = MagicMock(spec = Element)
         option.text = ""
 
-        with patch.object(test_bot, "_extract_visible_text", new_callable = AsyncMock, side_effect = TimeoutError("hidden")):
+        with patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, side_effect = TimeoutError("hidden")):
             assert not await city_option_text(test_bot, option)
 
     @pytest.mark.asyncio

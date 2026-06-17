@@ -67,57 +67,8 @@ kleinanzeigen_bot/__init__.py:
   _workspace_or_raise:
     "Workspace must be resolved before command execution": "Arbeitsbereich muss vor der Befehlsausführung aufgelöst werden"
 
-  _capture_login_detection_diagnostics_if_enabled:
-    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
-
   _capture_publish_error_diagnostics_if_enabled:
     "Diagnostics capture failed during publish error handling: %s": "Diagnose-Erfassung fehlgeschlagen während der Veröffentlichung-Fehlerbehandlung: %s"
-
-  login:
-    "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
-    "Already logged in. Skipping login.": "Bereits eingeloggt. Überspringe Anmeldung."
-    "Navigating to SSO login page (Auth0)...": "Navigiere zur SSO-Anmeldeseite (Auth0)..."
-    "Timeout navigating to SSO login page after %.1fs": "Zeitüberschreitung beim Navigieren zur SSO-Anmeldeseite nach %.1fs"
-    "Login confirmed.": "Anmeldung bestätigt."
-    "Login could not be confirmed after Auth0 flow (url=%s)": "Anmeldung nach Auth0-Flow konnte nicht bestätigt werden (URL=%s)"
-    "Login could not be confirmed after Auth0 flow (reason=%s, url=%s)": "Anmeldung nach Auth0-Flow konnte nicht bestätigt werden (Grund=%s, URL=%s)"
-
-  _wait_for_auth0_login_context:
-    "Auth0 redirect not detected (url=%s)": "Auth0-Weiterleitung nicht erkannt (URL=%s)"
-
-  _wait_for_auth0_password_step:
-    "Auth0 password step not reached (url=%s)": "Auth0-Passwortschritt nicht erreicht (URL=%s)"
-
-  _wait_for_post_auth0_submit_transition:
-    "Auth0 post-submit verification remained inconclusive (url=%s)": "Auth0-Verifikation nach Absenden blieb unklar (URL=%s)"
-
-  fill_login_data_and_send:
-    "Logging in...": "Anmeldung..."
-    "Auth0 Step 1: entering email...": "Auth0 Schritt 1: E-Mail wird eingegeben..."
-    "Waiting for Auth0 password page...": "Warte auf Auth0-Passwortseite..."
-    "Auth0 Step 2: entering password...": "Auth0 Schritt 2: Passwort wird eingegeben..."
-    "Auth0 login submitted.": "Auth0-Anmeldung abgesendet."
-
-  _handle_identifier_captcha_state:
-    "# Captcha detected on Auth0 login page. Please solve it in the browser.": "# Captcha auf der Auth0-Anmeldeseite erkannt. Bitte loesen Sie das Captcha im Browser."
-    "Auth0 Weiter button present after captcha, clicking it...": "Auth0-Weiter-Button nach Captcha vorhanden, klicke ihn..."
-    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
-
-  _check_sms_verification:
-    "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
-    "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
-
-  _check_email_verification:
-    "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
-    "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
-
-  _has_logged_in_marker:
-    "Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)": "Starte Login-Erkennung (Timeout: %.1fs Basis, %.1fs effektiv mit Multiplikator/Backoff)"
-    "Login detected via login detection selector '%s'": "Login erkannt über Login-Erkennungs-Selektor '%s'"
-    "Timeout waiting for login detection selector group after %.1fs": "Timeout beim Warten auf die Login-Erkennungs-Selektorgruppe nach %.1fs"
-
-  handle_after_login_logic:
-    "Handling GDPR disclaimer...": "Verarbeite DSGVO-Hinweis..."
 
   run:
     "DONE: No configuration errors found.": "FERTIG: Keine Konfigurationsfehler gefunden."
@@ -133,6 +84,62 @@ kleinanzeigen_bot/__init__.py:
     "DONE: No ads found to extend.": "FERTIG: Keine Anzeigen zum Verlängern gefunden."
     "Unknown command: %s": "Unbekannter Befehl: %s"
     "Timing collector flush failed: %s": "Zeitmessdaten konnten nicht gespeichert werden: %s"
+
+#################################################
+kleinanzeigen_bot/login_flow.py:
+#################################################
+  capture_login_detection_diagnostics_if_enabled:
+    "############################################": "############################################"
+    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
+
+  login:
+    "Checking if already logged in...": "Überprüfe, ob bereits eingeloggt..."
+    "Already logged in. Skipping login.": "Bereits eingeloggt. Überspringe Anmeldung."
+    "Navigating to SSO login page (Auth0)...": "Navigiere zur SSO-Anmeldeseite (Auth0)..."
+    "Timeout navigating to SSO login page after %.1fs": "Zeitüberschreitung beim Navigieren zur SSO-Anmeldeseite nach %.1fs"
+    "Login confirmed.": "Anmeldung bestätigt."
+    "Login could not be confirmed after Auth0 flow (url=%s)": "Anmeldung nach Auth0-Flow konnte nicht bestätigt werden (URL=%s)"
+    "Login could not be confirmed after Auth0 flow (reason=%s, url=%s)": "Anmeldung nach Auth0-Flow konnte nicht bestätigt werden (Grund=%s, URL=%s)"
+
+  wait_for_auth0_login_context:
+    "Auth0 redirect not detected (url=%s)": "Auth0-Weiterleitung nicht erkannt (URL=%s)"
+
+  wait_for_auth0_password_step:
+    "Auth0 password step not reached (url=%s)": "Auth0-Passwortschritt nicht erreicht (URL=%s)"
+
+  wait_for_post_auth0_submit_transition:
+    "Auth0 post-submit verification remained inconclusive (url=%s)": "Auth0-Verifikation nach Absenden blieb unklar (URL=%s)"
+
+  fill_login_data_and_send:
+    "Logging in...": "Anmeldung..."
+    "Auth0 Step 1: entering email...": "Auth0 Schritt 1: E-Mail wird eingegeben..."
+    "Waiting for Auth0 password page...": "Warte auf Auth0-Passwortseite..."
+    "Auth0 Step 2: entering password...": "Auth0 Schritt 2: Passwort wird eingegeben..."
+    "Auth0 login submitted.": "Auth0-Anmeldung abgesendet."
+
+  handle_identifier_captcha_state:
+    "############################################": "############################################"
+    "# Captcha detected on Auth0 login page. Please solve it in the browser.": "# Captcha auf der Auth0-Anmeldeseite erkannt. Bitte loesen Sie das Captcha im Browser."
+    "Auth0 Weiter button present after captcha, clicking it...": "Auth0-Weiter-Button nach Captcha vorhanden, klicke ihn..."
+    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
+
+  check_sms_verification:
+    "############################################": "############################################"
+    "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
+    "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
+
+  check_email_verification:
+    "############################################": "############################################"
+    "# Device verification message detected. Please follow the instruction displayed in the Browser.": "# Nachricht zur Geräteverifizierung erkannt. Bitte den Anweisungen im Browser folgen."
+    "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
+
+  has_logged_in_marker:
+    "Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)": "Starte Login-Erkennung (Timeout: %.1fs Basis, %.1fs effektiv mit Multiplikator/Backoff)"
+    "Login detected via login detection selector '%s'": "Login erkannt über Login-Erkennungs-Selektor '%s'"
+    "Timeout waiting for login detection selector group after %.1fs": "Timeout beim Warten auf die Login-Erkennungs-Selektorgruppe nach %.1fs"
+
+  handle_after_login_logic:
+    "Handling GDPR disclaimer...": "Verarbeite DSGVO-Hinweis..."
 
 #################################################
 kleinanzeigen_bot/publishing_workflow.py:
