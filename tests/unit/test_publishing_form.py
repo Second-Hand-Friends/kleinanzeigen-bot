@@ -4,6 +4,7 @@
 """Tests for publishing form operations (contact/location fields, category selection, city selection, pricing)."""
 
 import asyncio
+import logging
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
@@ -12,11 +13,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kleinanzeigen_bot import KleinanzeigenBot
+from kleinanzeigen_bot import LOG, KleinanzeigenBot
 from kleinanzeigen_bot.ad_form_helpers import VERSAND_COMBOBOX_SELECTOR
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.publishing_form import (
     _select_button_combobox,  # noqa: PLC2701 - needed for coverage of React fiber selection
+    _set_condition,  # noqa: PLC2701
+    _special_attribute_candidate_priority,  # noqa: PLC2701
     city_option_text,
     fill_image_section,
     read_city_selection_text,
@@ -29,6 +32,7 @@ from kleinanzeigen_bot.publishing_form import (
     set_shipping,
     set_shipping_form,
     set_shipping_options,
+    set_special_attributes,
     upload_images,
 )
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError
@@ -2091,3 +2095,744 @@ class TestSelectButtonCombobox:
             pytest.raises(TimeoutError, match = "not found in button combobox"),
         ):
             await _select_button_combobox(test_bot, elem_id, option_value)
+
+
+class TestSpecialAttributes:
+    """Tests for special attribute handling."""
+
+    @pytest.mark.asyncio
+    async def test_special_attributes_compound_name_lookup(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """Compound special-attribute names should be matched via original key in @name."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"autos.model_s": "a3"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        model_elem = MagicMock()
+        model_attrs = MagicMock()
+        model_attrs.id = None
+        model_attrs.name = "attributeMap[autos.marke_s+autos.model_s]"
+        model_attrs.get.side_effect = lambda key, default = None: {
+            "id": None,
+            "name": "attributeMap[autos.marke_s+autos.model_s]",
+            "type": None,
+            "role": None,
+        }.get(key, default)
+        model_elem.attrs = model_attrs
+        model_elem.local_name = "select"
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock) as mock_find_all,
+            patch.object(test_bot, "web_select", new_callable = AsyncMock) as mock_select,
+        ):
+
+            async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[Element]:
+                if selector_type == By.XPATH and "autos.model_s" in selector_value:
+                    return [model_elem]
+                return []
+
+            mock_find_all.side_effect = find_all_side_effect
+
+            await set_special_attributes(test_bot, ad_cfg)
+
+            assert mock_select.await_count == 1
+            assert mock_select.await_args is not None
+            assert mock_select.await_args.args[0] == By.XPATH
+            assert "contains(@name, 'autos.model_s')" in str(mock_select.await_args.args[1])
+            assert mock_select.await_args.args[2] == "a3"
+
+    @pytest.mark.asyncio
+    async def test_special_attributes_prefers_button_combobox_over_hidden_input(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Hidden backing inputs must not win over visible button combobox controls."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"color_s": "beige"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        hidden_elem = MagicMock()
+        hidden_attrs = MagicMock()
+        hidden_attrs.id = None
+        hidden_attrs.type = "hidden"
+        hidden_attrs.get.side_effect = lambda key, default = None: {
+            "id": None,
+            "name": "attributeMap[kleidung_herren.color]",
+            "type": "hidden",
+            "role": None,
+        }.get(key, default)
+        hidden_elem.attrs = hidden_attrs
+        hidden_elem.local_name = "input"
+
+        button_elem = MagicMock()
+        button_attrs = MagicMock()
+        button_attrs.id = "kleidung_herren.color"
+        button_attrs.type = "button"
+        button_attrs.get.side_effect = lambda key, default = None: {
+            "id": "kleidung_herren.color",
+            "name": None,
+            "type": "button",
+            "role": "combobox",
+        }.get(key, default)
+        button_elem.attrs = button_attrs
+        button_elem.local_name = "button"
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [hidden_elem, button_elem]),
+            patch("kleinanzeigen_bot.publishing_form._select_button_combobox", new_callable = AsyncMock) as mock_button_combobox,
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        mock_button_combobox.assert_awaited_once_with(test_bot, "kleidung_herren.color", "beige")
+        mock_input.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("combobox_type", ["text", None], ids = ["type-text", "type-absent"])
+    async def test_special_attributes_combobox_routed_over_hidden_input(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        combobox_type:str | None,
+    ) -> None:
+        """Combobox <input> must be routed to web_select_combobox regardless of type attribute presence."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"brand_s": "armani"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        hidden_elem = MagicMock()
+        hidden_attrs = MagicMock()
+        hidden_attrs.id = None
+        hidden_attrs.type = "hidden"
+        hidden_attrs.get.side_effect = lambda key, default = None: {
+            "id": None,
+            "name": "attributeMap[kleidung_herren.brand]",
+            "type": "hidden",
+            "role": None,
+        }.get(key, default)
+        hidden_elem.attrs = hidden_attrs
+        hidden_elem.local_name = "input"
+
+        combobox_elem = MagicMock()
+        combobox_attrs = MagicMock()
+        combobox_attrs.id = "kleidung_herren.brand"
+        combobox_attrs.type = combobox_type
+        combobox_attrs.get.side_effect = lambda key, default = None: {
+            "id": "kleidung_herren.brand",
+            "name": None,
+            "type": combobox_type,
+            "role": "combobox",
+        }.get(key, default)
+        combobox_elem.attrs = combobox_attrs
+        combobox_elem.local_name = "input"
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [hidden_elem, combobox_elem]),
+            patch.object(test_bot, "web_select_combobox", new_callable = AsyncMock) as mock_select_combobox,
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        mock_select_combobox.assert_awaited_once_with(By.ID, "kleidung_herren.brand", "armani")
+        mock_input.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("checked_attr", "attribute_value", "expect_click"),
+        [(None, "true", True), ("checked", "true", False), ("checked", "false", True)],
+    )
+    async def test_special_attributes_checkbox_clicks_only_on_state_change(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        checked_attr:str | None,
+        attribute_value:str,
+        expect_click:bool,
+    ) -> None:
+        """Checkbox attributes should only click when current and desired states differ."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"feature_b": attribute_value},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        checkbox_elem = MagicMock()
+        checkbox_attrs = MagicMock()
+        checkbox_attrs.id = "feature"
+        checkbox_attrs.type = "checkbox"
+        checkbox_attrs.get.side_effect = lambda key, default = None: {
+            "id": "feature",
+            "name": "attributeMap[feature]",
+            "type": "checkbox",
+            "role": None,
+            "checked": checked_attr,
+        }.get(key, default)
+        checkbox_elem.attrs = checkbox_attrs
+        checkbox_elem.local_name = "input"
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [checkbox_elem]),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        if expect_click:
+            mock_click.assert_awaited_once_with(By.ID, "feature")
+        else:
+            mock_click.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_hidden_input_fallback_finds_associated_button_combobox(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """When XPath matches only a hidden backing input (dynamic React IDs),
+        the fallback should locate the associated <button role="combobox"> and use
+        _select_button_combobox.  Regression test for issue #1096."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"groesse_s": "68"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        hidden_elem = MagicMock()
+        hidden_attrs = MagicMock()
+        hidden_attrs.id = None
+        hidden_attrs.type = "hidden"
+        hidden_attrs.get.side_effect = lambda key, default = None: {
+            "id": None,
+            "name": "attributeMap[groesse]",
+            "type": "hidden",
+            "role": None,
+        }.get(key, default)
+        hidden_elem.attrs = hidden_attrs
+        hidden_elem.local_name = "input"
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [hidden_elem]),
+            patch.object(
+                test_bot,
+                "_find_associated_button_combobox",
+                new_callable = AsyncMock,
+                return_value = ":r8r7:",
+            ) as mock_find_button,
+            patch(
+                "kleinanzeigen_bot.publishing_form._select_button_combobox",
+                new_callable = AsyncMock,
+            ) as mock_select_combobox,
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        mock_find_button.assert_awaited_once_with(hidden_input_name = "attributeMap[groesse]")
+        mock_select_combobox.assert_awaited_once_with(test_bot, ":r8r7:", "68")
+        mock_input.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_hidden_input_fallback_no_associated_button_raises(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """When the fallback cannot find an associated button combobox, a
+        TimeoutError is raised instead of falling through to the text-input handler."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"color_s": "beige"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        hidden_elem = MagicMock()
+        hidden_attrs = MagicMock()
+        hidden_attrs.id = None
+        hidden_attrs.type = "hidden"
+        hidden_attrs.get.side_effect = lambda key, default = None: {
+            "id": None,
+            "name": "attributeMap[color]",
+            "type": "hidden",
+            "role": None,
+        }.get(key, default)
+        hidden_elem.attrs = hidden_attrs
+        hidden_elem.local_name = "input"
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [hidden_elem]),
+            patch.object(
+                test_bot,
+                "_find_associated_button_combobox",
+                new_callable = AsyncMock,
+                return_value = None,
+            ) as mock_find_button,pytest.raises(TimeoutError)
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        mock_find_button.assert_awaited_once_with(hidden_input_name = "attributeMap[color]")
+
+    @pytest.mark.asyncio
+    async def test_fallback_not_triggered_when_button_combobox_directly_matched(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """When the XPath directly matches a <button role="combobox"> (not just
+        a hidden input), the fallback search should NOT be triggered — the normal
+        dispatch path handles it.  This guards against unnecessary JS execution."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"type_s": "accessoires"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        button_elem = MagicMock()
+        button_attrs = MagicMock()
+        button_attrs.id = "kleidung_herren.type"
+        button_attrs.type = "button"
+        button_attrs.get.side_effect = lambda key, default = None: {
+            "id": "kleidung_herren.type",
+            "name": None,
+            "type": "button",
+            "role": "combobox",
+        }.get(key, default)
+        button_elem.attrs = button_attrs
+        button_elem.local_name = "button"
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [button_elem]),
+            patch.object(
+                test_bot,
+                "_find_associated_button_combobox",
+                new_callable = AsyncMock,
+            ) as mock_find_button,
+            patch(
+                "kleinanzeigen_bot.publishing_form._select_button_combobox",
+                new_callable = AsyncMock,
+            ) as mock_select_combobox,
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        mock_find_button.assert_not_awaited()
+        mock_select_combobox.assert_awaited_once_with(test_bot, "kleidung_herren.type", "accessoires")
+
+    def test_special_attribute_candidate_priority_textarea(self) -> None:
+        """A textarea element should return priority (4, 0)."""
+        elem = MagicMock()
+        elem.local_name = "textarea"
+        elem.attrs = {}
+        assert _special_attribute_candidate_priority(elem) == (4, 0)
+
+    def test_special_attribute_candidate_priority_fallback(self) -> None:
+        """An unrecognized element (e.g. div with no matching attrs) should return priority (8, 0)."""
+        elem = MagicMock()
+        elem.local_name = "div"
+        elem.attrs = {}
+        assert _special_attribute_candidate_priority(elem) == (8, 0)
+
+
+class TestConditionSelector:
+    """Regression tests for condition dialog selection."""
+
+    @pytest.mark.asyncio
+    async def test_condition_selects_radio_by_value(self, test_bot:KleinanzeigenBot) -> None:
+        """Condition selection should resolve radios by value in the new dialog."""
+        dialog = MagicMock()
+        trigger = MagicMock()
+        trigger.attrs = {"id": "condition-trigger", "aria-controls": "condition-dialog"}
+        trigger.click = AsyncMock()
+        radio = MagicMock()
+        radio_attrs = MagicMock()
+        radio_attrs.id = "radio-condition-ok"
+        radio_attrs.get.side_effect = lambda key, default = None: "radio-condition-ok" if key == "id" else default
+        radio.attrs = radio_attrs
+        radio.click = AsyncMock()
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            # trigger lookup returns the dialog trigger button
+            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
+                return trigger
+            # radio lookup returns the matching radio
+            if selector_type == By.XPATH and "@type='radio'" in selector_value and "@value='ok'" in selector_value:
+                return radio
+            return None
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = dialog),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            handled = await _set_condition(test_bot, "ok")
+
+            assert handled is True
+
+            clicked_xpath_selectors = [str(call.args[1]) for call in mock_click.await_args_list if len(call.args) > 1]
+            trigger.click.assert_awaited_once()
+            assert any("label[@for=" in selector and "radio-condition-ok" in selector for selector in clicked_xpath_selectors)
+            assert any("Bestätigen" in selector for selector in clicked_xpath_selectors)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("configured", "expected_api_value", "expect_warning"),
+        [
+            ("wie_neu", "like_new", True),
+            ("sehr_gut", "like_new", True),
+            ("new", "new", False),
+            ("like_new", "like_new", False),
+            ("ok", "ok", False),
+            ("alright", "alright", False),
+            ("defect", "defect", False),
+        ],
+    )
+    async def test_condition_tokens_warn_only_for_legacy_values(
+        self,
+        test_bot:KleinanzeigenBot,
+        configured:str,
+        expected_api_value:str,
+        expect_warning:bool,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Condition tokens should resolve to the current API codes and warn only for legacy German values."""
+        caplog.set_level(logging.WARNING, logger = LOG.name)
+        dialog = MagicMock()
+        trigger = MagicMock()
+        trigger.attrs = {"id": "condition-trigger", "aria-controls": "condition-dialog"}
+        trigger.click = AsyncMock()
+        radio = MagicMock()
+        radio_attrs = MagicMock()
+        radio_attrs.get.side_effect = lambda key, default = None: f"radio-condition-{expected_api_value}" if key == "id" else default
+        radio.attrs = radio_attrs
+        radio.click = AsyncMock()
+
+        probed_values:list[str] = []
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
+                return trigger
+            if selector_type == By.XPATH and "@type='radio'" in selector_value:
+                if f"@value='{expected_api_value}'" in selector_value:
+                    probed_values.append(expected_api_value)
+                    return radio
+                if f"@value='{configured}'" in selector_value:
+                    probed_values.append(configured)
+                    return radio
+            return None
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = dialog),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            handled = await _set_condition(test_bot, configured)
+
+        assert handled is True
+        warning_messages = [record.message for record in caplog.records if record.levelno == logging.WARNING]
+        if expect_warning:
+            assert len(warning_messages) == 1
+            assert configured in warning_messages[0]
+            assert expected_api_value in warning_messages[0]
+            # Legacy German values should prefer the mapped API code and stop once it is found.
+            assert probed_values == [expected_api_value]
+        else:
+            assert warning_messages == []
+            assert probed_values == [configured]
+        clicked_xpath_selectors = [str(call.args[1]) for call in mock_click.await_args_list if len(call.args) > 1]
+        assert any(f"radio-condition-{expected_api_value}" in selector for selector in clicked_xpath_selectors)
+
+    @pytest.mark.asyncio
+    async def test_condition_legacy_value_falls_back_when_mapped_value_is_missing(
+        self,
+        test_bot:KleinanzeigenBot,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Legacy values should still work if the mapped API radio is unavailable."""
+        caplog.set_level(logging.WARNING, logger = LOG.name)
+        dialog = MagicMock()
+        trigger = MagicMock()
+        trigger.attrs = {"id": "condition-trigger", "aria-controls": "condition-dialog"}
+        trigger.click = AsyncMock()
+        radio = MagicMock()
+        radio_attrs = MagicMock()
+        radio_attrs.id = "radio-condition-wie_neu"
+        radio_attrs.get.side_effect = lambda key, default = None: "radio-condition-wie_neu" if key == "id" else default
+        radio.attrs = radio_attrs
+        radio.click = AsyncMock()
+
+        probed_values:list[str] = []
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
+                return trigger
+            if selector_type == By.XPATH and "@type='radio'" in selector_value:
+                if "@value='like_new'" in selector_value:
+                    probed_values.append("like_new")
+                    return None
+                if "@value='wie_neu'" in selector_value:
+                    probed_values.append("wie_neu")
+                    return radio
+            return None
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = dialog),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            handled = await _set_condition(test_bot, "wie_neu")
+
+        assert handled is True
+        warning_messages = [record.message for record in caplog.records if record.levelno == logging.WARNING]
+        assert len(warning_messages) == 1
+        assert "wie_neu" in warning_messages[0]
+        assert "like_new" in warning_messages[0]
+        assert probed_values == ["like_new", "wie_neu"]
+        clicked_xpath_selectors = [str(call.args[1]) for call in mock_click.await_args_list if len(call.args) > 1]
+        assert any("radio-condition-wie_neu" in selector for selector in clicked_xpath_selectors)
+
+    @pytest.mark.asyncio
+    async def test_condition_legacy_value_warns_even_when_not_handled(
+        self,
+        test_bot:KleinanzeigenBot,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Legacy German values should warn even when the condition dialog path is unavailable."""
+        caplog.set_level(logging.WARNING, logger = LOG.name)
+
+        with patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None):
+            handled = await _set_condition(test_bot, "wie_neu")
+
+        assert handled is False
+        warning_messages = [record.message for record in caplog.records if record.levelno == logging.WARNING]
+        assert len(warning_messages) == 1
+        assert "wie_neu" in warning_messages[0]
+        assert "like_new" in warning_messages[0]
+
+    @pytest.mark.asyncio
+    async def test_condition_unknown_value_raises(self, test_bot:KleinanzeigenBot) -> None:
+        """Unknown condition values should raise when no matching radio option is present."""
+        dialog = MagicMock()
+        trigger = MagicMock()
+        trigger.attrs = {"id": "condition-trigger", "aria-controls": "condition-dialog"}
+        trigger.click = AsyncMock()
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
+                return trigger
+            # Radio lookups for unknown values return None (no matching radio in the dialog).
+            return None
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = dialog),
+            pytest.raises(TimeoutError, match = "Failed to set attribute 'condition_s'"),
+        ):
+            await _set_condition(test_bot, "totally_unknown_value")
+
+    @pytest.mark.asyncio
+    async def test_condition_rejects_shipping_trigger(self, test_bot:KleinanzeigenBot) -> None:
+        """Condition dialog path should not click shipping trigger controls."""
+        trigger = MagicMock()
+        trigger.attrs = {
+            "id": "ad-shipping-options",
+            "aria-controls": None,
+            "aria-haspopup": "dialog",
+        }
+        trigger.click = AsyncMock()
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
+            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
+                return trigger
+            raise TimeoutError("unexpected selector")
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = trigger),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+        ):
+            handled = await _set_condition(test_bot, "new")
+
+        assert handled is False
+        # Regression guard: wrong shipping trigger must never be clicked by condition handler
+        trigger.click.assert_not_awaited()
+        mock_click.assert_not_awaited()
+
+
+class TestConditionFallbackToGenericHandler:
+    """Regression tests for condition_s fallback behavior.
+
+    When _set_condition reports "not handled" (e.g. category uses a button-combobox
+    instead of a dialog), set_special_attributes should fall through to the generic
+    XPath-based handler.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("condition_s", "expected_generic_value"),
+        [
+            ("new", "new"),
+            ("wie_neu", "like_new"),
+        ],
+    )
+    async def test_condition_falls_back_to_generic_handler_with_canonical_value(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        condition_s:str,
+        expected_generic_value:str,
+    ) -> None:
+        """Fallback should pass the canonical condition value to the generic combobox handler."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"category": "185/249", "special_attributes": {"condition_s": condition_s}, "shipping_type": "PICKUP"})
+
+        button_elem = MagicMock()
+        button_attrs = MagicMock()
+        button_attrs.get.side_effect = lambda key, default = None: {
+            "id": "modellbau.condition",
+            "type": "button",
+            "role": "combobox",
+            "name": None,
+        }.get(key, default)
+        button_elem.attrs = button_attrs
+        button_elem.local_name = "button"
+        probe_elem = MagicMock()
+        probe_elem.attrs = {"id": "modellbau.condition"}
+
+        with (
+            patch(
+                "kleinanzeigen_bot.publishing_form._set_condition",
+                new_callable = AsyncMock,
+                return_value = False,
+            ) as mock_set_condition,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = probe_elem),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [button_elem]),
+            patch(
+                "kleinanzeigen_bot.publishing_form._select_button_combobox",
+                new_callable = AsyncMock,
+            ) as mock_select_combobox,
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        mock_set_condition.assert_awaited_once_with(test_bot, condition_s)
+        mock_select_combobox.assert_awaited_once_with(test_bot, "modellbau.condition", expected_generic_value)
+
+    @pytest.mark.asyncio
+    async def test_condition_timeout_propagates_instead_of_falling_back(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """Real condition dialog failures should propagate and not silently use generic fallback."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"category": "161/176", "special_attributes": {"condition_s": "ok"}})
+
+        with (
+            patch(
+                "kleinanzeigen_bot.publishing_form._set_condition",
+                new_callable = AsyncMock,
+                side_effect = TimeoutError("dialog timeout"),
+            ),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock) as mock_find_all,
+            pytest.raises(TimeoutError, match = "dialog timeout"),
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        mock_find_all.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_condition_s_missing_control_logs_warning_and_continues(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Missing condition_s control should warn and allow later attributes to continue."""
+        caplog.set_level(logging.WARNING, logger = LOG.name)
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "category": "185/249",
+                "special_attributes": {"condition_s": "ok", "color_s": "beige"},
+                "shipping_type": "PICKUP",
+            }
+        )
+
+        color_elem = MagicMock()
+        color_attrs = MagicMock()
+        color_attrs.id = "kleidung_herren.color"
+        color_attrs.get.side_effect = lambda key, default = None: {
+            "id": "kleidung_herren.color",
+            "type": "button",
+            "role": "combobox",
+            "name": None,
+        }.get(key, default)
+        color_elem.attrs = color_attrs
+        color_elem.local_name = "button"
+
+        condition_probe = MagicMock()
+        condition_probe.attrs = {"id": "condition_s"}
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[Element]:
+            if selector_type == By.XPATH and "color_s" in selector_value:
+                return [color_elem]
+            if selector_type == By.XPATH and "condition_s" in selector_value:
+                raise AssertionError("condition_s lookup should be skipped when the probe returns None")
+            return []
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.XPATH and "condition_s" in selector_value:
+                return None
+            if selector_type == By.XPATH and "color_s" in selector_value:
+                return condition_probe
+            return None
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._set_condition", new_callable = AsyncMock, return_value = False) as mock_set_condition,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch("kleinanzeigen_bot.publishing_form._select_button_combobox", new_callable = AsyncMock) as mock_select_combobox,
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        mock_set_condition.assert_awaited_once_with(test_bot, "ok")
+        mock_select_combobox.assert_awaited_once_with(test_bot, "kleidung_herren.color", "beige")
+        warning_messages = [record.message for record in caplog.records if record.levelno == logging.WARNING]
+        assert len([message for message in warning_messages if "Special attribute 'condition_s' is not available" in message]) == 1
+
+    @pytest.mark.asyncio
+    async def test_condition_s_lookup_timeout_propagates(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Lookup timeouts for condition_s should still fail instead of being skipped."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"category": "185/249", "special_attributes": {"condition_s": "ok"}, "shipping_type": "PICKUP"})
+
+        condition_probe = MagicMock()
+        condition_probe.attrs = {"id": "condition_s"}
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._set_condition", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = condition_probe),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError("lookup timeout")),
+            pytest.raises(TimeoutError, match = "lookup timeout"),
+        ):
+            await set_special_attributes(test_bot, ad_cfg)

@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio, enum, importlib, os, re, sys  # isort: skip
+import asyncio, enum, importlib, os, sys  # isort: skip
 import urllib.parse as urllib_parse
 from dataclasses import dataclass
 from gettext import gettext as _
@@ -12,7 +12,6 @@ import certifi, colorama  # isort: skip
 from nodriver.core.connection import ProtocolException
 from ruamel.yaml import YAML
 
-from . import ad_form_helpers as _ad_form_helpers
 from . import ad_loading, captcha_flow, delete_flow, download_flow, extend_flow, published_ads
 from . import ad_state as _ad_state
 from . import price_reduction as _price_reduction
@@ -27,7 +26,6 @@ from .model.ad_model import (
 )
 from .model.config_model import Config  # noqa: TC001 — used at runtime, config injection
 from .published_ads import PublishedAd, ad_matches_id
-from .publishing_form import _select_button_combobox as _select_button_combobox
 from .update_checker import UpdateChecker
 from .utils import diagnostics as _diagnostics
 from .utils import loggers as _loggers
@@ -36,8 +34,8 @@ from .utils import xdg_paths as _xdg_paths
 from .utils.exceptions import CategoryResolutionError, PublishSubmissionUncertainError
 from .utils.files import abspath
 from .utils.i18n import pluralize
-from .utils.misc import ainput, ensure, is_frozen
-from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
+from .utils.misc import ainput, is_frozen
+from .utils.web_scraping_mixin import By, Is, WebScrapingMixin
 
 if TYPE_CHECKING:
     from .utils.timing_collector import TimingCollector
@@ -1004,7 +1002,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # set special attributes
         #############################
-        await self._set_special_attributes(ad_cfg)
+        await _publishing_form.set_special_attributes(self, ad_cfg)
 
         #############################
         # set shipping type/options/costs
@@ -1164,273 +1162,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         else:
             LOG.info("DONE: updated %s", pluralize("ad", count))
         LOG.info("############################################")
-
-    async def _set_condition(self, condition_value:str) -> bool:
-        """Try to set condition via dialog path.
-
-        Returns True when dialog handling succeeded, otherwise False to indicate
-        that caller should use generic special-attribute handling.
-        """
-        canonical_value, legacy_value = _ad_form_helpers.normalize_condition(condition_value)
-        if legacy_value is not None:
-            LOG.warning("Condition value [%s] is deprecated; update your config to [%s].", legacy_value, canonical_value)
-
-        short_timeout = self.timeout("quick_dom")
-        condition_trigger_xpath = "//label[contains(@for, '.condition')]/following::button[@aria-haspopup='dialog' or @aria-haspopup='true'][1]"
-
-        condition_trigger = await self.web_probe(By.XPATH, condition_trigger_xpath, timeout = short_timeout)
-        if condition_trigger is None:
-            LOG.debug("Condition dialog trigger not available for [%s]; falling back to generic handler.", condition_value)
-            return False
-
-        trigger_id = str(condition_trigger.attrs.get("id") or "")
-        trigger_controls = str(condition_trigger.attrs.get("aria-controls") or "")
-        LOG.debug("Condition dialog trigger resolved: id='%s', aria-controls='%s'", trigger_id, trigger_controls)
-
-        # Some categories render condition as a combobox and the broad dialog-trigger XPath
-        # may accidentally resolve to shipping controls (for example: id='ad-shipping-options').
-        # In that case we deliberately skip the dialog path and fall back to generic handling.
-        if "shipping" in trigger_id.lower() or "shipping" in trigger_controls.lower():
-            LOG.debug(
-                "Condition dialog trigger appears to be shipping-related (id='%s', aria-controls='%s'); skipping dialog path for condition_s.",
-                trigger_id,
-                trigger_controls,
-            )
-            return False
-
-        # CONDITION_GERMAN_TO_API maps German legacy condition tiers to English API
-        # values. Some legacy tiers are intentionally collapsed by the API
-        # (e.g. "sehr_gut" / legacy "very good" maps to "like_new").
-        # Build candidate_values by probing canonical_value first to avoid quick_dom
-        # timeout delays on the current API-valued dialog, then legacy_value as fallback.
-        candidate_values:list[str] = [canonical_value]
-        if legacy_value is not None:
-            candidate_values.append(legacy_value)
-
-        try:
-            await condition_trigger.click()
-            await self.web_find(By.XPATH, '//*[self::dialog or @role="dialog"]', timeout = short_timeout)
-            condition_radio = None
-            for candidate in candidate_values:
-                condition_radio = await self.web_probe(
-                    By.XPATH,
-                    f"//*[self::dialog or @role='dialog']//input[@type='radio' and @value={_ad_form_helpers.xpath_literal(candidate)}]",
-                    timeout = short_timeout,
-                )
-                if condition_radio is not None:
-                    break
-            if condition_radio is None:
-                raise TimeoutError(_("No condition radio matched values %(values)s") % {"values": candidate_values})
-            condition_radio_id = str(condition_radio.attrs.get("id") or "")
-            if condition_radio_id:
-                try:
-                    await self.web_click(By.XPATH, f"//*[self::dialog or @role='dialog']//label[@for={_ad_form_helpers.xpath_literal(condition_radio_id)}]")
-                except TimeoutError:
-                    await condition_radio.click()
-            else:
-                await condition_radio.click()
-        except TimeoutError as ex:
-            LOG.debug("Unable to select condition [%s]", condition_value, exc_info = True)
-            raise TimeoutError(_("Failed to set attribute '%s'") % "condition_s") from ex
-
-        try:
-            # Click accept button
-            await self.web_click(By.XPATH, '//*[self::dialog or @role="dialog"]//button[.//span[text()="Bestätigen"]]')
-        except TimeoutError as ex:
-            raise TimeoutError(_("Unable to close condition dialog!")) from ex
-
-        return True
-
-    @staticmethod
-    def _special_attribute_candidate_priority(elem:Element) -> tuple[int, int]:
-        local_name = elem.local_name
-        elem_type = str(cast(Any, elem.attrs.get("type")) or "").lower()
-        role = str(cast(Any, elem.attrs.get("role")) or "").lower()
-
-        if local_name == "button" and role == "combobox":
-            return (0, 0)
-        if local_name == "input" and elem_type in {"text", ""} and role == "combobox":
-            return (1, 0)
-        if local_name == "select":
-            return (2, 0)
-        if elem_type == "checkbox":
-            return (3, 0)
-        if local_name in {"input", "textarea"} and elem_type != "hidden":
-            return (4, 0)
-        if elem_type == "hidden":
-            return (9, 1)
-        return (8, 0)
-
-    @staticmethod
-    def _describe_special_attribute_candidate(elem:Element) -> str:
-        elem_id = cast(str | None, elem.attrs.get("id"))
-        elem_name = cast(str | None, elem.attrs.get("name"))
-        elem_type = cast(str | None, elem.attrs.get("type"))
-        elem_role = cast(str | None, elem.attrs.get("role"))
-        return f"{elem.local_name}#'{elem_id}' name='{elem_name}' type='{elem_type}' role='{elem_role}'"
-
-    def _pick_special_attribute_candidate(self, candidates:Sequence[Element], special_attribute_key:str) -> Element:
-        ensure(candidates, f"No candidates found for special attribute [{special_attribute_key}]")
-        ranked_candidates = sorted(
-            enumerate(candidates),
-            key = lambda entry: (self._special_attribute_candidate_priority(entry[1]), entry[0]),
-        )
-        selected_idx, selected = ranked_candidates[0]
-
-        if len(candidates) > 1:
-            debug_candidates = ", ".join(f"#{idx}:{self._describe_special_attribute_candidate(candidate)}" for idx, candidate in enumerate(candidates))
-            LOG.debug(
-                "Attribute field '%s' matched %s elements. Selected #%s: %s. Candidates: %s",
-                special_attribute_key,
-                len(candidates),
-                selected_idx,
-                self._describe_special_attribute_candidate(selected),
-                debug_candidates,
-            )
-
-        return selected
-
-    async def _set_special_attributes(self, ad_cfg:Ad) -> None:
-        if not ad_cfg.special_attributes:
-            return
-
-        LOG.debug("Found %i special attributes", len(ad_cfg.special_attributes))
-        for special_attribute_key, special_attribute_value in ad_cfg.special_attributes.items():
-            # Ensure special_attribute_value is treated as a string
-            special_attribute_value_str = str(special_attribute_value)
-            normalized_special_attribute_key = re.sub(r"_[a-z]+$", "", special_attribute_key).rsplit(".", maxsplit = 1)[-1]
-            if not _ad_form_helpers.SPECIAL_ATTRIBUTE_TOKEN_RE.fullmatch(normalized_special_attribute_key):
-                LOG.debug(
-                    "Attribute field '%s' has unsupported normalized key '%s'.",
-                    special_attribute_key,
-                    normalized_special_attribute_key,
-                )
-                raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
-
-            if normalized_special_attribute_key == "condition":
-                LOG.debug("Special attribute [%s]: trying dedicated condition dialog path", special_attribute_key)
-                if await self._set_condition(special_attribute_value_str):
-                    LOG.debug("Special attribute [%s]: condition dialog path succeeded", special_attribute_key)
-                    continue
-
-                LOG.info("Condition dialog not available, falling back to generic attribute handler for [%s]...", special_attribute_key)
-                special_attribute_value_str = _ad_form_helpers.normalize_condition(special_attribute_value_str)[0]
-
-            LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
-            id_suffix_literal = _ad_form_helpers.xpath_literal(f".{normalized_special_attribute_key}")
-            name_suffix_literal = _ad_form_helpers.xpath_literal(f".{normalized_special_attribute_key}]")
-            name_plus_literal = _ad_form_helpers.xpath_literal(f".{normalized_special_attribute_key}+")
-            bare_id_literal = _ad_form_helpers.xpath_literal(normalized_special_attribute_key)
-            bare_name_literal = _ad_form_helpers.xpath_literal(f"attributeMap[{normalized_special_attribute_key}]")
-            original_key_literal = _ad_form_helpers.xpath_literal(special_attribute_key)
-            # Match attribute fields by five patterns:
-            # 1) exact id                 -> @id={bare_id_literal}
-            # 2) dotted id suffix         -> ... = {id_suffix_literal}
-            # 3) exact attributeMap name  -> @name={bare_name_literal}
-            # 4) dotted name suffix       -> ... = {name_suffix_literal}
-            # 5) compound key marker      -> contains(@name, {name_plus_literal})
-            # Literals are derived via _ad_form_helpers.xpath_literal from normalized_special_attribute_key.
-            # 6) original config key      -> contains(@name, {original_key_literal}) for compound keys
-            special_attr_xpath = (
-                "//*["
-                f"@id={bare_id_literal}"
-                f" or (contains(@id, '.') and substring(@id, string-length(@id) - string-length({id_suffix_literal}) + 1) = {id_suffix_literal})"
-                f" or @name={bare_name_literal}"
-                f" or (contains(@name, '.') and substring(@name, string-length(@name) - string-length({name_suffix_literal}) + 1) = {name_suffix_literal})"
-                f" or contains(@name, {name_plus_literal})"
-                f" or contains(@name, {original_key_literal})"
-                "]"
-            )
-            quick_dom = self.timeout("quick_dom")
-            try:
-                if special_attribute_key == "condition_s":
-                    special_attr_probe = await self.web_probe(By.XPATH, special_attr_xpath, timeout = quick_dom)
-                    if special_attr_probe is None:
-                        LOG.warning("Special attribute '%s' is not available for the selected category. Skipping.", special_attribute_key)
-                        continue
-                special_attr_candidates = await self.web_find_all(
-                    By.XPATH,
-                    special_attr_xpath,
-                )
-                special_attr_elem = self._pick_special_attribute_candidate(special_attr_candidates, special_attribute_key)
-            except AssertionError as ex:
-                LOG.debug(
-                    "Attribute field '%s' (normalized: '%s') could not be found.",
-                    special_attribute_key,
-                    normalized_special_attribute_key,
-                )
-                if special_attribute_key == "condition_s":
-                    LOG.warning("Special attribute '%s' is not available for the selected category. Skipping.", special_attribute_key)
-                    continue
-                raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
-
-            try:
-                elem_id = cast(str | None, special_attr_elem.attrs.get("id"))
-                elem_type = str(cast(Any, special_attr_elem.attrs.get("type")) or "").lower()
-                elem_role = str(cast(Any, special_attr_elem.attrs.get("role")) or "").lower()
-                elem_selector_type = By.ID if elem_id else By.XPATH
-                elem_selector_value = elem_id or special_attr_xpath
-
-                # If the only match was a hidden backing input, search for the
-                # associated <button role="combobox"> by walking up the DOM tree.
-                if elem_type == "hidden":
-                    LOG.debug("Attribute field '%s': only matched hidden input, searching for associated button combobox...", special_attribute_key)
-                    hidden_input_name = special_attr_elem.attrs.get("name")
-                    if not hidden_input_name:
-                        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
-                    associated_button_id = await self._find_associated_button_combobox(
-                        hidden_input_name = str(hidden_input_name)
-                    )
-                    if associated_button_id is None:
-                        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
-                    LOG.debug("Attribute field '%s': found associated button combobox id='%s'", special_attribute_key, associated_button_id)
-                    await _select_button_combobox(self, associated_button_id, special_attribute_value_str)
-                    LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
-                    continue
-
-                if special_attr_elem.local_name == "select":
-                    LOG.debug("Attribute field '%s' seems to be a select...", special_attribute_key)
-                    await self.web_select(elem_selector_type, elem_selector_value, special_attribute_value_str)
-                elif elem_type == "checkbox":
-                    LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
-                    truthy_values = {"1", "true", "yes", "on", "ja", "checked"}
-                    falsy_values = {"", "0", "false", "no", "off", "nein", "unchecked", "none"}
-                    normalized_checkbox_value = special_attribute_value_str.strip().lower()
-                    if normalized_checkbox_value in truthy_values:
-                        desired_checked = True
-                    elif normalized_checkbox_value in falsy_values:
-                        desired_checked = False
-                    else:
-                        LOG.debug(
-                            "Attribute field '%s' has unsupported checkbox value '%s'.",
-                            special_attribute_key,
-                            special_attribute_value_str,
-                        )
-                        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
-
-                    current_checked_attr = special_attr_elem.attrs.get("checked")
-                    if isinstance(current_checked_attr, bool):
-                        current_checked = current_checked_attr
-                    else:
-                        normalized_current_checked = str(current_checked_attr).strip().lower() if current_checked_attr is not None else ""
-                        current_checked = normalized_current_checked not in falsy_values
-
-                    if desired_checked != current_checked:
-                        await self.web_click(elem_selector_type, elem_selector_value)
-                elif special_attr_elem.local_name == "button" and elem_role == "combobox":
-                    LOG.debug("Attribute field '%s' seems to be a button combobox (click-to-open dropdown)...", special_attribute_key)
-                    ensure(elem_id, f"No id available for button combobox special attribute [{special_attribute_key}]")
-                    await _select_button_combobox(self, cast(str, elem_id), special_attribute_value_str)
-                elif elem_role == "combobox" and elem_type in {"text", ""} and special_attr_elem.local_name == "input":
-                    LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
-                    await self.web_select_combobox(elem_selector_type, elem_selector_value, special_attribute_value_str)
-                else:
-                    LOG.debug("Attribute field '%s' seems to be a text input...", special_attribute_key)
-                    await self.web_input(elem_selector_type, elem_selector_value, special_attribute_value_str)
-            except TimeoutError as ex:
-                LOG.debug("Failed to set attribute field '%s' via known input types.", special_attribute_key)
-                raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
-            LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
 
 #############################
 # main entry point
