@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio, enum, importlib, json, os, re, sys  # isort: skip
+import asyncio, enum, importlib, os, re, sys  # isort: skip
 import urllib.parse as urllib_parse
 from dataclasses import dataclass
 from gettext import gettext as _
@@ -21,12 +21,13 @@ from . import publishing_persistence as _publishing_persistence
 from . import publishing_submission as _publishing_submission
 from . import runtime_config as _runtime_config
 from ._version import __version__
-from .model.ad_model import CARRIER_CODE_BY_OPTION, CARRIER_CODES_BY_SIZE, SIZE_INFO_BY_CARRIER_CODE, Ad
+from .model.ad_model import Ad
 from .model.ad_model import (
     AdUpdateStrategy as AdUpdateStrategy,
 )
 from .model.config_model import Config  # noqa: TC001 — used at runtime, config injection
 from .published_ads import PublishedAd, ad_matches_id
+from .publishing_form import _select_button_combobox as _select_button_combobox
 from .update_checker import UpdateChecker
 from .utils import diagnostics as _diagnostics
 from .utils import loggers as _loggers
@@ -1008,32 +1009,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         #############################
         # set shipping type/options/costs
         #############################
-        shipping_type = ad_cfg.shipping_type
-        if shipping_type != "NOT_APPLICABLE":
-            if ad_cfg.type == "WANTED":
-                # WANTED ads render shipping as a special-attribute combobox dropdown,
-                # not as radio buttons.  Select by display text using the standard
-                # DOM-based web_select_button_combobox (no React fiber internals).
-                # See issue #930 for broader React fiber migration.
-                display_text = _ad_form_helpers.WANTED_SHIPPING_LABELS.get(shipping_type)
-                if display_text:
-                    try:
-                        shipping_btn = await self.web_find(
-                            By.CSS_SELECTOR,
-                            _ad_form_helpers.VERSAND_COMBOBOX_SELECTOR,
-                            timeout = self.timeout("quick_dom"),
-                        )
-                        btn_id = cast(str, shipping_btn.attrs.get("id"))
-                        if not btn_id:
-                            raise TimeoutError(_("Shipping combobox button has no id attribute"))
-                        await self.web_select_button_combobox(btn_id, display_text)
-                    except TimeoutError as ex:
-                        LOG.warning("Failed to set shipping attribute for type '%s'!", shipping_type)
-                        raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % shipping_type) from ex
-            else:
-                await self._set_shipping(ad_cfg, mode)
-        else:
-            LOG.debug("Shipping step skipped - reason: NOT_APPLICABLE")
+        await _publishing_form.set_shipping_form(self, ad_cfg, mode)
 
         await _publishing_form.set_pricing_fields(self, ad_cfg, self.config.ad_defaults)
 
@@ -1408,7 +1384,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     if associated_button_id is None:
                         raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
                     LOG.debug("Attribute field '%s': found associated button combobox id='%s'", special_attribute_key, associated_button_id)
-                    await self._select_button_combobox(associated_button_id, special_attribute_value_str)
+                    await _select_button_combobox(self, associated_button_id, special_attribute_value_str)
                     LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
                     continue
 
@@ -1444,7 +1420,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 elif special_attr_elem.local_name == "button" and elem_role == "combobox":
                     LOG.debug("Attribute field '%s' seems to be a button combobox (click-to-open dropdown)...", special_attribute_key)
                     ensure(elem_id, f"No id available for button combobox special attribute [{special_attribute_key}]")
-                    await self._select_button_combobox(cast(str, elem_id), special_attribute_value_str)
+                    await _select_button_combobox(self, cast(str, elem_id), special_attribute_value_str)
                 elif elem_role == "combobox" and elem_type in {"text", ""} and special_attr_elem.local_name == "input":
                     LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
                     await self.web_select_combobox(elem_selector_type, elem_selector_value, special_attribute_value_str)
@@ -1455,248 +1431,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 LOG.debug("Failed to set attribute field '%s' via known input types.", special_attribute_key)
                 raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
             LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
-
-    # TODO: Issue #930 — migrate to web_select_button_combobox (display-text-based, no React fiber)
-    async def _select_button_combobox(self, elem_id:str, value:str) -> None:
-        """Select an option from a <button role="combobox"> dropdown by its API value.
-
-        Clicks the button to open the listbox, reads the options data from the React fiber
-        (which maps API values to display labels), and clicks the matching option.
-        """
-        await self.web_click(By.ID, elem_id)
-        listbox_id = f"{elem_id}-menu"
-        await self.web_find(By.ID, listbox_id)
-        js_btn_id = json.dumps(elem_id)
-        js_listbox_id = json.dumps(listbox_id)
-        js_value = json.dumps(value)
-        ok = await self.web_execute(f"""(function() {{
-            const listbox = document.getElementById({js_listbox_id});
-            if (!listbox) return false;
-            const liOptions = Array.from(listbox.querySelectorAll('[role="option"]'));
-            const btnEl = document.getElementById({js_btn_id});
-            if (!btnEl) return false;
-            const fiberKey = Object.keys(btnEl).find(k => k.startsWith('__reactFiber'));
-            let fiber = fiberKey ? btnEl[fiberKey] : null;
-            for (let i = 0; i < 20 && fiber; i++, fiber = fiber.return) {{
-                if (fiber.memoizedProps && fiber.memoizedProps.options) {{
-                    const optionsData = fiber.memoizedProps.options;
-                    for (let j = 0; j < optionsData.length; j++) {{
-                        if (optionsData[j].value === {js_value} && liOptions[j]) {{
-                            liOptions[j].click();
-                            return true;
-                        }}
-                    }}
-                    return false;
-                }}
-            }}
-            return false;
-        }})()""")
-        if not ok:
-            raise TimeoutError(_("Option '%(value)s' not found in button combobox '%(id)s'") % {"value": value, "id": elem_id})
-
-    async def _set_shipping(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
-        short_timeout = self.timeout("quick_dom")
-
-        # PRO/commercial accounts are expected to render Versand as a custom
-        # special-attribute dropdown (``<button role="combobox">``) from the
-        # PostListingForm Astro island.  In that UI the placeholder ("Bitte wählen")
-        # must be replaced directly with either "Versand möglich" (value "ja") or
-        # "Nur Abholung" (value "nein").
-        shipping_combobox = await self.web_probe(By.CSS_SELECTOR, _ad_form_helpers.VERSAND_COMBOBOX_SELECTOR, timeout = short_timeout)
-        if shipping_combobox is not None:
-            try:
-                btn_id = cast(str, shipping_combobox.attrs.get("id"))
-                if not btn_id:
-                    raise TimeoutError(_("Shipping combobox button has no id attribute"))
-                await self.web_select_button_combobox(btn_id, _ad_form_helpers.WANTED_SHIPPING_LABELS[ad_cfg.shipping_type], timeout = short_timeout)
-                LOG.debug("Selected shipping type via Versand combobox: %s", ad_cfg.shipping_type)
-                return
-            except KeyError as ex:
-                raise ValueError(_("Unsupported shipping_type: %s") % ad_cfg.shipping_type) from ex
-            except TimeoutError as ex:
-                LOG.debug(ex, exc_info = True)
-                raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % ad_cfg.shipping_type) from ex
-
-        # Private/non-commercial accounts are expected to render the radio-button
-        # controls and, for SHIPPING, the shipping-options dialog.  This is the
-        # fallback path when no special-attribute Versand combobox is present
-        # (see #869 vs #1125).
-        if ad_cfg.shipping_type == "PICKUP":
-            pickup_radio = await self.web_probe(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
-            if pickup_radio is None:
-                shipping_fieldset = await self.web_probe(By.ID, "ad-shipping-enabled", timeout = short_timeout)
-                if shipping_fieldset is not None:
-                    raise TimeoutError(
-                        _("Shipping fieldset is rendered, but the pickup radio is missing; page may not be fully loaded.")
-                    )
-                # Some categories (notably books 76/77 and comics 76/77/15156) render no
-                # shipping fieldset at all — those ads are PICKUP-only by site convention.
-                LOG.debug("PICKUP: no shipping fieldset for this category; treating as already PICKUP.")
-                return
-            try:
-                if not await self.web_check(By.ID, "ad-shipping-enabled-no", Is.SELECTED, timeout = short_timeout):
-                    await self.web_click(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
-            except TimeoutError as ex:
-                LOG.debug(ex, exc_info = True)
-                raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % ad_cfg.shipping_type) from ex
-        elif ad_cfg.shipping_options:
-            # Ensure shipping is enabled before opening the dialog (may already be selected)
-            try:
-                await self.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
-                await self.web_sleep(500, 800)
-            except TimeoutError as ex:
-                LOG.debug("Shipping enabled toggle not found before options dialog: %s", ex)
-            await self.web_click(By.ID, "ad-shipping-options")
-
-            if mode == AdUpdateStrategy.MODIFY:
-                try:
-                    # when "Andere Versandmethoden" is not available, go back and start over new
-                    await self.web_find(By.XPATH, '//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
-                except TimeoutError:
-                    await self.web_click(By.XPATH, '//button[contains(., "Zurück")]')
-
-                    # in some categories we need to go another dialog back
-                    try:
-                        await self.web_find(By.XPATH, '//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
-                    except TimeoutError:
-                        await self.web_click(By.XPATH, '//button[contains(., "Zurück")]')
-
-            await self.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
-            await self._set_shipping_options(ad_cfg, mode)
-        else:
-            # Ensure shipping is enabled before opening the dialog (may already be selected)
-            try:
-                await self.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
-                await self.web_sleep(500, 800)
-            except TimeoutError as ex:
-                LOG.debug("Shipping enabled toggle not found before options dialog: %s", ex)
-
-            # no options. only costs. Set custom shipping cost
-            try:
-                await self.web_click(By.ID, "ad-shipping-options")
-            except TimeoutError as ex:
-                LOG.debug(ex, exc_info = True)
-                LOG.warning("Shipping options dialog entry not found. Legacy '.versand_s' select UI is no longer supported and requires dedicated rebuild.")
-                raise TimeoutError(_("Unable to open shipping options dialog!")) from ex
-
-            try:
-                # when "Andere Versandmethoden" is not available, then we are already on the individual page
-                await self.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
-            except TimeoutError:
-                # Dialog option not present; already on the individual shipping page.
-                pass
-
-            # only click on "Individueller Versand" when the price input is not available, otherwise it's already checked
-            # (important for mode = UPDATE)
-            individual_price_elem = await self.web_probe(By.ID, "ad-individual-shipping-price", timeout = short_timeout)
-            if individual_price_elem is None:
-                # Input not visible yet; click the individual shipping option.
-                try:
-                    await self.web_click(By.ID, "ad-individual-shipping-checkbox-control")
-                except TimeoutError as ex:
-                    LOG.debug(ex, exc_info = True)
-                    raise TimeoutError(_("Unable to select individual shipping option!")) from ex
-
-            if ad_cfg.shipping_costs is not None:
-                price_str = str(ad_cfg.shipping_costs).replace(".", ",")
-                # Native DOM setter + React-aware events: send_keys gets wiped by
-                # React re-render after the ad-individual-shipping-checkbox-control click.
-                # A re-render between web_find and web_execute inside web_set_input_value can
-                # also leave the write as a silent no-op, so verify and retry before "Fertig".
-                max_attempts = 3
-                for attempt in range(1, max_attempts + 1):
-                    try:
-                        await self.web_set_input_value("ad-individual-shipping-price", price_str)
-                        actual = await self.web_execute("document.getElementById('ad-individual-shipping-price')?.value")
-                    except TimeoutError as ex:
-                        # A re-render landing on web_find inside web_set_input_value or on the
-                        # readback web_execute can raise here; treat either as a transient
-                        # failure so the outer loop can retry instead of bailing.
-                        LOG.debug(ex, exc_info = True)
-                        if attempt >= max_attempts:
-                            raise TimeoutError(_("Unable to set shipping price!")) from ex
-                        await self.web_sleep(300, 500)
-                        continue
-                    if actual == price_str:
-                        break
-                    if attempt >= max_attempts:
-                        raise TimeoutError(_("Unable to set shipping price!"))
-                    LOG.debug("shipping price not persisted (attempt %d/%d): got %r, expected %r", attempt, max_attempts, actual, price_str)
-                    await self.web_sleep(300, 500)
-            else:
-                LOG.debug(
-                    "Shipping option 'ad-individual-shipping-checkbox-control' selected but no shipping_costs provided; "
-                    "leaving field 'ad-individual-shipping-price' unchanged."
-                )
-
-            try:
-                await self.web_click(By.XPATH, '//button[contains(., "Fertig")]')
-            except TimeoutError as ex:
-                LOG.debug(ex, exc_info = True)
-                raise TimeoutError(_("Unable to close shipping dialog!")) from ex
-
-    async def _set_shipping_options(self, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
-        if not ad_cfg.shipping_options:
-            raise ValueError(_("shipping_options must be provided"))
-
-        # Resolve user-facing config names to carrier codes
-        try:
-            wanted_carrier_codes = [CARRIER_CODE_BY_OPTION[opt] for opt in set(ad_cfg.shipping_options)]
-        except KeyError as ex:
-            raise KeyError(_("Unknown shipping option(s), please refer to the documentation/README: %s") % ad_cfg.shipping_options) from ex
-
-        # Determine the size group — all options must belong to the same group
-        size_info = {SIZE_INFO_BY_CARRIER_CODE[code] for code in wanted_carrier_codes}
-        if len(size_info) != 1:
-            raise ValueError(_("You can only specify shipping options for one package size!"))
-        ((shipping_size, shipping_radio_value),) = size_info
-        wanted_codes = set(wanted_carrier_codes)
-        all_codes_for_size = CARRIER_CODES_BY_SIZE[shipping_size]
-
-        short_timeout = self.timeout("quick_dom")
-        dialog = '//*[self::dialog or @role="dialog"]'
-
-        try:
-            # Select the size group via radio button value (e.g. "SMALL", "MEDIUM", "LARGE")
-            size_radio_xpath = f'{dialog}//input[@type="radio" and @value="{shipping_radio_value}"]'
-            shipping_size_radio = await self.web_find(By.XPATH, size_radio_xpath, timeout = short_timeout)
-            shipping_size_radio_is_checked = shipping_size_radio.attrs.get("checked") is not None
-
-            if not shipping_size_radio_is_checked:
-                LOG.debug("Selecting size '%s' (radio value=%s)", shipping_size, shipping_radio_value)
-                await self.web_click(By.XPATH, size_radio_xpath, timeout = short_timeout)
-
-            await self.web_sleep(300, 500)
-            await self.web_click(By.XPATH, f'{dialog}//button[contains(., "Weiter")]', timeout = short_timeout)
-            await self.web_sleep(500, 800)
-
-            # Toggle package checkboxes by carrier code value attribute.
-            # IMPORTANT: REPLACE intentionally uses the same state-based sync as MODIFY.
-            # Live DOM defaults after "Weiter" are not stable across size/category (issue #956),
-            # so we must read current checkbox state and reconcile with desired state.
-            LOG.debug("Using state-based shipping option sync for mode '%s'", mode)
-            LOG.debug("Processing %d packages for size '%s'", len(all_codes_for_size), shipping_size)
-
-            for carrier_code in all_codes_for_size:
-                checkbox_xpath = f'{dialog}//input[@type="checkbox" and @value="{carrier_code}"]'
-                checkbox = await self.web_find(By.XPATH, checkbox_xpath, timeout = short_timeout)
-                is_checked = checkbox.attrs.get("checked") is not None
-                should_be_checked = carrier_code in wanted_codes
-
-                LOG.debug("Carrier '%s': checked=%s, wanted=%s", carrier_code, is_checked, should_be_checked)
-
-                if is_checked != should_be_checked:
-                    LOG.debug("Toggling carrier '%s'", carrier_code)
-                    await self.web_click(By.XPATH, checkbox_xpath, timeout = short_timeout)
-        except TimeoutError as ex:
-            LOG.debug(ex, exc_info = True)
-            raise TimeoutError(_("Failed to configure shipping options in dialog!")) from ex
-
-        try:
-            # Click apply button
-            await self.web_click(By.XPATH, f'{dialog}//button[contains(., "Fertig")]', timeout = short_timeout)
-        except TimeoutError as ex:
-            raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 
 #############################
 # main entry point
