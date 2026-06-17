@@ -16,6 +16,7 @@ from kleinanzeigen_bot import KleinanzeigenBot
 from kleinanzeigen_bot.ad_form_helpers import VERSAND_COMBOBOX_SELECTOR
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.publishing_form import (
+    _select_button_combobox,  # noqa: PLC2701 - needed for coverage of React fiber selection
     city_option_text,
     fill_image_section,
     read_city_selection_text,
@@ -1535,6 +1536,114 @@ class TestShippingDialogFlow:
         fertig_clicks = [c for c in mock_click.await_args_list if c.args and len(c.args) >= 2 and "Fertig" in str(c.args[1])]
         assert fertig_clicks, "Fertig must be clicked once a later readback confirms the price"
 
+    # ------------------------------------------------------------------
+    # set_shipping commercial/pro combobox: error paths
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_shipping_versand_combobox_no_id(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Commercial combobox with no id attribute should raise TimeoutError."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING"})
+        shipping_combobox = MagicMock()
+        shipping_combobox.attrs = {}  # No "id" key
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = shipping_combobox),
+            patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock),
+            pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'SHIPPING'!"),
+        ):
+            await set_shipping(test_bot, ad_cfg)
+
+    @pytest.mark.asyncio
+    async def test_shipping_versand_combobox_unsupported_type(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Commercial combobox with unsupported shipping_type should raise ValueError.
+
+        Bypasses Pydantic validation by patching the attribute at runtime because
+        the model only permits SHIPPING/PICKUP/NOT_APPLICABLE.
+        """
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING"})
+        shipping_combobox = MagicMock()
+        shipping_combobox.attrs = {"id": "uhren.versand"}
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = shipping_combobox),
+            patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock),
+            patch.object(ad_cfg, "shipping_type", "INVALID_TYPE"),
+            pytest.raises(ValueError, match = "Unsupported shipping_type: INVALID_TYPE"),
+        ):
+            await set_shipping(test_bot, ad_cfg)
+
+    @pytest.mark.asyncio
+    async def test_shipping_versand_combobox_select_timeout(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Timeout from web_select_button_combobox should be re-raised with descriptive message."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING"})
+        shipping_combobox = MagicMock()
+        shipping_combobox.attrs = {"id": "uhren.versand"}
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = shipping_combobox),
+            patch.object(
+                test_bot, "web_select_button_combobox", new_callable = AsyncMock, side_effect = TimeoutError("combobox selection failed")
+            ),
+            pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'SHIPPING'!"),
+        ):
+            await set_shipping(test_bot, ad_cfg)
+
+    # ------------------------------------------------------------------
+    # individual shipping-cost retry: web_set_input_value transient TimeoutError
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_shipping_price_recovers_after_set_input_timeout(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """A TimeoutError from web_set_input_value must be retried and recover on a subsequent attempt.
+
+        Flow: attempt1 (set_input TimeoutError → retry), attempt2 (set_input ok,
+        readback None → retry), attempt3 (set_input ok, readback matches → done).
+        """
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": [], "shipping_costs": 4.95})
+
+        set_input_attempts = 0
+
+        async def set_input_side_effect(element_id:str, value:str) -> None:
+            nonlocal set_input_attempts
+            set_input_attempts += 1
+            if set_input_attempts == 1:
+                raise TimeoutError("set_input raced with re-render")
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock, side_effect = set_input_side_effect) as mock_set_input,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = [None, "4,95"]),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+        ):
+            await set_shipping(test_bot, ad_cfg)
+
+        # attempt1 raised (caught), attempt2 set_input ok but readback=None (retry),
+        # attempt3 set_input ok and readback="4,95" (done) → 3 calls total
+        assert mock_set_input.await_count == 3, "expected 2 retries: one after set_input TimeoutError, one after mismatched readback"
+        inter_attempt_sleeps = [c for c in mock_sleep.await_args_list if c.args == (300, 500)]
+        assert len(inter_attempt_sleeps) == 2, "expected two inter-attempt backoff sleeps"
+        fertig_clicks = [c for c in mock_click.await_args_list if c.args and len(c.args) >= 2 and "Fertig" in str(c.args[1])]
+        assert fertig_clicks, "Fertig must be clicked once the retry succeeds"
+
 
 class TestShippingOptionsDialog:
     """Tests for set_shipping_options using carrier-code-based selectors."""
@@ -1751,6 +1860,60 @@ class TestShippingOptionsDialog:
         ):
             await set_shipping_options(test_bot, ad_cfg)
 
+    # ------------------------------------------------------------------
+    # set_shipping_options: pre-DOM validation and close failure
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_shipping_options_missing_raises_value_error(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Empty shipping_options should raise ValueError before any DOM interaction."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": []})
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+            pytest.raises(ValueError, match = "shipping_options must be provided"),
+        ):
+            await set_shipping_options(test_bot, ad_cfg)
+
+        mock_find.assert_not_awaited()
+        mock_click.assert_not_awaited()
+        mock_sleep.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_shipping_options_close_timeout_raises(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Timeout on the final Fertig click should raise TimeoutError."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["Hermes_Päckchen"])
+
+        async def click_side_effect(selector_type:By, selector_value:str, **_:Any) -> None:
+            if selector_type == By.XPATH and "Fertig" in selector_value:
+                raise TimeoutError("Fertig click timeout")
+
+        radio_mock = MagicMock()
+        radio_mock.attrs = {"checked": ""}
+        checkbox_mock = MagicMock()
+        checkbox_mock.attrs = {"checked": ""}
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            return radio_mock if "radio" in selector_value else checkbox_mock
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(TimeoutError, match = "Unable to close shipping dialog!"),
+        ):
+            await set_shipping_options(test_bot, ad_cfg)
+
 
 class TestWantedShippingSelection:
     """Tests for WANTED shipping path via set_shipping_form.
@@ -1876,3 +2039,55 @@ class TestWantedShippingSelection:
             pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'SHIPPING'!"),
         ):
             await set_shipping_form(test_bot, ad_cfg)
+
+
+class TestSelectButtonCombobox:
+    """Tests for _select_button_combobox (React fiber combobox selection).
+
+    ``_select_button_combobox`` is the internal helper used for special-attribute
+    comboboxes where the option list is embedded in the React fiber tree. It clicks
+    the button to open the menu, waits for the listbox, then executes JS to find
+    and click the matching option by value.
+    """
+
+    @pytest.mark.asyncio
+    async def test_select_button_combobox_success(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """Successful selection: clicks button, waits for listbox, executes JS, returns True."""
+        elem_id = "my-combobox-id"
+        option_value = "option_value"
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = True) as mock_execute,
+        ):
+            await _select_button_combobox(test_bot, elem_id, option_value)
+
+        mock_click.assert_awaited_once_with(By.ID, elem_id)
+        mock_find.assert_awaited_once_with(By.ID, f"{elem_id}-menu")
+        mock_execute.assert_awaited_once()
+        assert mock_execute.await_args is not None
+        js = str(mock_execute.await_args.args[0])
+        assert "my-combobox-id" in js
+        assert "my-combobox-id-menu" in js
+        assert "option_value" in js
+
+    @pytest.mark.asyncio
+    async def test_select_button_combobox_js_returns_false(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """When the JS fiber walk returns False, TimeoutError is raised."""
+        elem_id = "my-combobox-id"
+        option_value = "missing_option"
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = False),
+            pytest.raises(TimeoutError, match = "not found in button combobox"),
+        ):
+            await _select_button_combobox(test_bot, elem_id, option_value)
