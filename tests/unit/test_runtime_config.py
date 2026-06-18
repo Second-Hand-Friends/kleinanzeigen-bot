@@ -308,9 +308,9 @@ publishing:
 
 
 def _extract_match_cases() -> frozenset[str]:
-    """Parse case statements from KleinanzeigenBot.run() in __init__.py."""
-    init_path = Path(__file__).resolve().parent.parent.parent / "src" / "kleinanzeigen_bot" / "__init__.py"
-    source = init_path.read_text()
+    """Parse case statements from KleinanzeigenBot.run() in app.py."""
+    app_path = Path(__file__).resolve().parent.parent.parent / "src" / "kleinanzeigen_bot" / "app.py"
+    source = app_path.read_text()
     return frozenset(re.findall(r'^\s+case\s+"([^"]+)"', source, flags = re.MULTILINE))
 
 

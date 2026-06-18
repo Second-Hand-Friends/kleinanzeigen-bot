@@ -5,7 +5,7 @@
 
 Handles argument parsing via :func:`parse_args`, signal handling,
 daemonizing or foreground execution, log and locale setup, and
-dispatches to :class:`KleinanzeigenBot <kleinanzeigen_bot.KleinanzeigenBot>`.
+dispatches to :class:`KleinanzeigenBot <kleinanzeigen_bot.app.KleinanzeigenBot>`.
 
 Primary entry point: :func:`main`.
 """

@@ -4,7 +4,7 @@
 import asyncio, copy, fnmatch, json, logging, os  # isort: skip
 from collections.abc import Generator
 from contextlib import ExitStack, contextmanager
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 from typing import Any, Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -156,7 +156,7 @@ class TestKleinanzeigenBotInitialization:
 
 
             patch.object(test_bot, "close_browser_session"),
-            patch("kleinanzeigen_bot.UpdateChecker", DummyUpdateChecker),
+            patch("kleinanzeigen_bot.update_checker.UpdateChecker", DummyUpdateChecker),
         ):
             await test_bot.run(["app", command])
 
@@ -1254,9 +1254,7 @@ class TestKleinanzeigenBotShippingOptions:
             recorded_path.append(ad_file_relative)
             raise _SentinelException("Abort early for test")
 
-        # Mock Path to use PureWindowsPath for testing cross-drive behavior
         with (
-            patch("kleinanzeigen_bot.Path", PureWindowsPath),
             patch("kleinanzeigen_bot.price_reduction.apply_auto_price_reduction", side_effect = mock_apply_auto_price_reduction),
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock),
