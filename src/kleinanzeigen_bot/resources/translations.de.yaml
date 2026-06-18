@@ -64,6 +64,10 @@ kleinanzeigen_bot/__init__.py:
 #################################################
   module:
     "Direct execution not supported. Use 'pdm run app'": "Direkte Ausführung nicht unterstützt. Bitte 'pdm run app' verwenden"
+
+#################################################
+kleinanzeigen_bot/app.py:
+#################################################
   _workspace_or_raise:
     "Workspace must be resolved before command execution": "Arbeitsbereich muss vor der Befehlsausführung aufgelöst werden"
 
@@ -71,6 +75,7 @@ kleinanzeigen_bot/__init__.py:
     "Diagnostics capture failed during publish error handling: %s": "Diagnose-Erfassung fehlgeschlagen während der Veröffentlichung-Fehlerbehandlung: %s"
 
   run:
+    "############################################": "############################################"
     "DONE: No configuration errors found.": "FERTIG: Keine Konfigurationsfehler gefunden."
     "DONE: No active ads found.": "FERTIG: Keine aktiven Anzeigen gefunden."
     "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new, due, changed) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new, due, changed) oder numerische IDs."

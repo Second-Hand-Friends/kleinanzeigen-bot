@@ -58,7 +58,7 @@ class TestExtendCommand:
             patch("kleinanzeigen_bot.runtime_config.configure_file_logging", return_value = None),
             patch("kleinanzeigen_bot.runtime_config.apply_browser_config"),
             patch.object(test_bot, "load_ads", return_value = []),
-            patch("kleinanzeigen_bot.UpdateChecker"),
+            patch("kleinanzeigen_bot.update_checker.UpdateChecker"),
         ):
             await test_bot.run(["script.py", "extend"])
             assert test_bot.command == "extend"
@@ -80,7 +80,7 @@ class TestExtendCommand:
             patch.object(test_bot, "load_ads", return_value = []),
             patch.object(test_bot, "create_browser_session", new_callable = AsyncMock),
             patch.object(test_bot, "login", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.UpdateChecker"),
+            patch("kleinanzeigen_bot.update_checker.UpdateChecker"),
         ):
             await test_bot.run(["script.py", "extend", "--ads=12345,67890"])
             assert test_bot.command == "extend"
