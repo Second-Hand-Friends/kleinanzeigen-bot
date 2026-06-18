@@ -27,7 +27,6 @@ from .utils import xdg_paths as _xdg_paths
 from .utils.files import abspath
 from .utils.misc import is_frozen
 from .utils.web_scraping_mixin import WebScrapingMixin
-
 if TYPE_CHECKING:
     from .utils.timing_collector import TimingCollector
 
@@ -55,7 +54,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self.categories:dict[str, str] = {}
 
         self.file_log:_loggers.LogFileHandle | None = None
-        self._log_basename = os.path.splitext(os.path.basename(sys.executable))[0] if is_frozen() else self.__module__
+        self._log_basename = os.path.splitext(os.path.basename(sys.executable))[0] if is_frozen() else "kleinanzeigen_bot"
         self.log_file_path:str | None = abspath(f"{self._log_basename}.log")
         self._logfile_arg:str | None = None
         self._logfile_explicitly_provided:bool = False
