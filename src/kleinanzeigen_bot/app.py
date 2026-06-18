@@ -27,6 +27,7 @@ from .utils import xdg_paths as _xdg_paths
 from .utils.files import abspath
 from .utils.misc import is_frozen
 from .utils.web_scraping_mixin import WebScrapingMixin
+
 if TYPE_CHECKING:
     from .utils.timing_collector import TimingCollector
 
