@@ -11,7 +11,7 @@ import logging
 import os
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -1011,8 +1011,8 @@ class TestAutoPriceReductionDispatch:
 
         # Simulate Windows cross-drive scenario
         # Config on D:, ad file on C:
-        test_bot.config_file_path = "D:\\project\\config.yaml"
-        ad_file = "C:\\temp\\test_ad.yaml"
+        test_bot.config_file_path = str(PureWindowsPath("D:\\project\\config.yaml"))
+        ad_file = str(PureWindowsPath("C:\\temp\\test_ad.yaml"))
 
         # Create a sentinel exception to abort publish_ad early
         class _SentinelException(Exception):
@@ -1033,6 +1033,9 @@ class TestAutoPriceReductionDispatch:
             raise _SentinelException("Abort early for test")
 
         with (
+            # Force PureWindowsPath so that the cross-drive relative_to raises
+            # ValueError deterministically, even on non-Windows runners.
+            patch("kleinanzeigen_bot.ad_state.Path", PureWindowsPath),
             patch("kleinanzeigen_bot.price_reduction.apply_auto_price_reduction", side_effect = mock_apply_auto_price_reduction),
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock),
@@ -1042,7 +1045,9 @@ class TestAutoPriceReductionDispatch:
                 await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
                 pytest.fail("Expected _SentinelException to be raised")
             except _SentinelException:
-                pass
+                # SentinelException is raised by mock_apply_auto_price_reduction
+                # to abort publish_ad early after recording the path argument.
+                pass  # No cleanup needed — the real workflow would continue here.
 
         # Verify the path argument is the absolute path (fallback behavior)
         assert len(recorded_path) == 1
