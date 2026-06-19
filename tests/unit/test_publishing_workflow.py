@@ -62,7 +62,9 @@ class TestKleinanzeigenBotUpdateAdsResilience:
             await test_bot.update_ads([ad_one, ad_two])
 
         assert publish_mock.await_count == SUBMISSION_MAX_RETRIES + 1
-        assert any(call.args[2].id == 102 for call in publish_mock.await_args_list)
+        call_ids = [call.args[2].id for call in publish_mock.await_args_list]
+        assert call_ids.count(101) == SUBMISSION_MAX_RETRIES
+        assert call_ids.count(102) == 1
         assert all(call.args[5] == AdUpdateStrategy.MODIFY for call in publish_mock.await_args_list)
         assert sleep_mock.await_count == SUBMISSION_MAX_RETRIES - 1
 
