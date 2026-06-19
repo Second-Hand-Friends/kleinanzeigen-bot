@@ -27,6 +27,7 @@ from kleinanzeigen_bot.publishing_workflow import SUBMISSION_MAX_RETRIES
 from kleinanzeigen_bot.utils import xdg_paths
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
+from tests.conftest import build_published_ads, build_update_ad
 
 
 @pytest.fixture
@@ -45,29 +46,6 @@ def mock_page() -> MagicMock:
     mock.goto = AsyncMock()
     mock.close = AsyncMock()
     return mock
-
-
-@pytest.fixture
-def base_ad_config() -> dict[str, Any]:
-    """Provide a base ad configuration that can be used across tests."""
-    return {
-        "id": None,
-        "title": "Test Title",
-        "description": "Test Description",
-        "type": "OFFER",
-        "price_type": "FIXED",
-        "price": 100,
-        "shipping_type": "SHIPPING",
-        "shipping_options": [],
-        "category": "160",
-        "special_attributes": {},
-        "sell_directly": False,
-        "images": [],
-        "active": True,
-        "republication_interval": 7,
-        "created_on": None,
-        "contact": {"name": "Test User", "zipcode": "12345", "location": "Test City", "street": "", "phone": ""},
-    }
 
 
 def remove_fields(config:dict[str, Any], *fields:str) -> dict[str, Any]:
@@ -718,26 +696,17 @@ class TestKleinanzeigenBotBasics:
 class TestDisplayCounterProgression:
     """Regression tests for issue #977: progress counter must increment for every ad, including skipped ones."""
 
-    @staticmethod
-    def _build_ad(base_ad_config:dict[str, Any], ad_id:int | None, title:str) -> tuple[str, Ad, dict[str, Any]]:
-        ad_payload = copy.deepcopy(base_ad_config) | {"id": ad_id, "title": title}
-        return (f"{ad_id}.yaml", Ad.model_validate(ad_payload), ad_payload)
-
-    @staticmethod
-    def _build_published_ads(*ad_specs:tuple[int, str]) -> list[dict[str, Any]]:
-        return [{"id": ad_id, "state": state} for ad_id, state in ad_specs]
-
     @pytest.mark.asyncio
     async def test_publish_ads_counter_progression_with_paused_ads(
         self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], caplog:pytest.LogCaptureFixture
     ) -> None:
         """Display counter must advance for paused ads, and only non-paused ads are published."""
         ad_cfgs = [
-            self._build_ad(base_ad_config, 101, "Paused Ad 1"),
-            self._build_ad(base_ad_config, 102, "Active Ad 102"),
-            self._build_ad(base_ad_config, 103, "Paused Ad 2"),
+            build_update_ad(base_ad_config, 101, "Paused Ad 1"),
+            build_update_ad(base_ad_config, 102, "Active Ad 102"),
+            build_update_ad(base_ad_config, 103, "Paused Ad 2"),
         ]
-        published_ads = self._build_published_ads((101, "paused"), (102, "active"), (103, "paused"))
+        published_ads = build_published_ads((101, "paused"), (102, "active"), (103, "paused"))
 
         with (
             caplog.at_level(logging.INFO),
@@ -768,11 +737,11 @@ class TestDisplayCounterProgression:
     ) -> None:
         """Display counter must advance for paused ads, and only non-paused ads are updated."""
         ad_cfgs = [
-            self._build_ad(base_ad_config, 201, "Paused Ad 1"),
-            self._build_ad(base_ad_config, 202, "Active Ad 202"),
-            self._build_ad(base_ad_config, 203, "Paused Ad 2"),
+            build_update_ad(base_ad_config, 201, "Paused Ad 1"),
+            build_update_ad(base_ad_config, 202, "Active Ad 202"),
+            build_update_ad(base_ad_config, 203, "Paused Ad 2"),
         ]
-        published_ads = self._build_published_ads((201, "paused"), (202, "active"), (203, "paused"))
+        published_ads = build_published_ads((201, "paused"), (202, "active"), (203, "paused"))
 
         with (
             caplog.at_level(logging.INFO),
@@ -804,10 +773,10 @@ class TestDisplayCounterProgression:
     ) -> None:
         """Display counter must advance even for ads not found in published ads."""
         ad_cfgs = [
-            self._build_ad(base_ad_config, 301, "Not Found Ad"),
-            self._build_ad(base_ad_config, 302, "Active Ad 302"),
+            build_update_ad(base_ad_config, 301, "Not Found Ad"),
+            build_update_ad(base_ad_config, 302, "Active Ad 302"),
         ]
-        published_ads = self._build_published_ads((302, "active"))
+        published_ads = build_published_ads((302, "active"))
 
         with (
             caplog.at_level(logging.INFO),

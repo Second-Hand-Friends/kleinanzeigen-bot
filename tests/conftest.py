@@ -11,9 +11,10 @@ Fixture Organization:
 - Core fixtures: Basic test infrastructure (test_data_dir, test_bot_config, test_bot)
 - Mock fixtures: Mock objects for external dependencies (browser_mock)
 - Utility fixtures: Helper fixtures for common test scenarios (log_file_path)
+- Test data fixtures: Shared test data (base_ad_config, description_test_cases)
 - Smoke test fixtures: Special fixtures for smoke tests (smoke_bot, DummyBrowser, etc.)
-- Test data fixtures: Shared test data (description_test_cases)
 """
+import copy
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -118,6 +119,29 @@ def log_file_path(test_data_dir:str) -> str:
 # ============================================================================
 # Test Data Fixtures - Shared test data
 # ============================================================================
+
+
+@pytest.fixture
+def base_ad_config() -> dict[str, Any]:
+    """Provide a base ad configuration that can be used across tests."""
+    return {
+        "id": None,
+        "title": "Test Title",
+        "description": "Test Description",
+        "type": "OFFER",
+        "price_type": "FIXED",
+        "price": 100,
+        "shipping_type": "SHIPPING",
+        "shipping_options": [],
+        "category": "160",
+        "special_attributes": {},
+        "sell_directly": False,
+        "images": [],
+        "active": True,
+        "republication_interval": 7,
+        "created_on": None,
+        "contact": {"name": "Test User", "zipcode": "12345", "location": "Test City", "street": "", "phone": ""},
+    }
 
 
 @pytest.fixture
@@ -271,3 +295,19 @@ def smoke_bot() -> SmokeKleinanzeigenBot:
     bot = SmokeKleinanzeigenBot()
     bot.command = "publish"
     return bot
+
+
+# ============================================================================
+# Shared Helper Functions - Used across multiple test files
+# ============================================================================
+
+
+def build_update_ad(base_ad_config:dict[str, Any], ad_id:int | None, title:str) -> tuple[str, Ad, dict[str, Any]]:
+    """Build an ad tuple for testing from a base config, id, and title."""
+    ad_payload = copy.deepcopy(base_ad_config) | {"id": ad_id, "title": title}
+    return (f"{ad_id}.yaml", Ad.model_validate(ad_payload), ad_payload)
+
+
+def build_published_ads(*ad_specs:tuple[int, str]) -> list[dict[str, Any]]:
+    """Build a list of published ad dicts from (id, state) tuples."""
+    return [{"id": ad_id, "state": state} for ad_id, state in ad_specs]
