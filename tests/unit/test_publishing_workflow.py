@@ -20,7 +20,10 @@ from nodriver.core.connection import ProtocolException
 
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
-from kleinanzeigen_bot.model.config_model import DiagnosticsConfig
+from kleinanzeigen_bot.model.config_model import (
+    AutoPriceReductionConfig,
+    DiagnosticsConfig,
+)
 from kleinanzeigen_bot.publishing_workflow import SUBMISSION_MAX_RETRIES
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishSubmissionUncertainError
 from tests.conftest import build_published_ads, build_update_ad
@@ -343,6 +346,38 @@ class TestKleinanzeigenBotPublishAdsBasics:
 
             assert publish_mock.await_count == 1
             sleep_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("mode", "expected_path"),
+        [
+            (AdUpdateStrategy.REPLACE, "/p-anzeige-aufgeben-schritt2.html"),
+            (AdUpdateStrategy.MODIFY, "/p-anzeige-bearbeiten.html?adId=12345"),
+        ],
+        ids = ["replace", "modify"],
+    )
+    async def test_publish_ad_keeps_pre_submit_timeouts_retryable(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mode:AdUpdateStrategy,
+        expected_path:str,
+    ) -> None:
+        """Timeouts before submit boundary should remain plain retryable failures and force reload."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"id": 12345, "shipping_type": "NOT_APPLICABLE", "price_type": "NOT_APPLICABLE"})
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        expected_url = f"{test_bot.root_url}{expected_path}"
+        test_bot.keep_old_ads = True
+
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock) as web_open_mock,
+            patch.object(test_bot, "dismiss_consent_banner", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_category", new_callable = AsyncMock, side_effect = TimeoutError("image upload timeout")),
+            pytest.raises(TimeoutError, match = "image upload timeout"),
+        ):
+            await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], mode)
+
+        web_open_mock.assert_awaited_once_with(expected_url, reload_if_already_open = True)
 
 
 class TestDisplayCounterProgression:
@@ -792,3 +827,164 @@ class TestPublishAdPostSubmitUncertainty:
             pytest.raises(PublishSubmissionUncertainError, match = "submission may have succeeded before failure"),
         ):
             await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
+
+
+class TestWantedShippingSelection:
+    """Orchestration seam test for WANTED shipping delegation.
+
+    Verifies that ``publish_ad`` / ``fill_ad_form`` delegates to
+    ``kleinanzeigen_bot.publishing_form.set_shipping_form(self, ad_cfg, mode)``
+    with the expected bot/ad/mode arguments. Does not validate selector labels
+    or error behavior — those are covered by ``tests/unit/test_publishing_form.py``.
+    """
+
+    @pytest.mark.asyncio
+    async def test_publish_ad_delegates_to_set_shipping_form(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+        tmp_path:Path,
+    ) -> None:
+        """``publish_ad`` must delegate the shipping step to ``set_shipping_form``."""
+        test_bot.page = mock_page
+        test_bot.page.url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "type": "WANTED",
+                "shipping_type": "SHIPPING",
+                "shipping_options": [],
+                "price_type": "NOT_APPLICABLE",
+                "price": None,
+            }
+        )
+        ad_cfg_orig = ad_cfg.model_dump()
+        ad_file = str(tmp_path / "ad.yaml")
+
+        async def execute_side_effect(script:str) -> Any:
+            if "window.location.href" in script:
+                return test_bot.page.url
+            return None
+
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "dismiss_consent_banner", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_category", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_pricing_fields", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_special_attributes", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_shipping_form", new_callable = AsyncMock) as mock_set_shipping_form,
+            patch("kleinanzeigen_bot.publishing_form.set_contact_fields", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.fill_image_section", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "web_execute", side_effect = execute_side_effect),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock),
+        ):
+            await test_bot.publish_ad(ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+
+        mock_set_shipping_form.assert_awaited_once_with(test_bot, ad_cfg, AdUpdateStrategy.REPLACE)
+
+
+class TestAutoPriceReductionDispatch:
+    """Price reduction dispatch tests across REPLACE and MODIFY modes."""
+
+    @pytest.mark.asyncio
+    async def test_auto_price_reduction_conditional_on_mode_and_on_update(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], tmp_path:Path
+    ) -> None:
+        """Test price reduction dispatch across REPLACE and MODIFY modes.
+
+        - REPLACE mode always calls apply_auto_price_reduction.
+        - MODIFY mode with on_update=false still calls it for restore-first (no cycle advance).
+        - MODIFY mode with on_update=true calls it with full evaluation and cycle advance.
+        """
+        # Shared ad config with auto price reduction enabled
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "id": 12345,
+                "price": 200,
+                "auto_price_reduction": {"enabled": True, "strategy": "FIXED", "amount": 50, "min_price": 50, "delay_reposts": 0, "delay_days": 0},
+                "repost_count": 1,
+                "price_reduction_count": 0,
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+        ad_cfg.update_content_hash()
+        ad_cfg_orig = ad_cfg.model_dump()
+
+        mock_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
+
+        async def mock_web_execute_price_reduction(script:str) -> Any:
+            if "window.location.href" in script:
+                return "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+            return mock_response
+
+        async def mock_web_probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
+            if selector_value == "ad-category-path":
+                marker = MagicMock()
+                marker.apply = AsyncMock(return_value = "")
+                return marker
+            return None
+
+        with (
+            patch("kleinanzeigen_bot.price_reduction.apply_auto_price_reduction") as mock_apply,
+            patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = mock_web_probe),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_select", new_callable = AsyncMock),
+            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", side_effect = mock_web_execute_price_reduction),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = mock_response),
+            patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_contact_fields", new_callable = AsyncMock),
+            patch("builtins.input", return_value = ""),
+            patch("kleinanzeigen_bot.utils.misc.ainput", new_callable = AsyncMock, return_value = ""),
+        ):
+            test_bot.page = MagicMock()
+            test_bot.page.url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+            test_bot.config.publishing.delete_old_ads = "BEFORE_PUBLISH"
+
+            # --- REPLACE mode: always calls apply_auto_price_reduction ---
+            await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+            mock_apply.assert_called_once()
+            assert mock_apply.call_args.kwargs["mode"] == AdUpdateStrategy.REPLACE
+
+            # --- MODIFY mode with default config (on_update=false): still calls for restore-first ---
+            mock_apply.reset_mock()
+            await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
+            mock_apply.assert_called_once()
+            assert mock_apply.call_args.kwargs["mode"] == AdUpdateStrategy.MODIFY
+
+            # --- MODIFY mode with on_update=true: SHOULD call (new conditional behavior) ---
+            mock_apply.reset_mock()
+            ad_cfg.auto_price_reduction = AutoPriceReductionConfig(
+                enabled = True,
+                strategy = "FIXED",
+                amount = 50,
+                min_price = 50,
+                delay_reposts = 0,
+                delay_days = 0,
+                on_update = True,
+            )
+            await test_bot.publish_ad(str(tmp_path / "ad.yaml"), ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
+            mock_apply.assert_called_once()
+            assert mock_apply.call_args.kwargs["mode"] == AdUpdateStrategy.MODIFY
