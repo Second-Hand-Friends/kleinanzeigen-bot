@@ -198,7 +198,7 @@ class TestKleinanzeigenBotPublishAdsBasics:
         test_bot.config.publishing.delete_old_ads = "AFTER_PUBLISH"
         test_bot.keep_old_ads = False
 
-        payload:dict[str, list[Any]] = {"ads": []}
+        payload:dict[str, Any] = {"ads": [], "paging": {"pageNum": 1, "last": 1}}
         ad_cfgs:list[tuple[str, Ad, dict[str, Any]]] = [("ad.yaml", Ad.model_validate(base_ad_config), {})]
 
         with (
