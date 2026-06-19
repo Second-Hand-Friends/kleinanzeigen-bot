@@ -319,10 +319,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     def load_ads(self, *, ignore_inactive:bool = True, exclude_ads_with_id:bool = True) -> list[tuple[str, Ad, dict[str, Any]]]:
         """Load and validate all ad config files.
 
-        Temporary thin delegator to :func:`ad_loading.load_ads` — kept to
-        avoid churn at 7+ call sites inside :meth:`run` and
-        :meth:`download_ads`.  Will be removed when the bot class itself is
-        decomposed in steps 9–11.
+        Delegates to :func:`ad_loading.load_ads` with the current config,
+        selector, and category context for filtering and validation.
         """
         return ad_loading.load_ads(
             config_file_path = self.config_file_path,
