@@ -42,7 +42,11 @@ def test_detect_locale(monkeypatch:MonkeyPatch, lang:str | None, expected:i18n.L
     ("de", "Attribute", 2, False, "Attribute"),
     ("de", "Bild", 2, False, "Bilder"),
     ("de", "Datei", 2, False, "Dateien"),
-    ("de", "Kategorie", 2, False, "Kategorien")
+    ("de", "Kategorie", 2, False, "Kategorien"),
+    ("de", "Keller", 2, True, "2 Keller"),     # el/er/en -> no suffix
+    ("de", "Auto", 2, True, "2 Autos"),         # vowel ending -> add s
+    ("de", "Hund", 2, True, "2 Hunde"),         # default -> add e
+    ("en", "x", 2, True, "2 xs"),               # len < 2 -> add s
 ])
 def test_pluralize(
     lang:str,
