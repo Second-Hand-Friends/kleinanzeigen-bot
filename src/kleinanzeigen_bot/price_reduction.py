@@ -510,6 +510,35 @@ def apply_auto_price_reduction(
         )
         return
 
+    _apply_price_reduction_decision(ad_cfg, decision, ad_file_relative, base_price)
+    # Note: price_reduction_count is persisted to ad_cfg_orig only after successful publish
+
+
+def _apply_price_reduction_decision(
+    ad_cfg:Ad,
+    decision:PriceReductionDecision,
+    ad_file_relative:str,
+    base_price:int,
+) -> None:
+    """Apply the final price reduction decision (mutation phase).
+
+    Handles the final application section after all skip checks pass:
+    MODIFY-mode delay_reposts_ignored debug log, no_visible_change handling,
+    guards, optional trace logging, price assignment, and counter mutation.
+
+    Args:
+        ad_cfg: The ad configuration to mutate.
+        decision: The evaluated price reduction decision.
+        ad_file_relative: Relative path to the ad file (for logging context).
+        base_price: The base price from the decision.
+    """
+    delay_reposts = decision.delay_reposts
+    eligible_cycles = decision.eligible_cycles
+    applied_cycles = decision.applied_cycles
+    delay_days = decision.delay_days
+    elapsed_days = decision.elapsed_days
+    elapsed_display = "missing" if elapsed_days is None else str(elapsed_days)
+
     if decision.mode == AdUpdateStrategy.MODIFY and decision.delay_reposts_ignored:
         LOG.debug(
             "Auto price reduction for [%s]: delay_reposts=%s ignored in MODIFY mode (only delay_days applies)",
@@ -580,4 +609,3 @@ def apply_auto_price_reduction(
     LOG.info("Auto price reduction applied for [%s]: %s -> %s after %s reduction cycles",
              ad_file_relative, decision.restored_price, effective_price, next_cycle)
     ad_cfg.price_reduction_count = next_cycle
-    # Note: price_reduction_count is persisted to ad_cfg_orig only after successful publish
