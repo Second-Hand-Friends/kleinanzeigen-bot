@@ -39,29 +39,6 @@ from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
-@pytest.fixture
-def base_ad_config() -> dict[str, Any]:
-    """Provide a base ad configuration that can be used across tests."""
-    return {
-        "id": None,
-        "title": "Test Title",
-        "description": "Test Description",
-        "type": "OFFER",
-        "price_type": "FIXED",
-        "price": 100,
-        "shipping_type": "SHIPPING",
-        "shipping_options": [],
-        "category": "160",
-        "special_attributes": {},
-        "sell_directly": False,
-        "images": [],
-        "active": True,
-        "republication_interval": 7,
-        "created_on": None,
-        "contact": {"name": "Test User", "zipcode": "12345", "location": "Test City", "street": "", "phone": ""},
-    }
-
-
 class TestKleinanzeigenBotContactLocationHardening:
     @pytest.mark.asyncio
     async def test_city_option_text_falls_back_to_visible_text(self, test_bot:KleinanzeigenBot) -> None:

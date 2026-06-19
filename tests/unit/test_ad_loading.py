@@ -28,31 +28,8 @@ from kleinanzeigen_bot.model.config_model import (
 from kleinanzeigen_bot.utils import dicts, misc
 
 # --------------------------------------------------------------------------- #
-# Fixtures (local copies for standalone module tests)
+# Local fixtures (base_ad_config is in tests/conftest.py)
 # --------------------------------------------------------------------------- #
-
-
-@pytest.fixture
-def base_ad_config() -> dict[str, Any]:
-    """Provide a base ad configuration that can be used across tests."""
-    return {
-        "id": None,
-        "title": "Test Title",
-        "description": "Test Description",
-        "type": "OFFER",
-        "price_type": "FIXED",
-        "price": 100,
-        "shipping_type": "SHIPPING",
-        "shipping_options": [],
-        "category": "160",
-        "special_attributes": {},
-        "sell_directly": False,
-        "images": [],
-        "active": True,
-        "republication_interval": 7,
-        "created_on": None,
-        "contact": {"name": "Test User", "zipcode": "12345", "location": "Test City", "street": "", "phone": ""},
-    }
 
 
 @pytest.fixture

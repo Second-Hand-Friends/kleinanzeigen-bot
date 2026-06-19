@@ -15,29 +15,6 @@ from kleinanzeigen_bot.delete_flow import DeleteResult
 from kleinanzeigen_bot.model.ad_model import Ad
 
 
-@pytest.fixture
-def base_ad_config() -> dict[str, Any]:
-    """Provide a base ad configuration that can be used across tests."""
-    return {
-        "id": None,
-        "title": "Test Title",
-        "description": "Test Description",
-        "type": "OFFER",
-        "price_type": "FIXED",
-        "price": 100,
-        "shipping_type": "SHIPPING",
-        "shipping_options": [],
-        "category": "160",
-        "special_attributes": {},
-        "sell_directly": False,
-        "images": [],
-        "active": True,
-        "republication_interval": 7,
-        "created_on": None,
-        "contact": {"name": "Test User", "zipcode": "12345", "location": "Test City", "street": "", "phone": ""},
-    }
-
-
 def remove_fields(config:dict[str, Any], *fields:str) -> dict[str, Any]:
     """Create a new ad configuration with specified fields removed."""
     result = copy.deepcopy(config)
