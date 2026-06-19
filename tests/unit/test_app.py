@@ -149,7 +149,8 @@ login:
             encoding = "utf-8",
         )
         test_bot.config_file_path = str(config_path)
-        await test_bot.run(["script.py", "verify", "--config", str(config_path), "--workspace-mode", "portable"])
+        with patch("kleinanzeigen_bot.update_checker.UpdateChecker.check_for_updates"):
+            await test_bot.run(["script.py", "verify", "--config", str(config_path), "--workspace-mode", "portable"])
         assert test_bot.config.login.username == "test"
 
 
@@ -206,29 +207,11 @@ class TestKleinanzeigenBotAdManagement:
             mock_download.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_run_publish_invalid_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
-        """Test running publish with invalid selector exits with error."""
+    @pytest.mark.parametrize("command", ["publish", "download", "update", "extend"])
+    async def test_run_invalid_selector_exits_with_error(  # pylint: disable=unused-argument
+        self, test_bot:KleinanzeigenBot, mock_config_setup:None, command:str,
+    ) -> None:
+        """Test running command with invalid selector exits with error."""
         with pytest.raises(SystemExit) as exc_info:
-            await test_bot.run(["script.py", "publish", "--ads=invalid"])
-        assert exc_info.value.code == 2
-
-    @pytest.mark.asyncio
-    async def test_run_download_invalid_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
-        """Test running download with invalid selector exits with error."""
-        with pytest.raises(SystemExit) as exc_info:
-            await test_bot.run(["script.py", "download", "--ads=invalid"])
-        assert exc_info.value.code == 2
-
-    @pytest.mark.asyncio
-    async def test_run_update_invalid_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
-        """Test running update with invalid selector exits with error."""
-        with pytest.raises(SystemExit) as exc_info:
-            await test_bot.run(["script.py", "update", "--ads=invalid"])
-        assert exc_info.value.code == 2
-
-    @pytest.mark.asyncio
-    async def test_run_extend_invalid_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
-        """Test running extend with invalid selector exits with error."""
-        with pytest.raises(SystemExit) as exc_info:
-            await test_bot.run(["script.py", "extend", "--ads=invalid"])
+            await test_bot.run(["script.py", command, "--ads=invalid"])
         assert exc_info.value.code == 2
