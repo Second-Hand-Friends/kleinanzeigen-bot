@@ -7,7 +7,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from kleinanzeigen_bot import KleinanzeigenBot, publishing_submission
+from kleinanzeigen_bot import publishing_submission
+from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.utils.exceptions import PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By

@@ -10,7 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kleinanzeigen_bot import KleinanzeigenBot, download_flow
+from kleinanzeigen_bot import download_flow
+from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.published_ads import PublishedAdsFetchIncompleteError
 from kleinanzeigen_bot.utils import xdg_paths

@@ -23,7 +23,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from kleinanzeigen_bot import KleinanzeigenBot
+from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import i18n, loggers
