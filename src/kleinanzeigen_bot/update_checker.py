@@ -193,11 +193,8 @@ class UpdateChecker:
                 self._get_short_commit_hash(release_commit),
                 self.config.update_check.channel,
             )
-            self.state.update_last_check()
-            self.state.save(self.state_file)
-            return
         # All commit dates are in UTC; append ' UTC' to timestamps in logs for clarity.
-        if local_commit_date < release_commit_date:
+        elif local_commit_date < release_commit_date:
             logger.warning(
                 "A new version is available: %s from %s UTC (current: %s from %s UTC, channel: %s)",
                 self._get_short_commit_hash(release_commit),

@@ -143,6 +143,44 @@ def set_current_locale(new_locale:Locale) -> None:
     _CURRENT_LOCALE = new_locale
 
 
+def _pluralize_de(noun:str) -> str:
+    """German pluralization rules. Returns the plural form of *noun*."""
+    # Special cases
+    irregular_plurals = {
+        "Attribute": "Attribute",
+        "Bild": "Bilder",
+        "Feld": "Felder",
+        "Anzeigen-URL": "Anzeigen-URLs",  # Acronyms take 's' in German
+    }
+    if noun in irregular_plurals:
+        return irregular_plurals[noun]
+    for singular_suffix, plural_suffix in irregular_plurals.items():
+        if noun.lower().endswith(singular_suffix):
+            return noun[:-len(singular_suffix)] + plural_suffix.lower()
+
+    # Very simplified German rules
+    if noun.endswith("ei"):
+        return f"{noun}en"  # Datei -> Dateien
+    if noun.endswith("e"):
+        return f"{noun}n"  # Blume -> Blumen
+    if noun.endswith(("el", "er", "en")):
+        return noun  # Keller -> Keller
+    if noun[-1] in "aeiou":
+        return f"{noun}s"  # Auto -> Autos
+    return f"{noun}e"  # Hund -> Hunde
+
+
+def _pluralize_en(noun:str) -> str:
+    """English pluralization rules. Returns the plural form of *noun*."""
+    if len(noun) < 2:  # noqa: PLR2004 Magic value used in comparison
+        return f"{noun}s"
+    if noun.endswith(("s", "sh", "ch", "x", "z")):
+        return f"{noun}es"
+    if noun.endswith("y") and noun[-2].lower() not in "aeiou":
+        return f"{noun[:-1]}ies"
+    return f"{noun}s"
+
+
 def pluralize(noun:str, count:int | Sized, *, prefix_with_count:bool = True) -> str:
     """
     >>> set_current_locale(Locale("en"))  # Setup for doctests
@@ -163,38 +201,7 @@ def pluralize(noun:str, count:int | Sized, *, prefix_with_count:bool = True) -> 
     if count == 1:
         return f"{prefix}{noun}"
 
-    # German
     if _CURRENT_LOCALE.language == "de":
-        # Special cases
-        irregular_plurals = {
-            "Attribute": "Attribute",
-            "Bild": "Bilder",
-            "Feld": "Felder",
-            "Anzeigen-URL": "Anzeigen-URLs",  # Acronyms take 's' in German
-        }
-        if noun in irregular_plurals:
-            return f"{prefix}{irregular_plurals[noun]}"
-        for singular_suffix, plural_suffix in irregular_plurals.items():
-            if noun.lower().endswith(singular_suffix):
-                pluralized = noun[:-len(singular_suffix)] + plural_suffix.lower()
-                return f"{prefix}{pluralized}"
+        return f"{prefix}{_pluralize_de(noun)}"
 
-        # Very simplified German rules
-        if noun.endswith("ei"):
-            return f"{prefix}{noun}en"  # Datei -> Dateien
-        if noun.endswith("e"):
-            return f"{prefix}{noun}n"  # Blume -> Blumen
-        if noun.endswith(("el", "er", "en")):
-            return f"{prefix}{noun}"  # Keller -> Keller
-        if noun[-1] in "aeiou":
-            return f"{prefix}{noun}s"  # Auto -> Autos
-        return f"{prefix}{noun}e"  # Hund -> Hunde
-
-    # English
-    if len(noun) < 2:  # noqa: PLR2004 Magic value used in comparison
-        return f"{prefix}{noun}s"
-    if noun.endswith(("s", "sh", "ch", "x", "z")):
-        return f"{prefix}{noun}es"
-    if noun.endswith("y") and noun[-2].lower() not in "aeiou":
-        return f"{prefix}{noun[:-1]}ies"
-    return f"{prefix}{noun}s"
+    return f"{prefix}{_pluralize_en(noun)}"
