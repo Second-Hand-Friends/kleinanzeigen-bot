@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import copy, os  # isort: skip
+import copy
+import os
 from collections.abc import Generator
 from contextlib import ExitStack, contextmanager
 from pathlib import Path

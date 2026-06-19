@@ -571,7 +571,12 @@ class TestKleinanzeigenBotDiagnostics:
         ad_file = str(tmp_path / "ad_000001_Test.yml")
 
         with (
-            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps({"ads": []})}),
+            patch.object(
+                test_bot,
+                "web_request",
+                new_callable = AsyncMock,
+                return_value = {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})},
+            ),
             patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
