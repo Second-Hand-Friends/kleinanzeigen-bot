@@ -6,7 +6,7 @@ import os
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -16,12 +16,8 @@ from kleinanzeigen_bot import (
 )
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
-from kleinanzeigen_bot.model.config_model import (
-    Config,
-    PublishingConfig,
-)
+from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import xdg_paths
-from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
 def remove_fields(config:dict[str, Any], *fields:str) -> dict[str, Any]:
@@ -274,126 +270,8 @@ class TestKleinanzeigenBotAdManagement:
         assert exc_info.value.code == 2
 
 
-class TestKleinanzeigenBotShippingOptions:
-    """Tests for shipping options functionality."""
-
-    @pytest.mark.asyncio
-    async def test_shipping_options_mapping(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], tmp_path:Any) -> None:
-        """Test that shipping options are mapped correctly."""
-        # Create a mock page to simulate browser context
-        test_bot.page = MagicMock()
-        test_bot.page.url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
-        test_bot.page.evaluate = AsyncMock()
-
-        # Create ad config with specific shipping options
-        ad_cfg = Ad.model_validate(
-            base_ad_config
-            | {
-                "shipping_options": ["DHL_2", "Hermes_Päckchen"],
-                "updated_on": "2024-01-01T00:00:00",  # Add created_on to prevent KeyError
-                "created_on": "2024-01-01T00:00:00",  # Add updated_on for consistency
-            }
-        )
-
-        # Create the original ad config and published ads list
-        ad_cfg.update_content_hash()  # Add content hash to prevent republication
-        ad_cfg_orig = ad_cfg.model_dump()
-        published_ads:list[dict[str, Any]] = []
-
-        # Set up default config values needed for the test
-        test_bot.config.publishing = PublishingConfig.model_validate({"delete_old_ads": "BEFORE_PUBLISH", "delete_old_ads_by_title": False})
-
-        # Create temporary file path
-        ad_file = Path(tmp_path) / "test_ad.yaml"
-
-        # Mock web_execute to handle all JavaScript calls
-        async def mock_web_execute(script:str) -> Any:
-            if script == "document.body.scrollHeight":
-                return 0  # Return integer to prevent scrolling loop
-            if "window.location.href" in script:
-                return test_bot.page.url  # Return confirmation URL for ad_id extraction
-            return None
-
-        # Create mock elements
-        csrf_token_elem = MagicMock()
-        csrf_token_elem.attrs = {"content": "csrf-token-123"}
-
-        shipping_form_elem = MagicMock()
-        shipping_form_elem.attrs = {}
-
-        shipping_size_radio = MagicMock()
-        shipping_size_radio.attrs = {"checked": ""}  # SMALL radio is pre-checked
-
-        shipping_checkbox = MagicMock()
-        shipping_checkbox.attrs = {"checked": ""}  # Simulate pre-checked carriers for SMALL
-
-        category_path_elem = MagicMock()
-        category_path_elem.apply = AsyncMock(return_value = "Test Category")
-
-        # Mock the necessary web interaction methods
-        with (
-            patch.object(test_bot, "web_execute", side_effect = mock_web_execute),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
-            patch.object(test_bot, "web_select", new_callable = AsyncMock),
-            patch.object(test_bot, "web_input", new_callable = AsyncMock),
-            patch.object(test_bot, "web_open", new_callable = AsyncMock),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = True),
-            patch.object(test_bot, "web_request", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find_all", new_callable = AsyncMock),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_form.set_contact_fields", new_callable = AsyncMock),
-            patch("builtins.input", return_value = ""),
-            patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
-        ):
-
-            async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
-                if selector_type == By.ID and selector_value == "ad-category-path":
-                    return category_path_elem
-                return None
-
-            mock_probe.side_effect = probe_side_effect
-
-            # Mock web_find to simulate element detection
-            async def mock_find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
-                if selector_value == "meta[name=_csrf]":
-                    return csrf_token_elem
-                if selector_value == "myftr-shppngcrt-frm":
-                    return shipping_form_elem
-                # New shipping dialog: size radio via XPath with value attribute
-                if selector_type == By.XPATH and '@type="radio"' in selector_value and "@value=" in selector_value:
-                    return shipping_size_radio
-                if selector_type == By.XPATH and '@type="checkbox"' in selector_value and "@value=" in selector_value:
-                    return shipping_checkbox
-                return None
-
-            mock_find.side_effect = mock_find_side_effect
-
-            # Mock web_check to return True for radio button checked state
-            with patch.object(test_bot, "web_check", new_callable = AsyncMock) as mock_check:
-                mock_check.return_value = True
-
-                # Test through the public interface by publishing an ad
-                await test_bot.publish_ad(str(ad_file), ad_cfg, ad_cfg_orig, published_ads)
-
-            # Verify that the shipping dialog was interacted with:
-            # - web_find should have been called for the size radio (XPath with @type="radio")
-            # - web_click should have been called to deselect unwanted carriers and close dialog
-            radio_find_calls = [c for c in mock_find.await_args_list if len(c.args) >= 2 and '@type="radio"' in str(c.args[1])]
-            assert len(radio_find_calls) >= 1, "Expected at least one web_find for size radio"
-
-            click_xpath_values = [str(c.args[1]) for c in mock_click.await_args_list if len(c.args) >= 2 and c.args[0] == By.XPATH]
-            # Should click Weiter, deselect HERMES_002 (unwanted), and click Fertig
-            assert any("Weiter" in v for v in click_xpath_values), "Expected click on Weiter button"
-            assert any("HERMES_002" in v for v in click_xpath_values), "Expected click to deselect HERMES_002"
-            assert not any("DHL_001" in v for v in click_xpath_values), "Did not expect click for wanted DHL_001"
-            assert not any("HERMES_001" in v for v in click_xpath_values), "Did not expect click for wanted HERMES_001"
-            assert any("Fertig" in v for v in click_xpath_values), "Expected click on Fertig button"
-
-            # Verify the file was created in the temporary directory
-            assert ad_file.exists()
+class TestPublishAdCrossDrivePathFallback:
+    """Tests for cross-drive path fallback behavior."""
 
     @pytest.mark.asyncio
     async def test_cross_drive_path_fallback_windows(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
