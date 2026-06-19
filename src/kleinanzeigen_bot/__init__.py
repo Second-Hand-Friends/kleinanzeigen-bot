@@ -7,7 +7,6 @@ from typing import Final
 
 import colorama
 
-from .app import KleinanzeigenBot as KleinanzeigenBot
 from .utils import loggers as _loggers
 
 LOG:Final[_loggers.Logger] = _loggers.get_logger(__name__)

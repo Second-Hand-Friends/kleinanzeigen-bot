@@ -11,7 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kleinanzeigen_bot import KleinanzeigenBot, extend_flow, runtime_config
+from kleinanzeigen_bot import extend_flow, runtime_config
+from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.utils import dicts, misc, xdg_paths
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element

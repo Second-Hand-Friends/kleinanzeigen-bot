@@ -8,7 +8,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from kleinanzeigen_bot import KleinanzeigenBot, published_ads
+from kleinanzeigen_bot import published_ads
+from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.published_ads import PublishedAdsFetchIncompleteError
 from kleinanzeigen_bot.utils import misc
 

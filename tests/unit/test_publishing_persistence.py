@@ -10,12 +10,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from kleinanzeigen_bot import (
-    KleinanzeigenBot,
-    publishing_persistence,
-)
-from kleinanzeigen_bot import (
     local_path_renaming as _local_path_renaming,
 )
+from kleinanzeigen_bot import publishing_persistence
+from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.local_path_renaming import ImageRenameResult, LocalPathRenameResult, RenameStatus
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import Config

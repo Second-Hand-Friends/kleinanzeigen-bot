@@ -10,7 +10,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from kleinanzeigen_bot import KleinanzeigenBot, delete_flow
+from kleinanzeigen_bot import delete_flow
+from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.delete_flow import DeleteResult
 from kleinanzeigen_bot.model.ad_model import Ad
 

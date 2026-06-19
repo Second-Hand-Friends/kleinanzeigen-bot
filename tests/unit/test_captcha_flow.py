@@ -8,7 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kleinanzeigen_bot import KleinanzeigenBot, captcha_flow
+from kleinanzeigen_bot import captcha_flow
+from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.config_model import CaptchaConfig
 from kleinanzeigen_bot.utils.exceptions import CaptchaEncountered
 

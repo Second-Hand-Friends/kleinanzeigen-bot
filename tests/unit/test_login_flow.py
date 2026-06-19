@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
-from kleinanzeigen_bot import KleinanzeigenBot
+from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.login_flow import (
     LoginDetectionReason,
     LoginDetectionResult,

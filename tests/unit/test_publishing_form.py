@@ -13,8 +13,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kleinanzeigen_bot import LOG, KleinanzeigenBot
+from kleinanzeigen_bot import LOG
 from kleinanzeigen_bot.ad_form_helpers import VERSAND_COMBOBOX_SELECTOR
+from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import PublishingConfig
 from kleinanzeigen_bot.publishing_form import (
