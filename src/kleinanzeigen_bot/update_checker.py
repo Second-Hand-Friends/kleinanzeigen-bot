@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import colorama
 import requests
@@ -119,6 +119,51 @@ class UpdateChecker:
             return True
         return len(release_commit) < len(local_commit) and local_commit.startswith(release_commit)
 
+    def _get_release_and_commitish(self) -> tuple[dict[str, Any], str] | None:
+        """Fetch the applicable release from GitHub and extract its commit-ish.
+
+        Returns:
+            Tuple of (release dict, commit-ish string) on success, or None
+            on any failure (unknown channel, network error, missing commitish).
+        """
+        # --- Fetch release info from GitHub using correct endpoint per channel ---
+        try:
+            if self.config.update_check.channel == "latest":
+                # Use /releases/latest endpoint for stable releases
+                response = requests.get("https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases/latest", timeout = self._request_timeout())
+                response.raise_for_status()
+                release = response.json()
+                # Defensive: ensure it's not a prerelease
+                if release.get("prerelease", False):
+                    logger.warning("Latest release from GitHub is a prerelease, but 'latest' channel expects a stable release.")
+                    return None
+            elif self.config.update_check.channel == "preview":
+                # Use /releases endpoint and select the most recent prerelease
+                response = requests.get("https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases", timeout = self._request_timeout())
+                response.raise_for_status()
+                releases = response.json()
+                # Find the most recent prerelease
+                release = next((r for r in releases if r.get("prerelease", False) and not r.get("draft", False)), None)
+                if not release:
+                    logger.warning("No prerelease found for 'preview' channel.")
+                    return None
+            else:
+                logger.warning("Unknown update channel: %s", self.config.update_check.channel)
+                return None
+        except Exception as e:
+            logger.warning("Could not get releases: %s", e)
+            return None
+
+        # Get release commit-ish (use tag name to avoid branch tip drift)
+        release_commitish = release.get("tag_name")
+        if not release_commitish:
+            release_commitish = release.get("target_commitish")
+        if not release_commitish:
+            logger.warning("Could not determine release commit hash.")
+            return None
+
+        return release, release_commitish
+
     def check_for_updates(self, *, skip_interval_check:bool = False) -> None:
         """Check for updates to the bot.
 
@@ -143,40 +188,10 @@ class UpdateChecker:
             return
 
         # --- Fetch release info from GitHub using correct endpoint per channel ---
-        try:
-            if self.config.update_check.channel == "latest":
-                # Use /releases/latest endpoint for stable releases
-                response = requests.get("https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases/latest", timeout = self._request_timeout())
-                response.raise_for_status()
-                release = response.json()
-                # Defensive: ensure it's not a prerelease
-                if release.get("prerelease", False):
-                    logger.warning("Latest release from GitHub is a prerelease, but 'latest' channel expects a stable release.")
-                    return
-            elif self.config.update_check.channel == "preview":
-                # Use /releases endpoint and select the most recent prerelease
-                response = requests.get("https://api.github.com/repos/Second-Hand-Friends/kleinanzeigen-bot/releases", timeout = self._request_timeout())
-                response.raise_for_status()
-                releases = response.json()
-                # Find the most recent prerelease
-                release = next((r for r in releases if r.get("prerelease", False) and not r.get("draft", False)), None)
-                if not release:
-                    logger.warning("No prerelease found for 'preview' channel.")
-                    return
-            else:
-                logger.warning("Unknown update channel: %s", self.config.update_check.channel)
-                return
-        except Exception as e:
-            logger.warning("Could not get releases: %s", e)
+        result = self._get_release_and_commitish()
+        if result is None:
             return
-
-        # Get release commit-ish (use tag name to avoid branch tip drift)
-        release_commitish = release.get("tag_name")
-        if not release_commitish:
-            release_commitish = release.get("target_commitish")
-        if not release_commitish:
-            logger.warning("Could not determine release commit hash.")
-            return
+        release, release_commitish = result
 
         # Resolve commit hashes and dates for comparison
         local_commit, local_commit_date = self._resolve_commitish(local_commitish)
