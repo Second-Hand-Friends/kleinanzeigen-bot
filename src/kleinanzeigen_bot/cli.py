@@ -23,8 +23,8 @@ from typing import Final, Sequence
 import colorama
 import nodriver
 
-from kleinanzeigen_bot import KleinanzeigenBot
 from kleinanzeigen_bot._version import __version__
+from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.runtime_config import VALID_COMMANDS
 from kleinanzeigen_bot.utils import error_handlers as _error_handlers
 from kleinanzeigen_bot.utils import loggers as _loggers

@@ -32,7 +32,7 @@ _LOGIN_ENV_PATTERN:Final[re.Pattern[str]] = re.compile(r"^\$\{(?P<var>\w+)(?::-(
 
 # Commands that do not need workspace / filesystem state.
 WORKSPACE_FREE_COMMANDS:Final[frozenset[str]] = frozenset({"help", "version", "create-config"})
-# All valid CLI commands.  Keep in sync with the dispatch in __init__.py.
+# All valid CLI commands.  Keep in sync with the dispatch in app.py/run().
 VALID_COMMANDS:Final[frozenset[str]] = frozenset({
     "help", "version", "create-config", "diagnose", "verify",
     "update-check", "update-content-hash",
