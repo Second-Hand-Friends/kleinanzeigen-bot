@@ -17,7 +17,7 @@ from kleinanzeigen_bot.utils import xdg_paths
 
 
 @pytest.fixture
-def mock_config_setup(test_bot:KleinanzeigenBot, tmp_path:Path) -> Generator[None]:
+def mock_config_setup(test_bot:KleinanzeigenBot, tmp_path:Path) -> Generator[None, None, None]:
     """Provide a centralized mock configuration setup for tests.
     This fixture mocks load_config and other essential configuration-related methods."""
     test_bot.config_file_path = str(tmp_path / "config.yaml")
