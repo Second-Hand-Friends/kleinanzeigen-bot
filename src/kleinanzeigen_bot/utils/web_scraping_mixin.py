@@ -625,12 +625,12 @@ class WebScrapingMixin:  # noqa: PLR0904
     async def _prepare_browser_profile(self, user_data_dir:str, profile_name:str | None) -> None:
         """Ensure profile directory exists and write initial browser preferences."""
         xdg_paths.ensure_directory(Path(user_data_dir), "browser profile directory")
-        profile_dir = os.path.join(user_data_dir, profile_name or "Default")
-        os.makedirs(profile_dir, exist_ok = True)
-        prefs_file = os.path.join(profile_dir, "Preferences")
+        profile_dir = Path(user_data_dir) / (profile_name or "Default")
+        profile_dir.mkdir(parents = True, exist_ok = True)
+        prefs_file = profile_dir / "Preferences"
         if not await files.exists(prefs_file):
             LOG.info(" -> Setting chrome prefs [%s]...", prefs_file)
-            await asyncio.get_running_loop().run_in_executor(None, _write_initial_prefs, prefs_file)
+            await asyncio.get_running_loop().run_in_executor(None, _write_initial_prefs, str(prefs_file))
 
     async def _add_browser_extensions(self, cfg:NodriverConfig) -> None:
         """Add configured browser extensions to the nodriver config."""
