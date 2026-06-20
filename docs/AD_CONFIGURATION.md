@@ -260,7 +260,7 @@ shipping_options: []  # non-empty list required for direct-buy (sell_directly)
 #   - DHL_2
 #   - Hermes_Päckchen
 
-sell_directly:  # true or false, requires shipping_type SHIPPING with non-empty predefined shipping_options to take effect (default: false)
+sell_directly:  # true or false, requires shipping_type SHIPPING, non-empty predefined shipping_options, and price_type FIXED or NEGOTIABLE (default: false)
 ```
 
 **Migration from `shipping_costs` to `shipping_options`:**
@@ -312,7 +312,7 @@ You can select multiple options, but **only from one size group** (S, M, or L). 
 **Shipping types:**
 
 - `PICKUP` - Buyer picks up the item
-- `SHIPPING` - Item is shipped (requires predefined `shipping_options` for direct-buy; legacy `shipping_costs` alone enables shipping at the form level but no carrier is selected)
+- `SHIPPING` - Item is shipped. Non-empty `shipping_options` are required for predefined carrier selection and direct-buy (`sell_directly`). Legacy `shipping_costs` is accepted for backward compatibility but ignored during publishing.
 - `NOT_APPLICABLE` - Shipping not applicable for this item
 
 **Sell Directly:**

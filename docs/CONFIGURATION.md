@@ -127,7 +127,7 @@ ad_defaults:
   shipping_type: SHIPPING  # one of: PICKUP, SHIPPING, NOT_APPLICABLE
   # NOTE: shipping_options must be configured per-ad, not as defaults
   # shipping_costs is also per-ad (DEPRECATED — individual shipping removed, value is ignored during publishing)
-  sell_directly: false  # requires shipping_type SHIPPING with non-empty shipping_options to take effect
+  sell_directly: false  # requires shipping_type SHIPPING, non-empty shipping_options, and price_type FIXED or NEGOTIABLE
   contact:
     name: ""
     street: ""

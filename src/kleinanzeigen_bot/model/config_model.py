@@ -100,7 +100,7 @@ class AdDefaults(ContextualModel):
     )
     sell_directly:bool = Field(
         default = False,
-        description = "enable direct purchase option (requires shipping_type: SHIPPING and at least one predefined shipping_options entry)",
+        description = "enable direct purchase option (requires shipping_type: SHIPPING, non-empty shipping_options, and price_type FIXED or NEGOTIABLE)",
     )
     images:list[str] | None = Field(
         default_factory = list,
