@@ -2217,11 +2217,11 @@ class TestWebScrapingDiagnostics:
             assert "=== End Diagnostics ===" in caplog.text
 
     def test_diagnose_browser_issues_remote_debugging_host_configured(self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
-        """Test diagnostic when remote debugging host is configured."""
+        """Test diagnostic ignores configured remote debugging host and uses 127.0.0.1."""
         with (
             patch("os.path.exists", return_value = True),
             patch("os.access", return_value = True),
-            patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True),
+            patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True) as mock_is_port_open,
             patch("urllib.request.urlopen") as mock_urlopen,
             patch("psutil.process_iter", return_value = []),
             patch("platform.system", return_value = "Linux"),
@@ -2238,6 +2238,9 @@ class TestWebScrapingDiagnostics:
 
             assert "(info) Remote debugging port configured: 9222" in caplog.text
             assert "(ok) Remote debugging port is open" in caplog.text
+            # Verify diagnostics ignores configured host and uses 127.0.0.1
+            mock_is_port_open.assert_called_with("127.0.0.1", 9222)
+            mock_urlopen.assert_called_with("http://127.0.0.1:9222/json/version", timeout = ANY)
 
     def test_diagnose_browser_issues_process_info_missing_name(self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
         """Test diagnostic when process info is missing name."""
@@ -2515,6 +2518,32 @@ class TestWebScrapingDiagnostics:
 
             # Verify the debug message was logged
             mock_log.debug.assert_any_call(" -> No existing browser found at %s:%s", "127.0.0.1", 9222)
+
+    def test_diagnose_browser_issues_invalid_port_raises_value_error(self, scraper_with_config:WebScrapingMixin) -> None:
+        """Invalid remote debugging port value should propagate ValueError."""
+        scraper_with_config.browser_config.arguments = ["--remote-debugging-port=abc"]
+        with pytest.raises(ValueError, match = "invalid literal for int"):
+            scraper_with_config.diagnose_browser_issues()
+
+    def test_diagnose_browser_issues_first_port_wins(self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
+        """First --remote-debugging-port= should win when multiple are present."""
+        with patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = False):
+            scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222", "--remote-debugging-port=9223"]
+            scraper_with_config.diagnose_browser_issues()
+
+        assert "(info) Remote debugging port configured: 9222" in caplog.text
+        assert "9223" not in caplog.text
+
+    @patch.object(WebScrapingMixin, "_diagnose_chrome_version_issues")
+    def test_diagnose_browser_issues_port_zero_skips_probe_but_passes_through(
+        self, mock_diagnose:Mock, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Port 0 should skip remote debugging probe but pass through to chrome diagnostics."""
+        scraper_with_config.browser_config.arguments = ["--remote-debugging-port=0"]
+        scraper_with_config.diagnose_browser_issues()
+
+        assert "Remote debugging port configured" not in caplog.text
+        mock_diagnose.assert_called_once_with(0)
 
 
 class TestWebScrapingMixinPortRetry:

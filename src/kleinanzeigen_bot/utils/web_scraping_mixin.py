@@ -662,6 +662,84 @@ class WebScrapingMixin:  # noqa: PLR0904
 
         return False
 
+    def _detect_browser_binary(self) -> str | None:
+        """Auto-detect a compatible browser binary.
+
+        Returns the binary path or None if detection fails.
+        Debug-only failure logging is kept here; translated report-level
+        logging and binary-location mutation stay in the caller.
+        """
+        try:
+            return self.get_compatible_browser()
+        except AssertionError as exc:
+            LOG.debug("Browser auto-detection failed: %s", exc)
+            return None
+
+    def _configured_remote_debugging_port(self) -> int:
+        """Parse the first --remote-debugging-port= argument.
+
+        Returns 0 if not configured.
+        Raises ValueError for invalid port values.
+        """
+        for arg in self.browser_config.arguments:
+            if arg.startswith("--remote-debugging-port="):
+                return int(arg.split("=", maxsplit = 1)[1])
+        return 0
+
+    @staticmethod
+    def _remote_debugging_api_browser(remote_port:int, probe_timeout:float) -> tuple[str | None, Exception | None]:
+        """Probe the remote debugging API at 127.0.0.1.
+
+        Returns (browser_string, None) on success or (None, exception) on failure.
+        """
+        try:
+            response = urllib.request.urlopen(f"http://127.0.0.1:{remote_port}/json/version", timeout = probe_timeout)
+            version_info = json.loads(response.read().decode())
+            return version_info.get("Browser", "Unknown"), None
+        except Exception as exc:
+            return None, exc
+
+    def _target_browser_name(self) -> str:
+        """Return the lowercased target browser basename for process matching.
+
+        Falls back to auto-detection if binary_location is not set.
+        Detection failure is silent (no log output).
+        """
+        if self.browser_config.binary_location:
+            return os.path.basename(self.browser_config.binary_location).lower()
+        try:
+            target_browser_path = self.get_compatible_browser()
+            return os.path.basename(target_browser_path).lower()
+        except (AssertionError, TypeError):
+            return ""
+
+    @staticmethod
+    def _find_relevant_browser_processes(target_browser_name:str) -> tuple[list[dict[str, object]], Exception | None]:
+        """Find browser processes matching *target_browser_name*.
+
+        Returns (process_list, global_error). Per-process NoSuchProcess/AccessDenied
+        are silently skipped. The caller handles the global warning log.
+        """
+        try:
+            browser_processes:list[dict[str, object]] = []
+            for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+                try:
+                    proc_name = proc.info["name"] or ""
+                    cmdline = proc.info["cmdline"] or []
+
+                    is_target_browser = target_browser_name and target_browser_name in proc_name.lower()
+                    has_remote_debugging = cmdline and any(arg.startswith("--remote-debugging-port=") for arg in cmdline)
+
+                    if is_target_browser:
+                        proc.info["has_remote_debugging"] = has_remote_debugging
+                        browser_processes.append(proc.info)
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    # Process ended or is not accessible; skip it.
+                    pass
+            return browser_processes, None
+        except (psutil.Error, PermissionError) as exc:
+            return [], exc
+
     def diagnose_browser_issues(self) -> None:
         """
         Diagnose common browser connection issues and provide troubleshooting information.
@@ -679,11 +757,7 @@ class WebScrapingMixin:  # noqa: PLR0904
             else:
                 LOG.error("(fail) Browser binary not found: %s", self.browser_config.binary_location)
         else:
-            try:
-                browser_path = self.get_compatible_browser()
-            except AssertionError as exc:
-                LOG.debug("Browser auto-detection failed: %s", exc)
-                browser_path = None
+            browser_path = self._detect_browser_binary()
             if browser_path:
                 LOG.info("(ok) Auto-detected browser: %s", browser_path)
                 # Set the binary location for Chrome version detection
@@ -703,11 +777,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 LOG.info("(info) User data directory does not exist (will be created): %s", self.browser_config.user_data_dir)
 
         # Check for remote debugging port
-        remote_port = 0
-        for arg in self.browser_config.arguments:
-            if arg.startswith("--remote-debugging-port="):
-                remote_port = int(arg.split("=", maxsplit = 1)[1])
-                break
+        remote_port = self._configured_remote_debugging_port()
 
         if remote_port > 0:
             LOG.info("(info) Remote debugging port configured: %d", remote_port)
@@ -716,57 +786,24 @@ class WebScrapingMixin:  # noqa: PLR0904
                 # Try to get more information about the debugging endpoint
                 try:
                     probe_timeout = self.effective_timeout("chrome_remote_probe")
-                    response = urllib.request.urlopen(f"http://127.0.0.1:{remote_port}/json/version", timeout = probe_timeout)
-                    version_info = json.loads(response.read().decode())
-                    LOG.info("(ok) Remote debugging API accessible - Browser: %s", version_info.get("Browser", "Unknown"))
+                    browser_fact, exc = self._remote_debugging_api_browser(remote_port, probe_timeout)
                 except Exception as e:
-                    LOG.warning("(fail) Remote debugging port is open but API not accessible: %s", str(e))
+                    exc = e
+                    browser_fact = None
+                if exc is None:
+                    LOG.info("(ok) Remote debugging API accessible - Browser: %s", browser_fact)
+                else:
+                    LOG.warning("(fail) Remote debugging port is open but API not accessible: %s", str(exc))
                     LOG.info("  This might indicate a browser update issue or configuration problem")
             else:
                 LOG.info("(info) Remote debugging port is not open")
 
         # Check for running browser processes
-        browser_processes = []
-        target_browser_name = ""
+        target_browser_name = self._target_browser_name()
+        browser_processes, proc_exc = self._find_relevant_browser_processes(target_browser_name)
 
-        # Get the target browser name for comparison
-        if self.browser_config.binary_location:
-            target_browser_name = os.path.basename(self.browser_config.binary_location).lower()
-        else:
-            try:
-                target_browser_path = self.get_compatible_browser()
-                target_browser_name = os.path.basename(target_browser_path).lower()
-            except (AssertionError, TypeError):
-                target_browser_name = ""
-
-        try:
-            for proc in psutil.process_iter(["pid", "name", "cmdline"]):
-                try:
-                    proc_name = proc.info["name"] or ""
-                    cmdline = proc.info["cmdline"] or []
-
-                    # Check if this is a browser process relevant to our diagnostics
-                    is_relevant_browser = False
-
-                    # Is this the target browser?
-                    is_target_browser = target_browser_name and target_browser_name in proc_name.lower()
-
-                    # Does it have remote debugging?
-                    has_remote_debugging = cmdline and any(arg.startswith("--remote-debugging-port=") for arg in cmdline)
-
-                    # Detect target browser processes for diagnostics
-                    if is_target_browser:
-                        is_relevant_browser = True
-                        # Add debugging status to the process info for better diagnostics
-                        proc.info["has_remote_debugging"] = has_remote_debugging
-
-                    if is_relevant_browser:
-                        browser_processes.append(proc.info)
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    # Process ended or is not accessible; skip it.
-                    pass
-        except (psutil.Error, PermissionError) as exc:
-            LOG.warning("(warn) Unable to inspect browser processes: %s", exc)
+        if proc_exc is not None:
+            LOG.warning("(warn) Unable to inspect browser processes: %s", proc_exc)
             browser_processes = []
 
         if browser_processes:
