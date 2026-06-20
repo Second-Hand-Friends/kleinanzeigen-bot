@@ -237,22 +237,58 @@ special_attributes:
 
 ### Shipping Configuration
 
+> **Important:** Individual/custom shipping (`shipping_costs`) is no longer available on
+> kleinanzeigen.de. Only predefined DHL/Hermes carrier options are supported.
+
 ```yaml
 shipping_type:  # one of: PICKUP, SHIPPING, NOT_APPLICABLE (default: SHIPPING)
-shipping_costs:  # e.g. 2.95 (for individual postage, keep shipping_type SHIPPING and leave shipping_options empty)
 
-# Specify shipping options / packages.
-# It is possible to select multiple packages, but only from one size group (S, M, L)!
+# DEPRECATED: Individual/custom shipping is no longer supported.
+# shipping_costs is kept for backward compatibility with existing configs,
+# but its value is ignored during publishing. Remove shipping_costs and use
+# predefined shipping_options instead (see below).
+shipping_costs:  # e.g. 2.95 — IGNORED during publishing; migrate to shipping_options!
+
+# Specify predefined shipping options / packages.
+# Only DHL and Hermes carrier options are valid. You can select multiple
+# packages, but only from one size group (S, M, L)!
 # See the "Shipping Options Reference" table below for all available options.
-shipping_options: []
+shipping_options: []  # non-empty list required for direct-buy (sell_directly)
 
 # Example (size S only):
 # shipping_options:
 #   - DHL_2
 #   - Hermes_Päckchen
 
-sell_directly:  # true or false, requires shipping_type SHIPPING (with shipping_options or shipping_costs) to take effect (default: false)
+sell_directly:  # true or false, requires shipping_type SHIPPING with non-empty predefined shipping_options to take effect (default: false)
 ```
+
+**Migration from `shipping_costs` to `shipping_options`:**
+
+If your ad YAML currently uses `shipping_costs` (e.g. `shipping_costs: 4.50`) and
+`shipping_type: SHIPPING` with no `shipping_options`, replace it with the appropriate
+predefined option from the table below. For example, replace:
+
+```yaml
+shipping_type: SHIPPING
+shipping_costs: 4.50
+shipping_options: []
+```
+
+with:
+
+```yaml
+shipping_type: SHIPPING
+shipping_options:
+  - DHL_2
+```
+
+Choose the option that matches your typical package size. If you use multiple carriers,
+select multiple options from the same size group.
+
+**`shipping_costs` in downloaded ads:** Extraction still reads `shipping_costs` from
+live ads for backward compatibility, but the value is **ignored** when publishing.
+
 
 #### Shipping Options Reference
 
@@ -276,11 +312,11 @@ You can select multiple options, but **only from one size group** (S, M, or L). 
 **Shipping types:**
 
 - `PICKUP` - Buyer picks up the item
-- `SHIPPING` - Item is shipped (requires shipping costs or options)
+- `SHIPPING` - Item is shipped (requires predefined `shipping_options` for direct-buy; legacy `shipping_costs` alone enables shipping at the form level but no carrier is selected)
 - `NOT_APPLICABLE` - Shipping not applicable for this item
 
 **Sell Directly:**
-When `sell_directly: true`, buyers can purchase the item directly through the platform without contacting the seller first. This feature requires `shipping_type: SHIPPING` (with either predefined `shipping_options` or individual `shipping_costs`) and a fixed or negotiable price.
+When `sell_directly: true`, buyers can purchase the item directly through the platform without contacting the seller first. This feature requires `shipping_type: SHIPPING` **and** a non-empty list of predefined `shipping_options`. Individual `shipping_costs` alone does **not** qualify for direct-buy. A fixed or negotiable price is also required.
 
 ### Images
 
@@ -386,7 +422,7 @@ republication_interval: 7
 
 - **Schema validation errors**: Run `kleinanzeigen-bot verify` (binary) or `pdm run app verify` (source) to see which fields fail validation.
 - **Price reduction not applying**: Confirm `auto_price_reduction.enabled` is `true`, `min_price` is set, and you are using `publish` (not `update`, unless `on_update: true`). Run `kleinanzeigen-bot verify` to preview outcomes, or add `-v` for detailed decision data including repost/day-delay state. Remember ad-level values override `ad_defaults`.
-- **Shipping configuration issues**: Use `shipping_type: SHIPPING` when setting `shipping_costs` or `shipping_options`, and pick options from a single size group (S/M/L).
+- **Shipping configuration issues**: Use `shipping_type: SHIPPING` with non-empty `shipping_options` for predefined DHL/Hermes package shipping and direct-buy. Individual `shipping_costs` is deprecated and ignored during publishing — remove it from your config and migrate to `shipping_options` (pick options from a single size group S/M/L).
 - **Category not found**: Verify the category name or ID and check any custom mappings in `config.yaml`.
 - **File naming/prefix mismatch**: Ensure ad files match your `ad_files` glob and prefix (default `ad_`).
 - **Image path resolution**: Relative paths are resolved from the ad file location; use absolute paths and check file permissions if images are not found.

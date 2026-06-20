@@ -100,7 +100,7 @@
         },
         "sell_directly": {
           "default": false,
-          "description": "enable direct purchase option (only works when shipping_type is SHIPPING)",
+          "description": "enable direct purchase option (requires shipping_type: SHIPPING and at least one predefined shipping_options entry)",
           "title": "Sell Directly",
           "type": "boolean"
         },

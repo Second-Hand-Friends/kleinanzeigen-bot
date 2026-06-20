@@ -1148,9 +1148,17 @@ class TestPricingFields:
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
+        caplog:pytest.LogCaptureFixture,
     ) -> None:
         """Shipping ads with sell_directly enabled should continue if buy-now-true control is unavailable."""
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "sell_directly": True, "price_type": "FIXED", "price": 100})
+        caplog.set_level(logging.WARNING, logger = LOG.name)
+        ad_cfg = Ad.model_validate(
+            base_ad_config | {
+                "shipping_type": "SHIPPING",
+                "sell_directly": True,
+                "price_type": "FIXED",
+                "price": 100,
+                "shipping_options": ["DHL_2"]})
 
         with (
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
@@ -1161,7 +1169,48 @@ class TestPricingFields:
         ):
             await set_pricing_fields(test_bot, ad_cfg, test_bot.config.ad_defaults)
 
+        # Assert warning about category-unavailable buy-now
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("sell_directly" in m and "not available" in m for m in warning_messages), \
+            "Should log warning when buy-now-true is unavailable"
+
+        # Assert continuation (description field was set after the warning)
         mock_set.assert_any_await("ad-description", "desc")
+
+    @pytest.mark.asyncio
+    async def test_sell_directly_without_shipping_options_raises(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Direct-buy without predefined shipping_options should raise ValueError (publishing guard).
+
+        Uses model_construct to bypass Phase 1 model validator and test the publishing
+        guard independently.
+        """
+        ad_cfg = Ad.model_construct(
+            **base_ad_config | {
+                "shipping_type": "SHIPPING",
+                "sell_directly": True,
+                "price_type": "FIXED",
+                "price": 100,
+                "shipping_options": [],
+            }
+        )
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.get_ad_description", return_value = "desc"),
+            pytest.raises(ValueError, match = "Direct-buy.*shipping_options"),
+        ):
+            await set_pricing_fields(test_bot, ad_cfg, test_bot.config.ad_defaults)
+
+        # Price type dropdown may be clicked before the guard fires; the guard
+        # must prevent buy-now-true from being probed/clicked.
+        buy_now_probes = [c for c in mock_probe.await_args_list if len(c.args) >= 2 and "ad-buy-now" in str(c.args[1])]
+        assert not buy_now_probes, "guard must prevent buy-now DOM probing"
 
     @pytest.mark.asyncio
     async def test_buy_now_true_interaction_timeout_propagates(
@@ -1170,7 +1219,13 @@ class TestPricingFields:
         base_ad_config:dict[str, Any],
     ) -> None:
         """Existing direct-buy controls should still fail if interaction times out."""
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "sell_directly": True, "price_type": "FIXED", "price": 100})
+        ad_cfg = Ad.model_validate(
+            base_ad_config | {
+                "shipping_type": "SHIPPING",
+                "sell_directly": True,
+                "price_type": "FIXED",
+                "price": 100,
+                "shipping_options": ["DHL_2"]})
 
         buy_now_elem = MagicMock()
 
@@ -1374,257 +1429,105 @@ class TestShippingDialogFlow:
         mock_check.assert_not_awaited()
         mock_click.assert_not_awaited()
 
-    @pytest.mark.asyncio
-    async def test_shipping_without_options_uses_radio_and_dialog(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
-        """Shipping without package options should use radio + dialog flow."""
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": [], "shipping_costs": 4.95})
-
-        with (
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_input,
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "4,95"),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-        ):
-            await set_shipping(test_bot, ad_cfg)
-
-            click_args = [c.args for c in mock_click.await_args_list]
-            assert any(len(a) >= 2 and a[0] == By.ID and a[1] == "ad-individual-shipping-checkbox-control" for a in click_args)
-            assert any("Fertig" in str(a[1]) for a in click_args if len(a) >= 2)
-            mock_set_input.assert_awaited_once_with("ad-individual-shipping-price", "4,95")
+    # ------------------------------------------------------------------
+    # No-options branch: warn-and-skip (individual shipping removed)
+    # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_shipping_finish_timeout_raises(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
-        """Timeout while confirming shipping dialog should raise a clear error."""
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": []})
-
-        async def click_side_effect(selector_type:By, selector_value:str, **_:Any) -> None:
-            if selector_type == By.XPATH and "Fertig" in selector_value:
-                raise TimeoutError("finish timeout")
-
-        with (
-            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            pytest.raises(TimeoutError, match = "Unable to close shipping dialog!"),
-        ):
-            await set_shipping(test_bot, ad_cfg)
-
-    @pytest.mark.asyncio
-    async def test_shipping_without_options_does_not_toggle_checkbox_when_price_input_visible(
+    async def test_shipping_no_options_with_costs_warns_and_skips(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
+        caplog:pytest.LogCaptureFixture,
     ) -> None:
-        """When price input is already visible, individual-shipping checkbox is not toggled."""
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": [], "shipping_costs": 4.95})
-
-        with (
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, MagicMock()]),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_input,
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "4,95"),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-        ):
-            await set_shipping(test_bot, ad_cfg)
-
-        click_args = [c.args for c in mock_click.await_args_list]
-        assert not any(len(a) >= 2 and a[0] == By.ID and a[1] == "ad-individual-shipping-checkbox-control" for a in click_args)
-        mock_set_input.assert_awaited_once_with("ad-individual-shipping-price", "4,95")
-
-    @pytest.mark.asyncio
-    async def test_shipping_price_lost_to_react_rerender_raises(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-    ) -> None:
-        """When React re-render swallows the shipping price, the dialog must NOT be closed."""
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": [], "shipping_costs": 4.95})
-
-        async def set_input_side_effect(element_id:str, value:str) -> None:
-            pass
-
-        with (
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock, side_effect = set_input_side_effect),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            pytest.raises(TimeoutError, match = "Unable to set shipping price!"),
-        ):
-            await set_shipping(test_bot, ad_cfg)
-
-        # Fertig must never be clicked when the price was not confirmed
-        fertig_clicks = [c for c in mock_click.await_args_list if c.args and len(c.args) >= 2 and "Fertig" in str(c.args[1])]
-        assert not fertig_clicks, "Fertig was clicked despite shipping price not being set"
-
-    @pytest.mark.asyncio
-    async def test_shipping_price_recovers_when_readback_matches_on_retry(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-    ) -> None:
-        """First attempt mismatches (readback empty), second attempt succeeds — must close the dialog normally."""
+        """No shipping_options with shipping_costs: click enabled, warn, do NOT open dialog or touch individual selectors."""
+        caplog.set_level(logging.WARNING, logger = LOG.name)
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": [], "shipping_costs": 4.95})
 
         with (
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_input,
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = [None, "4,95"]),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
         ):
             await set_shipping(test_bot, ad_cfg)
 
-        assert mock_set_input.await_count == 2, "expected exactly one retry after the first mismatch"
-        inter_attempt_sleeps = [c for c in mock_sleep.await_args_list if c.args == (300, 500)]
-        assert len(inter_attempt_sleeps) == 1, "expected one inter-attempt backoff sleep"
-        fertig_clicks = [c for c in mock_click.await_args_list if c.args and len(c.args) >= 2 and "Fertig" in str(c.args[1])]
-        assert fertig_clicks, "Fertig must be clicked once the readback confirms the price"
+        # Must click shipping-enabled-yes
+        enabled_yes_clicks = [
+            c for c in mock_click.await_args_list
+            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-shipping-enabled-yes"
+        ]
+        assert enabled_yes_clicks, "Should click shipping-enabled-yes"
+
+        # Must NOT open shipping-options dialog
+        options_clicks = [
+            c for c in mock_click.await_args_list
+            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-shipping-options"
+        ]
+        assert not options_clicks, "Must NOT open shipping-options dialog"
+
+        # Must NOT touch any individual-shipping selectors
+        individual_clicks = [
+            c for c in mock_click.await_args_list
+            if len(c.args) >= 2 and "ad-individual-shipping" in str(c.args[1])
+        ]
+        assert not individual_clicks, "Must NOT touch individual-shipping selectors"
+
+        # Must NOT click Fertig (no dialog to close)
+        fertig_clicks = [
+            c for c in mock_click.await_args_list
+            if len(c.args) >= 2 and "Fertig" in str(c.args[1])
+        ]
+        assert not fertig_clicks, "Must NOT click Fertig (no dialog opened)"
+
+        # Must log warning about individual shipping removed
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("Individual shipping is no longer available" in m for m in warning_messages)
 
     @pytest.mark.asyncio
-    async def test_shipping_price_retries_when_readback_raises_transiently(
+    async def test_shipping_no_options_no_costs_no_warning(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
+        caplog:pytest.LogCaptureFixture,
     ) -> None:
-        """A TimeoutError from the readback web_execute must be retried, not propagated on the first occurrence."""
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": [], "shipping_costs": 4.95})
-
-        readback_results:list[str | Exception] = [TimeoutError("readback raced with re-render"), "4,95"]
-
-        async def readback_side_effect(*_args:Any, **_kwargs:Any) -> str | None:
-            result = readback_results.pop(0)
-            if isinstance(result, Exception):
-                raise result
-            return result
+        """No shipping_options and no shipping_costs: click enabled, debug log only, no warning."""
+        caplog.set_level(logging.WARNING, logger = LOG.name)
+        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": [], "shipping_costs": None})
 
         with (
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_input,
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = readback_side_effect),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
             await set_shipping(test_bot, ad_cfg)
 
-        assert mock_set_input.await_count == 2, "expected one retry after the readback raised"
-        fertig_clicks = [c for c in mock_click.await_args_list if c.args and len(c.args) >= 2 and "Fertig" in str(c.args[1])]
-        assert fertig_clicks, "Fertig must be clicked once a later readback confirms the price"
+        # Must click shipping-enabled-yes
+        enabled_yes_clicks = [
+            c for c in mock_click.await_args_list
+            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-shipping-enabled-yes"
+        ]
+        assert enabled_yes_clicks, "Should click shipping-enabled-yes"
+
+        # Must NOT open shipping-options dialog
+        options_clicks = [
+            c for c in mock_click.await_args_list
+            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-shipping-options"
+        ]
+        assert not options_clicks, "Must NOT open shipping-options dialog"
+
+        # Must NOT touch any individual-shipping selectors
+        individual_clicks = [
+            c for c in mock_click.await_args_list
+            if len(c.args) >= 2 and "ad-individual-shipping" in str(c.args[1])
+        ]
+        assert not individual_clicks, "Must NOT touch individual-shipping selectors"
+
+        # No warning should be logged (only debug)
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert not any("shipping_costs" in m for m in warning_messages)
+        assert not any("Individual shipping" in m for m in warning_messages)
 
     # ------------------------------------------------------------------
     # set_shipping commercial/pro combobox: error paths
     # ------------------------------------------------------------------
-
-    @pytest.mark.asyncio
-    async def test_shipping_versand_combobox_no_id(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-    ) -> None:
-        """Commercial combobox with no id attribute should raise TimeoutError."""
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING"})
-        shipping_combobox = MagicMock()
-        shipping_combobox.attrs = {}  # No "id" key
-
-        with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = shipping_combobox),
-            patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock),
-            pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'SHIPPING'!"),
-        ):
-            await set_shipping(test_bot, ad_cfg)
-
-    @pytest.mark.asyncio
-    async def test_shipping_versand_combobox_unsupported_type(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-    ) -> None:
-        """Commercial combobox with unsupported shipping_type should raise ValueError.
-
-        Bypasses Pydantic validation by patching the attribute at runtime because
-        the model only permits SHIPPING/PICKUP/NOT_APPLICABLE.
-        """
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING"})
-        shipping_combobox = MagicMock()
-        shipping_combobox.attrs = {"id": "uhren.versand"}
-
-        with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = shipping_combobox),
-            patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock),
-            patch.object(ad_cfg, "shipping_type", "INVALID_TYPE"),
-            pytest.raises(ValueError, match = "Unsupported shipping_type: INVALID_TYPE"),
-        ):
-            await set_shipping(test_bot, ad_cfg)
-
-    @pytest.mark.asyncio
-    async def test_shipping_versand_combobox_select_timeout(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-    ) -> None:
-        """Timeout from web_select_button_combobox should be re-raised with descriptive message."""
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING"})
-        shipping_combobox = MagicMock()
-        shipping_combobox.attrs = {"id": "uhren.versand"}
-
-        with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = shipping_combobox),
-            patch.object(
-                test_bot, "web_select_button_combobox", new_callable = AsyncMock, side_effect = TimeoutError("combobox selection failed")
-            ),
-            pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'SHIPPING'!"),
-        ):
-            await set_shipping(test_bot, ad_cfg)
-
-    # ------------------------------------------------------------------
-    # individual shipping-cost retry: web_set_input_value transient TimeoutError
-    # ------------------------------------------------------------------
-
-    @pytest.mark.asyncio
-    async def test_shipping_price_recovers_after_set_input_timeout(
-        self,
-        test_bot:KleinanzeigenBot,
-        base_ad_config:dict[str, Any],
-    ) -> None:
-        """A TimeoutError from web_set_input_value must be retried and recover on a subsequent attempt.
-
-        Flow: attempt1 (set_input TimeoutError → retry), attempt2 (set_input ok,
-        readback None → retry), attempt3 (set_input ok, readback matches → done).
-        """
-        ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": [], "shipping_costs": 4.95})
-
-        set_input_attempts = 0
-
-        async def set_input_side_effect(element_id:str, value:str) -> None:
-            nonlocal set_input_attempts
-            set_input_attempts += 1
-            if set_input_attempts == 1:
-                raise TimeoutError("set_input raced with re-render")
-
-        with (
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock, side_effect = set_input_side_effect) as mock_set_input,
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = [None, "4,95"]),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
-        ):
-            await set_shipping(test_bot, ad_cfg)
-
-        # attempt1 raised (caught), attempt2 set_input ok but readback=None (retry),
-        # attempt3 set_input ok and readback="4,95" (done) → 3 calls total
-        assert mock_set_input.await_count == 3, "expected 2 retries: one after set_input TimeoutError, one after mismatched readback"
-        inter_attempt_sleeps = [c for c in mock_sleep.await_args_list if c.args == (300, 500)]
-        assert len(inter_attempt_sleeps) == 2, "expected two inter-attempt backoff sleeps"
-        fertig_clicks = [c for c in mock_click.await_args_list if c.args and len(c.args) >= 2 and "Fertig" in str(c.args[1])]
-        assert fertig_clicks, "Fertig must be clicked once the retry succeeds"
 
 
 class TestShippingOptionsDialog:

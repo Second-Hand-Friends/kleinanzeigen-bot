@@ -76,7 +76,7 @@ ad_defaults:
   #   • NOT_APPLICABLE
   shipping_type: SHIPPING
 
-  # enable direct purchase option (only works when shipping_type is SHIPPING)
+  # enable direct purchase option (requires shipping_type: SHIPPING and at least one predefined shipping_options entry)
   sell_directly: false
 
   # default image glob patterns (optional). Leave empty for no default images

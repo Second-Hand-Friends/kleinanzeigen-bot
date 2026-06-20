@@ -20,6 +20,19 @@ from kleinanzeigen_bot.utils.pydantics import ContextualModel, ContextualValidat
 
 
 @pytest.mark.unit
+def test_shipping_costs_deprecated_in_schema() -> None:
+    """shipping_costs field is still present and parseable, but marked deprecated in JSON schema."""
+    # Field still works for parsing (deprecation is schema-level only)
+    minimal_cfg = {"title": "Test Title", "category": "160", "description": "Test"}
+    assert AdPartial.model_validate(minimal_cfg | {"shipping_costs": 4.95}).shipping_costs == 4.95
+
+    # Verify deprecation marker is present in the generated JSON schema
+    schema = AdPartial.model_json_schema()
+    shipping_costs_props = schema["properties"]["shipping_costs"]
+    assert shipping_costs_props.get("deprecated") is True
+
+
+@pytest.mark.unit
 def test_update_content_hash() -> None:
     minimal_ad_cfg = {
         "id": "123456789",
@@ -325,3 +338,99 @@ def test_auto_price_reduction_config_requires_amount_when_enabled() -> None:
     """Test AutoPriceReductionConfig validator requires amount when enabled"""
     with pytest.raises(ValueError, match = "amount must be specified when auto_price_reduction is enabled"):
         AutoPriceReductionConfig(enabled = True, strategy = "FIXED", amount = None, min_price = 50)
+
+
+# ── sell_directly validator tests ──────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_sell_directly_accepted_with_valid_options(base_ad_cfg:dict[str, object]) -> None:
+    """OFFER ad with sell_directly: true + SHIPPING + predefined options + FIXED passes."""
+    cfg = base_ad_cfg.copy() | {
+        "price_type": "FIXED",
+        "shipping_type": "SHIPPING",
+        "shipping_options": ["DHL_2"],
+        "sell_directly": True,
+        "price": 50,
+    }
+    ad = AdPartial.model_validate(cfg).to_ad(AdDefaults())
+    assert ad.sell_directly is True
+    assert ad.shipping_options == ["DHL_2"]
+
+
+@pytest.mark.unit
+def test_sell_directly_rejected_without_options(base_ad_cfg:dict[str, object]) -> None:
+    """OFFER ad with sell_directly: true but no shipping_options fails."""
+    cfg = base_ad_cfg.copy() | {
+        "price_type": "FIXED",
+        "shipping_type": "SHIPPING",
+        "sell_directly": True,
+        "price": 50,
+    }
+    with pytest.raises(ContextualValidationError, match = "shipping_option"):
+        AdPartial.model_validate(cfg).to_ad(AdDefaults())
+
+
+@pytest.mark.unit
+def test_sell_directly_rejected_with_shipping_costs_only(base_ad_cfg:dict[str, object]) -> None:
+    """OFFER ad with sell_directly: true + shipping_costs but no shipping_options fails."""
+    cfg = base_ad_cfg.copy() | {
+        "price_type": "FIXED",
+        "shipping_type": "SHIPPING",
+        "shipping_costs": 4.95,
+        "sell_directly": True,
+        "price": 50,
+    }
+    with pytest.raises(ContextualValidationError, match = "shipping_option"):
+        AdPartial.model_validate(cfg).to_ad(AdDefaults())
+
+
+@pytest.mark.unit
+def test_sell_directly_wanted_not_rejected(base_ad_cfg:dict[str, object]) -> None:
+    """WANTED ad with sell_directly: true must NOT be rejected by the validator."""
+    cfg = base_ad_cfg.copy() | {
+        "type": "WANTED",
+        "sell_directly": True,
+    }
+    # Should pass without error even with minimal shipping config
+    ad = AdPartial.model_validate(cfg).to_ad(AdDefaults())
+    assert ad.type == "WANTED"
+    assert ad.sell_directly is True
+
+
+@pytest.mark.unit
+def test_sell_directly_rejected_with_pickup(base_ad_cfg:dict[str, object]) -> None:
+    """OFFER ad with sell_directly: true + PICKUP shipping_type fails."""
+    cfg = base_ad_cfg.copy() | {
+        "shipping_type": "PICKUP",
+        "sell_directly": True,
+    }
+    with pytest.raises(ContextualValidationError, match = "shipping_type"):
+        AdPartial.model_validate(cfg).to_ad(AdDefaults())
+
+
+@pytest.mark.unit
+def test_sell_directly_rejected_with_give_away(base_ad_cfg:dict[str, object]) -> None:
+    """OFFER ad with sell_directly + GIVE_AWAY price_type fails."""
+    cfg = base_ad_cfg.copy() | {
+        "shipping_type": "SHIPPING",
+        "shipping_options": ["DHL_2"],
+        "price_type": "GIVE_AWAY",
+        "sell_directly": True,
+    }
+    with pytest.raises(ContextualValidationError, match = "price_type"):
+        AdPartial.model_validate(cfg).to_ad(AdDefaults())
+
+
+@pytest.mark.unit
+def test_shipping_costs_in_content_hash_during_deprecation() -> None:
+    """Verify shipping_costs still affects the content hash during deprecation phase."""
+    base = {
+        "title": "Test Ad Title",
+        "category": "160",
+        "description": "Test Description",
+    }
+    hash_without_costs = AdPartial.model_validate(base).update_content_hash().content_hash
+    hash_with_costs = AdPartial.model_validate(base | {"shipping_costs": 4.95}).update_content_hash().content_hash
+    assert hash_with_costs != hash_without_costs, \
+        "shipping_costs must still affect the content hash during deprecation"

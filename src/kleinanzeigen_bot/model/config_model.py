@@ -98,7 +98,10 @@ class AdDefaults(ContextualModel):
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] = Field(
         default = "SHIPPING", description = "shipping method for the item", examples = ["PICKUP", "SHIPPING", "NOT_APPLICABLE"]
     )
-    sell_directly:bool = Field(default = False, description = "enable direct purchase option (only works when shipping_type is SHIPPING)")
+    sell_directly:bool = Field(
+        default = False,
+        description = "enable direct purchase option (requires shipping_type: SHIPPING and at least one predefined shipping_options entry)",
+    )
     images:list[str] | None = Field(
         default_factory = list,
         description = "default image glob patterns (optional). Leave empty for no default images",
