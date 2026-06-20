@@ -89,7 +89,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     def _update_check_state_path(self) -> Path:
         return self._workspace_or_raise().state_dir / "update_check_state.json"
 
-    async def run(self, args:list[str]) -> None:  # noqa: PLR0915
+    async def run(self, args:list[str]) -> None:
         _cli = importlib.import_module("kleinanzeigen_bot.cli")
         parsed = _cli.parse_args(args)
         self.command = parsed.command
@@ -119,19 +119,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             self.config_file_path = str(self.workspace.config_file)
             self.log_file_path = str(self.workspace.log_file) if self.workspace.log_file else None
 
-        def _bootstrap_runtime() -> None:
-            self.file_log = _runtime_config.configure_file_logging(
-                self.log_file_path,
-                self.workspace,
-                self.file_log,
-                self.get_version(),
-            )
-            runtime_state = _runtime_config.load_config(self.config_file_path, self.workspace, self.command)
-            self.config = runtime_state.config
-            self.categories = runtime_state.categories
-            self._timing_collector = runtime_state.timing_collector
-            _runtime_config.apply_browser_config(self.browser_config, self.config, self.workspace, self.config_file_path)
-
         try:
             # When adding/removing a case, also update runtime_config.VALID_COMMANDS.
             match self.command:
@@ -141,169 +128,25 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                 case "version":
                     print(self.get_version())
                 case "create-config":
-                    if self.workspace is None and self._workspace_mode_arg is not None:
-                        try:
-                            workspace = _xdg_paths.resolve_workspace(
-                                config_arg = self._config_arg,
-                                logfile_arg = self._logfile_arg,
-                                workspace_mode = self._workspace_mode_arg,
-                                logfile_explicitly_provided = self._logfile_explicitly_provided,
-                                log_basename = self._log_basename,
-                            )
-                            self.workspace = workspace
-                            self.config_file_path = str(workspace.config_file)
-                            self.log_file_path = str(workspace.log_file) if workspace.log_file else None
-                        except ValueError as exc:
-                            LOG.error(str(exc))
-                            sys.exit(2)
-                    _runtime_config.create_default_config(self.config_file_path, self.workspace)
-                    return
+                    self._handle_create_config()
                 case "diagnose":
-                    _bootstrap_runtime()
-                    self.diagnose_browser_issues()
-                    return
+                    self._handle_diagnose()
                 case "verify":
-                    _bootstrap_runtime()
-                    # Check for updates on startup
-                    checker = _update_checker.UpdateChecker(self.config, self._update_check_state_path)
-                    checker.check_for_updates()
-                    self.ads_selector = "all"
-                    if ads := self.load_ads(exclude_ads_with_id = False):
-                        for ad_file, ad_cfg, _ad_cfg_orig in ads:
-                            ad_file_relative = _ad_state.relative_ad_path(ad_file, self.config_file_path)
-                            publish_decision = _price_reduction.evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = AdUpdateStrategy.REPLACE)
-                            _price_reduction.log_auto_price_reduction_preview(ad_file_relative, publish_decision)
-
-                            update_decision = _price_reduction.evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = AdUpdateStrategy.MODIFY)
-                            _price_reduction.log_auto_price_reduction_preview(ad_file_relative, update_decision)
-                    LOG.info("############################################")
-                    LOG.info("DONE: No configuration errors found.")
-                    LOG.info("############################################")
+                    self._handle_verify()
                 case "update-check":
-                    # update-check uses sensible defaults and needs no config files,
-                    # no file logging, and no browser setup — skip bootstrap entirely.
-                    self.config = Config()
-                    checker = _update_checker.UpdateChecker(self.config, self._update_check_state_path)
-                    checker.check_for_updates(skip_interval_check = True)
+                    self._handle_update_check()
                 case "update-content-hash":
-                    _bootstrap_runtime()
-                    # Check for updates on startup
-                    checker = _update_checker.UpdateChecker(self.config, self._update_check_state_path)
-                    checker.check_for_updates()
-                    self.ads_selector = "all"
-                    if ads := self.load_ads(exclude_ads_with_id = False):
-                        ad_loading.update_content_hashes(ads)
-                    else:
-                        LOG.info("############################################")
-                        LOG.info("DONE: No active ads found.")
-                        LOG.info("############################################")
+                    self._handle_update_content_hash()
                 case "publish":
-                    _bootstrap_runtime()
-                    # Check for updates on startup
-                    checker = _update_checker.UpdateChecker(self.config, self._update_check_state_path)
-                    checker.check_for_updates()
-
-                    if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all", "new", "due", "changed"}):
-                        if self._ads_selector_explicit:
-                            LOG.error(
-                                'Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, new, due, changed) or numeric IDs.',
-                                self.ads_selector,
-                            )
-                            sys.exit(2)
-                        self.ads_selector = "due"
-
-                    if ads := self.load_ads():
-                        await self.create_browser_session()
-                        await self.login()
-                        await self.publish_ads(ads)
-                    else:
-                        LOG.info("############################################")
-                        LOG.info("DONE: No new/outdated ads found.")
-                        LOG.info("############################################")
+                    await self._handle_publish()
                 case "update":
-                    _bootstrap_runtime()
-
-                    if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all", "changed"}):
-                        if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, changed) or numeric IDs.', self.ads_selector)
-                            sys.exit(2)
-                        self.ads_selector = "changed"
-
-                    if ads := self.load_ads():
-                        await self.create_browser_session()
-                        await self.login()
-                        await self.update_ads(ads)
-                    else:
-                        LOG.info("############################################")
-                        LOG.info("DONE: No changed ads found.")
-                        LOG.info("############################################")
+                    await self._handle_update()
                 case "delete":
-                    _bootstrap_runtime()
-                    # Check for updates on startup
-                    checker = _update_checker.UpdateChecker(self.config, self._update_check_state_path)
-                    checker.check_for_updates()
-                    if ads := self.load_ads():
-                        await self.create_browser_session()
-                        await self.login()
-                        await delete_flow.delete_ads(
-                            web = self, root_url = self.root_url,
-                            after_delete = self.config.deleting.after_delete,
-                            delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title,
-                            ad_cfgs = ads,
-                        )
-                    else:
-                        LOG.info("############################################")
-                        LOG.info("DONE: No ads to delete found.")
-                        LOG.info("############################################")
+                    await self._handle_delete()
                 case "extend":
-                    _bootstrap_runtime()
-                    # Check for updates on startup
-                    checker = _update_checker.UpdateChecker(self.config, self._update_check_state_path)
-                    checker.check_for_updates()
-
-                    # Default to all ads if no selector provided, but reject invalid values
-                    if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all"}):
-                        if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: all or comma-separated numeric IDs.', self.ads_selector)
-                            sys.exit(2)
-                        LOG.info("Extending all ads within 8-day window...")
-                        self.ads_selector = "all"
-
-                    if ads := self.load_ads():
-                        await self.create_browser_session()
-                        await self.login()
-                        await extend_flow.extend_ads(
-                            web = self, root_url = self.root_url,
-                            ad_cfgs = ads,
-                        )
-                    else:
-                        LOG.info("############################################")
-                        LOG.info("DONE: No ads found to extend.")
-                        LOG.info("############################################")
+                    await self._handle_extend()
                 case "download":
-                    # ad IDs depends on selector
-                    if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all", "new"}):
-                        if self._ads_selector_explicit:
-                            LOG.error('Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, new) or numeric IDs.', self.ads_selector)
-                            sys.exit(2)
-                        self.ads_selector = "new"
-                    _bootstrap_runtime()
-                    if self._preserve_local_settings:
-                        self.config.download.preserve_local_settings = True
-                    # Check for updates on startup
-                    checker = _update_checker.UpdateChecker(self.config, self._update_check_state_path)
-                    checker.check_for_updates()
-                    await self.create_browser_session()
-                    await self.login()
-                    await download_flow.download_ads(
-                        web = self, config = self.config,
-                        config_file_path = self.config_file_path,
-                        workspace = self._workspace_or_raise(),
-                        ads_selector = self.ads_selector,
-                        load_ads_func = self.load_ads,
-                        root_url = self.root_url,
-                    )
-
+                    await self._handle_download()
                 case _:
                     LOG.error("Unknown command: %s", self.command)
                     sys.exit(2)
@@ -315,6 +158,192 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     await loop.run_in_executor(None, self._timing_collector.flush)
                 except Exception as exc:  # noqa: BLE001
                     LOG.warning("Timing collector flush failed: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Bootstrap and shared helpers
+    # ------------------------------------------------------------------
+
+    def _bootstrap_runtime(self) -> None:
+        self.file_log = _runtime_config.configure_file_logging(
+            self.log_file_path,
+            self.workspace,
+            self.file_log,
+            self.get_version(),
+        )
+        runtime_state = _runtime_config.load_config(self.config_file_path, self.workspace, self.command)
+        self.config = runtime_state.config
+        self.categories = runtime_state.categories
+        self._timing_collector = runtime_state.timing_collector
+        _runtime_config.apply_browser_config(self.browser_config, self.config, self.workspace, self.config_file_path)
+
+    def _check_for_updates(self) -> None:
+        """Run startup update check (browser session not needed)."""
+        checker = _update_checker.UpdateChecker(self.config, self._update_check_state_path)
+        checker.check_for_updates()
+
+    async def _open_logged_in_browser(self) -> None:
+        """Create a browser session and log in."""
+        await self.create_browser_session()
+        await self.login()
+
+    # ------------------------------------------------------------------
+    # Command handlers
+    # ------------------------------------------------------------------
+
+    def _handle_create_config(self) -> None:
+        if self.workspace is None and self._workspace_mode_arg is not None:
+            try:
+                workspace = _xdg_paths.resolve_workspace(
+                    config_arg = self._config_arg,
+                    logfile_arg = self._logfile_arg,
+                    workspace_mode = self._workspace_mode_arg,
+                    logfile_explicitly_provided = self._logfile_explicitly_provided,
+                    log_basename = self._log_basename,
+                )
+                self.workspace = workspace
+                self.config_file_path = str(workspace.config_file)
+                self.log_file_path = str(workspace.log_file) if workspace.log_file else None
+            except ValueError as exc:
+                LOG.error(str(exc))
+                sys.exit(2)
+        _runtime_config.create_default_config(self.config_file_path, self.workspace)
+
+    def _handle_diagnose(self) -> None:
+        self._bootstrap_runtime()
+        self.diagnose_browser_issues()
+
+    def _handle_verify(self) -> None:
+        self._bootstrap_runtime()
+        self._check_for_updates()
+        self.ads_selector = "all"
+        if ads := self.load_ads(exclude_ads_with_id = False):
+            for ad_file, ad_cfg, _ad_cfg_orig in ads:
+                ad_file_relative = _ad_state.relative_ad_path(ad_file, self.config_file_path)
+                publish_decision = _price_reduction.evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = AdUpdateStrategy.REPLACE)
+                _price_reduction.log_auto_price_reduction_preview(ad_file_relative, publish_decision)
+
+                update_decision = _price_reduction.evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = AdUpdateStrategy.MODIFY)
+                _price_reduction.log_auto_price_reduction_preview(ad_file_relative, update_decision)
+        LOG.info("############################################")
+        LOG.info("DONE: No configuration errors found.")
+        LOG.info("############################################")
+
+    def _handle_update_check(self) -> None:
+        # update-check uses sensible defaults and needs no config files,
+        # no file logging, and no browser setup — skip bootstrap entirely.
+        self.config = Config()
+        checker = _update_checker.UpdateChecker(self.config, self._update_check_state_path)
+        checker.check_for_updates(skip_interval_check = True)
+
+    def _handle_update_content_hash(self) -> None:
+        self._bootstrap_runtime()
+        self._check_for_updates()
+        self.ads_selector = "all"
+        if ads := self.load_ads(exclude_ads_with_id = False):
+            ad_loading.update_content_hashes(ads)
+        else:
+            LOG.info("############################################")
+            LOG.info("DONE: No active ads found.")
+            LOG.info("############################################")
+
+    async def _handle_publish(self) -> None:
+        self._bootstrap_runtime()
+        self._check_for_updates()
+
+        if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all", "new", "due", "changed"}):
+            if self._ads_selector_explicit:
+                LOG.error(
+                    'Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, new, due, changed) or numeric IDs.',
+                    self.ads_selector,
+                )
+                sys.exit(2)
+            self.ads_selector = "due"
+
+        if ads := self.load_ads():
+            await self._open_logged_in_browser()
+            await self.publish_ads(ads)
+        else:
+            LOG.info("############################################")
+            LOG.info("DONE: No new/outdated ads found.")
+            LOG.info("############################################")
+
+    async def _handle_update(self) -> None:
+        self._bootstrap_runtime()
+        # NOTE: intentionally no update check — see project safeguards
+
+        if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all", "changed"}):
+            if self._ads_selector_explicit:
+                LOG.error('Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, changed) or numeric IDs.', self.ads_selector)
+                sys.exit(2)
+            self.ads_selector = "changed"
+
+        if ads := self.load_ads():
+            await self._open_logged_in_browser()
+            await self.update_ads(ads)
+        else:
+            LOG.info("############################################")
+            LOG.info("DONE: No changed ads found.")
+            LOG.info("############################################")
+
+    async def _handle_delete(self) -> None:
+        self._bootstrap_runtime()
+        self._check_for_updates()
+        if ads := self.load_ads():
+            await self._open_logged_in_browser()
+            await delete_flow.delete_ads(
+                web = self, root_url = self.root_url,
+                after_delete = self.config.deleting.after_delete,
+                delete_old_ads_by_title = self.config.publishing.delete_old_ads_by_title,
+                ad_cfgs = ads,
+            )
+        else:
+            LOG.info("############################################")
+            LOG.info("DONE: No ads to delete found.")
+            LOG.info("############################################")
+
+    async def _handle_extend(self) -> None:
+        self._bootstrap_runtime()
+        self._check_for_updates()
+
+        # Default to all ads if no selector provided, but reject invalid values
+        if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all"}):
+            if self._ads_selector_explicit:
+                LOG.error('Invalid --ads selector: "%s". Valid values: all or comma-separated numeric IDs.', self.ads_selector)
+                sys.exit(2)
+            LOG.info("Extending all ads within 8-day window...")
+            self.ads_selector = "all"
+
+        if ads := self.load_ads():
+            await self._open_logged_in_browser()
+            await extend_flow.extend_ads(
+                web = self, root_url = self.root_url,
+                ad_cfgs = ads,
+            )
+        else:
+            LOG.info("############################################")
+            LOG.info("DONE: No ads found to extend.")
+            LOG.info("############################################")
+
+    async def _handle_download(self) -> None:
+        # ad IDs depends on selector — validate before bootstrap/config loading
+        if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all", "new"}):
+            if self._ads_selector_explicit:
+                LOG.error('Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, new) or numeric IDs.', self.ads_selector)
+                sys.exit(2)
+            self.ads_selector = "new"
+        self._bootstrap_runtime()
+        if self._preserve_local_settings:
+            self.config.download.preserve_local_settings = True
+        self._check_for_updates()
+        await self._open_logged_in_browser()
+        await download_flow.download_ads(
+            web = self, config = self.config,
+            config_file_path = self.config_file_path,
+            workspace = self._workspace_or_raise(),
+            ads_selector = self.ads_selector,
+            load_ads_func = self.load_ads,
+            root_url = self.root_url,
+        )
 
     def load_ads(self, *, ignore_inactive:bool = True, exclude_ads_with_id:bool = True) -> list[tuple[str, Ad, dict[str, Any]]]:
         """Load and validate all ad config files.

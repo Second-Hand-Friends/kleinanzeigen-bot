@@ -8,6 +8,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from ruamel.yaml import YAML as _YAML
 
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.app import KleinanzeigenBot
@@ -42,7 +43,7 @@ def mock_config_setup(test_bot:KleinanzeigenBot, tmp_path:Path) -> Generator[Non
 class TestKleinanzeigenBotInitialization:
     """Tests for run-path initialization and download plumbing."""
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("command", ["verify", "update-check", "update-content-hash", "publish", "delete", "download"])
+    @pytest.mark.parametrize("command", ["verify", "update-check", "update-content-hash", "publish", "delete", "extend", "download"])
     async def test_run_uses_workspace_state_file_for_update_checker(self, test_bot:KleinanzeigenBot, command:str, tmp_path:Path) -> None:
         """Ensure UpdateChecker is initialized with the workspace state file."""
         update_checker_calls:list[tuple[Config, Path]] = []
@@ -152,6 +153,109 @@ login:
         with patch("kleinanzeigen_bot.update_checker.UpdateChecker.check_for_updates"):
             await test_bot.run(["script.py", "verify", "--config", str(config_path), "--workspace-mode", "portable"])
         assert test_bot.config.login.username == "test"
+
+    @pytest.mark.asyncio
+    async def test_run_update_does_not_instantiate_update_checker(  # pylint: disable=unused-argument
+        self, test_bot:KleinanzeigenBot, mock_config_setup:None,
+    ) -> None:
+        """Verify update command does NOT instantiate or run UpdateChecker."""
+        update_checker_calls:list[tuple[object, object]] = []
+
+        class _DummyUpdateChecker:
+            def __init__(self, config:object, state_file:object) -> None:
+                update_checker_calls.append((config, state_file))
+
+            def check_for_updates(self, *args:object, **kwargs:object) -> None:
+                pass
+
+        with (
+            patch.object(test_bot, "load_ads", return_value = []),
+            patch("kleinanzeigen_bot.update_checker.UpdateChecker", _DummyUpdateChecker),
+        ):
+            await test_bot.run(["script.py", "update"])
+
+        assert update_checker_calls == [], "UpdateChecker should not be instantiated for the update command"
+
+    @pytest.mark.asyncio
+    async def test_run_invalid_download_selector_skips_bootstrap(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Verify download with invalid explicit --ads exits before bootstrap/config loading."""
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            "login:\n  username: test\n  password: test"
+            "\nad_defaults:\n  contact:\n    name: T\n    zipcode: '12345'"
+            "\npublishing:\n  delete_old_ads: BEFORE_PUBLISH\n  delete_old_ads_by_title: false\n",
+            encoding = "utf-8",
+        )
+        workspace = xdg_paths.Workspace.for_config(config_path, "kleinanzeigen-bot")
+
+        with (
+            patch("kleinanzeigen_bot.runtime_config.resolve_workspace", return_value = workspace),
+            patch("kleinanzeigen_bot.runtime_config.load_config") as mock_load_config,
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                await test_bot.run(["script.py", "download", "--ads=invalid"])
+            assert exc_info.value.code == 2
+            mock_load_config.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Translation integrity
+# ---------------------------------------------------------------------------
+
+
+class TestAppTranslations:
+    """Verify German translation keys exist for extracted app.py handler methods."""
+
+    def _load_translations(self) -> dict[str, object]:
+        trans_path = Path(__file__).resolve().parent.parent.parent / "src" / "kleinanzeigen_bot" / "resources" / "translations.de.yaml"
+        with open(trans_path, encoding = "utf-8") as f:
+            trans:dict[str, object] = _YAML(typ = "safe").load(f)
+        return trans
+
+    def test_handler_translation_sections_present(self) -> None:
+        """All handler methods with LOG calls have corresponding translation sections."""
+        trans = self._load_translations()
+        app_section = trans.get("kleinanzeigen_bot/app.py", {})
+        assert isinstance(app_section, dict)
+
+        # Every handler that emits LOG.* calls must have a translation section
+        expected_sections:set[str] = {
+            "_handle_verify",
+            "_handle_update_content_hash",
+            "_handle_publish",
+            "_handle_update",
+            "_handle_delete",
+            "_handle_extend",
+            "_handle_download",
+        }
+        actual_sections = {k for k in app_section if isinstance(app_section[k], dict)}
+        for section in expected_sections:
+            assert section in actual_sections, f"Missing translation section for {section}"
+
+    def test_key_handler_messages_are_translated(self) -> None:
+        """Spot-check that critical messages moved to handlers are still translated."""
+        trans = self._load_translations()
+        app_section = trans.get("kleinanzeigen_bot/app.py", {})
+        assert isinstance(app_section, dict)
+
+        # Verify messages in their new handler homes
+        verify_section = app_section.get("_handle_verify", {})
+        assert isinstance(verify_section, dict)
+        assert verify_section["DONE: No configuration errors found."] == "FERTIG: Keine Konfigurationsfehler gefunden."
+
+        update_section = app_section.get("_handle_update", {})
+        assert isinstance(update_section, dict)
+        assert update_section["DONE: No changed ads found."] == "FERTIG: Keine geänderten Anzeigen gefunden."
+
+        extend_section = app_section.get("_handle_extend", {})
+        assert isinstance(extend_section, dict)
+        assert extend_section["DONE: No ads found to extend."] == "FERTIG: Keine Anzeigen zum Verlängern gefunden."
+
+        # Verify original run section keeps only its own messages
+        run_section = app_section.get("run", {})
+        assert isinstance(run_section, dict)
+        assert "Unknown command: %s" in run_section
+        assert "DONE: No configuration errors found." not in run_section
 
 
 class TestKleinanzeigenBotAdOperations:

@@ -75,20 +75,39 @@ kleinanzeigen_bot/app.py:
     "Diagnostics capture failed during publish error handling: %s": "Diagnose-Erfassung fehlgeschlagen während der Veröffentlichung-Fehlerbehandlung: %s"
 
   run:
-    "############################################": "############################################"
-    "DONE: No configuration errors found.": "FERTIG: Keine Konfigurationsfehler gefunden."
-    "DONE: No active ads found.": "FERTIG: Keine aktiven Anzeigen gefunden."
-    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new, due, changed) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new, due, changed) oder numerische IDs."
-    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, changed) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, changed) oder numerische IDs."
-    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new) oder numerische IDs."
-    "Invalid --ads selector: \"%s\". Valid values: all or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
-    "DONE: No new/outdated ads found.": "FERTIG: Keine neuen/veralteten Anzeigen gefunden."
-    "DONE: No ads to delete found.": "FERTIG: Keine zu löschenden Anzeigen gefunden."
-    "DONE: No changed ads found.": "FERTIG: Keine geänderten Anzeigen gefunden."
-    "Extending all ads within 8-day window...": "Verlängere alle Anzeigen innerhalb des 8-Tage-Zeitfensters..."
-    "DONE: No ads found to extend.": "FERTIG: Keine Anzeigen zum Verlängern gefunden."
     "Unknown command: %s": "Unbekannter Befehl: %s"
     "Timing collector flush failed: %s": "Zeitmessdaten konnten nicht gespeichert werden: %s"
+
+  _handle_verify:
+    "############################################": "############################################"
+    "DONE: No configuration errors found.": "FERTIG: Keine Konfigurationsfehler gefunden."
+
+  _handle_update_content_hash:
+    "############################################": "############################################"
+    "DONE: No active ads found.": "FERTIG: Keine aktiven Anzeigen gefunden."
+
+  _handle_publish:
+    "############################################": "############################################"
+    "DONE: No new/outdated ads found.": "FERTIG: Keine neuen/veralteten Anzeigen gefunden."
+    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new, due, changed) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new, due, changed) oder numerische IDs."
+
+  _handle_update:
+    "############################################": "############################################"
+    "DONE: No changed ads found.": "FERTIG: Keine geänderten Anzeigen gefunden."
+    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, changed) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, changed) oder numerische IDs."
+
+  _handle_delete:
+    "############################################": "############################################"
+    "DONE: No ads to delete found.": "FERTIG: Keine zu löschenden Anzeigen gefunden."
+
+  _handle_extend:
+    "############################################": "############################################"
+    "DONE: No ads found to extend.": "FERTIG: Keine Anzeigen zum Verlängern gefunden."
+    "Extending all ads within 8-day window...": "Verlängere alle Anzeigen innerhalb des 8-Tage-Zeitfensters..."
+    "Invalid --ads selector: \"%s\". Valid values: all or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
+
+  _handle_download:
+    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new) oder numerische IDs."
 
 #################################################
 kleinanzeigen_bot/login_flow.py:
