@@ -435,151 +435,35 @@ class WebScrapingMixin:  # noqa: PLR0904
         ########################################################
         # check if an existing browser instance shall be used...
         ########################################################
-        remote_host = "127.0.0.1"
-        remote_port = 0
-        for arg in self.browser_config.arguments:
-            if arg.startswith("--remote-debugging-host="):
-                remote_host = arg.split("=", maxsplit = 1)[1]
-            if arg.startswith("--remote-debugging-port="):
-                remote_port = int(arg.split("=", maxsplit = 1)[1])
+        remote_host, remote_port = self._parse_remote_debugging_args(self.browser_config.arguments)
 
         if remote_port > 0:
-            LOG.info("Using existing browser process at %s:%s", remote_host, remote_port)
-
-            # Enhanced port checking with retry logic
-            port_available = await self._check_port_with_retry(remote_host, remote_port)
-            ensure(
-                port_available,
-                f"Browser process not reachable at {remote_host}:{remote_port}. "
-                f"Start the browser with --remote-debugging-port={remote_port} or remove this port from your config.yaml. "
-                f"Make sure the browser is running and the port is not blocked by firewall.",
-            )
-
-            try:
-                cfg = NodriverConfig(
-                    browser_executable_path = self.browser_config.binary_location  # actually not necessary but nodriver fails without
-                )
-                cfg.host = remote_host
-                cfg.port = remote_port
-                self.browser = await nodriver.start(cfg)  # type: ignore[attr-defined]
-                LOG.info("New Browser session is %s", self.browser.websocket_url)
-                return
-            except Exception as e:
-                error_msg = str(e)
-                if "root" in error_msg.lower():
-                    LOG.error("Failed to connect to browser. This error often occurs when:")
-                    LOG.error("1. Running as root user (try running as regular user)")
-                    LOG.error("2. Browser profile is locked or in use by another process")
-                    LOG.error("3. Insufficient permissions to access the browser profile")
-                    LOG.error("4. Browser is not properly started with remote debugging enabled")
-                    LOG.error("")
-                    LOG.error("Troubleshooting steps:")
-                    LOG.error("1. Close all browser instances and try again")
-                    LOG.error("2. Remove the user_data_dir configuration temporarily")
-                    LOG.error("3. Start browser manually with: %s --remote-debugging-port=%d", self.browser_config.binary_location, remote_port)
-                    LOG.error("4. Check if any antivirus or security software is blocking the connection")
-                raise
+            self.browser = await self._connect_to_remote_browser(remote_host, remote_port)
+            LOG.info("New Browser session is %s", self.browser.websocket_url)
+            return
 
         ########################################################
         # configure and initialize new browser instance...
         ########################################################
 
-        # default_browser_args: @ https://github.com/Second-Hand-Friends/nodriver/blob/b0d1f0a59cd16e0d9001f32f35a663129e403efd/nodriver/core/config.py
-        # https://peter.sh/experiments/chromium-command-line-switches/
-        # https://github.com/GoogleChrome/chrome-launcher/blob/main/docs/chrome-flags-for-tools.md
-        browser_args = [
-            # "--disable-dev-shm-usage", # https://stackoverflow.com/a/50725918/5116073
-            "--disable-crash-reporter",
-            "--disable-domain-reliability",
-            "--disable-sync",
-            "--no-experiments",
-            "--disable-search-engine-choice-screen",
-            "--disable-features=MediaRouter",
-            "--use-mock-keychain",
-            "--test-type",  # https://stackoverflow.com/a/36746675/5116073
-            # https://chromium.googlesource.com/chromium/src/+/master/net/dns/README.md#request-remapping
-            '--host-resolver-rules="MAP connect.facebook.net 127.0.0.1, MAP securepubads.g.doubleclick.net 127.0.0.1, MAP www.googletagmanager.com 127.0.0.1"',
-        ]
+        browser_args, user_data_dir_from_args = self._build_new_browser_launch_args()
+        effective_user_data_dir = await self._resolve_effective_user_data_dir(user_data_dir_from_args)
 
-        is_edge = "edge" in self.browser_config.binary_location.lower()
-
-        if is_edge:
-            os.environ["MSEDGEDRIVER_TELEMETRY_OPTOUT"] = "1"  # https://docs.microsoft.com/en-us/microsoft-edge/privacy-whitepaper/#microsoft-edge-driver
-
-        if self.browser_config.use_private_window:
-            browser_args.append("-inprivate" if is_edge else "--incognito")
-
-        if self.browser_config.profile_name:
-            LOG.info(" -> Browser profile name: %s", self.browser_config.profile_name)
-            browser_args.append(f"--profile-directory={self.browser_config.profile_name}")
-
-        user_data_dir_from_args:str | None = None
-        for browser_arg in self.browser_config.arguments:
-            LOG.info(" -> Custom Browser argument: %s", browser_arg)
-            if browser_arg.startswith("--user-data-dir="):
-                raw = browser_arg.split("=", maxsplit = 1)[1].strip().strip('"').strip("'")
-                if not raw:
-                    LOG.warning("Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir.")
-                    continue
-                user_data_dir_from_args = raw
-                continue
-            browser_args.append(browser_arg)
-
-        effective_user_data_dir = user_data_dir_from_args or self.browser_config.user_data_dir
-        if user_data_dir_from_args and self.browser_config.user_data_dir:
-            arg_path, cfg_path = await asyncio.get_running_loop().run_in_executor(
-                None,
-                _resolve_user_data_dir_paths,
-                user_data_dir_from_args,
-                self.browser_config.user_data_dir,
-            )
-            if arg_path is None or cfg_path is None or arg_path != cfg_path:
-                LOG.warning(
-                    "Configured browser.user_data_dir (%s) does not match --user-data-dir argument (%s); using the argument value.",
-                    self.browser_config.user_data_dir,
-                    user_data_dir_from_args,
-                )
         if not effective_user_data_dir and not is_test_environment:
             LOG.debug("No effective browser user_data_dir found. Browser will use its default profile location.")
         self.browser_config.user_data_dir = effective_user_data_dir
 
-        if not loggers.is_debug(LOG):
-            browser_args.append("--log-level=3")  # INFO: 0, WARNING: 1, ERROR: 2, FATAL: 3
-
         if self.browser_config.user_data_dir:
             LOG.info(" -> Browser user data dir: %s", self.browser_config.user_data_dir)
 
-        cfg = NodriverConfig(
-            headless = False,
-            browser_executable_path = self.browser_config.binary_location,
-            browser_args = browser_args,
-            user_data_dir = self.browser_config.user_data_dir,
-        )
-
-        # When --no-sandbox is in browser_args, nodriver's Config.sandbox must also be set to False.
-        # Otherwise nodriver re-adds --no-sandbox itself but still runs internal sandbox-related logic
-        # that can cause startup failures in containerized environments (Docker, LXC, etc.).
-        if any(arg == "--no-sandbox" for arg in browser_args):
-            cfg.sandbox = False
-
-        # already logged by nodriver:
-        # LOG.debug("-> Effective browser arguments: \n\t\t%s", "\n\t\t".join(cfg.browser_args))
+        cfg = self._build_nodriver_config(self.browser_config.binary_location, browser_args, effective_user_data_dir)
 
         # Enhanced profile directory handling
         if cfg.user_data_dir:
-            xdg_paths.ensure_directory(Path(cfg.user_data_dir), "browser profile directory")
-            profile_dir = os.path.join(cfg.user_data_dir, self.browser_config.profile_name or "Default")
-            os.makedirs(profile_dir, exist_ok = True)
-            prefs_file = os.path.join(profile_dir, "Preferences")
-            if not await files.exists(prefs_file):
-                LOG.info(" -> Setting chrome prefs [%s]...", prefs_file)
-                await asyncio.get_running_loop().run_in_executor(None, _write_initial_prefs, prefs_file)
+            await self._prepare_browser_profile(cfg.user_data_dir, self.browser_config.profile_name)
 
         # load extensions
-        for crx_extension in self.browser_config.extensions:
-            LOG.info(" -> Adding Browser extension: [%s]", crx_extension)
-            ensure(await files.exists(crx_extension), f"Configured extension-file [{crx_extension}] does not exist.")
-            cfg.add_extension(crx_extension)
+        await self._add_browser_extensions(cfg)
 
         try:
             self.browser = await nodriver.start(cfg)  # type: ignore[attr-defined]
@@ -603,6 +487,157 @@ class WebScrapingMixin:  # noqa: PLR0904
                 LOG.error("4. Check browser binary permissions: %s", self.browser_config.binary_location)
                 LOG.error("5. Check if any antivirus or security software is blocking the browser")
             raise
+
+    @staticmethod
+    def _parse_remote_debugging_args(arguments:Iterable[str]) -> tuple[str, int]:
+        """Parse remote debugging host and port from browser arguments."""
+        remote_host = "127.0.0.1"
+        remote_port = 0
+        for arg in arguments:
+            if arg.startswith("--remote-debugging-host="):
+                remote_host = arg.split("=", maxsplit = 1)[1]
+            if arg.startswith("--remote-debugging-port="):
+                remote_port = int(arg.split("=", maxsplit = 1)[1])
+        return remote_host, remote_port
+
+    async def _connect_to_remote_browser(self, host:str, port:int) -> Browser:
+        """Connect to an existing browser process via remote debugging."""
+        LOG.info("Using existing browser process at %s:%s", host, port)
+
+        port_available = await self._check_port_with_retry(host, port)
+        ensure(
+            port_available,
+            f"Browser process not reachable at {host}:{port}. "
+            f"Start the browser with --remote-debugging-port={port} or remove this port from your config.yaml. "
+            f"Make sure the browser is running and the port is not blocked by firewall.",
+        )
+
+        try:
+            cfg = NodriverConfig(
+                browser_executable_path = self.browser_config.binary_location  # actually not necessary but nodriver fails without
+            )
+            cfg.host = host
+            cfg.port = port
+            return await nodriver.start(cfg)  # type: ignore[attr-defined]
+        except Exception as e:
+            error_msg = str(e)
+            if "root" in error_msg.lower():
+                LOG.error("Failed to connect to browser. This error often occurs when:")
+                LOG.error("1. Running as root user (try running as regular user)")
+                LOG.error("2. Browser profile is locked or in use by another process")
+                LOG.error("3. Insufficient permissions to access the browser profile")
+                LOG.error("4. Browser is not properly started with remote debugging enabled")
+                LOG.error("")
+                LOG.error("Troubleshooting steps:")
+                LOG.error("1. Close all browser instances and try again")
+                LOG.error("2. Remove the user_data_dir configuration temporarily")
+                LOG.error("3. Start browser manually with: %s --remote-debugging-port=%d", self.browser_config.binary_location, port)
+                LOG.error("4. Check if any antivirus or security software is blocking the connection")
+            raise
+
+    def _build_new_browser_launch_args(self) -> tuple[list[str], str | None]:
+        """Build browser launch arguments and extract user_data_dir from custom args.
+
+        Returns (browser_args, user_data_dir_from_args).
+        """
+        # default_browser_args: @ https://github.com/Second-Hand-Friends/nodriver/blob/b0d1f0a59cd16e0d9001f32f35a663129e403efd/nodriver/core/config.py
+        # https://peter.sh/experiments/chromium-command-line-switches/
+        # https://github.com/GoogleChrome/chrome-launcher/blob/main/docs/chrome-flags-for-tools.md
+        browser_args:list[str] = [
+            # "--disable-dev-shm-usage", # https://stackoverflow.com/a/50725918/5116073
+            "--disable-crash-reporter",
+            "--disable-domain-reliability",
+            "--disable-sync",
+            "--no-experiments",
+            "--disable-search-engine-choice-screen",
+            "--disable-features=MediaRouter",
+            "--use-mock-keychain",
+            "--test-type",  # https://stackoverflow.com/a/36746675/5116073
+            # https://chromium.googlesource.com/chromium/src/+/master/net/dns/README.md#request-remapping
+            '--host-resolver-rules="MAP connect.facebook.net 127.0.0.1, MAP securepubads.g.doubleclick.net 127.0.0.1, MAP www.googletagmanager.com 127.0.0.1"',
+        ]
+
+        is_edge = "edge" in (self.browser_config.binary_location or "").lower()
+
+        if is_edge:
+            os.environ["MSEDGEDRIVER_TELEMETRY_OPTOUT"] = "1"  # https://docs.microsoft.com/en-us/microsoft-edge/privacy-whitepaper/#microsoft-edge-driver
+
+        if self.browser_config.use_private_window:
+            browser_args.append("-inprivate" if is_edge else "--incognito")
+
+        if self.browser_config.profile_name:
+            LOG.info(" -> Browser profile name: %s", self.browser_config.profile_name)
+            browser_args.append(f"--profile-directory={self.browser_config.profile_name}")
+
+        user_data_dir_from_args:str | None = None
+        for browser_arg in self.browser_config.arguments:
+            LOG.info(" -> Custom Browser argument: %s", browser_arg)
+            if browser_arg.startswith("--user-data-dir="):
+                raw = browser_arg.split("=", maxsplit = 1)[1].strip().strip('"').strip("'")
+                if not raw:
+                    LOG.warning("Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir.")
+                    continue
+                user_data_dir_from_args = raw
+                continue
+            browser_args.append(browser_arg)
+
+        if not loggers.is_debug(LOG):
+            browser_args.append("--log-level=3")  # INFO: 0, WARNING: 1, ERROR: 2, FATAL: 3
+
+        return browser_args, user_data_dir_from_args
+
+    async def _resolve_effective_user_data_dir(self, user_data_dir_from_args:str | None) -> str | None:
+        """Resolve the effective user data directory, handling args vs config conflicts."""
+        effective = user_data_dir_from_args or self.browser_config.user_data_dir
+        if user_data_dir_from_args and self.browser_config.user_data_dir:
+            arg_path, cfg_path = await asyncio.get_running_loop().run_in_executor(
+                None,
+                _resolve_user_data_dir_paths,
+                user_data_dir_from_args,
+                self.browser_config.user_data_dir,
+            )
+            if arg_path is None or cfg_path is None or arg_path != cfg_path:
+                LOG.warning(
+                    "Configured browser.user_data_dir (%s) does not match --user-data-dir argument (%s); using the argument value.",
+                    self.browser_config.user_data_dir,
+                    user_data_dir_from_args,
+                )
+        return effective
+
+    @staticmethod
+    def _build_nodriver_config(browser_path:str, browser_args:list[str], user_data_dir:str | None) -> NodriverConfig:
+        """Build NodriverConfig and apply sandbox setting.
+
+        When --no-sandbox is in browser_args, nodriver's Config.sandbox must also be set to False.
+        Otherwise nodriver re-adds --no-sandbox itself but still runs internal sandbox-related logic
+        that can cause startup failures in containerized environments (Docker, LXC, etc.).
+        """
+        cfg = NodriverConfig(
+            headless = False,
+            browser_executable_path = browser_path,
+            browser_args = browser_args,
+            user_data_dir = user_data_dir,
+        )
+        if any(arg == "--no-sandbox" for arg in browser_args):
+            cfg.sandbox = False
+        return cfg
+
+    async def _prepare_browser_profile(self, user_data_dir:str, profile_name:str | None) -> None:
+        """Ensure profile directory exists and write initial browser preferences."""
+        xdg_paths.ensure_directory(Path(user_data_dir), "browser profile directory")
+        profile_dir = os.path.join(user_data_dir, profile_name or "Default")
+        os.makedirs(profile_dir, exist_ok = True)
+        prefs_file = os.path.join(profile_dir, "Preferences")
+        if not await files.exists(prefs_file):
+            LOG.info(" -> Setting chrome prefs [%s]...", prefs_file)
+            await asyncio.get_running_loop().run_in_executor(None, _write_initial_prefs, prefs_file)
+
+    async def _add_browser_extensions(self, cfg:NodriverConfig) -> None:
+        """Add configured browser extensions to the nodriver config."""
+        for crx_extension in self.browser_config.extensions:
+            LOG.info(" -> Adding Browser extension: [%s]", crx_extension)
+            ensure(await files.exists(crx_extension), f"Configured extension-file [{crx_extension}] does not exist.")
+            cfg.add_extension(crx_extension)
 
     async def _check_port_with_retry(self, host:str, port:int, max_retries:int = 3, retry_delay:float = 1.0) -> bool:
         """
