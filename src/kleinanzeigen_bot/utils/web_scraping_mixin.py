@@ -734,6 +734,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                         proc.info["has_remote_debugging"] = has_remote_debugging
                         browser_processes.append(proc.info)
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    # Process ended or is not accessible; skip it.
                     pass
             return browser_processes, None
         except (psutil.Error, PermissionError) as exc:
