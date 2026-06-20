@@ -1430,60 +1430,27 @@ class TestShippingDialogFlow:
         mock_click.assert_not_awaited()
 
     # ------------------------------------------------------------------
-    # No-options branch: warn-and-skip (individual shipping removed)
+    # No-options branch: fail-fast for configured costs, platform-default for none
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_shipping_no_options_with_costs_warns_and_skips(
+    async def test_shipping_no_options_with_costs_raises(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
-        caplog:pytest.LogCaptureFixture,
     ) -> None:
-        """No shipping_options with shipping_costs: click enabled, warn, do NOT open dialog or touch individual selectors."""
-        caplog.set_level(logging.WARNING, logger = LOG.name)
+        """No shipping_options with shipping_costs: raise ValueError (fail-fast)."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "SHIPPING", "shipping_options": [], "shipping_costs": 4.95})
 
         with (
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            pytest.raises(ValueError, match = "shipping_costs.*no longer supported"),
         ):
             await set_shipping(test_bot, ad_cfg)
 
-        # Must click shipping-enabled-yes
-        enabled_yes_clicks = [
-            c for c in mock_click.await_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-shipping-enabled-yes"
-        ]
-        assert enabled_yes_clicks, "Should click shipping-enabled-yes"
-
-        # Must NOT open shipping-options dialog
-        options_clicks = [
-            c for c in mock_click.await_args_list
-            if len(c.args) >= 2 and c.args[0] == By.ID and c.args[1] == "ad-shipping-options"
-        ]
-        assert not options_clicks, "Must NOT open shipping-options dialog"
-
-        # Must NOT touch any individual-shipping selectors
-        individual_clicks = [
-            c for c in mock_click.await_args_list
-            if len(c.args) >= 2 and "ad-individual-shipping" in str(c.args[1])
-        ]
-        assert not individual_clicks, "Must NOT touch individual-shipping selectors"
-
-        # Must NOT click Fertig (no dialog to close)
-        fertig_clicks = [
-            c for c in mock_click.await_args_list
-            if len(c.args) >= 2 and "Fertig" in str(c.args[1])
-        ]
-        assert not fertig_clicks, "Must NOT click Fertig (no dialog opened)"
-
-        # Must log warning about individual shipping removed
-        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
-        assert any("Individual shipping is no longer available" in m for m in warning_messages)
-
     @pytest.mark.asyncio
-    async def test_shipping_no_options_no_costs_no_warning(
+    async def test_shipping_no_options_no_costs_platform_default(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],

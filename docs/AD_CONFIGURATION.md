@@ -246,10 +246,11 @@ special_attributes:
 shipping_type:  # one of: PICKUP, SHIPPING, NOT_APPLICABLE (default: SHIPPING)
 
 # DEPRECATED: Individual/custom shipping is no longer supported.
-# shipping_costs is kept for backward compatibility with existing configs,
-# but its value is ignored during publishing. Remove shipping_costs and use
-# predefined shipping_options instead (see below).
-shipping_costs:  # e.g. 2.95 — IGNORED during publishing; migrate to shipping_options!
+# If shipping_costs is set without shipping_options, publishing is blocked
+# with an error. Remove shipping_costs and use predefined shipping_options
+# instead (see below). shipping_costs in downloaded ads is still readable
+# for backward compatibility.
+shipping_costs:  # e.g. 2.95 — BLOCKS publishing if set without shipping_options; migrate!
 
 # Specify predefined shipping options / packages.
 # Only DHL and Hermes carrier options are valid. You can select multiple
@@ -289,7 +290,9 @@ Choose the option that matches your typical package size. If you use multiple ca
 select multiple options from the same size group.
 
 **`shipping_costs` in downloaded ads:** Extraction still reads `shipping_costs` from
-live ads for backward compatibility, but the value is **ignored** when publishing.
+live ads for backward compatibility. However, attempting to publish an ad that has
+`shipping_costs` configured without `shipping_options` will **fail with an error** —
+you must migrate to predefined `shipping_options` before publishing.
 
 
 #### Shipping Options Reference
@@ -424,7 +427,7 @@ republication_interval: 7
 
 - **Schema validation errors**: Run `kleinanzeigen-bot verify` (binary) or `pdm run app verify` (source) to see which fields fail validation.
 - **Price reduction not applying**: Confirm `auto_price_reduction.enabled` is `true`, `min_price` is set, and you are using `publish` (not `update`, unless `on_update: true`). Run `kleinanzeigen-bot verify` to preview outcomes, or add `-v` for detailed decision data including repost/day-delay state. Remember ad-level values override `ad_defaults`.
-- **Shipping configuration issues**: Use `shipping_type: SHIPPING` with non-empty `shipping_options` for predefined DHL/Hermes package shipping and direct-buy. Individual `shipping_costs` is deprecated and ignored during publishing — remove it from your config and migrate to `shipping_options` (pick options from a single size group S/M/L).
+- **Shipping configuration issues**: Use `shipping_type: SHIPPING` with non-empty `shipping_options` for predefined DHL/Hermes package shipping and direct-buy. Individual `shipping_costs` is deprecated — publishing an ad with `shipping_costs` and no `shipping_options` will fail with an error. Remove `shipping_costs` from your config and migrate to `shipping_options` (pick options from a single size group S/M/L).
 - **Category not found**: Verify the category name or ID and check any custom mappings in `config.yaml`.
 - **File naming/prefix mismatch**: Ensure ad files match your `ad_files` glob and prefix (default `ad_`).
 - **Image path resolution**: Relative paths are resolved from the ad file location; use absolute paths and check file permissions if images are not found.

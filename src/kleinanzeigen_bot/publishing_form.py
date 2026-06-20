@@ -636,27 +636,26 @@ async def set_shipping(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStrategy = 
 
         await web.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
         await set_shipping_options(web, ad_cfg, mode)
+    elif ad_cfg.shipping_costs is not None:
+        # Fail-fast: configured shipping_costs with no shipping_options will not
+        # publish safely (Kleinanzeigen defaults may not match the article).
+        raise ValueError(
+            _("Individual shipping (shipping_costs) is no longer supported. "
+              "Remove shipping_costs and configure predefined 'shipping_options' instead.")
+        )
     else:
-        # No shipping_options (and possibly only shipping_costs): enable shipping
-        # in the form but do NOT open the shipping-options dialog or touch any
-        # individual-shipping selectors (individual shipping is no longer
-        # supported by kleinanzeigen.de).
+        # No shipping_options and no shipping_costs: enable shipping in the
+        # form but do NOT open the shipping-options dialog — the ad uses
+        # Kleinanzeigen platform defaults for shipping.
         try:
             await web.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
         except TimeoutError as ex:
             LOG.debug("Shipping enabled toggle not found: %s", ex)
 
-        if ad_cfg.shipping_costs is not None:
-            LOG.warning(
-                "Individual shipping is no longer available on kleinanzeigen.de. "
-                "shipping_costs=%.2f is ignored. Use predefined 'shipping_options' instead.",
-                ad_cfg.shipping_costs,
-            )
-        else:
-            LOG.debug(
-                "No shipping options and no shipping_costs configured; "
-                "shipping is enabled at the form level but no carrier/package is selected."
-            )
+        LOG.debug(
+            "No shipping options and no shipping_costs configured; "
+            "shipping is enabled at the form level but no carrier/package is selected."
+        )
 
 
 async def set_shipping_options(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:

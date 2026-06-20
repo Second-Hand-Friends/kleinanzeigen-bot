@@ -126,7 +126,7 @@ ad_defaults:
   price_type: NEGOTIABLE  # one of: FIXED, NEGOTIABLE, GIVE_AWAY, NOT_APPLICABLE
   shipping_type: SHIPPING  # one of: PICKUP, SHIPPING, NOT_APPLICABLE
   # NOTE: shipping_options must be configured per-ad, not as defaults
-  # shipping_costs is also per-ad (DEPRECATED — individual shipping removed, value is ignored during publishing)
+  # shipping_costs is also per-ad (DEPRECATED — individual shipping removed, publishing fails if set without shipping_options)
   sell_directly: false  # requires shipping_type SHIPPING, non-empty shipping_options, and price_type FIXED or NEGOTIABLE
   contact:
     name: ""

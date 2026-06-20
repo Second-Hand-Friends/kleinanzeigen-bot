@@ -285,8 +285,8 @@ kleinanzeigen_bot/publishing_form.py:
     "Shipping combobox button has no id attribute": "Versand-Combobox-Button hat kein ID-Attribut"
     "Shipping fieldset is rendered, but the pickup radio is missing; page may not be fully loaded.": "Das Versand-Fieldset wird gerendert, aber die Abholungs-Option fehlt; die Seite wurde möglicherweise nicht vollständig geladen."
     "Unsupported shipping_type: %s": "Nicht unterstützter shipping_type: %s"
-    ? "Individual shipping is no longer available on kleinanzeigen.de. shipping_costs=%.2f is ignored. Use predefined 'shipping_options' instead."
-    : "Individueller Versand ist auf kleinanzeigen.de nicht mehr verfügbar. shipping_costs=%.2f wird ignoriert. Verwenden Sie stattdessen vordefinierte 'shipping_options'."
+    ? "Individual shipping (shipping_costs) is no longer supported. Remove shipping_costs and configure predefined 'shipping_options' instead."
+    : "Individueller Versand (shipping_costs) wird nicht mehr unterstützt. Entferne shipping_costs und konfiguriere stattdessen vordefinierte 'shipping_options'."
 
   set_shipping_options:
     "Failed to configure shipping options in dialog!": "Versandoptionen konnten im Dialog nicht konfiguriert werden!"
