@@ -28,6 +28,8 @@ For full JSON schema with IDE autocompletion support, see:
 
 - [schemas/ad.schema.json](https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/ad.schema.json)
 
+Looking for shipping setup? See [Shipping Configuration](#shipping-configuration), including the [Shipping Options Reference](#shipping-options-reference).
+
 📖 **[Complete Main Configuration Reference →](CONFIGURATION.md)**
 
 Full documentation for `config.yaml` including all options, timeouts, browser settings, update checks, and ad_defaults.
