@@ -93,6 +93,7 @@ def __get_message_template(error_code:str) -> str | None:  # noqa: C901  # gener
     # https://github.com/pydantic/pydantic-core/blob/d03bf4a01ca3b378cc8590bd481f307e82115bc6/src/errors/types.rs#L477
     # ruff: noqa: PLR0911 Too many return statements
     # ruff: noqa: PLR0912 Too many branches
+    # ruff: noqa: PLR0915 Too many statements
     # ruff: noqa: E701 Multiple statements on one line (colon)
     match error_code:
         case "no_such_attribute": return _("Object has no attribute '{attribute}'")
