@@ -18,6 +18,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock, Mock, mock_open, patch
 import nodriver
 import psutil
 import pytest
+from nodriver.core.connection import ProtocolException
 from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
 
@@ -446,6 +447,19 @@ class TestWebScrapingErrorHandling:
 
         # Test network error
         with pytest.raises(Exception, match = "Network error"):
+            await web_scraper.web_request("https://example.com")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad_response", [None, "boom", 42, ["not", "a", "dict"], {"foo": "bar"}])
+    async def test_web_request_non_dict_response_raises_protocol_exception(
+        self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage, bad_response:object,
+    ) -> None:
+        """A non-dict / missing-statusCode response (e.g. CDP ExceptionDetails when the page
+        context is torn down mid-navigation) must raise a catchable ProtocolException rather
+        than a TypeError that would abort an entire publish batch."""
+        mock_page.evaluate.return_value = bad_response
+
+        with pytest.raises(ProtocolException):
             await web_scraper.web_request("https://example.com")
 
     @pytest.mark.asyncio

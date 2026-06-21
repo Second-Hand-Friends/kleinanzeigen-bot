@@ -1533,6 +1533,14 @@ class WebScrapingMixin:  # noqa: PLR0904
         """)
         if isinstance(valid_response_codes, int):
             valid_response_codes = [valid_response_codes]
+        # web_execute may return a CDP ExceptionDetails (or None) instead of the
+        # expected dict when the page context is torn down mid-navigation. Treat
+        # that as a transient protocol failure so the publish retry loop skips the
+        # ad instead of crashing the whole batch with a TypeError.
+        if not isinstance(response, dict) or "statusCode" not in response:
+            raise ProtocolException(
+                f"Unexpected response for HTTP {method} to {url}: {response!r}"
+            )
         ensure(
             response["statusCode"] in valid_response_codes,
             f'Invalid response "{response["statusCode"]} {response["statusMessage"]}" received for HTTP {method} to {url}',
