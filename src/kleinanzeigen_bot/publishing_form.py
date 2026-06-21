@@ -469,6 +469,12 @@ async def set_pricing_fields(web:WebScrapingMixin, ad_cfg:Ad, ad_defaults:AdDefa
         quick_dom = web.timeout("quick_dom")
         if ad_cfg.shipping_type == "SHIPPING":
             if sell_directly and price_type in {"FIXED", "NEGOTIABLE"}:
+                # Publishing guard: predefined shipping_options are required for direct-buy.
+                # Model validator catches most cases; this is a defensive check in publishing.
+                if not ad_cfg.shipping_options:
+                    raise ValueError(
+                        _("Direct-buy (sell_directly) requires predefined 'shipping_options'. 'shipping_costs' alone is not sufficient.")
+                    )
                 buy_now_true = await web.web_probe(By.ID, "ad-buy-now-true", timeout = quick_dom)
                 if buy_now_true is None:
                     LOG.warning("Direct-buy (sell_directly) is not available for the selected category. Skipping.")
@@ -630,77 +636,26 @@ async def set_shipping(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStrategy = 
 
         await web.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
         await set_shipping_options(web, ad_cfg, mode)
+    elif ad_cfg.shipping_costs is not None:
+        # Fail-fast: configured shipping_costs with no shipping_options will not
+        # publish safely (Kleinanzeigen defaults may not match the article).
+        raise ValueError(
+            _("Individual shipping (shipping_costs) is no longer supported. "
+              "Remove shipping_costs and configure predefined 'shipping_options' instead.")
+        )
     else:
-        # Ensure shipping is enabled before opening the dialog (may already be selected)
+        # No shipping_options and no shipping_costs: enable shipping in the
+        # form but do NOT open the shipping-options dialog — the ad uses
+        # Kleinanzeigen platform defaults for shipping.
         try:
             await web.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
-            await web.web_sleep(500, 800)
         except TimeoutError as ex:
-            LOG.debug("Shipping enabled toggle not found before options dialog: %s", ex)
+            LOG.debug("Shipping enabled toggle not found: %s", ex)
 
-        # no options. only costs. Set custom shipping cost
-        try:
-            await web.web_click(By.ID, "ad-shipping-options")
-        except TimeoutError as ex:
-            LOG.debug(ex, exc_info = True)
-            LOG.warning("Shipping options dialog entry not found. Legacy '.versand_s' select UI is no longer supported and requires dedicated rebuild.")
-            raise TimeoutError(_("Unable to open shipping options dialog!")) from ex
-
-        try:
-            # when "Andere Versandmethoden" is not available, then we are already on the individual page
-            await web.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
-        except TimeoutError:
-            # Dialog option not present; already on the individual shipping page.
-            pass
-
-        # only click on "Individueller Versand" when the price input is not available, otherwise it's already checked
-        # (important for mode = UPDATE)
-        individual_price_elem = await web.web_probe(By.ID, "ad-individual-shipping-price", timeout = short_timeout)
-        if individual_price_elem is None:
-            # Input not visible yet; click the individual shipping option.
-            try:
-                await web.web_click(By.ID, "ad-individual-shipping-checkbox-control")
-            except TimeoutError as ex:
-                LOG.debug(ex, exc_info = True)
-                raise TimeoutError(_("Unable to select individual shipping option!")) from ex
-
-        if ad_cfg.shipping_costs is not None:
-            price_str = str(ad_cfg.shipping_costs).replace(".", ",")
-            # Native DOM setter + React-aware events: send_keys gets wiped by
-            # React re-render after the ad-individual-shipping-checkbox-control click.
-            # A re-render between web_find and web_execute inside web_set_input_value can
-            # also leave the write as a silent no-op, so verify and retry before "Fertig".
-            max_attempts = 3
-            for attempt in range(1, max_attempts + 1):
-                try:
-                    await web.web_set_input_value("ad-individual-shipping-price", price_str)
-                    actual = await web.web_execute("document.getElementById('ad-individual-shipping-price')?.value")
-                except TimeoutError as ex:
-                    # A re-render landing on web_find inside web_set_input_value or on the
-                    # readback web_execute can raise here; treat either as a transient
-                    # failure so the outer loop can retry instead of bailing.
-                    LOG.debug(ex, exc_info = True)
-                    if attempt >= max_attempts:
-                        raise TimeoutError(_("Unable to set shipping price!")) from ex
-                    await web.web_sleep(300, 500)
-                    continue
-                if actual == price_str:
-                    break
-                if attempt >= max_attempts:
-                    raise TimeoutError(_("Unable to set shipping price!"))
-                LOG.debug("shipping price not persisted (attempt %d/%d): got %r, expected %r", attempt, max_attempts, actual, price_str)
-                await web.web_sleep(300, 500)
-        else:
-            LOG.debug(
-                "Shipping option 'ad-individual-shipping-checkbox-control' selected but no shipping_costs provided; "
-                "leaving field 'ad-individual-shipping-price' unchanged."
-            )
-
-        try:
-            await web.web_click(By.XPATH, '//button[contains(., "Fertig")]')
-        except TimeoutError as ex:
-            LOG.debug(ex, exc_info = True)
-            raise TimeoutError(_("Unable to close shipping dialog!")) from ex
+        LOG.debug(
+            "No shipping options and no shipping_costs configured; "
+            "shipping is enabled at the form level but no carrier/package is selected."
+        )
 
 
 async def set_shipping_options(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:

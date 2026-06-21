@@ -326,6 +326,8 @@
         }
       ],
       "default": null,
+      "deprecated": true,
+      "description": "DEPRECATED: Individual/custom shipping is no longer supported. Use shipping_options instead.",
       "title": "Shipping Costs"
     },
     "shipping_options": {

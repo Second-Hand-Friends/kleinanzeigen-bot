@@ -187,7 +187,11 @@ class AdPartial(ContextualModel):
     repost_count:int = Field(default = 0, ge = 0, description = "number of successful publications for this ad (persisted between runs)")
     price_reduction_count:int = Field(default = 0, ge = 0, description = "internal counter: number of automatic price reductions already applied")
     shipping_type:Literal["PICKUP", "SHIPPING", "NOT_APPLICABLE"] | None = _OPTIONAL()
-    shipping_costs:float | None = _OPTIONAL()
+    shipping_costs:float | None = Field(
+        default = None,
+        json_schema_extra = {"deprecated": True},
+        description = "DEPRECATED: Individual/custom shipping is no longer supported. Use shipping_options instead.",
+    )
     shipping_options:list[ShippingOption] | None = _OPTIONAL()
     sell_directly:bool | None = _OPTIONAL()
     images:list[str] | None = _OPTIONAL()
@@ -257,7 +261,12 @@ class AdPartial(ContextualModel):
         return values
 
     def update_content_hash(self) -> Self:
-        """Calculate and updates the content_hash value for user-modifiable fields of the ad."""
+        """Calculate and updates the content_hash value for user-modifiable fields of the ad.
+
+        Note: shipping_costs is intentionally included in the content hash during
+        the deprecation phase to avoid unnecessary re-publishes for users with
+        legacy configs. A future cleanup phase may remove it.
+        """
 
         # 1) Dump to a plain dict, excluding the metadata fields:
         raw = self.model_dump(
@@ -441,4 +450,27 @@ class Ad(AdPartial):
         # Validate the final Ad object after merging with defaults
         # This ensures the merged configuration is valid even if raw YAML had None values
         _validate_auto_price_reduction_constraints(self.price, self.auto_price_reduction)
+        return self
+
+    @model_validator(mode = "after")
+    def _validate_sell_directly(self) -> "Ad":
+        # Direct-buy rules apply only to non-WANTED ads.
+        # WANTED ads with sell_directly: true are silently accepted
+        # (publishing skips direct-buy handling for them).
+        if self.type == "WANTED" or not self.sell_directly:
+            return self
+
+        if self.shipping_type != "SHIPPING":
+            raise ValueError(
+                _("sell_directly requires shipping_type to be SHIPPING")
+            )
+        if not self.shipping_options:
+            raise ValueError(
+                _("sell_directly requires at least one predefined shipping_options entry (shipping_costs alone is not sufficient)")
+            )
+        if self.price_type not in {"FIXED", "NEGOTIABLE"}:
+            raise ValueError(
+                _("sell_directly requires price_type to be FIXED or NEGOTIABLE")
+            )
+
         return self

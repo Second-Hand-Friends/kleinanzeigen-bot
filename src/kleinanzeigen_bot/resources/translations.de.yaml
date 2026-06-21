@@ -258,6 +258,7 @@ kleinanzeigen_bot/publishing_form.py:
   set_pricing_fields:
     "Failed to set price type '%s'": "Fehler beim Setzen des Preistyps '%s'"
     "Direct-buy (sell_directly) is not available for the selected category. Skipping.": "Direktkauf (sell_directly) ist für die ausgewählte Kategorie nicht verfügbar. Überspringe."
+    "Direct-buy (sell_directly) requires predefined 'shipping_options'. 'shipping_costs' alone is not sufficient.": "Direktkauf (sell_directly) erfordert vordefinierte 'shipping_options'. 'shipping_costs' allein ist nicht ausreichend."
 
   upload_images:
     " -> found %s": "-> %s gefunden"
@@ -284,12 +285,8 @@ kleinanzeigen_bot/publishing_form.py:
     "Shipping combobox button has no id attribute": "Versand-Combobox-Button hat kein ID-Attribut"
     "Shipping fieldset is rendered, but the pickup radio is missing; page may not be fully loaded.": "Das Versand-Fieldset wird gerendert, aber die Abholungs-Option fehlt; die Seite wurde möglicherweise nicht vollständig geladen."
     "Unsupported shipping_type: %s": "Nicht unterstützter shipping_type: %s"
-    ? "Shipping options dialog entry not found. Legacy '.versand_s' select UI is no longer supported and requires dedicated rebuild."
-    : "Einstieg in den Versandoptionen-Dialog nicht gefunden. Die alte '.versand_s'-Select-UI wird nicht mehr unterstützt und muss gezielt neu umgesetzt werden."
-    "Unable to open shipping options dialog!": "Versandoptionen-Dialog konnte nicht geöffnet werden!"
-    "Unable to select individual shipping option!": "Individuelle Versandoption konnte nicht ausgewählt werden!"
-    "Unable to set shipping price!": "Versandpreis konnte nicht gesetzt werden!"
-    "Unable to close shipping dialog!": "Versanddialog konnte nicht geschlossen werden!"
+    ? "Individual shipping (shipping_costs) is no longer supported. Remove shipping_costs and configure predefined 'shipping_options' instead."
+    : "Individueller Versand (shipping_costs) wird nicht mehr unterstützt. Entferne shipping_costs und konfiguriere stattdessen vordefinierte 'shipping_options'."
 
   set_shipping_options:
     "Failed to configure shipping options in dialog!": "Versandoptionen konnten im Dialog nicht konfiguriert werden!"
@@ -945,6 +942,10 @@ kleinanzeigen_bot/model/ad_model.py:
     "title length exceeds {max} characters": "Die Titellänge überschreitet {max} Zeichen"
   _calculate_auto_price_internal:
     "min_price must be specified when auto_price_reduction is enabled": "min_price muss angegeben werden, wenn auto_price_reduction aktiviert ist"
+  _validate_sell_directly:
+    "sell_directly requires shipping_type to be SHIPPING": "sell_directly erfordert shipping_type: SHIPPING"
+    "sell_directly requires at least one predefined shipping_options entry (shipping_costs alone is not sufficient)": "sell_directly erfordert mindestens einen vordefinierten shipping_options Eintrag (shipping_costs allein reicht nicht aus)"
+    "sell_directly requires price_type to be FIXED or NEGOTIABLE": "sell_directly erfordert price_type: FIXED oder NEGOTIABLE"
 
 #################################################
 kleinanzeigen_bot/model/update_check_state.py:
