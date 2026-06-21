@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio, enum, inspect, json, os, platform, secrets, shutil, subprocess, urllib.request  # isort: skip # noqa: S404
+import asyncio, enum, inspect, ipaddress, json, os, platform, secrets, shutil, subprocess, urllib.request  # isort: skip # noqa: S404
 from collections.abc import Awaitable, Callable, Coroutine, Iterable, Sequence
 from gettext import gettext as _
 from pathlib import Path, PureWindowsPath
@@ -44,6 +44,23 @@ _KEY_VALUE_PAIR_SIZE = 2
 _PRIMARY_SELECTOR_BUDGET_RATIO:Final[float] = 0.70
 _BACKUP_SELECTOR_BUDGET_CAP_SECONDS:Final[float] = 0.75
 _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS:Final[float] = 0.25
+
+
+def _format_url_host(host:str) -> str:
+    """Format host for URL, bracketing IPv6 addresses only when needed.
+
+    Args:
+        host: The raw host string (e.g. '127.0.0.1', '::1', '[::1]')
+
+    Returns:
+        Host string safe for use in http://host:port/path URLs.
+        IPv6 addresses are bracketed; already-bracketed values are preserved.
+    """
+    host = host.strip()
+    if ":" in host:
+        host = host.strip("[]")
+        return f"[{host}]"
+    return host
 
 
 def _resolve_user_data_dir_paths(arg_value:str, config_value:str) -> tuple[Any, Any]:
@@ -686,14 +703,43 @@ class WebScrapingMixin:  # noqa: PLR0904
                 return int(arg.split("=", maxsplit = 1)[1])
         return 0
 
+    def _diagnostic_remote_debugging_endpoint(self) -> tuple[str, int]:
+        """Parse remote debugging host and port for diagnostics only.
+
+        Uses first-wins semantics for both host and port, matching the
+        existing first-port-wins behavior of _configured_remote_debugging_port().
+        Does NOT change browser launch or remote connection behavior.
+
+        Returns:
+            (remote_host, remote_port) with defaults ("127.0.0.1", 0).
+
+        Raises:
+            ValueError for invalid port values.
+        """
+        remote_host = "127.0.0.1"
+        remote_port = 0
+        host_assigned = False
+        port_assigned = False
+        for arg in self.browser_config.arguments:
+            if not host_assigned and arg.startswith("--remote-debugging-host="):
+                remote_host = arg.split("=", maxsplit = 1)[1]
+                host_assigned = True
+            if not port_assigned and arg.startswith("--remote-debugging-port="):
+                remote_port = int(arg.split("=", maxsplit = 1)[1])
+                port_assigned = True
+            if host_assigned and port_assigned:
+                break
+        return remote_host, remote_port
+
     @staticmethod
-    def _remote_debugging_api_browser(remote_port:int, probe_timeout:float) -> tuple[str | None, Exception | None]:
-        """Probe the remote debugging API at 127.0.0.1.
+    def _remote_debugging_api_browser(remote_host:str, remote_port:int, probe_timeout:float) -> tuple[str | None, Exception | None]:
+        """Probe the remote debugging API.
 
         Returns (browser_string, None) on success or (None, exception) on failure.
         """
         try:
-            response = urllib.request.urlopen(f"http://127.0.0.1:{remote_port}/json/version", timeout = probe_timeout)
+            formatted_host = _format_url_host(remote_host)
+            response = urllib.request.urlopen(f"http://{formatted_host}:{remote_port}/json/version", timeout = probe_timeout)
             version_info = json.loads(response.read().decode())
             return version_info.get("Browser", "Unknown"), None
         except Exception as exc:
@@ -776,17 +822,36 @@ class WebScrapingMixin:  # noqa: PLR0904
             else:
                 LOG.info("(info) User data directory does not exist (will be created): %s", self.browser_config.user_data_dir)
 
-        # Check for remote debugging port
-        remote_port = self._configured_remote_debugging_port()
+        # Check for remote debugging port - use diagnostics parser
+        remote_host, remote_port = self._diagnostic_remote_debugging_endpoint()
 
         if remote_port > 0:
-            LOG.info("(info) Remote debugging port configured: %d", remote_port)
-            if net.is_port_open("127.0.0.1", remote_port):
-                LOG.info("(ok) Remote debugging port is open")
+            # Security/documentation guard: warn when probing non-loopback host
+            _probed_host_normalized = remote_host.strip().strip("[]")
+            _is_non_loopback_host = True
+            if _probed_host_normalized.lower() == "localhost":
+                _is_non_loopback_host = False
+            else:
+                try:
+                    _addr = ipaddress.ip_address(_probed_host_normalized)
+                    _is_non_loopback_host = not _addr.is_loopback
+                except ValueError:
+                    # DNS name - treat as potentially remote
+                    pass
+            if _is_non_loopback_host:
+                LOG.warning(
+                    "(warn) Remote debugging diagnostics will probe configured host: %s:%d",
+                    remote_host,
+                    remote_port,
+                )
+
+            LOG.info("(info) Remote debugging port configured: %d on host %s", remote_port, remote_host)
+            if net.is_port_open(remote_host, remote_port):
+                LOG.info("(ok) Remote debugging port is open on %s:%d", remote_host, remote_port)
                 # Try to get more information about the debugging endpoint
                 try:
                     probe_timeout = self.effective_timeout("chrome_remote_probe")
-                    browser_fact, exc = self._remote_debugging_api_browser(remote_port, probe_timeout)
+                    browser_fact, exc = self._remote_debugging_api_browser(remote_host, remote_port, probe_timeout)
                 except Exception as e:
                     exc = e
                     browser_fact = None
@@ -796,7 +861,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                     LOG.warning("(fail) Remote debugging port is open but API not accessible: %s", str(exc))
                     LOG.info("  This might indicate a browser update issue or configuration problem")
             else:
-                LOG.info("(info) Remote debugging port is not open")
+                LOG.info("(info) Remote debugging port is not open on %s:%d", remote_host, remote_port)
 
         # Check for running browser processes
         target_browser_name = self._target_browser_name()
@@ -822,7 +887,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 LOG.error("(fail) Running as root - this can cause browser issues")
 
         # Chrome version detection and validation
-        self._diagnose_chrome_version_issues(remote_port)
+        self._diagnose_chrome_version_issues(remote_port, remote_host)
 
         LOG.info("=== End Diagnostics ===")
 
@@ -1905,12 +1970,13 @@ class WebScrapingMixin:  # noqa: PLR0904
 
         LOG.info(" -> %s 136+ configuration validation passed", version_info.browser_name)
 
-    def _diagnose_chrome_version_issues(self, remote_port:int) -> None:
+    def _diagnose_chrome_version_issues(self, remote_port:int, remote_host:str = "127.0.0.1") -> None:
         """
         Diagnose Chrome version issues and provide specific recommendations.
 
         Args:
             remote_port: Remote debugging port (0 if not configured)
+            remote_host: Remote debugging host (default "127.0.0.1")
         """
         # Skip diagnostics in test environments to avoid subprocess calls
         if os.environ.get("PYTEST_CURRENT_TEST"):
@@ -1922,7 +1988,7 @@ class WebScrapingMixin:  # noqa: PLR0904
             binary_path = self.browser_config.binary_location
             diagnostic_info = get_chrome_version_diagnostic_info(
                 binary_path = binary_path,
-                remote_host = "127.0.0.1",
+                remote_host = _format_url_host(remote_host),
                 remote_port = remote_port if remote_port > 0 else None,
                 remote_timeout = self.effective_timeout("chrome_remote_debugging"),
                 binary_timeout = self.effective_timeout("chrome_binary_detection"),

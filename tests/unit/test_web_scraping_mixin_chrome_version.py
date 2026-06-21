@@ -384,8 +384,76 @@ class TestWebScrapingMixinIntegration:
         # Test diagnostics
         scraper.diagnose_browser_issues()
 
-        # Verify Chrome diagnostics was called
-        mock_diagnose.assert_called_once_with(9222)
+        # Verify Chrome diagnostics was called with default host
+        mock_diagnose.assert_called_once_with(9222, "127.0.0.1")
+
+    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.get_chrome_version_diagnostic_info")
+    def test_diagnose_browser_issues_chrome_version_uses_configured_host(
+        self, mock_get_diagnostic:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test that Chrome version diagnostics receives configured remote host."""
+        # Setup mock return
+        mock_get_diagnostic.return_value = {
+            "binary_detection": None,
+            "remote_detection": None,
+            "chrome_136_plus_detected": False,
+            "recommendations": [],
+        }
+
+        # Configure scraper with explicit remote debugging host
+        scraper.browser_config.binary_location = "/usr/bin/chrome"
+        scraper.browser_config.arguments = ["--remote-debugging-host=10.0.0.5", "--remote-debugging-port=9222"]
+
+        # Temporarily unset PYTEST_CURRENT_TEST to allow diagnostics to run
+        original_env = os.environ.get("PYTEST_CURRENT_TEST")
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            del os.environ["PYTEST_CURRENT_TEST"]
+
+        try:
+            with patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = False):
+                scraper.diagnose_browser_issues()
+
+            # Verify get_chrome_version_diagnostic_info was called with configured host
+            call_kwargs = mock_get_diagnostic.call_args[1]  # keyword arguments
+            assert call_kwargs["remote_host"] == "10.0.0.5"
+        finally:
+            # Restore environment variable
+            if original_env is not None:
+                os.environ["PYTEST_CURRENT_TEST"] = original_env
+
+    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.get_chrome_version_diagnostic_info")
+    def test_diagnose_browser_issues_chrome_version_ipv6_host(
+        self, mock_get_diagnostic:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test that Chrome version diagnostics brackets IPv6 host (::1 -> [::1])."""
+        # Setup mock return
+        mock_get_diagnostic.return_value = {
+            "binary_detection": None,
+            "remote_detection": None,
+            "chrome_136_plus_detected": False,
+            "recommendations": [],
+        }
+
+        # Configure scraper with IPv6 remote debugging host
+        scraper.browser_config.binary_location = "/usr/bin/chrome"
+        scraper.browser_config.arguments = ["--remote-debugging-host=::1", "--remote-debugging-port=9222"]
+
+        # Temporarily unset PYTEST_CURRENT_TEST to allow diagnostics to run
+        original_env = os.environ.get("PYTEST_CURRENT_TEST")
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            del os.environ["PYTEST_CURRENT_TEST"]
+
+        try:
+            with patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = False):
+                scraper.diagnose_browser_issues()
+
+            # Verify get_chrome_version_diagnostic_info received bracketed IPv6 host
+            call_kwargs = mock_get_diagnostic.call_args[1]  # keyword arguments
+            assert call_kwargs["remote_host"] == "[::1]"
+        finally:
+            # Restore environment variable
+            if original_env is not None:
+                os.environ["PYTEST_CURRENT_TEST"] = original_env
 
     def test_backward_compatibility_old_configs_still_work(self, no_pytest_guard:None) -> None:
         """Test that old configurations without Chrome 136+ validation still work."""

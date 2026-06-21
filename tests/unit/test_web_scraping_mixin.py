@@ -23,7 +23,7 @@ from nodriver.core.tab import Tab as Page
 
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import files, loggers
-from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is, WebScrapingMixin, _is_admin  # noqa: PLC2701
+from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is, WebScrapingMixin, _format_url_host, _is_admin  # noqa: PLC2701
 
 
 class ConfigProtocol(Protocol):
@@ -1968,8 +1968,8 @@ class TestWebScrapingDiagnostics:
             scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
             scraper_with_config.diagnose_browser_issues()
 
-            assert "(info) Remote debugging port configured: 9222" in caplog.text
-            assert "(ok) Remote debugging port is open" in caplog.text
+            assert "(info) Remote debugging port configured: 9222 on host 127.0.0.1" in caplog.text
+            assert "(ok) Remote debugging port is open on 127.0.0.1:9222" in caplog.text
             assert "(ok) Remote debugging API accessible - Browser: Chrome/120.0.0.0" in caplog.text
 
     def test_diagnose_browser_issues_remote_debugging_port_configured_open_api_fails(
@@ -1983,8 +1983,8 @@ class TestWebScrapingDiagnostics:
             scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
             scraper_with_config.diagnose_browser_issues()
 
-            assert "(info) Remote debugging port configured: 9222" in caplog.text
-            assert "(ok) Remote debugging port is open" in caplog.text
+            assert "(info) Remote debugging port configured: 9222 on host 127.0.0.1" in caplog.text
+            assert "(ok) Remote debugging port is open on 127.0.0.1:9222" in caplog.text
             assert "(fail) Remote debugging port is open but API not accessible: Connection refused" in caplog.text
             assert "This might indicate a browser update issue or configuration problem" in caplog.text
 
@@ -1996,8 +1996,8 @@ class TestWebScrapingDiagnostics:
             scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
             scraper_with_config.diagnose_browser_issues()
 
-            assert "(info) Remote debugging port configured: 9222" in caplog.text
-            assert "(info) Remote debugging port is not open" in caplog.text
+            assert "(info) Remote debugging port configured: 9222 on host 127.0.0.1" in caplog.text
+            assert "(info) Remote debugging port is not open on 127.0.0.1:9222" in caplog.text
 
     def test_diagnose_browser_issues_remote_debugging_port_not_configured(
         self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
@@ -2208,8 +2208,8 @@ class TestWebScrapingDiagnostics:
             assert "(ok) Browser binary is executable" in caplog.text
             assert f"(ok) User data directory exists: {test_dir}" in caplog.text
             assert "(ok) User data directory is readable and writable" in caplog.text
-            assert "(info) Remote debugging port configured: 9222" in caplog.text
-            assert "(ok) Remote debugging port is open" in caplog.text
+            assert "(info) Remote debugging port configured: 9222 on host 127.0.0.1" in caplog.text
+            assert "(ok) Remote debugging port is open on 127.0.0.1:9222" in caplog.text
             assert "(ok) Remote debugging API accessible - Browser: Chrome/120.0.0.0" in caplog.text
             assert "(info) No browser processes currently running" in caplog.text
             # Linux platform detection was removed - no specific message expected
@@ -2217,7 +2217,7 @@ class TestWebScrapingDiagnostics:
             assert "=== End Diagnostics ===" in caplog.text
 
     def test_diagnose_browser_issues_remote_debugging_host_configured(self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
-        """Test diagnostic ignores configured remote debugging host and uses 127.0.0.1."""
+        """Test diagnostic uses configured remote debugging host."""
         with (
             patch("os.path.exists", return_value = True),
             patch("os.access", return_value = True),
@@ -2236,11 +2236,74 @@ class TestWebScrapingDiagnostics:
 
             scraper_with_config.diagnose_browser_issues()
 
-            assert "(info) Remote debugging port configured: 9222" in caplog.text
-            assert "(ok) Remote debugging port is open" in caplog.text
-            # Verify diagnostics ignores configured host and uses 127.0.0.1
-            mock_is_port_open.assert_called_with("127.0.0.1", 9222)
-            mock_urlopen.assert_called_with("http://127.0.0.1:9222/json/version", timeout = ANY)
+            assert "(info) Remote debugging port configured: 9222 on host 192.168.1.100" in caplog.text
+            assert "(ok) Remote debugging port is open on 192.168.1.100:9222" in caplog.text
+            # Verify diagnostics uses configured host instead of 127.0.0.1
+            mock_is_port_open.assert_called_with("192.168.1.100", 9222)
+            mock_urlopen.assert_called_with("http://192.168.1.100:9222/json/version", timeout = ANY)
+
+    def test_diagnose_browser_issues_remote_debugging_host_10_dot_0_dot_0_5(
+        self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test diagnostics uses --remote-debugging-host=10.0.0.5 for port and API probes."""
+        with (
+            patch("os.path.exists", return_value = True),
+            patch("os.access", return_value = True),
+            patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True) as mock_is_port_open,
+            patch("urllib.request.urlopen") as mock_urlopen,
+            patch("psutil.process_iter", return_value = []),
+            patch("platform.system", return_value = "Linux"),
+            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
+            patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
+        ):
+            mock_response = Mock()
+            mock_response.read.return_value = b'{"Browser": "Chrome/120.0.0.0"}'
+            mock_urlopen.return_value = mock_response
+
+            scraper_with_config.browser_config.arguments = ["--remote-debugging-host=10.0.0.5", "--remote-debugging-port=9222"]
+
+            scraper_with_config.diagnose_browser_issues()
+
+            # Security guard warning should be present for non-loopback host
+            assert "(warn) Remote debugging diagnostics will probe configured host: 10.0.0.5:9222" in caplog.text
+            # Probes should use 10.0.0.5 instead of 127.0.0.1
+            mock_is_port_open.assert_called_with("10.0.0.5", 9222)
+            mock_urlopen.assert_called_with("http://10.0.0.5:9222/json/version", timeout = ANY)
+            # Chrome diagnostics should also use 10.0.0.5
+            assert "(info) Remote debugging port configured: 9222 on host 10.0.0.5" in caplog.text
+            assert "(ok) Remote debugging port is open on 10.0.0.5:9222" in caplog.text
+
+    def test_diagnose_browser_issues_remote_debugging_host_after_port(
+        self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
+    ) -> None:
+        """Test diagnostics finds --remote-debugging-host even when it appears after the port."""
+        with (
+            patch("os.path.exists", return_value = True),
+            patch("os.access", return_value = True),
+            patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True) as mock_is_port_open,
+            patch("urllib.request.urlopen") as mock_urlopen,
+            patch("psutil.process_iter", return_value = []),
+            patch("platform.system", return_value = "Linux"),
+            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
+            patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
+        ):
+            mock_response = Mock()
+            mock_response.read.return_value = b'{"Browser": "Chrome/120.0.0.0"}'
+            mock_urlopen.return_value = mock_response
+
+            # Host appears AFTER port - parser must continue scanning
+            scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222", "--remote-debugging-host=10.0.0.5"]
+
+            scraper_with_config.diagnose_browser_issues()
+
+            # Security guard warning should be present for non-loopback host
+            assert "(warn) Remote debugging diagnostics will probe configured host: 10.0.0.5:9222" in caplog.text
+            # Probes should use 10.0.0.5 instead of 127.0.0.1
+            mock_is_port_open.assert_called_with("10.0.0.5", 9222)
+            mock_urlopen.assert_called_with("http://10.0.0.5:9222/json/version", timeout = ANY)
+            # Chrome diagnostics should also use 10.0.0.5
+            assert "(info) Remote debugging port configured: 9222 on host 10.0.0.5" in caplog.text
+            assert "(ok) Remote debugging port is open on 10.0.0.5:9222" in caplog.text
 
     def test_diagnose_browser_issues_process_info_missing_name(self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
         """Test diagnostic when process info is missing name."""
@@ -2395,6 +2458,19 @@ class TestWebScrapingDiagnostics:
         with patch("kleinanzeigen_bot.utils.web_scraping_mixin.os", mock_os):
             assert _is_admin() is False
 
+    def test_format_url_host_ipv6(self) -> None:
+        """Test IPv6-safe URL formatting for remote debugging probes."""
+        # IPv4 stays as-is
+        assert _format_url_host("127.0.0.1") == "127.0.0.1"
+        assert _format_url_host("10.0.0.5") == "10.0.0.5"
+        # IPv6 gets bracketed
+        assert _format_url_host("::1") == "[::1]"
+        assert _format_url_host("2001:db8::1") == "[2001:db8::1]"
+        # Already bracketed is preserved (stripped then re-bracketed)
+        assert _format_url_host("[::1]") == "[::1]"
+        # localhost
+        assert _format_url_host("localhost") == "localhost"
+
     def test_diagnose_browser_issues_psutil_exceptions(self, web_scraper:WebScrapingMixin) -> None:
         """Test diagnose_browser_issues handles psutil exceptions gracefully."""
         # Mock psutil.process_iter to return a list that will cause exceptions when accessing proc.info
@@ -2531,7 +2607,7 @@ class TestWebScrapingDiagnostics:
             scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222", "--remote-debugging-port=9223"]
             scraper_with_config.diagnose_browser_issues()
 
-        assert "(info) Remote debugging port configured: 9222" in caplog.text
+        assert "(info) Remote debugging port configured: 9222 on host 127.0.0.1" in caplog.text
         assert "9223" not in caplog.text
 
     @patch.object(WebScrapingMixin, "_diagnose_chrome_version_issues")
@@ -2543,7 +2619,7 @@ class TestWebScrapingDiagnostics:
         scraper_with_config.diagnose_browser_issues()
 
         assert "Remote debugging port configured" not in caplog.text
-        mock_diagnose.assert_called_once_with(0)
+        mock_diagnose.assert_called_once_with(0, "127.0.0.1")
 
 
 class TestWebScrapingMixinPortRetry:
