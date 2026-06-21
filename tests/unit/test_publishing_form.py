@@ -2802,3 +2802,103 @@ class TestConditionFallbackToGenericHandler:
             pytest.raises(TimeoutError, match = "lookup timeout"),
         ):
             await set_special_attributes(test_bot, ad_cfg)
+
+    @pytest.mark.asyncio
+    async def test_special_attributes_text_input_fallback(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """A plain input with no special type or role should use web_input."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"title": "My Title"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        text_elem = MagicMock()
+        text_attrs = MagicMock()
+        text_attrs.get.side_effect = lambda key, default = None: {
+            "id": "title",
+            "type": None,
+            "role": None,
+        }.get(key, default)
+        text_elem.attrs = text_attrs
+        text_elem.local_name = "input"
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [text_elem]),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        mock_input.assert_awaited_once_with(By.ID, "title", "My Title")
+
+    @pytest.mark.asyncio
+    async def test_special_attributes_unsupported_checkbox_value_raises(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """An unsupported checkbox value should raise TimeoutError."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"feature_b": "maybe"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        checkbox_elem = MagicMock()
+        checkbox_attrs = MagicMock()
+        checkbox_attrs.get.side_effect = lambda key, default = None: {
+            "id": "feature",
+            "name": "attributeMap[feature]",
+            "type": "checkbox",
+            "role": None,
+        }.get(key, default)
+        checkbox_elem.attrs = checkbox_attrs
+        checkbox_elem.local_name = "input"
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [checkbox_elem]),
+            pytest.raises(TimeoutError, match = r"Failed to set attribute 'feature_b'"),
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+    @pytest.mark.asyncio
+    async def test_hidden_input_fallback_no_name_raises(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """A hidden input without a name attribute should raise TimeoutError."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"groesse_s": "68"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        hidden_elem = MagicMock()
+        hidden_attrs = MagicMock()
+        hidden_attrs.get.side_effect = lambda key, default = None: {
+            "id": None,
+            "name": None,
+            "type": "hidden",
+            "role": None,
+        }.get(key, default)
+        hidden_elem.attrs = hidden_attrs
+        hidden_elem.local_name = "input"
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [hidden_elem]),
+            pytest.raises(TimeoutError, match = r"Failed to set attribute 'groesse_s'"),
+        ):
+            await set_special_attributes(test_bot, ad_cfg)

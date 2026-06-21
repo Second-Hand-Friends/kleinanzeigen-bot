@@ -800,6 +800,33 @@ async def _set_condition(web:WebScrapingMixin, condition_value:str) -> bool:
     return True
 
 
+def _build_special_attribute_xpath(normalized_special_attribute_key:str, special_attribute_key:str) -> str:
+    """Build an XPath expression that matches attribute fields by six patterns."""
+    id_suffix_literal = xpath_literal(f".{normalized_special_attribute_key}")
+    name_suffix_literal = xpath_literal(f".{normalized_special_attribute_key}]")
+    name_plus_literal = xpath_literal(f".{normalized_special_attribute_key}+")
+    bare_id_literal = xpath_literal(normalized_special_attribute_key)
+    bare_name_literal = xpath_literal(f"attributeMap[{normalized_special_attribute_key}]")
+    original_key_literal = xpath_literal(special_attribute_key)
+    # Match attribute fields by six patterns:
+    # 1) exact id                 -> @id={bare_id_literal}
+    # 2) dotted id suffix         -> ... = {id_suffix_literal}
+    # 3) exact attributeMap name  -> @name={bare_name_literal}
+    # 4) dotted name suffix       -> ... = {name_suffix_literal}
+    # 5) compound key marker      -> contains(@name, {name_plus_literal})
+    # 6) original config key      -> contains(@name, {original_key_literal}) for compound keys
+    return (
+        "//*["
+        f"@id={bare_id_literal}"
+        f" or (contains(@id, '.') and substring(@id, string-length(@id) - string-length({id_suffix_literal}) + 1) = {id_suffix_literal})"
+        f" or @name={bare_name_literal}"
+        f" or (contains(@name, '.') and substring(@name, string-length(@name) - string-length({name_suffix_literal}) + 1) = {name_suffix_literal})"
+        f" or contains(@name, {name_plus_literal})"
+        f" or contains(@name, {original_key_literal})"
+        "]"
+    )
+
+
 def _special_attribute_candidate_priority(elem:Element) -> tuple[int, int]:
     local_name = elem.local_name
     elem_type = str(cast(Any, elem.attrs.get("type")) or "").lower()
@@ -850,6 +877,92 @@ def _pick_special_attribute_candidate(candidates:Sequence[Element], special_attr
     return selected
 
 
+async def _resolve_special_attribute_element(
+    web:WebScrapingMixin,
+    special_attr_xpath:str,
+    special_attribute_key:str,
+) -> Element:
+    """Find DOM candidates for a special attribute and pick the best match."""
+    special_attr_candidates = await web.web_find_all(By.XPATH, special_attr_xpath)
+    return _pick_special_attribute_candidate(special_attr_candidates, special_attribute_key)
+
+
+async def _set_special_attribute_input(
+    web:WebScrapingMixin,
+    special_attr_elem:Element,
+    special_attr_xpath:str,
+    special_attribute_key:str,
+    special_attribute_value_str:str,
+) -> None:
+    """Set a special attribute value on the matched DOM element.
+
+    Inspects the element's type/role and dispatches to the appropriate
+    setter: button combobox (hidden input), select, checkbox,
+    button combobox, input combobox, or text input.
+    """
+    elem_id = cast(str | None, special_attr_elem.attrs.get("id"))
+    elem_type = str(cast(Any, special_attr_elem.attrs.get("type")) or "").lower()
+    elem_role = str(cast(Any, special_attr_elem.attrs.get("role")) or "").lower()
+    elem_selector_type = By.ID if elem_id else By.XPATH
+    elem_selector_value = elem_id or special_attr_xpath
+
+    # If the only match was a hidden backing input, search for the
+    # associated <button role="combobox"> by walking up the DOM tree.
+    if elem_type == "hidden":
+        LOG.debug("Attribute field '%s': only matched hidden input, searching for associated button combobox...", special_attribute_key)
+        hidden_input_name = special_attr_elem.attrs.get("name")
+        if not hidden_input_name:
+            raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
+        associated_button_id = await web._find_associated_button_combobox(  # noqa: SLF001 - WebScrapingMixin DOM helper
+            hidden_input_name = str(hidden_input_name)
+        )
+        if associated_button_id is None:
+            raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
+        LOG.debug("Attribute field '%s': found associated button combobox id='%s'", special_attribute_key, associated_button_id)
+        await _select_button_combobox(web, associated_button_id, special_attribute_value_str)
+        return  # NO log here — caller logs success
+
+    if special_attr_elem.local_name == "select":
+        LOG.debug("Attribute field '%s' seems to be a select...", special_attribute_key)
+        await web.web_select(elem_selector_type, elem_selector_value, special_attribute_value_str)
+    elif elem_type == "checkbox":
+        LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
+        truthy_values = {"1", "true", "yes", "on", "ja", "checked"}
+        falsy_values = {"", "0", "false", "no", "off", "nein", "unchecked", "none"}
+        normalized_checkbox_value = special_attribute_value_str.strip().lower()
+        if normalized_checkbox_value in truthy_values:
+            desired_checked = True
+        elif normalized_checkbox_value in falsy_values:
+            desired_checked = False
+        else:
+            LOG.debug(
+                "Attribute field '%s' has unsupported checkbox value '%s'.",
+                special_attribute_key,
+                special_attribute_value_str,
+            )
+            raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
+
+        current_checked_attr = special_attr_elem.attrs.get("checked")
+        if isinstance(current_checked_attr, bool):
+            current_checked = current_checked_attr
+        else:
+            normalized_current_checked = str(current_checked_attr).strip().lower() if current_checked_attr is not None else ""
+            current_checked = normalized_current_checked not in falsy_values
+
+        if desired_checked != current_checked:
+            await web.web_click(elem_selector_type, elem_selector_value)
+    elif special_attr_elem.local_name == "button" and elem_role == "combobox":
+        LOG.debug("Attribute field '%s' seems to be a button combobox (click-to-open dropdown)...", special_attribute_key)
+        ensure(elem_id, f"No id available for button combobox special attribute [{special_attribute_key}]")
+        await _select_button_combobox(web, cast(str, elem_id), special_attribute_value_str)
+    elif elem_role == "combobox" and elem_type in {"text", ""} and special_attr_elem.local_name == "input":
+        LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
+        await web.web_select_combobox(elem_selector_type, elem_selector_value, special_attribute_value_str)
+    else:
+        LOG.debug("Attribute field '%s' seems to be a text input...", special_attribute_key)
+        await web.web_input(elem_selector_type, elem_selector_value, special_attribute_value_str)
+
+
 async def set_special_attributes(web:WebScrapingMixin, ad_cfg:Ad) -> None:
     if not ad_cfg.special_attributes:
         return
@@ -877,42 +990,17 @@ async def set_special_attributes(web:WebScrapingMixin, ad_cfg:Ad) -> None:
             special_attribute_value_str = normalize_condition(special_attribute_value_str)[0]
 
         LOG.debug("Setting special attribute [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
-        id_suffix_literal = xpath_literal(f".{normalized_special_attribute_key}")
-        name_suffix_literal = xpath_literal(f".{normalized_special_attribute_key}]")
-        name_plus_literal = xpath_literal(f".{normalized_special_attribute_key}+")
-        bare_id_literal = xpath_literal(normalized_special_attribute_key)
-        bare_name_literal = xpath_literal(f"attributeMap[{normalized_special_attribute_key}]")
-        original_key_literal = xpath_literal(special_attribute_key)
-        # Match attribute fields by five patterns:
-        # 1) exact id                 -> @id={bare_id_literal}
-        # 2) dotted id suffix         -> ... = {id_suffix_literal}
-        # 3) exact attributeMap name  -> @name={bare_name_literal}
-        # 4) dotted name suffix       -> ... = {name_suffix_literal}
-        # 5) compound key marker      -> contains(@name, {name_plus_literal})
-        # Literals are derived via xpath_literal from normalized_special_attribute_key.
-        # 6) original config key      -> contains(@name, {original_key_literal}) for compound keys
-        special_attr_xpath = (
-            "//*["
-            f"@id={bare_id_literal}"
-            f" or (contains(@id, '.') and substring(@id, string-length(@id) - string-length({id_suffix_literal}) + 1) = {id_suffix_literal})"
-            f" or @name={bare_name_literal}"
-            f" or (contains(@name, '.') and substring(@name, string-length(@name) - string-length({name_suffix_literal}) + 1) = {name_suffix_literal})"
-            f" or contains(@name, {name_plus_literal})"
-            f" or contains(@name, {original_key_literal})"
-            "]"
-        )
+        special_attr_xpath = _build_special_attribute_xpath(normalized_special_attribute_key, special_attribute_key)
+
         quick_dom = web.timeout("quick_dom")
+        if special_attribute_key == "condition_s":
+            special_attr_probe = await web.web_probe(By.XPATH, special_attr_xpath, timeout = quick_dom)
+            if special_attr_probe is None:
+                LOG.warning("Special attribute '%s' is not available for the selected category. Skipping.", special_attribute_key)
+                continue
+
         try:
-            if special_attribute_key == "condition_s":
-                special_attr_probe = await web.web_probe(By.XPATH, special_attr_xpath, timeout = quick_dom)
-                if special_attr_probe is None:
-                    LOG.warning("Special attribute '%s' is not available for the selected category. Skipping.", special_attribute_key)
-                    continue
-            special_attr_candidates = await web.web_find_all(
-                By.XPATH,
-                special_attr_xpath,
-            )
-            special_attr_elem = _pick_special_attribute_candidate(special_attr_candidates, special_attribute_key)
+            special_attr_elem = await _resolve_special_attribute_element(web, special_attr_xpath, special_attribute_key)
         except AssertionError as ex:
             LOG.debug(
                 "Attribute field '%s' (normalized: '%s') could not be found.",
@@ -925,68 +1013,7 @@ async def set_special_attributes(web:WebScrapingMixin, ad_cfg:Ad) -> None:
             raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
 
         try:
-            elem_id = cast(str | None, special_attr_elem.attrs.get("id"))
-            elem_type = str(cast(Any, special_attr_elem.attrs.get("type")) or "").lower()
-            elem_role = str(cast(Any, special_attr_elem.attrs.get("role")) or "").lower()
-            elem_selector_type = By.ID if elem_id else By.XPATH
-            elem_selector_value = elem_id or special_attr_xpath
-
-            # If the only match was a hidden backing input, search for the
-            # associated <button role="combobox"> by walking up the DOM tree.
-            if elem_type == "hidden":
-                LOG.debug("Attribute field '%s': only matched hidden input, searching for associated button combobox...", special_attribute_key)
-                hidden_input_name = special_attr_elem.attrs.get("name")
-                if not hidden_input_name:
-                    raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
-                associated_button_id = await web._find_associated_button_combobox(  # noqa: SLF001 - WebScrapingMixin DOM helper
-                    hidden_input_name = str(hidden_input_name)
-                )
-                if associated_button_id is None:
-                    raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
-                LOG.debug("Attribute field '%s': found associated button combobox id='%s'", special_attribute_key, associated_button_id)
-                await _select_button_combobox(web, associated_button_id, special_attribute_value_str)
-                LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
-                continue
-
-            if special_attr_elem.local_name == "select":
-                LOG.debug("Attribute field '%s' seems to be a select...", special_attribute_key)
-                await web.web_select(elem_selector_type, elem_selector_value, special_attribute_value_str)
-            elif elem_type == "checkbox":
-                LOG.debug("Attribute field '%s' seems to be a checkbox...", special_attribute_key)
-                truthy_values = {"1", "true", "yes", "on", "ja", "checked"}
-                falsy_values = {"", "0", "false", "no", "off", "nein", "unchecked", "none"}
-                normalized_checkbox_value = special_attribute_value_str.strip().lower()
-                if normalized_checkbox_value in truthy_values:
-                    desired_checked = True
-                elif normalized_checkbox_value in falsy_values:
-                    desired_checked = False
-                else:
-                    LOG.debug(
-                        "Attribute field '%s' has unsupported checkbox value '%s'.",
-                        special_attribute_key,
-                        special_attribute_value_str,
-                    )
-                    raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
-
-                current_checked_attr = special_attr_elem.attrs.get("checked")
-                if isinstance(current_checked_attr, bool):
-                    current_checked = current_checked_attr
-                else:
-                    normalized_current_checked = str(current_checked_attr).strip().lower() if current_checked_attr is not None else ""
-                    current_checked = normalized_current_checked not in falsy_values
-
-                if desired_checked != current_checked:
-                    await web.web_click(elem_selector_type, elem_selector_value)
-            elif special_attr_elem.local_name == "button" and elem_role == "combobox":
-                LOG.debug("Attribute field '%s' seems to be a button combobox (click-to-open dropdown)...", special_attribute_key)
-                ensure(elem_id, f"No id available for button combobox special attribute [{special_attribute_key}]")
-                await _select_button_combobox(web, cast(str, elem_id), special_attribute_value_str)
-            elif elem_role == "combobox" and elem_type in {"text", ""} and special_attr_elem.local_name == "input":
-                LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
-                await web.web_select_combobox(elem_selector_type, elem_selector_value, special_attribute_value_str)
-            else:
-                LOG.debug("Attribute field '%s' seems to be a text input...", special_attribute_key)
-                await web.web_input(elem_selector_type, elem_selector_value, special_attribute_value_str)
+            await _set_special_attribute_input(web, special_attr_elem, special_attr_xpath, special_attribute_key, special_attribute_value_str)
         except TimeoutError as ex:
             LOG.debug("Failed to set attribute field '%s' via known input types.", special_attribute_key)
             raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
