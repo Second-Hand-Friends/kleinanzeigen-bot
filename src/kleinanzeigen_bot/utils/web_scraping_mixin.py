@@ -846,12 +846,12 @@ class WebScrapingMixin:  # noqa: PLR0904
                 )
 
             LOG.info("(info) Remote debugging port configured: %d on host %s", remote_port, remote_host)
-            if net.is_port_open(remote_host, remote_port):
+            if net.is_port_open(_probed_host_normalized, remote_port):
                 LOG.info("(ok) Remote debugging port is open on %s:%d", remote_host, remote_port)
                 # Try to get more information about the debugging endpoint
                 try:
                     probe_timeout = self.effective_timeout("chrome_remote_probe")
-                    browser_fact, exc = self._remote_debugging_api_browser(remote_host, remote_port, probe_timeout)
+                    browser_fact, exc = self._remote_debugging_api_browser(_probed_host_normalized, remote_port, probe_timeout)
                 except Exception as e:
                     exc = e
                     browser_fact = None
