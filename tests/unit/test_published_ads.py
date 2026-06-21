@@ -381,3 +381,111 @@ class TestJSONPagination:
         assert published_ads.ad_matches_id({"id": "nope"}, 42) is False
         # Boolean (True → 1) — accepting bool-to-int coercion is current behavior
         assert published_ads.ad_matches_id({"id": True}, 1) is True
+
+    # ── Bytearray / bytes content decode ──────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_bytearray_content_decodes(self, bot:KleinanzeigenBot) -> None:
+        """Bytearray response content should be decoded correctly (non-strict, happy path)."""
+        response_payload = bytearray(b'{"ads":[],"paging":{"pageNum":1,"last":1}}')
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.return_value = {"content": response_payload}
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
+            if not isinstance(result, list):
+                pytest.fail(f"expected result to be list, got {type(result).__name__}")
+            if len(result) != 0:
+                pytest.fail(f"expected empty list, got {len(result)} items")
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_bytes_content_decodes(self, bot:KleinanzeigenBot) -> None:
+        """Bytes response content should be decoded correctly (non-strict, happy path)."""
+        response_payload = b'{"ads":[],"paging":{"pageNum":1,"last":1}}'
+        with patch.object(bot, "web_request", new_callable = AsyncMock) as mock_request:
+            mock_request.return_value = {"content": response_payload}
+            result = await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url)
+            if not isinstance(result, list):
+                pytest.fail(f"expected result to be list, got {type(result).__name__}")
+            if len(result) != 0:
+                pytest.fail(f"expected empty list, got {len(result)} items")
+
+    # ── _parse_published_ads_page – strict error paths ────────────────────
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_non_dict_json_strict_raises(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should raise on non-dict JSON payload (e.g. JSON array)."""
+        with (
+            patch.object(bot, "web_request", new_callable = AsyncMock, return_value = {"content": '["not", "a", "dict"]'}),
+            pytest.raises(PublishedAdsFetchIncompleteError, match = "Unexpected JSON payload"),
+        ):
+            await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url, strict = True)
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_empty_json_content_strict_raises(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should raise on empty JSON content string."""
+        with (
+            patch.object(bot, "web_request", new_callable = AsyncMock, return_value = {"content": ""}),
+            pytest.raises(PublishedAdsFetchIncompleteError, match = "Empty JSON response content"),
+        ):
+            await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url, strict = True)
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_json_parse_failure_strict_raises(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should raise on JSON parse failure."""
+        with (
+            patch.object(bot, "web_request", new_callable = AsyncMock, return_value = {"content": "{invalid"}),
+            pytest.raises(PublishedAdsFetchIncompleteError, match = "Failed to parse JSON"),
+        ):
+            await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url, strict = True)
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_non_list_ads_type_strict_raises(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should raise when 'ads' field is not a list."""
+        response_data = {"ads": "not_a_list", "paging": {"pageNum": 1, "last": 1}}
+        with (
+            patch.object(bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps(response_data)}),
+            pytest.raises(PublishedAdsFetchIncompleteError, match = "Unexpected 'ads' type"),
+        ):
+            await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url, strict = True)
+
+    # ── _determine_next_page – strict error paths ─────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_missing_paging_dict_strict_raises(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should raise when paging dict is entirely absent from response."""
+        response_data = {"ads": [{"id": 1, "state": "active"}]}
+        with (
+            patch.object(bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps(response_data)}),
+            pytest.raises(PublishedAdsFetchIncompleteError, match = "No paging dict found"),
+        ):
+            await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url, strict = True)
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_invalid_page_num_strict_raises(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should raise when paging 'pageNum' is not a valid number."""
+        response_data = {"ads": [{"id": 1, "state": "active"}], "paging": {"pageNum": "not_a_number", "last": 1}}
+        with (
+            patch.object(bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps(response_data)}),
+            pytest.raises(PublishedAdsFetchIncompleteError, match = "Invalid 'pageNum'"),
+        ):
+            await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url, strict = True)
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_invalid_next_page_strict_raises(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should raise when 'next' page value is invalid and total_pages is known."""
+        response_data = {"ads": [{"id": 1, "state": "active"}], "paging": {"pageNum": 1, "last": 3, "next": "garbage"}}
+        with (
+            patch.object(bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps(response_data)}),
+            pytest.raises(PublishedAdsFetchIncompleteError, match = "Invalid 'next' page value"),
+        ):
+            await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url, strict = True)
+
+    # ── fetch_published_ads – strict guards ───────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_fetch_published_ads_non_dict_response_type_strict_raises(self, bot:KleinanzeigenBot) -> None:
+        """Strict mode should raise when web_request returns a non-dict response."""
+        with (
+            patch.object(bot, "web_request", new_callable = AsyncMock, return_value = "not a dict"),
+            pytest.raises(PublishedAdsFetchIncompleteError, match = "Unexpected pagination response type"),
+        ):
+            await published_ads.fetch_published_ads(web = bot, root_url = bot.root_url, strict = True)
