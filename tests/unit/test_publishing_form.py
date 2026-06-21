@@ -2821,7 +2821,6 @@ class TestConditionFallbackToGenericHandler:
 
         text_elem = MagicMock()
         text_attrs = MagicMock()
-        text_attrs.id = "title"
         text_attrs.get.side_effect = lambda key, default = None: {
             "id": "title",
             "type": None,
@@ -2856,7 +2855,6 @@ class TestConditionFallbackToGenericHandler:
 
         checkbox_elem = MagicMock()
         checkbox_attrs = MagicMock()
-        checkbox_attrs.id = "feature"
         checkbox_attrs.get.side_effect = lambda key, default = None: {
             "id": "feature",
             "name": "attributeMap[feature]",
@@ -2890,7 +2888,6 @@ class TestConditionFallbackToGenericHandler:
 
         hidden_elem = MagicMock()
         hidden_attrs = MagicMock()
-        hidden_attrs.id = None
         hidden_attrs.get.side_effect = lambda key, default = None: {
             "id": None,
             "name": None,
