@@ -402,25 +402,35 @@ kleinanzeigen_bot/download_flow.py:
 #################################################
   download_ads:
     "Ads download directory: %s": "Anzeigen-Download-Verzeichnis: %s"
-    "Fetching ad metadata (status, expiry dates)...": "Lade Anzeigen-Metadaten (Status, Ablaufdaten)..."
-    "Loaded metadata for %s published ads.": "Metadaten für %s veröffentlichte Anzeigen geladen."
     "Scanning ad overview for navigation URLs...": "Suche Navigations-URLs in Anzeigenübersicht..."
     "Found %s.": "%s gefunden."
     "ad URL": "Anzeigen-URL"
+    "Invalid ads selector: %s. Use 'all', 'new', or comma-separated numeric IDs.": "Ungültiger Anzeigen-Selektor: %s. Verwende 'all', 'new', oder kommagetrennte numerische IDs."
+
+  _fetch_published_ads_by_id:
+    "Fetching ad metadata (status, expiry dates)...": "Lade Anzeigen-Metadaten (Status, Ablaufdaten)..."
+    "Loaded metadata for %s published ads.": "Metadaten für %s veröffentlichte Anzeigen geladen."
+    "Skipping ad with non-numeric id: %s": "Überspringe Anzeige mit nicht-numerischer ID: %s"
+
+  _download_all_ads:
     "Starting download of all ads...": "Starte den Download aller Anzeigen..."
     "Downloading %d/%d ads...": "Lade Anzeige %d/%d herunter..."
     "%d of %d ads were downloaded from your profile.": "%d von %d Anzeigen wurden aus Ihrem Profil heruntergeladen."
+
+  _download_new_ads:
     "Starting download of not yet downloaded ads...": "Starte den Download noch nicht heruntergeladener Anzeigen..."
-    "Skipping ad with non-numeric id: %s": "Überspringe Anzeige mit nicht-numerischer ID: %s"
+    "Downloading %d/%d ads...": "Lade Anzeige %d/%d herunter..."
+    "Skipping saved ad without id (likely unpublished or manually created): %s": "Überspringe gespeicherte Anzeige ohne ID (vermutlich nicht veröffentlicht oder manuell erstellt): %s"
     "The ad with id %d has already been saved.": "Die Anzeige mit der ID %d wurde bereits gespeichert."
     "%s were downloaded from your profile.": "%s wurden aus Ihrem Profil heruntergeladen."
     "new ad": "neue Anzeige"
+
+  _download_ads_by_ids:
     "Starting download of ad(s) with the id(s):": "Starte Download der Anzeige(n) mit den ID(s):"
+    "Downloading %d/%d ads...": "Lade Anzeige %d/%d herunter..."
     "Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.": "Anzeigen-ID %d ist nicht in Ihren veröffentlichten Profilanzeigen. Speichere die heruntergeladene Anzeige als inaktiv."
     "Downloaded ad with id %d": "Anzeige mit der ID %d heruntergeladen"
-    "Invalid ads selector: %s. Use 'all', 'new', or comma-separated numeric IDs.": "Ungültiger Anzeigen-Selektor: %s. Verwende 'all', 'new', oder kommagetrennte numerische IDs."
     "The page with the id %d does not exist!": "Die Seite mit der ID %d existiert nicht!"
-    "Skipping saved ad without id (likely unpublished or manually created): %s": "Überspringe gespeicherte Anzeige ohne ID (vermutlich nicht veröffentlicht oder manuell erstellt): %s"
 
   _download_ad_with_resolved_state:
     "Ad %d found in overview but not in published profile. Saving as inactive.": "Anzeige %d wurde in der Übersicht gefunden, aber nicht im veröffentlichten Profil. Speichere als inaktiv."
