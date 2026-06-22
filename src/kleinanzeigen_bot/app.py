@@ -4,7 +4,7 @@
 import asyncio, importlib, os, sys  # isort: skip
 from gettext import gettext as _
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Literal, cast
+from typing import TYPE_CHECKING, Any, Final, cast
 
 import certifi
 
@@ -397,21 +397,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         _xdg_paths.ensure_directory(workspace.diagnostics_dir, "diagnostics directory")
         return workspace.diagnostics_dir
 
-    async def _capture_login_detection_diagnostics_if_enabled(
-        self,
-        *,
-        base_prefix:str = "login_detection_inconclusive",
-        pause_banner_message:str = "# Login detection remained inconclusive. Browser is paused for manual inspection.",
-    ) -> None:
-        await _login_flow.capture_login_detection_diagnostics_if_enabled(
-            self,
-            base_prefix = base_prefix,
-            pause_banner_message = pause_banner_message,
-            diagnostics_config = getattr(self.config, "diagnostics", None),
-            diagnostics_output_dir_fn = self._diagnostics_output_dir,
-            log_file_path = self.log_file_path,
-        )
-
     async def _capture_publish_error_diagnostics_if_enabled(
         self,
         ad_cfg:Ad,
@@ -466,34 +451,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         except Exception as error:  # noqa: BLE001
             LOG.warning("Diagnostics capture failed during publish error handling: %s", error)
 
-    async def _has_logged_in_marker(self) -> bool:
-        return await _login_flow.has_logged_in_marker(self, username = self.config.login.username)
-
     async def is_logged_in(self) -> bool:
         return await _login_flow.is_logged_in(self, username = self.config.login.username)
-
-    async def _check_publishing_result(self) -> bool:
-        return await _publishing_workflow.check_publishing_result(self)
-
-    async def _delete_old_ad_if_needed(
-        self, ad_cfg:Ad, published_ads_list:list[PublishedAd],
-        *, timing:Literal["BEFORE_PUBLISH", "AFTER_PUBLISH"],
-    ) -> None:
-        """Delete an old ad before or after (re-)publishing, depending on config.
-
-        Skips deletion when keep_old_ads is True or when the configured
-        ``delete_old_ads`` timing does not match *timing*.
-
-        In ``AFTER_PUBLISH`` mode, title-based deletion is always disabled to
-        avoid accidentally removing the newly published ad.
-        """
-        await _publishing_workflow.delete_old_ad_if_needed(
-            self, ad_cfg, published_ads_list,
-            timing = timing,
-            keep_old_ads = self.keep_old_ads,
-            config = self.config,
-            root_url = self.root_url,
-        )
 
     async def publish_ads(self, ad_cfgs:list[tuple[str, Ad, dict[str, Any]]]) -> None:
         await _publishing_workflow.publish_ads(

@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
+from kleinanzeigen_bot import login_flow
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.login_flow import (
     LoginDetectionReason,
@@ -397,7 +398,13 @@ class TestKleinanzeigenBotAuthentication:
         test_bot.page = page
 
         with patch("kleinanzeigen_bot.utils.diagnostics.capture_diagnostics", new_callable = AsyncMock) as mock_capture:
-            await test_bot._capture_login_detection_diagnostics_if_enabled(base_prefix = "login_detection_test")
+            await login_flow.capture_login_detection_diagnostics_if_enabled(
+                web = test_bot,
+                base_prefix = "login_detection_test",
+                diagnostics_config = test_bot.config.diagnostics,
+                diagnostics_output_dir_fn = test_bot._diagnostics_output_dir,
+                log_file_path = test_bot.log_file_path,
+            )
 
             mock_capture.assert_awaited_once()
             assert mock_capture.await_args is not None
@@ -420,7 +427,13 @@ class TestKleinanzeigenBotAuthentication:
         test_bot.page = cast(Any, None)
 
         with patch("kleinanzeigen_bot.utils.diagnostics.capture_diagnostics", new_callable = AsyncMock) as mock_capture:
-            await test_bot._capture_login_detection_diagnostics_if_enabled(base_prefix = "login_detection_test")
+            await login_flow.capture_login_detection_diagnostics_if_enabled(
+                web = test_bot,
+                base_prefix = "login_detection_test",
+                diagnostics_config = test_bot.config.diagnostics,
+                diagnostics_output_dir_fn = test_bot._diagnostics_output_dir,
+                log_file_path = test_bot.log_file_path,
+            )
 
             mock_capture.assert_awaited_once()
             assert mock_capture.await_args is not None
@@ -442,10 +455,15 @@ class TestKleinanzeigenBotAuthentication:
         test_bot.page = MagicMock()
 
         with (
-            patch.object(test_bot, "_diagnostics_output_dir", side_effect = RuntimeError("dir error")),
             patch("kleinanzeigen_bot.utils.diagnostics.capture_diagnostics", new_callable = AsyncMock) as mock_capture,
         ):
-            await test_bot._capture_login_detection_diagnostics_if_enabled(base_prefix = "login_detection_test")
+            await login_flow.capture_login_detection_diagnostics_if_enabled(
+                web = test_bot,
+                base_prefix = "login_detection_test",
+                diagnostics_config = test_bot.config.diagnostics,
+                diagnostics_output_dir_fn = MagicMock(side_effect = RuntimeError("dir error")),
+                log_file_path = test_bot.log_file_path,
+            )
 
             mock_capture.assert_not_awaited()
             assert test_bot._login_detection_diagnostics_captured is False
@@ -467,7 +485,13 @@ class TestKleinanzeigenBotAuthentication:
             new_callable = AsyncMock,
             side_effect = RuntimeError("capture error"),
         ):
-            await test_bot._capture_login_detection_diagnostics_if_enabled(base_prefix = "login_detection_test")
+            await login_flow.capture_login_detection_diagnostics_if_enabled(
+                web = test_bot,
+                base_prefix = "login_detection_test",
+                diagnostics_config = test_bot.config.diagnostics,
+                diagnostics_output_dir_fn = test_bot._diagnostics_output_dir,
+                log_file_path = test_bot.log_file_path,
+            )
 
             assert test_bot._login_detection_diagnostics_captured is False
 
