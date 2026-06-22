@@ -518,11 +518,15 @@ kleinanzeigen_bot/extract.py:
 #################################################
   download_ad:
     "Using download directory: %s": "Verwende Download-Verzeichnis: %s"
+
+  _commit_staged_download:
     "Saved ad config to: %s": "Anzeigen-Konfiguration gespeichert in: %s"
     "Backup directory %s already exists. Aborting download for ad %s to avoid data loss.": "Sicherungsverzeichnis %s existiert bereits. Download für Anzeige %s wird abgebrochen, um Datenverlust zu vermeiden."
     "Could not remove backup directory %s: %s": "Konnte Sicherungsverzeichnis %s nicht entfernen: %s"
     "Failed to restore backup directory %s to %s after download failure: %s": "Konnte Sicherungsverzeichnis %s nach %s nach einem Download-Fehler nicht wiederherstellen: %s"
     "Could not remove staging directory %s: %s": "Konnte Staging-Verzeichnis %s nicht entfernen: %s"
+
+  _preserve_local_settings_from_existing_ad:
     "Preserved local-only settings from existing ad %d.": "Lokale Einstellungen von bestehender Anzeige %d beibehalten."
     "Could not preserve local settings from existing ad %d: %s": "Konnte lokale Einstellungen von bestehender Anzeige %d nicht beibehalten: %s"
     "Could not preserve auto_price_reduction from existing ad %d: %s": "Konnte auto_price_reduction von bestehender Anzeige %d nicht beibehalten: %s"
