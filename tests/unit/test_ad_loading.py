@@ -731,6 +731,44 @@ def test_load_ads_skips_inactive_before_numeric_id(
             assert len(ads) == 0
 
 
+def test_skipped_ads_do_not_validate_description_or_images(
+    base_ad_config:dict[str, Any], test_bot_config:Config,
+) -> None:
+    """Inactive or non-selected ads are skipped without description/image validation."""
+    ad_defaults = test_bot_config.with_values(
+        {"ad_defaults": {"description": {"prefix": "", "suffix": ""}}}
+    ).ad_defaults
+
+    inactive_ad = base_ad_config | {
+        "id": 999,
+        "title": "Broken Inactive",
+        "active": False,
+        "images": ["missing/*.jpg"],
+    }
+    # Deliberately include images that would fail resolution (no matches)
+    # on a selected ad — but the ad is inactive so _prepare_selected_ad_entry never runs
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        ad_dir = temp_path / "ads"
+        ad_dir.mkdir()
+        dicts.save_dict(ad_dir / "inactive_broken.yaml", inactive_ad)
+
+        config_file = temp_path / "config.yaml"
+        config_file.write_text("")
+
+        # Should NOT raise — inactive ad is skipped before description/image validation
+        ads = load_ads(
+            config_file_path = str(config_file),
+            ad_file_patterns = ["ads/*.yaml"],
+            ad_defaults = ad_defaults,
+            categories = {},
+            ads_selector = "all",
+            command = "publish",
+        )
+        assert len(ads) == 0
+
+
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #

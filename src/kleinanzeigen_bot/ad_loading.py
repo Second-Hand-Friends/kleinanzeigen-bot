@@ -245,7 +245,94 @@ def resolve_ad_images(ad_file:str, image_patterns:list[str]) -> list[str]:
 # --------------------------------------------------------------------------- #
 
 
-def load_ads(  # noqa: PLR0915
+# Selector parsing
+
+
+def _parse_ad_selector(ads_selector:str) -> tuple[list[int] | None, frozenset[str]]:
+    """Parse *ads_selector* into numeric IDs and filter tokens.
+
+    Returns:
+        ``(ids, tokens)`` — a list of numeric IDs and a frozenset of
+        token strings.  When the selector is purely numeric, *ids* is the
+        parsed list and *tokens* is empty.  Otherwise *ids* is ``None``
+        and *tokens* contains the stripped, non-empty selector tokens.
+    """
+    if _download_selection.is_numeric_ids_selector(ads_selector):
+        return [int(n) for n in ads_selector.split(",")], frozenset()
+
+    tokens = frozenset(token.strip() for token in ads_selector.split(",") if token.strip())
+    return None, tokens
+
+
+# Selector filtering
+
+
+def _should_include_ad(
+    ad_cfg:Ad,
+    ad_cfg_orig:dict[str, Any],
+    ad_file_relative:str,
+    tokens:frozenset[str],
+    command:str,
+    *,
+    exclude_ads_with_id:bool = True,
+) -> bool:
+    """Return ``True`` when *ad_cfg* matches the given filter *tokens*.
+
+    Side effects: ``check_ad_changed`` may mutate ``ad_cfg_orig["content_hash"]``
+    and may emit log messages.
+    """
+    should_include = False
+
+    if "changed" in tokens and check_ad_changed(ad_cfg, ad_cfg_orig, ad_file_relative):
+        should_include = True
+    elif "changed" in tokens and command == "update" and _price_reduction.is_auto_price_reduction_due(ad_cfg, ad_file_relative):
+        # Only the "update" command considers pending price reductions
+        # as a reason to include a "changed" ad.
+        should_include = True
+
+    if "new" in tokens and (not ad_cfg.id or not exclude_ads_with_id):
+        should_include = True
+    elif "new" in tokens and ad_cfg.id and exclude_ads_with_id:
+        LOG.info(" -> SKIPPED: ad [%s] is not new. already has an id assigned.", ad_file_relative)
+
+    if "due" in tokens:
+        if check_ad_republication(ad_cfg, ad_file_relative):
+            should_include = True
+
+    if "all" in tokens:
+        should_include = True
+
+    return should_include
+
+
+# Selected-ad enrichment
+
+
+def _prepare_selected_ad_entry(
+    ad_file:str,
+    ad_cfg:Ad,
+    ad_defaults:Any,
+    categories:dict[str, str],
+) -> None:
+    """Validate description, resolve category, and resolve images for an ad
+    that has already passed inactive and selector filtering.
+
+    May mutate *ad_cfg* (category resolution, image list assignment) and
+    may raise :class:`AssertionError` via :func:`ensure`.
+    """
+    ensure(
+        get_ad_description(ad_cfg, ad_defaults, with_affixes = False),
+        _("-> property [description] not specified @ [%s]") % ad_file,
+    )
+    get_ad_description(ad_cfg, ad_defaults, with_affixes = True)  # validates complete description
+
+    resolve_ad_category(ad_cfg, categories)
+
+    if ad_cfg.images:
+        ad_cfg.images = resolve_ad_images(ad_file, ad_cfg.images)
+
+
+def load_ads(
     *,
     config_file_path:str,
     ad_file_patterns:list[str],
@@ -272,16 +359,10 @@ def load_ads(  # noqa: PLR0915
     if not ad_files:
         return []
 
-    ids = []
-    use_specific_ads = False
-    # Strip whitespace from selector tokens to match is_valid_ads_selector.
-    selectors = [token.strip() for token in ads_selector.split(",") if token.strip()]
-
-    if _download_selection.is_numeric_ids_selector(ads_selector):
-        ids = [int(n) for n in ads_selector.split(",")]
-        use_specific_ads = True
+    ids, tokens = _parse_ad_selector(ads_selector)
+    if ids is not None:
         LOG.info("Start fetch task for the ad(s) with id(s):")
-        LOG.info(" | ".join([str(id_) for id_ in ids]))
+        LOG.info(" | ".join(str(id_) for id_ in ids))
 
     ads:list[tuple[str, Ad, dict[str, Any]]] = []
     for ad_file, ad_file_relative in sorted(ad_files.items()):
@@ -294,50 +375,17 @@ def load_ads(  # noqa: PLR0915
             LOG.info(" -> SKIPPED: inactive ad [%s]", ad_file_relative)
             continue
 
-        if use_specific_ads:
+        if ids is not None:
             if ad_cfg.id not in ids:
                 LOG.info(" -> SKIPPED: ad [%s] is not in list of given ids.", ad_file_relative)
                 continue
-        else:
-            # Check if ad should be included based on selectors
-            should_include = False
+        elif not _should_include_ad(
+            ad_cfg, ad_cfg_orig, ad_file_relative,
+            tokens, command, exclude_ads_with_id = exclude_ads_with_id,
+        ):
+            continue
 
-            # Check for 'changed' selector
-            if "changed" in selectors and check_ad_changed(ad_cfg, ad_cfg_orig, ad_file_relative):
-                should_include = True
-            elif "changed" in selectors and command == "update" and _price_reduction.is_auto_price_reduction_due(ad_cfg, ad_file_relative):
-                # Only the "update" command considers pending price reductions
-                # as a reason to include a "changed" ad.
-                should_include = True
-
-            # Check for 'new' selector
-            if "new" in selectors and (not ad_cfg.id or not exclude_ads_with_id):
-                should_include = True
-            elif "new" in selectors and ad_cfg.id and exclude_ads_with_id:
-                LOG.info(" -> SKIPPED: ad [%s] is not new. already has an id assigned.", ad_file_relative)
-
-            # Check for 'due' selector
-            if "due" in selectors:
-                if check_ad_republication(ad_cfg, ad_file_relative):
-                    should_include = True
-
-            # Check for 'all' selector (always include)
-            if "all" in selectors:
-                should_include = True
-
-            if not should_include:
-                continue
-
-        ensure(
-            get_ad_description(ad_cfg, ad_defaults, with_affixes = False),
-            _("-> property [description] not specified @ [%s]") % ad_file,
-        )
-        get_ad_description(ad_cfg, ad_defaults, with_affixes = True)  # validates complete description
-
-        resolve_ad_category(ad_cfg, categories)
-
-        if ad_cfg.images:
-            ad_cfg.images = resolve_ad_images(ad_file, ad_cfg.images)
+        _prepare_selected_ad_entry(ad_file, ad_cfg, ad_defaults, categories)
 
         LOG.info(" -> LOADED: ad [%s]", ad_file_relative)
         ads.append((ad_file, ad_cfg, ad_cfg_orig))
