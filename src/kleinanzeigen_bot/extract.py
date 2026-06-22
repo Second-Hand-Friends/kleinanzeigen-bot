@@ -113,6 +113,65 @@ def _remove_tree_with_retries(path:Path) -> None:
         raise last_error
 
 
+def _render_name_with_budget(template:str, ad_id:int, title:str, max_length:int) -> tuple[str, bool, bool]:
+    """Pure renderer for download name templates with priority-based truncation.
+
+    Returns:
+        (rendered_name, id_truncated, title_truncated) — where rendered_name is
+        the final sanitized result.
+    """
+    sanitized_title = misc.sanitize_folder_name(title, max_length)
+    parsed_template = list(Formatter().parse(template))
+    id_value = str(ad_id)
+
+    has_id = any(field == "id" for _, field, _, _ in parsed_template if field)
+    id_rendered = False
+
+    parts:list[str] = []
+    current_length = 0
+
+    id_truncated = False
+    title_truncated = False
+
+    for index, (literal_text, field_name_part, _format_spec, _conversion) in enumerate(parsed_template):
+        remaining_length = max_length - current_length
+        # Reserve budget for not-yet-rendered {id} placeholders.
+        reserved_for_priority = len(id_value) if has_id and not id_rendered else 0
+        literal_length = min(len(literal_text), max(0, remaining_length - reserved_for_priority))
+        parts.append(literal_text[:literal_length])
+        current_length += literal_length
+
+        if field_name_part is None:
+            continue
+
+        remaining_length = max_length - current_length
+
+        if field_name_part == "id":
+            id_part = id_value[:remaining_length]
+            parts.append(id_part)
+            current_length += len(id_part)
+            id_rendered = True
+            if len(id_part) < len(id_value):
+                id_truncated = True
+            continue
+
+        if field_name_part == "title":
+            reserved_for_id = len(id_value) if has_id and not id_rendered else 0
+            reserved_for_future_literals = sum(len(future_literal) for future_literal, _field, _fmt, _conv in parsed_template[index + 1:])
+            available_for_title = max(0, remaining_length - reserved_for_id - reserved_for_future_literals)
+            title_part = sanitized_title[:available_for_title]
+            parts.append(title_part)
+            current_length += len(title_part)
+            if len(title_part) < len(sanitized_title):
+                title_truncated = True
+            continue
+
+    rendered_name = "".join(parts).strip()
+    result = misc.sanitize_folder_name(rendered_name, max_length)
+
+    return result, id_truncated, title_truncated
+
+
 class AdExtractor(WebScrapingMixin):
     """
     Wrapper class for ad extraction that uses an active bot´s browser session to extract specific elements from an ad page.
@@ -130,11 +189,6 @@ class AdExtractor(WebScrapingMixin):
         self.config:Config = config
         self.download_dir:Path = download_dir
         self.published_ads_by_id:dict[int, dict[str, Any]] = published_ads_by_id or {}
-
-    @staticmethod
-    def _reserved_for_pending_placeholders(*, has_id:bool, id_rendered:bool, id_value:str) -> int:
-        """Return reserved budget for pending high-priority placeholders."""
-        return len(id_value) if has_id and not id_rendered else 0
 
     @staticmethod
     def _truncate_log_snippet(value:str, *, max_length:int = _LOG_SNIPPET_LIMIT) -> str:
@@ -202,75 +256,23 @@ class AdExtractor(WebScrapingMixin):
         Returns:
             Rendered and sanitized name within max_length
         """
-        sanitized_title = misc.sanitize_folder_name(title, max_length)
-        parsed_template = list(Formatter().parse(template))
-        id_value = str(ad_id)
-
-        has_id = any(field == "id" for _, field, _, _ in parsed_template if field)
-        id_rendered = False
-
-        parts:list[str] = []
-        current_length = 0
-
-        id_truncated = False
-        title_truncated = False
-
-        for index, (literal_text, field_name_part, _format_spec, _conversion) in enumerate(parsed_template):
-            # Literal text has higher priority than title, but lower than id.
-            # Reserve budget only for not-yet-rendered id placeholders.
-            remaining_length = max_length - current_length
-            reserved_for_priority = self._reserved_for_pending_placeholders(
-                has_id = has_id,
-                id_rendered = id_rendered,
-                id_value = id_value,
-            )
-            literal_length = min(len(literal_text), max(0, remaining_length - reserved_for_priority))
-            parts.append(literal_text[:literal_length])
-            current_length += literal_length
-
-            if field_name_part is None:
-                continue
-
-            remaining_length = max_length - current_length
-
-            if field_name_part == "id":
-                # {id} has highest priority and should only truncate as last resort.
-                id_part = id_value[:remaining_length]
-                parts.append(id_part)
-                current_length += len(id_part)
-                id_rendered = True
-                if len(id_part) < len(id_value):
-                    id_truncated = True
-                continue
-
-            if field_name_part == "title":
-                # {title} is lowest priority; reserve budget for pending id and future literals first.
-                reserved_for_id = len(id_value) if has_id and not id_rendered else 0
-                reserved_for_future_literals = sum(len(future_literal) for future_literal, _field, _fmt, _conv in parsed_template[index + 1:])
-                available_for_title = max(0, remaining_length - reserved_for_id - reserved_for_future_literals)
-                title_part = sanitized_title[:available_for_title]
-                parts.append(title_part)
-                current_length += len(title_part)
-                if len(title_part) < len(sanitized_title):
-                    title_truncated = True
-                continue
-
-        rendered_name = "".join(parts).strip()
-        result = misc.sanitize_folder_name(rendered_name, max_length)
+        rendered, id_truncated, title_truncated = _render_name_with_budget(
+            template, ad_id, title, max_length
+        )
 
         # Emit warnings for truncation (log messages in English, no translation)
         if id_truncated or title_truncated:
             self._log_download_name_truncation(
                 template = template,
                 max_length = max_length,
-                id_value = id_value,
-                title_value = sanitized_title,
-                rendered = result,
+                id_value = str(ad_id),
+                title_value = misc.sanitize_folder_name(title, max_length),
+                rendered = rendered,
                 id_truncated = id_truncated,
                 title_truncated = title_truncated,
             )
 
-        return result
+        return rendered
 
     def _render_download_ad_file_stem(self, ad_id:int, title:str) -> str:
         max_stem_length = _MAX_FILENAME_COMPONENT_LENGTH - _DOWNLOAD_STEM_SUFFIX_BUDGET
