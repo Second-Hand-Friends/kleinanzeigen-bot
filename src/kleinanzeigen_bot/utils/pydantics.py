@@ -89,123 +89,123 @@ def format_validation_error(ex:ValidationError) -> str:
     return "\n".join(lines)
 
 
-def __get_message_template(error_code:str) -> str | None:  # noqa: C901  # generated/static pydantic error-code mapping
-    # https://github.com/pydantic/pydantic-core/blob/d03bf4a01ca3b378cc8590bd481f307e82115bc6/src/errors/types.rs#L477
-    # ruff: noqa: PLR0911 Too many return statements
-    # ruff: noqa: PLR0912 Too many branches
-    # ruff: noqa: PLR0915 Too many statements
-    # ruff: noqa: E701 Multiple statements on one line (colon)
-    match error_code:
-        case "no_such_attribute": return _("Object has no attribute '{attribute}'")
-        case "json_invalid": return _("Invalid JSON: {error}")
-        case "json_type": return _("JSON input should be string, bytes or bytearray")
-        case "needs_python_object": return _("Cannot check `{method_name}` when validating from json, use a JsonOrPython validator instead")
-        case "recursion_loop": return _("Recursion error - cyclic reference detected")
-        case "missing": return _("Field required")
-        case "frozen_field": return _("Field is frozen")
-        case "frozen_instance": return _("Instance is frozen")
-        case "extra_forbidden": return _("Extra inputs are not permitted")
-        case "invalid_key": return _("Keys should be strings")
-        case "get_attribute_error": return _("Error extracting attribute: {error}")
-        case "model_type": return _("Input should be a valid dictionary or instance of {class_name}")
-        case "model_attributes_type": return _("Input should be a valid dictionary or object to extract fields from")
-        case "dataclass_type": return _("Input should be a dictionary or an instance of {class_name}")
-        case "dataclass_exact_type": return _("Input should be an instance of {class_name}")
-        case "none_required": return _("Input should be None")
-        case "greater_than": return _("Input should be greater than {gt}")
-        case "greater_than_equal": return _("Input should be greater than or equal to {ge}")
-        case "less_than": return _("Input should be less than {lt}")
-        case "less_than_equal": return _("Input should be less than or equal to {le}")
-        case "multiple_of": return _("Input should be a multiple of {multiple_of}")
-        case "finite_number": return _("Input should be a finite number")
-        case "too_short": return _("{field_type} should have at least {min_length} item{expected_plural} after validation, not {actual_length}")
-        case "too_long": return _("{field_type} should have at most {max_length} item{expected_plural} after validation, not {actual_length}")
-        case "iterable_type": return _("Input should be iterable")
-        case "iteration_error": return _("Error iterating over object, error: {error}")
-        case "string_type": return _("Input should be a valid string")
-        case "string_sub_type": return _("Input should be a string, not an instance of a subclass of str")
-        case "string_unicode": return _("Input should be a valid string, unable to parse raw data as a unicode string")
-        case "string_too_short": return _("String should have at least {min_length} character{expected_plural}")
-        case "string_too_long": return _("String should have at most {max_length} character{expected_plural}")
-        case "string_pattern_mismatch": return _("String should match pattern '{pattern}'")
-        case "enum": return _("Input should be {expected}")
-        case "dict_type": return _("Input should be a valid dictionary")
-        case "mapping_type": return _("Input should be a valid mapping, error: {error}")
-        case "list_type": return _("Input should be a valid list")
-        case "tuple_type": return _("Input should be a valid tuple")
-        case "set_type": return _("Input should be a valid set")
-        case "set_item_not_hashable": return _("Set items should be hashable")
-        case "bool_type": return _("Input should be a valid boolean")
-        case "bool_parsing": return _("Input should be a valid boolean, unable to interpret input")
-        case "int_type": return _("Input should be a valid integer")
-        case "int_parsing": return _("Input should be a valid integer, unable to parse string as an integer")
-        case "int_from_float": return _("Input should be a valid integer, got a number with a fractional part")
-        case "int_parsing_size": return _("Unable to parse input string as an integer, exceeded maximum size")
-        case "float_type": return _("Input should be a valid number")
-        case "float_parsing": return _("Input should be a valid number, unable to parse string as a number")
-        case "bytes_type": return _("Input should be a valid bytes")
-        case "bytes_too_short": return _("Data should have at least {min_length} byte{expected_plural}")
-        case "bytes_too_long": return _("Data should have at most {max_length} byte{expected_plural}")
-        case "bytes_invalid_encoding": return _("Data should be valid {encoding}: {encoding_error}")
-        case "value_error": return _("Value error, {error}")
-        case "assertion_error": return _("Assertion failed, {error}")
-        case "custom_error": return None  # handled separately
-        case "literal_error": return _("Input should be {expected}")
-        case "date_type": return _("Input should be a valid date")
-        case "date_parsing": return _("Input should be a valid date in the format YYYY-MM-DD, {error}")
-        case "date_from_datetime_parsing": return _("Input should be a valid date or datetime, {error}")
-        case "date_from_datetime_inexact": return _("Datetimes provided to dates should have zero time - e.g. be exact dates")
-        case "date_past": return _("Date should be in the past")
-        case "date_future": return _("Date should be in the future")
-        case "time_type": return _("Input should be a valid time")
-        case "time_parsing": return _("Input should be in a valid time format, {error}")
-        case "datetime_type": return _("Input should be a valid datetime")
-        case "datetime_parsing": return _("Input should be a valid datetime, {error}")
-        case "datetime_object_invalid": return _("Invalid datetime object, got {error}")
-        case "datetime_from_date_parsing": return _("Input should be a valid datetime or date, {error}")
-        case "datetime_past": return _("Input should be in the past")
-        case "datetime_future": return _("Input should be in the future")
-        case "timezone_naive": return _("Input should not have timezone info")
-        case "timezone_aware": return _("Input should have timezone info")
-        case "timezone_offset": return _("Timezone offset of {tz_expected} required, got {tz_actual}")
-        case "time_delta_type": return _("Input should be a valid timedelta")
-        case "time_delta_parsing": return _("Input should be a valid timedelta, {error}")
-        case "frozen_set_type": return _("Input should be a valid frozenset")
-        case "is_instance_of": return _("Input should be an instance of {class}")
-        case "is_subclass_of": return _("Input should be a subclass of {class}")
-        case "callable_type": return _("Input should be callable")
-        case "union_tag_invalid": return _("Input tag '{tag}' found using {discriminator} does not match any of the expected tags: {expected_tags}")
-        case "union_tag_not_found": return _("Unable to extract tag using discriminator {discriminator}")
-        case "arguments_type": return _("Arguments must be a tuple, list or a dictionary")
-        case "missing_argument": return _("Missing required argument")
-        case "unexpected_keyword_argument": return _("Unexpected keyword argument")
-        case "missing_keyword_only_argument": return _("Missing required keyword only argument")
-        case "unexpected_positional_argument": return _("Unexpected positional argument")
-        case "missing_positional_only_argument": return _("Missing required positional only argument")
-        case "multiple_argument_values": return _("Got multiple values for argument")
-        case "url_type": return _("URL input should be a string or URL")
-        case "url_parsing": return _("Input should be a valid URL, {error}")
-        case "url_syntax_violation": return _("Input violated strict URL syntax rules, {error}")
-        case "url_too_long": return _("URL should have at most {max_length} character{expected_plural}")
-        case "url_scheme": return _("URL scheme should be {expected_schemes}")
-        case "uuid_type": return _("UUID input should be a string, bytes or UUID object")
-        case "uuid_parsing": return _("Input should be a valid UUID, {error}")
-        case "uuid_version": return _("UUID version {expected_version} expected")
-        case "decimal_type": return _("Decimal input should be an integer, float, string or Decimal object")
-        case "decimal_parsing": return _("Input should be a valid decimal")
-        case "decimal_max_digits": return _("Decimal input should have no more than {max_digits} digit{expected_plural} in total")
-        case "decimal_max_places": return _("Decimal input should have no more than {decimal_places} decimal place{expected_plural}")
-        case "decimal_whole_digits": return _("Decimal input should have no more than {whole_digits} digit{expected_plural} before the decimal point")
-        case "complex_type":
-            return _(
-                "Input should be a valid python complex object, a number, or a valid complex string "
-                "following the rules at https://docs.python.org/3/library/functions.html#complex"
-            )
-        case "complex_str_parsing":
-            return _(
-                "Input should be a valid complex string following the rules at "
-                "https://docs.python.org/3/library/functions.html#complex"
-            )
-        case _:
-            pass
-    return None
+# Mapping of pydantic error codes -> raw English message templates.
+# "custom_error" intentionally omitted; caller falls back to Pydantic's message.
+# Strings are NOT wrapped with _() here — translation happens lazily in
+# __get_message_template to avoid freezing the locale at import time.
+# See https://github.com/pydantic/pydantic-core/blob/main/src/errors/types.rs
+_MESSAGE_TEMPLATES:dict[str, str] = {
+    "no_such_attribute": "Object has no attribute '{attribute}'",
+    "json_invalid": "Invalid JSON: {error}",
+    "json_type": "JSON input should be string, bytes or bytearray",
+    "needs_python_object": "Cannot check `{method_name}` when validating from json, use a JsonOrPython validator instead",
+    "recursion_loop": "Recursion error - cyclic reference detected",
+    "missing": "Field required",
+    "frozen_field": "Field is frozen",
+    "frozen_instance": "Instance is frozen",
+    "extra_forbidden": "Extra inputs are not permitted",
+    "invalid_key": "Keys should be strings",
+    "get_attribute_error": "Error extracting attribute: {error}",
+    "model_type": "Input should be a valid dictionary or instance of {class_name}",
+    "model_attributes_type": "Input should be a valid dictionary or object to extract fields from",
+    "dataclass_type": "Input should be a dictionary or an instance of {class_name}",
+    "dataclass_exact_type": "Input should be an instance of {class_name}",
+    "none_required": "Input should be None",
+    "greater_than": "Input should be greater than {gt}",
+    "greater_than_equal": "Input should be greater than or equal to {ge}",
+    "less_than": "Input should be less than {lt}",
+    "less_than_equal": "Input should be less than or equal to {le}",
+    "multiple_of": "Input should be a multiple of {multiple_of}",
+    "finite_number": "Input should be a finite number",
+    "too_short": "{field_type} should have at least {min_length} item{expected_plural} after validation, not {actual_length}",
+    "too_long": "{field_type} should have at most {max_length} item{expected_plural} after validation, not {actual_length}",
+    "iterable_type": "Input should be iterable",
+    "iteration_error": "Error iterating over object, error: {error}",
+    "string_type": "Input should be a valid string",
+    "string_sub_type": "Input should be a string, not an instance of a subclass of str",
+    "string_unicode": "Input should be a valid string, unable to parse raw data as a unicode string",
+    "string_too_short": "String should have at least {min_length} character{expected_plural}",
+    "string_too_long": "String should have at most {max_length} character{expected_plural}",
+    "string_pattern_mismatch": "String should match pattern '{pattern}'",
+    "enum": "Input should be {expected}",
+    "dict_type": "Input should be a valid dictionary",
+    "mapping_type": "Input should be a valid mapping, error: {error}",
+    "list_type": "Input should be a valid list",
+    "tuple_type": "Input should be a valid tuple",
+    "set_type": "Input should be a valid set",
+    "set_item_not_hashable": "Set items should be hashable",
+    "bool_type": "Input should be a valid boolean",
+    "bool_parsing": "Input should be a valid boolean, unable to interpret input",
+    "int_type": "Input should be a valid integer",
+    "int_parsing": "Input should be a valid integer, unable to parse string as an integer",
+    "int_from_float": "Input should be a valid integer, got a number with a fractional part",
+    "int_parsing_size": "Unable to parse input string as an integer, exceeded maximum size",
+    "float_type": "Input should be a valid number",
+    "float_parsing": "Input should be a valid number, unable to parse string as a number",
+    "bytes_type": "Input should be a valid bytes",
+    "bytes_too_short": "Data should have at least {min_length} byte{expected_plural}",
+    "bytes_too_long": "Data should have at most {max_length} byte{expected_plural}",
+    "bytes_invalid_encoding": "Data should be valid {encoding}: {encoding_error}",
+    "value_error": "Value error, {error}",
+    "assertion_error": "Assertion failed, {error}",
+    # "custom_error" omitted intentionally — caller falls back to Pydantic's own message
+    "literal_error": "Input should be {expected}",
+    "date_type": "Input should be a valid date",
+    "date_parsing": "Input should be a valid date in the format YYYY-MM-DD, {error}",
+    "date_from_datetime_parsing": "Input should be a valid date or datetime, {error}",
+    "date_from_datetime_inexact": "Datetimes provided to dates should have zero time - e.g. be exact dates",
+    "date_past": "Date should be in the past",
+    "date_future": "Date should be in the future",
+    "time_type": "Input should be a valid time",
+    "time_parsing": "Input should be in a valid time format, {error}",
+    "datetime_type": "Input should be a valid datetime",
+    "datetime_parsing": "Input should be a valid datetime, {error}",
+    "datetime_object_invalid": "Invalid datetime object, got {error}",
+    "datetime_from_date_parsing": "Input should be a valid datetime or date, {error}",
+    "datetime_past": "Input should be in the past",
+    "datetime_future": "Input should be in the future",
+    "timezone_naive": "Input should not have timezone info",
+    "timezone_aware": "Input should have timezone info",
+    "timezone_offset": "Timezone offset of {tz_expected} required, got {tz_actual}",
+    "time_delta_type": "Input should be a valid timedelta",
+    "time_delta_parsing": "Input should be a valid timedelta, {error}",
+    "frozen_set_type": "Input should be a valid frozenset",
+    "is_instance_of": "Input should be an instance of {class}",
+    "is_subclass_of": "Input should be a subclass of {class}",
+    "callable_type": "Input should be callable",
+    "union_tag_invalid": "Input tag '{tag}' found using {discriminator} does not match any of the expected tags: {expected_tags}",
+    "union_tag_not_found": "Unable to extract tag using discriminator {discriminator}",
+    "arguments_type": "Arguments must be a tuple, list or a dictionary",
+    "missing_argument": "Missing required argument",
+    "unexpected_keyword_argument": "Unexpected keyword argument",
+    "missing_keyword_only_argument": "Missing required keyword only argument",
+    "unexpected_positional_argument": "Unexpected positional argument",
+    "missing_positional_only_argument": "Missing required positional only argument",
+    "multiple_argument_values": "Got multiple values for argument",
+    "url_type": "URL input should be a string or URL",
+    "url_parsing": "Input should be a valid URL, {error}",
+    "url_syntax_violation": "Input violated strict URL syntax rules, {error}",
+    "url_too_long": "URL should have at most {max_length} character{expected_plural}",
+    "url_scheme": "URL scheme should be {expected_schemes}",
+    "uuid_type": "UUID input should be a string, bytes or UUID object",
+    "uuid_parsing": "Input should be a valid UUID, {error}",
+    "uuid_version": "UUID version {expected_version} expected",
+    "decimal_type": "Decimal input should be an integer, float, string or Decimal object",
+    "decimal_parsing": "Input should be a valid decimal",
+    "decimal_max_digits": "Decimal input should have no more than {max_digits} digit{expected_plural} in total",
+    "decimal_max_places": "Decimal input should have no more than {decimal_places} decimal place{expected_plural}",
+    "decimal_whole_digits": "Decimal input should have no more than {whole_digits} digit{expected_plural} before the decimal point",
+    "complex_type": (
+        "Input should be a valid python complex object, a number, or a valid complex string "
+        "following the rules at https://docs.python.org/3/library/functions.html#complex"
+    ),
+    "complex_str_parsing": (
+        "Input should be a valid complex string following the rules at "
+        "https://docs.python.org/3/library/functions.html#complex"
+    ),
+}
+
+
+def __get_message_template(error_code:str) -> str | None:
+    template = _MESSAGE_TEMPLATES.get(error_code)
+    return _(template) if template is not None else None
