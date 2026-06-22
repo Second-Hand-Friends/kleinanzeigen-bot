@@ -294,18 +294,38 @@ class AdExtractor(WebScrapingMixin):
         # Extract ad info into a staging directory and determine final target directory
         ad_cfg, staging_dir, final_dir, ad_file_stem = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id, active_override = active)
 
-        # Save the ad configuration file to staging first (offload to executor to avoid blocking the event loop)
-        ad_file_path = str(staging_dir / f"{ad_file_stem}.yaml")
+        # Preserve local-only settings when re-downloading an existing ad
+        await self._preserve_local_settings_from_existing_ad(ad_cfg, final_dir, ad_file_stem, ad_id)
+
+        # Save the ad configuration to the final location with backup and rollback
         header_string = (
             "# yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/refs/heads/main/schemas/ad.schema.json"
         )
+        await self._commit_staged_download(
+            staging_dir = staging_dir,
+            final_dir = final_dir,
+            ad_file_stem = ad_file_stem,
+            ad_cfg = ad_cfg,
+            header_string = header_string,
+            ad_id = ad_id,
+        )
 
-        loop = asyncio.get_running_loop()
+    async def _preserve_local_settings_from_existing_ad(
+        self,
+        ad_cfg:AdPartial,
+        final_dir:Path,
+        ad_file_stem:str,
+        ad_id:int,
+    ) -> None:
+        """Preserve local-only settings from an existing downloaded ad YAML into ad_cfg.
 
-        # Preserve local-only settings when re-downloading an existing ad
+        No-op unless config.download.preserve_local_settings is enabled and
+        the final directory contains an existing ad YAML.
+        """
         if self.config.download.preserve_local_settings and await files.exists(final_dir):
             existing_yaml_path = final_dir / f"{ad_file_stem}.yaml"
             # Fall back to glob if the rendered stem does not match (e.g. title changed)
+            loop = asyncio.get_running_loop()
             if not await files.exists(existing_yaml_path):
                 yaml_candidates = await loop.run_in_executor(
                     None, lambda: sorted(final_dir.glob("*.yaml"))
@@ -352,11 +372,30 @@ class AdExtractor(WebScrapingMixin):
                 except Exception as ex:
                     LOG.warning("Could not preserve local settings from existing ad %d: %s", ad_id, ex)
 
+    async def _commit_staged_download(
+        self,
+        *,
+        staging_dir:Path,
+        final_dir:Path,
+        ad_file_stem:str,
+        ad_cfg:AdPartial,
+        header_string:str,
+        ad_id:int,
+    ) -> None:
+        """Commit the staged download to the final location with backup and rollback.
+
+        Saves the ad config to staging, backs up any existing final directory,
+        atomically renames staging → final, and cleans up the backup on success.
+        On any failure, restores the backup (if created by us) and removes staging,
+        then re-raises.
+        """
+        loop = asyncio.get_running_loop()
+        ad_file_path = staging_dir / f"{ad_file_stem}.yaml"
         backup_dir = final_dir.with_name(f"{_BACKUP_DIR_PREFIX}{ad_file_stem}")
         final_yaml_path = final_dir / f"{ad_file_stem}.yaml"
         backup_created_by_us = False
         try:
-            await loop.run_in_executor(None, lambda: dicts.save_dict(ad_file_path, ad_cfg.model_dump(mode = "json"), header = header_string))
+            await loop.run_in_executor(None, lambda: dicts.save_dict(str(ad_file_path), ad_cfg.model_dump(mode = "json"), header = header_string))
 
             if await files.exists(backup_dir):
                 raise FileExistsError(_("Backup directory %s already exists. Aborting download for ad %s to avoid data loss.") % (backup_dir, ad_id))
