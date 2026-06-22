@@ -218,9 +218,15 @@ async def download_ads(
     else:
         effective_selector = ads_selector  # numeric IDs: "123,456" — unchanged
 
+    # Validate selector before fetching metadata
+    is_numeric_selector = _download_selection.is_numeric_ids_selector(effective_selector)
+    if effective_selector not in {"all", "new"} and not is_numeric_selector:
+        LOG.error("Invalid ads selector: %s. Use 'all', 'new', or comma-separated numeric IDs.", effective_selector)
+        return
+
     # Fetch published ads once and build a lookup dict
     published_ads_by_id = await _fetch_published_ads_by_id(
-        web, root_url, strict = _download_selection.is_numeric_ids_selector(effective_selector),
+        web, root_url, strict = is_numeric_selector,
     )
 
     download_dir = resolve_download_dir(config, config_file_path, workspace)
@@ -238,9 +244,6 @@ async def download_ads(
         else:
             await _download_new_ads(ad_extractor, own_ad_urls, published_ads_by_id, load_ads_func)
 
-    elif _download_selection.is_numeric_ids_selector(effective_selector):
+    elif is_numeric_selector:
         ids = [int(n) for n in effective_selector.split(",")]
         await _download_ads_by_ids(ad_extractor, ids, published_ads_by_id)
-
-    else:
-        LOG.error("Invalid ads selector: %s. Use 'all', 'new', or comma-separated numeric IDs.", effective_selector)
