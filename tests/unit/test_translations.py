@@ -157,6 +157,24 @@ def _extract_log_messages(file_path:str, exclude_debug:bool = False) -> MessageD
                 if msg:
                     add_message(function_name, msg)
 
+    # Extract messages from _MESSAGE_TEMPLATES dict (used by __get_message_template)
+    for n in ast.walk(tree):
+        target_ids:list[str] = []
+        dict_value:ast.AST | None = None
+        if isinstance(n, ast.Assign):
+            target_ids = [t.id for t in n.targets if isinstance(t, ast.Name)]
+            dict_value = n.value
+        elif isinstance(n, ast.AnnAssign):
+            if isinstance(n.target, ast.Name):
+                target_ids = [n.target.id]
+            dict_value = n.value
+        if "_MESSAGE_TEMPLATES" not in target_ids or not isinstance(dict_value, ast.Dict):
+            continue
+        for val_node in dict_value.values:
+            msg = extract_string_constant(val_node)
+            if msg:  # skips None values (e.g. custom_error)
+                add_message("__get_message_template", msg)
+
     print(f"Messages: {len(messages)} in {file_path}")
 
     return messages
