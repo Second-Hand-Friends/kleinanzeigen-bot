@@ -570,11 +570,31 @@ async def set_shipping(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStrategy = 
     """Set shipping for non-WANTED ads (radio button or combobox flow)."""
     short_timeout = web.timeout("quick_dom")
 
-    # PRO/commercial accounts are expected to render Versand as a custom
-    # special-attribute dropdown (``<button role="combobox">``) from the
-    # PostListingForm Astro island.  In that UI the placeholder ("Bitte wählen")
-    # must be replaced directly with either "Versand möglich" (value "ja") or
-    # "Nur Abholung" (value "nein").
+    if await _select_shipping_combobox_if_present(web, ad_cfg, short_timeout):
+        return
+    if ad_cfg.shipping_type == "PICKUP":
+        await _set_pickup_shipping(web, ad_cfg, short_timeout)
+        return
+    if ad_cfg.shipping_options:
+        await _set_configured_shipping_options(web, ad_cfg, mode, short_timeout)
+        return
+    if ad_cfg.shipping_costs is not None:
+        # Fail-fast: configured shipping_costs with no shipping_options will not
+        # publish safely (Kleinanzeigen defaults may not match the article).
+        raise ValueError(
+            _("Individual shipping (shipping_costs) is no longer supported. "
+              "Remove shipping_costs and configure predefined 'shipping_options' instead.")
+        )
+    await _enable_platform_default_shipping(web, short_timeout)
+
+
+async def _select_shipping_combobox_if_present(
+    web:WebScrapingMixin, ad_cfg:Ad, short_timeout:int | float
+) -> bool:
+    """PRO/commercial accounts: select shipping via special-attribute combobox.
+
+    Returns True if the Versand combobox was found and handled, False otherwise.
+    """
     shipping_combobox = await web.web_probe(By.CSS_SELECTOR, VERSAND_COMBOBOX_SELECTOR, timeout = short_timeout)
     if shipping_combobox is not None:
         try:
@@ -583,79 +603,74 @@ async def set_shipping(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStrategy = 
                 raise TimeoutError(_("Shipping combobox button has no id attribute"))
             await web.web_select_button_combobox(btn_id, WANTED_SHIPPING_LABELS[ad_cfg.shipping_type], timeout = short_timeout)
             LOG.debug("Selected shipping type via Versand combobox: %s", ad_cfg.shipping_type)
-            return
+            return True
         except KeyError as ex:
             raise ValueError(_("Unsupported shipping_type: %s") % ad_cfg.shipping_type) from ex
         except TimeoutError as ex:
             LOG.debug(ex, exc_info = True)
             raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % ad_cfg.shipping_type) from ex
+    return False
 
-    # Private/non-commercial accounts are expected to render the radio-button
-    # controls and, for SHIPPING, the shipping-options dialog.  This is the
-    # fallback path when no special-attribute Versand combobox is present
-    # (see #869 vs #1125).
-    if ad_cfg.shipping_type == "PICKUP":
-        pickup_radio = await web.web_probe(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
-        if pickup_radio is None:
-            shipping_fieldset = await web.web_probe(By.ID, "ad-shipping-enabled", timeout = short_timeout)
-            if shipping_fieldset is not None:
-                raise TimeoutError(
-                    _("Shipping fieldset is rendered, but the pickup radio is missing; page may not be fully loaded.")
-                )
-            # Some categories (notably books 76/77 and comics 76/77/15156) render no
-            # shipping fieldset at all — those ads are PICKUP-only by site convention.
-            LOG.debug("PICKUP: no shipping fieldset for this category; treating as already PICKUP.")
-            return
-        try:
-            if not await web.web_check(By.ID, "ad-shipping-enabled-no", Is.SELECTED, timeout = short_timeout):
-                await web.web_click(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
-        except TimeoutError as ex:
-            LOG.debug(ex, exc_info = True)
-            raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % ad_cfg.shipping_type) from ex
-    elif ad_cfg.shipping_options:
-        # Ensure shipping is enabled before opening the dialog (may already be selected)
-        try:
-            await web.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
-            await web.web_sleep(500, 800)
-        except TimeoutError as ex:
-            LOG.debug("Shipping enabled toggle not found before options dialog: %s", ex)
-        await web.web_click(By.ID, "ad-shipping-options")
 
-        if mode == AdUpdateStrategy.MODIFY:
+async def _set_pickup_shipping(
+    web:WebScrapingMixin, ad_cfg:Ad, short_timeout:int | float
+) -> None:
+    """Set PICKUP shipping via radio button with category-fallback handling."""
+    pickup_radio = await web.web_probe(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
+    if pickup_radio is None:
+        shipping_fieldset = await web.web_probe(By.ID, "ad-shipping-enabled", timeout = short_timeout)
+        if shipping_fieldset is not None:
+            raise TimeoutError(
+                _("Shipping fieldset is rendered, but the pickup radio is missing; page may not be fully loaded.")
+            )
+        LOG.debug("PICKUP: no shipping fieldset for this category; treating as already PICKUP.")
+        return
+    try:
+        if not await web.web_check(By.ID, "ad-shipping-enabled-no", Is.SELECTED, timeout = short_timeout):
+            await web.web_click(By.ID, "ad-shipping-enabled-no", timeout = short_timeout)
+    except TimeoutError as ex:
+        LOG.debug(ex, exc_info = True)
+        raise TimeoutError(_("Failed to set shipping attribute for type '%s'!") % ad_cfg.shipping_type) from ex
+
+
+async def _set_configured_shipping_options(
+    web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStrategy, short_timeout:int | float
+) -> None:
+    """Open the shipping options dialog and configure carrier selections."""
+    try:
+        await web.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
+        await web.web_sleep(500, 800)
+    except TimeoutError as ex:
+        LOG.debug("Shipping enabled toggle not found before options dialog: %s", ex)
+    await web.web_click(By.ID, "ad-shipping-options")
+
+    if mode == AdUpdateStrategy.MODIFY:
+        try:
+            await web.web_find(By.XPATH, '//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
+        except TimeoutError:
+            await web.web_click(By.XPATH, '//button[contains(., "Zurück")]')
             try:
-                # when "Andere Versandmethoden" is not available, go back and start over new
                 await web.web_find(By.XPATH, '//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
             except TimeoutError:
                 await web.web_click(By.XPATH, '//button[contains(., "Zurück")]')
 
-                # in some categories we need to go another dialog back
-                try:
-                    await web.web_find(By.XPATH, '//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
-                except TimeoutError:
-                    await web.web_click(By.XPATH, '//button[contains(., "Zurück")]')
+    await web.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
+    await set_shipping_options(web, ad_cfg, mode)
 
-        await web.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
-        await set_shipping_options(web, ad_cfg, mode)
-    elif ad_cfg.shipping_costs is not None:
-        # Fail-fast: configured shipping_costs with no shipping_options will not
-        # publish safely (Kleinanzeigen defaults may not match the article).
-        raise ValueError(
-            _("Individual shipping (shipping_costs) is no longer supported. "
-              "Remove shipping_costs and configure predefined 'shipping_options' instead.")
-        )
-    else:
-        # No shipping_options and no shipping_costs: enable shipping in the
-        # form but do NOT open the shipping-options dialog — the ad uses
-        # Kleinanzeigen platform defaults for shipping.
-        try:
-            await web.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
-        except TimeoutError as ex:
-            LOG.debug("Shipping enabled toggle not found: %s", ex)
 
-        LOG.debug(
-            "No shipping options and no shipping_costs configured; "
-            "shipping is enabled at the form level but no carrier/package is selected."
-        )
+async def _enable_platform_default_shipping(
+    web:WebScrapingMixin, short_timeout:int | float
+) -> None:
+    """Enable shipping at the form level without selecting carrier options."""
+    try:
+        await web.web_click(By.ID, "ad-shipping-enabled-yes", timeout = short_timeout)
+    except TimeoutError as ex:
+        LOG.debug("Shipping enabled toggle not found: %s", ex)
+
+    LOG.debug(
+        "No shipping options and no shipping_costs configured; "
+        "shipping is enabled at the form level but no carrier/package is selected."
+    )
 
 
 async def set_shipping_options(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
