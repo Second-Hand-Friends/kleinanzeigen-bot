@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio, enum, inspect, json, os, platform, secrets, shutil, subprocess, urllib.request  # isort: skip # noqa: S404
+import asyncio, enum, inspect, json, os, platform, secrets, shutil, subprocess  # isort: skip # noqa: S404
 from collections.abc import Awaitable, Callable, Coroutine, Iterable, Sequence
 from gettext import gettext as _
 from pathlib import Path, PureWindowsPath
@@ -26,6 +26,8 @@ from kleinanzeigen_bot.model.config_model import Config as BotConfig
 from kleinanzeigen_bot.model.config_model import TimeoutConfig
 
 from . import files, loggers, net, xdg_paths
+from .browser_diagnostics import _run_browser_diagnostics
+from .browser_runtime_config import BrowserConfig
 from .chrome_version_detector import (
     ChromeVersionInfo,
     detect_chrome_version_from_binary,
@@ -42,23 +44,6 @@ _KEY_VALUE_PAIR_SIZE = 2
 _PRIMARY_SELECTOR_BUDGET_RATIO:Final[float] = 0.70
 _BACKUP_SELECTOR_BUDGET_CAP_SECONDS:Final[float] = 0.75
 _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS:Final[float] = 0.25
-
-
-def _format_url_host(host:str) -> str:
-    """Format host for URL, bracketing IPv6 addresses only when needed.
-
-    Args:
-        host: The raw host string (e.g. '127.0.0.1', '::1', '[::1]')
-
-    Returns:
-        Host string safe for use in http://host:port/path URLs.
-        IPv6 addresses are bracketed; already-bracketed values are preserved.
-    """
-    host = host.strip()
-    if ":" in host:
-        host = host.strip("[]")
-        return f"[{host}]"
-    return host
 
 
 def _resolve_user_data_dir_paths(arg_value:str, config_value:str) -> tuple[Any, Any]:
@@ -104,17 +89,6 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 METACHAR_ESCAPER:Final[dict[int, str]] = str.maketrans({ch: f"\\{ch}" for ch in "!\"#$%&'()*+,./:;<=>?@[\\]^`{|}~"})
 
 
-def _is_admin() -> bool:
-    """Check if the current process is running with admin/root privileges."""
-    try:
-        if hasattr(os, "geteuid"):
-            result = os.geteuid() == 0
-            return bool(result)
-        return False
-    except AttributeError:
-        return False
-
-
 class By(enum.Enum):
     ID = enum.auto()
     CLASS_NAME = enum.auto()
@@ -130,16 +104,6 @@ class Is(enum.Enum):
     DISABLED = enum.auto()
     READONLY = enum.auto()
     SELECTED = enum.auto()
-
-
-class BrowserConfig:
-    def __init__(self) -> None:
-        self.arguments:Iterable[str] = []
-        self.binary_location:str | None = None
-        self.extensions:Iterable[str] = []
-        self.use_private_window:bool = True
-        self.user_data_dir:str | None = None
-        self.profile_name:str | None = None
 
 
 def _write_initial_prefs(prefs_file:str) -> None:
@@ -218,14 +182,23 @@ def _allocate_selector_group_budgets(total_timeout:float, selector_count:int) ->
 
 
 def _parse_remote_debugging_args(arguments:Iterable[str]) -> tuple[str, int]:
-    """Parse remote debugging host and port from browser arguments."""
+    """Parse remote debugging host and port from browser arguments.
+
+    Uses first-wins semantics: only the first occurrence of each argument is used.
+    """
     remote_host = "127.0.0.1"
     remote_port = 0
+    host_assigned = False
+    port_assigned = False
     for arg in arguments:
-        if arg.startswith("--remote-debugging-host="):
+        if not host_assigned and arg.startswith("--remote-debugging-host="):
             remote_host = arg.split("=", maxsplit = 1)[1]
-        if arg.startswith("--remote-debugging-port="):
+            host_assigned = True
+        if not port_assigned and arg.startswith("--remote-debugging-port="):
             remote_port = int(arg.split("=", maxsplit = 1)[1])
+            port_assigned = True
+        if host_assigned and port_assigned:
+            break
     return remote_host, remote_port
 
 
@@ -245,47 +218,6 @@ def _build_nodriver_config(browser_path:str, browser_args:list[str], user_data_d
     if any(arg == "--no-sandbox" for arg in browser_args):
         cfg.sandbox = False
     return cfg
-
-
-def _remote_debugging_api_browser(remote_host:str, remote_port:int, probe_timeout:float) -> tuple[str | None, Exception | None]:
-    """Probe the remote debugging API.
-
-    Returns (browser_string, None) on success or (None, exception) on failure.
-    """
-    try:
-        formatted_host = _format_url_host(remote_host)
-        response = urllib.request.urlopen(f"http://{formatted_host}:{remote_port}/json/version", timeout = probe_timeout)
-        version_info = json.loads(response.read().decode())
-        return version_info.get("Browser", "Unknown"), None
-    except Exception as exc:
-        return None, exc
-
-
-def _find_relevant_browser_processes(target_browser_name:str) -> tuple[list[dict[str, object]], Exception | None]:
-    """Find browser processes matching *target_browser_name*.
-
-    Returns (process_list, global_error). Per-process NoSuchProcess/AccessDenied
-    are silently skipped. The caller handles the global warning log.
-    """
-    try:
-        browser_processes:list[dict[str, object]] = []
-        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
-            try:
-                proc_name = proc.info["name"] or ""
-                cmdline = proc.info["cmdline"] or []
-
-                is_target_browser = target_browser_name and target_browser_name in proc_name.lower()
-                has_remote_debugging = cmdline and any(arg.startswith("--remote-debugging-port=") for arg in cmdline)
-
-                if is_target_browser:
-                    proc.info["has_remote_debugging"] = has_remote_debugging
-                    browser_processes.append(proc.info)
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                # Process ended or is not accessible; skip it.
-                pass
-        return browser_processes, None
-    except (psutil.Error, PermissionError) as exc:
-        return [], exc
 
 
 class WebScrapingMixin:  # noqa: PLR0904
@@ -744,8 +676,6 @@ class WebScrapingMixin:  # noqa: PLR0904
 
     def diagnose_browser_issues(self) -> None:
         """Diagnose common browser connection issues and provide troubleshooting information."""
-        from .browser_diagnostics import _run_browser_diagnostics  # noqa: PLC0415
-
         _run_browser_diagnostics(
             browser_config = self.browser_config,
             get_timeout = self.effective_timeout,

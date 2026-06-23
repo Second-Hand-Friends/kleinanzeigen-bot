@@ -8,28 +8,95 @@ Contains diagnostic functions for browser binary, remote debugging,
 Chrome version issues, and process inspection.
 """
 import ipaddress
+import json
 import os
 import platform
 import subprocess  # noqa: S404
+import urllib.request
 from collections.abc import Callable, Iterable
 from typing import Final
 
+import psutil
+
 from kleinanzeigen_bot.utils import loggers
 
+from .browser_runtime_config import BrowserConfig
 from .chrome_version_detector import (
     get_chrome_version_diagnostic_info,
     validate_chrome_136_configuration,
 )
 from .net import is_port_open
-from .web_scraping_mixin import (
-    BrowserConfig,
-    _find_relevant_browser_processes,
-    _format_url_host,
-    _is_admin,
-    _remote_debugging_api_browser,
-)
 
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
+
+
+def _format_url_host(host:str) -> str:
+    """Format host for URL, bracketing IPv6 addresses only when needed.
+
+    Args:
+        host: The raw host string (e.g. '127.0.0.1', '::1', '[::1]')
+
+    Returns:
+        Host string safe for use in http://host:port/path URLs.
+        IPv6 addresses are bracketed; already-bracketed values are preserved.
+    """
+    host = host.strip()
+    if ":" in host:
+        host = host.strip("[]")
+        return f"[{host}]"
+    return host
+
+
+def _is_admin() -> bool:
+    """Check if the current process is running with admin/root privileges."""
+    try:
+        if hasattr(os, "geteuid"):
+            result = os.geteuid() == 0
+            return bool(result)
+        return False
+    except AttributeError:
+        return False
+
+
+def _remote_debugging_api_browser(remote_host:str, remote_port:int, probe_timeout:float) -> tuple[str | None, Exception | None]:
+    """Probe the remote debugging API.
+
+    Returns (browser_string, None) on success or (None, exception) on failure.
+    """
+    try:
+        formatted_host = _format_url_host(remote_host)
+        response = urllib.request.urlopen(f"http://{formatted_host}:{remote_port}/json/version", timeout = probe_timeout)
+        version_info = json.loads(response.read().decode())
+        return version_info.get("Browser", "Unknown"), None
+    except Exception as exc:
+        return None, exc
+
+
+def _find_relevant_browser_processes(target_browser_name:str) -> tuple[list[dict[str, object]], Exception | None]:
+    """Find browser processes matching *target_browser_name*.
+
+    Returns (process_list, global_error). Per-process NoSuchProcess/AccessDenied
+    are silently skipped. The caller handles the global warning log.
+    """
+    try:
+        browser_processes:list[dict[str, object]] = []
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                proc_name = proc.info["name"] or ""
+                cmdline = proc.info["cmdline"] or []
+
+                is_target_browser = target_browser_name and target_browser_name in proc_name.lower()
+                has_remote_debugging = cmdline and any(arg.startswith("--remote-debugging-port=") for arg in cmdline)
+
+                if is_target_browser:
+                    proc.info["has_remote_debugging"] = has_remote_debugging
+                    browser_processes.append(proc.info)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                # Process ended or is not accessible; skip it.
+                pass
+        return browser_processes, None
+    except (psutil.Error, PermissionError) as exc:
+        return [], exc
 
 
 def _diagnostic_remote_debugging_endpoint(arguments:Iterable[str]) -> tuple[str, int]:

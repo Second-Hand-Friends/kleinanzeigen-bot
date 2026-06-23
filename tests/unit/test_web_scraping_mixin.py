@@ -24,7 +24,8 @@ from nodriver.core.tab import Tab as Page
 
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import files, loggers
-from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is, WebScrapingMixin, _allocate_selector_group_budgets, _format_url_host, _is_admin  # noqa: PLC2701
+from kleinanzeigen_bot.utils.browser_diagnostics import _format_url_host, _is_admin  # noqa: PLC2701
+from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is, WebScrapingMixin, _allocate_selector_group_budgets  # noqa: PLC2701
 
 
 class ConfigProtocol(Protocol):
@@ -2469,7 +2470,7 @@ class TestWebScrapingDiagnostics:
         # Remove geteuid attribute to simulate Windows
         del mock_os.geteuid
 
-        with patch("kleinanzeigen_bot.utils.web_scraping_mixin.os", mock_os):
+        with patch("kleinanzeigen_bot.utils.browser_diagnostics.os", mock_os):
             assert _is_admin() is False
 
     def test_format_url_host_ipv6(self) -> None:
@@ -2900,7 +2901,7 @@ class TestWebScrapingMixinAdminCheck:
         mock_os = Mock()
         mock_os.geteuid = Mock(return_value = 0)
 
-        with patch("kleinanzeigen_bot.utils.web_scraping_mixin.os", mock_os):
+        with patch("kleinanzeigen_bot.utils.browser_diagnostics.os", mock_os):
             assert _is_admin() is True
 
     def test_is_admin_on_unix_system_not_root(self) -> None:
@@ -2909,7 +2910,7 @@ class TestWebScrapingMixinAdminCheck:
         mock_os = Mock()
         mock_os.geteuid = Mock(return_value = 1000)
 
-        with patch("kleinanzeigen_bot.utils.web_scraping_mixin.os", mock_os):
+        with patch("kleinanzeigen_bot.utils.browser_diagnostics.os", mock_os):
             assert _is_admin() is False
 
     def test_is_admin_on_windows_system(self) -> None:
@@ -2919,7 +2920,7 @@ class TestWebScrapingMixinAdminCheck:
         # Remove geteuid attribute to simulate Windows
         del mock_os.geteuid
 
-        with patch("kleinanzeigen_bot.utils.web_scraping_mixin.os", mock_os):
+        with patch("kleinanzeigen_bot.utils.browser_diagnostics.os", mock_os):
             assert _is_admin() is False
 
 
