@@ -414,7 +414,7 @@ class AdExtractor(WebScrapingMixin):
                     await loop.run_in_executor(None, _remove_tree_with_retries, backup_dir)
                 except OSError as ex:
                     LOG.warning("Could not remove backup directory %s: %s", backup_dir, ex)
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Broad catch is intentional: run rollback/cleanup for operational failures, then re-raise.
             # asyncio.CancelledError is a BaseException and is therefore not caught here.
             if backup_created_by_us and await files.exists(backup_dir) and not await files.exists(final_dir):
@@ -764,7 +764,7 @@ class AdExtractor(WebScrapingMixin):
 
         try:
             ad_cfg = await self._extract_ad_page_info(str(staging_dir), ad_id, ad_file_stem, title, active_override = active_override)
-        except Exception:
+        except Exception:  # noqa: BLE001 — intentional broad catch for staging directory cleanup on failure
             if await files.exists(staging_dir):
                 try:
                     await loop.run_in_executor(None, _remove_tree_with_retries, staging_dir)

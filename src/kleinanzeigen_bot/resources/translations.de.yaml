@@ -854,7 +854,20 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
   _web_find_all_once:
     "Unsupported selector type: %s": "Nicht unterstützter Selektor-Typ: %s"
 
-  diagnose_browser_issues:
+  _validate_chrome_136_configuration:
+    " -> %s 136+ configuration validation failed: %s": " -> %s 136+ Konfigurationsvalidierung fehlgeschlagen: %s"
+    " -> %s 136+ configuration validation passed": " -> %s 136+ Konfigurationsvalidierung bestanden"
+
+  _validate_chrome_version_configuration:
+    " -> %s 136+ detected: %s": " -> %s 136+ erkannt: %s"
+    " -> %s version detected: %s (pre-136, no special validation required)": " -> %s-Version erkannt: %s (vor 136, keine besondere Validierung erforderlich)"
+    " -> Browser version detection failed, skipping validation: %s": " -> Browser-Versionserkennung fehlgeschlagen, Validierung wird übersprungen: %s"
+    " -> Unexpected error during browser version validation, skipping: %s": " -> Unerwarteter Fehler bei Browser-Versionsvalidierung, wird übersprungen: %s"
+
+#################################################
+kleinanzeigen_bot/utils/browser_diagnostics.py:
+#################################################
+  _run_browser_diagnostics:
     "=== Browser Connection Diagnostics ===": "=== Browser-Verbindungsdiagnose ==="
     "=== End Diagnostics ===": "=== Ende der Diagnose ==="
     "(ok) Browser binary exists: %s": "(Ok) Browser-Binärdatei existiert: %s"
@@ -870,29 +883,16 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "(info) User data directory does not exist (will be created): %s": "(Info) Benutzerdatenverzeichnis existiert nicht (wird erstellt): %s"
     "(info) Remote debugging port configured: %d on host %s": "(Info) Remote-Debugging-Port konfiguriert: %d auf Host %s"
     "(info) Remote debugging port is not open on %s:%d": "(Info) Remote-Debugging-Port ist nicht offen auf %s:%d"
-
     "(warn) Remote debugging diagnostics will probe configured host: %s:%d": "(Warnung) Remote-Debugging-Diagnose wird konfigurierten Host prüfen: %s:%d"
     "(warn) Unable to inspect browser processes: %s": "(Warnung) Browser-Prozesse konnten nicht überprüft werden: %s"
-
     "(info) No browser processes currently running": "(Info) Derzeit keine Browser-Prozesse aktiv"
     "(fail) Running as root - this can cause browser issues": "(Fehler) Läuft als Root - dies kann Browser-Probleme verursachen"
-
     "(info) Found %d browser processes running": "(Info) %d Browser-Prozesse aktiv gefunden"
     "  - PID %d: %s (remote debugging enabled)": "  - PID %d: %s (Remote-Debugging aktiviert)"
     "  - PID %d: %s (remote debugging NOT enabled)": "  - PID %d: %s (Remote-Debugging NICHT aktiviert)"
     "(ok) Remote debugging API accessible - Browser: %s": "(ok) Remote-Debugging-API zugänglich - Browser: %s"
     "(fail) Remote debugging port is open but API not accessible: %s": "(Fehler) Remote-Debugging-Port ist offen, aber API nicht zugänglich: %s"
     "  This might indicate a browser update issue or configuration problem": "  Dies könnte auf ein Browser-Update-Problem oder Konfigurationsproblem hinweisen"
-
-  _validate_chrome_136_configuration:
-    " -> %s 136+ configuration validation failed: %s": " -> %s 136+ Konfigurationsvalidierung fehlgeschlagen: %s"
-    " -> %s 136+ configuration validation passed": " -> %s 136+ Konfigurationsvalidierung bestanden"
-
-  _validate_chrome_version_configuration:
-    " -> %s 136+ detected: %s": " -> %s 136+ erkannt: %s"
-    " -> %s version detected: %s (pre-136, no special validation required)": " -> %s-Version erkannt: %s (vor 136, keine besondere Validierung erforderlich)"
-    " -> Browser version detection failed, skipping validation: %s": " -> Browser-Versionserkennung fehlgeschlagen, Validierung wird übersprungen: %s"
-    " -> Unexpected error during browser version validation, skipping: %s": " -> Unerwarteter Fehler bei Browser-Versionsvalidierung, wird übersprungen: %s"
 
   _diagnose_chrome_version_issues:
     "(info) %s version from binary: %s (major: %d)": "(Info) %s-Version von Binärdatei: %s (Hauptversion: %d)"

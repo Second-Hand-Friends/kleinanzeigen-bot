@@ -24,7 +24,7 @@ from nodriver.core.tab import Tab as Page
 
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import files, loggers
-from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is, WebScrapingMixin, _format_url_host, _is_admin  # noqa: PLC2701
+from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is, WebScrapingMixin, _allocate_selector_group_budgets, _format_url_host, _is_admin  # noqa: PLC2701
 
 
 class ConfigProtocol(Protocol):
@@ -610,43 +610,43 @@ class TestTimeoutAndRetryHelpers:
         ):
             await web_scraper._run_with_timeout_retries(never_called, description = "guarded-op")
 
-    def test_allocate_selector_group_budgets_distributes_total(self, web_scraper:WebScrapingMixin) -> None:
+    def test_allocate_selector_group_budgets_distributes_total(self) -> None:
         """Selector group budgets should consume the full timeout budget."""
-        budgets = web_scraper._allocate_selector_group_budgets(2.0, 2)
+        budgets = _allocate_selector_group_budgets(2.0, 2)
         assert len(budgets) == 2
         assert budgets[0] + budgets[1] == pytest.approx(2.0)
 
-    def test_allocate_selector_group_budgets_rejects_zero_selector_count(self, web_scraper:WebScrapingMixin) -> None:
+    def test_allocate_selector_group_budgets_rejects_zero_selector_count(self) -> None:
         """Selector budget helper should reject empty selector groups."""
         with pytest.raises(ValueError, match = "selector_count must be > 0"):
-            web_scraper._allocate_selector_group_budgets(1.0, 0)
+            _allocate_selector_group_budgets(1.0, 0)
 
-    def test_allocate_selector_group_budgets_single_selector_clamps_negative_timeout(self, web_scraper:WebScrapingMixin) -> None:
+    def test_allocate_selector_group_budgets_single_selector_clamps_negative_timeout(self) -> None:
         """Single-selector budgets should never be negative."""
-        budgets = web_scraper._allocate_selector_group_budgets(-1.0, 1)
+        budgets = _allocate_selector_group_budgets(-1.0, 1)
         assert budgets == [0.0]
 
-    def test_allocate_selector_group_budgets_non_positive_timeout_returns_zeroes(self, web_scraper:WebScrapingMixin) -> None:
+    def test_allocate_selector_group_budgets_non_positive_timeout_returns_zeroes(self) -> None:
         """Multi-selector groups with non-positive timeout should return zero budgets."""
-        budgets = web_scraper._allocate_selector_group_budgets(0.0, 3)
+        budgets = _allocate_selector_group_budgets(0.0, 3)
         assert budgets == [0.0, 0.0, 0.0]
 
-    def test_allocate_selector_group_budgets_tiny_timeout_splits_equally(self, web_scraper:WebScrapingMixin) -> None:
+    def test_allocate_selector_group_budgets_tiny_timeout_splits_equally(self) -> None:
         """When timeout is too small for floors, budgets should split equally."""
         # 0.2s is below floor_total for two selectors (2 * 0.25s), so equal split applies.
-        budgets = web_scraper._allocate_selector_group_budgets(0.2, 2)
+        budgets = _allocate_selector_group_budgets(0.2, 2)
         assert budgets == pytest.approx([0.1, 0.1])
 
-    def test_allocate_selector_group_budgets_redistributes_surplus_to_primary(self, web_scraper:WebScrapingMixin) -> None:
+    def test_allocate_selector_group_budgets_redistributes_surplus_to_primary(self) -> None:
         """Last-backup cap overflow should be redistributed back to primary budget."""
-        budgets = web_scraper._allocate_selector_group_budgets(5.0, 2)
+        budgets = _allocate_selector_group_budgets(5.0, 2)
         # Derivation with current constants:
         # primary=min(5.0*0.70, 5.0-0.25)=3.5; last backup cap=0.75; surplus=1.5 -> primary+surplus=5.0-0.75=4.25.
         assert budgets == pytest.approx([4.25, 0.75])
 
-    def test_allocate_selector_group_budgets_multiple_backups_apply_reserve_logic(self, web_scraper:WebScrapingMixin) -> None:
+    def test_allocate_selector_group_budgets_multiple_backups_apply_reserve_logic(self) -> None:
         """Multi-backup groups should apply reserve/floor logic before final backup cap."""
-        budgets = web_scraper._allocate_selector_group_budgets(3.0, 4)
+        budgets = _allocate_selector_group_budgets(3.0, 4)
         # Derivation with current constants:
         # reserve_for_backups=0.25*3=0.75; primary=min(3.0*0.70, 2.25)=2.1.
         # remaining=0.9 -> backup1=max(0.25, min(0.75, 0.9-0.5))=0.4.
@@ -1974,7 +1974,7 @@ class TestWebScrapingDiagnostics:
         self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
     ) -> None:
         """Test diagnostic when remote debugging port is configured and open."""
-        with patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True), patch("urllib.request.urlopen") as mock_urlopen:
+        with patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = True), patch("urllib.request.urlopen") as mock_urlopen:
             mock_response = Mock()
             mock_response.read.return_value = b'{"Browser": "Chrome/120.0.0.0"}'
             mock_urlopen.return_value = mock_response
@@ -1991,7 +1991,7 @@ class TestWebScrapingDiagnostics:
     ) -> None:
         """Test diagnostic when remote debugging port is open but API is not accessible."""
         with (
-            patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = True),
             patch("urllib.request.urlopen", side_effect = Exception("Connection refused")),
         ):
             scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
@@ -2006,7 +2006,7 @@ class TestWebScrapingDiagnostics:
         self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
     ) -> None:
         """Test diagnostic when remote debugging port is configured but closed."""
-        with patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = False):
+        with patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = False):
             scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
             scraper_with_config.diagnose_browser_issues()
 
@@ -2052,7 +2052,7 @@ class TestWebScrapingDiagnostics:
 
             assert "(info) No browser processes currently running" in caplog.text
 
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.get_chrome_version_diagnostic_info")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics.get_chrome_version_diagnostic_info")
     def test_diagnose_browser_issues_macos_platform_with_user_data_dir(
         self, mock_get_diagnostic:Mock, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture, tmp_path:Path
     ) -> None:
@@ -2077,7 +2077,7 @@ class TestWebScrapingDiagnostics:
                 patch("platform.system", return_value = "Darwin"),
                 patch("os.path.exists", return_value = True),
                 patch("os.access", return_value = True),
-                patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True),
+                patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = True),
                 patch("urllib.request.urlopen") as mock_urlopen,
                 patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
             ):
@@ -2103,7 +2103,7 @@ class TestWebScrapingDiagnostics:
         with (
             patch("platform.system", return_value = "Linux"),
             patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
         ):
             scraper_with_config.diagnose_browser_issues()
 
@@ -2117,7 +2117,7 @@ class TestWebScrapingDiagnostics:
         with (
             patch("platform.system", return_value = "Linux"),
             patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = True),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = True),
         ):
             scraper_with_config.diagnose_browser_issues()
 
@@ -2142,13 +2142,13 @@ class TestWebScrapingDiagnostics:
         """Test diagnostic shows macOS-specific remote debugging instructions."""
         with (
             patch("platform.system", return_value = "Darwin"),
-            patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = False),
             patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
         ):
             scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
             scraper_with_config.diagnose_browser_issues()
 
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.get_chrome_version_diagnostic_info")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics.get_chrome_version_diagnostic_info")
     def test_diagnose_browser_issues_chrome_136_plus_misconfigured(
         self, mock_get_diagnostic:Mock, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
     ) -> None:
@@ -2168,7 +2168,7 @@ class TestWebScrapingDiagnostics:
 
         try:
             with (
-                patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True),
+                patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = True),
                 patch("urllib.request.urlopen") as mock_urlopen,
                 patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
             ):
@@ -2200,11 +2200,11 @@ class TestWebScrapingDiagnostics:
         with (
             patch("os.path.exists", return_value = True),
             patch("os.access", return_value = True),
-            patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = True),
             patch("urllib.request.urlopen") as mock_urlopen,
             patch("psutil.process_iter", return_value = []),
             patch("platform.system", return_value = "Linux"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
         ):
             mock_response = Mock()
             mock_response.read.return_value = b'{"Browser": "Chrome/120.0.0.0"}'
@@ -2235,11 +2235,11 @@ class TestWebScrapingDiagnostics:
         with (
             patch("os.path.exists", return_value = True),
             patch("os.access", return_value = True),
-            patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True) as mock_is_port_open,
+            patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = True) as mock_is_port_open,
             patch("urllib.request.urlopen") as mock_urlopen,
             patch("psutil.process_iter", return_value = []),
             patch("platform.system", return_value = "Linux"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
             patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
         ):
             mock_response = Mock()
@@ -2263,11 +2263,11 @@ class TestWebScrapingDiagnostics:
         with (
             patch("os.path.exists", return_value = True),
             patch("os.access", return_value = True),
-            patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True) as mock_is_port_open,
+            patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = True) as mock_is_port_open,
             patch("urllib.request.urlopen") as mock_urlopen,
             patch("psutil.process_iter", return_value = []),
             patch("platform.system", return_value = "Linux"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
             patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
         ):
             mock_response = Mock()
@@ -2294,11 +2294,11 @@ class TestWebScrapingDiagnostics:
         with (
             patch("os.path.exists", return_value = True),
             patch("os.access", return_value = True),
-            patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = True) as mock_is_port_open,
+            patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = True) as mock_is_port_open,
             patch("urllib.request.urlopen") as mock_urlopen,
             patch("psutil.process_iter", return_value = []),
             patch("platform.system", return_value = "Linux"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
             patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
         ):
             mock_response = Mock()
@@ -2329,7 +2329,7 @@ class TestWebScrapingDiagnostics:
             patch("os.access", return_value = True),
             patch("psutil.process_iter", return_value = [mock_process]),
             patch("platform.system", return_value = "Linux"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
             patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
         ):
             scraper_with_config.diagnose_browser_issues()
@@ -2348,7 +2348,7 @@ class TestWebScrapingDiagnostics:
             patch("os.access", return_value = True),
             patch("psutil.process_iter", return_value = mock_processes),
             patch("platform.system", return_value = "Linux"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
             patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
             patch.object(mock_process, "info", side_effect = psutil.AccessDenied),
         ):
@@ -2365,7 +2365,7 @@ class TestWebScrapingDiagnostics:
             patch("os.path.exists", return_value = True),
             patch("os.access", return_value = False),
             patch("platform.system", return_value = "Linux"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
             patch("psutil.process_iter", return_value = []),
         ):
             scraper_with_config.diagnose_browser_issues()
@@ -2378,7 +2378,7 @@ class TestWebScrapingDiagnostics:
         with (
             patch("os.path.exists", return_value = False),
             patch("platform.system", return_value = "Linux"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
             patch("psutil.process_iter", return_value = []),
         ):
             scraper_with_config.diagnose_browser_issues()
@@ -2390,7 +2390,7 @@ class TestWebScrapingDiagnostics:
         scraper_with_config.browser_config.binary_location = None
         with (
             patch("platform.system", return_value = "Linux"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
             patch("psutil.process_iter", return_value = []),
             patch.object(scraper_with_config, "get_compatible_browser", side_effect = AssertionError("No browser found")),
         ):
@@ -2408,7 +2408,7 @@ class TestWebScrapingDiagnostics:
             patch("os.path.exists", return_value = True),
             patch("os.access", return_value = False),
             patch("platform.system", return_value = "Linux"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
             patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
         ):
             scraper_with_config.diagnose_browser_issues()
@@ -2422,10 +2422,10 @@ class TestWebScrapingDiagnostics:
         with (
             patch("os.path.exists", return_value = True),
             patch("os.access", return_value = True),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin.net.is_port_open", return_value = True),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = True),
             patch("urllib.request.urlopen", side_effect = Exception("Connection refused")),
             patch("platform.system", return_value = "Linux"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
             patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
         ):
             scraper_with_config.diagnose_browser_issues()
@@ -2442,9 +2442,9 @@ class TestWebScrapingDiagnostics:
             patch("os.path.exists", return_value = True),
             patch("os.access", return_value = True),
             patch("psutil.process_iter", return_value = []),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin.net.is_port_open", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = False),
             patch("platform.system", return_value = "Darwin"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
             patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
         ):
             scraper_with_config.diagnose_browser_issues()
@@ -2455,7 +2455,7 @@ class TestWebScrapingDiagnostics:
             patch("os.path.exists", return_value = True),
             patch("os.access", return_value = True),
             patch("platform.system", return_value = "Linux"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = True),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = True),
             patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
         ):
             scraper_with_config.diagnose_browser_issues()
@@ -2499,9 +2499,9 @@ class TestWebScrapingDiagnostics:
             patch("os.access", return_value = True),
             patch("psutil.process_iter", return_value = mock_processes),
             patch("platform.system", return_value = "Linux"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin.WebScrapingMixin._diagnose_chrome_version_issues"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin.net.is_port_open", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._diagnose_chrome_version_issues"),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = False),
             patch.object(web_scraper, "get_compatible_browser", return_value = "/usr/bin/chrome"),
             patch.object(mock_process1, "info", side_effect = psutil.NoSuchProcess(pid = 123)),
             patch.object(mock_process2, "info", side_effect = psutil.AccessDenied(pid = 456)),
@@ -2523,8 +2523,8 @@ class TestWebScrapingDiagnostics:
             patch("os.access", return_value = True),
             patch("psutil.process_iter", return_value = [FailingProcess()]),
             patch("platform.system", return_value = "Linux"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
-            patch.object(scraper_with_config, "_diagnose_chrome_version_issues"),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._diagnose_chrome_version_issues"),
         ):
             scraper_with_config.browser_config.binary_location = "/usr/bin/chrome"
             scraper_with_config.diagnose_browser_issues()
@@ -2540,8 +2540,8 @@ class TestWebScrapingDiagnostics:
             patch("os.access", return_value = True),
             patch("psutil.process_iter", side_effect = psutil.Error("boom")),
             patch("platform.system", return_value = "Linux"),
-            patch("kleinanzeigen_bot.utils.web_scraping_mixin._is_admin", return_value = False),
-            patch.object(scraper_with_config, "_diagnose_chrome_version_issues"),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
+            patch("kleinanzeigen_bot.utils.browser_diagnostics._diagnose_chrome_version_issues"),
         ):
             scraper_with_config.browser_config.binary_location = "/usr/bin/chrome"
             scraper_with_config.diagnose_browser_issues()
@@ -2617,14 +2617,14 @@ class TestWebScrapingDiagnostics:
 
     def test_diagnose_browser_issues_first_port_wins(self, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture) -> None:
         """First --remote-debugging-port= should win when multiple are present."""
-        with patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = False):
+        with patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = False):
             scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222", "--remote-debugging-port=9223"]
             scraper_with_config.diagnose_browser_issues()
 
         assert "(info) Remote debugging port configured: 9222 on host 127.0.0.1" in caplog.text
         assert "9223" not in caplog.text
 
-    @patch.object(WebScrapingMixin, "_diagnose_chrome_version_issues")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics._diagnose_chrome_version_issues")
     def test_diagnose_browser_issues_port_zero_skips_probe_but_passes_through(
         self, mock_diagnose:Mock, scraper_with_config:WebScrapingMixin, caplog:pytest.LogCaptureFixture
     ) -> None:
@@ -2633,7 +2633,9 @@ class TestWebScrapingDiagnostics:
         scraper_with_config.diagnose_browser_issues()
 
         assert "Remote debugging port configured" not in caplog.text
-        mock_diagnose.assert_called_once_with(0, "127.0.0.1")
+        # _run_browser_diagnostics calls _diagnose_chrome_version_issues(browser_config, get_timeout, remote_port, remote_host)
+        assert mock_diagnose.call_args[0][2] == 0
+        assert mock_diagnose.call_args[0][3] == "127.0.0.1"
 
 
 class TestWebScrapingMixinPortRetry:

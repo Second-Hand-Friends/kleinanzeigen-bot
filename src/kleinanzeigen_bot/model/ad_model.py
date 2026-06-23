@@ -165,7 +165,7 @@ def _validate_auto_price_reduction_constraints(price:int | None, auto_price_redu
         try:
             min_price_dec = Decimal(str(min_price))
             price_dec = Decimal(str(price))
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Let Pydantic's type validation surface the underlying issue
             return
         if min_price_dec > price_dec:
