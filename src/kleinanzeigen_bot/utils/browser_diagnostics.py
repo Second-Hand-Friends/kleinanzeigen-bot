@@ -65,8 +65,8 @@ def _remote_debugging_api_browser(remote_host:str, remote_port:int, probe_timeou
     """
     try:
         formatted_host = _format_url_host(remote_host)
-        response = urllib.request.urlopen(f"http://{formatted_host}:{remote_port}/json/version", timeout = probe_timeout)
-        version_info = json.loads(response.read().decode())
+        with urllib.request.urlopen(f"http://{formatted_host}:{remote_port}/json/version", timeout = probe_timeout) as response:
+            version_info = json.loads(response.read().decode())
         return version_info.get("Browser", "Unknown"), None
     except Exception as exc:
         return None, exc

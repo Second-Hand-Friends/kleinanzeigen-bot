@@ -1976,9 +1976,10 @@ class TestWebScrapingDiagnostics:
     ) -> None:
         """Test diagnostic when remote debugging port is configured and open."""
         with patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = True), patch("urllib.request.urlopen") as mock_urlopen:
-            mock_response = Mock()
+            mock_response = MagicMock()
             mock_response.read.return_value = b'{"Browser": "Chrome/120.0.0.0"}'
             mock_urlopen.return_value = mock_response
+            mock_response.__enter__.return_value = mock_response
 
             scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
             scraper_with_config.diagnose_browser_issues()
@@ -2083,9 +2084,10 @@ class TestWebScrapingDiagnostics:
                 patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
             ):
                 # Mock Chrome 136+ detection from remote debugging
-                mock_response = Mock()
+                mock_response = MagicMock()
                 mock_response.read.return_value = b'{"Browser": "Chrome/136.0.6778.0"}'
                 mock_urlopen.return_value = mock_response
+                mock_response.__enter__.return_value = mock_response
 
                 scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
                 scraper_with_config.browser_config.user_data_dir = test_dir
@@ -2174,9 +2176,10 @@ class TestWebScrapingDiagnostics:
                 patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
             ):
                 # Mock Chrome 136+ detection from remote debugging
-                mock_response = Mock()
+                mock_response = MagicMock()
                 mock_response.read.return_value = b'{"Browser": "Chrome/136.0.6778.0"}'
                 mock_urlopen.return_value = mock_response
+                mock_response.__enter__.return_value = mock_response
 
                 # Configure remote debugging but NO user data directory
                 scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222"]
@@ -2207,9 +2210,10 @@ class TestWebScrapingDiagnostics:
             patch("platform.system", return_value = "Linux"),
             patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
         ):
-            mock_response = Mock()
+            mock_response = MagicMock()
             mock_response.read.return_value = b'{"Browser": "Chrome/120.0.0.0"}'
             mock_urlopen.return_value = mock_response
+            mock_response.__enter__.return_value = mock_response
 
             scraper_with_config.browser_config.binary_location = "/usr/bin/chrome"
             scraper_with_config.browser_config.user_data_dir = test_dir
@@ -2243,9 +2247,10 @@ class TestWebScrapingDiagnostics:
             patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
             patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
         ):
-            mock_response = Mock()
+            mock_response = MagicMock()
             mock_response.read.return_value = b'{"Browser": "Chrome/120.0.0.0"}'
             mock_urlopen.return_value = mock_response
+            mock_response.__enter__.return_value = mock_response
 
             scraper_with_config.browser_config.arguments = ["--remote-debugging-host=192.168.1.100", "--remote-debugging-port=9222"]
 
@@ -2271,9 +2276,10 @@ class TestWebScrapingDiagnostics:
             patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
             patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
         ):
-            mock_response = Mock()
+            mock_response = MagicMock()
             mock_response.read.return_value = b'{"Browser": "Chrome/120.0.0.0"}'
             mock_urlopen.return_value = mock_response
+            mock_response.__enter__.return_value = mock_response
 
             scraper_with_config.browser_config.arguments = ["--remote-debugging-host=10.0.0.5", "--remote-debugging-port=9222"]
 
@@ -2302,9 +2308,10 @@ class TestWebScrapingDiagnostics:
             patch("kleinanzeigen_bot.utils.browser_diagnostics._is_admin", return_value = False),
             patch.object(scraper_with_config, "get_compatible_browser", return_value = "/usr/bin/chrome"),
         ):
-            mock_response = Mock()
+            mock_response = MagicMock()
             mock_response.read.return_value = b'{"Browser": "Chrome/120.0.0.0"}'
             mock_urlopen.return_value = mock_response
+            mock_response.__enter__.return_value = mock_response
 
             # Host appears AFTER port - parser must continue scanning
             scraper_with_config.browser_config.arguments = ["--remote-debugging-port=9222", "--remote-debugging-host=10.0.0.5"]

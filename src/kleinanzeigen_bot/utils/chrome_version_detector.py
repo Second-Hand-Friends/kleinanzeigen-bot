@@ -139,8 +139,8 @@ def detect_chrome_version_from_remote_debugging(host:str = "127.0.0.1", port:int
     try:
         # Query the remote debugging API
         url = f"http://{host}:{port}/json/version"
-        response = urllib.request.urlopen(url, timeout = effective_timeout)  # noqa: S310
-        version_data = json.loads(response.read().decode())
+        with urllib.request.urlopen(url, timeout = effective_timeout) as response:  # noqa: S310
+            version_data = json.loads(response.read().decode())
 
         # Extract version information
         user_agent = version_data.get("User-Agent", "")

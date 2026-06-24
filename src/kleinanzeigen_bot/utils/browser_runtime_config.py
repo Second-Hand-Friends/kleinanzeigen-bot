@@ -7,7 +7,6 @@ Browser runtime configuration.
 Contains BrowserConfig, the data class for browser launcher settings,
 shared between WebScrapingMixin and browser diagnostics.
 """
-from collections.abc import Iterable  # noqa: TC003  # used at runtime in BrowserConfig annotations
 
 
 class BrowserConfig:
@@ -23,9 +22,9 @@ class BrowserConfig:
     """
 
     def __init__(self) -> None:
-        self.arguments:Iterable[str] = []
+        self.arguments:list[str] = []
         self.binary_location:str | None = None
-        self.extensions:Iterable[str] = []
+        self.extensions:list[str] = []
         self.use_private_window:bool = True
         self.user_data_dir:str | None = None
         self.profile_name:str | None = None
