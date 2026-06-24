@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio, enum, inspect, ipaddress, json, os, platform, secrets, shutil, subprocess, urllib.request  # isort: skip # noqa: S404
+import asyncio, enum, inspect, json, os, platform, secrets, shutil, subprocess  # isort: skip # noqa: S404
 from collections.abc import Awaitable, Callable, Coroutine, Iterable, Sequence
 from gettext import gettext as _
 from pathlib import Path, PureWindowsPath
@@ -26,12 +26,12 @@ from kleinanzeigen_bot.model.config_model import Config as BotConfig
 from kleinanzeigen_bot.model.config_model import TimeoutConfig
 
 from . import files, loggers, net, xdg_paths
+from .browser_diagnostics import _run_browser_diagnostics
+from .browser_runtime_config import BrowserConfig
 from .chrome_version_detector import (
     ChromeVersionInfo,
     detect_chrome_version_from_binary,
     detect_chrome_version_from_remote_debugging,
-    get_chrome_version_diagnostic_info,
-    validate_chrome_136_configuration,
 )
 from .misc import T, ensure
 
@@ -44,23 +44,6 @@ _KEY_VALUE_PAIR_SIZE = 2
 _PRIMARY_SELECTOR_BUDGET_RATIO:Final[float] = 0.70
 _BACKUP_SELECTOR_BUDGET_CAP_SECONDS:Final[float] = 0.75
 _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS:Final[float] = 0.25
-
-
-def _format_url_host(host:str) -> str:
-    """Format host for URL, bracketing IPv6 addresses only when needed.
-
-    Args:
-        host: The raw host string (e.g. '127.0.0.1', '::1', '[::1]')
-
-    Returns:
-        Host string safe for use in http://host:port/path URLs.
-        IPv6 addresses are bracketed; already-bracketed values are preserved.
-    """
-    host = host.strip()
-    if ":" in host:
-        host = host.strip("[]")
-        return f"[{host}]"
-    return host
 
 
 def _resolve_user_data_dir_paths(arg_value:str, config_value:str) -> tuple[Any, Any]:
@@ -106,17 +89,6 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 METACHAR_ESCAPER:Final[dict[int, str]] = str.maketrans({ch: f"\\{ch}" for ch in "!\"#$%&'()*+,./:;<=>?@[\\]^`{|}~"})
 
 
-def _is_admin() -> bool:
-    """Check if the current process is running with admin/root privileges."""
-    try:
-        if hasattr(os, "geteuid"):
-            result = os.geteuid() == 0
-            return bool(result)
-        return False
-    except AttributeError:
-        return False
-
-
 class By(enum.Enum):
     ID = enum.auto()
     CLASS_NAME = enum.auto()
@@ -132,16 +104,6 @@ class Is(enum.Enum):
     DISABLED = enum.auto()
     READONLY = enum.auto()
     SELECTED = enum.auto()
-
-
-class BrowserConfig:
-    def __init__(self) -> None:
-        self.arguments:Iterable[str] = []
-        self.binary_location:str | None = None
-        self.extensions:Iterable[str] = []
-        self.use_private_window:bool = True
-        self.user_data_dir:str | None = None
-        self.profile_name:str | None = None
 
 
 def _write_initial_prefs(prefs_file:str) -> None:
@@ -164,6 +126,98 @@ def _write_initial_prefs(prefs_file:str) -> None:
             },
             fd,
         )
+
+
+def _allocate_selector_group_budgets(total_timeout:float, selector_count:int) -> list[float]:
+    """Allocate a shared timeout budget across selector alternatives.
+
+    Strategy:
+    - Give the first selector a preferred share via `_PRIMARY_SELECTOR_BUDGET_RATIO`.
+    - Keep a minimum floor `_BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS` per selector.
+    - Cap backup slices with `_BACKUP_SELECTOR_BUDGET_CAP_SECONDS`.
+    - Reassign final-backup surplus to the primary slot to preserve total timeout.
+    """
+    if selector_count <= 0:
+        raise ValueError(_("selector_count must be > 0"))
+    if selector_count == 1:
+        return [max(total_timeout, 0.0)]
+    if total_timeout <= 0:
+        return [0.0 for _ in range(selector_count)]
+
+    # If total_timeout cannot satisfy per-slot floor, split equally to preserve total budget.
+    floor_total = _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS * selector_count
+    if total_timeout < floor_total:
+        equal_share = total_timeout / selector_count
+        return [equal_share for _ in range(selector_count)]
+
+    # Reserve minimum floor for backups before sizing the primary slice.
+    reserve_for_backups = _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS * (selector_count - 1)
+    # Primary gets preferred ratio, but never steals the reserved backup floors.
+    primary = min(total_timeout * _PRIMARY_SELECTOR_BUDGET_RATIO, total_timeout - reserve_for_backups)
+    primary = max(primary, _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS)
+    budgets = [primary]
+    remaining = total_timeout - primary
+
+    for index in range(selector_count - 1):
+        is_last_backup = index == selector_count - 2
+        if is_last_backup:
+            # Last backup is capped; any surplus is folded back into primary to keep sum == total_timeout.
+            alloc = min(remaining, _BACKUP_SELECTOR_BUDGET_CAP_SECONDS)
+            budgets.append(alloc)
+            surplus = remaining - alloc
+            if surplus > 0:
+                budgets[0] += surplus
+            continue
+
+        remaining_slots_after_this = selector_count - len(budgets) - 1
+        # Keep floor reserve for remaining backups, then clamp this slice to floor/cap bounds.
+        min_reserve = _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS * remaining_slots_after_this
+        alloc = remaining - min_reserve
+        alloc = max(_BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS, alloc)
+        alloc = min(_BACKUP_SELECTOR_BUDGET_CAP_SECONDS, alloc)
+        budgets.append(alloc)
+        remaining -= alloc
+
+    return budgets
+
+
+def _parse_remote_debugging_args(arguments:Iterable[str]) -> tuple[str, int]:
+    """Parse remote debugging host and port from browser arguments.
+
+    Uses first-wins semantics: only the first occurrence of each argument is used.
+    """
+    remote_host = "127.0.0.1"
+    remote_port = 0
+    host_assigned = False
+    port_assigned = False
+    for arg in arguments:
+        if not host_assigned and arg.startswith("--remote-debugging-host="):
+            remote_host = arg.split("=", maxsplit = 1)[1]
+            host_assigned = True
+        if not port_assigned and arg.startswith("--remote-debugging-port="):
+            remote_port = int(arg.split("=", maxsplit = 1)[1])
+            port_assigned = True
+        if host_assigned and port_assigned:
+            break
+    return remote_host, remote_port
+
+
+def _build_nodriver_config(browser_path:str, browser_args:list[str], user_data_dir:str | None) -> NodriverConfig:
+    """Build NodriverConfig and apply sandbox setting.
+
+    When --no-sandbox is in browser_args, nodriver's Config.sandbox must also be set to False.
+    Otherwise nodriver re-adds --no-sandbox itself but still runs internal sandbox-related logic
+    that can cause startup failures in containerized environments (Docker, LXC, etc.).
+    """
+    cfg = NodriverConfig(
+        headless = False,
+        browser_executable_path = browser_path,
+        browser_args = browser_args,
+        user_data_dir = user_data_dir,
+    )
+    if any(arg == "--no-sandbox" for arg in browser_args):
+        cfg.sandbox = False
+    return cfg
 
 
 class WebScrapingMixin:  # noqa: PLR0904
@@ -276,59 +330,6 @@ class WebScrapingMixin:  # noqa: PLR0904
 
         raise TimeoutError(_("%(desc)s failed without executing operation") % {"desc": description})
 
-    @staticmethod
-    def _allocate_selector_group_budgets(total_timeout:float, selector_count:int) -> list[float]:
-        """Allocate a shared timeout budget across selector alternatives.
-
-        Strategy:
-        - Give the first selector a preferred share via `_PRIMARY_SELECTOR_BUDGET_RATIO`.
-        - Keep a minimum floor `_BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS` per selector.
-        - Cap backup slices with `_BACKUP_SELECTOR_BUDGET_CAP_SECONDS`.
-        - Reassign final-backup surplus to the primary slot to preserve total timeout.
-        """
-        if selector_count <= 0:
-            raise ValueError(_("selector_count must be > 0"))
-        if selector_count == 1:
-            return [max(total_timeout, 0.0)]
-        if total_timeout <= 0:
-            return [0.0 for _ in range(selector_count)]
-
-        # If total_timeout cannot satisfy per-slot floor, split equally to preserve total budget.
-        floor_total = _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS * selector_count
-        if total_timeout < floor_total:
-            equal_share = total_timeout / selector_count
-            return [equal_share for _ in range(selector_count)]
-
-        # Reserve minimum floor for backups before sizing the primary slice.
-        reserve_for_backups = _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS * (selector_count - 1)
-        # Primary gets preferred ratio, but never steals the reserved backup floors.
-        primary = min(total_timeout * _PRIMARY_SELECTOR_BUDGET_RATIO, total_timeout - reserve_for_backups)
-        primary = max(primary, _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS)
-        budgets = [primary]
-        remaining = total_timeout - primary
-
-        for index in range(selector_count - 1):
-            is_last_backup = index == selector_count - 2
-            if is_last_backup:
-                # Last backup is capped; any surplus is folded back into primary to keep sum == total_timeout.
-                alloc = min(remaining, _BACKUP_SELECTOR_BUDGET_CAP_SECONDS)
-                budgets.append(alloc)
-                surplus = remaining - alloc
-                if surplus > 0:
-                    budgets[0] += surplus
-                continue
-
-            remaining_slots_after_this = selector_count - len(budgets) - 1
-            # Keep floor reserve for remaining backups, then clamp this slice to floor/cap bounds.
-            min_reserve = _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS * remaining_slots_after_this
-            alloc = remaining - min_reserve
-            alloc = max(_BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS, alloc)
-            alloc = min(_BACKUP_SELECTOR_BUDGET_CAP_SECONDS, alloc)
-            budgets.append(alloc)
-            remaining -= alloc
-
-        return budgets
-
     async def web_find_first_available(
         self,
         selectors:Sequence[tuple[By, str]],
@@ -345,7 +346,7 @@ class WebScrapingMixin:  # noqa: PLR0904
             raise ValueError(_("selectors must contain at least one selector"))
 
         async def attempt(effective_timeout:float) -> tuple[Element, int]:
-            budgets = self._allocate_selector_group_budgets(effective_timeout, len(selectors))
+            budgets = _allocate_selector_group_budgets(effective_timeout, len(selectors))
             failures:list[str] = []
             for index, ((selector_type, selector_value), candidate_timeout) in enumerate(zip(selectors, budgets, strict = True)):
                 try:
@@ -452,7 +453,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         ########################################################
         # check if an existing browser instance shall be used...
         ########################################################
-        remote_host, remote_port = self._parse_remote_debugging_args(self.browser_config.arguments)
+        remote_host, remote_port = _parse_remote_debugging_args(self.browser_config.arguments)
 
         if remote_port > 0:
             self.browser = await self._connect_to_remote_browser(remote_host, remote_port)
@@ -473,7 +474,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         if self.browser_config.user_data_dir:
             LOG.info(" -> Browser user data dir: %s", self.browser_config.user_data_dir)
 
-        cfg = self._build_nodriver_config(self.browser_config.binary_location, browser_args, effective_user_data_dir)
+        cfg = _build_nodriver_config(self.browser_config.binary_location, browser_args, effective_user_data_dir)
 
         # Enhanced profile directory handling
         if cfg.user_data_dir:
@@ -504,18 +505,6 @@ class WebScrapingMixin:  # noqa: PLR0904
                 LOG.error("4. Check browser binary permissions: %s", self.browser_config.binary_location)
                 LOG.error("5. Check if any antivirus or security software is blocking the browser")
             raise
-
-    @staticmethod
-    def _parse_remote_debugging_args(arguments:Iterable[str]) -> tuple[str, int]:
-        """Parse remote debugging host and port from browser arguments."""
-        remote_host = "127.0.0.1"
-        remote_port = 0
-        for arg in arguments:
-            if arg.startswith("--remote-debugging-host="):
-                remote_host = arg.split("=", maxsplit = 1)[1]
-            if arg.startswith("--remote-debugging-port="):
-                remote_port = int(arg.split("=", maxsplit = 1)[1])
-        return remote_host, remote_port
 
     async def _connect_to_remote_browser(self, host:str, port:int) -> Browser:
         """Connect to an existing browser process via remote debugging."""
@@ -621,24 +610,6 @@ class WebScrapingMixin:  # noqa: PLR0904
                 )
         return effective
 
-    @staticmethod
-    def _build_nodriver_config(browser_path:str, browser_args:list[str], user_data_dir:str | None) -> NodriverConfig:
-        """Build NodriverConfig and apply sandbox setting.
-
-        When --no-sandbox is in browser_args, nodriver's Config.sandbox must also be set to False.
-        Otherwise nodriver re-adds --no-sandbox itself but still runs internal sandbox-related logic
-        that can cause startup failures in containerized environments (Docker, LXC, etc.).
-        """
-        cfg = NodriverConfig(
-            headless = False,
-            browser_executable_path = browser_path,
-            browser_args = browser_args,
-            user_data_dir = user_data_dir,
-        )
-        if any(arg == "--no-sandbox" for arg in browser_args):
-            cfg.sandbox = False
-        return cfg
-
     async def _prepare_browser_profile(self, user_data_dir:str, profile_name:str | None) -> None:
         """Ensure profile directory exists and write initial browser preferences."""
         xdg_paths.ensure_directory(Path(user_data_dir), "browser profile directory")
@@ -703,193 +674,13 @@ class WebScrapingMixin:  # noqa: PLR0904
                 return int(arg.split("=", maxsplit = 1)[1])
         return 0
 
-    def _diagnostic_remote_debugging_endpoint(self) -> tuple[str, int]:
-        """Parse remote debugging host and port for diagnostics only.
-
-        Uses first-wins semantics for both host and port, matching the
-        existing first-port-wins behavior of _configured_remote_debugging_port().
-        Does NOT change browser launch or remote connection behavior.
-
-        Returns:
-            (remote_host, remote_port) with defaults ("127.0.0.1", 0).
-
-        Raises:
-            ValueError for invalid port values.
-        """
-        remote_host = "127.0.0.1"
-        remote_port = 0
-        host_assigned = False
-        port_assigned = False
-        for arg in self.browser_config.arguments:
-            if not host_assigned and arg.startswith("--remote-debugging-host="):
-                remote_host = arg.split("=", maxsplit = 1)[1]
-                host_assigned = True
-            if not port_assigned and arg.startswith("--remote-debugging-port="):
-                remote_port = int(arg.split("=", maxsplit = 1)[1])
-                port_assigned = True
-            if host_assigned and port_assigned:
-                break
-        return remote_host, remote_port
-
-    @staticmethod
-    def _remote_debugging_api_browser(remote_host:str, remote_port:int, probe_timeout:float) -> tuple[str | None, Exception | None]:
-        """Probe the remote debugging API.
-
-        Returns (browser_string, None) on success or (None, exception) on failure.
-        """
-        try:
-            formatted_host = _format_url_host(remote_host)
-            response = urllib.request.urlopen(f"http://{formatted_host}:{remote_port}/json/version", timeout = probe_timeout)
-            version_info = json.loads(response.read().decode())
-            return version_info.get("Browser", "Unknown"), None
-        except Exception as exc:
-            return None, exc
-
-    def _target_browser_name(self) -> str:
-        """Return the lowercased target browser basename for process matching.
-
-        Falls back to auto-detection if binary_location is not set.
-        Detection failure is silent (no log output).
-        """
-        if self.browser_config.binary_location:
-            return os.path.basename(self.browser_config.binary_location).lower()
-        try:
-            target_browser_path = self.get_compatible_browser()
-            return os.path.basename(target_browser_path).lower()
-        except (AssertionError, TypeError):
-            return ""
-
-    @staticmethod
-    def _find_relevant_browser_processes(target_browser_name:str) -> tuple[list[dict[str, object]], Exception | None]:
-        """Find browser processes matching *target_browser_name*.
-
-        Returns (process_list, global_error). Per-process NoSuchProcess/AccessDenied
-        are silently skipped. The caller handles the global warning log.
-        """
-        try:
-            browser_processes:list[dict[str, object]] = []
-            for proc in psutil.process_iter(["pid", "name", "cmdline"]):
-                try:
-                    proc_name = proc.info["name"] or ""
-                    cmdline = proc.info["cmdline"] or []
-
-                    is_target_browser = target_browser_name and target_browser_name in proc_name.lower()
-                    has_remote_debugging = cmdline and any(arg.startswith("--remote-debugging-port=") for arg in cmdline)
-
-                    if is_target_browser:
-                        proc.info["has_remote_debugging"] = has_remote_debugging
-                        browser_processes.append(proc.info)
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    # Process ended or is not accessible; skip it.
-                    pass
-            return browser_processes, None
-        except (psutil.Error, PermissionError) as exc:
-            return [], exc
-
     def diagnose_browser_issues(self) -> None:
-        """
-        Diagnose common browser connection issues and provide troubleshooting information.
-        """
-        LOG.info("=== Browser Connection Diagnostics ===")
-
-        # Check browser binary
-        if self.browser_config.binary_location:
-            if os.path.exists(self.browser_config.binary_location):
-                LOG.info("(ok) Browser binary exists: %s", self.browser_config.binary_location)
-                if os.access(self.browser_config.binary_location, os.X_OK):
-                    LOG.info("(ok) Browser binary is executable")
-                else:
-                    LOG.error("(fail) Browser binary is not executable")
-            else:
-                LOG.error("(fail) Browser binary not found: %s", self.browser_config.binary_location)
-        else:
-            browser_path = self._detect_browser_binary()
-            if browser_path:
-                LOG.info("(ok) Auto-detected browser: %s", browser_path)
-                # Set the binary location for Chrome version detection
-                self.browser_config.binary_location = browser_path
-            else:
-                LOG.error("(fail) No compatible browser found")
-
-        # Check user data directory
-        if self.browser_config.user_data_dir:
-            if os.path.exists(self.browser_config.user_data_dir):
-                LOG.info("(ok) User data directory exists: %s", self.browser_config.user_data_dir)
-                if os.access(self.browser_config.user_data_dir, os.R_OK | os.W_OK):
-                    LOG.info("(ok) User data directory is readable and writable")
-                else:
-                    LOG.error("(fail) User data directory permissions issue")
-            else:
-                LOG.info("(info) User data directory does not exist (will be created): %s", self.browser_config.user_data_dir)
-
-        # Check for remote debugging port - use diagnostics parser
-        remote_host, remote_port = self._diagnostic_remote_debugging_endpoint()
-
-        if remote_port > 0:
-            # Security/documentation guard: warn when probing non-loopback host
-            _probed_host_normalized = remote_host.strip().strip("[]")
-            _is_non_loopback_host = True
-            if _probed_host_normalized.lower() == "localhost":
-                _is_non_loopback_host = False
-            else:
-                try:
-                    _addr = ipaddress.ip_address(_probed_host_normalized)
-                    _is_non_loopback_host = not _addr.is_loopback
-                except ValueError:
-                    # DNS name - treat as potentially remote
-                    pass
-            if _is_non_loopback_host:
-                LOG.warning(
-                    "(warn) Remote debugging diagnostics will probe configured host: %s:%d",
-                    remote_host,
-                    remote_port,
-                )
-
-            LOG.info("(info) Remote debugging port configured: %d on host %s", remote_port, remote_host)
-            if net.is_port_open(_probed_host_normalized, remote_port):
-                LOG.info("(ok) Remote debugging port is open on %s:%d", remote_host, remote_port)
-                # Try to get more information about the debugging endpoint
-                try:
-                    probe_timeout = self.effective_timeout("chrome_remote_probe")
-                    browser_fact, exc = self._remote_debugging_api_browser(_probed_host_normalized, remote_port, probe_timeout)
-                except Exception as e:
-                    exc = e
-                    browser_fact = None
-                if exc is None:
-                    LOG.info("(ok) Remote debugging API accessible - Browser: %s", browser_fact)
-                else:
-                    LOG.warning("(fail) Remote debugging port is open but API not accessible: %s", str(exc))
-                    LOG.info("  This might indicate a browser update issue or configuration problem")
-            else:
-                LOG.info("(info) Remote debugging port is not open on %s:%d", remote_host, remote_port)
-
-        # Check for running browser processes
-        target_browser_name = self._target_browser_name()
-        browser_processes, proc_exc = self._find_relevant_browser_processes(target_browser_name)
-
-        if proc_exc is not None:
-            LOG.warning("(warn) Unable to inspect browser processes: %s", proc_exc)
-            browser_processes = []
-
-        if browser_processes:
-            LOG.info("(info) Found %d browser processes running", len(browser_processes))
-            for proc in browser_processes[:3]:  # Show first 3
-                has_debugging = proc.get("has_remote_debugging", False)
-                if has_debugging:
-                    LOG.info("  - PID %d: %s (remote debugging enabled)", proc["pid"], proc["name"])
-                else:
-                    LOG.warning("  - PID %d: %s (remote debugging NOT enabled)", proc["pid"], proc["name"])
-        else:
-            LOG.info("(info) No browser processes currently running")
-
-        if platform.system() == "Linux":
-            if _is_admin():
-                LOG.error("(fail) Running as root - this can cause browser issues")
-
-        # Chrome version detection and validation
-        self._diagnose_chrome_version_issues(remote_port, remote_host)
-
-        LOG.info("=== End Diagnostics ===")
+        """Diagnose common browser connection issues and provide troubleshooting information."""
+        _run_browser_diagnostics(
+            browser_config = self.browser_config,
+            get_timeout = self.effective_timeout,
+            get_compatible_browser = self.get_compatible_browser,
+        )
 
     def close_browser_session(self) -> None:
         if not self.browser:
@@ -1977,76 +1768,3 @@ class WebScrapingMixin:  # noqa: PLR0904
             raise AssertionError(error_message)
 
         LOG.info(" -> %s 136+ configuration validation passed", version_info.browser_name)
-
-    def _diagnose_chrome_version_issues(self, remote_port:int, remote_host:str = "127.0.0.1") -> None:
-        """
-        Diagnose Chrome version issues and provide specific recommendations.
-
-        Args:
-            remote_port: Remote debugging port (0 if not configured)
-            remote_host: Remote debugging host (default "127.0.0.1")
-        """
-        # Skip diagnostics in test environments to avoid subprocess calls
-        if os.environ.get("PYTEST_CURRENT_TEST"):
-            LOG.debug(" -> Skipping browser version diagnostics in test environment")
-            return
-
-        try:
-            # Get diagnostic information
-            binary_path = self.browser_config.binary_location
-            diagnostic_info = get_chrome_version_diagnostic_info(
-                binary_path = binary_path,
-                remote_host = _format_url_host(remote_host),
-                remote_port = remote_port if remote_port > 0 else None,
-                remote_timeout = self.effective_timeout("chrome_remote_debugging"),
-                binary_timeout = self.effective_timeout("chrome_binary_detection"),
-            )
-
-            # Report binary detection results
-            if diagnostic_info["binary_detection"]:
-                binary_info = diagnostic_info["binary_detection"]
-                LOG.info(
-                    "(info) %s version from binary: %s (major: %d)",
-                    binary_info["browser_name"],
-                    binary_info["version_string"],
-                    binary_info["major_version"],
-                )
-
-                if binary_info["is_chrome_136_plus"]:
-                    LOG.info("(info) %s 136+ detected - security validation required", binary_info["browser_name"])
-                else:
-                    LOG.info("(info) %s pre-136 detected - no special security requirements", binary_info["browser_name"])
-
-            # Report remote detection results
-            if diagnostic_info["remote_detection"]:
-                remote_info = diagnostic_info["remote_detection"]
-                LOG.info(
-                    "(info) %s version from remote debugging: %s (major: %d)",
-                    remote_info["browser_name"],
-                    remote_info["version_string"],
-                    remote_info["major_version"],
-                )
-
-                if remote_info["is_chrome_136_plus"]:
-                    LOG.info("(info) Remote %s 136+ detected - validating configuration", remote_info["browser_name"])
-
-                    # Validate configuration for Chrome/Edge 136+
-                    is_valid, error_message = validate_chrome_136_configuration(list(self.browser_config.arguments), self.browser_config.user_data_dir)
-
-                    if not is_valid:
-                        LOG.error("(fail) %s 136+ configuration validation failed: %s", remote_info["browser_name"], error_message)
-                        LOG.info("  Solution: Add --user-data-dir=/path/to/directory to browser arguments")
-                        LOG.info('  And user_data_dir: "/path/to/directory" to your configuration')
-                    else:
-                        LOG.info("(ok) %s 136+ configuration validation passed", remote_info["browser_name"])
-
-            # Add general recommendations
-            if diagnostic_info["chrome_136_plus_detected"]:
-                LOG.info("(info) Chrome/Edge 136+ security changes require --user-data-dir for remote debugging")
-                LOG.info("  See: https://developer.chrome.com/blog/remote-debugging-port")
-        except (subprocess.SubprocessError, OSError, FileNotFoundError) as e:
-            LOG.warning(" -> Browser version diagnostics failed: %s", e)
-            # Continue without diagnostics rather than failing
-        except Exception as e:
-            LOG.warning(" -> Unexpected error during browser version diagnostics: %s", e)
-            # Continue without diagnostics rather than failing

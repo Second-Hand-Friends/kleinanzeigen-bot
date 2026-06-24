@@ -115,7 +115,7 @@ def persist_published_ad(
 
     try:
         _dicts.save_dict(ad_file, ad_cfg_orig)
-    except Exception:
+    except Exception:  # noqa: BLE001 — intentional broad catch for image rename rollback on save failure
         for old_path, new_path in image_result.renamed_paths:
             try:
                 new_path.rename(old_path)

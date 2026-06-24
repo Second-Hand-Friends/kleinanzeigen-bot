@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from kleinanzeigen_bot.utils.browser_diagnostics import _diagnose_chrome_version_issues  # noqa: PLC2701
 from kleinanzeigen_bot.utils.chrome_version_detector import ChromeVersionInfo
 from kleinanzeigen_bot.utils.web_scraping_mixin import WebScrapingMixin
 
@@ -165,8 +166,8 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
         """Create a WebScrapingMixin instance for testing."""
         return WebScrapingMixin()
 
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.get_chrome_version_diagnostic_info")
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.validate_chrome_136_configuration")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics.get_chrome_version_diagnostic_info")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics.validate_chrome_136_configuration")
     def test_diagnose_chrome_version_issues_binary_detection(
         self, mock_validate:Mock, mock_get_diagnostic:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture, no_pytest_guard:None
     ) -> None:
@@ -185,7 +186,7 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
         scraper.browser_config.arguments = ["--remote-debugging-port=9222", "--user-data-dir=/tmp/chrome-debug"]
 
         # Test diagnostics
-        scraper._diagnose_chrome_version_issues(9222)
+        _diagnose_chrome_version_issues(scraper.browser_config, scraper.effective_timeout, 9222)
 
         # Verify logs
         assert "Chrome version from binary: 136.0.6778.0 (major: 136)" in caplog.text
@@ -200,8 +201,8 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
         assert kwargs["remote_timeout"] > 0
         assert kwargs["binary_timeout"] > 0
 
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.get_chrome_version_diagnostic_info")
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.validate_chrome_136_configuration")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics.get_chrome_version_diagnostic_info")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics.validate_chrome_136_configuration")
     def test_diagnose_chrome_version_issues_remote_detection(
         self, mock_validate:Mock, mock_get_diagnostic:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture, no_pytest_guard:None
     ) -> None:
@@ -220,7 +221,7 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
         scraper.browser_config.arguments = ["--remote-debugging-port=9222"]
 
         # Test diagnostics
-        scraper._diagnose_chrome_version_issues(9222)
+        _diagnose_chrome_version_issues(scraper.browser_config, scraper.effective_timeout, 9222)
 
         # Verify logs
         assert "(info) Chrome version from remote debugging: 136.0.6778.0 (major: 136)" in caplog.text
@@ -230,7 +231,7 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
         # Verify validation was called
         mock_validate.assert_called_once_with(["--remote-debugging-port=9222"], None)
 
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.get_chrome_version_diagnostic_info")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics.get_chrome_version_diagnostic_info")
     def test_diagnose_chrome_version_issues_no_detection(
         self, mock_get_diagnostic:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture, no_pytest_guard:None
     ) -> None:
@@ -242,13 +243,13 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
         scraper.browser_config.binary_location = "/path/to/chrome"
 
         # Test diagnostics
-        scraper._diagnose_chrome_version_issues(0)
+        _diagnose_chrome_version_issues(scraper.browser_config, scraper.effective_timeout, 0)
 
         # Verify no Chrome version logs
         assert "Chrome version from binary" not in caplog.text
         assert "Chrome version from remote debugging" not in caplog.text
 
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.get_chrome_version_diagnostic_info")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics.get_chrome_version_diagnostic_info")
     def test_diagnose_chrome_version_issues_chrome_136_plus_recommendations(
         self, mock_get_diagnostic:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture, no_pytest_guard:None
     ) -> None:
@@ -265,14 +266,14 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
         scraper.browser_config.binary_location = "/path/to/chrome"
 
         # Test diagnostics
-        scraper._diagnose_chrome_version_issues(0)
+        _diagnose_chrome_version_issues(scraper.browser_config, scraper.effective_timeout, 0)
 
         # Verify recommendations
         assert "Chrome/Edge 136+ security changes require --user-data-dir for remote debugging" in caplog.text
         assert "https://developer.chrome.com/blog/remote-debugging-port" in caplog.text
 
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.get_chrome_version_diagnostic_info")
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.validate_chrome_136_configuration")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics.get_chrome_version_diagnostic_info")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics.validate_chrome_136_configuration")
     def test_diagnose_chrome_version_issues_binary_pre_136(
         self, mock_validate:Mock, mock_get_diagnostic:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture, no_pytest_guard:None
     ) -> None:
@@ -294,7 +295,7 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
         scraper.browser_config.binary_location = "/path/to/chrome"
 
         # Test diagnostics
-        scraper._diagnose_chrome_version_issues(0)
+        _diagnose_chrome_version_issues(scraper.browser_config, scraper.effective_timeout, 0)
 
         # Verify pre-136 log message (lines 832-849)
         assert "Chrome pre-136 detected - no special security requirements" in caplog.text
@@ -307,8 +308,8 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
         assert kwargs["remote_timeout"] > 0
         assert kwargs["binary_timeout"] > 0
 
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.get_chrome_version_diagnostic_info")
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.validate_chrome_136_configuration")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics.get_chrome_version_diagnostic_info")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics.validate_chrome_136_configuration")
     def test_diagnose_chrome_version_issues_remote_validation_passes(
         self, mock_validate:Mock, mock_get_diagnostic:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture, no_pytest_guard:None
     ) -> None:
@@ -328,7 +329,7 @@ class TestWebScrapingMixinChromeVersionDiagnostics:
         scraper.browser_config.user_data_dir = "/tmp/chrome-debug"  # noqa: S108
 
         # Test diagnostics
-        scraper._diagnose_chrome_version_issues(9222)
+        _diagnose_chrome_version_issues(scraper.browser_config, scraper.effective_timeout, 9222)
 
         # Verify validation passed log message (line 846)
         assert "Chrome 136+ configuration validation passed" in caplog.text
@@ -370,7 +371,7 @@ class TestWebScrapingMixinIntegration:
         # Verify validation was called
         mock_validate.assert_called_once()
 
-    @patch.object(WebScrapingMixin, "_diagnose_chrome_version_issues")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics._diagnose_chrome_version_issues")
     @patch.object(WebScrapingMixin, "get_compatible_browser")
     def test_diagnose_browser_issues_calls_chrome_diagnostics(self, mock_get_browser:Mock, mock_diagnose:Mock, scraper:WebScrapingMixin) -> None:
         """Test that diagnose_browser_issues calls Chrome version diagnostics."""
@@ -384,10 +385,12 @@ class TestWebScrapingMixinIntegration:
         # Test diagnostics
         scraper.diagnose_browser_issues()
 
-        # Verify Chrome diagnostics was called with default host
-        mock_diagnose.assert_called_once_with(9222, "127.0.0.1")
+        # Verify Chrome diagnostics was called via _run_browser_diagnostics
+        assert mock_diagnose.call_count == 1
+        assert mock_diagnose.call_args[0][2] == 9222  # remote_port
+        assert mock_diagnose.call_args[0][3] == "127.0.0.1"  # remote_host
 
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.get_chrome_version_diagnostic_info")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics.get_chrome_version_diagnostic_info")
     def test_diagnose_browser_issues_chrome_version_uses_configured_host(
         self, mock_get_diagnostic:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture
     ) -> None:
@@ -410,7 +413,7 @@ class TestWebScrapingMixinIntegration:
             del os.environ["PYTEST_CURRENT_TEST"]
 
         try:
-            with patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = False):
+            with patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = False):
                 scraper.diagnose_browser_issues()
 
             # Verify get_chrome_version_diagnostic_info was called with configured host
@@ -421,7 +424,7 @@ class TestWebScrapingMixinIntegration:
             if original_env is not None:
                 os.environ["PYTEST_CURRENT_TEST"] = original_env
 
-    @patch("kleinanzeigen_bot.utils.web_scraping_mixin.get_chrome_version_diagnostic_info")
+    @patch("kleinanzeigen_bot.utils.browser_diagnostics.get_chrome_version_diagnostic_info")
     def test_diagnose_browser_issues_chrome_version_ipv6_host(
         self, mock_get_diagnostic:Mock, scraper:WebScrapingMixin, caplog:pytest.LogCaptureFixture
     ) -> None:
@@ -444,7 +447,7 @@ class TestWebScrapingMixinIntegration:
             del os.environ["PYTEST_CURRENT_TEST"]
 
         try:
-            with patch("kleinanzeigen_bot.utils.net.is_port_open", return_value = False):
+            with patch("kleinanzeigen_bot.utils.browser_diagnostics.is_port_open", return_value = False):
                 scraper.diagnose_browser_issues()
 
             # Verify get_chrome_version_diagnostic_info received bracketed IPv6 host

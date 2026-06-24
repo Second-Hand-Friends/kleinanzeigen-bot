@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import platform
-from typing import cast
 
 import nodriver
 import pytest
@@ -21,7 +20,7 @@ async def atest_init() -> None:
     web_scraping_mixin = WebScrapingMixin()
     if platform.system() == "Linux":
         # required for Ubuntu 24.04 or newer
-        cast(list[str], web_scraping_mixin.browser_config.arguments).append("--no-sandbox")
+        web_scraping_mixin.browser_config.arguments.append("--no-sandbox")
 
     browser_path = web_scraping_mixin.get_compatible_browser()
     ensure(browser_path is not None, "Browser not auto-detected")

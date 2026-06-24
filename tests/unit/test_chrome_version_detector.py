@@ -3,7 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import json
 import subprocess  # noqa: S404
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -179,12 +179,13 @@ class TestDetectChromeVersionFromRemoteDebugging:
     @patch("urllib.request.urlopen")
     def test_detect_chrome_version_from_remote_debugging_success(self, mock_urlopen:Mock) -> None:
         """Test successful Chrome version detection from remote debugging."""
-        mock_response = Mock()
+        mock_response = MagicMock()
         mock_response.read.return_value = json.dumps({
             "Browser": "Chrome/136.0.6778.0",
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.6778.0 Safari/537.36"
         }).encode()
         mock_urlopen.return_value = mock_response
+        mock_response.__enter__.return_value = mock_response
 
         version_info = detect_chrome_version_from_remote_debugging("127.0.0.1", 9222)
 
@@ -197,12 +198,13 @@ class TestDetectChromeVersionFromRemoteDebugging:
     @patch("urllib.request.urlopen")
     def test_detect_chrome_version_from_remote_debugging_edge(self, mock_urlopen:Mock) -> None:
         """Test Chrome version detection for Edge from remote debugging."""
-        mock_response = Mock()
+        mock_response = MagicMock()
         mock_response.read.return_value = json.dumps({
             "Browser": "Edg/136.0.6778.0",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.6778.0 Safari/537.36 Edg/136.0.6778.0"
         }).encode()
         mock_urlopen.return_value = mock_response
+        mock_response.__enter__.return_value = mock_response
 
         version_info = detect_chrome_version_from_remote_debugging("127.0.0.1", 9222)
 
@@ -213,12 +215,13 @@ class TestDetectChromeVersionFromRemoteDebugging:
     @patch("urllib.request.urlopen")
     def test_detect_chrome_version_from_remote_debugging_no_chrome_in_user_agent(self, mock_urlopen:Mock) -> None:
         """Test Chrome version detection with no Chrome in User-Agent."""
-        mock_response = Mock()
+        mock_response = MagicMock()
         mock_response.read.return_value = json.dumps({
             "Browser": "Unknown",
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
         }).encode()
         mock_urlopen.return_value = mock_response
+        mock_response.__enter__.return_value = mock_response
 
         version_info = detect_chrome_version_from_remote_debugging("127.0.0.1", 9222)
         assert version_info is None
@@ -234,9 +237,10 @@ class TestDetectChromeVersionFromRemoteDebugging:
     @patch("urllib.request.urlopen")
     def test_detect_chrome_version_from_remote_debugging_invalid_json(self, mock_urlopen:Mock) -> None:
         """Test Chrome version detection with invalid JSON response."""
-        mock_response = Mock()
+        mock_response = MagicMock()
         mock_response.read.return_value = b"Invalid JSON"
         mock_urlopen.return_value = mock_response
+        mock_response.__enter__.return_value = mock_response
 
         version_info = detect_chrome_version_from_remote_debugging("127.0.0.1", 9222)
         assert version_info is None
@@ -395,9 +399,10 @@ class TestGetChromeVersionDiagnosticInfo:
     ) -> None:
         """Test detect_chrome_version_from_remote_debugging handles JSONDecodeError gracefully."""
         # Mock urlopen to return invalid JSON
-        mock_response = Mock()
+        mock_response = MagicMock()
         mock_response.read.return_value = b"invalid json content"
         mock_urlopen.return_value = mock_response
+        mock_response.__enter__.return_value = mock_response
 
         # Should return None when JSON decode fails
         result = detect_chrome_version_from_remote_debugging("127.0.0.1", 9222)
