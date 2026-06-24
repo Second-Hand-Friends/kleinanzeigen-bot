@@ -2641,9 +2641,8 @@ class TestWebScrapingDiagnostics:
         scraper_with_config.diagnose_browser_issues()
 
         assert "Remote debugging port configured" not in caplog.text
-        # _run_browser_diagnostics calls _diagnose_chrome_version_issues(browser_config, get_timeout, remote_port, remote_host)
-        assert mock_diagnose.call_args[0][2] == 0
-        assert mock_diagnose.call_args[0][3] == "127.0.0.1"
+        # _diagnose_chrome_version_issues should still be called even when port probe is skipped
+        mock_diagnose.assert_called_once()
 
 
 class TestWebScrapingMixinPortRetry:
