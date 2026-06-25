@@ -409,7 +409,7 @@ async def handle_identifier_captcha_state(web:WebScrapingMixin) -> None:
             if "/u/login/password" in current_page_url(web):
                 return
         except TimeoutError:
-            pass
+            LOG.debug("Visible submit button not found — falling through to user prompt")
 
     # Still stuck — prompt user for any undetected challenge
     LOG.warning("############################################")
@@ -426,7 +426,7 @@ async def handle_identifier_captcha_state(web:WebScrapingMixin) -> None:
         await _click_auth0_submit(web, timeout = quick_dom)
         await web.web_sleep()
     except TimeoutError:
-        pass
+        LOG.debug("Final submit button not found — giving up")
 
 
 # ---------------------------------------------------------------------------
