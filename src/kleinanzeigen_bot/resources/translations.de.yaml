@@ -143,9 +143,11 @@ kleinanzeigen_bot/login_flow.py:
 
   handle_identifier_captcha_state:
     "############################################": "############################################"
-    "# Captcha detected on Auth0 login page. Please solve it in the browser.": "# Captcha auf der Auth0-Anmeldeseite erkannt. Bitte loesen Sie das Captcha im Browser."
-    "Auth0 Weiter button present after captcha, clicking it...": "Auth0-Weiter-Button nach Captcha vorhanden, klicke ihn..."
-    "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
+    "# Auth0 identifier page is still waiting.": "# Auth0-Identifikationsseite wartet noch."
+    "# If a security challenge is visible, please solve it.": "# Falls eine Sicherheitsabfrage sichtbar ist, bitte lösen."
+    "Auth0 captcha detected, waiting for token...": "Auth0-Captcha erkannt, warte auf Token..."
+    "Captcha token ready, clicking submit...": "Captcha-Token bereit, sende ab..."
+    "Press a key after solving the challenge...": "Eine Taste drücken, nachdem die Herausforderung gelöst wurde..."
 
   check_sms_verification:
     "############################################": "############################################"

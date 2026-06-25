@@ -25,7 +25,7 @@ from .model.config_model import CaptchaConfig, DiagnosticsConfig
 from .utils import diagnostics as _diagnostics
 from .utils import loggers as _loggers
 from .utils.misc import ainput
-from .utils.web_scraping_mixin import By, Is, WebScrapingMixin
+from .utils.web_scraping_mixin import By, WebScrapingMixin
 
 LOG:Final[_loggers.Logger] = _loggers.get_logger(__name__)
 
@@ -37,6 +37,32 @@ _LOGGED_OUT_CTA_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CSS_SELECTOR, 'a[href*="einloggen"]'),
     (By.CSS_SELECTOR, 'a[href*="/m-einloggen"]'),
 ]
+
+# Auth0-specific container selectors for captcha detection on the identifier page.
+# Includes container-based providers that don't use external iframes (e.g., Friendly
+# Captcha, built-in image CAPTCHA). We don't know which provider Kleinanzeigen.de
+# uses; this covers every Auth0-supported captcha container class. Used only in
+# handle_identifier_captcha_state, NOT in the shared captcha_flow to avoid false
+# positives during publishing flow.
+_AUTH0_CAPTCHA_CONTAINER_SELECTOR:Final[str] = (
+    # [data-captcha-provider] catches ALL Auth0 captcha providers (most reliable)
+    "[data-captcha-provider],"
+    # Container classes for known providers (substring matching where needed)
+    ".recaptcha, .hcaptcha, .captcha-challenge,"
+    "[class*='auth0-v2'], [class*='auth0_v2'],"
+    ".friendly-captcha, .frc-captcha, .arkose, .cf-turnstile,"
+    ".g-recaptcha"
+)
+
+
+async def _click_auth0_submit(web:WebScrapingMixin, *, timeout:float | None = None) -> None:
+    """Click the visible Auth0 submit button, avoiding the hidden form-submit button."""
+    effective_timeout = web.timeout("quick_dom") if timeout is None else timeout
+    await web.web_click(
+        By.CSS_SELECTOR,
+        "button[type='submit'][data-action-button-primary='true']:not([disabled]):not([aria-disabled='true'])",
+        timeout = effective_timeout,
+    )
 
 
 def _format_login_detection_selectors(selectors:Sequence[tuple["By", str]]) -> str:
@@ -304,46 +330,103 @@ async def wait_for_post_auth0_submit_transition(web:WebScrapingMixin, *, usernam
 # ---------------------------------------------------------------------------
 
 
-async def handle_identifier_captcha_state(web:WebScrapingMixin) -> None:
-    """Handle captcha on the Auth0 identifier page and click Weiter if present.
+async def _detect_auth0_identifier_captcha(web:WebScrapingMixin) -> bool:
+    """Detect captcha on the Auth0 identifier page.
 
-    After submitting the email, a reCAPTCHA may be displayed on the
-    identifier page. If so, this waits for the user to solve it and then
-    probes for a visible Weiter button (not assumed to exist). If present,
-    it is clicked to continue to the password page.
-
-    No-op when the password page is already reached or no captcha is
-    detected, so the normal fast path is unaffected.
+    Checks both iframe-based captchas (shared mechanism) and Auth0-specific
+    container-based captcha elements that don't use iframes.
     """
+    # Shared iframe-based captcha detection (reCAPTCHA, hCaptcha, Turnstile, etc.)
+    if await captcha_flow.detect_captcha(web):
+        return True
+
+    # Auth0-specific container-based captchas without iframes
+    quick_dom = web.timeout("quick_dom")
+    container = await web.web_probe(
+        By.CSS_SELECTOR,
+        _AUTH0_CAPTCHA_CONTAINER_SELECTOR,
+        timeout = quick_dom,
+    )
+    return container is not None
+
+
+async def handle_identifier_captcha_state(web:WebScrapingMixin) -> None:
+    """Handle captcha/challenge on the Auth0 identifier page.
+
+    After submitting the email, a non-interactive captcha (Cloudflare Turnstile
+    via Auth0 v2) may appear. This waits for its token, clicks the visible
+    submit button, and falls back to a user prompt if still stuck.
+    """
+    # Already on password page — nothing to do
     if "/u/login/password" in current_page_url(web):
         return
 
-    captcha_elem = await web.web_probe(
-        By.CSS_SELECTOR,
-        "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']",
-        timeout = web.timeout("captcha_detection"),
-    )
-    if captcha_elem is None:
+    # Brief grace period for normal navigation
+    await web.web_sleep(1000, 2000)
+    if "/u/login/password" in current_page_url(web):
         return
 
-    LOG.warning("############################################")
-    LOG.warning("# Captcha detected on Auth0 login page. Please solve it in the browser.")
-    LOG.warning("############################################")
-    await ainput(_("Press a key to continue..."))
-
-    # After captcha solving, probe for a visible Weiter button
+    # Detect captcha on the identifier page
+    captcha_detected = await _detect_auth0_identifier_captcha(web)
     quick_dom = web.timeout("quick_dom")
-    weiter_xpath = "//button[contains(., 'Weiter')]"
-    weiter = await web.web_probe(
-        By.XPATH, weiter_xpath,
-        timeout = quick_dom,
-    )
-    if weiter is not None and await web.web_check(By.XPATH, weiter_xpath, Is.DISPLAYED, timeout = quick_dom):
-        LOG.info("Auth0 Weiter button present after captcha, clicking it...")
-        await web.web_click(By.XPATH, weiter_xpath, timeout = quick_dom)
+
+    # Re-check URL: detection may have taken long enough for navigation to complete
+    if "/u/login/password" in current_page_url(web):
+        return
+
+    if captcha_detected:
+        LOG.info("Auth0 captcha detected, waiting for token...")
+        # Wait for Turnstile/other provider to generate a token before clicking
+        try:
+            await web.web_await(
+                lambda: web.web_execute(
+                    "document.querySelector(\"input[name='captcha']\")?.value?.length > 0"
+                ),
+                timeout = quick_dom,
+                timeout_error_message = "Captcha token did not appear",
+                apply_multiplier = False,
+            )
+        except TimeoutError:
+            LOG.debug("No captcha token appeared within quick_dom timeout")
+        else:
+            # Re-check URL: token wait may have taken long enough for navigation
+            if "/u/login/password" in current_page_url(web):
+                return
+            LOG.info("Captcha token ready, clicking submit...")
+            await _click_auth0_submit(web)
+            await web.web_sleep()
+            if "/u/login/password" in current_page_url(web):
+                return
+        # If token never arrived or click didn't advance, fall through to prompt
+
+    # No captcha or token didn't arrive — try clicking visible submit once
+    if not captcha_detected:
+        if "/u/login/password" in current_page_url(web):
+            return
+        try:
+            await _click_auth0_submit(web, timeout = quick_dom)
+            await web.web_sleep()
+            if "/u/login/password" in current_page_url(web):
+                return
+        except TimeoutError:
+            pass
+
+    # Still stuck — prompt user for any undetected challenge
+    LOG.warning("############################################")
+    LOG.warning("# Auth0 identifier page is still waiting.")
+    LOG.warning("# If a security challenge is visible, please solve it.")
+    LOG.warning("############################################")
+    await ainput(_("Press a key after solving the challenge..."))
+
+    if "/u/login/password" in current_page_url(web):
+        return
+
+    # Final attempt
+    try:
+        await _click_auth0_submit(web, timeout = quick_dom)
         await web.web_sleep()
-    else:
-        LOG.debug("No Weiter button after captcha — continuing to wait for password page")
+    except TimeoutError:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +452,7 @@ async def fill_login_data_and_send(
     # Step 1: email identifier
     LOG.debug("Auth0 Step 1: entering email...")
     await web.web_input(By.ID, "username", username)
-    await web.web_click(By.CSS_SELECTOR, "button[type='submit']")
+    await _click_auth0_submit(web)
 
     # Captcha-solving branch: captcha can appear on the identifier page
     # after email submit. After solving, a visible Weiter button may need
@@ -383,7 +466,7 @@ async def fill_login_data_and_send(
     LOG.debug("Auth0 Step 2: entering password...")
     await web.web_input(By.CSS_SELECTOR, "input[type='password']", password)
     await captcha_flow.check_and_wait_for_captcha(web, captcha_config, is_login_page = True)
-    await web.web_click(By.CSS_SELECTOR, "button[type='submit']")
+    await _click_auth0_submit(web)
     await wait_for_post_auth0_submit_transition(web, username = username)
     LOG.debug("Auth0 login submitted.")
 

@@ -566,8 +566,16 @@ class TestKleinanzeigenBotAuthentication:
                 call(By.CSS_SELECTOR, "input[type='password']", test_bot.config.login.password),
             ]
             assert mock_click.call_args_list == [
-                call(By.CSS_SELECTOR, "button[type='submit']"),
-                call(By.CSS_SELECTOR, "button[type='submit']"),
+                call(
+                    By.CSS_SELECTOR,
+                    "button[type='submit'][data-action-button-primary='true']:not([disabled]):not([aria-disabled='true'])",
+                    timeout = 2.0,
+                ),
+                call(
+                    By.CSS_SELECTOR,
+                    "button[type='submit'][data-action-button-primary='true']:not([disabled]):not([aria-disabled='true'])",
+                    timeout = 2.0,
+                ),
             ]
 
     @pytest.mark.asyncio
