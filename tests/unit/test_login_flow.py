@@ -18,6 +18,7 @@ from kleinanzeigen_bot.login_flow import (
     click_gdpr_banner,
     current_page_url,
     fill_login_data_and_send,
+    handle_identifier_captcha_state,
     has_logged_out_cta,
     is_valid_post_auth0_destination,
     wait_for_post_auth0_submit_transition,
@@ -721,3 +722,231 @@ class TestKleinanzeigenBotAuthentication:
 
             mock_probe.assert_awaited_once()
             mock_ainput.assert_not_awaited()
+
+    # ------------------------------------------------------------------
+    # _detect_auth0_identifier_captcha
+    # ------------------------------------------------------------------
+
+    @pytest.mark.parametrize(
+        ("detect_result", "probe_result", "expected"),
+        [
+            pytest.param(True, None, True, id = "iframe_detected"),
+            pytest.param(False, MagicMock(spec = Element), True, id = "container_detected"),
+            pytest.param(False, None, False, id = "nothing_found"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_detect_auth0_identifier_captcha(
+        self, test_bot:KleinanzeigenBot, detect_result:bool, probe_result:Any, expected:bool
+    ) -> None:
+        """Returns True when captcha is detected (iframe or container), False otherwise."""
+        with (
+            patch("kleinanzeigen_bot.login_flow.captcha_flow.detect_captcha", new_callable = AsyncMock, return_value = detect_result),
+            patch.object(test_bot, "timeout", return_value = 2.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = probe_result) as mock_probe,
+        ):
+            result = await login_flow._detect_auth0_identifier_captcha(test_bot)
+
+        assert result is expected
+        if detect_result:
+            mock_probe.assert_not_called()
+        else:
+            mock_probe.assert_awaited_once()
+            if probe_result is not None:
+                selector = mock_probe.call_args.args[1]
+                assert "[data-captcha-provider]" in selector
+                assert "[class*='auth0-v2']" in selector
+
+    # ------------------------------------------------------------------
+    # _click_auth0_submit
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_click_auth0_submit(self, test_bot:KleinanzeigenBot) -> None:
+        """Clicks the Auth0 primary submit button with the correct selector."""
+        expected_selector = "button[type='submit'][data-action-button-primary='true']:not([disabled]):not([aria-disabled='true'])"
+
+        with patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click:
+            await login_flow._click_auth0_submit(test_bot)
+
+        mock_click.assert_awaited_once()
+        assert mock_click.call_args is not None
+        assert mock_click.call_args.args[0] == By.CSS_SELECTOR
+        assert mock_click.call_args.args[1] == expected_selector
+
+    # ------------------------------------------------------------------
+    # handle_identifier_captcha_state
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_handle_identifier_already_on_password_page(self, test_bot:KleinanzeigenBot) -> None:
+        """Early return when already on the password page — no sleep, no detection, no submit."""
+        with (
+            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://login.kleinanzeigen.de/u/login/password"),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+            patch("kleinanzeigen_bot.login_flow._detect_auth0_identifier_captcha", new_callable = AsyncMock) as mock_detect,
+            patch("kleinanzeigen_bot.login_flow._click_auth0_submit", new_callable = AsyncMock) as mock_submit,
+            patch("kleinanzeigen_bot.login_flow.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
+            await handle_identifier_captcha_state(test_bot)
+
+        mock_sleep.assert_not_called()
+        mock_detect.assert_not_called()
+        mock_submit.assert_not_called()
+        mock_ainput.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_handle_identifier_navigates_during_grace_period(self, test_bot:KleinanzeigenBot) -> None:
+        """Navigation completes during grace-period sleep — returns early, no detection/submit."""
+        with (
+            patch(
+                "kleinanzeigen_bot.login_flow.current_page_url",
+                side_effect = [
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/login/password",
+                ],
+            ),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+            patch("kleinanzeigen_bot.login_flow._detect_auth0_identifier_captcha", new_callable = AsyncMock) as mock_detect,
+            patch("kleinanzeigen_bot.login_flow._click_auth0_submit", new_callable = AsyncMock) as mock_submit,
+            patch("kleinanzeigen_bot.login_flow.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
+            await handle_identifier_captcha_state(test_bot)
+
+        mock_sleep.assert_awaited_once()
+        mock_detect.assert_not_called()
+        mock_submit.assert_not_called()
+        mock_ainput.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_handle_identifier_captcha_token_arrives_submit_succeeds(self, test_bot:KleinanzeigenBot) -> None:
+        """Captcha detected, token arrives, submit click advances to password page."""
+        with (
+            patch(
+                "kleinanzeigen_bot.login_flow.current_page_url",
+                side_effect = [
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/login/password",
+                ],
+            ),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True) as mock_await,
+            patch("kleinanzeigen_bot.login_flow._detect_auth0_identifier_captcha", new_callable = AsyncMock, return_value = True),
+            patch("kleinanzeigen_bot.login_flow._click_auth0_submit", new_callable = AsyncMock) as mock_submit,
+            patch("kleinanzeigen_bot.login_flow.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
+            await handle_identifier_captcha_state(test_bot)
+
+        mock_sleep.assert_awaited()
+        assert mock_sleep.await_count == 2  # grace period + after submit
+        mock_await.assert_awaited_once()  # token was waited for
+        mock_submit.assert_awaited_once()  # submit was clicked
+        mock_ainput.assert_not_called()  # no prompt shown
+
+    @pytest.mark.asyncio
+    async def test_handle_identifier_captcha_token_times_out_prompt_solves(self, test_bot:KleinanzeigenBot) -> None:
+        """Captcha detected, token wait times out, user prompted, then navigates to password."""
+        with (
+            patch(
+                "kleinanzeigen_bot.login_flow.current_page_url",
+                side_effect = [
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/login/password",
+                ],
+            ),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = TimeoutError) as mock_await,
+            patch("kleinanzeigen_bot.login_flow._detect_auth0_identifier_captcha", new_callable = AsyncMock, return_value = True),
+            patch("kleinanzeigen_bot.login_flow._click_auth0_submit", new_callable = AsyncMock) as mock_submit,
+            patch("kleinanzeigen_bot.login_flow.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
+            await handle_identifier_captcha_state(test_bot)
+
+        mock_sleep.assert_awaited_once()  # grace period only
+        mock_await.assert_awaited_once()  # token wait was attempted (timed out)
+        mock_submit.assert_not_called()  # no submit in the token branch
+        mock_ainput.assert_awaited_once()  # prompt was shown
+
+    @pytest.mark.asyncio
+    async def test_handle_identifier_no_captcha_submit_succeeds(self, test_bot:KleinanzeigenBot) -> None:
+        """No captcha detected, submit click advances to password page."""
+        with (
+            patch(
+                "kleinanzeigen_bot.login_flow.current_page_url",
+                side_effect = [
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/login/password",
+                ],
+            ),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+            patch("kleinanzeigen_bot.login_flow._detect_auth0_identifier_captcha", new_callable = AsyncMock, return_value = False),
+            patch("kleinanzeigen_bot.login_flow._click_auth0_submit", new_callable = AsyncMock) as mock_submit,
+            patch("kleinanzeigen_bot.login_flow.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
+            await handle_identifier_captcha_state(test_bot)
+
+        mock_sleep.assert_awaited()
+        assert mock_sleep.await_count == 2  # grace period + after submit
+        mock_submit.assert_awaited_once()  # submit was clicked
+        mock_ainput.assert_not_called()  # no prompt shown
+
+    @pytest.mark.asyncio
+    async def test_handle_identifier_no_captcha_submit_fails_prompt_solves(self, test_bot:KleinanzeigenBot) -> None:
+        """No captcha detected, submit fails, user prompted, then navigates to password."""
+        with (
+            patch(
+                "kleinanzeigen_bot.login_flow.current_page_url",
+                side_effect = [
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/login/password",
+                ],
+            ),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+            patch("kleinanzeigen_bot.login_flow._detect_auth0_identifier_captcha", new_callable = AsyncMock, return_value = False),
+            patch(
+                "kleinanzeigen_bot.login_flow._click_auth0_submit",
+                new_callable = AsyncMock,
+                side_effect = TimeoutError,
+            ) as mock_submit,
+            patch("kleinanzeigen_bot.login_flow.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
+            await handle_identifier_captcha_state(test_bot)
+
+        mock_sleep.assert_awaited_once()  # grace period only (submit failed, no post-submit sleep)
+        mock_submit.assert_awaited_once()  # submit was attempted
+        mock_ainput.assert_awaited_once()  # prompt was shown
+
+    @pytest.mark.asyncio
+    async def test_handle_identifier_url_changes_during_detection(self, test_bot:KleinanzeigenBot) -> None:
+        """URL switches to password during captcha detection — returns early, no submit/prompt."""
+        with (
+            patch(
+                "kleinanzeigen_bot.login_flow.current_page_url",
+                side_effect = [
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/identifier",
+                    "https://login.kleinanzeigen.de/u/login/password",
+                ],
+            ),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+            patch("kleinanzeigen_bot.login_flow._detect_auth0_identifier_captcha", new_callable = AsyncMock) as mock_detect,
+            patch("kleinanzeigen_bot.login_flow._click_auth0_submit", new_callable = AsyncMock) as mock_submit,
+            patch("kleinanzeigen_bot.login_flow.ainput", new_callable = AsyncMock) as mock_ainput,
+        ):
+            await handle_identifier_captcha_state(test_bot)
+
+        mock_sleep.assert_awaited_once()  # grace period
+        mock_detect.assert_awaited_once()  # detection was called
+        mock_submit.assert_not_called()  # no submit
+        mock_ainput.assert_not_called()  # no prompt
