@@ -393,10 +393,13 @@ async def handle_identifier_captcha_state(web:WebScrapingMixin) -> None:
             if "/u/login/password" in current_page_url(web):
                 return
             LOG.info("Captcha token ready, clicking submit...")
-            await _click_auth0_submit(web)
-            await web.web_sleep()
-            if "/u/login/password" in current_page_url(web):
-                return
+            try:
+                await _click_auth0_submit(web)
+                await web.web_sleep()
+                if "/u/login/password" in current_page_url(web):
+                    return
+            except TimeoutError:
+                LOG.debug("Visible submit button not clickable after token; falling through to prompt")
         # If token never arrived or click didn't advance, fall through to prompt
 
     # No captcha or token didn't arrive — try clicking visible submit once
