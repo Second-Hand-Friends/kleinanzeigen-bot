@@ -782,7 +782,7 @@ class TestKleinanzeigenBotAuthentication:
     async def test_handle_identifier_already_on_password_page(self, test_bot:KleinanzeigenBot) -> None:
         """Early return when already on the password page — no sleep, no detection, no submit."""
         with (
-            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://login.kleinanzeigen.de/u/login/password"),
+            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://auth.example.com/u/login/password"),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
             patch("kleinanzeigen_bot.login_flow._detect_auth0_identifier_captcha", new_callable = AsyncMock) as mock_detect,
             patch("kleinanzeigen_bot.login_flow._click_auth0_submit", new_callable = AsyncMock) as mock_submit,
@@ -802,8 +802,8 @@ class TestKleinanzeigenBotAuthentication:
             patch(
                 "kleinanzeigen_bot.login_flow.current_page_url",
                 side_effect = [
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/login/password",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/login/password",
                 ],
             ),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
@@ -825,11 +825,11 @@ class TestKleinanzeigenBotAuthentication:
             patch(
                 "kleinanzeigen_bot.login_flow.current_page_url",
                 side_effect = [
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/login/password",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/login/password",
                 ],
             ),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
@@ -853,10 +853,10 @@ class TestKleinanzeigenBotAuthentication:
             patch(
                 "kleinanzeigen_bot.login_flow.current_page_url",
                 side_effect = [
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/login/password",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/login/password",
                 ],
             ),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
@@ -879,11 +879,11 @@ class TestKleinanzeigenBotAuthentication:
             patch(
                 "kleinanzeigen_bot.login_flow.current_page_url",
                 side_effect = [
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/login/password",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/login/password",
                 ],
             ),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
@@ -905,11 +905,11 @@ class TestKleinanzeigenBotAuthentication:
             patch(
                 "kleinanzeigen_bot.login_flow.current_page_url",
                 side_effect = [
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/login/password",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/login/password",
                 ],
             ),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
@@ -934,9 +934,9 @@ class TestKleinanzeigenBotAuthentication:
             patch(
                 "kleinanzeigen_bot.login_flow.current_page_url",
                 side_effect = [
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/identifier",
-                    "https://login.kleinanzeigen.de/u/login/password",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/identifier",
+                    "https://auth.example.com/u/login/password",
                 ],
             ),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
