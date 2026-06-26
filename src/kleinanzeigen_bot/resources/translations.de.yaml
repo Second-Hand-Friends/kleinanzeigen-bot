@@ -135,7 +135,8 @@ kleinanzeigen_bot/login_flow.py:
     "Auth0 password step not reached (url=%s)": "Auth0-Passwortschritt nicht erreicht (URL=%s)"
 
   wait_for_post_auth0_submit_transition:
-    "Auth0 post-submit verification remained inconclusive (url=%s)": "Auth0-Verifikation nach Absenden blieb unklar (URL=%s)"
+    "Auth0 post-submit verification remained inconclusive: %s": "Auth0-Verifikation nach Absenden blieb unklar: %s"
+    "Auth0 post-submit verification remained inconclusive: %s (url=%s)": "Auth0-Verifikation nach Absenden blieb unklar: %s (URL=%s)"
 
   fill_login_data_and_send:
     "Logging in...": "Anmeldung..."

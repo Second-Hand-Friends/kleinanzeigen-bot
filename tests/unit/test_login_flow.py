@@ -622,6 +622,11 @@ class TestKleinanzeigenBotAuthentication:
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]) as mock_wait,
             patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError) as mock_is_logged_in,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+            patch(
+                "kleinanzeigen_bot.login_flow._classify_post_submit_state",
+                new_callable = AsyncMock,
+                return_value = "UNKNOWN (url=unknown)",
+            ) as mock_classify,
         ):
             with pytest.raises(TimeoutError, match = "Auth0 post-submit verification remained inconclusive"):
                 await wait_for_post_auth0_submit_transition(test_bot, username = test_bot.config.login.username)
@@ -632,6 +637,7 @@ class TestKleinanzeigenBotAuthentication:
             assert mock_sleep.await_args is not None
             sleep_kwargs = cast(Any, mock_sleep.await_args).kwargs
             assert sleep_kwargs["min_ms"] < sleep_kwargs["max_ms"]
+            mock_classify.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_click_gdpr_banner_uses_quick_dom_timeout_and_clicks_found_element(self, test_bot:KleinanzeigenBot) -> None:
@@ -969,3 +975,173 @@ class TestKleinanzeigenBotAuthentication:
         assert mock_submit.await_count == 2  # first submit + final attempt
         mock_ainput.assert_awaited_once()  # prompt was shown
         mock_sleep.assert_awaited()  # grace period sleep happened
+
+
+class TestClassifyPostSubmitState:
+    """Tests for _classify_post_submit_state()."""
+
+    @pytest.mark.asyncio
+    async def test_classify_still_on_password_page(self, test_bot:KleinanzeigenBot) -> None:
+        """Should classify STILL_ON_PASSWORD_PAGE when URL contains /u/login/password."""
+        with (
+            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://kleinanzeigen.de/u/login/password"),
+            patch.object(test_bot, "timeout", return_value = 5.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+        ):
+            result = await login_flow._classify_post_submit_state(test_bot)
+
+        assert "STILL_ON_PASSWORD_PAGE" in result
+        assert isinstance(result, str)
+
+    @pytest.mark.asyncio
+    async def test_classify_auth0_error_selector_alert(self, test_bot:KleinanzeigenBot) -> None:
+        """Should report auth0_error when [role='alert'] element has visible text."""
+        mock_element = MagicMock(spec = Element)
+        with (
+            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://kleinanzeigen.de/u/login/password"),
+            patch.object(test_bot, "timeout", return_value = 5.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
+            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = "Falsches Passwort"),
+        ):
+            # Return the mock element only for the FIRST probe ([role='alert'])
+            mock_probe.side_effect = [mock_element, None, None, None]
+
+            result = await login_flow._classify_post_submit_state(test_bot)
+
+        assert "STILL_ON_PASSWORD_PAGE" in result
+        assert "auth0_error='Falsches Passwort'" in result
+
+    @pytest.mark.asyncio
+    async def test_classify_auth0_error_selector_error_element_password(self, test_bot:KleinanzeigenBot) -> None:
+        """Should report auth0_error when #error-element-password has visible text."""
+        mock_element = MagicMock(spec = Element)
+        with (
+            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://kleinanzeigen.de/u/login/password"),
+            patch.object(test_bot, "timeout", return_value = 5.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
+            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = "Password is required"),
+        ):
+            # Error probes 1-3 miss, 4th (#error-element-password) hits.
+            # MFA probes (calls 5-7) all miss.
+            mock_probe.side_effect = [None, None, None, mock_element, None, None, None]
+
+            result = await login_flow._classify_post_submit_state(test_bot)
+
+        assert "STILL_ON_PASSWORD_PAGE" in result
+        assert "auth0_error='Password is required'" in result
+
+    @pytest.mark.asyncio
+    async def test_classify_mfa_one_time_code_input(self, test_bot:KleinanzeigenBot) -> None:
+        """Should report MFA_DETECTED when input[autocomplete='one-time-code'] is present."""
+        mock_element = MagicMock(spec = Element)
+        with (
+            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://login.kleinanzeigen.de/u/mfa"),
+            patch.object(test_bot, "timeout", return_value = 5.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
+        ):
+            # Error probes all miss. MFA probe hits on the one-time-code input (5th call
+            # after 4 error selectors). SMS and email probes miss.
+            mock_probe.side_effect = [None, None, None, None, mock_element, None, None]
+
+            result = await login_flow._classify_post_submit_state(test_bot)
+
+        assert "MFA_DETECTED" in result
+        assert "ONE_TIME_CODE_INPUT" in result
+
+    @pytest.mark.asyncio
+    async def test_classify_mfa_sms_prompt(self, test_bot:KleinanzeigenBot) -> None:
+        """Should report SMS_VERIFICATION when German SMS prompt text is present."""
+        mock_element = MagicMock(spec = Element)
+        with (
+            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://login.kleinanzeigen.de/u/mfa-sms"),
+            patch.object(test_bot, "timeout", return_value = 5.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
+        ):
+            # Error probes miss (4). One-time-code probe misses (5th).
+            # SMS text probe (6th call since 0-indexed) hits.
+            mock_probe.side_effect = [None, None, None, None, None, mock_element, None]
+
+            result = await login_flow._classify_post_submit_state(test_bot)
+
+        assert "MFA_DETECTED" in result
+        assert "SMS_VERIFICATION" in result
+
+    @pytest.mark.asyncio
+    async def test_classify_unknown_fallback(self, test_bot:KleinanzeigenBot) -> None:
+        """Should return UNKNOWN when no probe matches and URL is non-password."""
+        with (
+            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://kleinanzeigen.de/meine-anzeigen"),
+            patch.object(test_bot, "timeout", return_value = 5.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+        ):
+            result = await login_flow._classify_post_submit_state(test_bot)
+
+        assert result.startswith("UNKNOWN (url=")
+        assert "kleinanzeigen.de/meine-anzeigen" in result
+
+    @pytest.mark.asyncio
+    async def test_classify_combined_password_page_and_error(self, test_bot:KleinanzeigenBot) -> None:
+        """Should preserve multiple facts: URL classification + auth0_error."""
+        mock_element = MagicMock(spec = Element)
+        with (
+            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://kleinanzeigen.de/u/login/password"),
+            patch.object(test_bot, "timeout", return_value = 5.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
+            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = "Invalid password"),
+        ):
+            mock_probe.side_effect = [mock_element, None, None, None]
+
+            result = await login_flow._classify_post_submit_state(test_bot)
+
+        assert "STILL_ON_PASSWORD_PAGE" in result
+        assert "auth0_error='Invalid password'" in result
+        # Verify both are present, not just one
+        assert " + " in result
+
+    @pytest.mark.asyncio
+    async def test_classify_never_raises(self, test_bot:KleinanzeigenBot) -> None:
+        """Should never raise, even when dependencies throw."""
+        with (
+            patch("kleinanzeigen_bot.login_flow.current_page_url", side_effect = RuntimeError("boom")),
+        ):
+            # Must not propagate the exception
+            result = await login_flow._classify_post_submit_state(test_bot)
+
+        assert result == "UNKNOWN (classification_error)"
+
+    @pytest.mark.asyncio
+    async def test_classify_snippet_sanitization(self, test_bot:KleinanzeigenBot) -> None:
+        """Should sanitize error text: cap at 120 chars, collapse whitespace, remove quotes."""
+        mock_element = MagicMock(spec = Element)
+        long_text = (
+            "  Falsches   Passwort oder   ungültige   Eingabe.   "
+            "Bitte versuche es erneut.   "
+            "Dies ist ein sehr langer Fehlertext der über 120 Zeichen lang sein wird. "
+            "Man kann sich kaum vorstellen wie lang der ist. "
+            "Er enthält auch 'Zitate' und mehrere Leerzeichen."
+        )
+        with (
+            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://kleinanzeigen.de/u/login/password"),
+            patch.object(test_bot, "timeout", return_value = 5.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
+            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = long_text),
+        ):
+            mock_probe.side_effect = [mock_element, None, None, None]
+
+            result = await login_flow._classify_post_submit_state(test_bot)
+
+        # Extract the snippet content (between formatting quotes of auth0_error='...')
+        snippet_start = result.index("auth0_error='") + len("auth0_error='")
+        snippet_end = result.index("'", snippet_start)
+        snippet = result[snippet_start:snippet_end]
+
+        # Verify single quotes were replaced with spaces in the snippet content
+        assert "'" not in snippet, "Single quotes in error text should be replaced with spaces"
+
+        # Verify no consecutive whitespace in the snippet content
+        assert "  " not in snippet, "Consecutive whitespace should be collapsed"
+
+        # Verify the snippet is at most 120 chars
+        assert len(snippet) <= 120, f"Snippet should be capped at 120 chars, got {len(snippet)}"
+
+        assert "auth0_error=" in result
