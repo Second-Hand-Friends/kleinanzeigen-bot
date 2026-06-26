@@ -11,6 +11,8 @@ from datetime import datetime  # noqa: TC003 — used in runtime type annotation
 from gettext import gettext as _
 from typing import TYPE_CHECKING, Any
 
+import colorama
+
 from . import ad_loading
 
 if TYPE_CHECKING:
@@ -39,6 +41,28 @@ def _translate_status(status:str) -> str:
     if status == "published-local":
         return _("published-local")
     return status
+
+
+# Canonical status ordering (matches precedence in :func:`compute_ad_status`).
+_STATUS_ORDER:tuple[str, ...] = ("disabled", "draft", "changed", "due", "published-local")
+
+# Status → ANSI colour prefix mapping.
+# Applied only when *color* is enabled in :func:`render_status_rows`.
+_STATUS_COLORS:dict[str, str] = {
+    "published-local": colorama.Fore.GREEN,
+    "changed": colorama.Fore.YELLOW,
+    "due": colorama.Fore.RED,
+    "draft": colorama.Fore.BLUE,
+    "disabled": colorama.Style.DIM,
+}
+
+
+def _colorize_status(status:str, text:str) -> str:
+    """Wrap *text* in ANSI colour codes for the given *status*, if a colour is mapped."""
+    prefix = _STATUS_COLORS.get(status)
+    if prefix is None:
+        return text
+    return f"{prefix}{text}{colorama.Style.RESET_ALL}"
 
 
 def compute_ad_status(
@@ -88,8 +112,15 @@ def build_status_rows(
     return rows
 
 
-def render_status_rows(rows:list[StatusRow]) -> str:
-    """Format status rows into an ASCII table string."""
+def render_status_rows(rows:list[StatusRow], *, color:bool = False) -> str:
+    """Format status rows into an ASCII table string.
+
+    Args:
+        rows:  Rows to render.
+        color: If ``True``, apply ANSI colour codes to the status column.
+               Column widths are always computed from plain (uncoloured)
+               labels so that coloured and uncoloured output align identically.
+    """
     if not rows:
         return ""
 
@@ -102,13 +133,7 @@ def render_status_rows(rows:list[StatusRow]) -> str:
     # Translated labels for column width calculation.
     # Uses ``_translate_status()`` which contains explicit ``_("...")`` calls
     # that the translation-coverage scanner can find.
-    translated_statuses = [
-        _translate_status("disabled"),
-        _translate_status("draft"),
-        _translate_status("changed"),
-        _translate_status("due"),
-        _translate_status("published-local"),
-    ]
+    translated_statuses = [_translate_status(s) for s in _STATUS_ORDER]
     col_status = max(len(h_status), *[len(s) for s in translated_statuses], 0)
 
     # Title width is data-driven, but clamp to at least header width
@@ -137,26 +162,30 @@ def render_status_rows(rows:list[StatusRow]) -> str:
 
     for r in rows:
         label = _translate_status(r.status)
+        # Pad with plain label first, then wrap in colour if enabled.
+        # This keeps stripped (ANSI-free) column widths identical.
+        padded = label.ljust(col_status)
+        display = _colorize_status(r.status, padded) if color else padded
         lines.append(
             "| "
             + r.ad_id.ljust(col_id)
             + " | "
             + r.title.ljust(col_title)
             + " | "
-            + label.ljust(col_status)
+            + display
             + " |"
         )
 
     lines.append(sep)
 
-    # Summary line
+    # Summary line — always plain
     counts:dict[str, int] = {}
     for r in rows:
         counts[r.status] = counts.get(r.status, 0) + 1
 
     summary_parts:list[str] = [
         f"{_translate_status(label)}: {counts[label]}"
-        for label in ("disabled", "draft", "changed", "due", "published-local")
+        for label in _STATUS_ORDER
         if label in counts
     ]
 

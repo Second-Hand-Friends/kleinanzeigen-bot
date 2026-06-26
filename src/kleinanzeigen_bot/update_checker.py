@@ -8,7 +8,6 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-import colorama
 import requests
 
 if TYPE_CHECKING:
@@ -24,8 +23,6 @@ except ImportError:
 from kleinanzeigen_bot.model.update_check_state import UpdateCheckState
 
 logger = logging.getLogger(__name__)
-
-colorama.init()
 
 
 class UpdateChecker:

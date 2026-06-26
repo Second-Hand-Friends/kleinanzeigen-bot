@@ -20,6 +20,7 @@ from .login_flow import LoginDetectionResult
 from .model.ad_model import Ad, AdUpdateStrategy
 from .model.config_model import Config  # noqa: TC001 — used at runtime, config injection
 from .published_ads import PublishedAd
+from .utils import color as _color
 from .utils import diagnostics as _diagnostics
 from .utils import loggers as _loggers
 from .utils import misc as _misc
@@ -265,7 +266,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         now = _misc.now()
         ads_for_status = [(abspath, ad_cfg, raw) for abspath, _relpath, ad_cfg, raw in loaded]
         rows = ad_status.build_status_rows(ads_for_status, now = now)
-        output = ad_status.render_status_rows(rows)
+        use_color = _color.should_use_color()
+        output = ad_status.render_status_rows(rows, color = use_color)
         print(output)
 
     async def _handle_publish(self) -> None:
