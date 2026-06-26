@@ -627,17 +627,21 @@ class TestKleinanzeigenBotAuthentication:
                 new_callable = AsyncMock,
                 return_value = "UNKNOWN (url=unknown)",
             ) as mock_classify,
+            pytest.raises(TimeoutError) as exc_info,
         ):
-            with pytest.raises(TimeoutError, match = "Auth0 post-submit verification remained inconclusive"):
-                await wait_for_post_auth0_submit_transition(test_bot, username = test_bot.config.login.username)
+            await wait_for_post_auth0_submit_transition(test_bot, username = test_bot.config.login.username)
 
-            mock_wait.assert_awaited_once()
-            assert mock_is_logged_in.await_count == 2
-            mock_sleep.assert_awaited_once()
-            assert mock_sleep.await_args is not None
-            sleep_kwargs = cast(Any, mock_sleep.await_args).kwargs
-            assert sleep_kwargs["min_ms"] < sleep_kwargs["max_ms"]
-            mock_classify.assert_awaited_once()
+        # The classified state must surface in the exception message
+        assert "Auth0 post-submit verification remained inconclusive" in str(exc_info.value)
+        assert "UNKNOWN (url=unknown)" in str(exc_info.value)
+
+        mock_wait.assert_awaited_once()
+        assert mock_is_logged_in.await_count == 2
+        mock_sleep.assert_awaited_once()
+        assert mock_sleep.await_args is not None
+        sleep_kwargs = cast(Any, mock_sleep.await_args).kwargs
+        assert sleep_kwargs["min_ms"] < sleep_kwargs["max_ms"]
+        mock_classify.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_click_gdpr_banner_uses_quick_dom_timeout_and_clicks_found_element(self, test_bot:KleinanzeigenBot) -> None:
@@ -1236,7 +1240,8 @@ class TestClassifyPostSubmitState:
     async def test_wait_for_post_auth0_submit_transition_redacts_sensitive_text(
         self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture,
     ) -> None:
-        """LOG.warning AND TimeoutError must redact auth0_error snippets."""
+        """LOG.warning must not include variable classification text; TimeoutError
+        must redact auth0_error snippets to avoid exposure via error handlers."""
         with (
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]),
             patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
@@ -1256,9 +1261,49 @@ class TestClassifyPostSubmitState:
         assert "auth0_error=<redacted>" in str(exc_info.value)
         assert "Auth0 post-submit verification remained inconclusive" in str(exc_info.value)
 
-        # Warning log must be redacted too
+        # Warning log is a static string — no variable classification text
         assert "secret password" not in caplog.text
-        assert "auth0_error=<redacted>" in caplog.text
+        assert "auth0_error=<redacted>" not in caplog.text
+        assert "Auth0 post-submit verification remained inconclusive" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_wait_for_post_auth0_submit_transition_redacts_url(
+        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """URL query/fragment/userinfo must be redacted from TimeoutError and logs."""
+        raw_url = "https://user:secret@login.kleinanzeigen.de/u/login/password?state=abc&code=secret#frag"
+        with (
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch(
+                "kleinanzeigen_bot.login_flow._classify_post_submit_state",
+                new_callable = AsyncMock,
+                return_value = "STILL_ON_PASSWORD_PAGE",
+            ),
+            patch("kleinanzeigen_bot.login_flow._safe_current_page_url", return_value = raw_url),
+            pytest.raises(TimeoutError) as exc_info,
+        ):
+            await wait_for_post_auth0_submit_transition(test_bot, username = test_bot.config.login.username)
+
+        exc_text = str(exc_info.value)
+
+        # Sensitive data must not appear in the exception
+        assert "state=" not in exc_text
+        assert "code=" not in exc_text
+        assert "#frag" not in exc_text
+        assert "user:" not in exc_text
+
+        # Sanitised diagnostic path must remain
+        assert "login.kleinanzeigen.de/u/login/password" in exc_text
+
+        # Same for log output
+        log_text = caplog.text
+        assert "state=" not in log_text
+        assert "code=" not in log_text
+        assert "#frag" not in log_text
+        assert "user:" not in log_text
+        assert "login.kleinanzeigen.de/u/login/password" in log_text
 
     @pytest.mark.asyncio
     async def test_wait_for_post_auth0_submit_transition_url_failure(

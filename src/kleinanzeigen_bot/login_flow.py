@@ -332,6 +332,27 @@ def _safe_current_page_url(web:WebScrapingMixin) -> str:
         return "unknown"
 
 
+def _redact_diagnostic_url(url:str) -> str:
+    """Strip query, fragment, and userinfo from a URL for safe diagnostic output.
+
+    ``current_page_url()`` already returns scheme+host+path, but this
+    helper provides defence in depth when a raw or differently-sourced
+    URL might carry query/fragment or embedded credentials.
+    Non-URL sentinel values such as ``'unknown'`` and ``'about:blank'``
+    are passed through unchanged.
+    """
+    if not url or url in {"unknown", "about:blank"}:
+        return url
+    try:
+        parsed = urllib_parse.urlparse(url)
+        # Strip userinfo — rebuild netloc from hostname + port only
+        host = parsed.hostname or ""
+        netloc = f"{host}:{parsed.port}" if parsed.port is not None and host else host
+        return urllib_parse.urlunparse((parsed.scheme, netloc, parsed.path, "", "", ""))
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
 def _redact_auth0_error(text:str) -> str:
     """Replace ``auth0_error='...'`` segments with ``auth0_error=<redacted>``.
 
@@ -422,7 +443,7 @@ async def _classify_post_submit_state(web:WebScrapingMixin) -> str:
 
     if facts:
         return " + ".join(facts)
-    return f"UNKNOWN (url={url})"
+    return f"UNKNOWN (url={_redact_diagnostic_url(url)})"
 
 
 async def wait_for_post_auth0_submit_transition(web:WebScrapingMixin, *, username:str) -> None:
@@ -452,7 +473,7 @@ async def wait_for_post_auth0_submit_transition(web:WebScrapingMixin, *, usernam
         return
 
     LOG.debug("Auth0 post-submit verification remained inconclusive; applying bounded fallback pause")
-    LOG.debug("Post-submit state before fallback sleep: url=%s", _safe_current_page_url(web))
+    LOG.debug("Post-submit state before fallback sleep: url=%s", _redact_diagnostic_url(_safe_current_page_url(web)))
     await web.web_sleep(min_ms = fallback_min_ms, max_ms = fallback_max_ms)
 
     try:
@@ -462,11 +483,10 @@ async def wait_for_post_auth0_submit_transition(web:WebScrapingMixin, *, usernam
         LOG.debug("Final post-submit login confirmation did not complete within %.1fs", quick_dom_timeout)
 
     classification = await _classify_post_submit_state(web)
-    safe_classification = _redact_auth0_error(classification)
-    LOG.warning("Auth0 post-submit verification remained inconclusive: %s", safe_classification)
+    LOG.warning("Auth0 post-submit verification remained inconclusive")
     raise TimeoutError(
         _("Auth0 post-submit verification remained inconclusive: %s (url=%s)")
-        % (safe_classification, _safe_current_page_url(web))
+        % (_redact_auth0_error(classification), _redact_diagnostic_url(_safe_current_page_url(web)))
     )
 
 
