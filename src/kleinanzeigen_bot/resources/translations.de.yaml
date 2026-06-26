@@ -455,6 +455,19 @@ kleinanzeigen_bot/ad_status.py:
     "due": "Fällig"
     "published-local": "Veröffentlicht (lokal)"
 
+  _apr_cell:
+    "off": "aus"
+
+  _apr_layout:
+    "off": "aus"
+    "APR repost": "APR-Repost"
+    "APR update": "APR-Update"
+
+  _format_apr_status:
+    "error": "Fehler"
+    "due: %s": "fällig: %s"
+    "not due": "nicht fällig"
+
   render_status_rows:
     "Ad ID": "Anzeigen-ID"
     "Title": "Titel"

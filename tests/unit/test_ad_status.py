@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import copy
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -12,6 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
+import kleinanzeigen_bot.price_reduction as _pr_mod  # noqa: PLC0414 — module import for patching in tests
 from kleinanzeigen_bot.ad_status import (
     StatusRow,
     build_status_rows,
@@ -20,7 +22,7 @@ from kleinanzeigen_bot.ad_status import (
 )
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.cli import parse_args
-from kleinanzeigen_bot.model.ad_model import Ad, AdPartial
+from kleinanzeigen_bot.model.ad_model import Ad, AdPartial, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.runtime_config import VALID_COMMANDS, RuntimeState
 from kleinanzeigen_bot.utils import xdg_paths
@@ -310,6 +312,185 @@ class TestRenderStatusRows:
         plain = render_status_rows(rows, color = False)
         coloured = render_status_rows(rows, color = True)
         assert plain == coloured, "Unmapped status should not be coloured"
+
+
+# --------------------------------------------------------------------------- #
+# APR column rendering
+# --------------------------------------------------------------------------- #
+
+
+class TestAprRendering:
+    """APR columns: presence, cell formatting, no-colour contamination."""
+
+    # -- render: columns absent when no active APR ------------------------- #
+
+    def test_no_apr_no_columns(self) -> None:
+        """APR columns absent when no effective APR is configured."""
+        rows = [
+            StatusRow(title = "A", ad_id = "1", status = "published-local"),
+            StatusRow(title = "B", ad_id = "2", status = "draft"),
+        ]
+        output = render_status_rows(rows)
+        assert "APR" not in output
+        assert "off" not in output
+
+    # -- render: columns present when APR active --------------------------- #
+
+    def test_columns_present_when_replace_apr_enabled(self) -> None:
+        """APR columns visible when REPLACE decision has effective APR."""
+        rows = [
+            StatusRow(title = "A", ad_id = "1", status = "published-local", apr_repost = "due: 9"),
+        ]
+        output = render_status_rows(rows)
+        assert "APR repost" in output
+        assert "APR update" in output
+        assert "due: 9" in output
+
+    def test_columns_present_when_update_apr_enabled(self) -> None:
+        """APR columns visible when MODIFY decision has effective APR."""
+        rows = [
+            StatusRow(title = "A", ad_id = "1", status = "published-local", apr_update = "due: 7"),
+        ]
+        output = render_status_rows(rows)
+        assert "APR repost" in output
+        assert "APR update" in output
+        assert "due: 7" in output
+
+    # -- render: cell values ----------------------------------------------- #
+
+    def test_apr_cell_off_for_none(self) -> None:
+        """None APR displayed as 'off'."""
+        rows = [
+            StatusRow(title = "A", ad_id = "1", status = "published-local", apr_repost = "due: 5"),
+            StatusRow(title = "B", ad_id = "2", status = "published-local", apr_repost = None),
+        ]
+        output = render_status_rows(rows)
+        assert "off" in output
+
+    def test_apr_cell_error(self) -> None:
+        """Error reason displayed as 'error'."""
+        rows = [
+            StatusRow(title = "A", ad_id = "1", status = "published-local", apr_repost = "error"),
+        ]
+        output = render_status_rows(rows)
+        assert "error" in output
+
+    def test_apr_cell_not_due(self) -> None:
+        """Not-due displayed."""
+        rows = [
+            StatusRow(title = "A", ad_id = "1", status = "published-local", apr_repost = "not due"),
+        ]
+        output = render_status_rows(rows)
+        assert "not due" in output
+
+    # -- render: APR unaffected by colour ---------------------------------- #
+
+    def test_apr_columns_not_coloured(self) -> None:
+        """APR columns contain no ANSI codes when status is coloured."""
+        rows = [
+            StatusRow(title = "A", ad_id = "1", status = "published-local", apr_repost = "due: 5", apr_update = "not due"),
+        ]
+        output = render_status_rows(rows, color = True)
+        # Status column has ANSI, but APR columns should not
+        # Find the data line and split by |
+        data_lines = [line for line in output.splitlines() if "|" in line and "APR" not in line and not line.startswith("+") and not line.startswith("S")]
+        for line in data_lines:
+            cells = [c.strip() for c in line.split("|") if c.strip()]
+            # cells[0]=id, cells[1]=title, cells[2]=status (coloured), cells[3]=apr_repost, cells[4]=apr_update
+            # cells[2] should have ANSI; cells[3] and cells[4] should not
+            if len(cells) >= 5:
+                assert "\x1b[" not in cells[3], "APR repost cell must not be coloured"
+                assert "\x1b[" not in cells[4], "APR update cell must not be coloured"
+
+    # -- build_status_rows: APR evaluation integration --------------------- #
+    # These test that evaluate_auto_price_reduction is called correctly
+    # by patching it and asserting call arguments.
+
+    def test_apr_eval_called_for_active_published(self) -> None:
+        """Active published row calls evaluator with REPLACE and MODIFY."""
+        ad = _ad(active = True, id = 1)
+        raw = _raw()
+        with patch.object(_pr_mod, "evaluate_auto_price_reduction") as mock_eval:
+            mock_eval.return_value = _pr_mod.PriceReductionDecision(
+                mode = AdUpdateStrategy.REPLACE,
+                enabled = False, on_update = False,
+                base_price = None, restored_price = None, result_price = None,
+                applied_cycles = 0, next_cycle = None, cycle_advanced = False,
+                reason = "not_configured",
+                total_reposts = 0, delay_reposts = 0, eligible_cycles = 0,
+                delay_days = 0, elapsed_days = None, reference = None,
+                delay_reposts_ignored = False,
+            )
+            build_status_rows([("ads/test.yaml", ad, raw)], now = _now())
+
+        assert mock_eval.call_count == 2
+        replace_call, modify_call = mock_eval.call_args_list
+        # REPLACE call
+        assert replace_call.kwargs["mode"] == AdUpdateStrategy.REPLACE
+        assert replace_call.args[1] == "ads/test.yaml"
+        # MODIFY call
+        assert modify_call.kwargs["mode"] == AdUpdateStrategy.MODIFY
+        assert modify_call.args[1] == "ads/test.yaml"
+
+    def test_apr_eval_not_called_for_disabled(self) -> None:
+        """Inactive/disabled row calls evaluator neither REPLACE nor MODIFY."""
+        ad = _ad(active = False, id = 1)
+        raw = _raw()
+        with patch.object(_pr_mod, "evaluate_auto_price_reduction") as mock_eval:
+            build_status_rows([("ads/test.yaml", ad, raw)], now = _now())
+        mock_eval.assert_not_called()
+
+    def test_apr_eval_draft_calls_replace_only(self) -> None:
+        """Active draft (no id) calls REPLACE only, not MODIFY."""
+        ad = _ad(active = True, id = None)
+        raw = _raw()
+        with patch.object(_pr_mod, "evaluate_auto_price_reduction") as mock_eval:
+            mock_eval.return_value = _pr_mod.PriceReductionDecision(
+                mode = AdUpdateStrategy.REPLACE,
+                enabled = False, on_update = False,
+                base_price = None, restored_price = None, result_price = None,
+                applied_cycles = 0, next_cycle = None, cycle_advanced = False,
+                reason = "not_configured",
+                total_reposts = 0, delay_reposts = 0, eligible_cycles = 0,
+                delay_days = 0, elapsed_days = None, reference = None,
+                delay_reposts_ignored = False,
+            )
+            build_status_rows([("ads/test.yaml", ad, raw)], now = _now())
+
+        assert mock_eval.call_count == 1
+        only_call = mock_eval.call_args_list[0]
+        assert only_call.kwargs["mode"] == AdUpdateStrategy.REPLACE
+
+    def test_apr_eval_apply_not_called(self) -> None:
+        """apply_auto_price_reduction is never called during build_status_rows."""
+        ad = _ad(active = True, id = 1)
+        raw = _raw()
+        with patch.object(_pr_mod, "apply_auto_price_reduction") as mock_apply:
+            build_status_rows([("ads/test.yaml", ad, raw)], now = _now())
+            mock_apply.assert_not_called()
+
+    def test_apr_eval_does_not_mutate_models(self) -> None:
+        """Ad model and raw dict unchanged after build_status_rows."""
+        ad = _ad(
+            active = True,
+            id = 1,
+            price = 1000,
+            repost_count = 1,
+            auto_price_reduction = {
+                "enabled": True,
+                "strategy": "PERCENTAGE",
+                "amount": 10,
+                "min_price": 1,
+                "delay_reposts": 0,
+                "delay_days": 0,
+            },
+        )
+        raw = _raw(price = 1000)
+        ad_before = ad.model_dump(mode = "json")
+        raw_before = copy.deepcopy(raw)
+        build_status_rows([("ads/test.yaml", ad, raw)], now = _now())
+        assert ad.model_dump(mode = "json") == ad_before, "Ad model should not be mutated"
+        assert raw == raw_before, "Raw dict should not be mutated"
 
 
 # --------------------------------------------------------------------------- #

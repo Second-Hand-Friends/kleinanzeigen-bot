@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any
 import colorama
 
 from . import ad_loading
+from . import price_reduction as _price_reduction
+from .model.ad_model import AdUpdateStrategy
 
 if TYPE_CHECKING:
     from .model.ad_model import Ad
@@ -26,6 +28,8 @@ class StatusRow:
     title:str  # ad.title
     ad_id:str  # "-" if None, else str(ad.id)
     status:str  # One of: "disabled", "draft", "changed", "due", "published-local"
+    apr_repost:str | None = None  # APR repost cell; ``None`` → rendered as "off"
+    apr_update:str | None = None  # APR update cell; ``None`` → rendered as "off"
 
 
 def _translate_status(status:str) -> str:
@@ -65,6 +69,23 @@ def _colorize_status(status:str, text:str) -> str:
     return f"{prefix}{text}{colorama.Style.RESET_ALL}"
 
 
+def _format_apr_status(decision:_price_reduction.PriceReductionDecision) -> str | None:
+    """Format a price-reduction decision into a compact APR cell string.
+
+    Returns ``None`` when the decision is not effective (rendered as ``off``).
+    Otherwise one of: ``due: <price>``, ``not due``, ``error``.
+    """
+    if not decision.enabled:
+        return None
+    if decision.mode == AdUpdateStrategy.MODIFY and not decision.on_update:
+        return None
+    if decision.reason in {"missing_price", "calculation_failed"}:
+        return _("error")
+    if decision.cycle_advanced and decision.result_price is not None:
+        return _("due: %s") % decision.result_price
+    return _("not due")
+
+
 def compute_ad_status(
     ad:Ad,
     ad_cfg_orig:dict[str, Any],
@@ -98,18 +119,66 @@ def build_status_rows(
     *,
     now:datetime | None = None,
 ) -> list[StatusRow]:
-    """Build status rows from ad-file / Ad / raw-dict triples."""
+    """Build status rows from ad-file / Ad / raw-dict triples.
+
+    The first element of each triple is the **relative** ad file path,
+    used for APR evaluation (``evaluate_auto_price_reduction``).
+    """
     rows:list[StatusRow] = []
-    for _ad_file, ad_cfg, ad_cfg_orig in ads:
+    for ad_file_rel, ad_cfg, ad_cfg_orig in ads:
         status = compute_ad_status(ad_cfg, ad_cfg_orig, now = now)
+
+        apr_repost:str | None = None
+        apr_update:str | None = None
+        if ad_cfg.active:
+            replace_dec = _price_reduction.evaluate_auto_price_reduction(
+                ad_cfg, ad_file_rel, mode = AdUpdateStrategy.REPLACE,
+            )
+            apr_repost = _format_apr_status(replace_dec)
+            if ad_cfg.id is not None:
+                modify_dec = _price_reduction.evaluate_auto_price_reduction(
+                    ad_cfg, ad_file_rel, mode = AdUpdateStrategy.MODIFY,
+                )
+                apr_update = _format_apr_status(modify_dec)
+
         rows.append(
             StatusRow(
                 title = ad_cfg.title,
                 ad_id = "-" if ad_cfg.id is None else str(ad_cfg.id),
                 status = status,
+                apr_repost = apr_repost,
+                apr_update = apr_update,
             )
         )
     return rows
+
+
+def _apr_cell(value:str | None) -> str:
+    """Return the display text for an APR cell — ``off`` when ``None``."""
+    return _("off") if value is None else value
+
+
+def _has_apr(rows:list[StatusRow]) -> bool:
+    """Return ``True`` if any row has non-``None`` APR data (show APR columns)."""
+    return any(r.apr_repost is not None or r.apr_update is not None for r in rows)
+
+
+def _apr_layout(rows:list[StatusRow]) -> tuple[bool, str, str, int, int]:
+    """Compute APR column layout: (show, h_repost, h_update, w_repost, w_update).
+
+    Returns ``show=False`` with empty strings and zero widths when no
+    effective APR data exists across *rows*.
+    """
+    if not _has_apr(rows):
+        return False, "", "", 0, 0
+    h_repost = _("APR repost")
+    h_update = _("APR update")
+    off = _("off")
+    cells_repost = [off if r.apr_repost is None else r.apr_repost for r in rows]
+    cells_update = [off if r.apr_update is None else r.apr_update for r in rows]
+    w_repost = max(len(h_repost), *[len(c) for c in cells_repost], 0)
+    w_update = max(len(h_update), *[len(c) for c in cells_update], 0)
+    return True, h_repost, h_update, w_repost, w_update
 
 
 def render_status_rows(rows:list[StatusRow], *, color:bool = False) -> str:
@@ -131,65 +200,53 @@ def render_status_rows(rows:list[StatusRow], *, color:bool = False) -> str:
     col_id = max(len(h_id), max((len(r.ad_id) for r in rows), default = 0))
 
     # Translated labels for column width calculation.
-    # Uses ``_translate_status()`` which contains explicit ``_("...")`` calls
-    # that the translation-coverage scanner can find.
-    translated_statuses = [_translate_status(s) for s in _STATUS_ORDER]
-    col_status = max(len(h_status), *[len(s) for s in translated_statuses], 0)
+    col_status = max(len(h_status), *[len(_translate_status(s)) for s in _STATUS_ORDER], 0)
 
     # Title width is data-driven, but clamp to at least header width
     col_title = max(len(h_title), max((len(r.title) for r in rows), default = 0))
 
-    sep = (
-        "+"
-        + "-" * (col_id + 2)
-        + "+"
-        + "-" * (col_title + 2)
-        + "+"
-        + "-" * (col_status + 2)
-        + "+"
-    )
-    header = (
-        "| "
-        + h_id.ljust(col_id)
-        + " | "
-        + h_title.ljust(col_title)
-        + " | "
-        + h_status.ljust(col_status)
-        + " |"
-    )
+    # APR columns — only if any row has non-None APR data
+    apr_show, h_apr_r, h_apr_u, w_apr_r, w_apr_u = _apr_layout(rows)
 
-    lines:list[str] = [sep, header, sep]
+    # Build separator and header
+    separator_parts = ["+", "-" * (col_id + 2), "+", "-" * (col_title + 2), "+", "-" * (col_status + 2)]
+    header_parts = ["| ", h_id.ljust(col_id), " | ", h_title.ljust(col_title), " | ", h_status.ljust(col_status)]
+    if apr_show:
+        separator_parts += ["+", "-" * (w_apr_r + 2), "+", "-" * (w_apr_u + 2)]
+        header_parts += [" | ", h_apr_r.ljust(w_apr_r), " | ", h_apr_u.ljust(w_apr_u)]
+    separator = "".join(separator_parts) + "+"
+    header = "".join(header_parts) + " |"
+
+    lines:list[str] = [separator, header, separator]
 
     for r in rows:
-        label = _translate_status(r.status)
-        # Pad with plain label first, then wrap in colour if enabled.
-        # This keeps stripped (ANSI-free) column widths identical.
-        padded = label.ljust(col_status)
-        display = _colorize_status(r.status, padded) if color else padded
-        lines.append(
-            "| "
-            + r.ad_id.ljust(col_id)
-            + " | "
-            + r.title.ljust(col_title)
-            + " | "
-            + display
-            + " |"
-        )
+        label = _translate_status(r.status).ljust(col_status)
+        cell = _colorize_status(r.status, label) if color else label
 
-    lines.append(sep)
+        row_parts = [
+            "| ", r.ad_id.ljust(col_id), " | ", r.title.ljust(col_title), " | ", cell,
+        ]
+        if apr_show:
+            row_parts.extend([
+                " | ", _apr_cell(r.apr_repost).ljust(w_apr_r),
+                " | ", _apr_cell(r.apr_update).ljust(w_apr_u),
+            ])
+        row_parts.append(" |")
+        lines.append("".join(row_parts))
+
+    lines.append(separator)
 
     # Summary line — always plain
     counts:dict[str, int] = {}
     for r in rows:
         counts[r.status] = counts.get(r.status, 0) + 1
 
-    summary_parts:list[str] = [
-        f"{_translate_status(label)}: {counts[label]}"
-        for label in _STATUS_ORDER
-        if label in counts
-    ]
-
-    summary = _("Summary: %s (%d total)") % (", ".join(summary_parts), len(rows))
-    lines.append(summary)
+    lines.append(
+        _("Summary: %s (%d total)")
+        % (", ".join(
+            f"{_translate_status(s)}: {counts[s]}"
+            for s in _STATUS_ORDER if s in counts
+        ), len(rows))
+    )
 
     return "\n".join(lines) + "\n"
