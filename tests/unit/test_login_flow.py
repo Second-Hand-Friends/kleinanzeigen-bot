@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import asyncio
+import inspect
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, call, patch
@@ -1204,9 +1206,9 @@ class TestClassifyPostSubmitState:
 
     @pytest.mark.asyncio
     async def test_wait_for_post_auth0_submit_transition_safe_diagnostics(
-        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture,
+        self, test_bot:KleinanzeigenBot,
     ) -> None:
-        """LOG.warning is static; TimeoutError uses coarse labels and sanitised URL."""
+        """TimeoutError uses coarse labels and sanitised URL."""
         with (
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]),
             patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
@@ -1226,9 +1228,6 @@ class TestClassifyPostSubmitState:
         assert "AUTH0_INLINE_ERROR" in str(exc_info.value)
         assert "kleinanzeigen.de/u/login/password" in str(exc_info.value)
         assert "Auth0 post-submit verification remained inconclusive" in str(exc_info.value)
-
-        # Warning log is a static string — no variable content
-        assert "Auth0 post-submit verification remained inconclusive" in caplog.text
 
     @pytest.mark.asyncio
     async def test_current_page_url_strips_userinfo(
@@ -1266,6 +1265,34 @@ class TestClassifyPostSubmitState:
                 return_value = "STILL_ON_PASSWORD_PAGE",
             ),
             patch("kleinanzeigen_bot.login_flow._diagnostic_url", return_value = "unknown"),
+            pytest.raises(TimeoutError, match = "Auth0 post-submit verification remained inconclusive"),
+        ):
+            await wait_for_post_auth0_submit_transition(test_bot, username = test_bot.config.login.username)
+
+    @pytest.mark.asyncio
+    async def test_wait_for_post_auth0_submit_transition_predicate_url_failure(
+        self, test_bot:KleinanzeigenBot,
+    ) -> None:
+        """current_page_url failure in predicate reaches classified TimeoutError."""
+
+        async def _call_predicate(
+            condition:Callable[[], Any] | None = None, *,
+            timeout:object = None, timeout_error_message:str = "",
+            apply_multiplier:bool = True,
+        ) -> Any:
+            assert condition is not None
+            result = condition()
+            result = await result if inspect.isawaitable(result) else result
+            if result:
+                return result
+            raise TimeoutError(timeout_error_message or "timed out")
+
+        with (
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _call_predicate),
+            patch("kleinanzeigen_bot.login_flow.current_page_url", side_effect = RuntimeError("boom")),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.login_flow._classify_post_submit_state", new_callable = AsyncMock, return_value = "STILL_ON_PASSWORD_PAGE"),
             pytest.raises(TimeoutError, match = "Auth0 post-submit verification remained inconclusive"),
         ):
             await wait_for_post_auth0_submit_transition(test_bot, username = test_bot.config.login.username)

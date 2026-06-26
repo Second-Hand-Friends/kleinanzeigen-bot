@@ -416,7 +416,7 @@ async def wait_for_post_auth0_submit_transition(web:WebScrapingMixin, *, usernam
 
     try:
         await web.web_await(
-            lambda: is_valid_post_auth0_destination(current_page_url(web)),
+            lambda: is_valid_post_auth0_destination(_diagnostic_url(web)),
             timeout = post_submit_timeout,
             timeout_error_message = f"Auth0 post-submit transition did not complete within {post_submit_timeout} seconds",
             apply_multiplier = False,
