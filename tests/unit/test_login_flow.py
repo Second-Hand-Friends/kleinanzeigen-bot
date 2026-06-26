@@ -548,7 +548,7 @@ class TestKleinanzeigenBotAuthentication:
             patch("kleinanzeigen_bot.login_flow.wait_for_auth0_password_step", new_callable = AsyncMock) as wait_password,
             patch("kleinanzeigen_bot.login_flow.wait_for_post_auth0_submit_transition", new_callable = AsyncMock) as wait_transition,
             patch.object(test_bot, "web_input") as mock_input,
-            patch.object(test_bot, "web_click") as mock_click,
+            patch("kleinanzeigen_bot.login_flow._click_auth0_submit", new_callable = AsyncMock) as mock_submit,
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock) as mock_captcha,
         ):
             await fill_login_data_and_send(
@@ -566,18 +566,7 @@ class TestKleinanzeigenBotAuthentication:
                 call(By.ID, "username", test_bot.config.login.username),
                 call(By.CSS_SELECTOR, "input[type='password']", test_bot.config.login.password),
             ]
-            assert mock_click.call_args_list == [
-                call(
-                    By.CSS_SELECTOR,
-                    "button[type='submit'][data-action-button-primary='true']:not([disabled]):not([aria-disabled='true'])",
-                    timeout = 2.0,
-                ),
-                call(
-                    By.CSS_SELECTOR,
-                    "button[type='submit'][data-action-button-primary='true']:not([disabled]):not([aria-disabled='true'])",
-                    timeout = 2.0,
-                ),
-            ]
+            assert mock_submit.await_count == 2  # identifier submit + password submit
 
     @pytest.mark.asyncio
     async def test_fill_login_data_and_send_fails_when_password_step_missing(self, test_bot:KleinanzeigenBot) -> None:
@@ -587,7 +576,7 @@ class TestKleinanzeigenBotAuthentication:
             patch("kleinanzeigen_bot.login_flow.handle_identifier_captcha_state", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.login_flow.wait_for_auth0_password_step", new_callable = AsyncMock, side_effect = AssertionError("missing password")),
             patch.object(test_bot, "web_input") as mock_input,
-            patch.object(test_bot, "web_click") as mock_click,
+            patch("kleinanzeigen_bot.login_flow._click_auth0_submit", new_callable = AsyncMock) as mock_submit,
         ):
             with pytest.raises(AssertionError, match = "missing password"):
                 await fill_login_data_and_send(
@@ -598,7 +587,7 @@ class TestKleinanzeigenBotAuthentication:
                 )
 
             assert mock_input.call_count == 1
-            assert mock_click.call_count == 1
+            assert mock_submit.await_count == 1
 
     @pytest.mark.asyncio
     async def test_wait_for_post_auth0_submit_transition_url_branch(self, test_bot:KleinanzeigenBot) -> None:
