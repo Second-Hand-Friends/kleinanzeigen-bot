@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Final, cast
 
 import certifi
 
-from . import ad_loading, delete_flow, download_flow, extend_flow
+from . import ad_loading, ad_status, delete_flow, download_flow, extend_flow
 from . import ad_state as _ad_state
 from . import login_flow as _login_flow
 from . import price_reduction as _price_reduction
@@ -137,6 +137,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     self._handle_update_check()
                 case "update-content-hash":
                     self._handle_update_content_hash()
+                case "status":
+                    self._handle_status()
                 case "publish":
                     await self._handle_publish()
                 case "update":
@@ -245,6 +247,26 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             LOG.info("############################################")
             LOG.info("DONE: No active ads found.")
             LOG.info("############################################")
+
+    def _handle_status(self) -> None:
+        """Show status overview of all local ads."""
+        self._bootstrap_runtime()
+        self._check_for_updates()
+
+        loaded = ad_loading.load_ad_configs(
+            config_file_path = self.config_file_path,
+            ad_file_patterns = self.config.ad_files,
+            ad_defaults = self.config.ad_defaults,
+        )
+        if not loaded:
+            LOG.info("No ad files found.")
+            return
+
+        now = _misc.now()
+        ads_for_status = [(abspath, ad_cfg, raw) for abspath, _relpath, ad_cfg, raw in loaded]
+        rows = ad_status.build_status_rows(ads_for_status, now = now)
+        output = ad_status.render_status_rows(rows)
+        print(output)
 
     async def _handle_publish(self) -> None:
         self._bootstrap_runtime()
