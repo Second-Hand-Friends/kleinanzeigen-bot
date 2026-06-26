@@ -999,7 +999,7 @@ class TestClassifyPostSubmitState:
 
     @pytest.mark.asyncio
     async def test_classify_auth0_error_selector_alert(self, test_bot:KleinanzeigenBot) -> None:
-        """Should report auth0_error when [role='alert'] element has visible text."""
+        """Should report AUTH0_INLINE_ERROR when [role='alert'] element has visible text."""
         mock_element = MagicMock(spec = Element)
         with (
             patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://kleinanzeigen.de/u/login/password"),
@@ -1013,11 +1013,13 @@ class TestClassifyPostSubmitState:
             result = await login_flow._classify_post_submit_state(test_bot)
 
         assert "STILL_ON_PASSWORD_PAGE" in result
-        assert "auth0_error='Falsches Passwort'" in result
+        assert "AUTH0_INLINE_ERROR" in result
+        # Coarse labels only — no raw text snippets
+        assert "Falsches Passwort" not in result
 
     @pytest.mark.asyncio
     async def test_classify_auth0_error_selector_error_element_password(self, test_bot:KleinanzeigenBot) -> None:
-        """Should report auth0_error when #error-element-password has visible text."""
+        """Should report AUTH0_INLINE_ERROR when #error-element-password has visible text."""
         mock_element = MagicMock(spec = Element)
         with (
             patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://kleinanzeigen.de/u/login/password"),
@@ -1032,7 +1034,8 @@ class TestClassifyPostSubmitState:
             result = await login_flow._classify_post_submit_state(test_bot)
 
         assert "STILL_ON_PASSWORD_PAGE" in result
-        assert "auth0_error='Password is required'" in result
+        assert "AUTH0_INLINE_ERROR" in result
+        assert "Password is required" not in result
 
     @pytest.mark.asyncio
     async def test_classify_mfa_one_time_code_input(self, test_bot:KleinanzeigenBot) -> None:
@@ -1085,7 +1088,7 @@ class TestClassifyPostSubmitState:
 
     @pytest.mark.asyncio
     async def test_classify_combined_password_page_and_error(self, test_bot:KleinanzeigenBot) -> None:
-        """Should preserve multiple facts: URL classification + auth0_error."""
+        """Should preserve multiple facts: URL classification + AUTH0_INLINE_ERROR."""
         mock_element = MagicMock(spec = Element)
         with (
             patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://kleinanzeigen.de/u/login/password"),
@@ -1098,8 +1101,8 @@ class TestClassifyPostSubmitState:
             result = await login_flow._classify_post_submit_state(test_bot)
 
         assert "STILL_ON_PASSWORD_PAGE" in result
-        assert "auth0_error='Invalid password'" in result
-        # Verify both are present, not just one
+        assert "AUTH0_INLINE_ERROR" in result
+        assert "Invalid password" not in result
         assert " + " in result
 
     @pytest.mark.asyncio
@@ -1112,43 +1115,6 @@ class TestClassifyPostSubmitState:
             result = await login_flow._classify_post_submit_state(test_bot)
 
         assert result == "UNKNOWN (classification_error)"
-
-    @pytest.mark.asyncio
-    async def test_classify_snippet_sanitization(self, test_bot:KleinanzeigenBot) -> None:
-        """Should sanitize error text: cap at 120 chars, collapse whitespace, remove quotes."""
-        mock_element = MagicMock(spec = Element)
-        long_text = (
-            "  Falsches   Passwort oder   ungültige   Eingabe.   "
-            "Bitte versuche es erneut.   "
-            "Dies ist ein sehr langer Fehlertext der über 120 Zeichen lang sein wird. "
-            "Man kann sich kaum vorstellen wie lang der ist. "
-            "Er enthält auch 'Zitate' und mehrere Leerzeichen."
-        )
-        with (
-            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://kleinanzeigen.de/u/login/password"),
-            patch.object(test_bot, "timeout", return_value = 5.0),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
-            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = long_text),
-        ):
-            mock_probe.side_effect = [mock_element, None, None, None]
-
-            result = await login_flow._classify_post_submit_state(test_bot)
-
-        # Extract the snippet content (between formatting quotes of auth0_error='...')
-        snippet_start = result.index("auth0_error='") + len("auth0_error='")
-        snippet_end = result.index("'", snippet_start)
-        snippet = result[snippet_start:snippet_end]
-
-        # Verify single quotes were replaced with spaces in the snippet content
-        assert "'" not in snippet, "Single quotes in error text should be replaced with spaces"
-
-        # Verify no consecutive whitespace in the snippet content
-        assert "  " not in snippet, "Consecutive whitespace should be collapsed"
-
-        # Verify the snippet is at most 120 chars
-        assert len(snippet) <= 120, f"Snippet should be capped at 120 chars, got {len(snippet)}"
-
-        assert "auth0_error=" in result
 
     # ------------------------------------------------------------------ #
     #  MFA email verification test
@@ -1178,7 +1144,7 @@ class TestClassifyPostSubmitState:
 
     @pytest.mark.asyncio
     async def test_classify_auth0_error_blank_text_not_reported(self, test_bot:KleinanzeigenBot) -> None:
-        """Auth0 error element with whitespace-only text should not be reported."""
+        """Auth0 error element with whitespace-only text should not produce AUTH0_INLINE_ERROR."""
         mock_element = MagicMock(spec = Element)
         with (
             patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://kleinanzeigen.de/u/login/password"),
@@ -1191,10 +1157,10 @@ class TestClassifyPostSubmitState:
             result = await login_flow._classify_post_submit_state(test_bot)
 
         assert "STILL_ON_PASSWORD_PAGE" in result
-        assert "auth0_error" not in result
+        assert "AUTH0_INLINE_ERROR" not in result
 
     # ------------------------------------------------------------------ #
-    #  Behavior tests replacing low-value direct helper tests
+    #  Behavior tests — probe resilience and selector gating
     # ------------------------------------------------------------------ #
 
     @pytest.mark.asyncio
@@ -1212,11 +1178,11 @@ class TestClassifyPostSubmitState:
             result = await login_flow._classify_post_submit_state(test_bot)
 
         assert "STILL_ON_PASSWORD_PAGE" in result
-        assert "auth0_error" not in result
+        assert "AUTH0_INLINE_ERROR" not in result
 
     @pytest.mark.asyncio
     async def test_classify_role_alert_gated_from_non_password_page(self, test_bot:KleinanzeigenBot) -> None:
-        """[role='alert'] on non-password URL must not produce auth0_error."""
+        """[role='alert'] on non-password URL must not produce AUTH0_INLINE_ERROR."""
         mock_element = MagicMock(spec = Element)
         with (
             patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://kleinanzeigen.de/meine-anzeigen"),
@@ -1224,7 +1190,7 @@ class TestClassifyPostSubmitState:
             patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
         ):
             # Error selectors are gated to password page only, so even though
-            # mock_element is returned for any probe, no auth0_error appears.
+            # mock_element is returned for any probe, no error label appears.
             # MFA probes are gated to non-destination URLs — meine-anzeigen is
             # a valid destination, so no MFA probes run either.
             mock_probe.return_value = mock_element
@@ -1233,15 +1199,14 @@ class TestClassifyPostSubmitState:
 
         # Verify no probes ran at all — both error and MFA probes are gated
         mock_probe.assert_not_awaited()
-        assert "auth0_error" not in result
+        assert "AUTH0_INLINE_ERROR" not in result
         assert result.startswith("UNKNOWN (url=")
 
     @pytest.mark.asyncio
-    async def test_wait_for_post_auth0_submit_transition_redacts_sensitive_text(
+    async def test_wait_for_post_auth0_submit_transition_safe_diagnostics(
         self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture,
     ) -> None:
-        """LOG.warning must not include variable classification text; TimeoutError
-        must redact auth0_error snippets to avoid exposure via error handlers."""
+        """LOG.warning is static; TimeoutError uses coarse labels and sanitised URL."""
         with (
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]),
             patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
@@ -1249,61 +1214,42 @@ class TestClassifyPostSubmitState:
             patch(
                 "kleinanzeigen_bot.login_flow._classify_post_submit_state",
                 new_callable = AsyncMock,
-                return_value = "STILL_ON_PASSWORD_PAGE + auth0_error='secret password-ish text'",
+                return_value = "STILL_ON_PASSWORD_PAGE + AUTH0_INLINE_ERROR",
             ),
-            patch("kleinanzeigen_bot.login_flow._safe_current_page_url", return_value = "https://kleinanzeigen.de/u/login/password"),
+            patch("kleinanzeigen_bot.login_flow._diagnostic_url", return_value = "https://kleinanzeigen.de/u/login/password"),
             pytest.raises(TimeoutError) as exc_info,
         ):
             await wait_for_post_auth0_submit_transition(test_bot, username = test_bot.config.login.username)
 
-        # Exception must not contain the raw secret
-        assert "secret password" not in str(exc_info.value)
-        assert "auth0_error=<redacted>" in str(exc_info.value)
+        # Exception carries coarse classification and sanitised URL — no raw text
+        assert "STILL_ON_PASSWORD_PAGE" in str(exc_info.value)
+        assert "AUTH0_INLINE_ERROR" in str(exc_info.value)
+        assert "kleinanzeigen.de/u/login/password" in str(exc_info.value)
         assert "Auth0 post-submit verification remained inconclusive" in str(exc_info.value)
 
-        # Warning log is a static string — no variable classification text
-        assert "secret password" not in caplog.text
-        assert "auth0_error=<redacted>" not in caplog.text
+        # Warning log is a static string — no variable content
         assert "Auth0 post-submit verification remained inconclusive" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_wait_for_post_auth0_submit_transition_redacts_url(
-        self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture,
+    async def test_current_page_url_strips_userinfo(
+        self, test_bot:KleinanzeigenBot,
     ) -> None:
-        """URL query/fragment/userinfo must be redacted from TimeoutError and logs."""
-        raw_url = "https://user:secret@login.kleinanzeigen.de/u/login/password?state=abc&code=secret#frag"
-        with (
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]),
-            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch(
-                "kleinanzeigen_bot.login_flow._classify_post_submit_state",
-                new_callable = AsyncMock,
-                return_value = "STILL_ON_PASSWORD_PAGE",
-            ),
-            patch("kleinanzeigen_bot.login_flow._safe_current_page_url", return_value = raw_url),
-            pytest.raises(TimeoutError) as exc_info,
-        ):
-            await wait_for_post_auth0_submit_transition(test_bot, username = test_bot.config.login.username)
+        """current_page_url strips userinfo, query, and fragment from URLs."""
+        # Set up a page with a raw URL containing credentials and query/fragment
+        test_bot.page = AsyncMock()
+        test_bot.page.url = "https://user:secret@login.kleinanzeigen.de/u/login/password?state=abc&code=secret#frag"
 
-        exc_text = str(exc_info.value)
+        result = current_page_url(test_bot)
 
-        # Sensitive data must not appear in the exception
-        assert "state=" not in exc_text
-        assert "code=" not in exc_text
-        assert "#frag" not in exc_text
-        assert "user:" not in exc_text
+        # Sensitive parts must be removed
+        assert "user:" not in result
+        assert "secret" not in result
+        assert "state=" not in result
+        assert "code=" not in result
+        assert "#frag" not in result
 
-        # Sanitised diagnostic path must remain
-        assert "login.kleinanzeigen.de/u/login/password" in exc_text
-
-        # Same for log output
-        log_text = caplog.text
-        assert "state=" not in log_text
-        assert "code=" not in log_text
-        assert "#frag" not in log_text
-        assert "user:" not in log_text
-        assert "login.kleinanzeigen.de/u/login/password" in log_text
+        # Sanitised path and host must be preserved
+        assert "login.kleinanzeigen.de/u/login/password" in result
 
     @pytest.mark.asyncio
     async def test_wait_for_post_auth0_submit_transition_url_failure(
@@ -1319,7 +1265,7 @@ class TestClassifyPostSubmitState:
                 new_callable = AsyncMock,
                 return_value = "STILL_ON_PASSWORD_PAGE",
             ),
-            patch("kleinanzeigen_bot.login_flow._safe_current_page_url", return_value = "unknown"),
+            patch("kleinanzeigen_bot.login_flow._diagnostic_url", return_value = "unknown"),
             pytest.raises(TimeoutError, match = "Auth0 post-submit verification remained inconclusive"),
         ):
             await wait_for_post_auth0_submit_transition(test_bot, username = test_bot.config.login.username)

@@ -12,7 +12,6 @@ generic consent-banner dismissal (that stays on WebScrapingMixin).
 
 import asyncio
 import enum
-import re
 import sys
 import urllib.parse as urllib_parse
 from collections.abc import Callable
@@ -26,7 +25,7 @@ from .model.config_model import CaptchaConfig, DiagnosticsConfig
 from .utils import diagnostics as _diagnostics
 from .utils import loggers as _loggers
 from .utils.misc import ainput
-from .utils.web_scraping_mixin import By, Element, WebScrapingMixin
+from .utils.web_scraping_mixin import By, WebScrapingMixin
 
 LOG:Final[_loggers.Logger] = _loggers.get_logger(__name__)
 
@@ -297,69 +296,16 @@ async def wait_for_auth0_password_step(web:WebScrapingMixin) -> None:
         raise AssertionError(_("Auth0 password step not reached (url=%s)") % current_url) from ex
 
 
-async def _safe_web_probe(web:WebScrapingMixin, sel_type:By, sel_value:str, timeout:float) -> Element | None:
-    """Single probe with best-effort exception swallowing.
+def _diagnostic_url(web:WebScrapingMixin) -> str:
+    """Best-effort URL diagnostic; returns ``'unknown'`` on any exception.
 
-    Individual probe failures are treated as the signal being absent.
+    Relies on ``current_page_url()`` which already strips query, fragment,
+    and userinfo from the raw browser URL.
     """
-    try:
-        return await web.web_probe(sel_type, sel_value, timeout = timeout)
-    except Exception:  # noqa: BLE001
-        return None
-
-
-async def _safe_extract_visible_text(web:WebScrapingMixin, element:Element) -> str | None:
-    """Best-effort visible-text extraction with exception swallowing."""
-    try:
-        return await web.extract_visible_text(element)
-    except Exception:  # noqa: BLE001
-        return None
-
-
-def _safe_timeout_or_default(web:WebScrapingMixin, key:str, default:float) -> float:
-    """Best-effort timeout lookup with fallback."""
-    try:
-        return web.timeout(key)
-    except Exception:  # noqa: BLE001
-        return default
-
-
-def _safe_current_page_url(web:WebScrapingMixin) -> str:
-    """Best-effort URL retrieval; returns ``'unknown'`` on any exception."""
     try:
         return current_page_url(web)
     except Exception:  # noqa: BLE001
         return "unknown"
-
-
-def _redact_diagnostic_url(url:str) -> str:
-    """Strip query, fragment, and userinfo from a URL for safe diagnostic output.
-
-    ``current_page_url()`` already returns scheme+host+path, but this
-    helper provides defence in depth when a raw or differently-sourced
-    URL might carry query/fragment or embedded credentials.
-    Non-URL sentinel values such as ``'unknown'`` and ``'about:blank'``
-    are passed through unchanged.
-    """
-    if not url or url in {"unknown", "about:blank"}:
-        return url
-    try:
-        parsed = urllib_parse.urlparse(url)
-        # Strip userinfo — rebuild netloc from hostname + port only
-        host = parsed.hostname or ""
-        netloc = f"{host}:{parsed.port}" if parsed.port is not None and host else host
-        return urllib_parse.urlunparse((parsed.scheme, netloc, parsed.path, "", "", ""))
-    except Exception:  # noqa: BLE001
-        return "unknown"
-
-
-def _redact_auth0_error(text:str) -> str:
-    """Replace ``auth0_error='...'`` segments with ``auth0_error=<redacted>``.
-
-    Used before emitting logs or exception messages so visible Auth0
-    error text is never written to logs or exposed in raised exceptions.
-    """
-    return re.sub(r"auth0_error='[^']*'", "auth0_error=<redacted>", text)
 
 
 async def _classify_post_submit_state(web:WebScrapingMixin) -> str:
@@ -369,17 +315,17 @@ async def _classify_post_submit_state(web:WebScrapingMixin) -> str:
     verification signals (gated to non-destination URLs). Never raises —
     all callers must treat the result as non-fatal diagnostic context.
 
-    Each individual probe or text-extraction failure is treated as the
-    signal being absent; already-detected facts are preserved.
+    Each probe/text-extraction failure uses a local ``try/except`` so the
+    signal is treated as absent without discarding already-detected facts.
 
-    Returns a compact string like:
-        "STILL_ON_PASSWORD_PAGE + auth0_error='Falsches Passwort'"
+    Returns coarse labels only (no raw page text):
         "STILL_ON_PASSWORD_PAGE"
+        "STILL_ON_PASSWORD_PAGE + AUTH0_INLINE_ERROR"
         "MFA_DETECTED (ONE_TIME_CODE_INPUT)"
         "MFA_DETECTED (SMS_VERIFICATION)"
         "UNKNOWN (url=https://kleinanzeigen.de/u/login/password)"
     """
-    url = _safe_current_page_url(web)
+    url = _diagnostic_url(web)
     if url == "unknown":
         return "UNKNOWN (classification_error)"
 
@@ -390,22 +336,28 @@ async def _classify_post_submit_state(web:WebScrapingMixin) -> str:
     if is_password_page:
         facts.append("STILL_ON_PASSWORD_PAGE")
 
-    quick_dom = _safe_timeout_or_default(web, "quick_dom", 5.0)
+    try:
+        quick_dom = web.timeout("quick_dom")
+    except Exception:  # noqa: BLE001
+        quick_dom = 5.0
 
     # 2) Auth0 inline error selectors — gated to password page only because
     #    ``[role='alert']`` is a broad selector that could match unrelated UI.
-    #    Per-probe failures are treated as absent; already-detected facts
-    #    (e.g. URL classification) are never discarded.
+    #    Appears as the coarse label ``AUTH0_INLINE_ERROR`` (no raw text).
     if is_password_page:
         for sel_type, sel_value in _AUTH0_POST_SUBMIT_ERROR_SELECTORS:
-            element = await _safe_web_probe(web, sel_type, sel_value, quick_dom)
-            if element is None:
+            try:
+                element = await web.web_probe(sel_type, sel_value, timeout = quick_dom)
+            except Exception:  # noqa: S112, BLE001
                 continue
-            text = await _safe_extract_visible_text(web, element)
-            if text and text.strip():
-                snippet = " ".join(text.strip().replace("'", " ").split())[:120]
-                facts.append(f"auth0_error='{snippet}'")
-                break
+            if element is not None:
+                try:
+                    text = await web.extract_visible_text(element)
+                except Exception:  # noqa: BLE001
+                    text = None
+                if text and text.strip():
+                    facts.append("AUTH0_INLINE_ERROR")
+                    break
 
     # 3) High-confidence MFA/verification probes.
     #    Gate: only run when URL is not a known valid Kleinanzeigen destination
@@ -414,36 +366,46 @@ async def _classify_post_submit_state(web:WebScrapingMixin) -> str:
         mfa_facts:list[str] = []
 
         # Locale-independent one-time code input field
-        otc_element = await _safe_web_probe(
-            web, By.CSS_SELECTOR, "input[autocomplete='one-time-code']", quick_dom,
-        )
-        if otc_element is not None:
-            mfa_facts.append("ONE_TIME_CODE_INPUT")
+        try:
+            otc_element = await web.web_probe(
+                By.CSS_SELECTOR, "input[autocomplete='one-time-code']",
+                timeout = quick_dom,
+            )
+            if otc_element is not None:
+                mfa_facts.append("ONE_TIME_CODE_INPUT")
+        except Exception:  # noqa: S110, BLE001
+            pass
 
         # German SMS verification prompt (same text as check_sms_verification)
-        sms_element = await _safe_web_probe(
-            web, By.TEXT,
-            "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer",
-            quick_dom,
-        )
-        if sms_element is not None:
-            mfa_facts.append("SMS_VERIFICATION")
+        try:
+            sms_element = await web.web_probe(
+                By.TEXT,
+                "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer",
+                timeout = quick_dom,
+            )
+            if sms_element is not None:
+                mfa_facts.append("SMS_VERIFICATION")
+        except Exception:  # noqa: S110, BLE001
+            pass
 
         # German email verification prompt (same text as check_email_verification)
-        email_element = await _safe_web_probe(
-            web, By.TEXT,
-            "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt",
-            quick_dom,
-        )
-        if email_element is not None:
-            mfa_facts.append("EMAIL_VERIFICATION")
+        try:
+            email_element = await web.web_probe(
+                By.TEXT,
+                "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt",
+                timeout = quick_dom,
+            )
+            if email_element is not None:
+                mfa_facts.append("EMAIL_VERIFICATION")
+        except Exception:  # noqa: S110, BLE001
+            pass
 
         if mfa_facts:
             facts.append(f"MFA_DETECTED ({', '.join(mfa_facts)})")
 
     if facts:
         return " + ".join(facts)
-    return f"UNKNOWN (url={_redact_diagnostic_url(url)})"
+    return f"UNKNOWN (url={url})"
 
 
 async def wait_for_post_auth0_submit_transition(web:WebScrapingMixin, *, username:str) -> None:
@@ -473,7 +435,7 @@ async def wait_for_post_auth0_submit_transition(web:WebScrapingMixin, *, usernam
         return
 
     LOG.debug("Auth0 post-submit verification remained inconclusive; applying bounded fallback pause")
-    LOG.debug("Post-submit state before fallback sleep: url=%s", _redact_diagnostic_url(_safe_current_page_url(web)))
+    LOG.debug("Post-submit state before fallback sleep: url=%s", _diagnostic_url(web))
     await web.web_sleep(min_ms = fallback_min_ms, max_ms = fallback_max_ms)
 
     try:
@@ -486,7 +448,7 @@ async def wait_for_post_auth0_submit_transition(web:WebScrapingMixin, *, usernam
     LOG.warning("Auth0 post-submit verification remained inconclusive")
     raise TimeoutError(
         _("Auth0 post-submit verification remained inconclusive: %s (url=%s)")
-        % (_redact_auth0_error(classification), _redact_diagnostic_url(_safe_current_page_url(web)))
+        % (classification, _diagnostic_url(web))
     )
 
 
