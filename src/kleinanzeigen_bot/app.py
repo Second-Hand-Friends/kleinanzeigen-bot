@@ -264,7 +264,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             return
 
         now = _misc.now()
-        ads_for_status = [(abspath, ad_cfg, raw) for abspath, _relpath, ad_cfg, raw in loaded]
+        ads_for_status = [(relpath, ad_cfg, raw) for _abspath, relpath, ad_cfg, raw in loaded]
         rows = ad_status.build_status_rows(ads_for_status, now = now)
         use_color = _color.should_use_color()
         output = ad_status.render_status_rows(rows, color = use_color)
