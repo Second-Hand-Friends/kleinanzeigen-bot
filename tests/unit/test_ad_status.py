@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import patch
@@ -25,6 +26,8 @@ from kleinanzeigen_bot.runtime_config import VALID_COMMANDS, RuntimeState
 from kleinanzeigen_bot.utils import xdg_paths
 
 pytestmark = pytest.mark.unit
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 _TZ = timezone.utc
 
@@ -244,6 +247,70 @@ class TestRenderStatusRows:
         # Summary ends with total count
         assert "total" in output.casefold() or "gesamt" in output.casefold()
 
+    # ------------------------------------------------------------------ #
+    # Colour rendering
+    # ------------------------------------------------------------------ #
+
+    def test_render_uncoloured_unchanged(self) -> None:
+        """Uncoloured output matches the default (color=False)."""
+        rows = [
+            StatusRow(title = "Item", ad_id = "1", status = "draft"),
+            StatusRow(title = "Thing", ad_id = "2", status = "published-local"),
+        ]
+        assert render_status_rows(rows) == render_status_rows(rows, color = False)
+
+    def test_render_coloured_contains_ansi(self) -> None:
+        """Coloured output includes ANSI escape sequences."""
+        rows = [StatusRow(title = "Test", ad_id = "42", status = "changed")]
+        output = render_status_rows(rows, color = True)
+        assert "\x1b[" in output
+
+    def test_render_coloured_stripped_equals_uncoloured(self) -> None:
+        """Stripping ANSI from coloured output produces identical text to uncoloured."""
+        rows = [
+            StatusRow(title = "Sofa", ad_id = "-", status = "draft"),
+            StatusRow(title = "Chair", ad_id = "99", status = "published-local"),
+            StatusRow(title = "Table", ad_id = "55", status = "changed"),
+            StatusRow(title = "Lamp", ad_id = "33", status = "due"),
+            StatusRow(title = "Rug", ad_id = "11", status = "disabled"),
+        ]
+
+        plain = render_status_rows(rows, color = False)
+        coloured = render_status_rows(rows, color = True)
+        stripped = _ANSI_RE.sub("", coloured)
+
+        assert stripped == plain, (
+            "Stripped coloured output must exactly match uncoloured output"
+        )
+
+    def test_render_coloured_only_status_column(self) -> None:
+        """Only the status column contains ANSI codes; headers and separators are plain."""
+        rows = [StatusRow(title = "Desk", ad_id = "7", status = "due")]
+        output = render_status_rows(rows, color = True)
+
+        # Header row should not contain ANSI
+        header_line = output.splitlines()[1]
+        assert "\x1b[" not in header_line, "Header must not be coloured"
+
+        # Separator lines should not contain ANSI
+        sep_lines = [line for line in output.splitlines() if line.startswith("+")]
+        for sep in sep_lines:
+            assert "\x1b[" not in sep, "Separators must not be coloured"
+
+        # The status column cell (last pipe segment) should contain ANSI
+        data_line = output.splitlines()[3]
+        cells = [c.strip() for c in data_line.split("|") if c.strip()]
+        assert len(cells) >= 3, "Expected at least 3 cells (id, title, status)"
+        status_cell = cells[-1]
+        assert "\x1b[" in status_cell, "Status cell should be coloured"
+
+    def test_render_colour_only_mapped_statuses(self) -> None:
+        """Only known status values get colour; unmapped statuses are unchanged."""
+        rows = [StatusRow(title = "?iss", ad_id = "0", status = "unknown")]
+        plain = render_status_rows(rows, color = False)
+        coloured = render_status_rows(rows, color = True)
+        assert plain == coloured, "Unmapped status should not be coloured"
+
 
 # --------------------------------------------------------------------------- #
 # Guardrail: status does not call load_ads or open browser
@@ -293,6 +360,7 @@ async def test_status_guardrails(
         patch.object(bot, "close_browser_session"),
         patch("kleinanzeigen_bot.ad_loading.load_ad_configs", return_value = []),
         patch("kleinanzeigen_bot.ad_status.render_status_rows", return_value = ""),
+        patch("kleinanzeigen_bot.utils.color.should_use_color", return_value = False),
     ):
         await bot.run(["app", "status"])
 
