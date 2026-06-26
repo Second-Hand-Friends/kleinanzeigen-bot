@@ -54,6 +54,16 @@ _AUTH0_CAPTCHA_CONTAINER_SELECTOR:Final[str] = (
     ".g-recaptcha"
 )
 
+# Post-submit diagnostic selectors — Auth0 inline error indicators on the
+# password page. Probed by _classify_post_submit_state() when the password
+# submit does not produce a valid post-Auth0 destination.
+_AUTH0_POST_SUBMIT_ERROR_SELECTORS:Final[list[tuple[By, str]]] = [
+    (By.CSS_SELECTOR, "[role='alert']"),
+    (By.CSS_SELECTOR, ".ulp-input-error-message"),
+    (By.CSS_SELECTOR, ".ulp-error-info"),
+    (By.CSS_SELECTOR, "#error-element-password"),
+]
+
 
 async def _click_auth0_submit(web:WebScrapingMixin, *, timeout:float | None = None) -> None:
     """Click the visible Auth0 submit button, avoiding the hidden form-submit button."""
@@ -286,6 +296,118 @@ async def wait_for_auth0_password_step(web:WebScrapingMixin) -> None:
         raise AssertionError(_("Auth0 password step not reached (url=%s)") % current_url) from ex
 
 
+def _diagnostic_url(web:WebScrapingMixin) -> str:
+    """Best-effort URL diagnostic; returns ``'unknown'`` on any exception.
+
+    Relies on ``current_page_url()`` which already strips query, fragment,
+    and userinfo from the raw browser URL.
+    """
+    try:
+        return current_page_url(web)
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
+async def _classify_post_submit_state(web:WebScrapingMixin) -> str:
+    """Best-effort classification of page state after Auth0 password submit.
+
+    Probes URL, Auth0 inline error selectors, and high-confidence MFA/
+    verification signals (gated to non-destination URLs). Never raises —
+    all callers must treat the result as non-fatal diagnostic context.
+
+    Each probe/text-extraction failure uses a local ``try/except`` so the
+    signal is treated as absent without discarding already-detected facts.
+
+    Returns coarse labels only (no raw page text):
+        "STILL_ON_PASSWORD_PAGE"
+        "STILL_ON_PASSWORD_PAGE + AUTH0_INLINE_ERROR"
+        "MFA_DETECTED (ONE_TIME_CODE_INPUT)"
+        "MFA_DETECTED (SMS_VERIFICATION)"
+        "UNKNOWN (url=https://kleinanzeigen.de/u/login/password)"
+    """
+    url = _diagnostic_url(web)
+    if url == "unknown":
+        return "UNKNOWN (classification_error)"
+
+    facts:list[str] = []
+
+    # 1) Password-page classification
+    is_password_page = "/u/login/password" in url
+    if is_password_page:
+        facts.append("STILL_ON_PASSWORD_PAGE")
+
+    try:
+        quick_dom = web.timeout("quick_dom")
+    except Exception:  # noqa: BLE001
+        quick_dom = 5.0
+
+    # 2) Auth0 inline error selectors — gated to password page only because
+    #    ``[role='alert']`` is a broad selector that could match unrelated UI.
+    #    Appears as the coarse label ``AUTH0_INLINE_ERROR`` (no raw text).
+    if is_password_page:
+        for sel_type, sel_value in _AUTH0_POST_SUBMIT_ERROR_SELECTORS:
+            try:
+                element = await web.web_probe(sel_type, sel_value, timeout = quick_dom)
+            except Exception:  # noqa: S112, BLE001
+                continue
+            if element is not None:
+                try:
+                    text = await web.extract_visible_text(element)
+                except Exception:  # noqa: BLE001
+                    text = None
+                if text and text.strip():
+                    facts.append("AUTH0_INLINE_ERROR")
+                    break
+
+    # 3) High-confidence MFA/verification probes.
+    #    Gate: only run when URL is not a known valid Kleinanzeigen destination
+    #    (i.e. still on login/knotenpunkt or an Auth0 challenge page).
+    if not is_valid_post_auth0_destination(url):
+        mfa_facts:list[str] = []
+
+        # Locale-independent one-time code input field
+        try:
+            otc_element = await web.web_probe(
+                By.CSS_SELECTOR, "input[autocomplete='one-time-code']",
+                timeout = quick_dom,
+            )
+            if otc_element is not None:
+                mfa_facts.append("ONE_TIME_CODE_INPUT")
+        except Exception:  # noqa: S110, BLE001
+            pass
+
+        # German SMS verification prompt (same text as check_sms_verification)
+        try:
+            sms_element = await web.web_probe(
+                By.TEXT,
+                "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer",
+                timeout = quick_dom,
+            )
+            if sms_element is not None:
+                mfa_facts.append("SMS_VERIFICATION")
+        except Exception:  # noqa: S110, BLE001
+            pass
+
+        # German email verification prompt (same text as check_email_verification)
+        try:
+            email_element = await web.web_probe(
+                By.TEXT,
+                "Um dein Konto zu schützen haben wir dir eine E-Mail geschickt",
+                timeout = quick_dom,
+            )
+            if email_element is not None:
+                mfa_facts.append("EMAIL_VERIFICATION")
+        except Exception:  # noqa: S110, BLE001
+            pass
+
+        if mfa_facts:
+            facts.append(f"MFA_DETECTED ({', '.join(mfa_facts)})")
+
+    if facts:
+        return " + ".join(facts)
+    return f"UNKNOWN (url={url})"
+
+
 async def wait_for_post_auth0_submit_transition(web:WebScrapingMixin, *, username:str) -> None:
     post_submit_timeout = web.timeout("login_detection")
     quick_dom_timeout = web.timeout("quick_dom")
@@ -294,7 +416,7 @@ async def wait_for_post_auth0_submit_transition(web:WebScrapingMixin, *, usernam
 
     try:
         await web.web_await(
-            lambda: is_valid_post_auth0_destination(current_page_url(web)),
+            lambda: is_valid_post_auth0_destination(_diagnostic_url(web)),
             timeout = post_submit_timeout,
             timeout_error_message = f"Auth0 post-submit transition did not complete within {post_submit_timeout} seconds",
             apply_multiplier = False,
@@ -313,6 +435,7 @@ async def wait_for_post_auth0_submit_transition(web:WebScrapingMixin, *, usernam
         return
 
     LOG.debug("Auth0 post-submit verification remained inconclusive; applying bounded fallback pause")
+    LOG.debug("Post-submit state before fallback sleep: url=%s", _diagnostic_url(web))
     await web.web_sleep(min_ms = fallback_min_ms, max_ms = fallback_max_ms)
 
     try:
@@ -321,8 +444,12 @@ async def wait_for_post_auth0_submit_transition(web:WebScrapingMixin, *, usernam
     except (TimeoutError, asyncio.TimeoutError):
         LOG.debug("Final post-submit login confirmation did not complete within %.1fs", quick_dom_timeout)
 
-    current_url = current_page_url(web)
-    raise TimeoutError(_("Auth0 post-submit verification remained inconclusive (url=%s)") % current_url)
+    classification = await _classify_post_submit_state(web)
+    LOG.warning("Auth0 post-submit verification remained inconclusive")
+    raise TimeoutError(
+        _("Auth0 post-submit verification remained inconclusive: %s (url=%s)")
+        % (classification, _diagnostic_url(web))
+    )
 
 
 # ---------------------------------------------------------------------------
