@@ -109,6 +109,9 @@ kleinanzeigen_bot/app.py:
   _handle_download:
     "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new) oder numerische IDs."
 
+  _handle_status:
+    "No ad files found.": "Keine Anzeigendateien gefunden."
+
 #################################################
 kleinanzeigen_bot/login_flow.py:
 #################################################
@@ -441,6 +444,22 @@ kleinanzeigen_bot/download_flow.py:
 
   _download_ad_with_resolved_state:
     "Ad %d found in overview but not in published profile. Saving as inactive.": "Anzeige %d wurde in der Übersicht gefunden, aber nicht im veröffentlichten Profil. Speichere als inaktiv."
+
+#################################################
+kleinanzeigen_bot/ad_status.py:
+#################################################
+  _translate_status:
+    "disabled": "Deaktiviert"
+    "draft": "Entwurf"
+    "changed": "Geändert"
+    "due": "Fällig"
+    "published-local": "Veröffentlicht (lokal)"
+
+  render_status_rows:
+    "Ad ID": "Anzeigen-ID"
+    "Title": "Titel"
+    "Status": "Status"
+    "Summary: %s (%d total)": "Zusammenfassung: %s (%d insgesamt)"
 
 #################################################
 kleinanzeigen_bot/ad_loading.py:

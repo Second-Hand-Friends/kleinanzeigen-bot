@@ -80,6 +80,7 @@ def _help_text() -> str:
                                     "geändert" gelten und neu veröffentlicht werden.
               create-config - Erstellt eine neue Standard-Konfigurationsdatei, falls noch nicht vorhanden
               diagnose - Diagnostiziert Browser-Verbindungsprobleme und zeigt Troubleshooting-Informationen
+              status   - Zeigt den Status der Anzeigen an
               --
               help     - Zeigt diese Hilfe an (Standardbefehl)
               version  - Zeigt die Version der Anwendung an
@@ -135,6 +136,7 @@ def _help_text() -> str:
                                 use this after changing config.yaml/ad_defaults to avoid every ad being marked "changed" and republished
           create-config - creates a new default configuration file if one does not exist
           diagnose - diagnoses browser connection issues and shows troubleshooting information
+          status   - shows status overview of ads
           --
           help     - displays this help (default command)
           version  - displays the application version

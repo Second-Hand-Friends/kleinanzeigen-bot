@@ -96,7 +96,45 @@ def is_valid_ads_selector(ads_selector:str, valid_keywords:set[str]) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Republication / change detection
+# Pure content-hash / due helpers (no I/O, no logging, no mutation)
+# --------------------------------------------------------------------------- #
+
+
+def has_ad_content_changed(ad_cfg:Ad, ad_cfg_orig:dict[str, Any]) -> bool:
+    """Return ``True`` when the ad's stored *content_hash* differs from the
+    current computed hash.
+
+    Unlike :func:`check_ad_changed`, this function is **pure** — no logging,
+    no mutation of *ad_cfg_orig*.  A missing or empty stored hash is treated
+    as "not changed".
+    """
+    if ad_cfg.id is None:
+        return False
+    stored_hash = ad_cfg_orig.get("content_hash")
+    if not stored_hash:  # None or empty string — hash never computed
+        return False
+    current_hash = AdPartial.model_validate(ad_cfg_orig).update_content_hash().content_hash
+    return current_hash is not None and current_hash != stored_hash
+
+
+def is_ad_due_for_republication(ad_cfg:Ad, *, now:datetime | None = None) -> bool:
+    """Return ``True`` when *ad_cfg* is due for republication (pure).
+
+    Unlike :func:`check_ad_republication`, this function is **pure** — no
+    logging, no side effects.  Pass *now* for deterministic testing.
+    """
+    if ad_cfg.updated_on is None and ad_cfg.created_on is None:
+        return True
+    latest = ad_cfg.updated_on or ad_cfg.created_on
+    if latest is None:
+        return True
+    if now is None:
+        now = _misc.now()
+    return (now - latest).days >= ad_cfg.republication_interval
+
+
+# --------------------------------------------------------------------------- #
+# Republication / change detection (with logging / mutation)
 # --------------------------------------------------------------------------- #
 
 
@@ -108,33 +146,28 @@ def check_ad_republication(
 ) -> bool:
     """Return ``True`` when *ad_cfg* is due for republication.
 
+    Delegates to :func:`is_ad_due_for_republication` for the pure check,
+    then adds logging when the ad is **not** due (SKIPPED message).
+
     The interval is measured against :func:`~kleinanzeigen_bot.utils.misc.now`
     by default; pass *now* to make the function deterministic in tests.
     """
-    if ad_cfg.updated_on:
-        last_updated_on = ad_cfg.updated_on
-    elif ad_cfg.created_on:
-        last_updated_on = ad_cfg.created_on
-    else:
+    if is_ad_due_for_republication(ad_cfg, now = now):
         return True
 
-    if not last_updated_on:
-        return True
-
+    # Log why it was skipped — only reaches here when not due and a date exists
     if now is None:
         now = _misc.now()
-
-    ad_age = now - last_updated_on
-    if ad_age.days < ad_cfg.republication_interval:
+    latest = ad_cfg.updated_on or ad_cfg.created_on
+    if latest is not None:
+        ad_age = now - latest
         LOG.info(
             " -> SKIPPED: ad [%s] was last published %d days ago. republication is only required every %s days",
             ad_file_relative,
             ad_age.days,
             ad_cfg.republication_interval,
         )
-        return False
-
-    return True
+    return False
 
 
 def check_ad_changed(
@@ -150,11 +183,10 @@ def check_ad_changed(
         ``ad_cfg_orig["content_hash"]`` with the freshly computed hash when a
         change is detected.  Callers must be aware of this mutation.
     """
-    if not ad_cfg.id:
-        # New ads are not considered "changed"
+    if not has_ad_content_changed(ad_cfg, ad_cfg_orig):
         return False
 
-    # Calculate hash on original config to match what was stored
+    # Recompute hash for logging and mutation
     current_hash = AdPartial.model_validate(ad_cfg_orig).update_content_hash().content_hash
     stored_hash = ad_cfg_orig.get("content_hash")
 
@@ -162,13 +194,10 @@ def check_ad_changed(
     LOG.debug("    Stored hash: %s", stored_hash)
     LOG.debug("    Current hash: %s", current_hash)
 
-    if stored_hash and current_hash != stored_hash:
-        LOG.info("Changes detected in ad [%s], will republish", ad_file_relative)
-        # Update hash in original configuration
-        ad_cfg_orig["content_hash"] = current_hash
-        return True
-
-    return False
+    LOG.info("Changes detected in ad [%s], will republish", ad_file_relative)
+    # Update hash in original configuration
+    ad_cfg_orig["content_hash"] = current_hash
+    return True
 
 
 # --------------------------------------------------------------------------- #
@@ -332,6 +361,27 @@ def _prepare_selected_ad_entry(
         ad_cfg.images = resolve_ad_images(ad_file, ad_cfg.images)
 
 
+def load_ad_configs(
+    *,
+    config_file_path:str,
+    ad_file_patterns:list[str],
+    ad_defaults:Any,
+) -> list[tuple[str, str, Ad, dict[str, Any]]]:
+    """Discover, load raw YAML, validate, and apply defaults for every ad file.
+
+    This is a **neutral** loading step — no selector filtering, no category
+    resolution, no image globbing, no ``_prepare_selected_ad_entry()``.
+    Returns a sorted list of ``(abspath, relpath, Ad, raw_dict)`` tuples.
+    """
+    ad_files = discover_ad_files(config_file_path, ad_file_patterns)
+    result:list[tuple[str, str, Ad, dict[str, Any]]] = []
+    for ad_file, ad_file_relative in sorted(ad_files.items()):
+        ad_cfg_orig = _dicts.load_dict(ad_file, "ad")
+        ad_cfg = load_ad(ad_cfg_orig, ad_defaults)
+        result.append((ad_file, ad_file_relative, ad_cfg, ad_cfg_orig))
+    return result
+
+
 def load_ads(
     *,
     config_file_path:str,
@@ -354,9 +404,13 @@ def load_ads(
         Tuples of ``(file_path, validated Ad model, original raw data)``.
     """
     LOG.info("Searching for ad config files...")
-    ad_files = discover_ad_files(config_file_path, ad_file_patterns)
-    LOG.info(" -> found %s", pluralize("ad config file", ad_files))
-    if not ad_files:
+    loaded = load_ad_configs(
+        config_file_path = config_file_path,
+        ad_file_patterns = ad_file_patterns,
+        ad_defaults = ad_defaults,
+    )
+    LOG.info(" -> found %s", pluralize("ad config file", loaded))
+    if not loaded:
         return []
 
     ids, tokens = _parse_ad_selector(ads_selector)
@@ -365,9 +419,7 @@ def load_ads(
         LOG.info(" | ".join(str(id_) for id_ in ids))
 
     ads:list[tuple[str, Ad, dict[str, Any]]] = []
-    for ad_file, ad_file_relative in sorted(ad_files.items()):
-        ad_cfg_orig:dict[str, Any] = _dicts.load_dict(ad_file, "ad")
-        ad_cfg:Ad = load_ad(ad_cfg_orig, ad_defaults)
+    for ad_file, ad_file_relative, ad_cfg, ad_cfg_orig in loaded:
 
         # Inactive check runs before numeric ID filtering — an inactive ad
         # with a matching numeric ID will still be skipped.

@@ -36,7 +36,7 @@ WORKSPACE_FREE_COMMANDS:Final[frozenset[str]] = frozenset({"help", "version", "c
 VALID_COMMANDS:Final[frozenset[str]] = frozenset({
     "help", "version", "create-config", "diagnose", "verify",
     "update-check", "update-content-hash",
-    "publish", "update", "delete", "extend", "download",
+    "publish", "status", "update", "delete", "extend", "download",
 })
 
 
