@@ -182,6 +182,9 @@ async def login(
             username = username,
             password = password,
             captcha_config = captcha_config,
+            diagnostics_config = diagnostics_config,
+            diagnostics_output_dir_fn = diagnostics_output_dir_fn,
+            log_file_path = log_file_path,
         )
         await handle_after_login_logic(web)
     except (AssertionError, TimeoutError):
@@ -408,7 +411,14 @@ async def _classify_post_submit_state(web:WebScrapingMixin) -> str:
     return f"UNKNOWN (url={url})"
 
 
-async def wait_for_post_auth0_submit_transition(web:WebScrapingMixin, *, username:str) -> None:
+async def wait_for_post_auth0_submit_transition(
+    web:WebScrapingMixin,
+    *,
+    username:str,
+    diagnostics_config:DiagnosticsConfig | None = None,
+    diagnostics_output_dir_fn:Callable[[], Path] | None = None,
+    log_file_path:str | None = None,
+) -> None:
     post_submit_timeout = web.timeout("login_detection")
     quick_dom_timeout = web.timeout("quick_dom")
     fallback_max_ms = max(700, int(quick_dom_timeout * 1_000))
@@ -445,10 +455,30 @@ async def wait_for_post_auth0_submit_transition(web:WebScrapingMixin, *, usernam
         LOG.debug("Final post-submit login confirmation did not complete within %.1fs", quick_dom_timeout)
 
     classification = await _classify_post_submit_state(web)
+    sanitized_url = _diagnostic_url(web)
     LOG.warning("Auth0 post-submit verification remained inconclusive")
+
+    # Best-effort diagnostics capture — never mask the original TimeoutError.
+    try:
+        await capture_login_detection_diagnostics_if_enabled(
+            web,
+            base_prefix = "login_detection_auth0_post_submit_inconclusive",
+            pause_banner_message = "# Auth0 post-submit verification remained inconclusive. Browser is paused for manual inspection.",
+            diagnostics_config = diagnostics_config,
+            diagnostics_output_dir_fn = diagnostics_output_dir_fn,
+            log_file_path = log_file_path,
+            json_payload = {
+                "event": "auth0_post_submit_inconclusive",
+                "classification": classification,
+                "page_url": sanitized_url,
+            },
+        )
+    except Exception:  # noqa: S110, BLE001
+        pass
+
     raise TimeoutError(
         _("Auth0 post-submit verification remained inconclusive: %s (url=%s)")
-        % (classification, _diagnostic_url(web))
+        % (classification, sanitized_url)
     )
 
 
@@ -570,6 +600,9 @@ async def fill_login_data_and_send(
     username:str,
     password:str,
     captcha_config:CaptchaConfig,
+    diagnostics_config:DiagnosticsConfig | None = None,
+    diagnostics_output_dir_fn:Callable[[], Path] | None = None,
+    log_file_path:str | None = None,
 ) -> None:
     """Auth0 2-step login via m-einloggen-sso.html (server-side redirect, no JS needed).
 
@@ -597,7 +630,13 @@ async def fill_login_data_and_send(
     await web.web_input(By.CSS_SELECTOR, "input[type='password']", password)
     await captcha_flow.check_and_wait_for_captcha(web, captcha_config, is_login_page = True)
     await _click_auth0_submit(web)
-    await wait_for_post_auth0_submit_transition(web, username = username)
+    await wait_for_post_auth0_submit_transition(
+        web,
+        username = username,
+        diagnostics_config = diagnostics_config,
+        diagnostics_output_dir_fn = diagnostics_output_dir_fn,
+        log_file_path = log_file_path,
+    )
     LOG.debug("Auth0 login submitted.")
 
 
@@ -696,6 +735,7 @@ async def capture_login_detection_diagnostics_if_enabled(
     diagnostics_config:DiagnosticsConfig | None,
     diagnostics_output_dir_fn:Callable[[], Path] | None,
     log_file_path:str | None,
+    json_payload:dict[str, str] | None = None,
 ) -> None:
     cfg = diagnostics_config
     if cfg is None or not getattr(getattr(cfg, "capture_on", None), "login_detection", False):
@@ -720,6 +760,7 @@ async def capture_login_detection_diagnostics_if_enabled(
             output_dir = output_dir,
             base_prefix = base_prefix,
             page = page,
+            json_payload = json_payload,
             log_file_path = log_file_path,
             copy_log = getattr(cfg, "capture_log_copy", False),
         )
