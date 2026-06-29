@@ -497,43 +497,81 @@ async def set_pricing_fields(web:WebScrapingMixin, ad_cfg:Ad, ad_defaults:AdDefa
     await web.web_set_input_value("ad-description", description)
 
 
-# TODO: Issue #930 — migrate to web_select_button_combobox (display-text-based, no React fiber)
 async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) -> None:
     """Select an option from a <button role="combobox"> dropdown by its API value.
 
-    Clicks the button to open the listbox, reads the options data from the React fiber
-    (which maps API values to display labels), and clicks the matching option.
+    Opens the control with pointerdown/mousedown and selects the matching option
+    in a single async browser script execution.  Uses React fiber matching first,
+    then DOM attribute matching, then normalized text fallback.
     """
-    await web.web_click(By.ID, elem_id)
-    listbox_id = f"{elem_id}-menu"
-    await web.web_find(By.ID, listbox_id)
-    js_btn_id = json.dumps(elem_id)
-    js_listbox_id = json.dumps(listbox_id)
+    js_elem_id = json.dumps(elem_id)
     js_value = json.dumps(value)
-    ok = await web.web_execute(f"""(function() {{
-        const listbox = document.getElementById({js_listbox_id});
-        if (!listbox) return false;
-        const liOptions = Array.from(listbox.querySelectorAll('[role="option"]'));
-        const btnEl = document.getElementById({js_btn_id});
-        if (!btnEl) return false;
-        const fiberKey = Object.keys(btnEl).find(k => k.startsWith('__reactFiber'));
-        let fiber = fiberKey ? btnEl[fiberKey] : null;
-        for (let i = 0; i < 20 && fiber; i++, fiber = fiber.return) {{
+    status = await web.web_execute(f"""(async function() {{
+    var btn = document.getElementById({js_elem_id});
+    if (!btn) return {{ok:false, reason:'Button not found'}};
+    btn.dispatchEvent(new PointerEvent('pointerdown',{{bubbles:true,cancelable:true}}));
+    btn.dispatchEvent(new MouseEvent('mousedown',{{bubbles:true,cancelable:true}}));
+    var listbox = null;
+    var options = null;
+    for (var i = 0; i < 50; i++) {{
+        await new Promise(function(r){{setTimeout(r,20);}});
+        var candidate = document.getElementById({js_elem_id}+'-menu');
+        if (!candidate && btn.parentElement) {{
+            candidate = btn.parentElement.querySelector('[role="listbox"]');
+        }}
+        if (!candidate && btn.parentElement) {{
+            var m = btn.parentElement.querySelector('[role="menu"]');
+            if (m) candidate = m;
+        }}
+        if (candidate) {{
+            options = Array.from(candidate.querySelectorAll('[role="option"]'));
+            if (options.length > 0) break;
+        }}
+    }}
+    if (!options || options.length === 0) {{
+        return {{ok:false, reason:'No options appeared after opening', options:[]}};
+    }}
+    var optionInfo = options.map(function(o){{return o.textContent ? o.textContent.trim() : '';}});
+    var fiberKey = Object.keys(btn).find(function(k){{return k.startsWith('__reactFiber');}});
+    if (fiberKey) {{
+        var fiber = btn[fiberKey];
+        for (var j = 0; j < 20 && fiber; j++, fiber = fiber.return) {{
             if (fiber.memoizedProps && fiber.memoizedProps.options) {{
-                const optionsData = fiber.memoizedProps.options;
-                for (let j = 0; j < optionsData.length; j++) {{
-                    if (optionsData[j].value === {js_value} && liOptions[j]) {{
-                        liOptions[j].click();
-                        return true;
+                var opts = fiber.memoizedProps.options;
+                for (var k = 0; k < opts.length; k++) {{
+                    if (opts[k].value === {js_value} && options[k]) {{
+                        options[k].click();
+                        return {{ok:true}};
                     }}
                 }}
-                return false;
+                break;
             }}
         }}
-        return false;
-    }})()""")
-    if not ok:
-        raise TimeoutError(_("Option '%(value)s' not found in button combobox '%(id)s'") % {"value": value, "id": elem_id})
+    }}
+    for (var k = 0; k < options.length; k++) {{
+        var o = options[k];
+        if (o.getAttribute('value') === {js_value} ||
+            o.getAttribute('data-value') === {js_value} ||
+            o.getAttribute('aria-label') === {js_value} ||
+            o.getAttribute('title') === {js_value}) {{
+            o.click();
+            return {{ok:true}};
+        }}
+        var text = (o.textContent || '').trim().toLowerCase();
+        if (text === {js_value}.toLowerCase()) {{
+            o.click();
+            return {{ok:true}};
+        }}
+    }}
+    return {{ok:false, reason:'Option not found', requested:{js_value}, options:optionInfo}};
+}})()""")
+    if not isinstance(status, dict) or not status.get("ok"):
+        observed = status.get("options", []) if isinstance(status, dict) else []
+        reason = status.get("reason", "unknown") if isinstance(status, dict) else "unknown"
+        raise TimeoutError(
+            _("Option '%(value)s' not found in button combobox '%(id)s': %(reason)s (observed: %(options)s)")
+            % {"value": value, "id": elem_id, "reason": reason, "options": observed}
+        )
 
 
 async def set_shipping_form(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:

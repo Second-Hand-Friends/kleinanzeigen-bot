@@ -289,7 +289,7 @@ kleinanzeigen_bot/publishing_form.py:
     "Shipping combobox button has no id attribute": "Versand-Combobox-Button hat kein ID-Attribut"
 
   _select_button_combobox:
-    "Option '%(value)s' not found in button combobox '%(id)s'": "Option '%(value)s' nicht in Button-Combobox '%(id)s' gefunden"
+    "Option '%(value)s' not found in button combobox '%(id)s': %(reason)s (observed: %(options)s)": "Option '%(value)s' nicht in Button-Combobox '%(id)s' gefunden: %(reason)s (beobachtet: %(options)s)"
 
   _select_shipping_combobox_if_present:
     "Shipping combobox button has no id attribute": "Versand-Combobox-Button hat kein ID-Attribut"

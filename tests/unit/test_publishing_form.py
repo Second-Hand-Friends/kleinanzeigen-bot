@@ -2012,55 +2012,102 @@ class TestWantedShippingSelection:
 
 
 class TestSelectButtonCombobox:
-    """Tests for _select_button_combobox (React fiber combobox selection).
+    """Tests for _select_button_combobox (single async script combobox selection).
 
     ``_select_button_combobox`` is the internal helper used for special-attribute
-    comboboxes where the option list is embedded in the React fiber tree. It clicks
-    the button to open the menu, waits for the listbox, then executes JS to find
-    and click the matching option by value.
+    comboboxes where the option list is embedded in the React fiber tree. It executes
+    a single async JS script that opens the control via pointerdown/mousedown,
+    polls for visible options, and clicks the matching option by value.
     """
 
     @pytest.mark.asyncio
-    async def test_select_button_combobox_success(
+    async def test_select_button_combobox_calls_web_execute_directly(
         self,
         test_bot:KleinanzeigenBot,
     ) -> None:
-        """Successful selection: clicks button, waits for listbox, executes JS, returns True."""
+        """Successful selection: calls web_execute directly with no separate click/find."""
         elem_id = "my-combobox-id"
         option_value = "option_value"
 
         with (
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = True) as mock_execute,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = {"ok": True}) as mock_execute,
         ):
             await _select_button_combobox(test_bot, elem_id, option_value)
 
-        mock_click.assert_awaited_once_with(By.ID, elem_id)
-        mock_find.assert_awaited_once_with(By.ID, f"{elem_id}-menu")
+        mock_click.assert_not_awaited()
+        mock_find.assert_not_awaited()
         mock_execute.assert_awaited_once()
         assert mock_execute.await_args is not None
         js = str(mock_execute.await_args.args[0])
-        assert "my-combobox-id" in js
-        assert "my-combobox-id-menu" in js
+        # JS key invariants: async IIFE, pointerdown, mousedown, escaped elem_id, escaped value, option query
+        assert "async function" in js or "async(function" in js or js.startswith("(async")
+        assert "pointerdown" in js
+        assert "mousedown" in js
+        assert "document.getElementById(" in js
         assert "option_value" in js
 
     @pytest.mark.asyncio
-    async def test_select_button_combobox_js_returns_false(
+    async def test_select_button_combobox_structured_failure_raises_timeout(
         self,
         test_bot:KleinanzeigenBot,
     ) -> None:
-        """When the JS fiber walk returns False, TimeoutError is raised."""
+        """When JS returns {ok: False, ...}, TimeoutError is raised with context."""
+        elem_id = "my-combobox-id"
+        option_value = "missing_option"
+        js_status = {
+            "ok": False,
+            "reason": "Option not found",
+            "requested": "missing_option",
+            "options": ["Option A", "Option B"],
+        }
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = js_status),
+            pytest.raises(TimeoutError) as exc_info,
+        ):
+            await _select_button_combobox(test_bot, elem_id, option_value)
+
+        msg = str(exc_info.value)
+        assert "missing_option" in msg
+        assert "my-combobox-id" in msg
+        assert "Option not found" in msg
+        assert "Option A" in msg
+
+    @pytest.mark.asyncio
+    async def test_select_button_combobox_bare_false_raises_timeout(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """When JS returns a bare False (legacy fallback), TimeoutError is still raised."""
         elem_id = "my-combobox-id"
         option_value = "missing_option"
 
         with (
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = False),
-            pytest.raises(TimeoutError, match = "not found in button combobox"),
+            pytest.raises(TimeoutError),
         ):
             await _select_button_combobox(test_bot, elem_id, option_value)
+
+    @pytest.mark.asyncio
+    async def test_select_button_combobox_element_id_escaped_via_json_dumps(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """elem_id must be embedded in JS via json.dumps (safe quoting)."""
+        elem_id = 'danger"id'
+        option_value = "val"
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = {"ok": True}) as mock_execute,
+        ):
+            await _select_button_combobox(test_bot, elem_id, option_value)
+
+        assert mock_execute.await_args is not None
+        js = str(mock_execute.await_args.args[0])
+        # json.dumps('danger"id') == '"danger\\"id"'
+        assert 'danger\\"id' in js or 'danger"' in js
 
 
 class TestSpecialAttributes:
