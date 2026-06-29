@@ -571,6 +571,40 @@ class TestKleinanzeigenBotAuthentication:
             assert mock_submit.await_count == 2  # identifier submit + password submit
 
     @pytest.mark.asyncio
+    async def test_fill_login_data_and_send_forwards_diagnostics_args(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Diagnostics config, output_dir_fn, and log_file_path are forwarded to wait_for_post_auth0_submit_transition."""
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate(
+            {
+                "capture_on": {"login_detection": True},
+                "output_dir": str(tmp_path),
+            }
+        )
+        with (
+            patch("kleinanzeigen_bot.login_flow.wait_for_auth0_login_context", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.login_flow.handle_identifier_captcha_state", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.login_flow.wait_for_auth0_password_step", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.login_flow.wait_for_post_auth0_submit_transition", new_callable = AsyncMock) as wait_transition,
+            patch.object(test_bot, "web_input"),
+            patch("kleinanzeigen_bot.login_flow._click_auth0_submit", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+        ):
+            await fill_login_data_and_send(
+                test_bot,
+                username = test_bot.config.login.username,
+                password = test_bot.config.login.password,
+                captcha_config = test_bot.config.captcha,
+                diagnostics_config = test_bot.config.diagnostics,
+                diagnostics_output_dir_fn = test_bot._diagnostics_output_dir,
+                log_file_path = test_bot.log_file_path,
+            )
+
+        wait_transition.assert_awaited_once()
+        assert wait_transition.await_args is not None
+        assert wait_transition.await_args.kwargs.get("diagnostics_config") is test_bot.config.diagnostics
+        assert wait_transition.await_args.kwargs.get("diagnostics_output_dir_fn") == test_bot._diagnostics_output_dir
+        assert wait_transition.await_args.kwargs.get("log_file_path") == test_bot.log_file_path
+
+    @pytest.mark.asyncio
     async def test_fill_login_data_and_send_fails_when_password_step_missing(self, test_bot:KleinanzeigenBot) -> None:
         """Missing Auth0 password step should fail fast."""
         with (
@@ -1296,3 +1330,159 @@ class TestClassifyPostSubmitState:
             pytest.raises(TimeoutError, match = "Auth0 post-submit verification remained inconclusive"),
         ):
             await wait_for_post_auth0_submit_transition(test_bot, username = test_bot.config.login.username)
+
+    @pytest.mark.asyncio
+    async def test_wait_for_post_auth0_submit_transition_capture_enabled(
+        self, test_bot:KleinanzeigenBot, tmp_path:Path,
+    ) -> None:
+        """Enabled capture_on.login_detection triggers diagnostics capture with sanitised JSON payload."""
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate(
+            {
+                "capture_on": {"login_detection": True},
+                "output_dir": str(tmp_path),
+            }
+        )
+        test_bot._login_detection_diagnostics_captured = False
+        test_bot.page = MagicMock()
+        # Raw URL with userinfo, query params (state, code), and fragment
+        test_bot.page.url = (
+            "https://user:secret@login.kleinanzeigen.de/u/login/password"
+            "?state=abc123&code=secret456&other=keep#frag"
+        )
+
+        with (
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch(
+                "kleinanzeigen_bot.login_flow._classify_post_submit_state",
+                new_callable = AsyncMock,
+                return_value = "STILL_ON_PASSWORD_PAGE + AUTH0_INLINE_ERROR",
+            ),
+            patch("kleinanzeigen_bot.utils.diagnostics.capture_diagnostics", new_callable = AsyncMock) as mock_capture,
+            pytest.raises(TimeoutError, match = "STILL_ON_PASSWORD_PAGE"),
+        ):
+            await wait_for_post_auth0_submit_transition(
+                test_bot,
+                username = test_bot.config.login.username,
+                diagnostics_config = test_bot.config.diagnostics,
+                diagnostics_output_dir_fn = test_bot._diagnostics_output_dir,
+                log_file_path = test_bot.log_file_path,
+            )
+
+        mock_capture.assert_awaited_once()
+        assert mock_capture.await_args is not None
+        assert mock_capture.await_args.kwargs.get("base_prefix") == "login_detection_auth0_post_submit_inconclusive"
+        payload = mock_capture.await_args.kwargs.get("json_payload")
+        assert isinstance(payload, dict)
+        assert payload["event"] == "auth0_post_submit_inconclusive"
+        assert payload["classification"] == "STILL_ON_PASSWORD_PAGE + AUTH0_INLINE_ERROR"
+
+        # page_url must be sanitised — no userinfo, query/fragment stripped
+        sanitised = str(payload.get("page_url", ""))
+        assert "user:" not in sanitised
+        assert "secret" not in sanitised
+        assert "state=" not in sanitised
+        assert "code=" not in sanitised
+        assert "#frag" not in sanitised
+        # Host and path preserved
+        assert "login.kleinanzeigen.de/u/login/password" in sanitised
+
+    @pytest.mark.asyncio
+    async def test_wait_for_post_auth0_submit_transition_capture_disabled_config_none(
+        self, test_bot:KleinanzeigenBot,
+    ) -> None:
+        """Disabled diagnostics config (None) skips capture and raises original TimeoutError."""
+        with (
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch(
+                "kleinanzeigen_bot.login_flow._classify_post_submit_state",
+                new_callable = AsyncMock,
+                return_value = "STILL_ON_PASSWORD_PAGE",
+            ),
+            patch("kleinanzeigen_bot.utils.diagnostics.capture_diagnostics", new_callable = AsyncMock) as mock_capture,
+            pytest.raises(TimeoutError, match = "Auth0 post-submit verification remained inconclusive"),
+        ):
+            await wait_for_post_auth0_submit_transition(
+                test_bot,
+                username = test_bot.config.login.username,
+            )
+
+        mock_capture.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_wait_for_post_auth0_submit_transition_capture_disabled_login_detection_false(
+        self, test_bot:KleinanzeigenBot, tmp_path:Path,
+    ) -> None:
+        """Disabled capture_on.login_detection skips capture and raises original TimeoutError."""
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate(
+            {
+                "capture_on": {"login_detection": False},
+                "output_dir": str(tmp_path),
+            }
+        )
+
+        with (
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch(
+                "kleinanzeigen_bot.login_flow._classify_post_submit_state",
+                new_callable = AsyncMock,
+                return_value = "STILL_ON_PASSWORD_PAGE",
+            ),
+            patch("kleinanzeigen_bot.utils.diagnostics.capture_diagnostics", new_callable = AsyncMock) as mock_capture,
+            pytest.raises(TimeoutError, match = "Auth0 post-submit verification remained inconclusive"),
+        ):
+            await wait_for_post_auth0_submit_transition(
+                test_bot,
+                username = test_bot.config.login.username,
+                diagnostics_config = test_bot.config.diagnostics,
+            )
+
+        mock_capture.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_wait_for_post_auth0_submit_transition_capture_failure_preserves_error(
+        self, test_bot:KleinanzeigenBot, tmp_path:Path,
+    ) -> None:
+        """Capture exception does not mask the original classified TimeoutError.
+
+        Patches ``capture_login_detection_diagnostics_if_enabled`` itself (not
+        the lower-level ``capture_diagnostics``) to prove the local
+        ``try/except`` guard in ``wait_for_post_auth0_submit_transition`` works.
+        """
+        test_bot.config.diagnostics = DiagnosticsConfig.model_validate(
+            {
+                "capture_on": {"login_detection": True},
+                "output_dir": str(tmp_path),
+            }
+        )
+        test_bot._login_detection_diagnostics_captured = False
+        test_bot.page = MagicMock()
+
+        with (
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch(
+                "kleinanzeigen_bot.login_flow._classify_post_submit_state",
+                new_callable = AsyncMock,
+                return_value = "STILL_ON_PASSWORD_PAGE",
+            ),
+            patch(
+                "kleinanzeigen_bot.login_flow.capture_login_detection_diagnostics_if_enabled",
+                new_callable = AsyncMock,
+                side_effect = RuntimeError("capture guard boom"),
+            ),
+            pytest.raises(TimeoutError, match = "STILL_ON_PASSWORD_PAGE"),
+        ):
+            await wait_for_post_auth0_submit_transition(
+                test_bot,
+                username = test_bot.config.login.username,
+                diagnostics_config = test_bot.config.diagnostics,
+                diagnostics_output_dir_fn = test_bot._diagnostics_output_dir,
+                log_file_path = test_bot.log_file_path,
+            )
