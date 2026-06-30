@@ -173,13 +173,13 @@ files = [
 
 [[package]]
 name = "bracex"
-version = "2.7"
+version = "3.0"
 requires_python = ">=3.10"
 summary = "Bash style brace expander."
 groups = ["default"]
 files = [
-    {file = "bracex-2.7-py3-none-any.whl", hash = "sha256:025043774188f8a05db36de9e3d4f7d82a8509a41a115cc134c44a60c36375eb"},
-    {file = "bracex-2.7.tar.gz", hash = "sha256:4cb5d415a707f6beeb2779099486090bf98cbd8b7edbdfcb7cbea2f5fe6bdb48"},
+    {file = "bracex-3.0-py3-none-any.whl", hash = "sha256:3833e61c2f092d5aa0468fa2e6c6e990a306185abf763b6d122f0158e59c58a5"},
+    {file = "bracex-3.0.tar.gz", hash = "sha256:b73f718d6bd98d8419e45df02426c86e9967c179949f779340d6c3a8c83b9111"},
 ]
 
 [[package]]
@@ -2039,16 +2039,16 @@ files = [
 
 [[package]]
 name = "wcmatch"
-version = "10.1"
-requires_python = ">=3.9"
+version = "10.2"
+requires_python = ">=3.10"
 summary = "Wildcard/glob file name matcher."
 groups = ["default"]
 dependencies = [
     "bracex>=2.1.1",
 ]
 files = [
-    {file = "wcmatch-10.1-py3-none-any.whl", hash = "sha256:5848ace7dbb0476e5e55ab63c6bbd529745089343427caa5537f230cc01beb8a"},
-    {file = "wcmatch-10.1.tar.gz", hash = "sha256:f11f94208c8c8484a16f4f48638a85d771d9513f4ab3f37595978801cb9465af"},
+    {file = "wcmatch-10.2-py3-none-any.whl", hash = "sha256:f1a79e80ccbe296907b7eaf57d8d3bc49eab0b428d35f7d09986b5079b6e4a5d"},
+    {file = "wcmatch-10.2.tar.gz", hash = "sha256:92204839e3e9c945e1e71d7e1e4edeab2601ed50a5c51ff4f3f97ca711eeb738"},
 ]
 
 [[package]]
