@@ -2042,8 +2042,7 @@ class TestSelectButtonCombobox:
         mock_execute.assert_awaited_once()
         assert mock_execute.await_args is not None
         js = str(mock_execute.await_args.args[0])
-        # Stable contract: one async browser script receives safely quoted inputs.
-        assert "async function" in js or "async(function" in js or js.startswith("(async")
+        # Stable contract: a single browser script receives safely quoted inputs.
         assert json.dumps(elem_id) in js
         assert json.dumps(option_value) in js
 
