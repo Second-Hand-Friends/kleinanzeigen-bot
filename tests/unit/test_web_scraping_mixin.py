@@ -1245,8 +1245,12 @@ class TestWebScrolling:
                 await web_scraper.web_await(condition, timeout = 0.2, apply_multiplier = False)
         finally:
             task.cancel()
-            with pytest.raises(asyncio.CancelledError):
+            task_was_cancelled = False
+            try:
                 await task
+            except asyncio.CancelledError:
+                task_was_cancelled = True
+            assert task_was_cancelled
 
         assert tick_count[0] > 0, "Background ticker should have advanced while web_await was retrying"
 
