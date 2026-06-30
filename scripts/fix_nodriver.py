@@ -75,21 +75,28 @@ def _fix_network_encoding(path:Path) -> str:
 
 # ── connection.py flat-mode session retry ──────────────────────────────────
 
+# Keep this marker and guidance in sync with the CLI runtime guard in
+# src/kleinanzeigen_bot/cli.py and the README source-install caveat.
+_CONNECTION_SEND_PATCH_MARKER = "KLEINANZEIGEN_BOT_NODEDRIVER_CDP_REATTACH_PATCH_V1"
+
 _SEND_START = "        if not _attach:"
 _SEND_ERR_END = "            raise exception"
 
-_NEW_SEND = """\
+_MARKER_COMMENT_LINE = f"        # {_CONNECTION_SEND_PATCH_MARKER}: re-attach/retry CDP -32601 for Chromium flat-mode sessions."
+
+_NEW_SEND = f"""\
         method, *params = next(cdp_obj).values()
         if params:
             params = params.pop()
 
+{_MARKER_COMMENT_LINE}
         for _retry in range(2):
             if not _attach:
                 if not self.attached or not self.socket:
                     await self.attach()
 
             _id = next(self.__count__)
-            message = {"method": method, "params": params, "id": _id}
+            message = {{"method": method, "params": params, "id": _id}}
             if not _attach:
                 message["sessionId"] = self.session_id
             message.update(kwargs)
@@ -136,6 +143,9 @@ _NEW_SEND = """\
                 raise exception
             break"""
 
+# Derive the old markerless body from _NEW_SEND for legacy normalization.
+_OLD_SEND = _NEW_SEND.replace(f"{_MARKER_COMMENT_LINE}\n", "")
+
 
 def _fix_connection_send(path:Path) -> str:
     try:
@@ -144,21 +154,32 @@ def _fix_connection_send(path:Path) -> str:
         print(f"fix_nodriver: cannot read {path}: {exc}", file = sys.stderr)
         sys.exit(1)
 
-    if "for _retry in range(2):" in text:
+    # Marker-based idempotency check.
+    if _CONNECTION_SEND_PATCH_MARKER in text:
         return "already-ok"
 
+    # Check for old markerless patched body (marker absent, _SEND_START may be
+    # gone because the original patch replaced it).  _OLD_SEND uses 8-space
+    # template indent matching nodriver's coding style.
+    if _OLD_SEND in text:
+        # Exact old markerless body found — normalize by replacing with _NEW_SEND.
+        text = text.replace(_OLD_SEND, _NEW_SEND)
+        path.write_text(text, "utf-8")
+        return "updated"
+
+    # Fresh patch: find the original unpatched send-method body.
     start = text.find(_SEND_START)
     if start == -1:
         print("fix_nodriver: send start marker not found", file = sys.stderr)
         sys.exit(1)
 
+    indent = text[text.rfind("\n", 0, start) + 1: start]
     err = text.find(_SEND_ERR_END, start)
     if err == -1:
         print("fix_nodriver: send error end not found", file = sys.stderr)
         sys.exit(1)
 
     err_end = text.index("\n", err)
-    indent = text[text.rfind("\n", 0, start) + 1: start]
     body = textwrap.indent(_NEW_SEND, indent).removeprefix("\n")
     result = text[:start] + body + text[err_end:]
     path.write_text(result, "utf-8")

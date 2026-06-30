@@ -5,11 +5,14 @@
 
 from __future__ import annotations
 
+import importlib.metadata
+import logging
 import runpy
 import sys
 from datetime import timedelta
+from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -18,9 +21,6 @@ from kleinanzeigen_bot.utils import i18n, loggers
 from kleinanzeigen_bot.utils.exceptions import CaptchaEncountered
 
 pytestmark = pytest.mark.unit
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 class TestCliParseArgs:
@@ -198,3 +198,141 @@ class TestCliMain:
 
         assert exc_info.value.code == 0
         assert calls == [["kleinanzeigen-bot", "version"]]
+
+
+class TestNodriverPatchGuard:
+    """Tests for _warn_unpatched_nodriver runtime guard."""
+
+    @staticmethod
+    def _make_mock_dist(tmp_path:Path, connection_text:str) -> MagicMock:
+        """Build a fake distribution whose locate_file returns a file in tmp_path."""
+        fpath = tmp_path / "connection.py"
+        fpath.write_text(connection_text, encoding = "utf-8")
+        dist = MagicMock()
+        dist.locate_file.return_value = fpath
+        return dist
+
+    def _setup(self) -> None:
+        """Reset the warned flag before each guard test."""
+        cli._warned_nodriver_patch[0] = False  # noqa: SLF001
+
+    def test_no_warning_when_marker_present(self, caplog:pytest.LogCaptureFixture, tmp_path:Path) -> None:
+        """Marker present => no warning."""
+        self._setup()
+        dist = self._make_mock_dist(tmp_path, "# KLEINANZEIGEN_BOT_NODEDRIVER_CDP_REATTACH_PATCH_V1: retry loop\n...\nfor _retry in range(2):\n")
+        with patch("kleinanzeigen_bot.cli.importlib.metadata.distribution", return_value = dist):
+            cli._warn_unpatched_nodriver()  # noqa: SLF001
+        assert "nodriver CDP re-attach patch not found" not in caplog.text
+
+    def test_warning_when_marker_absent(self, caplog:pytest.LogCaptureFixture, tmp_path:Path) -> None:
+        """Marker absent => warning once."""
+        self._setup()
+        dist = self._make_mock_dist(tmp_path, "# original nodriver code\nasync def send(...):\n    pass\n")
+        with patch("kleinanzeigen_bot.cli.importlib.metadata.distribution", return_value = dist):
+            cli._warn_unpatched_nodriver()  # noqa: SLF001
+        assert "nodriver CDP re-attach patch not found" in caplog.text
+
+    def test_warning_only_once(self, caplog:pytest.LogCaptureFixture, tmp_path:Path) -> None:
+        """Repeated calls => warned only once."""
+        self._setup()
+        dist = self._make_mock_dist(tmp_path, "# unpatched\n")
+        with patch("kleinanzeigen_bot.cli.importlib.metadata.distribution", return_value = dist):
+            cli._warn_unpatched_nodriver()  # noqa: SLF001
+            cli._warn_unpatched_nodriver()  # noqa: SLF001
+            cli._warn_unpatched_nodriver()  # noqa: SLF001
+        assert caplog.text.count("nodriver CDP re-attach patch not found") == 1
+
+    def test_silent_when_package_not_found(self, caplog:pytest.LogCaptureFixture) -> None:
+        """PackageNotFoundError => silent, no warning."""
+        self._setup()
+        with patch("kleinanzeigen_bot.cli.importlib.metadata.distribution", side_effect = importlib.metadata.PackageNotFoundError):
+            cli._warn_unpatched_nodriver()  # noqa: SLF001
+        assert "nodriver CDP re-attach patch not found" not in caplog.text
+
+    def test_silent_when_frozen(self, caplog:pytest.LogCaptureFixture) -> None:
+        """Frozen build => silent, no warning, never checks."""
+        self._setup()
+        with patch("kleinanzeigen_bot.cli.is_frozen", return_value = True):
+            cli._warn_unpatched_nodriver()  # noqa: SLF001
+        assert "nodriver CDP re-attach patch not found" not in caplog.text
+
+    # ── edge-case coverage ─────────────────────────────────────────────────
+
+    def test_silent_when_metadata_generic_exception(self, caplog:pytest.LogCaptureFixture) -> None:
+        """Generic exception during metadata lookup => silent, no warning, flag unchanged."""
+        self._setup()
+        with patch("kleinanzeigen_bot.cli.importlib.metadata.distribution", side_effect = ValueError("corrupt")):
+            cli._warn_unpatched_nodriver()  # noqa: SLF001
+        assert "nodriver CDP re-attach patch not found" not in caplog.text
+        assert cli._warned_nodriver_patch[0] is False  # noqa: SLF001
+
+    def test_silent_when_metadata_generic_exception_debug_logged(
+        self,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Generic metadata exception writes debug log when LOG is DEBUG."""
+        self._setup()
+        prev_level = cli.LOG.level
+        cli.LOG.setLevel(logging.DEBUG)
+        try:
+            with patch("kleinanzeigen_bot.cli.importlib.metadata.distribution", side_effect = ValueError("corrupt")):
+                cli._warn_unpatched_nodriver()  # noqa: SLF001
+            assert "nodriver patch check: metadata lookup failed" in caplog.text
+        finally:
+            cli.LOG.setLevel(prev_level)
+
+    def test_silent_when_locator_fallback_attribute_error(self, caplog:pytest.LogCaptureFixture, tmp_path:Path) -> None:
+        """locate_file() AttributeError => fallback to dist._path works; no warning when marker present."""
+        self._setup()
+        # Fake site-packages tree under tmp_path.
+        site_pkgs = tmp_path / "site-packages"
+        fake_dist_info = site_pkgs / "nodriver-1.0.0.dist-info"
+        fake_dist_info.mkdir(parents = True)
+        conn_py = site_pkgs / "nodriver" / "core" / "connection.py"
+        conn_py.parent.mkdir(parents = True)
+        conn_py.write_text("# KLEINANZEIGEN_BOT_NODEDRIVER_CDP_REATTACH_PATCH_V1\n", encoding = "utf-8")
+
+        dist = MagicMock()
+        dist.locate_file.side_effect = AttributeError("no locate_file")
+        dist._path = fake_dist_info  # noqa: SLF001
+
+        with patch("kleinanzeigen_bot.cli.importlib.metadata.distribution", return_value = dist):
+            cli._warn_unpatched_nodriver()  # noqa: SLF001
+        # Fallback resolved to the real file with marker => silent.
+        assert "nodriver CDP re-attach patch not found" not in caplog.text
+        assert cli._warned_nodriver_patch[0] is False  # noqa: SLF001
+
+    def test_silent_when_path_resolution_generic_exception(self, caplog:pytest.LogCaptureFixture) -> None:
+        """Generic exception during path resolution => silent, no warning, flag unchanged."""
+        self._setup()
+        dist = MagicMock()
+        dist.locate_file.side_effect = RuntimeError("unexpected")
+        with patch("kleinanzeigen_bot.cli.importlib.metadata.distribution", return_value = dist):
+            cli._warn_unpatched_nodriver()  # noqa: SLF001
+        assert "nodriver CDP re-attach patch not found" not in caplog.text
+        assert cli._warned_nodriver_patch[0] is False  # noqa: SLF001
+
+    def test_silent_when_connection_path_missing(self, caplog:pytest.LogCaptureFixture, tmp_path:Path) -> None:
+        """Non-existent connection.py => silent, no warning, flag unchanged."""
+        self._setup()
+        dist = MagicMock()
+        dist.locate_file.return_value = tmp_path / "nonexistent" / "connection.py"
+        with patch("kleinanzeigen_bot.cli.importlib.metadata.distribution", return_value = dist):
+            cli._warn_unpatched_nodriver()  # noqa: SLF001
+        assert "nodriver CDP re-attach patch not found" not in caplog.text
+        assert cli._warned_nodriver_patch[0] is False  # noqa: SLF001
+
+    def test_silent_when_read_text_oserror(self, caplog:pytest.LogCaptureFixture, tmp_path:Path) -> None:
+        """read_text OSError => silent, no warning, flag unchanged."""
+        self._setup()
+        conn_py = tmp_path / "connection.py"
+        conn_py.write_text("unpatched content", encoding = "utf-8")
+        dist = MagicMock()
+        dist.locate_file.return_value = conn_py
+        with (
+            patch("kleinanzeigen_bot.cli.importlib.metadata.distribution", return_value = dist),
+            patch.object(Path, "read_text", side_effect = OSError("permission denied")),
+        ):
+            cli._warn_unpatched_nodriver()  # noqa: SLF001
+        assert "nodriver CDP re-attach patch not found" not in caplog.text
+        assert cli._warned_nodriver_patch[0] is False  # noqa: SLF001

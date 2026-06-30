@@ -814,6 +814,11 @@ class WebScrapingMixin:  # noqa: PLR0904
                         await self.page.attach()
                     except Exception as re_exc:  # noqa: S110
                         LOG.debug("Re-attach failed: %s", re_exc)
+                    elapsed = loop.time() - start_at
+                    if elapsed >= effective_timeout:
+                        raise TimeoutError(timeout_error_message or f"Condition not met within {effective_timeout} seconds") from None
+                    remaining_timeout = max(effective_timeout - elapsed, 0.0)
+                    await asyncio.sleep(min(0.05, remaining_timeout))
                     continue
                 ex = ex1
             except Exception as ex1:

@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Unit tests for web_scraping_mixin.py focusing on error handling scenarios."""
 
+import asyncio
 import json
 import logging
 import os
@@ -1196,6 +1197,62 @@ class TestWebScrolling:
         # so the total elapsed time should be at least the timeout (0.2s) but not wildly exceed it.
         assert elapsed >= 0.15, f"Expected >= 0.15s elapsed, got {elapsed:.3f}s"
         assert elapsed < 1.0, f"Expected < 1.0s elapsed, got {elapsed:.3f}s"
+
+    @pytest.mark.asyncio
+    async def test_web_await_reattach_exhaustion(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
+        """web_await raises TimeoutError when condition keeps raising ProtocolException(-32601)."""
+
+        async def condition() -> bool:
+            raise ProtocolException({"message": "Method not found", "code": -32601})
+
+        with pytest.raises(TimeoutError):
+            await web_scraper.web_await(condition, timeout = 0.2, apply_multiplier = False)
+
+    @pytest.mark.asyncio
+    async def test_web_await_reattach_bounded(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
+        """web_await with persistent -32601 should have bounded attach calls, not tight loop."""
+        attach_mock = cast(AsyncMock, mock_page.attach)
+        attach_mock.reset_mock()
+
+        async def condition() -> bool:
+            raise ProtocolException({"message": "Method not found", "code": -32601})
+
+        with pytest.raises(TimeoutError):
+            await web_scraper.web_await(condition, timeout = 0.05, apply_multiplier = False)
+
+        # The exception triggers re-attach on each retry attempt.
+        assert attach_mock.call_count > 0, "Expected at least one attach attempt"
+        # With 50ms retry sleep per iteration and 50ms timeout, at most ~5 iterations.
+        # Use a generous threshold to avoid flakiness on busy CI.
+        assert attach_mock.call_count < 50, f"Expected < 50 attach calls, got {attach_mock.call_count}"
+
+    @pytest.mark.asyncio
+    async def test_web_await_reattach_background_task_advances(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
+        """Background tasks should advance while web_await retries -32601."""
+        tick_count:list[int] = [0]
+
+        async def ticker() -> None:
+            while True:
+                await asyncio.sleep(0.001)
+                tick_count[0] += 1
+
+        async def condition() -> bool:
+            raise ProtocolException({"message": "Method not found", "code": -32601})
+
+        task = asyncio.create_task(ticker())
+        try:
+            with pytest.raises(TimeoutError):
+                await web_scraper.web_await(condition, timeout = 0.2, apply_multiplier = False)
+        finally:
+            task.cancel()
+            task_was_cancelled = False
+            try:
+                await task
+            except asyncio.CancelledError:
+                task_was_cancelled = True
+            assert task_was_cancelled
+
+        assert tick_count[0] > 0, "Background ticker should have advanced while web_await was retrying"
 
     @pytest.mark.asyncio
     async def test_web_sleep_produces_real_delay(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:

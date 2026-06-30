@@ -13,11 +13,13 @@ from __future__ import annotations
 
 import atexit
 import getopt
+import importlib.metadata
 import os
 import signal
 import sys
 import textwrap
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final, Sequence
 
 import colorama
@@ -36,6 +38,11 @@ from kleinanzeigen_bot.utils.misc import is_frozen
 LOG:Final[_loggers.Logger] = _loggers.get_logger(__name__)
 LOG.setLevel(_loggers.INFO)
 
+# Keep this marker and warning guidance in sync with scripts/fix_nodriver.py
+# and the README source-install caveat.
+_NODRIVER_PATCH_MARKER:Final[str] = "KLEINANZEIGEN_BOT_NODEDRIVER_CDP_REATTACH_PATCH_V1"
+_warned_nodriver_patch:list[bool] = [False]
+
 
 @dataclass(slots = True)
 class ParsedArgs:
@@ -50,6 +57,56 @@ class ParsedArgs:
     log_file_path:str | None = None
     logfile_explicitly_provided:bool = False
     workspace_mode:str | None = None
+
+
+def _warn_unpatched_nodriver() -> None:
+    """Check installed nodriver for the CDP re-attach patch marker and warn if missing.
+
+    Keeps a module-level flag so repeated ``main()`` calls only warn once.
+    Silent on frozen builds, uninstalled nodriver, missing/unreadable files,
+    or any metadata weirdness.
+    """
+    if _warned_nodriver_patch[0] or is_frozen():
+        return
+
+    try:
+        dist = importlib.metadata.distribution("nodriver")
+    except importlib.metadata.PackageNotFoundError:
+        return
+    except Exception:
+        if _loggers.is_debug(LOG):
+            LOG.debug("nodriver patch check: metadata lookup failed", exc_info = True)
+        return
+
+    try:
+        try:
+            connection_path = Path(dist.locate_file("nodriver/core/connection.py"))  # type: ignore[arg-type]
+        except AttributeError:
+            # Fallback for older Python/importlib_metadata.
+            site_packages = Path(dist._path).parent  # type: ignore[attr-defined]  # noqa: SLF001
+            connection_path = site_packages / "nodriver/core/connection.py"
+    except Exception:
+        if _loggers.is_debug(LOG):
+            LOG.debug("nodriver patch check: path resolution failed", exc_info = True)
+        return
+
+    if not connection_path.is_file():
+        return
+    try:
+        text = connection_path.read_text("utf-8")
+    except OSError:
+        return
+
+    if _NODRIVER_PATCH_MARKER in text:
+        return
+
+    _warned_nodriver_patch[0] = True
+    LOG.warning(
+        "nodriver CDP re-attach patch not found: installed nodriver may miss the flat-mode fix. "
+        "Plain pip installs skip the PDM post_install hook; run `pdm install` from a source "
+        "checkout or `python scripts/fix_nodriver.py` from the repository. "
+        "Symptom: repeated `Re-attaching CDP session after -32601`."
+    )
 
 
 def _help_executable() -> str:
@@ -265,6 +322,7 @@ def main(args:Sequence[str]) -> None:
         )  # [1:] removes the first empty blank line
 
     _loggers.configure_console_logging()
+    _warn_unpatched_nodriver()
     signal.signal(signal.SIGINT, _error_handlers.on_sigint)
     atexit.register(_loggers.flush_all_handlers)
 
