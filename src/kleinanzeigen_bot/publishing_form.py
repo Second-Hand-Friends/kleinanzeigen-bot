@@ -506,6 +506,8 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
     """
     js_elem_id = json.dumps(elem_id)
     js_value = json.dumps(value)
+    # Use web.timeout("quick_dom") as the JS-side polling budget, converted to milliseconds.
+    poll_deadline_ms = int(web.timeout("quick_dom") * 1000)
     status = await web.web_execute(f"""(async function() {{
     var btn = document.getElementById({js_elem_id});
     if (!btn) return {{ok:false, reason:'Button not found'}};
@@ -513,7 +515,8 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
     btn.dispatchEvent(new MouseEvent('mousedown',{{bubbles:true,cancelable:true}}));
     var listbox = null;
     var options = null;
-    for (var i = 0; i < 50; i++) {{
+    var pollDeadline = Date.now() + {poll_deadline_ms};
+    while (Date.now() < pollDeadline) {{
         await new Promise(function(r){{setTimeout(r,20);}});
         var candidate = document.getElementById({js_elem_id}+'-menu');
         if (!candidate && btn.parentElement) {{

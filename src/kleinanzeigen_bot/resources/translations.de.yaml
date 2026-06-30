@@ -35,6 +35,9 @@ kleinanzeigen_bot/cli.py:
     "Unknown command: %s": "Unbekannter Befehl: %s"
     "More than one command given: %s": "Mehr als ein Befehl angegeben: %s"
     "Invalid --workspace-mode '%s'. Use 'portable' or 'xdg'.": "Ungültiger --workspace-mode '%s'. Verwenden Sie 'portable' oder 'xdg'."
+  _warn_unpatched_nodriver:
+    ? "nodriver CDP re-attach patch not found: installed nodriver may miss the flat-mode fix. Plain pip installs skip the PDM post_install hook; run `pdm install` from a source checkout or `python scripts/fix_nodriver.py` from the repository. Symptom: repeated `Re-attaching CDP session after -32601`."
+    : "nodriver CDP Re-Attach-Patch nicht gefunden: installiertes nodriver hat möglicherweise nicht den Flat-Mode-Fix. Reine pip-Installationen überspringen den PDM post_install-Hook; führen Sie `pdm install` in einem Quell-Checkout aus oder `python scripts/fix_nodriver.py` aus dem Repository. Symptom: wiederholtes `Re-attaching CDP session after -32601`."
 
 #################################################
 kleinanzeigen_bot/runtime_config.py:

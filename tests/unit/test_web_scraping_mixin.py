@@ -4,6 +4,7 @@
 """Unit tests for web_scraping_mixin.py focusing on error handling scenarios."""
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -1243,10 +1244,8 @@ class TestWebScrolling:
                 await web_scraper.web_await(condition, timeout = 0.2, apply_multiplier = False)
         finally:
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
 
         assert tick_count[0] > 0, "Background ticker should have advanced while web_await was retrying"
 

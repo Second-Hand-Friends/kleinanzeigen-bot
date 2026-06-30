@@ -4,6 +4,7 @@
 """Tests for publishing form operations (contact/location fields, category selection, city selection, pricing)."""
 
 import asyncio
+import json
 import logging
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -2091,13 +2092,13 @@ class TestSelectButtonCombobox:
             await _select_button_combobox(test_bot, elem_id, option_value)
 
     @pytest.mark.asyncio
-    async def test_select_button_combobox_element_id_escaped_via_json_dumps(
+    async def test_select_button_combobox_element_id_and_value_escaped_via_json_dumps(
         self,
         test_bot:KleinanzeigenBot,
     ) -> None:
-        """elem_id must be embedded in JS via json.dumps (safe quoting)."""
+        """elem_id and option_value must be embedded in JS via json.dumps (safe quoting)."""
         elem_id = 'danger"id'
-        option_value = "val"
+        option_value = "bad'val"
 
         with (
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = {"ok": True}) as mock_execute,
@@ -2106,8 +2107,8 @@ class TestSelectButtonCombobox:
 
         assert mock_execute.await_args is not None
         js = str(mock_execute.await_args.args[0])
-        # json.dumps('danger"id') == '"danger\\"id"'
-        assert 'danger\\"id' in js or 'danger"' in js
+        assert json.dumps(elem_id) in js
+        assert json.dumps(option_value) in js
 
 
 class TestSpecialAttributes:

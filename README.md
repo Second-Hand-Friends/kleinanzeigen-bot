@@ -141,6 +141,15 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
    pdm install
    ```
 
+   > **Note for pip-only users:** Running `pip install .` from a source checkout
+   > skips the PDM `post_install` hook that patches nodriver for
+   > Chromium flat-mode sessions. If you see repeated
+   > `Re-attaching CDP session after -32601` messages at startup, use
+   > `pdm install` instead, or run `python scripts/fix_nodriver.py` from the
+   > repository checkout. The app also checks for this nodriver patch at
+   > startup and warns if it appears missing; keep this note in sync with
+   > `scripts/fix_nodriver.py` and the CLI guard.
+
 1. Run the app:
 
    ```bash
