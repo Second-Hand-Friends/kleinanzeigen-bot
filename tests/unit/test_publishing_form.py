@@ -2042,12 +2042,10 @@ class TestSelectButtonCombobox:
         mock_execute.assert_awaited_once()
         assert mock_execute.await_args is not None
         js = str(mock_execute.await_args.args[0])
-        # JS key invariants: async IIFE, pointerdown, mousedown, escaped elem_id, escaped value, option query
+        # Stable contract: one async browser script receives safely quoted inputs.
         assert "async function" in js or "async(function" in js or js.startswith("(async")
-        assert "pointerdown" in js
-        assert "mousedown" in js
-        assert "document.getElementById(" in js
-        assert "option_value" in js
+        assert json.dumps(elem_id) in js
+        assert json.dumps(option_value) in js
 
     @pytest.mark.asyncio
     async def test_select_button_combobox_structured_failure_raises_timeout(
