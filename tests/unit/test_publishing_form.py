@@ -2054,12 +2054,12 @@ class TestSelectButtonCombobox:
         self,
         test_bot:KleinanzeigenBot,
     ) -> None:
-        """When JS returns {ok: False, ...}, TimeoutError is raised with context."""
+        """When JS returns {ok: False, reason_code, ...}, TimeoutError contains the mapped label."""
         elem_id = "my-combobox-id"
         option_value = "missing_option"
         js_status = {
             "ok": False,
-            "reason": "Option not found",
+            "reason": "option_not_found",
             "requested": "missing_option",
             "options": ["Option A", "Option B"],
         }
@@ -2073,6 +2073,7 @@ class TestSelectButtonCombobox:
         msg = str(exc_info.value)
         assert "missing_option" in msg
         assert "my-combobox-id" in msg
+        # JS code "option_not_found" is mapped to label "Option not found" via _().
         assert "Option not found" in msg
         assert "Option A" in msg
 
