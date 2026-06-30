@@ -4,7 +4,6 @@
 """Unit tests for web_scraping_mixin.py focusing on error handling scenarios."""
 
 import asyncio
-import contextlib
 import json
 import logging
 import os
@@ -1221,6 +1220,8 @@ class TestWebScrolling:
         with pytest.raises(TimeoutError):
             await web_scraper.web_await(condition, timeout = 0.05, apply_multiplier = False)
 
+        # The exception triggers re-attach on each retry attempt.
+        assert attach_mock.call_count > 0, "Expected at least one attach attempt"
         # With 50ms retry sleep per iteration and 50ms timeout, at most ~5 iterations.
         # Use a generous threshold to avoid flakiness on busy CI.
         assert attach_mock.call_count < 50, f"Expected < 50 attach calls, got {attach_mock.call_count}"
@@ -1244,8 +1245,10 @@ class TestWebScrolling:
                 await web_scraper.web_await(condition, timeout = 0.2, apply_multiplier = False)
         finally:
             task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            try:
                 await task
+            except asyncio.CancelledError:
+                ...  # expected: task was cancelled above
 
         assert tick_count[0] > 0, "Background ticker should have advanced while web_await was retrying"
 

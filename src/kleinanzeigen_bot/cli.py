@@ -41,7 +41,7 @@ LOG.setLevel(_loggers.INFO)
 # Keep this marker and warning guidance in sync with scripts/fix_nodriver.py
 # and the README source-install caveat.
 _NODRIVER_PATCH_MARKER:Final[str] = "KLEINANZEIGEN_BOT_NODEDRIVER_CDP_REATTACH_PATCH_V1"
-_warned_nodriver_patch:bool = False
+_warned_nodriver_patch:list[bool] = [False]
 
 
 @dataclass(slots = True)
@@ -66,8 +66,7 @@ def _warn_unpatched_nodriver() -> None:
     Silent on frozen builds, uninstalled nodriver, missing/unreadable files,
     or any metadata weirdness.
     """
-    global _warned_nodriver_patch  # noqa: PLW0603
-    if _warned_nodriver_patch or is_frozen():
+    if _warned_nodriver_patch[0] or is_frozen():
         return
 
     try:
@@ -101,7 +100,7 @@ def _warn_unpatched_nodriver() -> None:
     if _NODRIVER_PATCH_MARKER in text:
         return
 
-    _warned_nodriver_patch = True
+    _warned_nodriver_patch[0] = True
     LOG.warning(
         "nodriver CDP re-attach patch not found: installed nodriver may miss the flat-mode fix. "
         "Plain pip installs skip the PDM post_install hook; run `pdm install` from a source "

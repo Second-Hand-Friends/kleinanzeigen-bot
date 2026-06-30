@@ -2098,7 +2098,7 @@ class TestSelectButtonCombobox:
     ) -> None:
         """elem_id and option_value must be embedded in JS via json.dumps (safe quoting)."""
         elem_id = 'danger"id'
-        option_value = "bad'val"
+        option_value = 'bad"value'
 
         with (
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = {"ok": True}) as mock_execute,

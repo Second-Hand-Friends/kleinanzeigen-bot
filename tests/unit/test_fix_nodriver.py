@@ -31,7 +31,6 @@ pytestmark = pytest.mark.unit
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 _SEND_START_LINE = "        if not _attach:"
-_SEND_ERR_END_LINE = "            raise exception"
 
 _ORIG_BODY_AFTER_START = """\
             if not self.attached or not self.socket:

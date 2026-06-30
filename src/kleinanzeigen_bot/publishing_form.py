@@ -510,7 +510,7 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
     poll_deadline_ms = int(web.timeout("quick_dom") * 1000)
     status = await web.web_execute(f"""(async function() {{
     var btn = document.getElementById({js_elem_id});
-    if (!btn) return {{ok:false, reason:'Button not found'}};
+    if (!btn) return {{ok:false, reason:'button_not_found'}};
     btn.dispatchEvent(new PointerEvent('pointerdown',{{bubbles:true,cancelable:true}}));
     btn.dispatchEvent(new MouseEvent('mousedown',{{bubbles:true,cancelable:true}}));
     var listbox = null;
@@ -532,7 +532,7 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
         }}
     }}
     if (!options || options.length === 0) {{
-        return {{ok:false, reason:'No options appeared after opening', options:[]}};
+        return {{ok:false, reason:'no_options_after_opening', options:[]}};
     }}
     var optionInfo = options.map(function(o){{return o.textContent ? o.textContent.trim() : '';}});
     var fiberKey = Object.keys(btn).find(function(k){{return k.startsWith('__reactFiber');}});
@@ -566,11 +566,17 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
             return {{ok:true}};
         }}
     }}
-    return {{ok:false, reason:'Option not found', requested:{js_value}, options:optionInfo}};
+    return {{ok:false, reason:'option_not_found', requested:{js_value}, options:optionInfo}};
 }})()""")
     if not isinstance(status, dict) or not status.get("ok"):
         observed = status.get("options", []) if isinstance(status, dict) else []
-        reason = status.get("reason", "unknown") if isinstance(status, dict) else "unknown"
+        reason_code = status.get("reason", "unknown") if isinstance(status, dict) else "unknown"
+        _reason_labels:dict[str, str] = {
+            "button_not_found": _("Button not found"),
+            "no_options_after_opening": _("No options appeared after opening"),
+            "option_not_found": _("Option not found"),
+        }
+        reason = _reason_labels.get(reason_code, _("Unknown failure: %s") % reason_code)
         raise TimeoutError(
             _("Option '%(value)s' not found in button combobox '%(id)s': %(reason)s (observed: %(options)s)")
             % {"value": value, "id": elem_id, "reason": reason, "options": observed}
