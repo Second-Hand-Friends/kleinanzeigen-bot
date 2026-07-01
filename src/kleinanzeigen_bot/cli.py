@@ -117,19 +117,20 @@ def _help_executable() -> str:
     return "python -m kleinanzeigen_bot"
 
 
-def _help_text() -> str:
-    exe = _help_executable()
-    if get_current_locale().language == "de":
+def help_text(*, executable:str | None = None, language:str | None = None) -> str:
+    exe = executable if executable is not None else _help_executable()
+    lang = language if language is not None else get_current_locale().language
+    if lang == "de":
         return textwrap.dedent(
             f"""\
             Verwendung: {colorama.Fore.LIGHTMAGENTA_EX}{exe} BEFEHL [OPTIONEN]{colorama.Style.RESET_ALL}
 
             Befehle:
               publish  - (Wieder-)Veröffentlicht Anzeigen
-              verify   - Überprüft die Konfigurationsdateien
+              verify   - Überprüft die Konfigurationsdateien und zeigt Preissenkungsvorschauen an
               delete   - Löscht Anzeigen
               update   - Aktualisiert bestehende Anzeigen
-              extend   - Verlängert Anzeigen innerhalb des 8-Tage-Zeitfensters
+              extend   - Verlängert Anzeigen im 8-Tage-Zeitfenster (behält Beobachter/Interessenten bei und zählt nicht zum monatlichen Anzeigenkontingent)
               download - Lädt eine oder mehrere Anzeigen herunter
               update-check - Prüft auf verfügbare Updates
               update-content-hash - Berechnet den content_hash aller Anzeigen anhand der aktuellen ad_defaults neu;
@@ -166,6 +167,7 @@ def _help_text() -> str:
                     Mögliche Werte:
                     * all: Verlängert alle Anzeigen, die innerhalb von 8 Tagen ablaufen
                     * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
+                    * Hinweis: Anzeigen außerhalb des 8-Tage-Fensters werden übersprungen.
               --force           - Alias für '--ads=all'
               --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
               --preserve-local-settings - Erzwingt das Beibehalten lokaler Einstellungen bei erneutem Download (überschreibt config-Wert false)
@@ -183,10 +185,10 @@ def _help_text() -> str:
 
         Commands:
           publish  - (re-)publishes ads
-          verify   - verifies the configuration files
+          verify   - verifies the configuration files and previews automatic price reduction outcomes
           delete   - deletes ads
           update   - updates published ads
-          extend   - extends ads within the 8-day window before expiry
+          extend   - extends ads within the 8-day window before expiry (keeps watchers/savers and does not count towards the monthly ad quota)
           download - downloads one or multiple ads
           update-check - checks for available updates
           update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;
@@ -221,6 +223,7 @@ def _help_text() -> str:
                 Possible values:
                 * all: extend all ads expiring within 8 days
                 * <id(s)>: specify ad IDs to extend, e.g. "--ads=1,2,3"
+                * Note: ads outside the 8-day window are skipped.
           --force           - alias for '--ads=all'
           --keep-old        - don't delete old ads on republication
           --preserve-local-settings - force-enable preservation of local-only settings on re-download (overrides config value of false)
@@ -234,7 +237,7 @@ def _help_text() -> str:
 
 
 def show_help() -> None:
-    print(_help_text())
+    print(help_text())
 
 
 def parse_args(args:Sequence[str]) -> ParsedArgs:

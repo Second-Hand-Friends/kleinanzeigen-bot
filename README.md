@@ -200,6 +200,7 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 
 ## <a name="usage"></a>Usage
 
+<!-- readme-usage:generated:start -->
 ```console
 Usage: kleinanzeigen-bot COMMAND [OPTIONS]
 
@@ -208,13 +209,14 @@ Commands:
   verify   - verifies the configuration files and previews automatic price reduction outcomes
   delete   - deletes ads
   update   - updates published ads
+  extend   - extends ads within the 8-day window before expiry (keeps watchers/savers and does not count towards the monthly ad quota)
   download - downloads one or multiple ads
-  extend   - extends active ads that expire soon (keeps watchers/savers and does not count towards the monthly ad quota)
   update-check - checks for available updates
   update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;
-                      use this after changing config.yaml/ad_defaults to avoid every ad being marked "changed" and republished
+                        use this after changing config.yaml/ad_defaults to avoid every ad being marked "changed" and republished
   create-config - creates a new default configuration file if one does not exist
   diagnose - diagnoses browser connection issues and shows troubleshooting information
+  status   - shows status overview of ads
   --
   help     - displays this help (default command)
   version  - displays the application version
@@ -233,23 +235,26 @@ Options:
         * all: downloads all ads from your profile
         * new: downloads ads from your profile that are not locally saved yet
         * <id(s)>: provide one or several ads by ID to download, like e.g. "--ads=1,2,3"
-  --ads=all|<id(s)> (extend) - specifies which ads to extend (DEFAULT: all)
+  --ads=all|changed|<id(s)> (update) - specifies which ads to update (DEFAULT: changed)
         Possible values:
-        * all: extend all eligible ads in your profile
-        * <id(s)>: provide one or several ads by ID to extend, like e.g. "--ads=1,2,3"
-        * Note: kleinanzeigen.de only allows extending ads within 8 days of expiry; ads outside this window are skipped.
-  --ads=changed|<id(s)> (update) - specifies which ads to update (DEFAULT: changed)
-        Possible values:
+        * all: update all ads
         * changed: only update ads that have been modified since last publication
         * <id(s)>: provide one or several ads by ID to update, like e.g. "--ads=1,2,3"
+  --ads=all|<id(s)> (extend) - specifies which ads to extend (DEFAULT: all)
+        Possible values:
+        * all: extend all ads expiring within 8 days
+        * <id(s)>: specify ad IDs to extend, e.g. "--ads=1,2,3"
+        * Note: ads outside the 8-day window are skipped.
   --force           - alias for '--ads=all'
   --keep-old        - don't delete old ads on republication
+  --preserve-local-settings - force-enable preservation of local-only settings on re-download (overrides config value of false)
   --config=<PATH>   - path to the config YAML or JSON file (does not implicitly change workspace mode)
   --workspace-mode=portable|xdg - overrides workspace mode for this run
   --logfile=<PATH>  - path to the logfile (DEFAULT: depends on active workspace mode)
   --lang=en|de      - display language (STANDARD: system language if supported, otherwise English)
   -v, --verbose     - enables verbose output - only useful when troubleshooting issues
 ```
+<!-- readme-usage:generated:end -->
 
 > **Note:** The output of `kleinanzeigen-bot help` is always the most up-to-date reference for available commands and options.
 
