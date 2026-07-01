@@ -1141,6 +1141,94 @@ class TestClassifyPostSubmitState:
         assert "Invalid password" not in result
         assert " + " in result
 
+    # ------------------------------------------------------------------ #
+    #  IP range block detection tests (issue #1120)
+    # ------------------------------------------------------------------ #
+
+    @pytest.mark.asyncio
+    async def test_classify_ip_range_blocked(self, test_bot:KleinanzeigenBot) -> None:
+        """Should report IP_RANGE_BLOCKED when IP-block heading text is present on password page."""
+        mock_element = MagicMock(spec = Element)
+        with (
+            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://login.kleinanzeigen.de/u/login/password"),
+            patch.object(test_bot, "timeout", return_value = 5.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
+        ):
+            # Error selectors (4) all miss. IP-block text probe (5th) hits.
+            # MFA probes (6-8) all miss.
+            mock_probe.side_effect = [None, None, None, None, mock_element, None, None, None]
+
+            result = await login_flow._classify_post_submit_state(test_bot)
+
+        assert "STILL_ON_PASSWORD_PAGE" in result
+        assert "IP_RANGE_BLOCKED" in result
+        assert "AUTH0_INLINE_ERROR" not in result
+
+    @pytest.mark.asyncio
+    async def test_classify_ip_range_blocked_probe_exception_preserves_facts(
+        self, test_bot:KleinanzeigenBot,
+    ) -> None:
+        """When IP-block probe raises, password-page fact is preserved."""
+        with (
+            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://login.kleinanzeigen.de/u/login/password"),
+            patch.object(test_bot, "timeout", return_value = 5.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
+        ):
+            # Error selectors (4) miss. IP-block probe (5th) raises.
+            # MFA probes (6-8) miss.
+            mock_probe.side_effect = [None, None, None, None, RuntimeError("boom"), None, None, None]
+
+            result = await login_flow._classify_post_submit_state(test_bot)
+
+        assert "STILL_ON_PASSWORD_PAGE" in result
+        assert "IP_RANGE_BLOCKED" not in result
+
+    @pytest.mark.asyncio
+    async def test_classify_ip_range_blocked_gated_from_non_password_page(
+        self, test_bot:KleinanzeigenBot,
+    ) -> None:
+        """IP_RANGE_BLOCKED must not be reported on non-password pages."""
+        mock_element = MagicMock(spec = Element)
+        with (
+            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://kleinanzeigen.de/meine-anzeigen"),
+            patch.object(test_bot, "timeout", return_value = 5.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
+        ):
+            # Error selectors are gated to password page; IP-block probe is
+            # also gated to password page; MFA probes gated to non-destination.
+            # meine-anzeigen is a valid destination, so no probes run.
+            mock_probe.return_value = mock_element
+
+            result = await login_flow._classify_post_submit_state(test_bot)
+
+        mock_probe.assert_not_awaited()
+        assert "IP_RANGE_BLOCKED" not in result
+        assert result.startswith("UNKNOWN (url=")
+
+    @pytest.mark.asyncio
+    async def test_classify_ip_range_blocked_with_auth0_error(
+        self, test_bot:KleinanzeigenBot,
+    ) -> None:
+        """Both AUTH0_INLINE_ERROR and IP_RANGE_BLOCKED can coexist on password page."""
+        mock_element_auth0 = MagicMock(spec = Element)
+        mock_element_ip = MagicMock(spec = Element)
+        with (
+            patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://login.kleinanzeigen.de/u/login/password"),
+            patch.object(test_bot, "timeout", return_value = 5.0),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
+            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = "Falsches Passwort"),
+        ):
+            # Error selector [role='alert'] (1st) hits, loop breaks (only 1
+            # error probe consumed). IP-block probe (2nd call) hits.
+            # MFA probes (calls 3-5) all miss.
+            mock_probe.side_effect = [mock_element_auth0, mock_element_ip, None, None, None]
+
+            result = await login_flow._classify_post_submit_state(test_bot)
+
+        assert "STILL_ON_PASSWORD_PAGE" in result
+        assert "AUTH0_INLINE_ERROR" in result
+        assert "IP_RANGE_BLOCKED" in result
+
     @pytest.mark.asyncio
     async def test_classify_never_raises(self, test_bot:KleinanzeigenBot) -> None:
         """Should never raise, even when dependencies throw."""

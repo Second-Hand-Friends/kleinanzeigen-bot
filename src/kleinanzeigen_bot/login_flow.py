@@ -324,6 +324,7 @@ async def _classify_post_submit_state(web:WebScrapingMixin) -> str:
     Returns coarse labels only (no raw page text):
         "STILL_ON_PASSWORD_PAGE"
         "STILL_ON_PASSWORD_PAGE + AUTH0_INLINE_ERROR"
+        "STILL_ON_PASSWORD_PAGE + IP_RANGE_BLOCKED"
         "MFA_DETECTED (ONE_TIME_CODE_INPUT)"
         "MFA_DETECTED (SMS_VERIFICATION)"
         "UNKNOWN (url=https://kleinanzeigen.de/u/login/password)"
@@ -361,6 +362,23 @@ async def _classify_post_submit_state(web:WebScrapingMixin) -> str:
                 if text and text.strip():
                     facts.append("AUTH0_INLINE_ERROR")
                     break
+
+    # 2b) IP range block detection — gated to password page only.
+    #      When Kleinanzeigen returns its IP-range block page (div#error with
+    #      German text) instead of proceeding after password submit, the URL
+    #      stays on /u/login/password but the DOM is the block page. Probe
+    #      for the distinctive heading text.
+    if is_password_page:
+        try:
+            ip_block_element = await web.web_probe(
+                By.TEXT,
+                "IP-Bereich vorübergehend gesperrt",
+                timeout = quick_dom,
+            )
+            if ip_block_element is not None:
+                facts.append("IP_RANGE_BLOCKED")
+        except Exception:  # noqa: S110, BLE001
+            pass
 
     # 3) High-confidence MFA/verification probes.
     #    Gate: only run when URL is not a known valid Kleinanzeigen destination
