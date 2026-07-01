@@ -1145,18 +1145,38 @@ class TestClassifyPostSubmitState:
     #  IP range block detection tests (issue #1120)
     # ------------------------------------------------------------------ #
 
+    @staticmethod
+    async def _ip_probe_return(sel_type:object, sel_value:object, **kwargs:object) -> MagicMock | None:
+        """Return a mock for the IP-block text probe, ``None`` for everything else."""
+        if sel_type is By.TEXT and sel_value == login_flow._IP_RANGE_BLOCKED_TEXT:
+            return MagicMock(spec = Element)
+        return None
+
+    @staticmethod
+    async def _ip_probe_raise(sel_type:object, sel_value:object, **kwargs:object) -> MagicMock | None:
+        """Raise RuntimeError on the IP-block text probe, ``None`` otherwise."""
+        if sel_type is By.TEXT and sel_value == login_flow._IP_RANGE_BLOCKED_TEXT:
+            raise RuntimeError("boom")
+        return None
+
+    @staticmethod
+    async def _ip_probe_with_auth0_alert(sel_type:object, sel_value:object, **kwargs:object) -> MagicMock | None:
+        """Return a mock for ``[role='alert']`` and the IP-block text; ``None`` otherwise."""
+        if sel_type is By.CSS_SELECTOR and sel_value == "[role='alert']":
+            return MagicMock(spec = Element)
+        if sel_type is By.TEXT and sel_value == login_flow._IP_RANGE_BLOCKED_TEXT:
+            return MagicMock(spec = Element)
+        return None
+
     @pytest.mark.asyncio
     async def test_classify_ip_range_blocked(self, test_bot:KleinanzeigenBot) -> None:
         """Should report IP_RANGE_BLOCKED when IP-block heading text is present on password page."""
-        mock_element = MagicMock(spec = Element)
         with (
             patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://login.kleinanzeigen.de/u/login/password"),
             patch.object(test_bot, "timeout", return_value = 5.0),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
         ):
-            # Error selectors (4) all miss. IP-block text probe (5th) hits.
-            # MFA probes (6-8) all miss.
-            mock_probe.side_effect = [None, None, None, None, mock_element, None, None, None]
+            mock_probe.side_effect = self._ip_probe_return
 
             result = await login_flow._classify_post_submit_state(test_bot)
 
@@ -1174,9 +1194,7 @@ class TestClassifyPostSubmitState:
             patch.object(test_bot, "timeout", return_value = 5.0),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
         ):
-            # Error selectors (4) miss. IP-block probe (5th) raises.
-            # MFA probes (6-8) miss.
-            mock_probe.side_effect = [None, None, None, None, RuntimeError("boom"), None, None, None]
+            mock_probe.side_effect = self._ip_probe_raise
 
             result = await login_flow._classify_post_submit_state(test_bot)
 
@@ -1188,7 +1206,6 @@ class TestClassifyPostSubmitState:
         self, test_bot:KleinanzeigenBot,
     ) -> None:
         """IP_RANGE_BLOCKED must not be reported on non-password pages."""
-        mock_element = MagicMock(spec = Element)
         with (
             patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://kleinanzeigen.de/meine-anzeigen"),
             patch.object(test_bot, "timeout", return_value = 5.0),
@@ -1196,8 +1213,8 @@ class TestClassifyPostSubmitState:
         ):
             # Error selectors are gated to password page; IP-block probe is
             # also gated to password page; MFA probes gated to non-destination.
-            # meine-anzeigen is a valid destination, so no probes run.
-            mock_probe.return_value = mock_element
+            # meine-anzeigen is a valid destination, so no probes run at all.
+            mock_probe.side_effect = self._ip_probe_return
 
             result = await login_flow._classify_post_submit_state(test_bot)
 
@@ -1210,18 +1227,13 @@ class TestClassifyPostSubmitState:
         self, test_bot:KleinanzeigenBot,
     ) -> None:
         """Both AUTH0_INLINE_ERROR and IP_RANGE_BLOCKED can coexist on password page."""
-        mock_element_auth0 = MagicMock(spec = Element)
-        mock_element_ip = MagicMock(spec = Element)
         with (
             patch("kleinanzeigen_bot.login_flow.current_page_url", return_value = "https://login.kleinanzeigen.de/u/login/password"),
             patch.object(test_bot, "timeout", return_value = 5.0),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
             patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = "Falsches Passwort"),
         ):
-            # Error selector [role='alert'] (1st) hits, loop breaks (only 1
-            # error probe consumed). IP-block probe (2nd call) hits.
-            # MFA probes (calls 3-5) all miss.
-            mock_probe.side_effect = [mock_element_auth0, mock_element_ip, None, None, None]
+            mock_probe.side_effect = self._ip_probe_with_auth0_alert
 
             result = await login_flow._classify_post_submit_state(test_bot)
 

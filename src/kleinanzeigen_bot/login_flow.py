@@ -64,6 +64,11 @@ _AUTH0_POST_SUBMIT_ERROR_SELECTORS:Final[list[tuple[By, str]]] = [
     (By.CSS_SELECTOR, "#error-element-password"),
 ]
 
+# Distinctive German heading text that appears inside div#error when Kleinanzeigen
+# returns its IP-range block page instead of the normal password step result.
+# Referenced by _classify_post_submit_state() to emit IP_RANGE_BLOCKED.
+_IP_RANGE_BLOCKED_TEXT:Final[str] = "IP-Bereich vorübergehend gesperrt"
+
 
 async def _click_auth0_submit(web:WebScrapingMixin, *, timeout:float | None = None) -> None:
     """Click the visible Auth0 submit button, avoiding the hidden form-submit button."""
@@ -372,7 +377,7 @@ async def _classify_post_submit_state(web:WebScrapingMixin) -> str:
         try:
             ip_block_element = await web.web_probe(
                 By.TEXT,
-                "IP-Bereich vorübergehend gesperrt",
+                _IP_RANGE_BLOCKED_TEXT,
                 timeout = quick_dom,
             )
             if ip_block_element is not None:
