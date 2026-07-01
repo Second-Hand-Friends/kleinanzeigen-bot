@@ -258,7 +258,7 @@ Options:
 
 > **Note:** The output of `kleinanzeigen-bot help` is always the most up-to-date reference for available commands and options.
 
-Limitation of `download`: It's only possible to extract the cheapest given shipping option.
+Shipping inference during `download`: the bot reads the public ad shipping state. Pickup becomes `PICKUP`; `Versand möglich` without a price becomes `SHIPPING` without costs/options. Visible "shipping from" prices are kept as deprecated `shipping_costs` metadata and, when they match a current gateway option, infer one [`shipping_options`](docs/AD_CONFIGURATION.md#shipping-options-reference) entry by default. Set `download.include_all_matching_shipping_options: true` to include all non-excluded options with the same package size. `sell_directly` is resolved only for current-profile ads from cached manage-ads data.
 
 ## <a name="config"></a>Configuration
 
