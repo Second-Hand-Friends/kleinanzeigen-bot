@@ -146,9 +146,12 @@ def get_readme_diff(repo_root:Path) -> str:
 def main() -> None:
     repo_root = Path(__file__).resolve().parent.parent
 
-    schema_diffs = get_schema_diffs(repo_root)
-    default_config_diff = get_default_config_diff(repo_root)
-    readme_diff = get_readme_diff(repo_root)
+    try:
+        schema_diffs = get_schema_diffs(repo_root)
+        default_config_diff = get_default_config_diff(repo_root)
+        readme_diff = get_readme_diff(repo_root)
+    except (FileNotFoundError, RuntimeError) as exc:
+        raise SystemExit(f"Error while checking generated artifacts: {exc}") from exc
 
     if schema_diffs or default_config_diff or readme_diff:
         messages:list[str] = ["Generated artifacts are not up-to-date."]

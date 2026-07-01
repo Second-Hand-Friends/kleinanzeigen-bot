@@ -88,7 +88,7 @@ When changing models, config defaults, schema-affecting validators, or `create-c
 
 - `pdm run generate-schemas` — regenerates `schemas/*.json`
 - `pdm run generate-config` — regenerates `docs/config.default.yaml`
-- `pdm run generate-artifacts` — runs both
+- `pdm run generate-artifacts` — runs schemas, config, and README usage regeneration
 
 CI and workflows are the source of truth for the exact required checks, coverage gates, generated-artifact verification, and PR title validation.
 

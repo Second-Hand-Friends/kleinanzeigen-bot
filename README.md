@@ -206,10 +206,10 @@ Usage: kleinanzeigen-bot COMMAND [OPTIONS]
 
 Commands:
   publish  - (re-)publishes ads
-  verify   - verifies the configuration files
+  verify   - verifies the configuration files and previews automatic price reduction outcomes
   delete   - deletes ads
   update   - updates published ads
-  extend   - extends ads within the 8-day window before expiry
+  extend   - extends ads within the 8-day window before expiry (keeps watchers/savers and does not count towards the monthly ad quota)
   download - downloads one or multiple ads
   update-check - checks for available updates
   update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;
@@ -244,6 +244,7 @@ Options:
         Possible values:
         * all: extend all ads expiring within 8 days
         * <id(s)>: specify ad IDs to extend, e.g. "--ads=1,2,3"
+        * Note: ads outside the 8-day window are skipped.
   --force           - alias for '--ads=all'
   --keep-old        - don't delete old ads on republication
   --preserve-local-settings - force-enable preservation of local-only settings on re-download (overrides config value of false)
