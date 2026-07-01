@@ -117,9 +117,10 @@ def _help_executable() -> str:
     return "python -m kleinanzeigen_bot"
 
 
-def _help_text() -> str:
-    exe = _help_executable()
-    if get_current_locale().language == "de":
+def help_text(*, executable:str | None = None, language:str | None = None) -> str:
+    exe = executable if executable is not None else _help_executable()
+    lang = language if language is not None else get_current_locale().language
+    if lang == "de":
         return textwrap.dedent(
             f"""\
             Verwendung: {colorama.Fore.LIGHTMAGENTA_EX}{exe} BEFEHL [OPTIONEN]{colorama.Style.RESET_ALL}
@@ -234,7 +235,7 @@ def _help_text() -> str:
 
 
 def show_help() -> None:
-    print(_help_text())
+    print(help_text())
 
 
 def parse_args(args:Sequence[str]) -> ParsedArgs:

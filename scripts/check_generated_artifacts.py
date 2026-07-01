@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""CI guard: verifies generated schema and default-config artifacts are up-to-date."""
+"""CI guard: verifies generated schema, default-config, and README artifacts are up-to-date."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
+from generate_readme_commands import build_usage_block, replace_marked_section
 from schema_utils import generate_schema_content
 
 from kleinanzeigen_bot.model.ad_model import AdPartial
@@ -111,13 +112,45 @@ def get_default_config_diff(repo_root:Path) -> str:
     )
 
 
+def get_readme_diff(repo_root:Path) -> str:
+    """
+    Compare committed README.md with in-memory generated content and return a unified diff string.
+
+    Never mutates README.md — computes expected content entirely in memory.
+    """
+    readme_path = repo_root / "README.md"
+    if not readme_path.is_file():
+        raise FileNotFoundError(f"Missing README.md: {readme_path}")
+
+    committed = readme_path.read_text(encoding = "utf-8")
+    new_block = build_usage_block()
+
+    try:
+        expected = replace_marked_section(committed, new_block)
+    except ValueError as exc:
+        raise RuntimeError(f"README marker validation failed: {exc}") from exc
+
+    if committed == expected:
+        return ""
+
+    return "".join(
+        difflib.unified_diff(
+            committed.splitlines(keepends = True),
+            expected.splitlines(keepends = True),
+            fromfile = "README.md",
+            tofile = "<generated via: pdm run generate-readme-commands>",
+        )
+    )
+
+
 def main() -> None:
     repo_root = Path(__file__).resolve().parent.parent
 
     schema_diffs = get_schema_diffs(repo_root)
     default_config_diff = get_default_config_diff(repo_root)
+    readme_diff = get_readme_diff(repo_root)
 
-    if schema_diffs or default_config_diff:
+    if schema_diffs or default_config_diff or readme_diff:
         messages:list[str] = ["Generated artifacts are not up-to-date."]
 
         if schema_diffs:
@@ -130,13 +163,18 @@ def main() -> None:
             messages.append("Outdated docs/config.default.yaml detected.")
             messages.append(default_config_diff)
 
+        if readme_diff:
+            messages.append("Outdated README.md detected (Usage section).")
+            messages.append(readme_diff)
+
         messages.append("Regenerate with one of the following:")
-        messages.append("- Schema files: pdm run generate-schemas")
+        messages.append("- Schema files:          pdm run generate-schemas")
         messages.append("- Default config snapshot: pdm run generate-config")
-        messages.append("- Both: pdm run generate-artifacts")
+        messages.append("- README Usage section:   pdm run generate-readme-commands")
+        messages.append("- All:                    pdm run generate-artifacts")
         raise SystemExit("\n".join(messages))
 
-    print("Generated schemas and docs/config.default.yaml are up-to-date.")
+    print("Generated schemas, docs/config.default.yaml, and README.md are up-to-date.")
 
 
 if __name__ == "__main__":
