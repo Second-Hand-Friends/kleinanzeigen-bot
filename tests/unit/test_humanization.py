@@ -205,6 +205,7 @@ async def test_web_sleep_uses_configured_band() -> None:
     with patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.sleep", new_callable = AsyncMock) as sleep:
         await scraper.web_sleep()
     # 10 ms lower bound -> 0.010 s
+    assert sleep.await_args is not None
     slept_seconds = sleep.await_args.args[0]
     assert 0.010 <= slept_seconds <= 0.011
 
@@ -214,6 +215,7 @@ async def test_web_sleep_respects_explicit_bounds() -> None:
     scraper = make_scraper()
     with patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.sleep", new_callable = AsyncMock) as sleep:
         await scraper.web_sleep(50, 51)
+    assert sleep.await_args is not None
     assert 0.050 <= sleep.await_args.args[0] <= 0.051
 
 
