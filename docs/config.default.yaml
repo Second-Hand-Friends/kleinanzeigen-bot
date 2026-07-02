@@ -334,6 +334,59 @@ timeouts:
   retry_backoff_factor: 1.5
 
 # ################################################################################
+# Human-like browser interaction settings to reduce automation detection.
+humanization:
+
+  # master switch for all human-like interaction behavior
+  enabled: true
+
+  # click via real CDP mouse move + press/release instead of an instant element click (auto-falls back on failure)
+  mouse_movement: true
+
+  # type text character-by-character with variable per-keystroke delays instead of a single burst
+  typing_jitter: true
+
+  # minimum delay between individual keystrokes (ms)
+  typing_delay_min_ms: 40
+
+  # maximum delay between individual keystrokes (ms)
+  typing_delay_max_ms: 140
+
+  # minimum pause after interactions (ms); matches the historical web_sleep band
+  action_delay_min_ms: 1000
+
+  # maximum pause after interactions (ms); matches the historical web_sleep band
+  action_delay_max_ms: 2500
+
+  # probability of inserting a longer 'thinking' pause at boundaries
+  long_pause_probability: 0.1
+
+  # minimum duration of a 'thinking' pause (ms)
+  long_pause_min_ms: 1500
+
+  # maximum duration of a 'thinking' pause (ms)
+  long_pause_max_ms: 4000
+
+  # chance to run a random subset of idle micro-actions (scroll / mouse wiggle) at a page boundary
+  idle_action_probability: 0.3
+
+  # pick a random window size from viewport_sizes at launch (ignored if --window-size is set manually)
+  randomize_viewport: true
+
+  # whitelist of WxH desktop window sizes to randomly choose from when randomize_viewport is enabled
+  # Example usage:
+  #   viewport_sizes:
+  #     - "1920x1080"
+  #     - "1366x768"
+  viewport_sizes:
+    - 1920x1080
+    - 1680x1050
+    - 1600x900
+    - 1536x864
+    - 1440x900
+    - 1366x768
+
+# ################################################################################
 # diagnostics capture configuration for troubleshooting
 diagnostics:
 

@@ -23,7 +23,7 @@ from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
 
 from kleinanzeigen_bot.model.config_model import Config as BotConfig
-from kleinanzeigen_bot.model.config_model import TimeoutConfig
+from kleinanzeigen_bot.model.config_model import HumanizationConfig, TimeoutConfig
 
 from . import files, loggers, net, xdg_paths
 from .browser_diagnostics import _run_browser_diagnostics
@@ -38,6 +38,11 @@ from .misc import T, ensure
 if TYPE_CHECKING:
     from nodriver.cdp.runtime import RemoteObject
 
+
+# Crypto-secure RNG used for all human-like interaction jitter (movement, timing, viewport).
+# Using SystemRandom keeps behavior unpredictable and stays consistent with the module's use of
+# `secrets` elsewhere (avoids the weak-PRNG lint that a plain `random` import would trigger).
+_rng:Final = secrets.SystemRandom()
 
 # Constants for RemoteObject conversion
 _KEY_VALUE_PAIR_SIZE = 2
@@ -226,7 +231,19 @@ class WebScrapingMixin:  # noqa: PLR0904
         self.browser:Browser = None  # pyright: ignore[reportAttributeAccessIssue]
         self.page:Page = None  # pyright: ignore[reportAttributeAccessIssue]
         self._default_timeout_config:TimeoutConfig | None = None
+        self._default_humanization_config:HumanizationConfig | None = None
         self.config:BotConfig = cast(BotConfig, None)
+
+    def _get_humanization_config(self) -> HumanizationConfig:
+        config = getattr(self, "config", None)
+        if config is not None:
+            humanization = cast(Optional[HumanizationConfig], getattr(config, "humanization", None))
+            if humanization is not None:
+                return humanization
+
+        if self._default_humanization_config is None:
+            self._default_humanization_config = HumanizationConfig()
+        return self._default_humanization_config
 
     def _get_timeout_config(self) -> TimeoutConfig:
         config = getattr(self, "config", None)
@@ -587,6 +604,18 @@ class WebScrapingMixin:  # noqa: PLR0904
                 continue
             browser_args.append(browser_arg)
 
+        humanization = self._get_humanization_config()
+        if (
+            humanization.enabled
+            and humanization.randomize_viewport
+            and humanization.viewport_sizes
+            and not any(arg.startswith("--window-size") for arg in browser_args)
+        ):
+            width, height = _rng.choice(humanization.viewport_sizes).lower().split("x")
+            window_size = f"--window-size={width.strip()},{height.strip()}"
+            LOG.info(" -> Randomized browser window size: %s", window_size)
+            browser_args.append(window_size)
+
         if not loggers.is_debug(LOG):
             browser_args.append("--log-level=3")  # INFO: 0, WARNING: 1, ERROR: 2, FATAL: 3
 
@@ -892,9 +921,61 @@ class WebScrapingMixin:  # noqa: PLR0904
         :raises TimeoutError: if element could not be found within time
         """
         elem = await self.web_find(selector_type, selector_value, timeout = timeout)
-        await elem.click()
+        humanization = self._get_humanization_config()
+        if humanization.enabled and humanization.mouse_movement:
+            try:
+                await self._humanized_click(elem)
+            except Exception as ex:  # noqa: BLE001 – any CDP/geometry failure must fall back to a plain click
+                LOG.debug("Humanized click failed, falling back to element.click(): %s", ex)
+                await elem.click()
+        else:
+            await elem.click()
         await self.web_sleep()
         return elem
+
+    @staticmethod
+    def _position_center(pos:Any) -> tuple[float, float]:
+        """Return the viewport-relative center (x, y) from a nodriver Position, raising if unavailable."""
+        if pos is None:
+            raise ValueError("element has no position (likely not visible)")
+        center = getattr(pos, "center", None)
+        if center is not None:
+            return float(center[0]), float(center[1])
+        # Fallback: derive from the bounding box attributes.
+        x = float(getattr(pos, "x", 0.0))
+        y = float(getattr(pos, "y", 0.0))
+        width = float(getattr(pos, "width", 0.0))
+        height = float(getattr(pos, "height", 0.0))
+        return x + width / 2, y + height / 2
+
+    async def _humanized_click(self, elem:Element) -> None:
+        """Click an element the way a human would: scroll it into view, move the mouse there in
+        small jittered steps, then dispatch native press/release via CDP.
+
+        Raises on any failure so that :meth:`web_click` can fall back to ``elem.click()``.
+        """
+        try:
+            await elem.scroll_into_view()
+        except Exception:  # noqa: BLE001 – older/edge nodriver builds: fall back to JS scroll
+            await elem.apply("(el) => el.scrollIntoView({block: 'center', inline: 'center'})")
+
+        target_x, target_y = self._position_center(await elem.get_position())
+        tab = elem._tab  # noqa: SLF001 – nodriver Element exposes its CDP tab via _tab
+
+        # Approach the target from a nearby random offset in a handful of small steps.
+        steps = _rng.randint(3, 6)
+        start_x = target_x + _rng.uniform(-60, 60)
+        start_y = target_y + _rng.uniform(-60, 60)
+        for step in range(1, steps + 1):
+            ratio = step / steps
+            x = start_x + (target_x - start_x) * ratio + _rng.uniform(-2, 2)
+            y = start_y + (target_y - start_y) * ratio + _rng.uniform(-2, 2)
+            await tab.send(cdp_input.dispatch_mouse_event("mouseMoved", x = x, y = y))
+            await asyncio.sleep(_rng.uniform(0.01, 0.04))
+
+        await tab.send(cdp_input.dispatch_mouse_event("mousePressed", x = target_x, y = target_y, button = cdp_input.MouseButton.LEFT, click_count = 1))
+        await asyncio.sleep(_rng.uniform(0.04, 0.12))
+        await tab.send(cdp_input.dispatch_mouse_event("mouseReleased", x = target_x, y = target_y, button = cdp_input.MouseButton.LEFT, click_count = 1))
 
     async def web_execute(self, jscode:str) -> Any:
         """
@@ -1163,9 +1244,27 @@ class WebScrapingMixin:  # noqa: PLR0904
         """
         input_field = await self.web_find(selector_type, selector_value, timeout = timeout)
         await self._clear_input(input_field)
-        await input_field.send_keys(str(text))
+        humanization = self._get_humanization_config()
+        if humanization.enabled and humanization.typing_jitter:
+            await self._humanized_type(input_field, str(text))
+        else:
+            await input_field.send_keys(str(text))
         await self.web_sleep()
         return input_field
+
+    async def _humanized_type(self, input_field:Element, text:str) -> None:
+        """Type text one character at a time with a randomized per-keystroke delay.
+
+        Falls back to a single ``send_keys`` burst if character-wise entry fails partway through.
+        """
+        humanization = self._get_humanization_config()
+        min_ms = humanization.typing_delay_min_ms
+        max_ms = humanization.typing_delay_max_ms
+        for char in text:
+            await input_field.send_keys(char)
+            delay_ms = min_ms if max_ms <= min_ms else _rng.randint(min_ms, max_ms)
+            if delay_ms > 0:
+                await asyncio.sleep(delay_ms / 1_000)
 
     async def web_open(self, url:str, *, timeout:int | float | None = None, reload_if_already_open:bool = False) -> None:
         """
@@ -1186,12 +1285,25 @@ class WebScrapingMixin:  # noqa: PLR0904
             timeout_error_message = f"Page did not finish loading within {page_timeout} seconds.",
             apply_multiplier = False,
         )
+        await self.perform_random_human_actions()
 
     async def web_text(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> str:
         element = await self.web_find(selector_type, selector_value, parent = parent, timeout = timeout)
         return await self.extract_visible_text(element)
 
-    async def web_sleep(self, min_ms:int = 1_000, max_ms:int = 2_500) -> None:
+    async def web_sleep(self, min_ms:int | None = None, max_ms:int | None = None) -> None:
+        """Pause for a randomized duration.
+
+        When called without explicit bounds the configurable humanization action-delay band is
+        used (defaults 1000-2500 ms, matching the historical behavior). Callers that pass explicit
+        ``min_ms``/``max_ms`` (e.g. short 50-100 ms field clears) keep their own bounds.
+        """
+        if min_ms is None or max_ms is None:
+            humanization = self._get_humanization_config()
+            if min_ms is None:
+                min_ms = humanization.action_delay_min_ms
+            if max_ms is None:
+                max_ms = humanization.action_delay_max_ms
         duration = max_ms <= min_ms and min_ms or secrets.randbelow(max_ms - min_ms) + min_ms
         LOG.log(
             loggers.INFO if duration > 1_500 else loggers.DEBUG,  # noqa: PLR2004 Magic value used in comparison
@@ -1199,6 +1311,16 @@ class WebScrapingMixin:  # noqa: PLR0904
             duration,
         )
         await asyncio.sleep(duration / 1_000)
+
+    async def web_think(self) -> None:
+        """Occasionally insert a longer human 'thinking' pause at a natural boundary.
+
+        No-op when humanization is disabled or the probability gate does not fire.
+        """
+        humanization = self._get_humanization_config()
+        if not humanization.enabled or _rng.random() >= humanization.long_pause_probability:
+            return
+        await self.web_sleep(humanization.long_pause_min_ms, humanization.long_pause_max_ms)
 
     async def navigate_paginated_ad_overview(
         self,
@@ -1365,6 +1487,47 @@ class WebScrapingMixin:  # noqa: PLR0904
                 current_y_pos -= scroll_length
                 await self.web_execute(f"window.scrollTo(0, {current_y_pos})")
                 await asyncio.sleep(scroll_length / scroll_speed / 2)  # double speed
+
+    async def perform_random_human_actions(self) -> None:
+        """Run a random subset of lightweight idle behaviors so activity looks less robotic.
+
+        Best-effort and self-contained: never raises into the caller, and is a no-op when
+        humanization is disabled or the top-level probability gate does not fire. Because only a
+        random subset runs on each invocation, the observable behavior pattern is not constant.
+        """
+        humanization = self._get_humanization_config()
+        if not humanization.enabled or _rng.random() >= humanization.idle_action_probability:
+            return
+
+        actions:list[Callable[[], Awaitable[None]]] = [self._idle_scroll, self._idle_mouse_wiggle, self.web_think]
+        _rng.shuffle(actions)
+        count = _rng.randint(1, len(actions))  # at least one, since the gate already fired
+        for action in actions[:count]:
+            try:
+                await action()
+            except Exception as ex:  # noqa: BLE001 – idle actions are strictly best-effort
+                LOG.debug("Idle human action %s failed: %s", getattr(action, "__name__", action), ex)
+
+    async def _idle_scroll(self) -> None:
+        """Scroll the page a small random amount (occasionally upwards)."""
+        scroll_amount = _rng.randint(80, 400)
+        if _rng.random() < 0.3:  # noqa: PLR2004 – occasionally scroll back up
+            scroll_amount = -scroll_amount
+        await self.web_execute(f"window.scrollBy({{top: {scroll_amount}, left: 0, behavior: 'smooth'}})")
+        await self.web_sleep(200, 600)
+
+    async def _idle_mouse_wiggle(self) -> None:
+        """Move the mouse to a random point within the viewport."""
+        if not self.page:
+            return
+        dims = await self.web_execute("[window.innerWidth, window.innerHeight]")
+        try:
+            width, height = float(dims[0]), float(dims[1])
+        except (TypeError, ValueError, IndexError, KeyError):
+            width, height = 1280.0, 800.0
+        x = _rng.uniform(width * 0.1, width * 0.9)
+        y = _rng.uniform(height * 0.1, height * 0.9)
+        await self.page.send(cdp_input.dispatch_mouse_event("mouseMoved", x = x, y = y))
 
     async def web_select(self, selector_type:By, selector_value:str, selected_value:Any, timeout:int | float | None = None) -> Element:
         """
