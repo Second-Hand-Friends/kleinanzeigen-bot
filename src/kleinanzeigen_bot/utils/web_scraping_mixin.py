@@ -294,6 +294,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         self.page:Page = None  # pyright: ignore[reportAttributeAccessIssue]
         self._default_timeout_config:TimeoutConfig | None = None
         self._default_humanization_config:HumanizationConfig | None = None
+        self._screen_metrics_cache:tuple[int, int] | None = None
         self.config:BotConfig = cast(BotConfig, None)
 
     def _get_humanization_config(self) -> HumanizationConfig:
@@ -643,6 +644,9 @@ class WebScrapingMixin:  # noqa: PLR0904
         The probe browser uses a temporary user data directory and its own lifecycle
         — it never touches ``self.browser`` or ``self.page``.
         """
+        if self._screen_metrics_cache is not None:
+            return self._screen_metrics_cache
+
         binary = self.browser_config.binary_location
         if not binary:
             return None
@@ -661,16 +665,20 @@ class WebScrapingMixin:  # noqa: PLR0904
 
             cfg = _build_nodriver_config(binary, probe_args, tmp_dir)
 
-            browser = await nodriver.start(cfg)  # type: ignore[attr-defined]
-            page = await browser.get("about:blank")
-            # Give the page a moment to stabilise before querying screen metrics.
-            await asyncio.sleep(0.5)
+            async def run_probe() -> Any:
+                nonlocal browser
+                browser = await nodriver.start(cfg)  # type: ignore[attr-defined]
+                page = await browser.get("about:blank")
+                # Give the page a moment to stabilise before querying screen metrics.
+                await asyncio.sleep(0.5)
 
-            result = await page.evaluate(
-                "({availWidth: window.screen.availWidth, availHeight: window.screen.availHeight})",
-                await_promise = True,
-                return_by_value = True,
-            )
+                return await page.evaluate(
+                    "({availWidth: window.screen.availWidth, availHeight: window.screen.availHeight})",
+                    await_promise = True,
+                    return_by_value = True,
+                )
+
+            result = await asyncio.wait_for(run_probe(), timeout = self.effective_timeout("chrome_remote_probe"))
 
             # Normalize nodriver RemoteObject to a plain dict when
             # return_by_value is not honoured by the runtime.
@@ -690,8 +698,12 @@ class WebScrapingMixin:  # noqa: PLR0904
                 h = result.get("availHeight")
                 if isinstance(w, (int, float)) and isinstance(h, (int, float)) and w > 0 and h > 0:
                     LOG.debug("Screen metrics probed: %dx%d", int(w), int(h))
-                    return int(w), int(h)
+                    self._screen_metrics_cache = (int(w), int(h))
+                    return self._screen_metrics_cache
             LOG.debug("Unexpected probe result: %r", result)
+            return None
+        except TimeoutError:
+            LOG.debug("Screen metrics probe timed out", exc_info = True)
             return None
         except Exception:
             LOG.debug("Screen metrics probe failed", exc_info = True)

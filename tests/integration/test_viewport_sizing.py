@@ -55,7 +55,7 @@ def _setup_mixin() -> WebScrapingMixin:
     return mixin
 
 
-def _requires_display() -> bool:
+def _display_available() -> bool:
     if platform.system() == "Linux" or os.environ.get("CI", "").lower() == "true":
         return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
     return True
@@ -86,7 +86,7 @@ def _viewport_fits(size:str, avail_w:int, avail_h:int) -> bool:
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(not _has_browser(), reason = "No compatible browser binary detected")
-@pytest.mark.skipif(not _requires_display(), reason = "No real display/window manager available")
+@pytest.mark.skipif(not _display_available(), reason = "No real display/window manager available")
 async def test_probe_screen_metrics_returns_positive_dimensions() -> None:
     """The probe browser must report positive CSS-pixel availWidth/availHeight."""
     mixin = _setup_mixin()
@@ -106,7 +106,7 @@ async def test_probe_screen_metrics_returns_positive_dimensions() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(not _has_browser(), reason = "No compatible browser binary detected")
-@pytest.mark.skipif(not _requires_display(), reason = "No real display/window manager available")
+@pytest.mark.skipif(not _display_available(), reason = "No real display/window manager available")
 async def test_viewport_selection_respects_screen_size() -> None:
     """Configure one oversized and one fitting viewport; verify the oversized
     candidate is excluded by the runtime filtering path.
@@ -141,7 +141,7 @@ async def test_viewport_selection_respects_screen_size() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(not _has_browser(), reason = "No compatible browser binary detected")
-@pytest.mark.skipif(not _requires_display(), reason = "No real display/window manager available")
+@pytest.mark.skipif(not _display_available(), reason = "No real display/window manager available")
 async def test_viewport_selection_returns_none_when_all_oversized() -> None:
     """When *all* configured viewports exceed the available screen, selection
     must return ``None`` (meaning omit ``--window-size``).
@@ -168,7 +168,7 @@ async def test_viewport_selection_returns_none_when_all_oversized() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(not _has_browser(), reason = "No compatible browser binary detected")
-@pytest.mark.skipif(not _requires_display(), reason = "No real display/window manager available")
+@pytest.mark.skipif(not _display_available(), reason = "No real display/window manager available")
 async def test_create_browser_session_selects_fitting_viewport() -> None:
     """Start a browser via create_browser_session() with one oversized and one
     fitting viewport candidate, and verify the final window fits within the

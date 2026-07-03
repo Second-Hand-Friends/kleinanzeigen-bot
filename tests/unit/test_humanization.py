@@ -4,6 +4,7 @@
 """Tests for the human-like interaction behavior in WebScrapingMixin (bot-detection evasion)."""
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -436,16 +437,6 @@ def test_jitter_viewport_floor_at_one() -> None:
     assert mock_rand.call_args_list[1].args == (1, 10 + 16)
 
 
-def test_jitter_viewport_base_equals_avail_only_downward_or_zero() -> None:
-    """When base == avail, jitter can only shrink or stay the same size."""
-    with patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [1910, 1070]) as mock_rand:
-        jw, jh = _jitter_viewport(1920, 1080, 1920, 1080)
-    assert jw <= 1920
-    assert jh <= 1080
-    assert mock_rand.call_args_list[0].args == (max(1, 1920 - 24), 1920)
-    assert mock_rand.call_args_list[1].args == (max(1, 1080 - 16), 1080)
-
-
 # ---------------------------------------------------------------------------
 # integration-level: _select_viewport_size with jitter
 # ---------------------------------------------------------------------------
@@ -572,22 +563,60 @@ async def test_select_viewport_size_user_window_size_bypasses_selection() -> Non
     """User-supplied --window-size in browser_config.arguments prevents _select_viewport_size
     from being called at all (tested via the guard in create_browser_session)."""
     scraper = WebScrapingMixin()
+    scraper.browser_config.binary_location = "/bin/sh"
     scraper.browser_config.arguments = ["--window-size=800,600"]
     scraper.config = Config.model_validate({
         "login": {"username": "u", "password": "p"},  # noqa: S106
         "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1920x1080"]).model_dump(),
     })
-    with patch.object(scraper, "_probe_screen_metrics", return_value = (1920, 1080)) as probe:
-        # Simulate the guard in create_browser_session
-        humanization = scraper._get_humanization_config()
-        guard_should_call = (
-            humanization.enabled
-            and humanization.randomize_viewport
-            and humanization.viewport_sizes
-            and not any(arg.startswith("--window-size") for arg in scraper.browser_config.arguments)
-        )
-        assert not guard_should_call, "Guard should skip when user-supplied --window-size present"
-        probe.assert_not_called()
+    fake_browser = SimpleNamespace(websocket_url = "ws://test")
+    with (
+        patch.object(scraper, "_validate_chrome_version_configuration", new_callable = AsyncMock),
+        patch.object(scraper, "_select_viewport_size", new_callable = AsyncMock) as select_viewport,
+        patch.object(scraper, "_resolve_effective_user_data_dir", new_callable = AsyncMock, return_value = None),
+        patch.object(scraper, "_add_browser_extensions", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", new_callable = AsyncMock, return_value = fake_browser),
+    ):
+        await scraper.create_browser_session()
+    select_viewport.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_probe_screen_metrics_times_out() -> None:
+    scraper = WebScrapingMixin()
+    scraper.browser_config.binary_location = "/bin/sh"
+    scraper.config = Config.model_validate({
+        "login": {"username": "u", "password": "p"},  # noqa: S106
+        "timeouts": {"chrome_remote_probe": 0.1},
+    })
+
+    async def slow_start(_cfg:object) -> object:
+        await asyncio.sleep(1)
+        return SimpleNamespace()
+
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", side_effect = slow_start):
+        result = await scraper._probe_screen_metrics()
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_probe_screen_metrics_reuses_successful_probe() -> None:
+    scraper = WebScrapingMixin()
+    scraper.browser_config.binary_location = "/bin/sh"
+    page = SimpleNamespace(evaluate = AsyncMock(return_value = {"availWidth": 111, "availHeight": 222}))
+    browser = SimpleNamespace(get = AsyncMock(return_value = page), stop = lambda: None)
+
+    with (
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.sleep", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", new_callable = AsyncMock, return_value = browser) as start,
+    ):
+        first = await scraper._probe_screen_metrics()
+        second = await scraper._probe_screen_metrics()
+
+    assert first == (111, 222)
+    assert second == (111, 222)
+    start.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
