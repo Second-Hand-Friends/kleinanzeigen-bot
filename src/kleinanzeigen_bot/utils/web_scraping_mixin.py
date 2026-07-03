@@ -1301,17 +1301,20 @@ class WebScrapingMixin:  # noqa: PLR0904
         """Pause for a randomized duration.
 
         When called without explicit bounds the configurable humanization action-delay band is
-        used (defaults 1000-2500 ms, matching the historical behavior). Callers that pass explicit
-        ``min_ms``/``max_ms`` (e.g. short 50-100 ms field clears) keep their own bounds.
+        used (defaults 1000-2500 ms, matching the historical behavior). When only one bound is
+        given the missing one is derived so the explicit bound acts as a hard cap: ``min_ms``
+        alone becomes a fixed delay, ``max_ms`` alone draws from 0..max_ms.
         """
-        if min_ms is None or max_ms is None:
+        if min_ms is None and max_ms is None:
             humanization = self._get_humanization_config()
-            if min_ms is None:
-                min_ms = humanization.action_delay_min_ms
-            if max_ms is None:
-                max_ms = humanization.action_delay_max_ms
-        assert min_ms is not None, "min_ms should have been filled from config fallback"  # noqa: S101
-        assert max_ms is not None, "max_ms should have been filled from config fallback"  # noqa: S101
+            min_ms = humanization.action_delay_min_ms
+            max_ms = humanization.action_delay_max_ms
+        elif min_ms is None:
+            min_ms = 0
+        elif max_ms is None:
+            max_ms = min_ms
+        assert min_ms is not None, "min_ms should have been filled before duration selection"  # noqa: S101
+        assert max_ms is not None, "max_ms should have been filled before duration selection"  # noqa: S101
         min_duration = min_ms
         max_duration = max_ms
         if max_duration <= min_duration:  # noqa: SIM108  # intentional if/else (the ternary form breaks when min_duration=0)

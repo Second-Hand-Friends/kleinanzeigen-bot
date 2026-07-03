@@ -219,6 +219,26 @@ async def test_web_sleep_respects_explicit_bounds() -> None:
     assert 0.050 <= sleep.await_args.args[0] <= 0.051
 
 
+@pytest.mark.asyncio
+async def test_web_sleep_with_max_only_respects_hard_cap() -> None:
+    """web_sleep(max_ms=500) must never sleep above 0.5 s."""
+    scraper = make_scraper()
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.sleep", new_callable = AsyncMock) as sleep:
+        await scraper.web_sleep(max_ms = 500)
+    assert sleep.await_args is not None
+    assert 0 <= sleep.await_args.args[0] <= 0.5
+
+
+@pytest.mark.asyncio
+async def test_web_sleep_with_min_only_is_fixed_delay() -> None:
+    """web_sleep(min_ms=500) with omitted max resolves to exactly 0.5 s."""
+    scraper = make_scraper()
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.sleep", new_callable = AsyncMock) as sleep:
+        await scraper.web_sleep(min_ms = 500)
+    assert sleep.await_args is not None
+    assert sleep.await_args.args[0] == 0.5
+
+
 # ---------------------------------------------------------------------------
 # viewport randomization at launch
 # ---------------------------------------------------------------------------
