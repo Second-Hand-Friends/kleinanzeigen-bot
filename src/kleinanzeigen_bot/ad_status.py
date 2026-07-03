@@ -183,7 +183,7 @@ def _apr_layout(rows:list[StatusRow]) -> tuple[bool, str, str, int, int]:
     return True, h_repost, h_update, w_repost, w_update
 
 
-def render_status_rows(rows:list[StatusRow], *, color:bool = False) -> str:  # noqa: PLR0914
+def render_status_rows(rows:list[StatusRow], *, color:bool = False) -> str:
     """Format status rows into an ASCII table string.
 
     Args:
@@ -195,49 +195,57 @@ def render_status_rows(rows:list[StatusRow], *, color:bool = False) -> str:  # n
     if not rows:
         return ""
 
-    h_id = _("Ad ID")
-    h_title = _("Title")
-    h_status = _("Status")
-
-    col_id = max(len(h_id), max((len(r.ad_id) for r in rows), default = 0))
-    col_filename = max(len(_("Filename")), max((len(r.filename) for r in rows), default = 0))
-
-    # Translated labels for column width calculation.
-    col_status = max(len(h_status), *[len(_translate_status(s)) for s in _STATUS_ORDER], 0)
-
-    # Title width is data-driven, but clamp to at least header width
-    col_title = max(len(h_title), max((len(r.title) for r in rows), default = 0))
+    # Column header labels and data-driven widths.
+    H = {
+        "id": _("Ad ID"),
+        "fn": _("Filename"),
+        "title": _("Title"),
+        "status": _("Status"),
+    }
+    W = {
+        "id": max(len(H["id"]), max((len(r.ad_id) for r in rows), default = 0)),
+        "fn": max(len(H["fn"]), max((len(r.filename) for r in rows), default = 0)),
+        "title": max(len(H["title"]), max((len(r.title) for r in rows), default = 0)),
+        "status": max(len(H["status"]), *[len(_translate_status(s)) for s in _STATUS_ORDER], 0),
+    }
 
     # APR columns — only if any row has non-None APR data
     apr_show, h_apr_r, h_apr_u, w_apr_r, w_apr_u = _apr_layout(rows)
 
-    # Build separator and header
-    separator_parts = ["+", "-" * (col_id + 2), "+", "-" * (col_filename + 2), "+", "-" * (col_title + 2), "+", "-" * (col_status + 2)]
-    header_parts = ["| ", h_id.ljust(col_id), " | ", _("Filename").ljust(col_filename), " | ", h_title.ljust(col_title), " | ", h_status.ljust(col_status)]
+    # Build separator and header row
+    widths = [W["id"], W["fn"], W["title"], W["status"]]
     if apr_show:
-        separator_parts += ["+", "-" * (w_apr_r + 2), "+", "-" * (w_apr_u + 2)]
-        header_parts += [" | ", h_apr_r.ljust(w_apr_r), " | ", h_apr_u.ljust(w_apr_u)]
-    separator = "".join(separator_parts) + "+"
-    header = "".join(header_parts) + " |"
+        widths += [w_apr_r, w_apr_u]
+    sep = "".join("+" + "-" * (w + 2) for w in widths) + "+"
 
-    lines:list[str] = [separator, header, separator]
+    hdr_parts = [
+        "| ", H["id"].ljust(W["id"]), " | ", H["fn"].ljust(W["fn"]),
+        " | ", H["title"].ljust(W["title"]), " | ", H["status"].ljust(W["status"]),
+    ]
+    if apr_show:
+        hdr_parts += [" | ", h_apr_r.ljust(w_apr_r), " | ", h_apr_u.ljust(w_apr_u)]
+    hdr_parts.append(" |")
+    hdr = "".join(hdr_parts)
+
+    lines:list[str] = [sep, hdr, sep]
 
     for r in rows:
-        label = _translate_status(r.status).ljust(col_status)
+        label = _translate_status(r.status).ljust(W["status"])
         cell = _colorize_status(r.status, label) if color else label
 
-        row_parts = [
-            "| ", r.ad_id.ljust(col_id), " | ", r.filename.ljust(col_filename), " | ", r.title.ljust(col_title), " | ", cell,
+        parts = [
+            "| ", r.ad_id.ljust(W["id"]), " | ", r.filename.ljust(W["fn"]),
+            " | ", r.title.ljust(W["title"]), " | ", cell,
         ]
         if apr_show:
-            row_parts.extend([
+            parts += [
                 " | ", _apr_cell(r.apr_repost).ljust(w_apr_r),
                 " | ", _apr_cell(r.apr_update).ljust(w_apr_u),
-            ])
-        row_parts.append(" |")
-        lines.append("".join(row_parts))
+            ]
+        parts.append(" |")
+        lines.append("".join(parts))
 
-    lines.append(separator)
+    lines.append(sep)
 
     # Summary line — always plain
     counts:dict[str, int] = {}
