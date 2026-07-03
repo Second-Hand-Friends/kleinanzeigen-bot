@@ -4,13 +4,20 @@
 """Tests for the human-like interaction behavior in WebScrapingMixin (bot-detection evasion)."""
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from kleinanzeigen_bot.model.config_model import Config, HumanizationConfig
-from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element, WebScrapingMixin
+from kleinanzeigen_bot.utils.web_scraping_mixin import (
+    By,
+    Element,
+    WebScrapingMixin,
+    _filter_viewport_sizes,  # noqa: PLC2701 # type: ignore[attr-defined]
+    _jitter_viewport,  # noqa: PLC2701 # type: ignore[attr-defined]
+)
 
 
 def make_scraper(humanization:HumanizationConfig | None = None) -> WebScrapingMixin:
@@ -243,10 +250,18 @@ async def test_web_sleep_with_min_only_is_fixed_delay() -> None:
 # viewport randomization at launch
 # ---------------------------------------------------------------------------
 
-def test_viewport_arg_appended_when_enabled() -> None:
+def test_viewport_arg_appended_when_selected() -> None:
+    """selected_viewport_size parameter is honoured by _build_new_browser_launch_args."""
+    scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1600x900"]))
+    args, _ = scraper._build_new_browser_launch_args(selected_viewport_size = "1600x900")
+    assert "--window-size=1600,900" in args
+
+
+def test_viewport_arg_not_appended_when_unselected() -> None:
+    """_build_new_browser_launch_args with no selected_viewport_size must not add --window-size."""
     scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1600x900"]))
     args, _ = scraper._build_new_browser_launch_args()
-    assert "--window-size=1600,900" in args
+    assert not any(a.startswith("--window-size") for a in args)
 
 
 def test_viewport_arg_not_appended_when_user_supplied() -> None:
@@ -347,3 +362,280 @@ async def test_humanized_type_fallback_clears_and_sends_full_text() -> None:
     assert field.send_keys.await_args_list[0].args[0] == "a"
     assert field.send_keys.await_args_list[1].args[0] == "b"
     assert field.send_keys.await_args_list[2].args[0] == "abc"
+
+
+# ---------------------------------------------------------------------------
+# viewport-size helper functions (_filter_viewport_sizes)
+# ---------------------------------------------------------------------------
+
+
+def test_filter_viewport_sizes_all_fit() -> None:
+    sizes = ["1920x1080", "1366x768", "2560x1440"]
+    assert _filter_viewport_sizes(sizes, 2560, 1440) == sizes
+
+
+def test_filter_viewport_sizes_some_fit() -> None:
+    sizes = ["1920x1080", "2560x1440", "1366x768"]
+    result = _filter_viewport_sizes(sizes, 1920, 1080)
+    assert result == ["1920x1080", "1366x768"]
+
+
+def test_filter_viewport_sizes_none_fit() -> None:
+    sizes = ["2560x1440", "3840x2160"]
+    assert _filter_viewport_sizes(sizes, 1920, 1080) == []
+
+
+def test_filter_viewport_sizes_boundary_exact() -> None:
+    """Sizes exactly equal to the available area must fit."""
+    assert _filter_viewport_sizes(["1920x1080"], 1920, 1080) == ["1920x1080"]
+
+
+def test_filter_viewport_sizes_skips_parse_errors() -> None:
+    sizes = ["1920x1080", "not-valid", "1366x768"]
+    result = _filter_viewport_sizes(sizes, 1920, 1080)
+    assert result == ["1920x1080", "1366x768"]
+
+
+def test_filter_viewport_sizes_empty_list() -> None:
+    assert _filter_viewport_sizes([], 1920, 1080) == []
+
+
+# ---------------------------------------------------------------------------
+# _jitter_viewport
+# ---------------------------------------------------------------------------
+
+
+def test_jitter_viewport_basic() -> None:
+    """Jitter stays within ±24 width and ±16 height."""
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [1024, 600]) as mock_rand:
+        jw, jh = _jitter_viewport(1024, 600, 2000, 1200)
+    assert jw == 1024
+    assert jh == 600
+    assert mock_rand.call_args_list[0].args == (max(1, 1024 - 24), min(2000, 1024 + 24))
+    assert mock_rand.call_args_list[1].args == (max(1, 600 - 16), min(1200, 600 + 16))
+
+
+def test_jitter_viewport_caps_by_avail() -> None:
+    """max_w / max_h are clamped to avail dimensions."""
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [1900, 1050]) as mock_rand:
+        jw, jh = _jitter_viewport(1920, 1080, 1920, 1080)
+    assert jw == 1900
+    assert jh == 1050
+    # base_w + 24 = 1944 but avail_w caps at 1920
+    assert mock_rand.call_args_list[0].args == (max(1, 1920 - 24), 1920)
+    assert mock_rand.call_args_list[1].args == (max(1, 1080 - 16), 1080)
+
+
+def test_jitter_viewport_floor_at_one() -> None:
+    """min_w / min_h never drop below 1, even for tiny bases."""
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [1, 1]) as mock_rand:
+        jw, jh = _jitter_viewport(10, 10, 1920, 1080)
+    assert jw == 1
+    assert jh == 1
+    # base_w - 24 = -14, clamped to 1
+    assert mock_rand.call_args_list[0].args == (1, 10 + 24)
+    assert mock_rand.call_args_list[1].args == (1, 10 + 16)
+
+
+# ---------------------------------------------------------------------------
+# integration-level: _select_viewport_size with jitter
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_select_viewport_size_applies_jitter_when_metrics_known() -> None:
+    """When metrics are available, a fitting base is jittered before returning."""
+    scraper = WebScrapingMixin()
+    scraper.config = Config.model_validate({
+        "login": {"username": "u", "password": "p"},  # noqa: S106
+        "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1600x900", "1920x1080"]).model_dump(),
+    })
+    with (
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin._has_display_available", return_value = True),
+        patch.object(scraper, "_probe_screen_metrics", return_value = (1920, 1080)),
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.choice", return_value = "1600x900"),
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [1590, 890]),
+    ):
+        result = await scraper._select_viewport_size()
+    # Jitter applied: base 1600x900 → ~1590x890
+    assert result == "1590x890"
+
+
+@pytest.mark.asyncio
+async def test_select_viewport_size_skips_headless_without_probe() -> None:
+    scraper = WebScrapingMixin()
+    scraper.browser_config.arguments = ["--headless=new"]
+    scraper.config = Config.model_validate({
+        "login": {"username": "u", "password": "p"},  # noqa: S106
+        "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1600x900"]).model_dump(),
+    })
+    with patch.object(scraper, "_probe_screen_metrics", new_callable = AsyncMock) as probe:
+        result = await scraper._select_viewport_size()
+    probe.assert_not_awaited()
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_select_viewport_size_skips_no_display_on_linux_without_probe() -> None:
+    scraper = WebScrapingMixin()
+    scraper.config = Config.model_validate({
+        "login": {"username": "u", "password": "p"},  # noqa: S106
+        "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1600x900"]).model_dump(),
+    })
+    with (
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin.platform.system", return_value = "Linux"),
+        patch.dict("kleinanzeigen_bot.utils.web_scraping_mixin.os.environ", {}, clear = True),
+        patch.object(scraper, "_probe_screen_metrics", new_callable = AsyncMock) as probe,
+    ):
+        result = await scraper._select_viewport_size()
+    probe.assert_not_awaited()
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_select_viewport_size_skips_ci_without_display_without_probe() -> None:
+    scraper = WebScrapingMixin()
+    scraper.config = Config.model_validate({
+        "login": {"username": "u", "password": "p"},  # noqa: S106
+        "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1600x900"]).model_dump(),
+    })
+    with (
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin.platform.system", return_value = "Darwin"),
+        patch.dict("kleinanzeigen_bot.utils.web_scraping_mixin.os.environ", {"CI": "true"}, clear = True),
+        patch.object(scraper, "_probe_screen_metrics", new_callable = AsyncMock) as probe,
+    ):
+        result = await scraper._select_viewport_size()
+    probe.assert_not_awaited()
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_select_viewport_size_omits_when_none_fit() -> None:
+    """When all sizes exceed avail, returns None regardless of jitter."""
+    scraper = WebScrapingMixin()
+    scraper.config = Config.model_validate({
+        "login": {"username": "u", "password": "p"},  # noqa: S106
+        "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["2560x1440"]).model_dump(),
+    })
+    with (
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin._has_display_available", return_value = True),
+        patch.object(scraper, "_probe_screen_metrics", return_value = (1920, 1080)),
+    ):
+        result = await scraper._select_viewport_size()
+    assert result is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "metrics",
+    [
+        None,
+        (0, 1080),
+        (1920, 0),
+        (-1, 1080),
+        (1920, -1),
+        ("1920", 1080),
+        (1920, "1080"),
+        (1920,),
+        (1920, 1080, 1),
+        ({"availWidth": 1920},),
+        (True, 1080),
+        (float("nan"), 1080),
+        (float("inf"), 1080),
+    ],
+)
+async def test_select_viewport_size_returns_none_for_invalid_metrics(metrics:object) -> None:
+    scraper = WebScrapingMixin()
+    scraper.config = Config.model_validate({
+        "login": {"username": "u", "password": "p"},  # noqa: S106
+        "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["2560x1440", "1366x768"]).model_dump(),
+    })
+    with (
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin._has_display_available", return_value = True),
+        patch.object(scraper, "_probe_screen_metrics", return_value = metrics),
+    ):
+        result = await scraper._select_viewport_size()
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_select_viewport_size_user_window_size_bypasses_selection() -> None:
+    """User-supplied --window-size in browser_config.arguments prevents _select_viewport_size
+    from being called at all (tested via the guard in create_browser_session)."""
+    scraper = WebScrapingMixin()
+    scraper.browser_config.binary_location = "fake-browser"
+    scraper.browser_config.arguments = ["--window-size=800,600"]
+    scraper.config = Config.model_validate({
+        "login": {"username": "u", "password": "p"},  # noqa: S106
+        "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1920x1080"]).model_dump(),
+    })
+    fake_browser = SimpleNamespace(websocket_url = "ws://test")
+    with (
+        patch.object(scraper, "_validate_chrome_version_configuration", new_callable = AsyncMock),
+        patch.object(scraper, "_select_viewport_size", new_callable = AsyncMock) as select_viewport,
+        patch.object(scraper, "_resolve_effective_user_data_dir", new_callable = AsyncMock, return_value = None),
+        patch.object(scraper, "_add_browser_extensions", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin.files.exists", new_callable = AsyncMock, return_value = True),
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", new_callable = AsyncMock, return_value = fake_browser),
+    ):
+        await scraper.create_browser_session()
+    select_viewport.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_probe_screen_metrics_times_out() -> None:
+    scraper = WebScrapingMixin()
+    scraper.browser_config.binary_location = "fake-browser"
+    scraper.config = Config.model_validate({
+        "login": {"username": "u", "password": "p"},  # noqa: S106
+        "timeouts": {"chrome_remote_probe": 0.1},
+    })
+
+    async def slow_start(_cfg:object) -> object:
+        await asyncio.sleep(1)
+        return SimpleNamespace()
+
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", side_effect = slow_start):
+        result = await scraper._probe_screen_metrics()
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_probe_screen_metrics_reuses_successful_probe() -> None:
+    scraper = WebScrapingMixin()
+    scraper.browser_config.binary_location = "fake-browser"
+    page = SimpleNamespace(evaluate = AsyncMock(return_value = {"availWidth": 111, "availHeight": 222}))
+    browser = SimpleNamespace(get = AsyncMock(return_value = page), stop = lambda: None)
+
+    with (
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.sleep", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", new_callable = AsyncMock, return_value = browser) as start,
+    ):
+        first = await scraper._probe_screen_metrics()
+        second = await scraper._probe_screen_metrics()
+
+    assert first == (111, 222)
+    assert second == (111, 222)
+    start.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# default viewport sizes
+# ---------------------------------------------------------------------------
+
+def test_default_viewport_sizes_contain_new_entries() -> None:
+    cfg = HumanizationConfig()
+    expected_extras = {"2560x1440", "1920x1200", "1728x1117", "1512x982"}
+    for expected in expected_extras:
+        assert expected in cfg.viewport_sizes, f"Missing default viewport: {expected}"
+
+
+def test_default_viewport_sizes_omits_4k() -> None:
+    cfg = HumanizationConfig()
+    assert "3840x2160" not in cfg.viewport_sizes
+
+
+def test_default_viewport_sizes_count() -> None:
+    cfg = HumanizationConfig()
+    assert len(cfg.viewport_sizes) == 10

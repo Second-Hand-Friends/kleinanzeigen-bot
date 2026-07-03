@@ -370,7 +370,10 @@ class HumanizationConfig(ContextualModel):
         default = True, description = "pick a random window size from viewport_sizes at launch (ignored if --window-size is set manually)"
     )
     viewport_sizes:list[str] = Field(
-        default_factory = lambda: ["1920x1080", "1680x1050", "1600x900", "1536x864", "1440x900", "1366x768"],
+        default_factory = lambda: [
+            "2560x1440", "1920x1200", "1920x1080", "1728x1117",
+            "1680x1050", "1600x900", "1536x864", "1512x982", "1440x900", "1366x768",
+        ],
         description = "whitelist of WxH desktop window sizes to randomly choose from when randomize_viewport is enabled",
         examples = ['"1920x1080"', '"1366x768"'],
     )
