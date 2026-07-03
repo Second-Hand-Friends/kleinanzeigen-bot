@@ -500,9 +500,13 @@ async def set_pricing_fields(web:WebScrapingMixin, ad_cfg:Ad, ad_defaults:AdDefa
 async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) -> None:
     """Select an option from a <button role="combobox"> dropdown by its API value.
 
-    Opens the control with pointerdown/mousedown and selects the matching option
-    in a single async browser script execution.  Uses React fiber matching first,
-    then DOM attribute matching, then normalized text fallback.
+    Opens the control with a full native click sequence (pointerdown → mousedown →
+    mouseup → click) and selects the matching option in a single async browser
+    script execution.  Uses React fiber matching first, then DOM attribute
+    matching, then normalized text fallback.  The listbox search first checks the button's ID-suffixed element,
+    then the button's parentElement, then uses aria-controls/owns
+    association, and finally falls back to visible document-level
+    portal candidates with aria-labelledby matching.
     """
     js_elem_id = json.dumps(elem_id)
     js_value = json.dumps(value)
@@ -513,6 +517,8 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
     if (!btn) return {{ok:false, reason:'button_not_found'}};
     btn.dispatchEvent(new PointerEvent('pointerdown',{{bubbles:true,cancelable:true}}));
     btn.dispatchEvent(new MouseEvent('mousedown',{{bubbles:true,cancelable:true}}));
+    btn.dispatchEvent(new MouseEvent('mouseup',{{bubbles:true,cancelable:true}}));
+    btn.dispatchEvent(new MouseEvent('click',{{bubbles:true,cancelable:true}}));
     var listbox = null;
     var options = null;
     var pollDeadline = Date.now() + {poll_deadline_ms};
@@ -526,6 +532,34 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
             var m = btn.parentElement.querySelector('[role="menu"]');
             if (m) candidate = m;
         }}
+        /* Headless UI / React portals: try aria-controls/owns association first,
+           then visible document-level portal candidates with aria-labelledby. */
+        if (!candidate && btn.getAttribute) {{
+            var controlledId = btn.getAttribute('aria-controls');
+            if (controlledId) {{
+                candidate = document.getElementById(controlledId);
+            }}
+        }}
+        if (!candidate && btn.getAttribute) {{
+            var ownedId = btn.getAttribute('aria-owns');
+            if (ownedId) {{
+                candidate = document.getElementById(ownedId);
+            }}
+        }}
+        if (!candidate) {{
+            var portalCandidates = document.querySelectorAll('[role="listbox"],[role="menu"]');
+            for (var p = 0; p < portalCandidates.length; p++) {{
+                var pc = portalCandidates[p];
+                var rect = pc.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {{
+                    var labelledby = pc.getAttribute('aria-labelledby');
+                    if (!labelledby || labelledby === btn.id) {{
+                        candidate = pc;
+                        break;
+                    }}
+                }}
+            }}
+        }}
         if (candidate) {{
             options = Array.from(candidate.querySelectorAll('[role="option"]'));
             if (options.length > 0) break;
@@ -534,7 +568,7 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
     if (!options || options.length === 0) {{
         return {{ok:false, reason:'no_options_after_opening', options:[]}};
     }}
-    var optionInfo = options.map(function(o){{return o.textContent ? o.textContent.trim() : '';}});
+    var optionInfo = options.map(function(o){{return o.textContent ? o.textContent.replace(/\\s+/g,' ').trim() : '';}});
     var fiberKey = Object.keys(btn).find(function(k){{return k.startsWith('__reactFiber');}});
     if (fiberKey) {{
         var fiber = btn[fiberKey];
@@ -560,8 +594,8 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
             o.click();
             return {{ok:true}};
         }}
-        var text = (o.textContent || '').trim().toLowerCase();
-        if (text === {js_value}.toLowerCase()) {{
+        var text = (o.textContent || '').replace(/\\s+/g,' ').trim().toLowerCase();
+        if (text === ({js_value}+'').replace(/\\s+/g,' ').trim().toLowerCase()) {{
             o.click();
             return {{ok:true}};
         }}
