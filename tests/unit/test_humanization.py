@@ -408,6 +408,7 @@ def test_parse_viewport_size() -> None:
 
 
 def test_parse_viewport_size_rejects_invalid_values() -> None:
+    assert _parse_viewport_size(cast(Any, None)) is None
     assert _parse_viewport_size("invalid") is None
     assert _parse_viewport_size("1920x") is None
     assert _parse_viewport_size("1920xabc") is None
@@ -502,6 +503,14 @@ async def test_select_viewport_size_for_metrics_returns_none_when_none_fit() -> 
 
 
 @pytest.mark.asyncio
+async def test_select_viewport_size_for_metrics_handles_invalid_chosen_size() -> None:
+    scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1366x768"]))
+
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.choice", return_value = "invalid"):
+        assert scraper._select_viewport_size_for_metrics((1920, 1080)) is None
+
+
+@pytest.mark.asyncio
 async def test_create_browser_session_no_prelaunch_viewport_probe() -> None:
     scraper = WebScrapingMixin()
     scraper.browser_config.binary_location = "fake-browser"
@@ -526,6 +535,47 @@ async def test_create_browser_session_no_prelaunch_viewport_probe() -> None:
     cfg_arg = start.call_args_list[0].args[0]
     assert "--timeout=1" in cfg_arg.browser_args
     assert not any(arg.startswith("--window-size") for arg in cfg_arg.browser_args)
+
+
+@pytest.mark.asyncio
+async def test_create_browser_session_marks_remote_sessions() -> None:
+    scraper = WebScrapingMixin()
+    scraper.browser_config.binary_location = "fake-browser"
+    scraper.browser_config.arguments = ["--remote-debugging-port=9222"]
+    scraper.config = Config.model_validate({
+        "login": {"username": "u", "password": "p"},  # noqa: S106
+        "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1366x768"]).model_dump(),
+    })
+    remote_browser = SimpleNamespace(websocket_url = "ws://remote")
+
+    with (
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin.files.exists", new_callable = AsyncMock, return_value = True),
+        patch.object(scraper, "_validate_chrome_version_configuration", new_callable = AsyncMock),
+        patch.object(scraper, "_connect_to_remote_browser", new_callable = AsyncMock, return_value = remote_browser),
+    ):
+        await scraper.create_browser_session()
+
+    assert scraper.browser is remote_browser
+    assert scraper._browser_session_is_remote is True
+
+
+def test_is_kleinanzeigen_page_rejects_missing_and_unparseable_urls() -> None:
+    scraper = make_scraper()
+
+    assert scraper._is_kleinanzeigen_page(None) is False
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin.urlparse", side_effect = ValueError("bad url")):
+        assert scraper._is_kleinanzeigen_page("https://www.kleinanzeigen.de/") is False
+
+
+@pytest.mark.asyncio
+async def test_collect_current_viewport_metrics_handles_missing_page_and_non_dict() -> None:
+    scraper = make_scraper()
+
+    assert await scraper._collect_current_viewport_metrics() is None
+
+    scraper.page = cast(Any, SimpleNamespace(url = "https://www.kleinanzeigen.de/"))
+    with patch.object(scraper, "web_execute", new_callable = AsyncMock, return_value = "not-a-dict"):
+        assert await scraper._collect_current_viewport_metrics() is None
 
 
 @pytest.mark.asyncio
@@ -607,6 +657,56 @@ async def test_resize_viewport_after_open_records_invalid_metrics() -> None:
 
 
 @pytest.mark.asyncio
+async def test_resize_viewport_after_open_records_unavailable_metrics() -> None:
+    scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1366x768"]))
+    scraper.page = cast(Any, SimpleNamespace(url = "https://www.kleinanzeigen.de/"))
+
+    with (
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin._has_display_available", return_value = True),
+        patch.object(scraper, "_collect_current_viewport_metrics", new_callable = AsyncMock, return_value = None),
+    ):
+        await scraper._resize_viewport_after_open()
+
+    status = scraper.get_viewport_resize_status()
+    assert status["status"] == "unavailable-page"
+    assert status["reason"] == "metrics-unavailable"
+
+
+@pytest.mark.asyncio
+async def test_resize_viewport_after_open_records_metrics_collection_error() -> None:
+    scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1366x768"]))
+    scraper.page = cast(Any, SimpleNamespace(url = "https://www.kleinanzeigen.de/"))
+
+    with (
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin._has_display_available", return_value = True),
+        patch.object(scraper, "_collect_current_viewport_metrics", new_callable = AsyncMock, side_effect = RuntimeError("page gone")),
+    ):
+        await scraper._resize_viewport_after_open()
+
+    status = scraper.get_viewport_resize_status()
+    assert status["status"] == "unavailable-page"
+    assert status["reason"] == "metrics-unavailable"
+    assert status["error"] == "page gone"
+
+
+@pytest.mark.asyncio
+async def test_resize_viewport_after_open_records_no_fitting_size() -> None:
+    scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["2560x1440"]))
+    scraper.page = cast(Any, SimpleNamespace(url = "https://www.kleinanzeigen.de/"))
+    metrics = {"availWidth": 1920, "availHeight": 1080}
+
+    with (
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin._has_display_available", return_value = True),
+        patch.object(scraper, "_collect_current_viewport_metrics", new_callable = AsyncMock, return_value = metrics),
+    ):
+        await scraper._resize_viewport_after_open()
+
+    status = scraper.get_viewport_resize_status()
+    assert status["status"] == "no-fitting-size"
+    assert status["reason"] == "no-configured-size-fits"
+
+
+@pytest.mark.asyncio
 async def test_apply_viewport_size_preserves_window_position() -> None:
     scraper = make_scraper()
     bounds = SimpleNamespace(left = 12, top = 34)
@@ -628,6 +728,17 @@ async def test_apply_viewport_size_preserves_window_position() -> None:
     assert new_bounds.top == 34
     assert new_bounds.width == 1377
     assert new_bounds.height == 777
+
+
+@pytest.mark.asyncio
+async def test_apply_viewport_size_reports_invalid_inputs_and_cdp_errors() -> None:
+    scraper = make_scraper()
+
+    assert await scraper._apply_viewport_size("1377x777") == "page unavailable"
+
+    scraper.page = cast(Any, SimpleNamespace(get_window = AsyncMock(side_effect = RuntimeError("no window"))))
+    assert await scraper._apply_viewport_size("invalid") == "invalid viewport size: 'invalid'"
+    assert await scraper._apply_viewport_size("1377x777") == "no window"
 
 
 @pytest.mark.asyncio
