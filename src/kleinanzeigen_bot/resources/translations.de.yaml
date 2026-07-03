@@ -823,9 +823,18 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     " -> Randomized browser window size: %s": " -> Zufällige Browser-Fenstergröße: %s"
     "Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir.": "Ignoriere leeres --user-data-dir= Argument; verwende konfiguriertes user_data_dir."
 
-  _select_viewport_size:
-    "Screen-aware viewport: %s jittered to %dx%d (avail %dx%d)": "Bildschirmgerechte Fenstergröße: %s mit Zufallsabweichung auf %dx%d (verfügbar: %dx%d)"
-    "No configured viewport fits %dx%d screen; omitting --window-size": "Keine konfigurierte Fenstergröße passt in den verfügbaren Bildschirmbereich %dx%d; --window-size wird weggelassen"
+  _select_viewport_size_for_metrics:
+    "Screen metrics unavailable or invalid; omitting viewport resize": "Bildschirmdaten nicht verfügbar oder ungültig; Größenänderung des Browserfensters wird ausgelassen"
+    "No configured viewport fits %dx%d screen; omitting viewport resize": "Keine konfigurierte Fenstergröße passt in den verfügbaren Bildschirmbereich %dx%d; Größenänderung des Browserfensters wird ausgelassen"
+    "Selected viewport size became invalid during parsing: %s": "Ausgewählte Fenstergröße wurde beim Auswerten ungültig: %s"
+    "Screen-aware viewport: %s jittered to %s (avail %dx%d)": "Bildschirmgerechte Fenstergröße: %s mit Zufallsabweichung auf %s (verfügbar: %dx%d)"
+
+  _apply_viewport_size:
+    "Applied randomized browser window size: %dx%d": "Zufällige Browser-Fenstergröße angewendet: %dx%d"
+    "Viewport resize failed via CDP: %s": "Größenänderung des Browserfensters über CDP fehlgeschlagen: %s"
+
+  _resize_viewport_after_open:
+    "Viewport resize skipped: %s": "Größenänderung des Browserfensters übersprungen: %s"
 
   _resolve_effective_user_data_dir:
     "Configured browser.user_data_dir (%s) does not match --user-data-dir argument (%s); using the argument value.": "Konfiguriertes browser.user_data_dir (%s) stimmt nicht mit --user-data-dir Argument (%s) überein; verwende Argument-Wert."
