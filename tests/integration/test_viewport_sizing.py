@@ -62,7 +62,7 @@ def _display_available() -> bool:
     return True
 
 
-async def _collect_or_skip_metrics(mixin:WebScrapingMixin) -> tuple[int, int]:
+async def _collect_or_skip_metrics(mixin:WebScrapingMixin) -> dict[str, object]:
     metrics = await mixin._collect_current_viewport_metrics()
     if not isinstance(metrics, dict):
         pytest.skip("Screen metrics unavailable")
@@ -70,7 +70,7 @@ async def _collect_or_skip_metrics(mixin:WebScrapingMixin) -> tuple[int, int]:
     avail_h = metrics.get("availHeight")
     if not isinstance(avail_w, (int, float)) or not isinstance(avail_h, (int, float)) or avail_w <= 0 or avail_h <= 0:
         pytest.skip(f"Screen metrics unavailable: {metrics!r}")
-    return int(avail_w), int(avail_h)
+    return metrics
 
 
 # ---------------------------------------------------------------------------
@@ -106,23 +106,15 @@ async def test_web_open_triggers_post_open_viewport_resize() -> None:
         if status["status"] == "applied":
             assert status["applied"] is True
             assert status["selected_viewport"]
-            avail_w, avail_h = await _collect_or_skip_metrics(mixin)
-            assert avail_w > 0
-            assert avail_h > 0
+            metrics = await _collect_or_skip_metrics(mixin)
+            outer_w = metrics.get("outerWidth")
+            outer_h = metrics.get("outerHeight")
+            assert isinstance(outer_w, (int, float))
+            assert isinstance(outer_h, (int, float))
+            assert f"{int(outer_w)}x{int(outer_h)}" == status["selected_viewport"]
     finally:
         mixin.close_browser_session()
         shutil.rmtree(ud_dir, ignore_errors = True)
-
-
-@pytest.mark.asyncio
-async def test_select_viewport_size_for_metrics_returns_none_when_all_oversized() -> None:
-    """When all configured viewports exceed screen metrics, no fallback size is selected."""
-    mixin = WebScrapingMixin()
-    mixin.config = _make_bare_config(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["5000x5000", "6000x6000"]))
-
-    selected = mixin._select_viewport_size_for_metrics((1920, 1080))
-
-    assert selected is None
 
 
 @pytest.mark.asyncio

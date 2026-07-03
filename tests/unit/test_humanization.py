@@ -459,11 +459,7 @@ def test_jitter_viewport_floor_at_one() -> None:
 @pytest.mark.asyncio
 async def test_select_viewport_size_for_metrics_applies_jitter() -> None:
     """When metrics are available, a fitting base is jittered before returning."""
-    scraper = WebScrapingMixin()
-    scraper.config = Config.model_validate({
-        "login": {"username": "u", "password": "p"},  # noqa: S106
-        "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1600x900", "1920x1080"]).model_dump(),
-    })
+    scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1600x900", "1920x1080"]))
     with (
         patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.choice", return_value = "1600x900"),
         patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [1590, 890]),
@@ -492,11 +488,7 @@ async def test_select_viewport_size_for_metrics_applies_jitter() -> None:
     ],
 )
 async def test_select_viewport_size_for_metrics_returns_none_for_invalid_metrics(metrics:object) -> None:
-    scraper = WebScrapingMixin()
-    scraper.config = Config.model_validate({
-        "login": {"username": "u", "password": "p"},  # noqa: S106
-        "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["2560x1440", "1366x768"]).model_dump(),
-    })
+    scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["2560x1440", "1366x768"]))
     with patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.choice", autospec = True) as choice_mock:
         result = scraper._select_viewport_size_for_metrics(metrics)
     assert result is None
@@ -505,11 +497,7 @@ async def test_select_viewport_size_for_metrics_returns_none_for_invalid_metrics
 
 @pytest.mark.asyncio
 async def test_select_viewport_size_for_metrics_returns_none_when_none_fit() -> None:
-    scraper = WebScrapingMixin()
-    scraper.config = Config.model_validate({
-        "login": {"username": "u", "password": "p"},  # noqa: S106
-        "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["2560x1440"]).model_dump(),
-    })
+    scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["2560x1440"]))
     assert scraper._select_viewport_size_for_metrics((1920, 1080)) is None
 
 

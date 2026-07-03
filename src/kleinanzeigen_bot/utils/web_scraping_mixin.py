@@ -59,7 +59,6 @@ _VIEWPORT_JITTER_H:Final[int] = 16
 _VIEWPORT_RESIZE_STATUS_NOT_ATTEMPTED:Final[str] = "not-attempted"
 _VIEWPORT_RESIZE_STATUS_APPLIED:Final[str] = "applied"
 _VIEWPORT_RESIZE_STATUS_SKIPPED:Final[str] = "skipped"
-_VIEWPORT_RESIZE_STATUS_UNAVAILABLE:Final[str] = "unavailable"
 _VIEWPORT_RESIZE_STATUS_INVALID_METRICS:Final[str] = "invalid-metrics"
 _VIEWPORT_RESIZE_STATUS_NO_FIT:Final[str] = "no-fitting-size"
 _VIEWPORT_RESIZE_STATUS_FAILED:Final[str] = "failed"
@@ -799,7 +798,18 @@ class WebScrapingMixin:  # noqa: PLR0904
             self._set_viewport_resize_status(_VIEWPORT_RESIZE_STATUS_SKIPPED, attempted = True, reason = skip_reason)
             return
 
-        before_metrics = await self._collect_current_viewport_metrics()
+        try:
+            before_metrics = await self._collect_current_viewport_metrics()
+        except Exception as exc:  # noqa: BLE001
+            LOG.debug("Screen metrics unavailable or invalid; omitting viewport resize: %s", exc)
+            self._set_viewport_resize_status(
+                _VIEWPORT_RESIZE_STATUS_UNAVAILABLE_PAGE,
+                attempted = True,
+                reason = "metrics-unavailable",
+                error = str(exc),
+            )
+            return
+
         if before_metrics is None:
             self._set_viewport_resize_status(
                 _VIEWPORT_RESIZE_STATUS_UNAVAILABLE_PAGE,
