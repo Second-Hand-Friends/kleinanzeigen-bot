@@ -206,6 +206,8 @@ def test_build_status_rows() -> None:
     ]
     rows = build_status_rows(ads, now = _now())
     assert len(rows) == 2
+    assert rows[0].filename == "ads/one.yaml"
+    assert rows[1].filename == "ads/two.yaml"
     assert rows[0].status == "disabled"
     assert rows[1].status == "draft"
 
@@ -251,6 +253,13 @@ class TestRenderStatusRows:
 
         # Summary ends with total count
         assert "total" in output.casefold() or "gesamt" in output.casefold()
+
+        # Column order: Ad ID, Filename, Title, Status
+        header_line = output.splitlines()[1]
+        headers = [c.strip() for c in header_line.split("|") if c.strip()]
+        assert headers == ["Ad ID", "Filename", "Title", "Status"], (
+            f"Unexpected column order: {headers}"
+        )
 
     # ------------------------------------------------------------------ #
     # Colour rendering
@@ -404,6 +413,36 @@ class TestAprRendering:
             if len(cells) >= 6:
                 assert "\x1b[" not in cells[4], "APR repost cell must not be coloured"
                 assert "\x1b[" not in cells[5], "APR update cell must not be coloured"
+
+    # -- render: coloured APR output -------------------------------------- #
+
+    def test_apr_coloured_stripped_equals_plain(self) -> None:
+        """With APR columns, strip(coloured) == plain and APR cells stay uncoloured."""
+        rows = [
+            StatusRow(
+                title = "A", ad_id = "1", filename = "a.yaml",
+                status = "published-local",
+                apr_repost = "due: 9", apr_update = "not due",
+            ),
+        ]
+        plain = render_status_rows(rows, color = False)
+        coloured = render_status_rows(rows, color = True)
+        stripped = _ANSI_RE.sub("", coloured)
+        assert stripped == plain, (
+            "Stripped coloured output must match plain when APR columns present"
+        )
+
+        # APR cells are not coloured (only the status column is)
+        data_lines = [
+            line for line in coloured.splitlines()
+            if "|" in line and not line.startswith("+") and "APR" not in line and not line.startswith("S")
+        ]
+        for line in data_lines:
+            cells = [c.strip() for c in line.split("|") if c.strip()]
+            if len(cells) >= 6:
+                assert "\x1b[" in cells[3], "Status cell should be coloured"
+                assert "\x1b[" not in cells[4], "APR repost must not be coloured"
+                assert "\x1b[" not in cells[5], "APR update must not be coloured"
 
     # -- build_status_rows: APR evaluation integration --------------------- #
     # These test that evaluate_auto_price_reduction is called correctly
