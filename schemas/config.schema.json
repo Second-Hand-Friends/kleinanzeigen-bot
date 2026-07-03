@@ -574,18 +574,12 @@
       "type": "object"
     },
     "HumanizationConfig": {
-      "description": "Controls human-like browser interaction to reduce automation fingerprinting.\n\nWhen enabled (the default), clicks are performed via real mouse movement + press/release,\ntext is typed character-by-character with variable delays, pauses vary, occasional idle\nmicro-actions (small scrolls, mouse wiggles) are injected, and the browser window size is\nrandomized at launch. All behavior is opt-out via ``enabled: false`` and individually tunable.",
+      "description": "Controls browser pacing, typing jitter, and viewport behavior.\n\n``enabled`` controls whether optional humanization extras are active while baseline\nworkflow pacing (``web_sleep``) remains unchanged. Optional typing jitter and viewport\nrandomization are controlled by explicit options.",
       "properties": {
         "enabled": {
           "default": true,
-          "description": "master switch for all human-like interaction behavior",
+          "description": "enable optional humanization extras; baseline interaction pacing is preserved",
           "title": "Enabled",
-          "type": "boolean"
-        },
-        "mouse_movement": {
-          "default": true,
-          "description": "click via real CDP mouse move + press/release instead of an instant element click (auto-falls back on failure)",
-          "title": "Mouse Movement",
           "type": "boolean"
         },
         "typing_jitter": {
@@ -609,52 +603,22 @@
           "type": "integer"
         },
         "action_delay_min_ms": {
-          "default": 1000,
-          "description": "minimum pause after interactions (ms); matches the historical web_sleep band",
+          "default": 500,
+          "description": "minimum baseline pause after interactions used by web_sleep (ms)",
           "minimum": 0,
           "title": "Action Delay Min Ms",
           "type": "integer"
         },
         "action_delay_max_ms": {
-          "default": 2500,
-          "description": "maximum pause after interactions (ms); matches the historical web_sleep band",
+          "default": 1500,
+          "description": "maximum baseline pause after interactions used by web_sleep (ms)",
           "minimum": 0,
           "title": "Action Delay Max Ms",
           "type": "integer"
         },
-        "long_pause_probability": {
-          "default": 0.1,
-          "description": "probability of inserting a longer 'thinking' pause at boundaries",
-          "maximum": 1.0,
-          "minimum": 0.0,
-          "title": "Long Pause Probability",
-          "type": "number"
-        },
-        "long_pause_min_ms": {
-          "default": 1500,
-          "description": "minimum duration of a 'thinking' pause (ms)",
-          "minimum": 0,
-          "title": "Long Pause Min Ms",
-          "type": "integer"
-        },
-        "long_pause_max_ms": {
-          "default": 4000,
-          "description": "maximum duration of a 'thinking' pause (ms)",
-          "minimum": 0,
-          "title": "Long Pause Max Ms",
-          "type": "integer"
-        },
-        "idle_action_probability": {
-          "default": 0.3,
-          "description": "chance to run a random subset of idle micro-actions (scroll / mouse wiggle) at a page boundary",
-          "maximum": 1.0,
-          "minimum": 0.0,
-          "title": "Idle Action Probability",
-          "type": "number"
-        },
         "randomize_viewport": {
           "default": true,
-          "description": "pick a random window size from viewport_sizes at launch (ignored if --window-size is set manually)",
+          "description": "pick a random window size from viewport_sizes after page open using available screen metrics (ignored if --window-size is set manually)",
           "title": "Randomize Viewport",
           "type": "boolean"
         },
@@ -1002,7 +966,7 @@
     },
     "humanization": {
       "$ref": "#/$defs/HumanizationConfig",
-      "description": "Human-like browser interaction settings to reduce automation detection."
+      "description": "Browser pacing, typing jitter, and viewport behavior settings."
     },
     "diagnostics": {
       "$ref": "#/$defs/DiagnosticsConfig",
