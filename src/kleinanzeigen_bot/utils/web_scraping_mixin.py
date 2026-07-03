@@ -1,11 +1,12 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio, enum, inspect, json, math, os, platform, secrets, shutil, subprocess, tempfile  # isort: skip # noqa: S404
+import asyncio, enum, inspect, json, math, os, platform, secrets, shutil, subprocess  # isort: skip # noqa: S404
 from collections.abc import Awaitable, Callable, Coroutine, Iterable, Sequence
 from gettext import gettext as _
 from pathlib import Path, PureWindowsPath
 from typing import Any, Final, Optional, cast
+from urllib.parse import urlparse
 
 try:
     from typing import Never  # type: ignore[attr-defined,unused-ignore] # mypy
@@ -13,7 +14,7 @@ except ImportError:
     from typing import NoReturn as Never  # Python <3.11
 
 import nodriver, psutil  # isort: skip
-from nodriver.cdp import input_ as cdp_input  # isort: skip
+from nodriver.cdp import browser as cdp_browser, input_ as cdp_input  # isort: skip
 from typing import TYPE_CHECKING, TypeGuard
 
 from nodriver.core.browser import Browser
@@ -55,6 +56,13 @@ _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS:Final[float] = 0.25
 # available screen area so the window never exceeds what the display can show.
 _VIEWPORT_JITTER_W:Final[int] = 24
 _VIEWPORT_JITTER_H:Final[int] = 16
+_VIEWPORT_RESIZE_STATUS_NOT_ATTEMPTED:Final[str] = "not-attempted"
+_VIEWPORT_RESIZE_STATUS_APPLIED:Final[str] = "applied"
+_VIEWPORT_RESIZE_STATUS_SKIPPED:Final[str] = "skipped"
+_VIEWPORT_RESIZE_STATUS_INVALID_METRICS:Final[str] = "invalid-metrics"
+_VIEWPORT_RESIZE_STATUS_NO_FIT:Final[str] = "no-fitting-size"
+_VIEWPORT_RESIZE_STATUS_FAILED:Final[str] = "failed"
+_VIEWPORT_RESIZE_STATUS_UNAVAILABLE_PAGE:Final[str] = "unavailable-page"
 
 
 def _resolve_user_data_dir_paths(arg_value:str, config_value:str) -> tuple[Any, Any]:
@@ -231,19 +239,38 @@ def _build_nodriver_config(browser_path:str, browser_args:list[str], user_data_d
     return cfg
 
 
-def _filter_viewport_sizes(sizes:list[str], avail_w:int, avail_h:int) -> list[str]:
+def _parse_viewport_size(size:str) -> tuple[int, int] | None:
+    """Parse a ``WxH`` viewport string into ``(width, height)`` integers."""
+    if not isinstance(size, str):
+        return None
+
+    parts = size.lower().split("x")
+    if len(parts) != _KEY_VALUE_PAIR_SIZE:
+        return None
+
+    try:
+        w = int(parts[0].strip())
+        h = int(parts[1].strip())
+    except ValueError:
+        return None
+
+    if w <= 0 or h <= 0:
+        return None
+    return w, h
+
+
+def _filter_viewport_sizes(sizes:Sequence[str], avail_w:int, avail_h:int) -> list[str]:
     """Return viewport sizes whose width/height both fit within the given available screen area."""
     fitting:list[str] = []
     for size in sizes:
-        try:
-            parts = size.lower().split("x")
-            w = int(parts[0].strip())
-            h = int(parts[1].strip())
-            if w <= avail_w and h <= avail_h:
-                fitting.append(size)
-        except (ValueError, IndexError):
+        parsed = _parse_viewport_size(size)
+        if parsed is None:
             LOG.debug("Skipping unparseable viewport size during filtering: %s", size)
             continue
+
+        w, h = parsed
+        if w <= avail_w and h <= avail_h:
+            fitting.append(size)
     return fitting
 
 
@@ -292,9 +319,11 @@ class WebScrapingMixin:  # noqa: PLR0904
         self.browser_config:Final[BrowserConfig] = BrowserConfig()
         self.browser:Browser = None  # pyright: ignore[reportAttributeAccessIssue]
         self.page:Page = None  # pyright: ignore[reportAttributeAccessIssue]
+        self._browser_session_is_remote:bool = False
+        self._viewport_resize_attempted:bool = False
+        self._viewport_resize_status:dict[str, Any] = {"status": _VIEWPORT_RESIZE_STATUS_NOT_ATTEMPTED, "attempted": False, "applied": False}
         self._default_timeout_config:TimeoutConfig | None = None
         self._default_humanization_config:HumanizationConfig | None = None
-        self._screen_metrics_cache:tuple[int, int] | None = None
         self.config:BotConfig = cast(BotConfig, None)
 
     def _get_humanization_config(self) -> HumanizationConfig:
@@ -503,6 +532,9 @@ class WebScrapingMixin:  # noqa: PLR0904
 
     async def create_browser_session(self) -> None:
         LOG.info("Creating Browser session...")
+        self._viewport_resize_attempted = False
+        self._set_viewport_resize_status(_VIEWPORT_RESIZE_STATUS_NOT_ATTEMPTED, attempted = False)
+        self._browser_session_is_remote = False
 
         if self.browser_config.binary_location:
             ensure(await files.exists(self.browser_config.binary_location), f"Specified browser binary [{self.browser_config.binary_location}] does not exist.")
@@ -538,27 +570,15 @@ class WebScrapingMixin:  # noqa: PLR0904
         if remote_port > 0:
             self.browser = await self._connect_to_remote_browser(remote_host, remote_port)
             LOG.info("New Browser session is %s", self.browser.websocket_url)
+            self._browser_session_is_remote = True
             return
 
         ########################################################
         # configure and initialize new browser instance...
         ########################################################
 
-        # Screen-aware viewport selection — probe is skipped when the user already
-        # supplies --window-size or when humanization / randomization is disabled.
-        # Computed locally to avoid stale state across repeated sessions.
-        humanization = self._get_humanization_config()
-        selected_viewport_size:str | None = None
-        if (
-            humanization.enabled
-            and humanization.randomize_viewport
-            and humanization.viewport_sizes
-            and not any(arg.startswith("--window-size") for arg in self.browser_config.arguments)
-        ):
-            selected_viewport_size = await self._select_viewport_size()
-
         browser_args, user_data_dir_from_args = self._build_new_browser_launch_args(
-            selected_viewport_size = selected_viewport_size
+            selected_viewport_size = None
         )
         effective_user_data_dir = await self._resolve_effective_user_data_dir(user_data_dir_from_args)
 
@@ -581,6 +601,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         try:
             self.browser = await nodriver.start(cfg)  # type: ignore[attr-defined]
             LOG.info("New Browser session is %s", self.browser.websocket_url)
+            self._browser_session_is_remote = False
         except Exception as e:
             # Clean up any resources that were created during setup
             self._cleanup_session_resources()
@@ -636,144 +657,202 @@ class WebScrapingMixin:  # noqa: PLR0904
                 LOG.error("4. Check if any antivirus or security software is blocking the connection")
             raise
 
-    async def _probe_screen_metrics(self) -> tuple[int, int] | None:
-        """Start a temporary isolated browser to probe CSS-pixel screen dimensions.
+    def _set_viewport_resize_status(
+        self,
+        status:str,
+        *,
+        attempted:bool | None = None,
+        applied:bool = False,
+        reason:str | None = None,
+        selected_viewport:str | None = None,
+        error:str | None = None,
+    ) -> None:
+        attempted_value = self._viewport_resize_attempted if attempted is None else attempted
+        self._viewport_resize_attempted = attempted_value
+        result:dict[str, Any] = {"status": status, "attempted": attempted_value, "applied": applied}
+        if reason is not None:
+            result["reason"] = reason
+        if selected_viewport is not None:
+            result["selected_viewport"] = selected_viewport
+        if error is not None:
+            result["error"] = error
+        self._viewport_resize_status = result
 
-        Returns ``(availWidth, availHeight)`` from ``window.screen``, or ``None`` if
-        the probe browser could not be started or the metrics are unavailable.
-        The probe browser uses a temporary user data directory and its own lifecycle
-        — it never touches ``self.browser`` or ``self.page``.
-        """
-        if self._screen_metrics_cache is not None:
-            return self._screen_metrics_cache
+    def get_viewport_resize_status(self) -> dict[str, Any]:
+        """Return diagnostics for the post-open screen-aware viewport resize."""
+        return dict(self._viewport_resize_status)
 
-        binary = self.browser_config.binary_location
-        if not binary:
-            return None
-
-        tmp_dir:str | None = None
-        browser:Browser | None = None
+    def _is_kleinanzeigen_page(self, url:str | None) -> bool:
+        if not url:
+            return False
         try:
-            tmp_dir = tempfile.mkdtemp(prefix = "kbb-probe-")
-
-            # Strip flags that would tie the probe to the user's profile, alter its
-            # window, or load extensions.  Critical generic flags (--no-sandbox, …)
-            # are preserved.  --disable-extensions is kept as a safety/noise-reduction
-            # flag, not an extension-load flag.
-            skip_prefixes = ("--user-data-dir=", "--profile-directory=", "--window-size", "--load-extension=")
-            probe_args = [a for a in self.browser_config.arguments if not any(a.startswith(p) for p in skip_prefixes)]
-
-            cfg = _build_nodriver_config(binary, probe_args, tmp_dir)
-
-            async def run_probe() -> Any:
-                nonlocal browser
-                browser = await nodriver.start(cfg)  # type: ignore[attr-defined]
-                page = await browser.get("about:blank")
-                # Give the page a moment to stabilise before querying screen metrics.
-                await asyncio.sleep(0.5)
-
-                return await page.evaluate(
-                    "({availWidth: window.screen.availWidth, availHeight: window.screen.availHeight})",
-                    await_promise = True,
-                    return_by_value = True,
-                )
-
-            result = await asyncio.wait_for(run_probe(), timeout = self.effective_timeout("chrome_remote_probe"))
-
-            # Normalize nodriver RemoteObject to a plain dict when
-            # return_by_value is not honoured by the runtime.
-            if _is_remote_object(result):
-                try:
-                    remote_obj:"RemoteObject" = result  # noqa: F841
-                    if hasattr(remote_obj, "deep_serialized_value") and remote_obj.deep_serialized_value:
-                        result = self._convert_remote_object_value(remote_obj.deep_serialized_value.value)
-                    elif hasattr(remote_obj, "value") and remote_obj.value is not None:
-                        result = remote_obj.value
-                except Exception as exc:
-                    LOG.debug("Metrics RemoteObject extraction failed: %s", exc)
-                    return None
-
-            if isinstance(result, dict):
-                w = result.get("availWidth")
-                h = result.get("availHeight")
-                if isinstance(w, (int, float)) and isinstance(h, (int, float)) and w > 0 and h > 0:
-                    LOG.debug("Screen metrics probed: %dx%d", int(w), int(h))
-                    self._screen_metrics_cache = (int(w), int(h))
-                    return self._screen_metrics_cache
-            LOG.debug("Unexpected probe result: %r", result)
-            return None
-        except TimeoutError:
-            LOG.debug("Screen metrics probe timed out", exc_info = True)
-            return None
+            host = (urlparse(url).hostname or "").lower()
         except Exception:
-            LOG.debug("Screen metrics probe failed", exc_info = True)
-            return None
-        finally:
-            if browser is not None:
-                try:
-                    browser_pid = getattr(browser, "_process_pid", None)
-                    stop_result = cast(Any, browser.stop)()
-                    if inspect.isawaitable(stop_result):
-                        await stop_result
-                    # Mirror close_browser_session() orphan child cleanup
-                    if isinstance(browser_pid, int) and browser_pid > 0:
-                        self._kill_orphaned_browser_children(browser_pid)
-                except Exception as exc:
-                    LOG.debug("Probe browser stop ignored: %s", exc)
-            if tmp_dir is not None:
-                try:
-                    shutil.rmtree(tmp_dir, ignore_errors = True)
-                except Exception as exc:
-                    LOG.debug("Probe temp directory cleanup ignored: %s", exc)
+            return False
+        return host.endswith("kleinanzeigen.de")
 
-    async def _select_viewport_size(self) -> str | None:
-        """Screen-aware viewport selection.
-
-        Returns a ``WxH`` string or ``None`` (meaning *omit --window-size*).
-
-        Decision logic, in order:
-        1. Skip headless or no-display environments.
-        2. Probe the real screen via an isolated browser.
-        3. If metrics are obtained, pick randomly among configured sizes that fit,
-           then apply bounded jitter (±24px width, ±16px height) capped by the
-           available screen.
-        4. If nothing fits, return ``None`` — let the browser/window-manager choose.
-        5. If the probe fails or reports invalid metrics, return ``None``.
-        """
+    def _viewport_resize_skip_reason(self, url:str | None) -> str | None:
         humanization = self._get_humanization_config()
-        sizes = humanization.viewport_sizes
-        if not sizes:
-            return None
+        skip_checks:tuple[tuple[bool, str], ...] = (
+            (not self._is_kleinanzeigen_page(url), "non-kleinanzeigen-url"),
+            (self._browser_session_is_remote, "remote-browser"),
+            (any(arg.startswith("--window-size") for arg in self.browser_config.arguments), "user-window-size"),
+            (not humanization.enabled, "humanization-disabled"),
+            (not humanization.randomize_viewport, "randomize-viewport-disabled"),
+            (not humanization.viewport_sizes, "no-viewport-sizes"),
+            (any(_is_headless_browser_arg(arg) for arg in self.browser_config.arguments), "headless"),
+            (not _has_display_available(), "no-display"),
+        )
+        for should_skip, reason in skip_checks:
+            if should_skip:
+                return reason
+        return None
 
-        if any(_is_headless_browser_arg(arg) for arg in self.browser_config.arguments):
-            LOG.debug("Skipping randomized viewport sizing for headless browser args")
-            return None
-
-        if not _has_display_available():
-            LOG.debug("Skipping randomized viewport sizing because no real display is available")
-            return None
-
-        metrics = await self._probe_screen_metrics()
+    def _select_viewport_size_for_metrics(self, metrics:Any) -> str | None:
+        """Select a configured viewport size from already available screen metrics."""
         normalized_metrics = _normalize_viewport_metrics(metrics)
         if normalized_metrics is None:
-            LOG.debug("Screen metrics unavailable or invalid; omitting --window-size")
+            LOG.debug("Screen metrics unavailable or invalid; omitting viewport resize")
             return None
 
         avail_w, avail_h = normalized_metrics
-        fitting = _filter_viewport_sizes(sizes, avail_w, avail_h)
-        if fitting:
-            chosen = _rng.choice(fitting)
-            parts = chosen.lower().split("x")
-            base_w = int(parts[0].strip())
-            base_h = int(parts[1].strip())
-            jw, jh = _jitter_viewport(base_w, base_h, avail_w, avail_h)
-            LOG.info(
-                "Screen-aware viewport: %s jittered to %dx%d (avail %dx%d)",
-                chosen, jw, jh, avail_w, avail_h,
+        fitting = _filter_viewport_sizes(self._get_humanization_config().viewport_sizes, avail_w, avail_h)
+        if not fitting:
+            LOG.debug("No configured viewport fits %dx%d screen; omitting viewport resize", avail_w, avail_h)
+            return None
+
+        chosen = _rng.choice(fitting)
+        parsed = _parse_viewport_size(chosen)
+        if parsed is None:
+            LOG.debug("Selected viewport size became invalid during parsing: %s", chosen)
+            return None
+
+        base_w, base_h = parsed
+        jw, jh = _jitter_viewport(base_w, base_h, avail_w, avail_h)
+        selected = f"{jw}x{jh}"
+        LOG.info("Screen-aware viewport: %s jittered to %s (avail %dx%d)", chosen, selected, avail_w, avail_h)
+        return selected
+
+    async def _collect_current_viewport_metrics(self) -> dict[str, Any] | None:
+        if not self.page:
+            return None
+        metrics = await self.web_execute(
+            "({"
+            "availWidth: window.screen.availWidth, "
+            "availHeight: window.screen.availHeight, "
+            "outerWidth: window.outerWidth, "
+            "outerHeight: window.outerHeight, "
+            "innerWidth: window.innerWidth, "
+            "innerHeight: window.innerHeight, "
+            "devicePixelRatio: window.devicePixelRatio, "
+            "url: location.href, "
+            "title: document.title"
+            "})"
+        )
+        if not isinstance(metrics, dict):
+            return None
+        return metrics
+
+    async def _apply_viewport_size(self, selected_viewport_size:str) -> str | None:
+        """Apply viewport dimensions via CDP window bounds, preserving position.
+
+        Returns ``None`` on success or a human-readable error message on failure.
+        """
+        if not self.page:
+            return "page unavailable"
+
+        parsed = _parse_viewport_size(selected_viewport_size)
+        if parsed is None:
+            return f"invalid viewport size: {selected_viewport_size!r}"
+
+        width, height = parsed
+        try:
+            window_id, bounds = await self.page.get_window()
+            left = getattr(bounds, "left", None)
+            top = getattr(bounds, "top", None)
+            new_bounds = cdp_browser.Bounds(
+                left = left if isinstance(left, int) else 0,
+                top = top if isinstance(top, int) else 0,
+                width = width,
+                height = height,
+                window_state = cdp_browser.WindowState.NORMAL,
             )
-            return f"{jw}x{jh}"
-        LOG.debug("No configured viewport fits %dx%d screen; omitting --window-size", avail_w, avail_h)
-        return None
+            await self.page.send(cdp_browser.set_window_bounds(window_id, bounds = new_bounds))
+            LOG.info("Applied randomized browser window size: %dx%d", width, height)
+            return None
+        except Exception as exc:  # noqa: BLE001
+            LOG.debug("Viewport resize failed via CDP: %s", exc)
+            return str(exc)
+
+    async def _resize_viewport_after_open(self) -> None:
+        if not self.page or self._viewport_resize_attempted:
+            return
+
+        url = getattr(self.page, "url", None)
+        if not self._is_kleinanzeigen_page(url):
+            return
+
+        skip_reason = self._viewport_resize_skip_reason(url)
+        if skip_reason is not None:
+            LOG.debug("Viewport resize skipped: %s", skip_reason)
+            self._set_viewport_resize_status(_VIEWPORT_RESIZE_STATUS_SKIPPED, attempted = True, reason = skip_reason)
+            return
+
+        try:
+            before_metrics = await self._collect_current_viewport_metrics()
+        except Exception as exc:  # noqa: BLE001
+            LOG.debug("Screen metrics unavailable or invalid; omitting viewport resize: %s", exc)
+            self._set_viewport_resize_status(
+                _VIEWPORT_RESIZE_STATUS_UNAVAILABLE_PAGE,
+                attempted = True,
+                reason = "metrics-unavailable",
+                error = str(exc),
+            )
+            return
+
+        if before_metrics is None:
+            self._set_viewport_resize_status(
+                _VIEWPORT_RESIZE_STATUS_UNAVAILABLE_PAGE,
+                attempted = True,
+                reason = "metrics-unavailable",
+            )
+            return
+
+        normalized_metrics = _normalize_viewport_metrics((before_metrics.get("availWidth"), before_metrics.get("availHeight")))
+        if normalized_metrics is None:
+            self._set_viewport_resize_status(
+                _VIEWPORT_RESIZE_STATUS_INVALID_METRICS,
+                attempted = True,
+                reason = "invalid-screen-metrics",
+            )
+            return
+
+        selected_viewport_size = self._select_viewport_size_for_metrics(normalized_metrics)
+        if selected_viewport_size is None:
+            self._set_viewport_resize_status(
+                _VIEWPORT_RESIZE_STATUS_NO_FIT,
+                attempted = True,
+                reason = "no-configured-size-fits",
+            )
+            return
+
+        error = await self._apply_viewport_size(selected_viewport_size)
+        if error is None:
+            self._set_viewport_resize_status(
+                _VIEWPORT_RESIZE_STATUS_APPLIED,
+                attempted = True,
+                applied = True,
+                selected_viewport = selected_viewport_size,
+            )
+            return
+
+        self._set_viewport_resize_status(
+            _VIEWPORT_RESIZE_STATUS_FAILED,
+            attempted = True,
+            reason = "cdp-window-bounds-failed",
+            selected_viewport = selected_viewport_size,
+            error = error,
+        )
 
     def _build_new_browser_launch_args(self, selected_viewport_size:str | None = None) -> tuple[list[str], str | None]:
         """Build browser launch arguments and extract user_data_dir from custom args.
@@ -828,7 +907,7 @@ class WebScrapingMixin:  # noqa: PLR0904
             browser_args.append(browser_arg)
 
         if selected_viewport_size:
-            # Selected by _select_viewport_size() — already screen-filtered.
+            # Selected by the screen-aware viewport logic — already screen-filtered.
             width, height = selected_viewport_size.lower().split("x")
             window_size = f"--window-size={width.strip()},{height.strip()}"
             LOG.info(" -> Randomized browser window size: %s", window_size)
@@ -1509,6 +1588,8 @@ class WebScrapingMixin:  # noqa: PLR0904
             timeout_error_message = f"Page did not finish loading within {page_timeout} seconds.",
             apply_multiplier = False,
         )
+
+        await self._resize_viewport_after_open()
         await self.perform_random_human_actions()
 
     async def web_text(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> str:
