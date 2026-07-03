@@ -820,7 +820,6 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
   _build_new_browser_launch_args:
     " -> Browser profile name: %s": " -> Browser-Profilname: %s"
     " -> Custom Browser argument: %s": " -> Benutzerdefiniertes Browser-Argument: %s"
-    " -> Randomized browser window size: %s": " -> Zufällige Browser-Fenstergröße: %s"
     "Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir.": "Ignoriere leeres --user-data-dir= Argument; verwende konfiguriertes user_data_dir."
 
   _select_viewport_size_for_metrics:

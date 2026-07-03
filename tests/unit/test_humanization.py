@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""Tests for the human-like interaction behavior in WebScrapingMixin (bot-detection evasion)."""
+"""Tests for human-like interaction pacing and viewport behavior in WebScrapingMixin."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -31,74 +31,21 @@ def make_scraper(humanization:HumanizationConfig | None = None) -> WebScrapingMi
 
 
 # ---------------------------------------------------------------------------
-# web_click: mouse-based clicking with fallback
+# web_click: always use plain element click
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_web_click_uses_humanized_path_when_enabled() -> None:
-    scraper = make_scraper(HumanizationConfig(mouse_movement = True))
+async def test_web_click_uses_plain_click() -> None:
+    scraper = make_scraper()
     elem = AsyncMock(spec = Element)
     with (
         patch.object(scraper, "web_find", new_callable = AsyncMock, return_value = elem),
-        patch.object(scraper, "_humanized_click", new_callable = AsyncMock) as humanized,
         patch.object(scraper, "web_sleep", new_callable = AsyncMock),
     ):
         result = await scraper.web_click(By.ID, "x")
 
-    humanized.assert_awaited_once_with(elem)
-    elem.click.assert_not_awaited()
+    elem.click.assert_awaited_once()
     assert result is elem
-
-
-@pytest.mark.asyncio
-async def test_web_click_falls_back_to_plain_click_on_failure() -> None:
-    scraper = make_scraper(HumanizationConfig(mouse_movement = True))
-    elem = AsyncMock(spec = Element)
-    with (
-        patch.object(scraper, "web_find", new_callable = AsyncMock, return_value = elem),
-        patch.object(scraper, "_humanized_click", new_callable = AsyncMock, side_effect = RuntimeError("no geometry")),
-        patch.object(scraper, "web_sleep", new_callable = AsyncMock),
-    ):
-        await scraper.web_click(By.ID, "x")
-
-    elem.click.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_web_click_uses_plain_click_when_mouse_movement_disabled() -> None:
-    scraper = make_scraper(HumanizationConfig(mouse_movement = False))
-    elem = AsyncMock(spec = Element)
-    with (
-        patch.object(scraper, "web_find", new_callable = AsyncMock, return_value = elem),
-        patch.object(scraper, "_humanized_click", new_callable = AsyncMock) as humanized,
-        patch.object(scraper, "web_sleep", new_callable = AsyncMock),
-    ):
-        await scraper.web_click(By.ID, "x")
-
-    humanized.assert_not_awaited()
-    elem.click.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_humanized_click_dispatches_mouse_events() -> None:
-    scraper = make_scraper()
-    tab = AsyncMock()
-    elem = AsyncMock(spec = Element)
-    elem.scroll_into_view = AsyncMock()
-    elem.get_position = AsyncMock(return_value = SimpleNamespace(center = (100.0, 200.0)))
-    elem._tab = tab
-    with (
-        patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.sleep", new_callable = AsyncMock),
-        patch("kleinanzeigen_bot.utils.web_scraping_mixin.cdp_input.dispatch_mouse_event") as dispatch,
-    ):
-        await scraper._humanized_click(elem)
-
-    # at least the moves plus a press and a release were dispatched
-    assert tab.send.await_count >= 3
-    dispatched_types = [call.args[0] for call in dispatch.call_args_list]
-    assert "mouseMoved" in dispatched_types
-    assert "mousePressed" in dispatched_types
-    assert "mouseReleased" in dispatched_types
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +54,7 @@ async def test_humanized_click_dispatches_mouse_events() -> None:
 
 @pytest.mark.asyncio
 async def test_web_input_types_per_character_when_jitter_enabled() -> None:
-    scraper = make_scraper(HumanizationConfig(typing_delay_min_ms = 0, typing_delay_max_ms = 0))
+    scraper = make_scraper(HumanizationConfig(typing_jitter = True, typing_delay_min_ms = 0, typing_delay_max_ms = 0))
     field = AsyncMock(spec = Element)
     with (
         patch.object(scraper, "web_find", new_callable = AsyncMock, return_value = field),
@@ -134,73 +81,33 @@ async def test_web_input_single_burst_when_jitter_disabled() -> None:
     field.send_keys.assert_awaited_once_with("abc")
 
 
+@pytest.mark.asyncio
+async def test_web_input_sends_per_character_by_default() -> None:
+    scraper = make_scraper()
+    field = AsyncMock(spec = Element)
+    with (
+        patch.object(scraper, "web_find", new_callable = AsyncMock, return_value = field),
+        patch.object(scraper, "_clear_input", new_callable = AsyncMock),
+        patch.object(scraper, "web_sleep", new_callable = AsyncMock),
+    ):
+        await scraper.web_input(By.ID, "x", "abc")
+
+    assert [call.args[0] for call in field.send_keys.await_args_list] == ["a", "b", "c"]
+
+
 # ---------------------------------------------------------------------------
-# idle actions + thinking pauses
+# web_sleep
 # ---------------------------------------------------------------------------
 
+# web_sleep is always independent of humanization.enabled
 @pytest.mark.asyncio
-async def test_perform_random_human_actions_noop_when_disabled() -> None:
-    scraper = make_scraper(HumanizationConfig(enabled = False))
-    with (
-        patch.object(scraper, "_idle_scroll", new_callable = AsyncMock) as scroll,
-        patch.object(scraper, "_idle_mouse_wiggle", new_callable = AsyncMock) as wiggle,
-        patch.object(scraper, "web_think", new_callable = AsyncMock) as think,
-    ):
-        await scraper.perform_random_human_actions()
-
-    scroll.assert_not_awaited()
-    wiggle.assert_not_awaited()
-    think.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_perform_random_human_actions_runs_subset_when_gate_fires() -> None:
-    scraper = make_scraper(HumanizationConfig(idle_action_probability = 1.0))
-    with (
-        patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.random", return_value = 0.0),
-        patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.shuffle"),
-        patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", return_value = 1),
-        patch.object(scraper, "_idle_scroll", new_callable = AsyncMock) as scroll,
-        patch.object(scraper, "_idle_mouse_wiggle", new_callable = AsyncMock) as wiggle,
-        patch.object(scraper, "web_think", new_callable = AsyncMock) as think,
-    ):
-        await scraper.perform_random_human_actions()
-
-    # exactly one action runs (subset size forced to 1, shuffle disabled -> first action)
-    assert scroll.await_count + wiggle.await_count + think.await_count == 1
-
-
-@pytest.mark.asyncio
-async def test_perform_random_human_actions_swallows_action_errors() -> None:
-    scraper = make_scraper(HumanizationConfig(idle_action_probability = 1.0))
-    with (
-        patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.random", return_value = 0.0),
-        patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.shuffle"),
-        patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", return_value = 3),
-        patch.object(scraper, "_idle_scroll", new_callable = AsyncMock, side_effect = RuntimeError("boom")),
-        patch.object(scraper, "_idle_mouse_wiggle", new_callable = AsyncMock),
-        patch.object(scraper, "web_think", new_callable = AsyncMock),
-    ):
-        # must not raise even though the first action fails
-        await scraper.perform_random_human_actions()
-
-
-@pytest.mark.asyncio
-async def test_web_think_pauses_only_within_probability() -> None:
-    scraper = make_scraper(HumanizationConfig(long_pause_probability = 0.1))
-    with (
-        patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.random", return_value = 0.05),
-        patch.object(scraper, "web_sleep", new_callable = AsyncMock) as sleep,
-    ):
-        await scraper.web_think()
-    sleep.assert_awaited_once()
-
-    with (
-        patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.random", return_value = 0.5),
-        patch.object(scraper, "web_sleep", new_callable = AsyncMock) as sleep2,
-    ):
-        await scraper.web_think()
-    sleep2.assert_not_awaited()
+async def test_web_sleep_is_independent_from_enabled_flag() -> None:
+    scraper = make_scraper(HumanizationConfig(enabled = False, action_delay_min_ms = 1, action_delay_max_ms = 1))
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.sleep", new_callable = AsyncMock) as sleep:
+        await scraper.web_sleep()
+    assert sleep.await_count == 1
+    assert sleep.await_args is not None
+    assert sleep.await_args.args[0] == 0.001
 
 
 # ---------------------------------------------------------------------------
@@ -248,18 +155,11 @@ async def test_web_sleep_with_min_only_is_fixed_delay() -> None:
 
 
 # ---------------------------------------------------------------------------
-# viewport randomization at launch
+# viewport launch arguments
 # ---------------------------------------------------------------------------
 
-def test_viewport_arg_appended_when_selected() -> None:
-    """selected_viewport_size parameter is honoured by _build_new_browser_launch_args."""
-    scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1600x900"]))
-    args, _ = scraper._build_new_browser_launch_args(selected_viewport_size = "1600x900")
-    assert "--window-size=1600,900" in args
-
-
-def test_viewport_arg_not_appended_when_unselected() -> None:
-    """_build_new_browser_launch_args with no selected_viewport_size must not add --window-size."""
+def test_viewport_arg_not_appended_by_bot_at_launch() -> None:
+    """Bot-selected viewport sizes are applied post-open, not as launch args."""
     scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1600x900"]))
     args, _ = scraper._build_new_browser_launch_args()
     assert not any(a.startswith("--window-size") for a in args)
@@ -271,12 +171,6 @@ def test_viewport_arg_not_appended_when_user_supplied() -> None:
     args, _ = scraper._build_new_browser_launch_args()
     assert "--window-size=1600,900" not in args
     assert "--window-size=800,600" in args
-
-
-def test_viewport_arg_not_appended_when_disabled() -> None:
-    scraper = make_scraper(HumanizationConfig(randomize_viewport = False))
-    args, _ = scraper._build_new_browser_launch_args()
-    assert not any(arg.startswith("--window-size") for arg in args)
 
 
 # ---------------------------------------------------------------------------
@@ -334,9 +228,6 @@ def test_reversed_min_max_raises_error() -> None:
 
     with pytest.raises(ValueError, match = "must be >="):
         HumanizationConfig(action_delay_min_ms = 3_000, action_delay_max_ms = 1_000)
-
-    with pytest.raises(ValueError, match = "must be >="):
-        HumanizationConfig(long_pause_min_ms = 5_000, long_pause_max_ms = 2_000)
 
 
 # ---------------------------------------------------------------------------
@@ -457,8 +348,7 @@ def test_jitter_viewport_floor_at_one() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_select_viewport_size_for_metrics_applies_jitter() -> None:
+def test_select_viewport_size_for_metrics_applies_jitter() -> None:
     """When metrics are available, a fitting base is jittered before returning."""
     scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1600x900", "1920x1080"]))
     with (
@@ -469,7 +359,6 @@ async def test_select_viewport_size_for_metrics_applies_jitter() -> None:
     assert result == "1590x890"
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "metrics",
     [
@@ -488,7 +377,7 @@ async def test_select_viewport_size_for_metrics_applies_jitter() -> None:
         (float("inf"), 1080),
     ],
 )
-async def test_select_viewport_size_for_metrics_returns_none_for_invalid_metrics(metrics:object) -> None:
+def test_select_viewport_size_for_metrics_returns_none_for_invalid_metrics(metrics:object) -> None:
     scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["2560x1440", "1366x768"]))
     with patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.choice", autospec = True) as choice_mock:
         result = scraper._select_viewport_size_for_metrics(metrics)
@@ -496,18 +385,9 @@ async def test_select_viewport_size_for_metrics_returns_none_for_invalid_metrics
     choice_mock.assert_not_called()
 
 
-@pytest.mark.asyncio
-async def test_select_viewport_size_for_metrics_returns_none_when_none_fit() -> None:
+def test_select_viewport_size_for_metrics_returns_none_when_none_fit() -> None:
     scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["2560x1440"]))
     assert scraper._select_viewport_size_for_metrics((1920, 1080)) is None
-
-
-@pytest.mark.asyncio
-async def test_select_viewport_size_for_metrics_handles_invalid_chosen_size() -> None:
-    scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1366x768"]))
-
-    with patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.choice", return_value = "invalid"):
-        assert scraper._select_viewport_size_for_metrics((1920, 1080)) is None
 
 
 @pytest.mark.asyncio
@@ -567,15 +447,24 @@ def test_is_kleinanzeigen_page_rejects_missing_and_unparseable_urls() -> None:
         assert scraper._is_kleinanzeigen_page("https://www.kleinanzeigen.de/") is False
 
 
-@pytest.mark.asyncio
-async def test_collect_current_viewport_metrics_handles_missing_page_and_non_dict() -> None:
+def test_is_kleinanzeigen_page_matches_domain_boundary() -> None:
     scraper = make_scraper()
 
-    assert await scraper._collect_current_viewport_metrics() is None
+    assert scraper._is_kleinanzeigen_page("https://kleinanzeigen.de/") is True
+    assert scraper._is_kleinanzeigen_page("https://www.kleinanzeigen.de/") is True
+    assert scraper._is_kleinanzeigen_page("https://notkleinanzeigen.de/") is False
+    assert scraper._is_kleinanzeigen_page("https://kleinanzeigen.de.evil.test/") is False
+
+
+@pytest.mark.asyncio
+async def test_available_screen_size_handles_missing_page_and_non_dict() -> None:
+    scraper = make_scraper()
+
+    assert await scraper._available_screen_size() is None
 
     scraper.page = cast(Any, SimpleNamespace(url = "https://www.kleinanzeigen.de/"))
     with patch.object(scraper, "web_execute", new_callable = AsyncMock, return_value = "not-a-dict"):
-        assert await scraper._collect_current_viewport_metrics() is None
+        assert await scraper._available_screen_size() is None
 
 
 @pytest.mark.asyncio
@@ -585,15 +474,33 @@ async def test_resize_viewport_after_open_skips_user_window_size() -> None:
     scraper.page = cast(Any, SimpleNamespace(url = "https://www.kleinanzeigen.de/"))
 
     with (
-        patch.object(scraper, "_collect_current_viewport_metrics", new_callable = AsyncMock) as collect_metrics,
+        patch.object(scraper, "_available_screen_size", new_callable = AsyncMock) as collect_metrics,
         patch.object(scraper, "_apply_viewport_size", new_callable = AsyncMock) as apply_size,
     ):
         await scraper._resize_viewport_after_open()
 
     collect_metrics.assert_not_awaited()
     apply_size.assert_not_awaited()
-    assert scraper.get_viewport_resize_status()["status"] == "skipped"
-    assert scraper.get_viewport_resize_status()["reason"] == "user-window-size"
+    assert scraper._viewport_resize_attempted is True
+
+
+@pytest.mark.asyncio
+async def test_resize_viewport_after_open_does_not_skip_window_size_prefix_typos() -> None:
+    scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1366x768"]))
+    scraper.browser_config.arguments = ["--window-size-mode=weird"]
+    scraper.page = cast(Any, SimpleNamespace(url = "https://www.kleinanzeigen.de/"))
+
+    with (
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin._has_display_available", return_value = True),
+        patch.object(scraper, "_available_screen_size", new_callable = AsyncMock, return_value = (1920, 1080)) as collect_metrics,
+        patch.object(scraper, "_apply_viewport_size", new_callable = AsyncMock, return_value = True) as apply_size,
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.choice", return_value = "1366x768"),
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [1366, 768]),
+    ):
+        await scraper._resize_viewport_after_open()
+
+    collect_metrics.assert_awaited_once()
+    apply_size.assert_awaited_once_with("1366x768")
 
 
 @pytest.mark.asyncio
@@ -603,27 +510,17 @@ async def test_resize_viewport_after_open_ignores_non_kleinanzeigen_page() -> No
 
     await scraper._resize_viewport_after_open()
 
-    assert scraper.get_viewport_resize_status()["status"] == "not-attempted"
-    assert scraper.get_viewport_resize_status()["attempted"] is False
+    assert scraper._viewport_resize_attempted is False
 
 
 @pytest.mark.asyncio
-async def test_resize_viewport_after_open_applies_once_with_status() -> None:
+async def test_resize_viewport_after_open_applies_once() -> None:
     scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1366x768"]))
     scraper.page = cast(Any, SimpleNamespace(url = "https://www.kleinanzeigen.de/"))
-    before_metrics = {
-        "availWidth": 1920,
-        "availHeight": 1080,
-        "outerWidth": 1200,
-        "outerHeight": 900,
-        "innerWidth": 1180,
-        "innerHeight": 820,
-        "devicePixelRatio": 2,
-    }
     with (
         patch("kleinanzeigen_bot.utils.web_scraping_mixin._has_display_available", return_value = True),
-        patch.object(scraper, "_collect_current_viewport_metrics", new_callable = AsyncMock, return_value = before_metrics) as collect_metrics,
-        patch.object(scraper, "_apply_viewport_size", new_callable = AsyncMock, return_value = None) as apply_size,
+        patch.object(scraper, "_available_screen_size", new_callable = AsyncMock, return_value = (1920, 1080)) as collect_metrics,
+        patch.object(scraper, "_apply_viewport_size", new_callable = AsyncMock, return_value = True) as apply_size,
         patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.choice", return_value = "1366x768"),
         patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [1377, 777]),
     ):
@@ -632,78 +529,66 @@ async def test_resize_viewport_after_open_applies_once_with_status() -> None:
 
     assert collect_metrics.await_count == 1
     apply_size.assert_awaited_once_with("1377x777")
-    status = scraper.get_viewport_resize_status()
-    assert status["status"] == "applied"
-    assert status["attempted"] is True
-    assert status["applied"] is True
-    assert status["selected_viewport"] == "1377x777"
+    assert scraper._viewport_resize_attempted is True
 
 
 @pytest.mark.asyncio
-async def test_resize_viewport_after_open_records_invalid_metrics() -> None:
+async def test_resize_viewport_after_open_skips_invalid_metrics() -> None:
     scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1366x768"]))
     scraper.page = cast(Any, SimpleNamespace(url = "https://www.kleinanzeigen.de/"))
-    metrics = {"availWidth": True, "availHeight": 1080}
-
     with (
         patch("kleinanzeigen_bot.utils.web_scraping_mixin._has_display_available", return_value = True),
-        patch.object(scraper, "_collect_current_viewport_metrics", new_callable = AsyncMock, return_value = metrics),
+        patch.object(scraper, "web_execute", new_callable = AsyncMock, return_value = {"availWidth": True, "availHeight": 1080}),
+        patch.object(scraper, "_apply_viewport_size", new_callable = AsyncMock) as apply_size,
     ):
         await scraper._resize_viewport_after_open()
 
-    status = scraper.get_viewport_resize_status()
-    assert status["status"] == "invalid-metrics"
-    assert status["reason"] == "invalid-screen-metrics"
+    apply_size.assert_not_awaited()
+    assert scraper._viewport_resize_attempted is True
 
 
 @pytest.mark.asyncio
-async def test_resize_viewport_after_open_records_unavailable_metrics() -> None:
+async def test_resize_viewport_after_open_skips_when_metrics_unavailable() -> None:
     scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1366x768"]))
     scraper.page = cast(Any, SimpleNamespace(url = "https://www.kleinanzeigen.de/"))
 
     with (
         patch("kleinanzeigen_bot.utils.web_scraping_mixin._has_display_available", return_value = True),
-        patch.object(scraper, "_collect_current_viewport_metrics", new_callable = AsyncMock, return_value = None),
+        patch.object(scraper, "_available_screen_size", new_callable = AsyncMock, return_value = None),
     ):
         await scraper._resize_viewport_after_open()
 
-    status = scraper.get_viewport_resize_status()
-    assert status["status"] == "unavailable-page"
-    assert status["reason"] == "metrics-unavailable"
+    assert scraper._viewport_resize_attempted is True
 
 
 @pytest.mark.asyncio
-async def test_resize_viewport_after_open_records_metrics_collection_error() -> None:
+async def test_resize_viewport_after_open_treats_metrics_collection_error_as_nonfatal() -> None:
     scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1366x768"]))
     scraper.page = cast(Any, SimpleNamespace(url = "https://www.kleinanzeigen.de/"))
 
     with (
         patch("kleinanzeigen_bot.utils.web_scraping_mixin._has_display_available", return_value = True),
-        patch.object(scraper, "_collect_current_viewport_metrics", new_callable = AsyncMock, side_effect = RuntimeError("page gone")),
+        patch.object(scraper, "_available_screen_size", new_callable = AsyncMock, side_effect = RuntimeError("page gone")),
     ):
         await scraper._resize_viewport_after_open()
 
-    status = scraper.get_viewport_resize_status()
-    assert status["status"] == "unavailable-page"
-    assert status["reason"] == "metrics-unavailable"
-    assert status["error"] == "page gone"
+    assert scraper._viewport_resize_attempted is True
 
 
 @pytest.mark.asyncio
-async def test_resize_viewport_after_open_records_no_fitting_size() -> None:
+async def test_resize_viewport_after_open_skips_when_no_fitting_size() -> None:
     scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["2560x1440"]))
     scraper.page = cast(Any, SimpleNamespace(url = "https://www.kleinanzeigen.de/"))
-    metrics = {"availWidth": 1920, "availHeight": 1080}
 
     with (
         patch("kleinanzeigen_bot.utils.web_scraping_mixin._has_display_available", return_value = True),
-        patch.object(scraper, "_collect_current_viewport_metrics", new_callable = AsyncMock, return_value = metrics),
+        patch.object(scraper, "_available_screen_size", new_callable = AsyncMock, return_value = (1920, 1080)),
+        patch.object(scraper, "_apply_viewport_size", new_callable = AsyncMock) as apply_size,
     ):
         await scraper._resize_viewport_after_open()
 
-    status = scraper.get_viewport_resize_status()
-    assert status["status"] == "no-fitting-size"
-    assert status["reason"] == "no-configured-size-fits"
+    apply_size.assert_not_awaited()
+    assert scraper._viewport_resize_attempted is True
 
 
 @pytest.mark.asyncio
@@ -717,9 +602,9 @@ async def test_apply_viewport_size_preserves_window_position() -> None:
     scraper.page = cast(Any, page)
 
     with patch("kleinanzeigen_bot.utils.web_scraping_mixin.cdp_browser.set_window_bounds", return_value = "set-bounds") as set_bounds:
-        error = await scraper._apply_viewport_size("1377x777")
+        applied = await scraper._apply_viewport_size("1377x777")
 
-    assert error is None
+    assert applied is True
     page.get_window.assert_awaited_once()
     page.send.assert_awaited_once_with("set-bounds")
     assert set_bounds.call_args.args[0] == 7
@@ -731,79 +616,80 @@ async def test_apply_viewport_size_preserves_window_position() -> None:
 
 
 @pytest.mark.asyncio
-async def test_apply_viewport_size_reports_invalid_inputs_and_cdp_errors() -> None:
+async def test_apply_viewport_size_omits_unknown_window_position() -> None:
     scraper = make_scraper()
+    bounds = SimpleNamespace(left = None, top = None)
+    page = SimpleNamespace(
+        get_window = AsyncMock(return_value = (7, bounds)),
+        send = AsyncMock(),
+    )
+    scraper.page = cast(Any, page)
 
-    assert await scraper._apply_viewport_size("1377x777") == "page unavailable"
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin.cdp_browser.set_window_bounds", return_value = "set-bounds") as set_bounds:
+        applied = await scraper._apply_viewport_size("1377x777")
 
-    scraper.page = cast(Any, SimpleNamespace(get_window = AsyncMock(side_effect = RuntimeError("no window"))))
-    assert await scraper._apply_viewport_size("invalid") == "invalid viewport size: 'invalid'"
-    assert await scraper._apply_viewport_size("1377x777") == "no window"
+    assert applied is True
+    new_bounds = set_bounds.call_args.kwargs["bounds"]
+    assert new_bounds.left is None
+    assert new_bounds.top is None
+    assert new_bounds.width == 1377
+    assert new_bounds.height == 777
 
 
 @pytest.mark.asyncio
-async def test_resize_viewport_after_open_records_cdp_failure() -> None:
+async def test_apply_viewport_size_reports_invalid_inputs_and_cdp_errors() -> None:
+    scraper = make_scraper()
+
+    assert await scraper._apply_viewport_size("1377x777") is False
+
+    scraper.page = cast(Any, SimpleNamespace(get_window = AsyncMock(side_effect = RuntimeError("no window"))))
+    assert await scraper._apply_viewport_size("invalid") is False
+    assert await scraper._apply_viewport_size("1377x777") is False
+
+
+@pytest.mark.asyncio
+async def test_resize_viewport_after_open_treats_resize_failure_as_nonfatal() -> None:
     scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1366x768"]))
     scraper.page = cast(Any, SimpleNamespace(url = "https://www.kleinanzeigen.de/"))
-    metrics = {"availWidth": 1920, "availHeight": 1080}
+    metrics = (1920, 1080)
 
     with (
         patch("kleinanzeigen_bot.utils.web_scraping_mixin._has_display_available", return_value = True),
-        patch.object(scraper, "_collect_current_viewport_metrics", new_callable = AsyncMock, return_value = metrics),
-        patch.object(scraper, "_apply_viewport_size", new_callable = AsyncMock, return_value = "broken"),
+        patch.object(scraper, "_available_screen_size", new_callable = AsyncMock, return_value = metrics),
+        patch.object(scraper, "_apply_viewport_size", new_callable = AsyncMock, return_value = False) as apply_size,
         patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.choice", return_value = "1366x768"),
         patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [1366, 768]),
     ):
         await scraper._resize_viewport_after_open()
 
-    status = scraper.get_viewport_resize_status()
-    assert status["status"] == "failed"
-    assert status["reason"] == "cdp-window-bounds-failed"
-    assert status["error"] == "broken"
+    apply_size.assert_awaited_once_with("1366x768")
+    assert scraper._viewport_resize_attempted is True
 
 
 @pytest.mark.asyncio
-async def test_web_open_triggers_resize_before_random_actions() -> None:
+async def test_web_open_triggers_resize_after_open() -> None:
     scraper = make_scraper()
     page = SimpleNamespace(url = "https://www.kleinanzeigen.de/")
     scraper.browser = cast(Any, SimpleNamespace(get = AsyncMock(return_value = page)))
 
-    calls:list[str] = []
-
     async def resize() -> None:
-        calls.append("resize")
-
-    async def random_actions() -> None:
-        calls.append("random-actions")
+        pass
 
     with (
         patch.object(scraper, "web_await", new_callable = AsyncMock),
         patch.object(scraper, "_resize_viewport_after_open", side_effect = resize) as resize_mock,
-        patch.object(scraper, "perform_random_human_actions", side_effect = random_actions) as random_actions_mock,
     ):
         await scraper.web_open("https://www.kleinanzeigen.de/")
 
     resize_mock.assert_awaited_once()
-    random_actions_mock.assert_awaited_once()
-    assert calls == ["resize", "random-actions"]
 
 
-# ---------------------------------------------------------------------------
-# default viewport sizes
-# ---------------------------------------------------------------------------
-
-def test_default_viewport_sizes_contain_new_entries() -> None:
+def test_default_humanization_config() -> None:
     cfg = HumanizationConfig()
-    expected_extras = {"2560x1440", "1920x1200", "1728x1117", "1512x982"}
-    for expected in expected_extras:
-        assert expected in cfg.viewport_sizes, f"Missing default viewport: {expected}"
-
-
-def test_default_viewport_sizes_omits_4k() -> None:
-    cfg = HumanizationConfig()
-    assert "3840x2160" not in cfg.viewport_sizes
-
-
-def test_default_viewport_sizes_count() -> None:
-    cfg = HumanizationConfig()
-    assert len(cfg.viewport_sizes) == 10
+    assert cfg.enabled is True
+    assert cfg.typing_jitter is True
+    assert cfg.randomize_viewport is True
+    assert cfg.action_delay_min_ms == 500
+    assert cfg.action_delay_max_ms == 1500
+    assert cfg.typing_delay_min_ms > 0
+    assert cfg.typing_delay_max_ms >= cfg.typing_delay_min_ms

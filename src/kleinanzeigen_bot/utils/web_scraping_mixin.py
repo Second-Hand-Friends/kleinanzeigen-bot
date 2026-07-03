@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from nodriver.cdp.runtime import RemoteObject
 
 
-# Crypto-secure RNG used for all human-like interaction jitter (movement, timing, viewport).
+# Crypto-secure RNG used for human-like interaction jitter (typing, timing, viewport).
 # Using SystemRandom keeps behavior unpredictable and stays consistent with the module's use of
 # `secrets` elsewhere (avoids the weak-PRNG lint that a plain `random` import would trigger).
 _rng:Final = secrets.SystemRandom()
@@ -56,13 +56,6 @@ _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS:Final[float] = 0.25
 # available screen area so the window never exceeds what the display can show.
 _VIEWPORT_JITTER_W:Final[int] = 24
 _VIEWPORT_JITTER_H:Final[int] = 16
-_VIEWPORT_RESIZE_STATUS_NOT_ATTEMPTED:Final[str] = "not-attempted"
-_VIEWPORT_RESIZE_STATUS_APPLIED:Final[str] = "applied"
-_VIEWPORT_RESIZE_STATUS_SKIPPED:Final[str] = "skipped"
-_VIEWPORT_RESIZE_STATUS_INVALID_METRICS:Final[str] = "invalid-metrics"
-_VIEWPORT_RESIZE_STATUS_NO_FIT:Final[str] = "no-fitting-size"
-_VIEWPORT_RESIZE_STATUS_FAILED:Final[str] = "failed"
-_VIEWPORT_RESIZE_STATUS_UNAVAILABLE_PAGE:Final[str] = "unavailable-page"
 
 
 def _resolve_user_data_dir_paths(arg_value:str, config_value:str) -> tuple[Any, Any]:
@@ -321,7 +314,6 @@ class WebScrapingMixin:  # noqa: PLR0904
         self.page:Page = None  # pyright: ignore[reportAttributeAccessIssue]
         self._browser_session_is_remote:bool = False
         self._viewport_resize_attempted:bool = False
-        self._viewport_resize_status:dict[str, Any] = {"status": _VIEWPORT_RESIZE_STATUS_NOT_ATTEMPTED, "attempted": False, "applied": False}
         self._default_timeout_config:TimeoutConfig | None = None
         self._default_humanization_config:HumanizationConfig | None = None
         self.config:BotConfig = cast(BotConfig, None)
@@ -533,7 +525,6 @@ class WebScrapingMixin:  # noqa: PLR0904
     async def create_browser_session(self) -> None:
         LOG.info("Creating Browser session...")
         self._viewport_resize_attempted = False
-        self._set_viewport_resize_status(_VIEWPORT_RESIZE_STATUS_NOT_ATTEMPTED, attempted = False)
         self._browser_session_is_remote = False
 
         if self.browser_config.binary_location:
@@ -577,9 +568,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         # configure and initialize new browser instance...
         ########################################################
 
-        browser_args, user_data_dir_from_args = self._build_new_browser_launch_args(
-            selected_viewport_size = None
-        )
+        browser_args, user_data_dir_from_args = self._build_new_browser_launch_args()
         effective_user_data_dir = await self._resolve_effective_user_data_dir(user_data_dir_from_args)
 
         if not effective_user_data_dir and not is_test_environment:
@@ -657,46 +646,20 @@ class WebScrapingMixin:  # noqa: PLR0904
                 LOG.error("4. Check if any antivirus or security software is blocking the connection")
             raise
 
-    def _set_viewport_resize_status(
-        self,
-        status:str,
-        *,
-        attempted:bool | None = None,
-        applied:bool = False,
-        reason:str | None = None,
-        selected_viewport:str | None = None,
-        error:str | None = None,
-    ) -> None:
-        attempted_value = self._viewport_resize_attempted if attempted is None else attempted
-        self._viewport_resize_attempted = attempted_value
-        result:dict[str, Any] = {"status": status, "attempted": attempted_value, "applied": applied}
-        if reason is not None:
-            result["reason"] = reason
-        if selected_viewport is not None:
-            result["selected_viewport"] = selected_viewport
-        if error is not None:
-            result["error"] = error
-        self._viewport_resize_status = result
-
-    def get_viewport_resize_status(self) -> dict[str, Any]:
-        """Return diagnostics for the post-open screen-aware viewport resize."""
-        return dict(self._viewport_resize_status)
-
     def _is_kleinanzeigen_page(self, url:str | None) -> bool:
         if not url:
             return False
         try:
-            host = (urlparse(url).hostname or "").lower()
+            host = (urlparse(url).hostname or "").rstrip(".").lower()
         except Exception:
             return False
-        return host.endswith("kleinanzeigen.de")
+        return host == "kleinanzeigen.de" or host.endswith(".kleinanzeigen.de")
 
-    def _viewport_resize_skip_reason(self, url:str | None) -> str | None:
+    def _viewport_resize_skip_reason(self) -> str | None:
         humanization = self._get_humanization_config()
         skip_checks:tuple[tuple[bool, str], ...] = (
-            (not self._is_kleinanzeigen_page(url), "non-kleinanzeigen-url"),
             (self._browser_session_is_remote, "remote-browser"),
-            (any(arg.startswith("--window-size") for arg in self.browser_config.arguments), "user-window-size"),
+            (any(arg == "--window-size" or arg.startswith("--window-size=") for arg in self.browser_config.arguments), "user-window-size"),
             (not humanization.enabled, "humanization-disabled"),
             (not humanization.randomize_viewport, "randomize-viewport-disabled"),
             (not humanization.viewport_sizes, "no-viewport-sizes"),
@@ -733,56 +696,53 @@ class WebScrapingMixin:  # noqa: PLR0904
         LOG.info("Screen-aware viewport: %s jittered to %s (avail %dx%d)", chosen, selected, avail_w, avail_h)
         return selected
 
-    async def _collect_current_viewport_metrics(self) -> dict[str, Any] | None:
+    async def _available_screen_size(self) -> tuple[int, int] | None:
         if not self.page:
             return None
         metrics = await self.web_execute(
-            "({"
-            "availWidth: window.screen.availWidth, "
-            "availHeight: window.screen.availHeight, "
-            "outerWidth: window.outerWidth, "
-            "outerHeight: window.outerHeight, "
-            "innerWidth: window.innerWidth, "
-            "innerHeight: window.innerHeight, "
-            "devicePixelRatio: window.devicePixelRatio, "
-            "url: location.href, "
-            "title: document.title"
-            "})"
+            "({availWidth: window.screen.availWidth, availHeight: window.screen.availHeight})"
         )
         if not isinstance(metrics, dict):
             return None
-        return metrics
+        return _normalize_viewport_metrics((metrics.get("availWidth"), metrics.get("availHeight")))
 
-    async def _apply_viewport_size(self, selected_viewport_size:str) -> str | None:
-        """Apply viewport dimensions via CDP window bounds, preserving position.
+    async def _apply_viewport_size(self, selected_viewport_size:str) -> bool:
+        """Apply viewport dimensions via CDP window bounds.
 
-        Returns ``None`` on success or a human-readable error message on failure.
+        Existing window position is preserved when CDP reports it.
+
+        Returns ``True`` on success.
         """
         if not self.page:
-            return "page unavailable"
+            LOG.debug("Viewport resize failed: page unavailable")
+            return False
 
         parsed = _parse_viewport_size(selected_viewport_size)
         if parsed is None:
-            return f"invalid viewport size: {selected_viewport_size!r}"
+            LOG.debug("Viewport resize failed: invalid viewport size %r", selected_viewport_size)
+            return False
 
         width, height = parsed
         try:
             window_id, bounds = await self.page.get_window()
             left = getattr(bounds, "left", None)
             top = getattr(bounds, "top", None)
-            new_bounds = cdp_browser.Bounds(
-                left = left if isinstance(left, int) else 0,
-                top = top if isinstance(top, int) else 0,
-                width = width,
-                height = height,
-                window_state = cdp_browser.WindowState.NORMAL,
-            )
+            bounds_args:dict[str, Any] = {
+                "width": width,
+                "height": height,
+                "window_state": cdp_browser.WindowState.NORMAL,
+            }
+            if isinstance(left, int):
+                bounds_args["left"] = left
+            if isinstance(top, int):
+                bounds_args["top"] = top
+            new_bounds = cdp_browser.Bounds(**bounds_args)
             await self.page.send(cdp_browser.set_window_bounds(window_id, bounds = new_bounds))
             LOG.info("Applied randomized browser window size: %dx%d", width, height)
-            return None
+            return True
         except Exception as exc:  # noqa: BLE001
             LOG.debug("Viewport resize failed via CDP: %s", exc)
-            return str(exc)
+            return False
 
     async def _resize_viewport_after_open(self) -> None:
         if not self.page or self._viewport_resize_attempted:
@@ -792,76 +752,31 @@ class WebScrapingMixin:  # noqa: PLR0904
         if not self._is_kleinanzeigen_page(url):
             return
 
-        skip_reason = self._viewport_resize_skip_reason(url)
+        self._viewport_resize_attempted = True
+
+        skip_reason = self._viewport_resize_skip_reason()
         if skip_reason is not None:
             LOG.debug("Viewport resize skipped: %s", skip_reason)
-            self._set_viewport_resize_status(_VIEWPORT_RESIZE_STATUS_SKIPPED, attempted = True, reason = skip_reason)
             return
 
         try:
-            before_metrics = await self._collect_current_viewport_metrics()
+            available_screen_size = await self._available_screen_size()
         except Exception as exc:  # noqa: BLE001
             LOG.debug("Screen metrics unavailable or invalid; omitting viewport resize: %s", exc)
-            self._set_viewport_resize_status(
-                _VIEWPORT_RESIZE_STATUS_UNAVAILABLE_PAGE,
-                attempted = True,
-                reason = "metrics-unavailable",
-                error = str(exc),
-            )
             return
 
-        if before_metrics is None:
-            self._set_viewport_resize_status(
-                _VIEWPORT_RESIZE_STATUS_UNAVAILABLE_PAGE,
-                attempted = True,
-                reason = "metrics-unavailable",
-            )
+        if available_screen_size is None:
+            LOG.debug("Screen metrics unavailable or invalid; omitting viewport resize")
             return
 
-        normalized_metrics = _normalize_viewport_metrics((before_metrics.get("availWidth"), before_metrics.get("availHeight")))
-        if normalized_metrics is None:
-            self._set_viewport_resize_status(
-                _VIEWPORT_RESIZE_STATUS_INVALID_METRICS,
-                attempted = True,
-                reason = "invalid-screen-metrics",
-            )
-            return
-
-        selected_viewport_size = self._select_viewport_size_for_metrics(normalized_metrics)
+        selected_viewport_size = self._select_viewport_size_for_metrics(available_screen_size)
         if selected_viewport_size is None:
-            self._set_viewport_resize_status(
-                _VIEWPORT_RESIZE_STATUS_NO_FIT,
-                attempted = True,
-                reason = "no-configured-size-fits",
-            )
             return
 
-        error = await self._apply_viewport_size(selected_viewport_size)
-        if error is None:
-            self._set_viewport_resize_status(
-                _VIEWPORT_RESIZE_STATUS_APPLIED,
-                attempted = True,
-                applied = True,
-                selected_viewport = selected_viewport_size,
-            )
-            return
+        await self._apply_viewport_size(selected_viewport_size)
 
-        self._set_viewport_resize_status(
-            _VIEWPORT_RESIZE_STATUS_FAILED,
-            attempted = True,
-            reason = "cdp-window-bounds-failed",
-            selected_viewport = selected_viewport_size,
-            error = error,
-        )
-
-    def _build_new_browser_launch_args(self, selected_viewport_size:str | None = None) -> tuple[list[str], str | None]:
+    def _build_new_browser_launch_args(self) -> tuple[list[str], str | None]:
         """Build browser launch arguments and extract user_data_dir from custom args.
-
-        Args:
-            selected_viewport_size: Optional ``WxH`` string from screen-aware viewport
-                selection.  When provided, appends ``--window-size=W,H`` to the launch args.
-                Kept as a parameter (not instance state) to prevent stale values across
-                repeated sessions.
 
         Returns (browser_args, user_data_dir_from_args).
         """
@@ -905,13 +820,6 @@ class WebScrapingMixin:  # noqa: PLR0904
                 user_data_dir_from_args = raw
                 continue
             browser_args.append(browser_arg)
-
-        if selected_viewport_size:
-            # Selected by the screen-aware viewport logic — already screen-filtered.
-            width, height = selected_viewport_size.lower().split("x")
-            window_size = f"--window-size={width.strip()},{height.strip()}"
-            LOG.info(" -> Randomized browser window size: %s", window_size)
-            browser_args.append(window_size)
 
         if not loggers.is_debug(LOG):
             browser_args.append("--log-level=3")  # INFO: 0, WARNING: 1, ERROR: 2, FATAL: 3
@@ -1218,61 +1126,9 @@ class WebScrapingMixin:  # noqa: PLR0904
         :raises TimeoutError: if element could not be found within time
         """
         elem = await self.web_find(selector_type, selector_value, timeout = timeout)
-        humanization = self._get_humanization_config()
-        if humanization.enabled and humanization.mouse_movement:
-            try:
-                await self._humanized_click(elem)
-            except Exception as ex:  # noqa: BLE001 – any CDP/geometry failure must fall back to a plain click
-                LOG.debug("Humanized click failed, falling back to element.click(): %s", ex)
-                await elem.click()
-        else:
-            await elem.click()
+        await elem.click()
         await self.web_sleep()
         return elem
-
-    @staticmethod
-    def _position_center(pos:Any) -> tuple[float, float]:
-        """Return the viewport-relative center (x, y) from a nodriver Position, raising if unavailable."""
-        if pos is None:
-            raise ValueError("element has no position (likely not visible)")
-        center = getattr(pos, "center", None)
-        if center is not None:
-            return float(center[0]), float(center[1])
-        # Fallback: derive from the bounding box attributes.
-        x = float(getattr(pos, "x", 0.0))
-        y = float(getattr(pos, "y", 0.0))
-        width = float(getattr(pos, "width", 0.0))
-        height = float(getattr(pos, "height", 0.0))
-        return x + width / 2, y + height / 2
-
-    async def _humanized_click(self, elem:Element) -> None:
-        """Click an element the way a human would: scroll it into view, move the mouse there in
-        small jittered steps, then dispatch native press/release via CDP.
-
-        Raises on any failure so that :meth:`web_click` can fall back to ``elem.click()``.
-        """
-        try:
-            await elem.scroll_into_view()
-        except Exception:  # noqa: BLE001 – older/edge nodriver builds: fall back to JS scroll
-            await elem.apply("(el) => el.scrollIntoView({block: 'center', inline: 'center'})")
-
-        target_x, target_y = self._position_center(await elem.get_position())
-        tab = elem._tab  # noqa: SLF001 – nodriver Element exposes its CDP tab via _tab
-
-        # Approach the target from a nearby random offset in a handful of small steps.
-        steps = _rng.randint(3, 6)
-        start_x = target_x + _rng.uniform(-60, 60)
-        start_y = target_y + _rng.uniform(-60, 60)
-        for step in range(1, steps + 1):
-            ratio = step / steps
-            x = start_x + (target_x - start_x) * ratio + _rng.uniform(-2, 2)
-            y = start_y + (target_y - start_y) * ratio + _rng.uniform(-2, 2)
-            await tab.send(cdp_input.dispatch_mouse_event("mouseMoved", x = x, y = y))
-            await asyncio.sleep(_rng.uniform(0.01, 0.04))
-
-        await tab.send(cdp_input.dispatch_mouse_event("mousePressed", x = target_x, y = target_y, button = cdp_input.MouseButton.LEFT, click_count = 1))
-        await asyncio.sleep(_rng.uniform(0.04, 0.12))
-        await tab.send(cdp_input.dispatch_mouse_event("mouseReleased", x = target_x, y = target_y, button = cdp_input.MouseButton.LEFT, click_count = 1))
 
     async def web_execute(self, jscode:str) -> Any:
         """
@@ -1590,7 +1446,6 @@ class WebScrapingMixin:  # noqa: PLR0904
         )
 
         await self._resize_viewport_after_open()
-        await self.perform_random_human_actions()
 
     async def web_text(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> str:
         element = await self.web_find(selector_type, selector_value, parent = parent, timeout = timeout)
@@ -1599,8 +1454,8 @@ class WebScrapingMixin:  # noqa: PLR0904
     async def web_sleep(self, min_ms:int | None = None, max_ms:int | None = None) -> None:
         """Pause for a randomized duration.
 
-        When called without explicit bounds the configurable humanization action-delay band is
-        used (defaults 1000-2500 ms, matching the historical behavior). When only one bound is
+        When called without explicit bounds the configurable action-delay band is used for
+        baseline interaction pacing. When only one bound is
         given the missing one is derived so the explicit bound acts as a hard cap: ``min_ms``
         alone becomes a fixed delay, ``max_ms`` alone draws from 0..max_ms.
         """
@@ -1619,23 +1474,14 @@ class WebScrapingMixin:  # noqa: PLR0904
         if max_duration <= min_duration:  # noqa: SIM108  # intentional if/else (the ternary form breaks when min_duration=0)
             duration = min_duration
         else:
-            duration = secrets.randbelow(max_duration - min_duration) + min_duration
+            # Use the module RNG for all runtime jitter paths; keep bounds semantics unchanged.
+            duration = _rng.randrange(min_duration, max_duration)
         LOG.log(
             loggers.INFO if duration > 1_500 else loggers.DEBUG,  # noqa: PLR2004 Magic value used in comparison
             " ... pausing for %d ms ...",
             duration,
         )
         await asyncio.sleep(duration / 1_000)
-
-    async def web_think(self) -> None:
-        """Occasionally insert a longer human 'thinking' pause at a natural boundary.
-
-        No-op when humanization is disabled or the probability gate does not fire.
-        """
-        humanization = self._get_humanization_config()
-        if not humanization.enabled or _rng.random() >= humanization.long_pause_probability:
-            return
-        await self.web_sleep(humanization.long_pause_min_ms, humanization.long_pause_max_ms)
 
     async def navigate_paginated_ad_overview(
         self,
@@ -1802,47 +1648,6 @@ class WebScrapingMixin:  # noqa: PLR0904
                 current_y_pos -= scroll_length
                 await self.web_execute(f"window.scrollTo(0, {current_y_pos})")
                 await asyncio.sleep(scroll_length / scroll_speed / 2)  # double speed
-
-    async def perform_random_human_actions(self) -> None:
-        """Run a random subset of lightweight idle behaviors so activity looks less robotic.
-
-        Best-effort and self-contained: never raises into the caller, and is a no-op when
-        humanization is disabled or the top-level probability gate does not fire. Because only a
-        random subset runs on each invocation, the observable behavior pattern is not constant.
-        """
-        humanization = self._get_humanization_config()
-        if not humanization.enabled or _rng.random() >= humanization.idle_action_probability:
-            return
-
-        actions:list[Callable[[], Awaitable[None]]] = [self._idle_scroll, self._idle_mouse_wiggle, self.web_think]
-        _rng.shuffle(actions)
-        count = _rng.randint(1, len(actions))  # at least one, since the gate already fired
-        for action in actions[:count]:
-            try:
-                await action()
-            except Exception as ex:  # noqa: BLE001 – idle actions are strictly best-effort
-                LOG.debug("Idle human action %s failed: %s", getattr(action, "__name__", action), ex)
-
-    async def _idle_scroll(self) -> None:
-        """Scroll the page a small random amount (occasionally upwards)."""
-        scroll_amount = _rng.randint(80, 400)
-        if _rng.random() < 0.3:  # noqa: PLR2004 – occasionally scroll back up
-            scroll_amount = -scroll_amount
-        await self.web_execute(f"window.scrollBy({{top: {scroll_amount}, left: 0, behavior: 'smooth'}})")
-        await self.web_sleep(200, 600)
-
-    async def _idle_mouse_wiggle(self) -> None:
-        """Move the mouse to a random point within the viewport."""
-        if not self.page:
-            return
-        dims = await self.web_execute("[window.innerWidth, window.innerHeight]")
-        try:
-            width, height = float(dims[0]), float(dims[1])
-        except (TypeError, ValueError, IndexError, KeyError):
-            width, height = 1280.0, 800.0
-        x = _rng.uniform(width * 0.1, width * 0.9)
-        y = _rng.uniform(height * 0.1, height * 0.9)
-        await self.page.send(cdp_input.dispatch_mouse_event("mouseMoved", x = x, y = y))
 
     async def web_select(self, selector_type:By, selector_value:str, selected_value:Any, timeout:int | float | None = None) -> Element:
         """

@@ -343,31 +343,36 @@ class TimeoutConfig(ContextualModel):
 
 
 class HumanizationConfig(ContextualModel):
-    """Controls human-like browser interaction to reduce automation fingerprinting.
+    """Controls browser pacing, typing jitter, and viewport behavior.
 
-    When enabled (the default), clicks are performed via real mouse movement + press/release,
-    text is typed character-by-character with variable delays, pauses vary, occasional idle
-    micro-actions (small scrolls, mouse wiggles) are injected, and the browser window size is
-    randomized at launch. All behavior is opt-out via ``enabled: false`` and individually tunable.
+    ``enabled`` controls whether optional humanization extras are active while baseline
+    workflow pacing (``web_sleep``) remains unchanged. Optional typing jitter and viewport
+    randomization are controlled by explicit options.
     """
 
-    enabled:bool = Field(default = True, description = "master switch for all human-like interaction behavior")
-    mouse_movement:bool = Field(
-        default = True, description = "click via real CDP mouse move + press/release instead of an instant element click (auto-falls back on failure)"
+    enabled:bool = Field(
+        default = True,
+        description = "enable optional humanization extras; baseline interaction pacing is preserved",
     )
-    typing_jitter:bool = Field(default = True, description = "type text character-by-character with variable per-keystroke delays instead of a single burst")
+    typing_jitter:bool = Field(
+        default = True,
+        description = "type text character-by-character with variable per-keystroke delays instead of a single burst",
+    )
     typing_delay_min_ms:int = Field(default = 40, ge = 0, description = "minimum delay between individual keystrokes (ms)")
     typing_delay_max_ms:int = Field(default = 140, ge = 0, description = "maximum delay between individual keystrokes (ms)")
-    action_delay_min_ms:int = Field(default = 1_000, ge = 0, description = "minimum pause after interactions (ms); matches the historical web_sleep band")
-    action_delay_max_ms:int = Field(default = 2_500, ge = 0, description = "maximum pause after interactions (ms); matches the historical web_sleep band")
-    long_pause_probability:float = Field(default = 0.1, ge = 0.0, le = 1.0, description = "probability of inserting a longer 'thinking' pause at boundaries")
-    long_pause_min_ms:int = Field(default = 1_500, ge = 0, description = "minimum duration of a 'thinking' pause (ms)")
-    long_pause_max_ms:int = Field(default = 4_000, ge = 0, description = "maximum duration of a 'thinking' pause (ms)")
-    idle_action_probability:float = Field(
-        default = 0.3, ge = 0.0, le = 1.0, description = "chance to run a random subset of idle micro-actions (scroll / mouse wiggle) at a page boundary"
+    action_delay_min_ms:int = Field(
+        default = 500,
+        ge = 0,
+        description = "minimum baseline pause after interactions used by web_sleep (ms)",
+    )
+    action_delay_max_ms:int = Field(
+        default = 1_500,
+        ge = 0,
+        description = "maximum baseline pause after interactions used by web_sleep (ms)",
     )
     randomize_viewport:bool = Field(
-        default = True, description = "pick a random window size from viewport_sizes at launch (ignored if --window-size is set manually)"
+        default = True,
+        description = "pick a random window size from viewport_sizes after page open using available screen metrics (ignored if --window-size is set manually)",
     )
     viewport_sizes:list[str] = Field(
         default_factory = lambda: [
@@ -398,7 +403,6 @@ class HumanizationConfig(ContextualModel):
         for lo_name, hi_name in (
             ("typing_delay_min_ms", "typing_delay_max_ms"),
             ("action_delay_min_ms", "action_delay_max_ms"),
-            ("long_pause_min_ms", "long_pause_max_ms"),
         ):
             lo_value = getattr(self, lo_name)
             hi_value = getattr(self, hi_name)
@@ -581,7 +585,7 @@ class Config(ContextualModel):
     update_check:UpdateCheckConfig = Field(default_factory = UpdateCheckConfig, description = "Update check configuration")
     timeouts:TimeoutConfig = Field(default_factory = TimeoutConfig, description = "Centralized timeout configuration.")
     humanization:HumanizationConfig = Field(
-        default_factory = HumanizationConfig, description = "Human-like browser interaction settings to reduce automation detection."
+        default_factory = HumanizationConfig, description = "Browser pacing, typing jitter, and viewport behavior settings."
     )
     diagnostics:DiagnosticsConfig = Field(default_factory = DiagnosticsConfig, description = "diagnostics capture configuration for troubleshooting")
 
