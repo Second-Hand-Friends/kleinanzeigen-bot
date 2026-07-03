@@ -216,7 +216,7 @@ Commands:
                         use this after changing config.yaml/ad_defaults to avoid every ad being marked "changed" and republished
   create-config - creates a new default configuration file if one does not exist
   diagnose - diagnoses browser connection issues and shows troubleshooting information
-  status   - shows status overview of ads
+  status   - shows ad status and APR preview details
   --
   help     - displays this help (default command)
   version  - displays the application version

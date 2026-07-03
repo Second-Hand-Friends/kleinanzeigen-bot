@@ -560,15 +560,6 @@ kleinanzeigen_bot/price_reduction.py:
   is_auto_price_reduction_due:
     "Pending auto price reduction detected for ad [%s]": "Ausstehende automatische Preisreduzierung für Anzeige [%s] erkannt"
 
-  log_auto_price_reduction_preview:
-    "publish": "veröffentlichen"
-    "update": "aktualisieren"
-    "Auto price reduction preview for [%s] (%s): disabled": "Vorschau automatische Preisreduzierung für [%s] (%s): deaktiviert"
-    "Auto price reduction preview for [%s] (%s): missing price": "Vorschau automatische Preisreduzierung für [%s] (%s): Preis fehlt"
-    "Auto price reduction preview for [%s] (%s): disabled (on_update=false, effective_price=%s)": "Vorschau automatische Preisreduzierung für [%s] (%s): deaktiviert (on_update=false, effektiver Preis=%s)"
-    "Auto price reduction preview for [%s] (%s): %s -> %s (cycle %s)": "Vorschau automatische Preisreduzierung für [%s] (%s): %s -> %s (Zyklus %s)"
-    "Auto price reduction preview for [%s] (%s): no new reduction (effective_price=%s, reason=%s)": "Vorschau automatische Preisreduzierung für [%s] (%s): keine neue Reduktion (effektiver Preis=%s, Grund=%s)"
-
   apply_auto_price_reduction:
     "Auto price reduction is enabled for [%s] but no price is configured.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber es wurde kein Preis konfiguriert."
     "Auto price reduction is enabled for [%s] but min_price equals price (%s) - no reductions will occur.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber min_price entspricht dem Preis (%s) - es werden keine Reduktionen auftreten."
