@@ -27,6 +27,7 @@ class StatusRow:
 
     title:str  # ad.title
     ad_id:str  # "-" if None, else str(ad.id)
+    filename:str  # Relative ad-file path (e.g. "ads/sofa.yaml")
     status:str  # One of: "disabled", "draft", "changed", "due", "published-local"
     apr_repost:str | None = None  # APR repost cell; ``None`` → rendered as "off"
     apr_update:str | None = None  # APR update cell; ``None`` → rendered as "off"
@@ -145,6 +146,7 @@ def build_status_rows(
             StatusRow(
                 title = ad_cfg.title,
                 ad_id = "-" if ad_cfg.id is None else str(ad_cfg.id),
+                filename = ad_file_rel,
                 status = status,
                 apr_repost = apr_repost,
                 apr_update = apr_update,
@@ -181,7 +183,7 @@ def _apr_layout(rows:list[StatusRow]) -> tuple[bool, str, str, int, int]:
     return True, h_repost, h_update, w_repost, w_update
 
 
-def render_status_rows(rows:list[StatusRow], *, color:bool = False) -> str:
+def render_status_rows(rows:list[StatusRow], *, color:bool = False) -> str:  # noqa: PLR0914
     """Format status rows into an ASCII table string.
 
     Args:
@@ -198,6 +200,7 @@ def render_status_rows(rows:list[StatusRow], *, color:bool = False) -> str:
     h_status = _("Status")
 
     col_id = max(len(h_id), max((len(r.ad_id) for r in rows), default = 0))
+    col_filename = max(len(_("Filename")), max((len(r.filename) for r in rows), default = 0))
 
     # Translated labels for column width calculation.
     col_status = max(len(h_status), *[len(_translate_status(s)) for s in _STATUS_ORDER], 0)
@@ -209,8 +212,8 @@ def render_status_rows(rows:list[StatusRow], *, color:bool = False) -> str:
     apr_show, h_apr_r, h_apr_u, w_apr_r, w_apr_u = _apr_layout(rows)
 
     # Build separator and header
-    separator_parts = ["+", "-" * (col_id + 2), "+", "-" * (col_title + 2), "+", "-" * (col_status + 2)]
-    header_parts = ["| ", h_id.ljust(col_id), " | ", h_title.ljust(col_title), " | ", h_status.ljust(col_status)]
+    separator_parts = ["+", "-" * (col_id + 2), "+", "-" * (col_filename + 2), "+", "-" * (col_title + 2), "+", "-" * (col_status + 2)]
+    header_parts = ["| ", h_id.ljust(col_id), " | ", _("Filename").ljust(col_filename), " | ", h_title.ljust(col_title), " | ", h_status.ljust(col_status)]
     if apr_show:
         separator_parts += ["+", "-" * (w_apr_r + 2), "+", "-" * (w_apr_u + 2)]
         header_parts += [" | ", h_apr_r.ljust(w_apr_r), " | ", h_apr_u.ljust(w_apr_u)]
@@ -224,7 +227,7 @@ def render_status_rows(rows:list[StatusRow], *, color:bool = False) -> str:
         cell = _colorize_status(r.status, label) if color else label
 
         row_parts = [
-            "| ", r.ad_id.ljust(col_id), " | ", r.title.ljust(col_title), " | ", cell,
+            "| ", r.ad_id.ljust(col_id), " | ", r.filename.ljust(col_filename), " | ", r.title.ljust(col_title), " | ", cell,
         ]
         if apr_show:
             row_parts.extend([

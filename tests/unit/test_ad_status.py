@@ -221,8 +221,8 @@ class TestRenderStatusRows:
 
     def test_headers_and_rows(self) -> None:
         rows = [
-            StatusRow(title = "Ad A", ad_id = "-", status = "draft"),
-            StatusRow(title = "Ad B", ad_id = "123", status = "published-local"),
+            StatusRow(title = "Ad A", ad_id = "-", filename = "a.yaml", status = "draft"),
+            StatusRow(title = "Ad B", ad_id = "123", filename = "b.yaml", status = "published-local"),
         ]
         output = render_status_rows(rows)
 
@@ -233,12 +233,15 @@ class TestRenderStatusRows:
 
         # Contains headers
         assert "Ad ID" in output
+        assert "Filename" in output
         assert "Title" in output
         assert "Status" in output
 
         # Contains row data
         assert "-" in output
         assert "123" in output
+        assert "a.yaml" in output
+        assert "b.yaml" in output
         assert "Ad A" in output
         assert "Ad B" in output
 
@@ -256,25 +259,25 @@ class TestRenderStatusRows:
     def test_render_uncoloured_unchanged(self) -> None:
         """Uncoloured output matches the default (color=False)."""
         rows = [
-            StatusRow(title = "Item", ad_id = "1", status = "draft"),
-            StatusRow(title = "Thing", ad_id = "2", status = "published-local"),
+            StatusRow(title = "Item", ad_id = "1", filename = "a.yaml", status = "draft"),
+            StatusRow(title = "Thing", ad_id = "2", filename = "b.yaml", status = "published-local"),
         ]
         assert render_status_rows(rows) == render_status_rows(rows, color = False)
 
     def test_render_coloured_contains_ansi(self) -> None:
         """Coloured output includes ANSI escape sequences."""
-        rows = [StatusRow(title = "Test", ad_id = "42", status = "changed")]
+        rows = [StatusRow(title = "Test", ad_id = "42", filename = "t.yaml", status = "changed")]
         output = render_status_rows(rows, color = True)
         assert "\x1b[" in output
 
     def test_render_coloured_stripped_equals_uncoloured(self) -> None:
         """Stripping ANSI from coloured output produces identical text to uncoloured."""
         rows = [
-            StatusRow(title = "Sofa", ad_id = "-", status = "draft"),
-            StatusRow(title = "Chair", ad_id = "99", status = "published-local"),
-            StatusRow(title = "Table", ad_id = "55", status = "changed"),
-            StatusRow(title = "Lamp", ad_id = "33", status = "due"),
-            StatusRow(title = "Rug", ad_id = "11", status = "disabled"),
+            StatusRow(title = "Sofa", ad_id = "-", filename = "sofa.yaml", status = "draft"),
+            StatusRow(title = "Chair", ad_id = "99", filename = "chair.yaml", status = "published-local"),
+            StatusRow(title = "Table", ad_id = "55", filename = "table.yaml", status = "changed"),
+            StatusRow(title = "Lamp", ad_id = "33", filename = "lamp.yaml", status = "due"),
+            StatusRow(title = "Rug", ad_id = "11", filename = "rug.yaml", status = "disabled"),
         ]
 
         plain = render_status_rows(rows, color = False)
@@ -287,7 +290,7 @@ class TestRenderStatusRows:
 
     def test_render_coloured_only_status_column(self) -> None:
         """Only the status column contains ANSI codes; headers and separators are plain."""
-        rows = [StatusRow(title = "Desk", ad_id = "7", status = "due")]
+        rows = [StatusRow(title = "Desk", ad_id = "7", filename = "desk.yaml", status = "due")]
         output = render_status_rows(rows, color = True)
 
         # Header row should not contain ANSI
@@ -308,7 +311,7 @@ class TestRenderStatusRows:
 
     def test_render_colour_only_mapped_statuses(self) -> None:
         """Only known status values get colour; unmapped statuses are unchanged."""
-        rows = [StatusRow(title = "?iss", ad_id = "0", status = "unknown")]
+        rows = [StatusRow(title = "?iss", ad_id = "0", filename = "q.yaml", status = "unknown")]
         plain = render_status_rows(rows, color = False)
         coloured = render_status_rows(rows, color = True)
         assert plain == coloured, "Unmapped status should not be coloured"
@@ -327,8 +330,8 @@ class TestAprRendering:
     def test_no_apr_no_columns(self) -> None:
         """APR columns absent when no effective APR is configured."""
         rows = [
-            StatusRow(title = "A", ad_id = "1", status = "published-local"),
-            StatusRow(title = "B", ad_id = "2", status = "draft"),
+            StatusRow(title = "A", ad_id = "1", filename = "a.yaml", status = "published-local"),
+            StatusRow(title = "B", ad_id = "2", filename = "b.yaml", status = "draft"),
         ]
         output = render_status_rows(rows)
         assert "APR" not in output
@@ -339,7 +342,7 @@ class TestAprRendering:
     def test_columns_present_when_replace_apr_enabled(self) -> None:
         """APR columns visible when REPLACE decision has effective APR."""
         rows = [
-            StatusRow(title = "A", ad_id = "1", status = "published-local", apr_repost = "due: 9"),
+            StatusRow(title = "A", ad_id = "1", filename = "a.yaml", status = "published-local", apr_repost = "due: 9"),
         ]
         output = render_status_rows(rows)
         assert "APR repost" in output
@@ -349,7 +352,7 @@ class TestAprRendering:
     def test_columns_present_when_update_apr_enabled(self) -> None:
         """APR columns visible when MODIFY decision has effective APR."""
         rows = [
-            StatusRow(title = "A", ad_id = "1", status = "published-local", apr_update = "due: 7"),
+            StatusRow(title = "A", ad_id = "1", filename = "a.yaml", status = "published-local", apr_update = "due: 7"),
         ]
         output = render_status_rows(rows)
         assert "APR repost" in output
@@ -361,8 +364,8 @@ class TestAprRendering:
     def test_apr_cell_off_for_none(self) -> None:
         """None APR displayed as 'off'."""
         rows = [
-            StatusRow(title = "A", ad_id = "1", status = "published-local", apr_repost = "due: 5"),
-            StatusRow(title = "B", ad_id = "2", status = "published-local", apr_repost = None),
+            StatusRow(title = "A", ad_id = "1", filename = "a.yaml", status = "published-local", apr_repost = "due: 5"),
+            StatusRow(title = "B", ad_id = "2", filename = "b.yaml", status = "published-local", apr_repost = None),
         ]
         output = render_status_rows(rows)
         assert "off" in output
@@ -370,7 +373,7 @@ class TestAprRendering:
     def test_apr_cell_error(self) -> None:
         """Error reason displayed as 'error'."""
         rows = [
-            StatusRow(title = "A", ad_id = "1", status = "published-local", apr_repost = "error"),
+            StatusRow(title = "A", ad_id = "1", filename = "a.yaml", status = "published-local", apr_repost = "error"),
         ]
         output = render_status_rows(rows)
         assert "error" in output
@@ -378,7 +381,7 @@ class TestAprRendering:
     def test_apr_cell_not_due(self) -> None:
         """Not-due displayed."""
         rows = [
-            StatusRow(title = "A", ad_id = "1", status = "published-local", apr_repost = "not due"),
+            StatusRow(title = "A", ad_id = "1", filename = "a.yaml", status = "published-local", apr_repost = "not due"),
         ]
         output = render_status_rows(rows)
         assert "not due" in output
@@ -388,7 +391,7 @@ class TestAprRendering:
     def test_apr_columns_not_coloured(self) -> None:
         """APR columns contain no ANSI codes when status is coloured."""
         rows = [
-            StatusRow(title = "A", ad_id = "1", status = "published-local", apr_repost = "due: 5", apr_update = "not due"),
+            StatusRow(title = "A", ad_id = "1", filename = "a.yaml", status = "published-local", apr_repost = "due: 5", apr_update = "not due"),
         ]
         output = render_status_rows(rows, color = True)
         # Status column has ANSI, but APR columns should not
@@ -396,11 +399,11 @@ class TestAprRendering:
         data_lines = [line for line in output.splitlines() if "|" in line and "APR" not in line and not line.startswith("+") and not line.startswith("S")]
         for line in data_lines:
             cells = [c.strip() for c in line.split("|") if c.strip()]
-            # cells[0]=id, cells[1]=title, cells[2]=status (coloured), cells[3]=apr_repost, cells[4]=apr_update
-            # cells[2] should have ANSI; cells[3] and cells[4] should not
-            if len(cells) >= 5:
-                assert "\x1b[" not in cells[3], "APR repost cell must not be coloured"
-                assert "\x1b[" not in cells[4], "APR update cell must not be coloured"
+            # cells[0]=id, cells[1]=filename, cells[2]=title, cells[3]=status (coloured), cells[4]=apr_repost, cells[5]=apr_update
+            # cells[3] should have ANSI; cells[4] and cells[5] should not
+            if len(cells) >= 6:
+                assert "\x1b[" not in cells[4], "APR repost cell must not be coloured"
+                assert "\x1b[" not in cells[5], "APR update cell must not be coloured"
 
     # -- build_status_rows: APR evaluation integration --------------------- #
     # These test that evaluate_auto_price_reduction is called correctly
