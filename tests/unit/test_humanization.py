@@ -563,7 +563,7 @@ async def test_select_viewport_size_user_window_size_bypasses_selection() -> Non
     """User-supplied --window-size in browser_config.arguments prevents _select_viewport_size
     from being called at all (tested via the guard in create_browser_session)."""
     scraper = WebScrapingMixin()
-    scraper.browser_config.binary_location = "/bin/sh"
+    scraper.browser_config.binary_location = "fake-browser"
     scraper.browser_config.arguments = ["--window-size=800,600"]
     scraper.config = Config.model_validate({
         "login": {"username": "u", "password": "p"},  # noqa: S106
@@ -575,6 +575,7 @@ async def test_select_viewport_size_user_window_size_bypasses_selection() -> Non
         patch.object(scraper, "_select_viewport_size", new_callable = AsyncMock) as select_viewport,
         patch.object(scraper, "_resolve_effective_user_data_dir", new_callable = AsyncMock, return_value = None),
         patch.object(scraper, "_add_browser_extensions", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin.files.exists", new_callable = AsyncMock, return_value = True),
         patch("kleinanzeigen_bot.utils.web_scraping_mixin.nodriver.start", new_callable = AsyncMock, return_value = fake_browser),
     ):
         await scraper.create_browser_session()
@@ -584,7 +585,7 @@ async def test_select_viewport_size_user_window_size_bypasses_selection() -> Non
 @pytest.mark.asyncio
 async def test_probe_screen_metrics_times_out() -> None:
     scraper = WebScrapingMixin()
-    scraper.browser_config.binary_location = "/bin/sh"
+    scraper.browser_config.binary_location = "fake-browser"
     scraper.config = Config.model_validate({
         "login": {"username": "u", "password": "p"},  # noqa: S106
         "timeouts": {"chrome_remote_probe": 0.1},
@@ -603,7 +604,7 @@ async def test_probe_screen_metrics_times_out() -> None:
 @pytest.mark.asyncio
 async def test_probe_screen_metrics_reuses_successful_probe() -> None:
     scraper = WebScrapingMixin()
-    scraper.browser_config.binary_location = "/bin/sh"
+    scraper.browser_config.binary_location = "fake-browser"
     page = SimpleNamespace(evaluate = AsyncMock(return_value = {"availWidth": 111, "availHeight": 222}))
     browser = SimpleNamespace(get = AsyncMock(return_value = page), stop = lambda: None)
 
