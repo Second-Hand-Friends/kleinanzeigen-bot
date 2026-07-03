@@ -133,7 +133,6 @@ reviews:
     enabled: true
     auto_incremental_review: true
     drafts: false
-    ignore_title_keywords: ["wip", "draft", "temp"]
     labels: ["!wip", "!draft"]  # Review all PRs except those with wip or draft labels
 
 
