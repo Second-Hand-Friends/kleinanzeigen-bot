@@ -392,6 +392,9 @@ class TestWebScrapingErrorHandling:
         cast(Any, web_scraper).web_sleep = mock_sleep
         web_scraper._clear_input = AsyncMock()  # type: ignore[method-assign]
 
+        # disable typing jitter so text is sent as a single burst (humanization is on by default)
+        web_scraper.config.humanization.typing_jitter = False
+
         result = await web_scraper.web_input(By.ID, "username", "hello world", timeout = 1)
 
         assert result is mock_element
