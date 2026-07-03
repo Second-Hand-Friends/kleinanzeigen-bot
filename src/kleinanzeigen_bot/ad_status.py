@@ -27,6 +27,7 @@ class StatusRow:
 
     title:str  # ad.title
     ad_id:str  # "-" if None, else str(ad.id)
+    filename:str  # Relative ad-file path (e.g. "ads/sofa.yaml")
     status:str  # One of: "disabled", "draft", "changed", "due", "published-local"
     apr_repost:str | None = None  # APR repost cell; ``None`` → rendered as "off"
     apr_update:str | None = None  # APR update cell; ``None`` → rendered as "off"
@@ -145,6 +146,7 @@ def build_status_rows(
             StatusRow(
                 title = ad_cfg.title,
                 ad_id = "-" if ad_cfg.id is None else str(ad_cfg.id),
+                filename = ad_file_rel,
                 status = status,
                 apr_repost = apr_repost,
                 apr_update = apr_update,
@@ -193,48 +195,57 @@ def render_status_rows(rows:list[StatusRow], *, color:bool = False) -> str:
     if not rows:
         return ""
 
-    h_id = _("Ad ID")
-    h_title = _("Title")
-    h_status = _("Status")
-
-    col_id = max(len(h_id), max((len(r.ad_id) for r in rows), default = 0))
-
-    # Translated labels for column width calculation.
-    col_status = max(len(h_status), *[len(_translate_status(s)) for s in _STATUS_ORDER], 0)
-
-    # Title width is data-driven, but clamp to at least header width
-    col_title = max(len(h_title), max((len(r.title) for r in rows), default = 0))
+    # Column header labels and data-driven widths.
+    H = {
+        "id": _("Ad ID"),
+        "fn": _("Filename"),
+        "title": _("Title"),
+        "status": _("Status"),
+    }
+    W = {
+        "id": max(len(H["id"]), max((len(r.ad_id) for r in rows), default = 0)),
+        "fn": max(len(H["fn"]), max((len(r.filename) for r in rows), default = 0)),
+        "title": max(len(H["title"]), max((len(r.title) for r in rows), default = 0)),
+        "status": max(len(H["status"]), *[len(_translate_status(s)) for s in _STATUS_ORDER], 0),
+    }
 
     # APR columns — only if any row has non-None APR data
     apr_show, h_apr_r, h_apr_u, w_apr_r, w_apr_u = _apr_layout(rows)
 
-    # Build separator and header
-    separator_parts = ["+", "-" * (col_id + 2), "+", "-" * (col_title + 2), "+", "-" * (col_status + 2)]
-    header_parts = ["| ", h_id.ljust(col_id), " | ", h_title.ljust(col_title), " | ", h_status.ljust(col_status)]
+    # Build separator and header row
+    widths = [W["id"], W["fn"], W["title"], W["status"]]
     if apr_show:
-        separator_parts += ["+", "-" * (w_apr_r + 2), "+", "-" * (w_apr_u + 2)]
-        header_parts += [" | ", h_apr_r.ljust(w_apr_r), " | ", h_apr_u.ljust(w_apr_u)]
-    separator = "".join(separator_parts) + "+"
-    header = "".join(header_parts) + " |"
+        widths += [w_apr_r, w_apr_u]
+    sep = "".join("+" + "-" * (w + 2) for w in widths) + "+"
 
-    lines:list[str] = [separator, header, separator]
+    hdr_parts = [
+        "| ", H["id"].ljust(W["id"]), " | ", H["fn"].ljust(W["fn"]),
+        " | ", H["title"].ljust(W["title"]), " | ", H["status"].ljust(W["status"]),
+    ]
+    if apr_show:
+        hdr_parts += [" | ", h_apr_r.ljust(w_apr_r), " | ", h_apr_u.ljust(w_apr_u)]
+    hdr_parts.append(" |")
+    hdr = "".join(hdr_parts)
+
+    lines:list[str] = [sep, hdr, sep]
 
     for r in rows:
-        label = _translate_status(r.status).ljust(col_status)
+        label = _translate_status(r.status).ljust(W["status"])
         cell = _colorize_status(r.status, label) if color else label
 
-        row_parts = [
-            "| ", r.ad_id.ljust(col_id), " | ", r.title.ljust(col_title), " | ", cell,
+        parts = [
+            "| ", r.ad_id.ljust(W["id"]), " | ", r.filename.ljust(W["fn"]),
+            " | ", r.title.ljust(W["title"]), " | ", cell,
         ]
         if apr_show:
-            row_parts.extend([
+            parts += [
                 " | ", _apr_cell(r.apr_repost).ljust(w_apr_r),
                 " | ", _apr_cell(r.apr_update).ljust(w_apr_u),
-            ])
-        row_parts.append(" |")
-        lines.append("".join(row_parts))
+            ]
+        parts.append(" |")
+        lines.append("".join(parts))
 
-    lines.append(separator)
+    lines.append(sep)
 
     # Summary line — always plain
     counts:dict[str, int] = {}

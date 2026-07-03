@@ -478,6 +478,7 @@ kleinanzeigen_bot/ad_status.py:
 
   render_status_rows:
     "Ad ID": "Anzeigen-ID"
+    "Filename": "Dateiname"
     "Title": "Titel"
     "Status": "Status"
     "Summary: %s (%d total)": "Zusammenfassung: %s (%d insgesamt)"
