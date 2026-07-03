@@ -2068,9 +2068,14 @@ class TestSelectButtonCombobox:
         assert "MouseEvent('mousedown'" in js
         assert "MouseEvent('mouseup'" in js
         assert "MouseEvent('click'" in js
-        # Document-level fallback search for portal-rendered menus
-        assert "document.querySelector('[role=\"listbox\"]')" in js
-        assert "document.querySelector('[role=\"menu\"]')" in js
+        # Scoped portal fallback: aria-controls/owns association first, then visible portal candidates with aria-labelledby
+        assert "btn.getAttribute('aria-controls')" in js
+        assert "document.getElementById(controlledId)" in js
+        assert "btn.getAttribute('aria-owns')" in js
+        assert "document.getElementById(ownedId)" in js
+        assert "document.querySelectorAll('[role=\"listbox\"],[role=\"menu\"]')" in js
+        assert "getBoundingClientRect" in js
+        assert "aria-labelledby" in js
         # Whitespace normalization in text matching
         assert ".replace(/\\s+/g,' ').trim()" in js
 

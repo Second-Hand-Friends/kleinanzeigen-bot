@@ -504,8 +504,9 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
     mouseup → click) and selects the matching option in a single async browser
     script execution.  Uses React fiber matching first, then DOM attribute
     matching, then normalized text fallback.  The listbox search walks from
-    the button's ID-suffixed element up to the document root, supporting both
-    inline and portal-rendered dropdowns.
+    the button's ID-suffixed element through parent elements, then uses
+    aria-controls/owns association, and finally falls back to visible
+    document-level portal candidates with aria-labelledby matching.
     """
     js_elem_id = json.dumps(elem_id)
     js_value = json.dumps(value)
@@ -531,13 +532,33 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
             var m = btn.parentElement.querySelector('[role="menu"]');
             if (m) candidate = m;
         }}
-        /* Headless UI / React portals often render the listbox at the
-           document root rather than inside the button's parentElement. */
-        if (!candidate) {{
-            candidate = document.querySelector('[role="listbox"]');
+        /* Headless UI / React portals: try aria-controls/owns association first,
+           then visible document-level portal candidates with aria-labelledby. */
+        if (!candidate && btn.getAttribute) {{
+            var controlledId = btn.getAttribute('aria-controls');
+            if (controlledId) {{
+                candidate = document.getElementById(controlledId);
+            }}
+        }}
+        if (!candidate && btn.getAttribute) {{
+            var ownedId = btn.getAttribute('aria-owns');
+            if (ownedId) {{
+                candidate = document.getElementById(ownedId);
+            }}
         }}
         if (!candidate) {{
-            candidate = document.querySelector('[role="menu"]');
+            var portalCandidates = document.querySelectorAll('[role="listbox"],[role="menu"]');
+            for (var p = 0; p < portalCandidates.length; p++) {{
+                var pc = portalCandidates[p];
+                var rect = pc.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {{
+                    var labelledby = pc.getAttribute('aria-labelledby');
+                    if (!labelledby || labelledby === btn.id) {{
+                        candidate = pc;
+                        break;
+                    }}
+                }}
+            }}
         }}
         if (candidate) {{
             options = Array.from(candidate.querySelectorAll('[role="option"]'));
