@@ -382,7 +382,7 @@ class HumanizationConfig(ContextualModel):
         for size in value:
             parts = size.lower().split("x")
             if len(parts) != expected_parts or not (parts[0].strip().isdigit() and parts[1].strip().isdigit()):
-                raise ValueError(f"Invalid viewport size '{size}'. Expected format 'WIDTHxHEIGHT', e.g. '1920x1080'.")
+                raise ValueError(_("Invalid viewport size '%(size)s'. Expected format 'WIDTHxHEIGHT', e.g. '1920x1080'.") % {"size": size})
         return value
 
     @model_validator(mode = "after")
@@ -392,8 +392,15 @@ class HumanizationConfig(ContextualModel):
             ("action_delay_min_ms", "action_delay_max_ms"),
             ("long_pause_min_ms", "long_pause_max_ms"),
         ):
-            if getattr(self, hi_name) < getattr(self, lo_name):
-                raise ValueError(f"{hi_name} ({getattr(self, hi_name)}) must be >= {lo_name} ({getattr(self, lo_name)}).")
+            lo_value = getattr(self, lo_name)
+            hi_value = getattr(self, hi_name)
+            if hi_value < lo_value:
+                raise ValueError(
+                    _("%(hi_name)s (%(hi_value)d) must be >= %(lo_name)s (%(lo_value)d).") % {
+                        "hi_name": hi_name, "hi_value": hi_value,
+                        "lo_name": lo_name, "lo_value": lo_value,
+                    }
+                )
         return self
 
 

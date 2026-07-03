@@ -241,3 +241,80 @@ def test_viewport_arg_not_appended_when_disabled() -> None:
     scraper = make_scraper(HumanizationConfig(randomize_viewport = False))
     args, _ = scraper._build_new_browser_launch_args()
     assert not any(arg.startswith("--window-size") for arg in args)
+
+
+# ---------------------------------------------------------------------------
+# web_sleep: zero-delay range does not raise
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_web_sleep_zero_delay() -> None:
+    """web_sleep(0, 0) must not raise and must sleep 0 seconds."""
+    scraper = make_scraper()
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.sleep", new_callable = AsyncMock) as sleep:
+        await scraper.web_sleep(0, 0)
+    assert sleep.await_count == 1
+    assert sleep.await_args is not None
+    assert sleep.await_args.args[0] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_web_sleep_default_zero_band() -> None:
+    """web_sleep() without args with config band (0, 0) must not raise and sleep 0."""
+    scraper = make_scraper(HumanizationConfig(action_delay_min_ms = 0, action_delay_max_ms = 0))
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.sleep", new_callable = AsyncMock) as sleep:
+        await scraper.web_sleep()
+    assert sleep.await_args is not None
+    assert sleep.await_args.args[0] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# HumanizationConfig validators
+# ---------------------------------------------------------------------------
+
+def test_invalid_viewport_format_raises_error() -> None:
+    with pytest.raises(ValueError, match = "Invalid viewport size"):
+        HumanizationConfig(viewport_sizes = ["invalid"])
+
+    with pytest.raises(ValueError, match = "Invalid viewport size"):
+        HumanizationConfig(viewport_sizes = ["1920x1080x720"])
+
+    with pytest.raises(ValueError, match = "Invalid viewport size"):
+        HumanizationConfig(viewport_sizes = ["abcxdef"])
+
+
+def test_reversed_min_max_raises_error() -> None:
+    with pytest.raises(ValueError, match = "must be >="):
+        HumanizationConfig(typing_delay_min_ms = 100, typing_delay_max_ms = 50)
+
+    with pytest.raises(ValueError, match = "must be >="):
+        HumanizationConfig(action_delay_min_ms = 3_000, action_delay_max_ms = 1_000)
+
+    with pytest.raises(ValueError, match = "must be >="):
+        HumanizationConfig(long_pause_min_ms = 5_000, long_pause_max_ms = 2_000)
+
+
+# ---------------------------------------------------------------------------
+# _humanized_type fallback on per-character failure
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_humanized_type_fallback_clears_and_sends_full_text() -> None:
+    """When per-character typing fails, fallback clears and sends full text once."""
+    scraper = make_scraper(HumanizationConfig(typing_delay_min_ms = 0, typing_delay_max_ms = 0))
+    field = AsyncMock(spec = Element)
+    field.send_keys = AsyncMock(side_effect = [None, RuntimeError("cdp fail"), None])
+
+    with (
+        patch.object(scraper, "_clear_input", new_callable = AsyncMock) as clear_mock,
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.sleep", new_callable = AsyncMock),
+    ):
+        await scraper._humanized_type(field, "abc")
+
+    # _clear_input was called in the fallback path
+    clear_mock.assert_awaited_once_with(field)
+    # send_keys: "a" (ok), "b" (fails), then full "abc" after clear
+    assert field.send_keys.await_count == 3
+    assert field.send_keys.await_args_list[0].args[0] == "a"
+    assert field.send_keys.await_args_list[1].args[0] == "b"
+    assert field.send_keys.await_args_list[2].args[0] == "abc"

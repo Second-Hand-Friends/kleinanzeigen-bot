@@ -1260,11 +1260,17 @@ class WebScrapingMixin:  # noqa: PLR0904
         humanization = self._get_humanization_config()
         min_ms = humanization.typing_delay_min_ms
         max_ms = humanization.typing_delay_max_ms
-        for char in text:
-            await input_field.send_keys(char)
-            delay_ms = min_ms if max_ms <= min_ms else _rng.randint(min_ms, max_ms)
-            if delay_ms > 0:
-                await asyncio.sleep(delay_ms / 1_000)
+        try:
+            for char in text:
+                await input_field.send_keys(char)
+                delay_ms = min_ms if max_ms <= min_ms else _rng.randint(min_ms, max_ms)
+                if delay_ms > 0:
+                    await asyncio.sleep(delay_ms / 1_000)
+        except Exception as ex:
+            # Character-wise typing failed partway through; clear and send the full text.
+            LOG.debug("Humanized typing failed, falling back to full send_keys(): %s", ex)
+            await self._clear_input(input_field)
+            await input_field.send_keys(text)
 
     async def web_open(self, url:str, *, timeout:int | float | None = None, reload_if_already_open:bool = False) -> None:
         """
@@ -1304,7 +1310,14 @@ class WebScrapingMixin:  # noqa: PLR0904
                 min_ms = humanization.action_delay_min_ms
             if max_ms is None:
                 max_ms = humanization.action_delay_max_ms
-        duration = max_ms <= min_ms and min_ms or secrets.randbelow(max_ms - min_ms) + min_ms
+        assert min_ms is not None, "min_ms should have been filled from config fallback"  # noqa: S101
+        assert max_ms is not None, "max_ms should have been filled from config fallback"  # noqa: S101
+        min_duration = min_ms
+        max_duration = max_ms
+        if max_duration <= min_duration:  # noqa: SIM108  # intentional if/else (the ternary form breaks when min_duration=0)
+            duration = min_duration
+        else:
+            duration = secrets.randbelow(max_duration - min_duration) + min_duration
         LOG.log(
             loggers.INFO if duration > 1_500 else loggers.DEBUG,  # noqa: PLR2004 Magic value used in comparison
             " ... pausing for %d ms ...",
