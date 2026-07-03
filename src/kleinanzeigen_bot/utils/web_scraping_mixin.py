@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio, enum, inspect, json, os, platform, secrets, shutil, subprocess, tempfile  # isort: skip # noqa: S404
+import asyncio, enum, inspect, json, math, os, platform, secrets, shutil, subprocess, tempfile  # isort: skip # noqa: S404
 from collections.abc import Awaitable, Callable, Coroutine, Iterable, Sequence
 from gettext import gettext as _
 from pathlib import Path, PureWindowsPath
@@ -247,15 +247,29 @@ def _filter_viewport_sizes(sizes:list[str], avail_w:int, avail_h:int) -> list[st
     return fitting
 
 
-def _pick_smallest_viewport(sizes:list[str]) -> str:
-    """Return the viewport string with the smallest area (width × height)."""
-    def _area(size:str) -> int:
-        try:
-            parts = size.lower().split("x")
-            return int(parts[0].strip()) * int(parts[1].strip())
-        except (ValueError, IndexError):
-            return 2**63 - 1  # push badly-formed entries to the end
-    return min(sizes, key = _area)
+def _is_headless_browser_arg(arg:str) -> bool:
+    return arg == "--headless" or arg.startswith("--headless=")
+
+
+def _has_display_available() -> bool:
+    if platform.system() == "Linux" or os.environ.get("CI", "").lower() == "true":
+        return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    return True
+
+
+def _normalize_viewport_metrics(metrics:Any) -> tuple[int, int] | None:
+    if not isinstance(metrics, tuple) or len(metrics) != _KEY_VALUE_PAIR_SIZE:
+        return None
+    w, h = metrics
+    if isinstance(w, bool) or isinstance(h, bool):
+        return None
+    if not isinstance(w, (int, float)) or not isinstance(h, (int, float)):
+        return None
+    if not math.isfinite(w) or not math.isfinite(h):
+        return None
+    if w <= 0 or h <= 0:
+        return None
+    return int(w), int(h)
 
 
 def _jitter_viewport(base_w:int, base_h:int, avail_w:int, avail_h:int) -> tuple[int, int]:
@@ -701,46 +715,53 @@ class WebScrapingMixin:  # noqa: PLR0904
                     LOG.debug("Probe temp directory cleanup ignored: %s", exc)
 
     async def _select_viewport_size(self) -> str | None:
-        """Screen-aware viewport selection with fallback.
+        """Screen-aware viewport selection.
 
         Returns a ``WxH`` string or ``None`` (meaning *omit --window-size*).
 
         Decision logic, in order:
-        1. Probe the real screen via an isolated browser.
-        2. If metrics are obtained, pick randomly among configured sizes that fit,
+        1. Skip headless or no-display environments.
+        2. Probe the real screen via an isolated browser.
+        3. If metrics are obtained, pick randomly among configured sizes that fit,
            then apply bounded jitter (±24px width, ±16px height) capped by the
            available screen.
-        3. If nothing fits, return ``None`` — let the browser/window-manager choose.
-        4. If the probe fails, return the smallest configured size as a least-risk
-           fallback **without** jitter (no screen metrics to bound against).
+        4. If nothing fits, return ``None`` — let the browser/window-manager choose.
+        5. If the probe fails or reports invalid metrics, return ``None``.
         """
         humanization = self._get_humanization_config()
         sizes = humanization.viewport_sizes
         if not sizes:
             return None
 
-        metrics = await self._probe_screen_metrics()
-        if metrics is not None:
-            avail_w, avail_h = metrics
-            fitting = _filter_viewport_sizes(sizes, avail_w, avail_h)
-            if fitting:
-                chosen = _rng.choice(fitting)
-                parts = chosen.lower().split("x")
-                base_w = int(parts[0].strip())
-                base_h = int(parts[1].strip())
-                jw, jh = _jitter_viewport(base_w, base_h, avail_w, avail_h)
-                LOG.info(
-                    "Screen-aware viewport: %s jittered to %dx%d (avail %dx%d)",
-                    chosen, jw, jh, avail_w, avail_h,
-                )
-                return f"{jw}x{jh}"
-            LOG.info("No configured viewport fits %dx%d screen; omitting --window-size", avail_w, avail_h)
+        if any(_is_headless_browser_arg(arg) for arg in self.browser_config.arguments):
+            LOG.debug("Skipping randomized viewport sizing for headless browser args")
             return None
 
-        # Probe failed — safest fallback is the smallest configured size (no jitter).
-        smallest = _pick_smallest_viewport(sizes)
-        LOG.debug("Screen metrics unavailable; falling back to smallest viewport: %s", smallest)
-        return smallest
+        if not _has_display_available():
+            LOG.debug("Skipping randomized viewport sizing because no real display is available")
+            return None
+
+        metrics = await self._probe_screen_metrics()
+        normalized_metrics = _normalize_viewport_metrics(metrics)
+        if normalized_metrics is None:
+            LOG.debug("Screen metrics unavailable or invalid; omitting --window-size")
+            return None
+
+        avail_w, avail_h = normalized_metrics
+        fitting = _filter_viewport_sizes(sizes, avail_w, avail_h)
+        if fitting:
+            chosen = _rng.choice(fitting)
+            parts = chosen.lower().split("x")
+            base_w = int(parts[0].strip())
+            base_h = int(parts[1].strip())
+            jw, jh = _jitter_viewport(base_w, base_h, avail_w, avail_h)
+            LOG.info(
+                "Screen-aware viewport: %s jittered to %dx%d (avail %dx%d)",
+                chosen, jw, jh, avail_w, avail_h,
+            )
+            return f"{jw}x{jh}"
+        LOG.debug("No configured viewport fits %dx%d screen; omitting --window-size", avail_w, avail_h)
+        return None
 
     def _build_new_browser_launch_args(self, selected_viewport_size:str | None = None) -> tuple[list[str], str | None]:
         """Build browser launch arguments and extract user_data_dir from custom args.

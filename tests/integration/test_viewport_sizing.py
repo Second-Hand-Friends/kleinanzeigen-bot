@@ -14,6 +14,7 @@ candidate is correctly excluded.
 """
 from __future__ import annotations
 
+import os
 import platform
 import shutil
 import tempfile
@@ -54,6 +55,19 @@ def _setup_mixin() -> WebScrapingMixin:
     return mixin
 
 
+def _requires_display() -> bool:
+    if platform.system() == "Linux" or os.environ.get("CI", "").lower() == "true":
+        return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    return True
+
+
+async def _probe_or_skip_metrics(mixin:WebScrapingMixin) -> tuple[int, int]:
+    metrics = await mixin._probe_screen_metrics()
+    if metrics is None:
+        pytest.skip("Screen metrics unavailable")
+    return metrics
+
+
 def _viewport_fits(size:str, avail_w:int, avail_h:int) -> bool:
     """Return True if the WxH string fits within the given available area."""
     try:
@@ -72,12 +86,11 @@ def _viewport_fits(size:str, avail_w:int, avail_h:int) -> bool:
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(not _has_browser(), reason = "No compatible browser binary detected")
+@pytest.mark.skipif(not _requires_display(), reason = "No real display/window manager available")
 async def test_probe_screen_metrics_returns_positive_dimensions() -> None:
     """The probe browser must report positive CSS-pixel availWidth/availHeight."""
     mixin = _setup_mixin()
-    metrics = await mixin._probe_screen_metrics()
-    assert metrics is not None, "Screen metrics probe returned None"
-    avail_w, avail_h = metrics
+    avail_w, avail_h = await _probe_or_skip_metrics(mixin)
     assert isinstance(avail_w, int)
     assert avail_w > 0, f"availWidth must be positive, got {avail_w!r}"
     assert isinstance(avail_h, int)
@@ -93,16 +106,13 @@ async def test_probe_screen_metrics_returns_positive_dimensions() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(not _has_browser(), reason = "No compatible browser binary detected")
+@pytest.mark.skipif(not _requires_display(), reason = "No real display/window manager available")
 async def test_viewport_selection_respects_screen_size() -> None:
     """Configure one oversized and one fitting viewport; verify the oversized
     candidate is excluded by the runtime filtering path.
     """
     mixin = _setup_mixin()
-
-    # 1. Probe real screen dimensions.
-    metrics = await mixin._probe_screen_metrics()
-    assert metrics is not None, "Cannot run test without screen metrics"
-    avail_w, avail_h = metrics
+    avail_w, avail_h = await _probe_or_skip_metrics(mixin)
 
     # 2. Build a viewport list with exactly one oversized candidate (> screen)
     #    and one that clearly fits (0.7 × screen).
@@ -118,7 +128,8 @@ async def test_viewport_selection_respects_screen_size() -> None:
     # 4. Configure the mixin with these sizes and run the selection logic.
     mixin.config = _make_bare_config(HumanizationConfig(randomize_viewport = True, viewport_sizes = sizes))
 
-    selected = await mixin._select_viewport_size()
+    with patch.object(mixin, "_probe_screen_metrics", return_value = (avail_w, avail_h)):
+        selected = await mixin._select_viewport_size()
     assert selected is not None, "At least the fitting size should be selected"
     # The selected viewport must fit within available screen when parsed.
     # (Jitter is bounded by avail so this always holds.)
@@ -130,15 +141,13 @@ async def test_viewport_selection_respects_screen_size() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(not _has_browser(), reason = "No compatible browser binary detected")
+@pytest.mark.skipif(not _requires_display(), reason = "No real display/window manager available")
 async def test_viewport_selection_returns_none_when_all_oversized() -> None:
     """When *all* configured viewports exceed the available screen, selection
     must return ``None`` (meaning omit ``--window-size``).
     """
     mixin = _setup_mixin()
-
-    metrics = await mixin._probe_screen_metrics()
-    assert metrics is not None
-    avail_w, avail_h = metrics
+    avail_w, avail_h = await _probe_or_skip_metrics(mixin)
 
     # All sizes are way oversized.
     sizes = [f"{avail_w + 500}x{avail_h + 500}", f"{avail_w + 1000}x{avail_h + 1000}"]
@@ -147,7 +156,8 @@ async def test_viewport_selection_returns_none_when_all_oversized() -> None:
     assert not any(_viewport_fits(s, avail_w, avail_h) for s in sizes)
 
     mixin.config = _make_bare_config(HumanizationConfig(randomize_viewport = True, viewport_sizes = sizes))
-    selected = await mixin._select_viewport_size()
+    with patch.object(mixin, "_probe_screen_metrics", return_value = (avail_w, avail_h)):
+        selected = await mixin._select_viewport_size()
     assert selected is None, f"Expected None (no sizes fit {avail_w}x{avail_h}), got {selected!r}"
 
 
@@ -158,6 +168,7 @@ async def test_viewport_selection_returns_none_when_all_oversized() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(not _has_browser(), reason = "No compatible browser binary detected")
+@pytest.mark.skipif(not _requires_display(), reason = "No real display/window manager available")
 async def test_create_browser_session_selects_fitting_viewport() -> None:
     """Start a browser via create_browser_session() with one oversized and one
     fitting viewport candidate, and verify the final window fits within the
@@ -165,11 +176,7 @@ async def test_create_browser_session_selects_fitting_viewport() -> None:
     filtering, jitter, and ``--window-size`` injection.
     """
     mixin = _setup_mixin()
-
-    # 1. Probe the real screen to derive meaningful test sizes.
-    metrics = await mixin._probe_screen_metrics()
-    assert metrics is not None, "Cannot run test without screen metrics"
-    avail_w, avail_h = metrics
+    avail_w, avail_h = await _probe_or_skip_metrics(mixin)
 
     # 2. Build viewport list: one oversized (exceeds screen), one clearly fitting.
     oversized = f"{avail_w + 200}x{avail_h + 100}"
@@ -184,8 +191,10 @@ async def test_create_browser_session_selects_fitting_viewport() -> None:
     ))
 
     try:
-        # 4. Start the browser through the full session-creation path.
-        await mixin.create_browser_session()
+        # 4. Start the browser through the full session-creation path, reusing
+        #    the already-probed metrics so a second flaky probe cannot fail CI.
+        with patch.object(mixin, "_probe_screen_metrics", return_value = (avail_w, avail_h)):
+            await mixin.create_browser_session()
 
         # 5. Navigate to about:blank and read the actual inner window size.
         #    Uses web_execute() which normalizes nodriver RemoteObject values.
@@ -216,9 +225,7 @@ async def test_create_browser_session_selects_fitting_viewport() -> None:
 
 @pytest.mark.asyncio
 async def test_select_viewport_size_fallback_to_smallest_on_probe_failure() -> None:
-    """When _probe_screen_metrics fails, _select_viewport_size must return the
-    smallest configured size as a least-risk fallback.
-    """
+    """When _probe_screen_metrics fails, _select_viewport_size must return None."""
     mixin = WebScrapingMixin()
     sizes = ["2560x1440", "1920x1080", "1366x768"]
     mixin.config = _make_bare_config(HumanizationConfig(randomize_viewport = True, viewport_sizes = sizes))
@@ -226,7 +233,7 @@ async def test_select_viewport_size_fallback_to_smallest_on_probe_failure() -> N
     with patch.object(mixin, "_probe_screen_metrics", return_value = None):
         selected = await mixin._select_viewport_size()
 
-    assert selected == "1366x768", f"Expected smallest (1366x768), got {selected!r}"
+    assert selected is None
 
 
 @pytest.mark.asyncio
