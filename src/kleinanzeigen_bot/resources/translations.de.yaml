@@ -1003,7 +1003,7 @@ kleinanzeigen_bot/model/config_model.py:
   _validate_pause_requires_capture:
     "pause_on_login_detection_failure requires capture_on.login_detection to be enabled": "pause_on_login_detection_failure erfordert, dass capture_on.login_detection aktiviert ist"
   _validate_viewport_sizes:
-    "Invalid viewport size '%(size)s'. Expected format 'WIDTHxHEIGHT', e.g. '1920x1080'.": "Ungültige Viewport-Größe '%(size)s'. Erwartetes Format 'BREITExHÖHE', z.B. '1920x1080'."
+    "Invalid viewport size '%(size)s'. Width and height must be positive integers, e.g. '1920x1080'.": "Ungültige Viewport-Größe '%(size)s'. Breite und Höhe müssen positive Ganzzahlen sein, z.B. '1920x1080'."
   _validate_ranges:
     "%(hi_name)s (%(hi_value)d) must be >= %(lo_name)s (%(lo_value)d).": "%(hi_name)s (%(hi_value)d) muss >= %(lo_name)s (%(lo_value)d) sein."
 

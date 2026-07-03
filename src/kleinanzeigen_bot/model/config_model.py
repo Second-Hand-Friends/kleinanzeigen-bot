@@ -382,7 +382,10 @@ class HumanizationConfig(ContextualModel):
         for size in value:
             parts = size.lower().split("x")
             if len(parts) != expected_parts or not (parts[0].strip().isdigit() and parts[1].strip().isdigit()):
-                raise ValueError(_("Invalid viewport size '%(size)s'. Expected format 'WIDTHxHEIGHT', e.g. '1920x1080'.") % {"size": size})
+                raise ValueError(_("Invalid viewport size '%(size)s'. Width and height must be positive integers, e.g. '1920x1080'.") % {"size": size})
+            width, height = int(parts[0].strip()), int(parts[1].strip())
+            if width <= 0 or height <= 0:
+                raise ValueError(_("Invalid viewport size '%(size)s'. Width and height must be positive integers, e.g. '1920x1080'.") % {"size": size})
         return value
 
     @model_validator(mode = "after")

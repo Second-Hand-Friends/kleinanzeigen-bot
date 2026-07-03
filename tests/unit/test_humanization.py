@@ -282,6 +282,15 @@ def test_invalid_viewport_format_raises_error() -> None:
     with pytest.raises(ValueError, match = "Invalid viewport size"):
         HumanizationConfig(viewport_sizes = ["abcxdef"])
 
+    with pytest.raises(ValueError, match = "Invalid viewport size"):
+        HumanizationConfig(viewport_sizes = ["0x0"])
+
+    with pytest.raises(ValueError, match = "Invalid viewport size"):
+        HumanizationConfig(viewport_sizes = ["0x720"])
+
+    with pytest.raises(ValueError, match = "Invalid viewport size"):
+        HumanizationConfig(viewport_sizes = ["1920x0"])
+
 
 def test_reversed_min_max_raises_error() -> None:
     with pytest.raises(ValueError, match = "must be >="):
