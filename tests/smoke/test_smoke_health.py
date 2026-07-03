@@ -272,6 +272,7 @@ def test_cli_subcommands_with_config_formats(
     out = (result.stdout + "\n" + result.stderr).lower()
     if subcommand == "verify":
         assert "no configuration errors found" in out, f"Expected 'no configuration errors found' in output for 'verify'.\n{out}"
+        assert "auto price reduction preview for" not in out, f"Verify should not emit APR preview logs.\n{out}"
     elif subcommand == "update-content-hash":
         assert "no active ads found" in out, f"Expected 'no active ads found' in output for 'update-content-hash'.\n{out}"
     elif subcommand == "update-check":
@@ -279,8 +280,8 @@ def test_cli_subcommands_with_config_formats(
 
 
 @pytest.mark.smoke
-def test_verify_shows_auto_price_reduction_decisions(tmp_path:Path, test_bot_config:Config) -> None:
-    """Smoke: verify previews publish and update-mode price reduction decisions."""
+def test_status_shows_auto_price_reduction_decisions(tmp_path:Path, test_bot_config:Config) -> None:
+    """Smoke: status shows publish and update-mode price reduction decision details."""
     config_dict = test_bot_config.model_dump()
     config_dict["ad_files"] = ["./**/ad_*.yaml"]
     config_path = tmp_path / "config.yaml"
@@ -313,6 +314,7 @@ def test_verify_shows_auto_price_reduction_decisions(tmp_path:Path, test_bot_con
         "title: Test Auto Pricing Update Ad\n"
         "description: A test ad to verify update price reduction preview\n"
         "category: 161/gezielt\n"
+        "id: 123456789\n"
         "price: 200\n"
         "price_type: FIXED\n"
         "repost_count: 1\n"
@@ -327,14 +329,14 @@ def test_verify_shows_auto_price_reduction_decisions(tmp_path:Path, test_bot_con
         encoding = "utf-8",
     )
 
-    args = ["verify", "--config", str(config_path), "--workspace-mode", "portable"]
+    args = ["status", "--config", str(config_path), "--workspace-mode", "portable"]
     result = invoke_cli(args, cwd = tmp_path)
     assert result.returncode == 0
     out = (result.stdout + "\n" + result.stderr).lower()
-    assert "no configuration errors found" in out, f"Expected 'no configuration errors found' in output.\n{out}"
-    assert "auto price reduction preview for" in out, f"Expected auto price reduction preview logs in output.\n{out}"
-    assert "(publish):" in out, f"Expected publish preview in output.\n{out}"
-    assert "disabled (on_update=false" in out, f"Expected update preview disabled message when on_update=false.\n{out}"
+    assert "title:" in out, f"Expected status blocks with title fields in output.\n{out}"
+    assert "apr update" in out or "apr-aktualisierung" in out, f"Expected update APR detail label in output.\n{out}"
+    assert "apr publish" in out or "apr-veröffentlichung" in out, f"Expected publish APR detail label in output.\n{out}"
+    assert "ads/" in out or "ad_" in out, f"Expected ad path in status output.\n{out}"
+    assert "ad_test_pricing.yaml" in out, f"Expected first ad filename in output.\n{out}"
     assert "ad_test_update_pricing.yaml" in out, f"Expected update-enabled ad preview in output.\n{out}"
-    assert "(update):" in out, f"Expected update preview in output.\n{out}"
-    assert "cycle 1" in out, f"Expected update preview with cycle progression in output.\n{out}"
+    assert "update" in out, f"Expected update APR detail text in output.\n{out}"

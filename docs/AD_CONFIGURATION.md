@@ -113,9 +113,9 @@ When `auto_price_reduction.enabled` is set to `true`, the bot evaluates whether 
 
 **Note:** `repost_count` and price reduction counters are only incremented and persisted after a successful publish. Failed publish attempts do not advance the counters.
 
-When automatic price reduction is enabled, each `publish` (and optionally `update`) run logs one clear INFO message per ad summarizing the outcome—whether the price was reduced, kept, or the reduction was delayed (and why). The `verify` command also previews these outcomes for all configured ads so you can validate your pricing configuration without triggering a publish cycle. Ads without `auto_price_reduction` configured are silently skipped at default log level.
+When automatic price reduction is enabled, each `publish` (and optionally `update`) run logs one clear INFO message per ad summarizing the outcome—whether the price was reduced, kept, or the reduction was delayed (and why). Use `status` to preview these outcomes for configured ads without triggering a publish cycle. Ads without `auto_price_reduction` configured are skipped.
 
-If you run with `-v` / `--verbose`, the bot additionally logs structured decision details (repost counts, cycle state, day delay, reference timestamps) and the full cycle-by-cycle calculation trace (base price, reduction value, rounded step result, and floor clamp).
+The `status` command shows APR details inside each ad block, together with the full relative ad path for quick copy/paste.
 
 ```yaml
 auto_price_reduction:
@@ -197,12 +197,12 @@ When `on_update` is enabled, the reduced effective price is preserved across mix
 
 This ensures price reductions accumulate correctly regardless of whether you use `publish`, `update`, or both.
 
-#### Verify Command Preview
+#### Status Command Preview
 
-The `verify` command previews pricing outcomes for both modes:
+The `status` command previews pricing outcomes for active ads:
 
 - **Publish preview**: Always shown when `auto_price_reduction.enabled` is `true`. Shows the effective price after applying reductions based on the current `repost_count`, `price_reduction_count`, and delay settings.
-- **Update preview**: Always shown when `auto_price_reduction.enabled` is `true`. Reports the update-mode outcome: if `on_update` is `true`, it shows the reduction result; if `on_update` is `false` (default), it reports that update-mode reductions are disabled and shows the restored effective price (no new cycle).
+- **Update preview**: Shown for ads that already have an ID. Reports the update-mode outcome: if `on_update` is `true`, it shows the reduction result; if `on_update` is `false` (default), it reports that update-mode reductions are disabled and shows the restored effective price (no new cycle).
 
 ```yaml
 # Example: enable reductions for both publish and update
@@ -426,7 +426,7 @@ republication_interval: 7
 ## Troubleshooting
 
 - **Schema validation errors**: Run `kleinanzeigen-bot verify` (binary) or `pdm run app verify` (source) to see which fields fail validation.
-- **Price reduction not applying**: Confirm `auto_price_reduction.enabled` is `true`, `min_price` is set, and you are using `publish` (not `update`, unless `on_update: true`). Run `kleinanzeigen-bot verify` to preview outcomes, or add `-v` for detailed decision data including repost/day-delay state. Remember ad-level values override `ad_defaults`.
+- **Price reduction not applying**: Confirm `auto_price_reduction.enabled` is `true`, `min_price` is set, and you are using `publish` (not `update`, unless `on_update: true`). Use `status` for detailed decision data including repost/day-delay state. Remember ad-level values override `ad_defaults`.
 - **Shipping configuration issues**: Use `shipping_type: SHIPPING` with non-empty `shipping_options` for predefined DHL/Hermes package shipping and direct-buy. Individual `shipping_costs` is deprecated — publishing an ad with `shipping_costs` and no `shipping_options` will fail with an error. Remove `shipping_costs` from your config and migrate to `shipping_options` (pick options from a single size group S/M/L).
 - **Category not found**: Verify the category name or ID and check any custom mappings in `config.yaml`.
 - **File naming/prefix mismatch**: Ensure ad files match your `ad_files` glob and prefix (default `ad_`).

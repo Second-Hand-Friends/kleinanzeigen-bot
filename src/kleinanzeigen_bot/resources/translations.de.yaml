@@ -463,25 +463,42 @@ kleinanzeigen_bot/ad_status.py:
     "due": "Fällig"
     "published-local": "Veröffentlicht (lokal)"
 
-  _apr_cell:
-    "off": "aus"
-
-  _apr_layout:
-    "off": "aus"
-    "APR repost": "APR-Repost"
-    "APR update": "APR-Update"
-
-  _format_apr_status:
-    "error": "Fehler"
-    "due: %s": "fällig: %s"
-    "not due": "nicht fällig"
+  __get_message_template:
+    "missing price": "fehlender Preis"
+    "minimum price equals current price": "Mindestpreis entspricht dem aktuellen Preis"
+    "update reductions disabled": "Preisreduzierung beim Aktualisieren deaktiviert"
+    "waiting for repost delay": "wartet auf Repost-Verzögerung"
+    "repost delay already applied": "Repost-Verzögerung bereits angewendet"
+    "waiting for publish timestamp": "wartet auf Veröffentlichungszeitpunkt"
+    "waiting for day delay": "wartet auf Tagesverzögerung"
+    "eligible": "berechtigt"
+    "calculation failed": "Berechnung fehlgeschlagen"
+    "no visible price change": "keine sichtbare Preisänderung"
 
   render_status_rows:
-    "Ad ID": "Anzeigen-ID"
-    "Filename": "Dateiname"
-    "Title": "Titel"
-    "Status": "Status"
     "Summary: %s (%d total)": "Zusammenfassung: %s (%d insgesamt)"
+
+  _build_apr_line_parts:
+    "price change": "Preisänderung"
+    "effective price": "Effektiver Preis"
+    "cycle": "Zyklus"
+    "reason": "Grund"
+
+  _format_apr_detail:
+    "missing price": "fehlender Preis"
+    "disabled": "deaktiviert"
+    "price reduction": "Preisreduzierung"
+    "no new reduction": "keine neue Reduktion"
+
+  _format_apr_price:
+    "no effective price": "kein effektiver Preis"
+
+  _render_status_block:
+    "title": "Titel"
+    "id": "ID"
+    "status": "Status"
+    "APR update": "APR-Aktualisierung"
+    "APR publish": "APR-Veröffentlichung"
 
 #################################################
 kleinanzeigen_bot/ad_loading.py:
@@ -542,15 +559,6 @@ kleinanzeigen_bot/price_reduction.py:
 #################################################
   is_auto_price_reduction_due:
     "Pending auto price reduction detected for ad [%s]": "Ausstehende automatische Preisreduzierung für Anzeige [%s] erkannt"
-
-  log_auto_price_reduction_preview:
-    "publish": "veröffentlichen"
-    "update": "aktualisieren"
-    "Auto price reduction preview for [%s] (%s): disabled": "Vorschau automatische Preisreduzierung für [%s] (%s): deaktiviert"
-    "Auto price reduction preview for [%s] (%s): missing price": "Vorschau automatische Preisreduzierung für [%s] (%s): Preis fehlt"
-    "Auto price reduction preview for [%s] (%s): disabled (on_update=false, effective_price=%s)": "Vorschau automatische Preisreduzierung für [%s] (%s): deaktiviert (on_update=false, effektiver Preis=%s)"
-    "Auto price reduction preview for [%s] (%s): %s -> %s (cycle %s)": "Vorschau automatische Preisreduzierung für [%s] (%s): %s -> %s (Zyklus %s)"
-    "Auto price reduction preview for [%s] (%s): no new reduction (effective_price=%s, reason=%s)": "Vorschau automatische Preisreduzierung für [%s] (%s): keine neue Reduktion (effektiver Preis=%s, Grund=%s)"
 
   apply_auto_price_reduction:
     "Auto price reduction is enabled for [%s] but no price is configured.": "Automatische Preisreduzierung ist für [%s] aktiviert, aber es wurde kein Preis konfiguriert."

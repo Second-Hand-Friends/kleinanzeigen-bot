@@ -9,9 +9,7 @@ from typing import TYPE_CHECKING, Any, Final, cast
 import certifi
 
 from . import ad_loading, ad_status, delete_flow, download_flow, extend_flow
-from . import ad_state as _ad_state
 from . import login_flow as _login_flow
-from . import price_reduction as _price_reduction
 from . import publishing_workflow as _publishing_workflow
 from . import runtime_config as _runtime_config
 from . import update_checker as _update_checker
@@ -219,14 +217,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self._bootstrap_runtime()
         self._check_for_updates()
         self.ads_selector = "all"
-        if ads := self.load_ads(exclude_ads_with_id = False):
-            for ad_file, ad_cfg, _ad_cfg_orig in ads:
-                ad_file_relative = _ad_state.relative_ad_path(ad_file, self.config_file_path)
-                publish_decision = _price_reduction.evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = AdUpdateStrategy.REPLACE)
-                _price_reduction.log_auto_price_reduction_preview(ad_file_relative, publish_decision)
-
-                update_decision = _price_reduction.evaluate_auto_price_reduction(ad_cfg, ad_file_relative, mode = AdUpdateStrategy.MODIFY)
-                _price_reduction.log_auto_price_reduction_preview(ad_file_relative, update_decision)
+        self.load_ads(exclude_ads_with_id = False)
         LOG.info("############################################")
         LOG.info("DONE: No configuration errors found.")
         LOG.info("############################################")

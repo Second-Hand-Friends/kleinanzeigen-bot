@@ -150,8 +150,14 @@ login:
             encoding = "utf-8",
         )
         test_bot.config_file_path = str(config_path)
-        with patch("kleinanzeigen_bot.update_checker.UpdateChecker.check_for_updates"):
+        with (
+            patch("kleinanzeigen_bot.update_checker.UpdateChecker.check_for_updates"),
+            patch.object(test_bot, "load_ads", return_value = []) as mock_load_ads,
+            patch("kleinanzeigen_bot.price_reduction.evaluate_auto_price_reduction") as mock_evaluate,
+        ):
             await test_bot.run(["script.py", "verify", "--config", str(config_path), "--workspace-mode", "portable"])
+        mock_load_ads.assert_called_once_with(exclude_ads_with_id = False)
+        mock_evaluate.assert_not_called()
         assert test_bot.config.login.username == "test"
 
     @pytest.mark.asyncio

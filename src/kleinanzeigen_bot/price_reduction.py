@@ -9,12 +9,10 @@ __all__ = [
     "apply_auto_price_reduction",
     "evaluate_auto_price_reduction",
     "is_auto_price_reduction_due",
-    "log_auto_price_reduction_preview",
 ]
 
 from dataclasses import dataclass
 from datetime import datetime
-from gettext import gettext as _
 from typing import Any
 
 from kleinanzeigen_bot.model.ad_model import (
@@ -334,52 +332,6 @@ def is_auto_price_reduction_due(ad_cfg:Ad, ad_file_relative:str) -> bool:
 
     LOG.info("Pending auto price reduction detected for ad [%s]", ad_file_relative)
     return True
-
-
-def log_auto_price_reduction_preview(ad_file_relative:str, decision:PriceReductionDecision) -> None:
-    mode_label = _("publish") if decision.mode == AdUpdateStrategy.REPLACE else _("update")
-    if not decision.enabled:
-        LOG.info("Auto price reduction preview for [%s] (%s): disabled", ad_file_relative, mode_label)
-        return
-
-    if decision.base_price is None:
-        LOG.info("Auto price reduction preview for [%s] (%s): missing price", ad_file_relative, mode_label)
-        return
-
-    if decision.mode == AdUpdateStrategy.MODIFY and not decision.on_update:
-        LOG.info(
-            "Auto price reduction preview for [%s] (%s): disabled (on_update=false, effective_price=%s)",
-            ad_file_relative,
-            mode_label,
-            decision.result_price,
-        )
-        return
-
-    if decision.cycle_advanced:
-        LOG.info(
-            "Auto price reduction preview for [%s] (%s): %s -> %s (cycle %s)",
-            ad_file_relative,
-            mode_label,
-            decision.restored_price,
-            decision.result_price,
-            decision.next_cycle,
-        )
-        return
-
-    LOG.info(
-        "Auto price reduction preview for [%s] (%s): no new reduction (effective_price=%s, reason=%s)",
-        ad_file_relative,
-        mode_label,
-        decision.result_price,
-        decision.reason,
-    )
-    if decision.delay_reposts_ignored:
-        LOG.debug(
-            "Auto price reduction preview for [%s] (%s): delay_reposts=%s ignored in MODIFY mode",
-            ad_file_relative,
-            mode_label,
-            decision.delay_reposts,
-        )
 
 
 def apply_auto_price_reduction(
