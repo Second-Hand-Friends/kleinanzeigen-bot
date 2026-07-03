@@ -500,9 +500,12 @@ async def set_pricing_fields(web:WebScrapingMixin, ad_cfg:Ad, ad_defaults:AdDefa
 async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) -> None:
     """Select an option from a <button role="combobox"> dropdown by its API value.
 
-    Opens the control with pointerdown/mousedown and selects the matching option
-    in a single async browser script execution.  Uses React fiber matching first,
-    then DOM attribute matching, then normalized text fallback.
+    Opens the control with a full native click sequence (pointerdown → mousedown →
+    mouseup → click) and selects the matching option in a single async browser
+    script execution.  Uses React fiber matching first, then DOM attribute
+    matching, then normalized text fallback.  The listbox search walks from
+    the button's ID-suffixed element up to the document root, supporting both
+    inline and portal-rendered dropdowns.
     """
     js_elem_id = json.dumps(elem_id)
     js_value = json.dumps(value)
@@ -513,6 +516,8 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
     if (!btn) return {{ok:false, reason:'button_not_found'}};
     btn.dispatchEvent(new PointerEvent('pointerdown',{{bubbles:true,cancelable:true}}));
     btn.dispatchEvent(new MouseEvent('mousedown',{{bubbles:true,cancelable:true}}));
+    btn.dispatchEvent(new MouseEvent('mouseup',{{bubbles:true,cancelable:true}}));
+    btn.dispatchEvent(new MouseEvent('click',{{bubbles:true,cancelable:true}}));
     var listbox = null;
     var options = null;
     var pollDeadline = Date.now() + {poll_deadline_ms};
@@ -526,6 +531,14 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
             var m = btn.parentElement.querySelector('[role="menu"]');
             if (m) candidate = m;
         }}
+        /* Headless UI / React portals often render the listbox at the
+           document root rather than inside the button's parentElement. */
+        if (!candidate) {{
+            candidate = document.querySelector('[role="listbox"]');
+        }}
+        if (!candidate) {{
+            candidate = document.querySelector('[role="menu"]');
+        }}
         if (candidate) {{
             options = Array.from(candidate.querySelectorAll('[role="option"]'));
             if (options.length > 0) break;
@@ -534,7 +547,7 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
     if (!options || options.length === 0) {{
         return {{ok:false, reason:'no_options_after_opening', options:[]}};
     }}
-    var optionInfo = options.map(function(o){{return o.textContent ? o.textContent.trim() : '';}});
+    var optionInfo = options.map(function(o){{return o.textContent ? o.textContent.replace(/\\s+/g,' ').trim() : '';}});
     var fiberKey = Object.keys(btn).find(function(k){{return k.startsWith('__reactFiber');}});
     if (fiberKey) {{
         var fiber = btn[fiberKey];
@@ -560,7 +573,7 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
             o.click();
             return {{ok:true}};
         }}
-        var text = (o.textContent || '').trim().toLowerCase();
+        var text = (o.textContent || '').replace(/\\s+/g,' ').trim().toLowerCase();
         if (text === {js_value}.toLowerCase()) {{
             o.click();
             return {{ok:true}};

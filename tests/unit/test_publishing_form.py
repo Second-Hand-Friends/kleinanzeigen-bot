@@ -2016,9 +2016,9 @@ class TestSelectButtonCombobox:
     """Tests for _select_button_combobox (single async script combobox selection).
 
     ``_select_button_combobox`` is the internal helper used for special-attribute
-    comboboxes where the option list is embedded in the React fiber tree. It executes
-    a single async JS script that opens the control via pointerdown/mousedown,
-    polls for visible options, and clicks the matching option by value.
+    button comboboxes. It executes a single async JS script that opens the control
+    via a full native click sequence (pointerdown → mousedown → mouseup → click),
+    polls for visible options, and clicks the matching option by value or text.
     """
 
     @pytest.mark.asyncio
@@ -2045,6 +2045,58 @@ class TestSelectButtonCombobox:
         # Stable contract: a single browser script receives safely quoted inputs.
         assert json.dumps(elem_id) in js
         assert json.dumps(option_value) in js
+
+    @pytest.mark.asyncio
+    async def test_select_button_combobox_js_contains_full_click_sequence(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """The injected JS must dispatch a full click sequence (including mouseup/click)
+        and include document-level listbox search for portal-rendered menus."""
+        elem_id = "my-combobox-id"
+        option_value = "option_value"
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = {"ok": True}) as mock_execute,
+        ):
+            await _select_button_combobox(test_bot, elem_id, option_value)
+
+        assert mock_execute.await_args is not None
+        js = str(mock_execute.await_args.args[0])
+        # Full click sequence: pointerdown + mousedown + mouseup + click
+        assert "PointerEvent('pointerdown'" in js
+        assert "MouseEvent('mousedown'" in js
+        assert "MouseEvent('mouseup'" in js
+        assert "MouseEvent('click'" in js
+        # Document-level fallback search for portal-rendered menus
+        assert "document.querySelector('[role=\"listbox\"]')" in js
+        assert "document.querySelector('[role=\"menu\"]')" in js
+        # Whitespace normalization in text matching
+        assert ".replace(/\\s+/g,' ').trim()" in js
+
+    @pytest.mark.asyncio
+    async def test_select_button_combobox_no_options_failure_raises_timeout(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        """When JS returns no_options_after_opening, TimeoutError contains the mapped label."""
+        elem_id = "my-combobox-id"
+        option_value = "missing_option"
+        js_status = {
+            "ok": False,
+            "reason": "no_options_after_opening",
+            "options": [],
+        }
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = js_status),
+            pytest.raises(TimeoutError) as exc_info,
+        ):
+            await _select_button_combobox(test_bot, elem_id, option_value)
+
+        msg = str(exc_info.value)
+        assert "my-combobox-id" in msg
+        assert "No options appeared after opening" in msg
 
     @pytest.mark.asyncio
     async def test_select_button_combobox_structured_failure_raises_timeout(
