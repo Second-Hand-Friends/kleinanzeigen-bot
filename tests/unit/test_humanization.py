@@ -10,7 +10,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from kleinanzeigen_bot.model.config_model import Config, HumanizationConfig
-from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element, WebScrapingMixin
+from kleinanzeigen_bot.utils.web_scraping_mixin import (
+    By,
+    Element,
+    WebScrapingMixin,
+    _filter_viewport_sizes,  # noqa: PLC2701
+    _jitter_viewport,  # noqa: PLC2701
+    _pick_smallest_viewport,  # noqa: PLC2701
+)
 
 
 def make_scraper(humanization:HumanizationConfig | None = None) -> WebScrapingMixin:
@@ -243,10 +250,18 @@ async def test_web_sleep_with_min_only_is_fixed_delay() -> None:
 # viewport randomization at launch
 # ---------------------------------------------------------------------------
 
-def test_viewport_arg_appended_when_enabled() -> None:
+def test_viewport_arg_appended_when_selected() -> None:
+    """selected_viewport_size parameter is honoured by _build_new_browser_launch_args."""
+    scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1600x900"]))
+    args, _ = scraper._build_new_browser_launch_args(selected_viewport_size = "1600x900")
+    assert "--window-size=1600,900" in args
+
+
+def test_viewport_arg_not_appended_when_unselected() -> None:
+    """_build_new_browser_launch_args with no selected_viewport_size must not add --window-size."""
     scraper = make_scraper(HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1600x900"]))
     args, _ = scraper._build_new_browser_launch_args()
-    assert "--window-size=1600,900" in args
+    assert not any(a.startswith("--window-size") for a in args)
 
 
 def test_viewport_arg_not_appended_when_user_supplied() -> None:
@@ -347,3 +362,203 @@ async def test_humanized_type_fallback_clears_and_sends_full_text() -> None:
     assert field.send_keys.await_args_list[0].args[0] == "a"
     assert field.send_keys.await_args_list[1].args[0] == "b"
     assert field.send_keys.await_args_list[2].args[0] == "abc"
+
+
+# ---------------------------------------------------------------------------
+# viewport-size helper functions (_filter_viewport_sizes, _pick_smallest_viewport)
+# ---------------------------------------------------------------------------
+
+
+def test_filter_viewport_sizes_all_fit() -> None:
+    sizes = ["1920x1080", "1366x768", "2560x1440"]
+    assert _filter_viewport_sizes(sizes, 2560, 1440) == sizes
+
+
+def test_filter_viewport_sizes_some_fit() -> None:
+    sizes = ["1920x1080", "2560x1440", "1366x768"]
+    result = _filter_viewport_sizes(sizes, 1920, 1080)
+    assert result == ["1920x1080", "1366x768"]
+
+
+def test_filter_viewport_sizes_none_fit() -> None:
+    sizes = ["2560x1440", "3840x2160"]
+    assert _filter_viewport_sizes(sizes, 1920, 1080) == []
+
+
+def test_filter_viewport_sizes_boundary_exact() -> None:
+    """Sizes exactly equal to the available area must fit."""
+    assert _filter_viewport_sizes(["1920x1080"], 1920, 1080) == ["1920x1080"]
+
+
+def test_filter_viewport_sizes_skips_parse_errors() -> None:
+    sizes = ["1920x1080", "not-valid", "1366x768"]
+    result = _filter_viewport_sizes(sizes, 1920, 1080)
+    assert result == ["1920x1080", "1366x768"]
+
+
+def test_filter_viewport_sizes_empty_list() -> None:
+    assert _filter_viewport_sizes([], 1920, 1080) == []
+
+
+def test_pick_smallest_viewport_basic() -> None:
+    sizes = ["2560x1440", "1920x1080", "1366x768", "1920x1200"]
+    # areas: 3_686_400, 2_073_600, 1_048_704, 2_304_000
+    assert _pick_smallest_viewport(sizes) == "1366x768"
+
+
+def test_pick_smallest_viewport_single_entry() -> None:
+    assert _pick_smallest_viewport(["1920x1080"]) == "1920x1080"
+
+
+def test_pick_smallest_viewport_prefers_smaller_width() -> None:
+    """When areas tie, the one listed first with smaller width wins (stable min)."""
+    sizes = ["1600x900", "1440x900"]
+    # areas: 1_440_000, 1_296_000
+    assert _pick_smallest_viewport(sizes) == "1440x900"
+
+
+def test_pick_smallest_viewport_skips_parse_errors() -> None:
+    """Parse errors get a very large area so they lose against valid entries."""
+    sizes = ["invalid", "1366x768", "bad"]
+    result = _pick_smallest_viewport(sizes)
+    assert result == "1366x768"
+
+
+# ---------------------------------------------------------------------------
+# _jitter_viewport
+# ---------------------------------------------------------------------------
+
+
+def test_jitter_viewport_basic() -> None:
+    """Jitter stays within ±24 width and ±16 height."""
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [1024, 600]) as mock_rand:
+        jw, jh = _jitter_viewport(1024, 600, 2000, 1200)
+    assert jw == 1024
+    assert jh == 600
+    assert mock_rand.call_args_list[0].args == (max(1, 1024 - 24), min(2000, 1024 + 24))
+    assert mock_rand.call_args_list[1].args == (max(1, 600 - 16), min(1200, 600 + 16))
+
+
+def test_jitter_viewport_caps_by_avail() -> None:
+    """max_w / max_h are clamped to avail dimensions."""
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [1900, 1050]) as mock_rand:
+        jw, jh = _jitter_viewport(1920, 1080, 1920, 1080)
+    assert jw == 1900
+    assert jh == 1050
+    # base_w + 24 = 1944 but avail_w caps at 1920
+    assert mock_rand.call_args_list[0].args == (max(1, 1920 - 24), 1920)
+    assert mock_rand.call_args_list[1].args == (max(1, 1080 - 16), 1080)
+
+
+def test_jitter_viewport_floor_at_one() -> None:
+    """min_w / min_h never drop below 1, even for tiny bases."""
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [1, 1]) as mock_rand:
+        jw, jh = _jitter_viewport(10, 10, 1920, 1080)
+    assert jw == 1
+    assert jh == 1
+    # base_w - 24 = -14, clamped to 1
+    assert mock_rand.call_args_list[0].args == (1, 10 + 24)
+    assert mock_rand.call_args_list[1].args == (1, 10 + 16)
+
+
+def test_jitter_viewport_base_equals_avail_only_downward_or_zero() -> None:
+    """When base == avail, jitter can only shrink or stay the same size."""
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [1910, 1070]) as mock_rand:
+        jw, jh = _jitter_viewport(1920, 1080, 1920, 1080)
+    assert jw <= 1920
+    assert jh <= 1080
+    assert mock_rand.call_args_list[0].args == (max(1, 1920 - 24), 1920)
+    assert mock_rand.call_args_list[1].args == (max(1, 1080 - 16), 1080)
+
+
+# ---------------------------------------------------------------------------
+# integration-level: _select_viewport_size with jitter
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_select_viewport_size_applies_jitter_when_metrics_known() -> None:
+    """When metrics are available, a fitting base is jittered before returning."""
+    scraper = WebScrapingMixin()
+    scraper.config = Config.model_validate({
+        "login": {"username": "u", "password": "p"},  # noqa: S106
+        "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1600x900", "1920x1080"]).model_dump(),
+    })
+    with (
+        patch.object(scraper, "_probe_screen_metrics", return_value = (1920, 1080)),
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.choice", return_value = "1600x900"),
+        patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [1590, 890]),
+    ):
+        result = await scraper._select_viewport_size()
+    # Jitter applied: base 1600x900 → ~1590x890
+    assert result == "1590x890"
+
+
+@pytest.mark.asyncio
+async def test_select_viewport_size_omits_when_none_fit() -> None:
+    """When all sizes exceed avail, returns None regardless of jitter."""
+    scraper = WebScrapingMixin()
+    scraper.config = Config.model_validate({
+        "login": {"username": "u", "password": "p"},  # noqa: S106
+        "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["2560x1440"]).model_dump(),
+    })
+    with patch.object(scraper, "_probe_screen_metrics", return_value = (1920, 1080)):
+        result = await scraper._select_viewport_size()
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_select_viewport_size_fallback_no_jitter() -> None:
+    """Probe failure returns smallest base without jitter."""
+    scraper = WebScrapingMixin()
+    scraper.config = Config.model_validate({
+        "login": {"username": "u", "password": "p"},  # noqa: S106
+        "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["2560x1440", "1366x768"]).model_dump(),
+    })
+    with patch.object(scraper, "_probe_screen_metrics", return_value = None):
+        result = await scraper._select_viewport_size()
+    assert result == "1366x768"  # smallest, no jitter
+
+
+@pytest.mark.asyncio
+async def test_select_viewport_size_user_window_size_bypasses_selection() -> None:
+    """User-supplied --window-size in browser_config.arguments prevents _select_viewport_size
+    from being called at all (tested via the guard in create_browser_session)."""
+    scraper = WebScrapingMixin()
+    scraper.browser_config.arguments = ["--window-size=800,600"]
+    scraper.config = Config.model_validate({
+        "login": {"username": "u", "password": "p"},  # noqa: S106
+        "humanization": HumanizationConfig(randomize_viewport = True, viewport_sizes = ["1920x1080"]).model_dump(),
+    })
+    with patch.object(scraper, "_probe_screen_metrics", return_value = (1920, 1080)) as probe:
+        # Simulate the guard in create_browser_session
+        humanization = scraper._get_humanization_config()
+        guard_should_call = (
+            humanization.enabled
+            and humanization.randomize_viewport
+            and humanization.viewport_sizes
+            and not any(arg.startswith("--window-size") for arg in scraper.browser_config.arguments)
+        )
+        assert not guard_should_call, "Guard should skip when user-supplied --window-size present"
+        probe.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# default viewport sizes
+# ---------------------------------------------------------------------------
+
+def test_default_viewport_sizes_contain_new_entries() -> None:
+    cfg = HumanizationConfig()
+    expected_extras = {"2560x1440", "1920x1200", "1728x1117", "1512x982"}
+    for expected in expected_extras:
+        assert expected in cfg.viewport_sizes, f"Missing default viewport: {expected}"
+
+
+def test_default_viewport_sizes_omits_4k() -> None:
+    cfg = HumanizationConfig()
+    assert "3840x2160" not in cfg.viewport_sizes
+
+
+def test_default_viewport_sizes_count() -> None:
+    cfg = HumanizationConfig()
+    assert len(cfg.viewport_sizes) == 10
