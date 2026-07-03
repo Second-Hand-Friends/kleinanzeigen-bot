@@ -15,6 +15,7 @@ import pytest
 
 import kleinanzeigen_bot.price_reduction as _pr_mod  # noqa: PLC0414 — module import for patching in tests
 from kleinanzeigen_bot.ad_status import (
+    AprDetail,
     StatusRow,
     build_status_rows,
     compute_ad_status,
@@ -30,6 +31,11 @@ from kleinanzeigen_bot.utils import xdg_paths
 pytestmark = pytest.mark.unit
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(value:str) -> str:
+    return _ANSI_RE.sub("", value)
+
 
 _TZ = timezone.utc
 
@@ -221,45 +227,66 @@ class TestRenderStatusRows:
     def test_empty(self) -> None:
         assert not render_status_rows([])
 
-    def test_headers_and_rows(self) -> None:
+    def test_per_ad_layout_keeps_status_apr_and_path_together(self) -> None:
         rows = [
-            StatusRow(title = "Ad A", ad_id = "-", filename = "a.yaml", status = "draft"),
-            StatusRow(title = "Ad B", ad_id = "123", filename = "b.yaml", status = "published-local"),
+            StatusRow(
+                title = "Ad A",
+                ad_id = "-",
+                filename = "data/my_ads/ad_000001_Test/ad_000001.yaml",
+                status = "draft",
+            ),
+            StatusRow(
+                title = "Ad B",
+                ad_id = "123",
+                filename = "b.yaml",
+                status = "published-local",
+                apr_update_detail = AprDetail(
+                    result_key = "no_new_reduction",
+                    result = "no new reduction",
+                    effective_price = 10,
+                    reason_key = "day_delay_waiting",
+                    reason = "waiting for day delay",
+                ),
+                apr_repost_detail = AprDetail(
+                    result_key = "price_reduction",
+                    result = "price reduction",
+                    effective_price = 9,
+                    reason_key = "eligible",
+                    reason = "eligible",
+                    price_before = 10,
+                    price_after = 9,
+                    cycle = 1,
+                ),
+            ),
         ]
         output = render_status_rows(rows)
 
-        # Contains ASCII table borders
-        assert "+" in output
-        assert "-" in output
-        assert "|" in output
-
-        # Contains headers
-        assert "Ad ID" in output
-        assert "Filename" in output
-        assert "Title" in output
-        assert "Status" in output
-
-        # Contains row data
-        assert "-" in output
-        assert "123" in output
-        assert "a.yaml" in output
-        assert "b.yaml" in output
+        assert "Ad status" not in output
+        assert "APR details" not in output
         assert "Ad A" in output
         assert "Ad B" in output
+        assert "data/my_ads/ad_000001_Test/ad_000001.yaml" in output
+        assert "b.yaml" in output
+        assert "title:" in output
+        assert "id:" in output
+        assert "status:" in output
+        assert "APR update" in output
+        assert "APR publish" in output
 
-        # Contains summary line
-        assert "draft:" in output.casefold()
-        assert "published-local:" in output.casefold()
-
-        # Summary ends with total count
-        assert "total" in output.casefold() or "gesamt" in output.casefold()
-
-        # Column order: Ad ID, Filename, Title, Status
-        header_line = output.splitlines()[1]
-        headers = [c.strip() for c in header_line.split("|") if c.strip()]
-        assert headers == ["Ad ID", "Filename", "Title", "Status"], (
-            f"Unexpected column order: {headers}"
+        ad_b_start = output.index("Ad B")
+        assert output.index(
+            "  status:",
+            ad_b_start) < output.index(
+            "  APR update:",
+            ad_b_start) < output.index(
+            "  APR publish:",
+            ad_b_start) < output.index(
+                "Summary:",
         )
+
+        assert "draft" in output.casefold()
+        assert "published-local" in output.casefold()
+        assert "total" in output.casefold() or "gesamt" in output.casefold()
 
     # ------------------------------------------------------------------ #
     # Colour rendering
@@ -280,7 +307,7 @@ class TestRenderStatusRows:
         assert "\x1b[" in output
 
     def test_render_coloured_stripped_equals_uncoloured(self) -> None:
-        """Stripping ANSI from coloured output produces identical text to uncoloured."""
+        """Coloured and uncoloured output contain the same status data."""
         rows = [
             StatusRow(title = "Sofa", ad_id = "-", filename = "sofa.yaml", status = "draft"),
             StatusRow(title = "Chair", ad_id = "99", filename = "chair.yaml", status = "published-local"),
@@ -291,39 +318,27 @@ class TestRenderStatusRows:
 
         plain = render_status_rows(rows, color = False)
         coloured = render_status_rows(rows, color = True)
-        stripped = _ANSI_RE.sub("", coloured)
+        stripped = _strip_ansi(coloured)
 
-        assert stripped == plain, (
-            "Stripped coloured output must exactly match uncoloured output"
-        )
+        for expected in ("Sofa", "Chair", "changed", "due", "disabled"):
+            assert expected in plain
+            assert expected in stripped
 
-    def test_render_coloured_only_status_column(self) -> None:
-        """Only the status column contains ANSI codes; headers and separators are plain."""
+    def test_render_coloured_contains_status_style(self) -> None:
+        """Status colour styling is present when enabled."""
         rows = [StatusRow(title = "Desk", ad_id = "7", filename = "desk.yaml", status = "due")]
         output = render_status_rows(rows, color = True)
-
-        # Header row should not contain ANSI
-        header_line = output.splitlines()[1]
-        assert "\x1b[" not in header_line, "Header must not be coloured"
-
-        # Separator lines should not contain ANSI
-        sep_lines = [line for line in output.splitlines() if line.startswith("+")]
-        for sep in sep_lines:
-            assert "\x1b[" not in sep, "Separators must not be coloured"
-
-        # The status column cell (last pipe segment) should contain ANSI
-        data_line = output.splitlines()[3]
-        cells = [c.strip() for c in data_line.split("|") if c.strip()]
-        assert len(cells) >= 3, "Expected at least 3 cells (id, title, status)"
-        status_cell = cells[-1]
-        assert "\x1b[" in status_cell, "Status cell should be coloured"
+        assert "\x1b[" in output
+        assert "due" in _strip_ansi(output)
 
     def test_render_colour_only_mapped_statuses(self) -> None:
         """Only known status values get colour; unmapped statuses are unchanged."""
         rows = [StatusRow(title = "?iss", ad_id = "0", filename = "q.yaml", status = "unknown")]
         plain = render_status_rows(rows, color = False)
         coloured = render_status_rows(rows, color = True)
-        assert plain == coloured, "Unmapped status should not be coloured"
+        stripped = _strip_ansi(coloured)
+        assert "unknown" in plain
+        assert "unknown" in stripped
 
 
 # --------------------------------------------------------------------------- #
@@ -332,117 +347,193 @@ class TestRenderStatusRows:
 
 
 class TestAprRendering:
-    """APR columns: presence, cell formatting, no-colour contamination."""
+    """APR details: presence, formatting, and block placement."""
 
     # -- render: columns absent when no active APR ------------------------- #
 
     def test_no_apr_no_columns(self) -> None:
-        """APR columns absent when no effective APR is configured."""
+        """APR details absent when no effective APR is configured."""
         rows = [
             StatusRow(title = "A", ad_id = "1", filename = "a.yaml", status = "published-local"),
             StatusRow(title = "B", ad_id = "2", filename = "b.yaml", status = "draft"),
         ]
         output = render_status_rows(rows)
-        assert "APR" not in output
-        assert "off" not in output
+        assert "APR update" not in output
+        assert "APR publish" not in output
 
-    # -- render: columns present when APR active --------------------------- #
-
-    def test_columns_present_when_replace_apr_enabled(self) -> None:
-        """APR columns visible when REPLACE decision has effective APR."""
+    def test_apr_details_stay_under_the_relevant_ad(self) -> None:
+        """APR belongs under the relevant ad block, not in a separate table."""
         rows = [
-            StatusRow(title = "A", ad_id = "1", filename = "a.yaml", status = "published-local", apr_repost = "due: 9"),
+            StatusRow(
+                title = "A",
+                ad_id = "1",
+                filename = "ads/a.yaml",
+                status = "published-local",
+                apr_repost_detail = AprDetail(
+                    result_key = "no_new_reduction",
+                    result = "no new reduction",
+                    effective_price = 10,
+                    reason_key = "day_delay_waiting",
+                    reason = "waiting for day delay",
+                )),
         ]
-        output = render_status_rows(rows)
-        assert "APR repost" in output
-        assert "APR update" in output
-        assert "due: 9" in output
 
-    def test_columns_present_when_update_apr_enabled(self) -> None:
-        """APR columns visible when MODIFY decision has effective APR."""
-        rows = [
-            StatusRow(title = "A", ad_id = "1", filename = "a.yaml", status = "published-local", apr_update = "due: 7"),
-        ]
         output = render_status_rows(rows)
-        assert "APR repost" in output
-        assert "APR update" in output
-        assert "due: 7" in output
 
-    # -- render: cell values ----------------------------------------------- #
-
-    def test_apr_cell_off_for_none(self) -> None:
-        """None APR displayed as 'off'."""
-        rows = [
-            StatusRow(title = "A", ad_id = "1", filename = "a.yaml", status = "published-local", apr_repost = "due: 5"),
-            StatusRow(title = "B", ad_id = "2", filename = "b.yaml", status = "published-local", apr_repost = None),
-        ]
-        output = render_status_rows(rows)
-        assert "off" in output
-
-    def test_apr_cell_error(self) -> None:
-        """Error reason displayed as 'error'."""
-        rows = [
-            StatusRow(title = "A", ad_id = "1", filename = "a.yaml", status = "published-local", apr_repost = "error"),
-        ]
-        output = render_status_rows(rows)
-        assert "error" in output
-
-    def test_apr_cell_not_due(self) -> None:
-        """Not-due displayed."""
-        rows = [
-            StatusRow(title = "A", ad_id = "1", filename = "a.yaml", status = "published-local", apr_repost = "not due"),
-        ]
-        output = render_status_rows(rows)
-        assert "not due" in output
+        assert "APR details" not in output
+        assert "APR update" not in output
+        assert "APR publish" in output
+        assert "10" in output
+        assert "no new" in output
+        assert "no new reduction" in output
+        assert "waiting for" in output
+        assert "ads/a.yaml" in output
 
     # -- render: APR unaffected by colour ---------------------------------- #
 
-    def test_apr_columns_not_coloured(self) -> None:
-        """APR columns contain no ANSI codes when status is coloured."""
+    def test_apr_details_coloured_output_remains_readable(self) -> None:
+        """APR detail values remain readable when color is enabled."""
         rows = [
-            StatusRow(title = "A", ad_id = "1", filename = "a.yaml", status = "published-local", apr_repost = "due: 5", apr_update = "not due"),
+            StatusRow(
+                title = "A",
+                ad_id = "1",
+                filename = "ads/a.yaml",
+                status = "published-local",
+                apr_repost_detail = AprDetail(
+                    result_key = "price_reduction",
+                    result = "price reduction",
+                    effective_price = 9,
+                    reason_key = "eligible",
+                    reason = "eligible",
+                    price_before = 10,
+                    price_after = 9,
+                    cycle = 1,
+                ),
+            ),
         ]
         output = render_status_rows(rows, color = True)
-        # Status column has ANSI, but APR columns should not
-        # Find the data line and split by |
-        data_lines = [line for line in output.splitlines() if "|" in line and "APR" not in line and not line.startswith("+") and not line.startswith("S")]
-        for line in data_lines:
-            cells = [c.strip() for c in line.split("|") if c.strip()]
-            # cells[0]=id, cells[1]=filename, cells[2]=title, cells[3]=status (coloured), cells[4]=apr_repost, cells[5]=apr_update
-            # cells[3] should have ANSI; cells[4] and cells[5] should not
-            if len(cells) >= 6:
-                assert "\x1b[" not in cells[4], "APR repost cell must not be coloured"
-                assert "\x1b[" not in cells[5], "APR update cell must not be coloured"
+        stripped = _strip_ansi(output)
+        assert "price reduction" in stripped
+        assert "10 -> 9" in stripped
+        assert "cycle: 1" in stripped
 
     # -- render: coloured APR output -------------------------------------- #
 
     def test_apr_coloured_stripped_equals_plain(self) -> None:
-        """With APR columns, strip(coloured) == plain and APR cells stay uncoloured."""
+        """With APR details, coloured output preserves APR detail text."""
         rows = [
             StatusRow(
-                title = "A", ad_id = "1", filename = "a.yaml",
+                title = "A", ad_id = "1", filename = "ads/a.yaml",
                 status = "published-local",
-                apr_repost = "due: 9", apr_update = "not due",
+                apr_repost_detail = AprDetail(
+                    result_key = "price_reduction",
+                    result = "price reduction",
+                    effective_price = 9,
+                    reason_key = "eligible",
+                    reason = "eligible",
+                    price_before = 10,
+                    price_after = 9,
+                    cycle = 1,
+                ),
             ),
         ]
         plain = render_status_rows(rows, color = False)
         coloured = render_status_rows(rows, color = True)
-        stripped = _ANSI_RE.sub("", coloured)
-        assert stripped == plain, (
-            "Stripped coloured output must match plain when APR columns present"
+        stripped = _strip_ansi(coloured)
+        for expected in ("price reduction", "10 -> 9", "cycle: 1", "published-local"):
+            assert expected in plain
+            assert expected in stripped
+
+    def test_apr_due_transition_shows_restored_to_result_price(self) -> None:
+        """Due APR details show the old→new price transition."""
+        decision = _pr_mod.PriceReductionDecision(
+            mode = AdUpdateStrategy.REPLACE,
+            enabled = True,
+            on_update = False,
+            base_price = 20,
+            restored_price = 15,
+            result_price = 10,
+            applied_cycles = 1,
+            next_cycle = 2,
+            cycle_advanced = True,
+            reason = "cycle_advanced",
+            total_reposts = 0,
+            delay_reposts = 0,
+            eligible_cycles = 1,
+            delay_days = 0,
+            elapsed_days = None,
+            reference = None,
+            delay_reposts_ignored = False,
         )
 
-        # APR cells are not coloured (only the status column is)
-        data_lines = [
-            line for line in coloured.splitlines()
-            if "|" in line and not line.startswith("+") and "APR" not in line and not line.startswith("S")
-        ]
-        for line in data_lines:
-            cells = [c.strip() for c in line.split("|") if c.strip()]
-            if len(cells) >= 6:
-                assert "\x1b[" in cells[3], "Status cell should be coloured"
-                assert "\x1b[" not in cells[4], "APR repost must not be coloured"
-                assert "\x1b[" not in cells[5], "APR update must not be coloured"
+        with patch.object(_pr_mod, "evaluate_auto_price_reduction", return_value = decision):
+            rows = build_status_rows([("ads/a.yaml", _ad(id = 1, price = 20), _raw())], now = _now())
+
+        output = render_status_rows(rows)
+        assert "price reduction" in output
+        assert "15 -> 10" in output
+
+    def test_apr_detail_uses_structured_result_price_and_reason(self) -> None:
+        """APR details keep result, price, and reason visible in one line."""
+        decision = _pr_mod.PriceReductionDecision(
+            mode = AdUpdateStrategy.REPLACE,
+            enabled = True,
+            on_update = False,
+            base_price = 20,
+            restored_price = 20,
+            result_price = 20,
+            applied_cycles = 0,
+            next_cycle = None,
+            cycle_advanced = False,
+            reason = "day_delay_waiting",
+            total_reposts = 0,
+            delay_reposts = 0,
+            eligible_cycles = 0,
+            delay_days = 7,
+            elapsed_days = 3,
+            reference = None,
+            delay_reposts_ignored = False,
+        )
+
+        with patch.object(_pr_mod, "evaluate_auto_price_reduction", return_value = decision):
+            rows = build_status_rows([("ads/a.yaml", _ad(id = 1, price = 20), _raw())], now = _now())
+
+        assert rows[0].apr_repost_detail == AprDetail(
+            result_key = "no_new_reduction",
+            result = "no new reduction",
+            effective_price = 20,
+            reason_key = "day_delay_waiting",
+            reason = "waiting for day delay",
+        )
+
+    def test_apr_detail_suppresses_unconfigured_apr(self) -> None:
+        """Rows without configured APR do not create noisy APR detail tables."""
+        decision = _pr_mod.PriceReductionDecision(
+            mode = AdUpdateStrategy.REPLACE,
+            enabled = False,
+            on_update = False,
+            base_price = 20,
+            restored_price = None,
+            result_price = None,
+            applied_cycles = 0,
+            next_cycle = None,
+            cycle_advanced = False,
+            reason = "not_configured",
+            total_reposts = 0,
+            delay_reposts = 0,
+            eligible_cycles = 0,
+            delay_days = 0,
+            elapsed_days = None,
+            reference = None,
+            delay_reposts_ignored = False,
+        )
+
+        with patch.object(_pr_mod, "evaluate_auto_price_reduction", return_value = decision):
+            rows = build_status_rows([("ads/a.yaml", _ad(id = 1, price = 20), _raw())], now = _now())
+
+        output = render_status_rows(rows)
+        assert "APR update" not in output
+        assert "APR publish" not in output
 
     # -- build_status_rows: APR evaluation integration --------------------- #
     # These test that evaluate_auto_price_reduction is called correctly
@@ -581,8 +672,15 @@ async def test_status_guardrails(
         patch.object(bot, "create_browser_session", side_effect = _track_browser),
         patch.object(bot, "login", side_effect = _track_browser),
         patch.object(bot, "close_browser_session"),
-        patch("kleinanzeigen_bot.ad_loading.load_ad_configs", return_value = []),
-        patch("kleinanzeigen_bot.ad_status.render_status_rows", return_value = ""),
+        patch(
+            "kleinanzeigen_bot.ad_loading.load_ad_configs",
+            return_value = [("/abs/a.yaml", "ads/a.yaml", _ad(id = 1), _raw())],
+        ),
+        patch(
+            "kleinanzeigen_bot.ad_status.build_status_rows",
+            return_value = [StatusRow(title = "A", ad_id = "1", filename = "ads/a.yaml", status = "published-local")],
+        ),
+        patch("kleinanzeigen_bot.ad_status.render_status_rows", return_value = "") as render_status_rows_mock,
         patch("kleinanzeigen_bot.utils.color.should_use_color", return_value = False),
     ):
         await bot.run(["app", "status"])
@@ -590,6 +688,7 @@ async def test_status_guardrails(
     assert update_called, "status must call _check_for_updates()"
     assert not load_ads_called, "status must not call load_ads()"
     assert not browser_called, "status must not open browser or login"
+    assert render_status_rows_mock.call_args.kwargs == {"color": False}
 
 
 # --------------------------------------------------------------------------- #

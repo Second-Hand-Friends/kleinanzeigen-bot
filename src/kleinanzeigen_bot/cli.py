@@ -127,7 +127,7 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
 
             Befehle:
               publish  - (Wieder-)Veröffentlicht Anzeigen
-              verify   - Überprüft die Konfigurationsdateien und zeigt Preissenkungsvorschauen an
+              verify   - Überprüft die Konfigurationsdateien und Ad-Integrität
               delete   - Löscht Anzeigen
               update   - Aktualisiert bestehende Anzeigen
               extend   - Verlängert Anzeigen im 8-Tage-Zeitfenster (behält Beobachter/Interessenten bei und zählt nicht zum monatlichen Anzeigenkontingent)
@@ -185,7 +185,7 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
 
         Commands:
           publish  - (re-)publishes ads
-          verify   - verifies the configuration files and previews automatic price reduction outcomes
+          verify   - verifies the configuration files and ad integrity
           delete   - deletes ads
           update   - updates published ads
           extend   - extends ads within the 8-day window before expiry (keeps watchers/savers and does not count towards the monthly ad quota)

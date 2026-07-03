@@ -206,7 +206,7 @@ Usage: kleinanzeigen-bot COMMAND [OPTIONS]
 
 Commands:
   publish  - (re-)publishes ads
-  verify   - verifies the configuration files and previews automatic price reduction outcomes
+  verify   - verifies the configuration files and ad integrity
   delete   - deletes ads
   update   - updates published ads
   extend   - extends ads within the 8-day window before expiry (keeps watchers/savers and does not count towards the monthly ad quota)

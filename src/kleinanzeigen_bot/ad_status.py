@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Ad status computation and display for the ``status`` CLI command.
-This module owns status label mapping, row building, and ASCII table rendering.
+This module owns status label mapping, row building, and terminal rendering.
 """
 from __future__ import annotations
 
@@ -22,15 +22,29 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen = True, slots = True)
+class AprDetail:
+    """Structured APR preview detail for the status output."""
+
+    result_key:str
+    result:str
+    effective_price:int | None
+    reason_key:str
+    reason:str
+    price_before:int | None = None
+    price_after:int | None = None
+    cycle:int | None = None
+
+
+@dataclass(frozen = True, slots = True)
 class StatusRow:
-    """One row in the status table. Rendered by :func:`render_status_rows`."""
+    """One row in status output rendered by :func:`render_status_rows`."""
 
     title:str  # ad.title
     ad_id:str  # "-" if None, else str(ad.id)
     filename:str  # Relative ad-file path (e.g. "ads/sofa.yaml")
     status:str  # One of: "disabled", "draft", "changed", "due", "published-local"
-    apr_repost:str | None = None  # APR repost cell; ``None`` → rendered as "off"
-    apr_update:str | None = None  # APR update cell; ``None`` → rendered as "off"
+    apr_repost_detail:AprDetail | None = None
+    apr_update_detail:AprDetail | None = None
 
 
 def _translate_status(status:str) -> str:
@@ -51,8 +65,6 @@ def _translate_status(status:str) -> str:
 # Canonical status ordering (matches precedence in :func:`compute_ad_status`).
 _STATUS_ORDER:tuple[str, ...] = ("disabled", "draft", "changed", "due", "published-local")
 
-# Status → ANSI colour prefix mapping.
-# Applied only when *color* is enabled in :func:`render_status_rows`.
 _STATUS_COLORS:dict[str, str] = {
     "published-local": colorama.Fore.GREEN,
     "changed": colorama.Fore.YELLOW,
@@ -61,30 +73,93 @@ _STATUS_COLORS:dict[str, str] = {
     "disabled": colorama.Style.DIM,
 }
 
+_MESSAGE_TEMPLATES:dict[str, str] = {
+    "missing_price": "missing price",
+    "min_price_equals_price": "minimum price equals current price",
+    "update_disabled": "update reductions disabled",
+    "repost_delay_waiting": "waiting for repost delay",
+    "repost_delay_applied": "repost delay already applied",
+    "day_delay_missing_timestamp": "waiting for publish timestamp",
+    "day_delay_waiting": "waiting for day delay",
+    "eligible": "eligible",
+    "calculation_failed": "calculation failed",
+    "no_visible_change": "no visible price change",
+}
 
-def _colorize_status(status:str, text:str) -> str:
-    """Wrap *text* in ANSI colour codes for the given *status*, if a colour is mapped."""
-    prefix = _STATUS_COLORS.get(status)
-    if prefix is None:
+
+def _format_status(value:str, *, color:bool) -> str:
+    """Return the translated status label, optionally colorized."""
+    label = _translate_status(value)
+    prefix = _STATUS_COLORS.get(value)
+    if not color or prefix is None:
+        return label
+    return f"{prefix}{label}{colorama.Style.RESET_ALL}"
+
+
+def _colorize(text:str, prefix:str, *, color:bool) -> str:
+    if not color:
         return text
     return f"{prefix}{text}{colorama.Style.RESET_ALL}"
 
 
-def _format_apr_status(decision:_price_reduction.PriceReductionDecision) -> str | None:
-    """Format a price-reduction decision into a compact APR cell string.
+def _format_apr_reason(decision:_price_reduction.PriceReductionDecision) -> str:
+    template = __get_message_template(decision.reason)
+    return template if template is not None else decision.reason.replace("_", " ")
 
-    Returns ``None`` when the decision is not effective (rendered as ``off``).
-    Otherwise one of: ``due: <price>``, ``not due``, ``error``.
-    """
+
+def __get_message_template(reason:str) -> str | None:
+    template = _MESSAGE_TEMPLATES.get(reason)
+    return _(template) if template is not None else None
+
+
+def _format_apr_price(value:int | None) -> str:
+    if value is None:
+        return _("no effective price")
+    return str(value)
+
+
+def _format_apr_detail(decision:_price_reduction.PriceReductionDecision) -> AprDetail | None:
+    """Return the structured APR preview for the status detail table."""
     if not decision.enabled:
         return None
+
+    if decision.base_price is None:
+        return AprDetail(
+            result_key = "missing_price",
+            result = _("missing price"),
+            effective_price = None,
+            reason_key = decision.reason,
+            reason = _format_apr_reason(decision),
+        )
+
     if decision.mode == AdUpdateStrategy.MODIFY and not decision.on_update:
-        return None
-    if decision.reason in {"missing_price", "calculation_failed"}:
-        return _("error")
-    if decision.cycle_advanced and decision.result_price is not None:
-        return _("due: %s") % decision.result_price
-    return _("not due")
+        return AprDetail(
+            result_key = "disabled",
+            result = _("disabled"),
+            effective_price = decision.result_price,
+            reason_key = decision.reason,
+            reason = _format_apr_reason(decision),
+        )
+
+    if decision.cycle_advanced:
+        return AprDetail(
+            result_key = "price_reduction",
+            result = _("price reduction"),
+            effective_price = decision.result_price,
+            reason_key = decision.reason,
+            reason = _format_apr_reason(decision),
+            price_before = decision.restored_price,
+            price_after = decision.result_price,
+            cycle = decision.next_cycle,
+        )
+
+    return AprDetail(
+        result_key = "no_new_reduction",
+        result = _("no new reduction"),
+        effective_price = decision.result_price,
+        reason_key = decision.reason,
+        reason = _format_apr_reason(decision),
+    )
 
 
 def compute_ad_status(
@@ -129,18 +204,21 @@ def build_status_rows(
     for ad_file_rel, ad_cfg, ad_cfg_orig in ads:
         status = compute_ad_status(ad_cfg, ad_cfg_orig, now = now)
 
-        apr_repost:str | None = None
-        apr_update:str | None = None
         if ad_cfg.active:
             replace_dec = _price_reduction.evaluate_auto_price_reduction(
                 ad_cfg, ad_file_rel, mode = AdUpdateStrategy.REPLACE,
             )
-            apr_repost = _format_apr_status(replace_dec)
+            apr_repost_detail = _format_apr_detail(replace_dec)
             if ad_cfg.id is not None:
                 modify_dec = _price_reduction.evaluate_auto_price_reduction(
                     ad_cfg, ad_file_rel, mode = AdUpdateStrategy.MODIFY,
                 )
-                apr_update = _format_apr_status(modify_dec)
+                apr_update_detail = _format_apr_detail(modify_dec)
+            else:
+                apr_update_detail = None
+        else:
+            apr_repost_detail = None
+            apr_update_detail = None
 
         rows.append(
             StatusRow(
@@ -148,110 +226,107 @@ def build_status_rows(
                 ad_id = "-" if ad_cfg.id is None else str(ad_cfg.id),
                 filename = ad_file_rel,
                 status = status,
-                apr_repost = apr_repost,
-                apr_update = apr_update,
+                apr_repost_detail = apr_repost_detail,
+                apr_update_detail = apr_update_detail,
             )
         )
     return rows
 
 
-def _apr_cell(value:str | None) -> str:
-    """Return the display text for an APR cell — ``off`` when ``None``."""
-    return _("off") if value is None else value
+def _render_detail_line(label:str, value:str) -> str:
+    return f"  {label}: {value}"
 
 
-def _has_apr(rows:list[StatusRow]) -> bool:
-    """Return ``True`` if any row has non-``None`` APR data (show APR columns)."""
-    return any(r.apr_repost is not None or r.apr_update is not None for r in rows)
+def _build_apr_line_parts(detail:AprDetail) -> str:
+    parts:list[str] = [detail.result]
+
+    parts.append(f"{_('effective price')}: {_format_apr_price(detail.effective_price)}")
+
+    if detail.price_before is not None and detail.price_after is not None:
+        before_formatted = _format_apr_price(detail.price_before)
+        after_formatted = _format_apr_price(detail.price_after)
+        if before_formatted != after_formatted:
+            parts.append(f"{_('price change')}: {before_formatted} -> {after_formatted}")
+
+    if detail.cycle is not None:
+        parts.append(f"{_('cycle')}: {detail.cycle}")
+
+    if detail.reason:
+        parts.append(f"{_('reason')}: {detail.reason}")
+
+    return "; ".join(parts)
 
 
-def _apr_layout(rows:list[StatusRow]) -> tuple[bool, str, str, int, int]:
-    """Compute APR column layout: (show, h_repost, h_update, w_repost, w_update).
-
-    Returns ``show=False`` with empty strings and zero widths when no
-    effective APR data exists across *rows*.
-    """
-    if not _has_apr(rows):
-        return False, "", "", 0, 0
-    h_repost = _("APR repost")
-    h_update = _("APR update")
-    off = _("off")
-    cells_repost = [off if r.apr_repost is None else r.apr_repost for r in rows]
-    cells_update = [off if r.apr_update is None else r.apr_update for r in rows]
-    w_repost = max(len(h_repost), *[len(c) for c in cells_repost], 0)
-    w_update = max(len(h_update), *[len(c) for c in cells_update], 0)
-    return True, h_repost, h_update, w_repost, w_update
+def _render_apr_detail(detail:AprDetail, *, color:bool) -> str:
+    text = _build_apr_line_parts(detail)
+    prefix = _apr_detail_color(detail)
+    if prefix is None:
+        return text
+    return _colorize(text, prefix, color = color)
 
 
-def render_status_rows(rows:list[StatusRow], *, color:bool = False) -> str:
-    """Format status rows into an ASCII table string.
+def _apr_detail_color(detail:AprDetail) -> str | None:
+    if detail.price_before is not None and detail.price_after is not None and detail.price_before != detail.price_after:
+        return str(colorama.Fore.YELLOW)
+    if detail.effective_price is None:
+        return str(colorama.Fore.RED)
+    if detail.result_key in {"disabled", "no_new_reduction"}:
+        return str(colorama.Style.DIM)
+    return None
+
+
+def _render_status_block(row:StatusRow, *, color:bool) -> list[str]:
+    lines:list[str] = [
+        _colorize(row.filename, colorama.Style.BRIGHT, color = color),
+        _render_detail_line(_("title"), row.title),
+        _render_detail_line(_("id"), row.ad_id),
+        _render_detail_line(_("status"), _format_status(row.status, color = color)),
+    ]
+
+    if row.apr_update_detail is not None:
+        lines.append(
+            _render_detail_line(
+                _("APR update"),
+                _render_apr_detail(row.apr_update_detail, color = color),
+            )
+        )
+    if row.apr_repost_detail is not None:
+        lines.append(
+            _render_detail_line(
+                _("APR publish"),
+                _render_apr_detail(row.apr_repost_detail, color = color),
+            )
+        )
+    return lines
+
+
+def render_status_rows(
+    rows:list[StatusRow],
+    *,
+    color:bool = False,
+) -> str:
+    """Format status rows into terminal output.
 
     Args:
-        rows:  Rows to render.
-        color: If ``True``, apply ANSI colour codes to the status column.
-               Column widths are always computed from plain (uncoloured)
-               labels so that coloured and uncoloured output align identically.
+        rows: Rows to render.
+        color: If ``True``, emit terminal colours for the status value.
     """
     if not rows:
         return ""
 
-    # Column header labels and data-driven widths.
-    H = {
-        "id": _("Ad ID"),
-        "fn": _("Filename"),
-        "title": _("Title"),
-        "status": _("Status"),
-    }
-    W = {
-        "id": max(len(H["id"]), max((len(r.ad_id) for r in rows), default = 0)),
-        "fn": max(len(H["fn"]), max((len(r.filename) for r in rows), default = 0)),
-        "title": max(len(H["title"]), max((len(r.title) for r in rows), default = 0)),
-        "status": max(len(H["status"]), *[len(_translate_status(s)) for s in _STATUS_ORDER], 0),
-    }
+    lines:list[str] = []
 
-    # APR columns — only if any row has non-None APR data
-    apr_show, h_apr_r, h_apr_u, w_apr_r, w_apr_u = _apr_layout(rows)
-
-    # Build separator and header row
-    widths = [W["id"], W["fn"], W["title"], W["status"]]
-    if apr_show:
-        widths += [w_apr_r, w_apr_u]
-    sep = "".join("+" + "-" * (w + 2) for w in widths) + "+"
-
-    hdr_parts = [
-        "| ", H["id"].ljust(W["id"]), " | ", H["fn"].ljust(W["fn"]),
-        " | ", H["title"].ljust(W["title"]), " | ", H["status"].ljust(W["status"]),
-    ]
-    if apr_show:
-        hdr_parts += [" | ", h_apr_r.ljust(w_apr_r), " | ", h_apr_u.ljust(w_apr_u)]
-    hdr_parts.append(" |")
-    hdr = "".join(hdr_parts)
-
-    lines:list[str] = [sep, hdr, sep]
-
-    for r in rows:
-        label = _translate_status(r.status).ljust(W["status"])
-        cell = _colorize_status(r.status, label) if color else label
-
-        parts = [
-            "| ", r.ad_id.ljust(W["id"]), " | ", r.filename.ljust(W["fn"]),
-            " | ", r.title.ljust(W["title"]), " | ", cell,
-        ]
-        if apr_show:
-            parts += [
-                " | ", _apr_cell(r.apr_repost).ljust(w_apr_r),
-                " | ", _apr_cell(r.apr_update).ljust(w_apr_u),
-            ]
-        parts.append(" |")
-        lines.append("".join(parts))
-
-    lines.append(sep)
+    for index, row in enumerate(rows):
+        lines.extend(_render_status_block(row, color = color))
+        if index != len(rows) - 1:
+            lines.append("")
 
     # Summary line — always plain
     counts:dict[str, int] = {}
     for r in rows:
         counts[r.status] = counts.get(r.status, 0) + 1
 
+    lines.append("")
     lines.append(
         _("Summary: %s (%d total)")
         % (", ".join(
