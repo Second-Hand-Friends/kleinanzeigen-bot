@@ -503,10 +503,10 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
     Opens the control with a full native click sequence (pointerdown → mousedown →
     mouseup → click) and selects the matching option in a single async browser
     script execution.  Uses React fiber matching first, then DOM attribute
-    matching, then normalized text fallback.  The listbox search walks from
-    the button's ID-suffixed element through parent elements, then uses
-    aria-controls/owns association, and finally falls back to visible
-    document-level portal candidates with aria-labelledby matching.
+    matching, then normalized text fallback.  The listbox search first checks the button's ID-suffixed element,
+    then the button's parentElement, then uses aria-controls/owns
+    association, and finally falls back to visible document-level
+    portal candidates with aria-labelledby matching.
     """
     js_elem_id = json.dumps(elem_id)
     js_value = json.dumps(value)
@@ -595,7 +595,7 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
             return {{ok:true}};
         }}
         var text = (o.textContent || '').replace(/\\s+/g,' ').trim().toLowerCase();
-        if (text === {js_value}.toLowerCase()) {{
+        if (text === ({js_value}+'').replace(/\\s+/g,' ').trim().toLowerCase()) {{
             o.click();
             return {{ok:true}};
         }}
