@@ -823,8 +823,8 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir.": "Ignoriere leeres --user-data-dir= Argument; verwende konfiguriertes user_data_dir."
 
   _select_viewport_size:
-    "Screen-aware viewport: %s jittered to %dx%d (avail %dx%d)": "Screen-bewusster Viewport: %s auf %dx%d verjittert (verfügbar %dx%d)"
-    "No configured viewport fits %dx%d screen; omitting --window-size": "Kein konfigurierter Viewport passt auf %dx%d Bildschirm; --window-size wird weggelassen"
+    "Screen-aware viewport: %s jittered to %dx%d (avail %dx%d)": "Bildschirmgerechte Fenstergröße: %s mit Zufallsabweichung auf %dx%d (verfügbar: %dx%d)"
+    "No configured viewport fits %dx%d screen; omitting --window-size": "Keine konfigurierte Fenstergröße passt in den verfügbaren Bildschirmbereich %dx%d; --window-size wird weggelassen"
 
   _resolve_effective_user_data_dir:
     "Configured browser.user_data_dir (%s) does not match --user-data-dir argument (%s); using the argument value.": "Konfiguriertes browser.user_data_dir (%s) stimmt nicht mit --user-data-dir Argument (%s) überein; verwende Argument-Wert."

@@ -686,7 +686,9 @@ class WebScrapingMixin:  # noqa: PLR0904
             if browser is not None:
                 try:
                     browser_pid = getattr(browser, "_process_pid", None)
-                    browser.stop()
+                    stop_result = cast(Any, browser.stop)()
+                    if inspect.isawaitable(stop_result):
+                        await stop_result
                     # Mirror close_browser_session() orphan child cleanup
                     if isinstance(browser_pid, int) and browser_pid > 0:
                         self._kill_orphaned_browser_children(browser_pid)

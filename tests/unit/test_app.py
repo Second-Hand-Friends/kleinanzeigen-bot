@@ -8,9 +8,9 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from kleinanzeigen_bot._version import __version__
 from ruamel.yaml import YAML as _YAML
 
+from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.runtime_config import RuntimeState
