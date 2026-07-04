@@ -45,13 +45,28 @@ async def delete_ads(
     deleted_count = 0
 
     needs_title_matching = delete_old_ads_by_title and any(ad_cfg.id is None for _, ad_cfg, _ in ad_cfgs)
-    published_ads_list = await published_ads.fetch_published_ads(web, root_url, strict = needs_title_matching)
+    title_matching_fetch_error:published_ads.PublishedAdsFetchIncompleteError | None = None
+    if needs_title_matching:
+        try:
+            published_ads_list = await published_ads.fetch_published_ads(web, root_url, strict = True)
+        except published_ads.PublishedAdsFetchIncompleteError as ex:
+            published_ads_list = []
+            title_matching_fetch_error = ex
+    else:
+        published_ads_list = await published_ads.fetch_published_ads(web, root_url, strict = False)
 
     for ad_file, ad_cfg, ad_cfg_orig in ad_cfgs:
         count += 1
         LOG.info("Processing %s/%s: '%s' from [%s]...", count, len(ad_cfgs), ad_cfg.title, ad_file)
 
-        result = await delete_ad(web, root_url, ad_cfg, published_ads_list, delete_old_ads_by_title = delete_old_ads_by_title)
+        if ad_cfg.id is None and delete_old_ads_by_title and title_matching_fetch_error is not None:
+            LOG.error(
+                " -> SKIPPED: title-based deletion requires a complete published ads list: %s",
+                title_matching_fetch_error,
+            )
+            result = DeleteResult(deleted = False, attempted = False)
+        else:
+            result = await delete_ad(web, root_url, ad_cfg, published_ads_list, delete_old_ads_by_title = delete_old_ads_by_title)
         if result.deleted:
             deleted_count += 1
 

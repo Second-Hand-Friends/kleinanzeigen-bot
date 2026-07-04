@@ -14,6 +14,7 @@ from kleinanzeigen_bot import delete_flow
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.delete_flow import DeleteResult
 from kleinanzeigen_bot.model.ad_model import Ad
+from kleinanzeigen_bot.published_ads import PublishedAdsFetchIncompleteError
 
 
 def remove_fields(config:dict[str, Any], *fields:str) -> dict[str, Any]:
@@ -474,6 +475,37 @@ class TestDeleteAdsAfterDeletePolicy:
             )
 
         mock_fetch.assert_awaited_once_with(test_bot, test_bot.root_url, strict = False)
+
+    @pytest.mark.asyncio
+    async def test_delete_ads_skips_title_deletes_but_continues_id_deletes_when_strict_fetch_fails(
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any], tmp_path:Path,
+    ) -> None:
+        """Incomplete strict title matching should not block exact-ID deletes in the same batch."""
+        test_bot.config.deleting.after_delete = "NONE"
+        title_ad_file, title_ad_cfg, title_ad_cfg_orig = self._make_ad(minimal_ad_config, tmp_path)
+        title_ad_cfg.id = None
+        title_ad_cfg_orig.pop("id", None)
+        id_ad_file, id_ad_cfg, id_ad_cfg_orig = self._make_ad(minimal_ad_config | {"title": "Exact ID Title"}, tmp_path)
+
+        fetch_error = PublishedAdsFetchIncompleteError("page 2 timed out")
+        mock_delete = AsyncMock(return_value = DeleteResult(deleted = True, attempted = True))
+
+        with (
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, side_effect = fetch_error) as mock_fetch,
+            patch("kleinanzeigen_bot.delete_flow.delete_ad", new = mock_delete),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await delete_flow.delete_ads(
+                web = test_bot, root_url = test_bot.root_url,
+                after_delete = test_bot.config.deleting.after_delete,
+                delete_old_ads_by_title = True,
+                ad_cfgs = [(title_ad_file, title_ad_cfg, title_ad_cfg_orig), (id_ad_file, id_ad_cfg, id_ad_cfg_orig)],
+            )
+
+        mock_fetch.assert_awaited_once_with(test_bot, test_bot.root_url, strict = True)
+        mock_delete.assert_awaited_once_with(
+            test_bot, test_bot.root_url, id_ad_cfg, [], delete_old_ads_by_title = True,
+        )
 
     @pytest.mark.asyncio
     async def test_cleanup_on_title_match_all_404_with_id_none(
