@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Tests for publishing persistence functionality."""
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -142,6 +143,90 @@ class TestLogLocalPathRenameResult:
 
         assert mock_info.called == expect_info
         assert mock_warning.called == expect_warning
+
+
+class TestPersistPublishedAdTimestamps:
+    """Tests for timestamp persistence in persist_published_ad."""
+
+    @staticmethod
+    def _make_ad_cfg_orig(*, created_on:str | None = None) -> dict[str, Any]:
+        """Minimal ad_cfg_orig with required fields for AdPartial validation."""
+        ad_cfg_orig:dict[str, Any] = {
+            "title": "Test Ad Title",
+            "description": "Test description for the ad listing.",
+            "type": "OFFER",
+            "category": "160",
+        }
+        if created_on is not None:
+            ad_cfg_orig["created_on"] = created_on
+        return ad_cfg_orig
+
+    def test_first_publish_sets_created_on_when_ad_already_has_id(self) -> None:
+        """First publish sets created_on based on old_ad_id, not current ad_cfg.id."""
+        ad = _make_min_ad()
+        ad.id = 12345
+        ad_cfg_orig = self._make_ad_cfg_orig()
+        cfg = _make_config()
+        published_at = datetime(2026, 7, 4, 12, 34, 56, tzinfo = timezone.utc)
+
+        with (
+            patch("kleinanzeigen_bot.local_path_renaming.rename_referenced_local_image_files_after_id_change",
+                  return_value = _make_image_rename_result()),
+            patch("kleinanzeigen_bot.local_path_renaming.rename_local_ad_file_and_folder_after_id_change",
+                  return_value = _local_path_renaming.LocalPathRenameResult(
+                      ad_file = Path("test.yaml"),
+                      file_status = RenameStatus.SAME,
+                      folder_status = RenameStatus.SAME,
+                  )),
+            patch("kleinanzeigen_bot.utils.dicts.save_dict"),
+            patch("kleinanzeigen_bot.utils.misc.now", return_value = published_at),
+        ):
+            publishing_persistence.persist_published_ad(
+                ad_file = "test.yaml",
+                ad_cfg = ad,
+                ad_cfg_orig = ad_cfg_orig,
+                old_ad_id = None,
+                ad_id = 12345,
+                mode = AdUpdateStrategy.REPLACE,
+                config = cfg,
+            )
+
+        assert ad_cfg_orig["created_on"] == "2026-07-04T12:34:56+00:00"
+        assert ad_cfg_orig["updated_on"] == "2026-07-04T12:34:56+00:00"
+
+    def test_update_preserves_existing_created_on(self) -> None:
+        """Updating an existing ad keeps the original created_on value."""
+        ad = _make_min_ad()
+        ad.id = 12345
+        ad.created_on = datetime(2024, 1, 2, 3, 4, 5, tzinfo = timezone.utc)
+        ad_cfg_orig = self._make_ad_cfg_orig(created_on = "2024-01-02T03:04:05")
+        cfg = _make_config()
+        updated_at = datetime(2026, 7, 4, 12, 34, 56, tzinfo = timezone.utc)
+
+        with (
+            patch("kleinanzeigen_bot.local_path_renaming.rename_referenced_local_image_files_after_id_change",
+                  return_value = _make_image_rename_result()),
+            patch("kleinanzeigen_bot.local_path_renaming.rename_local_ad_file_and_folder_after_id_change",
+                  return_value = _local_path_renaming.LocalPathRenameResult(
+                      ad_file = Path("test.yaml"),
+                      file_status = RenameStatus.SAME,
+                      folder_status = RenameStatus.SAME,
+                  )),
+            patch("kleinanzeigen_bot.utils.dicts.save_dict"),
+            patch("kleinanzeigen_bot.utils.misc.now", return_value = updated_at),
+        ):
+            publishing_persistence.persist_published_ad(
+                ad_file = "test.yaml",
+                ad_cfg = ad,
+                ad_cfg_orig = ad_cfg_orig,
+                old_ad_id = 12345,
+                ad_id = 12345,
+                mode = AdUpdateStrategy.MODIFY,
+                config = cfg,
+            )
+
+        assert ad_cfg_orig["created_on"] == "2024-01-02T03:04:05"
+        assert ad_cfg_orig["updated_on"] == "2026-07-04T12:34:56+00:00"
 
 
 class TestPersistPublishedAdPriceReductionCount:
