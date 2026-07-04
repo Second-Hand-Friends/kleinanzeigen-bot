@@ -40,6 +40,16 @@ LOG = _loggers.get_logger(__name__)
 SUBMISSION_MAX_RETRIES:Final[int] = 3
 
 
+class PostPublishPersistenceError(RuntimeError):
+    """Raised when local persistence fails after successful remote publish/update."""
+
+    def __init__(self, *, ad_id:int | None, ad_title:str, original:Exception) -> None:
+        self.ad_id = ad_id
+        self.ad_title = ad_title
+        super().__init__(f"Post-publish persistence failed for '{ad_title}' (ad ID {ad_id})")
+        self.original = original
+
+
 async def check_publishing_result(web:WebScrapingMixin) -> bool:
     """Check for publishing success messages (checking-done or not-completed)."""
     return await web.web_check(By.ID, "checking-done", Is.DISPLAYED) or await web.web_check(By.ID, "not-completed", Is.DISPLAYED)
@@ -164,12 +174,13 @@ async def publish_ad(
             ad_file, ad_cfg, ad_cfg_orig, old_ad_id, ad_id, mode,
             config = config,
         )
-    except Exception:
+    except Exception as ex:
         LOG.error(  # noqa: G201 — must use .error(exc_info=True) for translation lookup
             "Post-publish persistence failed for '%s' (ad ID %s - ad is live on "
             "Kleinanzeigen but local YAML may be out of sync)",
             ad_cfg.title, ad_id, exc_info = True,
         )
+        raise PostPublishPersistenceError(ad_id = ad_id, ad_title = ad_cfg.title, original = ex) from ex
 
 
 async def publish_ads(
@@ -257,6 +268,16 @@ async def publish_ads(
                     "If posted, sync local state with 'kleinanzeigen-bot download "
                     "--ads=new' or 'kleinanzeigen-bot download --ads=<id>'; "
                     "otherwise rerun publish for this ad.",
+                )
+                failed_count += 1
+                break
+            except PostPublishPersistenceError as ex:
+                if capture_diagnostics:
+                    await capture_diagnostics(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
+                LOG.warning(
+                    "Persistence failed for '%s' after ad submission. Ad ID: %s. "
+                    "No retry performed. If the ad is online, sync local state manually.",
+                    ad_cfg.title, ex.ad_id,
                 )
                 failed_count += 1
                 break
@@ -391,6 +412,16 @@ async def update_ads(
                     "Manual recovery required for '%s'. Check 'Meine Anzeigen' to "
                     "confirm whether the update was applied.",
                     ad_cfg.title,
+                )
+                failed_count += 1
+                break
+            except PostPublishPersistenceError as ex:
+                if capture_diagnostics:
+                    await capture_diagnostics(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
+                LOG.warning(
+                    "Persistence failed for '%s' after ad update submission. Ad ID: %s. "
+                    "No retry performed. If the ad is online, sync local state manually.",
+                    ad_cfg.title, ex.ad_id,
                 )
                 failed_count += 1
                 break

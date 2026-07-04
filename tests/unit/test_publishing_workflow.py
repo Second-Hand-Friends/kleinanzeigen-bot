@@ -24,7 +24,7 @@ from kleinanzeigen_bot.model.config_model import (
     AutoPriceReductionConfig,
     DiagnosticsConfig,
 )
-from kleinanzeigen_bot.publishing_workflow import SUBMISSION_MAX_RETRIES
+from kleinanzeigen_bot.publishing_workflow import SUBMISSION_MAX_RETRIES, PostPublishPersistenceError
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishSubmissionUncertainError
 from tests.conftest import build_published_ads, build_update_ad
 
@@ -346,6 +346,107 @@ class TestKleinanzeigenBotPublishAdsBasics:
 
             assert publish_mock.await_count == 1
             sleep_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_publish_ads_treats_post_publish_persistence_error_as_fail_closed(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        mock_page:MagicMock,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        test_bot.page = mock_page
+        test_bot.config.publishing.delete_old_ads = "AFTER_PUBLISH"
+        test_bot.keep_old_ads = False
+
+        ad_cfg = Ad.model_validate(base_ad_config)
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = "ad.yaml"
+
+        with (
+            patch.object(
+                test_bot,
+                "web_request",
+                new_callable = AsyncMock,
+                return_value = {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})},
+            ),
+            patch(
+                "kleinanzeigen_bot.publishing_workflow.publish_ad",
+                new_callable = AsyncMock,
+                side_effect = PostPublishPersistenceError(
+                    ad_id = 12345,
+                    ad_title = ad_cfg.title,
+                    original = RuntimeError("disk full"),
+                ),
+            ) as publish_ad_mock,
+            patch.object(
+                test_bot,
+                "_capture_publish_error_diagnostics_if_enabled",
+                new_callable = AsyncMock,
+            ) as capture_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock) as web_await_mock,
+            patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock) as delete_ad_mock,
+            caplog.at_level("INFO"),
+        ):
+            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
+            assert web_await_mock.await_count == 0
+            assert sleep_mock.await_count == 0
+            assert publish_ad_mock.await_count == 1
+            assert delete_ad_mock.await_count == 0
+            capture_mock.assert_awaited_once()
+
+            assert any("DONE: (Re-)published 0 ads (1 failed after retries)" in record.getMessage() for record in caplog.records)
+            assert any("Persistence failed for 'Test Title' after ad submission" in record.getMessage() for record in caplog.records)
+            assert any("Ad ID: 12345" in record.getMessage() for record in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_update_ads_persistence_failure_is_not_retried_and_still_processes_next_ad(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        ad_one = build_update_ad(base_ad_config, 401, "Persistence Error Update")
+        ad_two = build_update_ad(base_ad_config, 402, "Healthy Update")
+
+        async def publish_side_effect(
+            _web:Any,
+            _ad_file:str,
+            ad_cfg:Ad,
+            _ad_cfg_orig:dict[str, Any],
+            _published_ads:list[dict[str, Any]],
+            _mode:AdUpdateStrategy,
+            **kwargs:Any,
+        ) -> None:
+            if ad_cfg.id == 401:
+                raise PostPublishPersistenceError(
+                    ad_id = 401,
+                    ad_title = ad_cfg.title,
+                    original = RuntimeError("disk full"),
+                )
+
+        with (
+            patch(
+                "kleinanzeigen_bot.published_ads.fetch_published_ads",
+                new_callable = AsyncMock,
+                return_value = build_published_ads((401, "active"), (402, "active")),
+            ),
+            patch(
+                "kleinanzeigen_bot.publishing_workflow.publish_ad",
+                new_callable = AsyncMock,
+                side_effect = publish_side_effect,
+            ) as publish_mock,
+            patch.object(test_bot, "_capture_publish_error_diagnostics_if_enabled", new_callable = AsyncMock) as capture_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True) as web_await_mock,
+        ):
+            await test_bot.update_ads([ad_one, ad_two])
+
+            assert publish_mock.await_count == 2
+            sleep_mock.assert_not_awaited()
+            web_await_mock.assert_awaited_once()
+            capture_mock.assert_awaited_once()
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(

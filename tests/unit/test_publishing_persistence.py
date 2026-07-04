@@ -17,6 +17,7 @@ from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.local_path_renaming import ImageRenameResult, LocalPathRenameResult, RenameStatus
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import Config
+from kleinanzeigen_bot.publishing_workflow import PostPublishPersistenceError
 
 
 def _make_rename_result(*, renamed:bool = False, blocked:bool = False, id_mismatch:bool = True) -> LocalPathRenameResult:
@@ -283,10 +284,15 @@ class TestPersistPublishedAdSaveRollback:
 
 
 @pytest.mark.asyncio
-async def test_publish_ad_survives_persistence_failure() -> None:
-    """When persist_published_ad raises, publish_ad logs and does not propagate."""
+async def test_publish_ad_raises_post_publish_persistence_error(caplog:pytest.LogCaptureFixture) -> None:
+    """When persist_published_ad fails, publish_ad raises a post-submit persistence error."""
     ad = _make_min_ad()
-    ad_cfg_orig:dict[str, Any] = {"title": "Test Ad Title", "description": "Test description for the ad listing.", "type": "OFFER", "category": "160"}
+    ad_cfg_orig:dict[str, Any] = {
+        "title": "Test Ad Title",
+        "description": "Test description for the ad listing.",
+        "type": "OFFER",
+        "category": "160",
+    }
     cfg = _make_config()
     bot = KleinanzeigenBot()
     bot.browser = MagicMock()
@@ -301,6 +307,21 @@ async def test_publish_ad_survives_persistence_failure() -> None:
         patch("kleinanzeigen_bot.publishing_submission.submit_and_confirm_ad", new_callable = AsyncMock, return_value = 12345),
         patch("kleinanzeigen_bot.publishing_persistence.persist_published_ad",
               side_effect = RuntimeError("disk full")),
+        patch("kleinanzeigen_bot.utils.misc.now"),
+        caplog.at_level("ERROR"),
+        pytest.raises(
+            PostPublishPersistenceError,
+            match = r"Post-publish persistence failed for 'Test Ad Title' \(ad ID 12345\)",
+        ) as exc_info,
     ):
-        # Must not raise — the try/except in publish_ad swallows the error
         await bot.publish_ad("test.yaml", ad, ad_cfg_orig, [], AdUpdateStrategy.REPLACE)
+
+    assert exc_info.value.ad_id == 12345
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    assert str(exc_info.value.__cause__) == "disk full"
+
+    diagnostics = [
+        record for record in caplog.records
+        if "Post-publish persistence failed for 'Test Ad Title'" in record.getMessage()
+    ]
+    assert diagnostics
