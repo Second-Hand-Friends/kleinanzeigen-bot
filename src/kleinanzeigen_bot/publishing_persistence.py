@@ -72,6 +72,7 @@ def persist_published_ad(
 ) -> None:
     """Write the published ad ID, hash, timestamps, and counters back to the
     YAML file, then rename local paths to match the new ID."""
+    is_first_publish = old_ad_id is None
     ad_cfg_orig["id"] = ad_id
     # Rename referenced images before hashing/saving so the YAML content and
     # content_hash reflect only image file renames that actually succeeded.
@@ -89,9 +90,10 @@ def persist_published_ad(
     # Update content hash after successful publication
     # Calculate hash on original config to ensure consistent comparison on restart
     ad_cfg_orig["content_hash"] = AdPartial.model_validate(ad_cfg_orig).update_content_hash().content_hash
-    ad_cfg_orig["updated_on"] = _misc.now().isoformat(timespec = "seconds")
-    if not ad_cfg.created_on and not ad_cfg.id:
-        ad_cfg_orig["created_on"] = ad_cfg_orig["updated_on"]
+    published_at = _misc.now().isoformat(timespec = "seconds")
+    ad_cfg_orig["updated_on"] = published_at
+    if is_first_publish and not ad_cfg.created_on:
+        ad_cfg_orig["created_on"] = published_at
 
     # Increment repost_count only for REPLACE operations (actual reposts)
     if mode == AdUpdateStrategy.REPLACE:
