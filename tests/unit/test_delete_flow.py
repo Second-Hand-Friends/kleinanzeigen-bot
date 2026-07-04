@@ -103,7 +103,7 @@ class TestKleinanzeigenBotAdDeletion:
         minimal_ad_config:dict[str, Any],
     ) -> None:
         """When no published ads match, should return False without opening any pages."""
-        ad_cfg = Ad.model_validate(minimal_ad_config | {"title": "No Match Title", "id": 99999})
+        ad_cfg = Ad.model_validate(minimal_ad_config | {"title": "No Match Title", "id": None})
         published_ads = [{"title": "Different Title", "id": 12345}]
 
         with (
@@ -121,7 +121,7 @@ class TestKleinanzeigenBotAdDeletion:
 
         assert isinstance(result, DeleteResult)
         assert result == DeleteResult(deleted = False, attempted = False)
-        assert ad_cfg.id == 99999  # Preserved — no deletion attempted
+        assert ad_cfg.id is None  # Preserved — no deletion attempted
         mock_web_open.assert_not_called()
         mock_web_find.assert_not_called()
         mock_web_sleep.assert_not_called()
@@ -208,8 +208,10 @@ class TestKleinanzeigenBotAdDeletion:
         assert "ids=0" in mock_request.call_args[1]["url"]
 
     @pytest.mark.asyncio
-    async def test_delete_ad_multiple_title_matches(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
-        """When multiple published ads match by title with mixed 200/404, should return True."""
+    async def test_delete_ad_multiple_title_matches_fails_closed(
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any],
+    ) -> None:
+        """When multiple published ads match by title, should skip deletion as ambiguous."""
         ad_cfg = Ad.model_validate(minimal_ad_config | {"title": "Test Title", "id": None})
         published_ads = [
             {"title": "Test Title", "id": 100},
@@ -217,19 +219,12 @@ class TestKleinanzeigenBotAdDeletion:
             {"title": "Test Title", "id": 300},
         ]
 
-        response_sequence = [
-            {"statusCode": 200, "statusMessage": "OK", "content": "{}"},
-            {"statusCode": 404, "statusMessage": "Not Found", "content": "{}"},
-            {"statusCode": 200, "statusMessage": "OK", "content": "{}"},
-        ]
-
         with (
-            patch.object(test_bot, "web_open", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = response_sequence) as mock_request,
+            patch.object(test_bot, "web_open", new_callable = AsyncMock) as mock_web_open,
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_web_find,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_web_sleep,
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
         ):
-            mock_find.return_value.attrs = {"content": "some-token"}
             result = await delete_flow.delete_ad(
                 web = test_bot, root_url = test_bot.root_url,
                 ad_cfg = ad_cfg,
@@ -238,15 +233,24 @@ class TestKleinanzeigenBotAdDeletion:
             )
 
         assert isinstance(result, DeleteResult)
-        assert result == DeleteResult(deleted = True, attempted = True)
+        assert result == DeleteResult(deleted = False, attempted = False)
         assert ad_cfg.id is None
-        assert mock_request.call_count == 3
+        mock_web_open.assert_not_called()
+        mock_web_find.assert_not_called()
+        mock_web_sleep.assert_not_called()
+        mock_request.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_delete_ad_title_and_id_match_deduplicated(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
-        """When the same ad matches by both title and ID, it should be deleted only once."""
+    async def test_delete_ad_with_id_does_not_expand_to_same_title_matches(
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any],
+    ) -> None:
+        """When an ID is present, title matching must not expand deletion to other ads."""
         ad_cfg = Ad.model_validate(minimal_ad_config | {"title": "Test Title", "id": 100})
-        published_ads = [{"title": "Test Title", "id": 100}]
+        published_ads = [
+            {"title": "Test Title", "id": 100},
+            {"title": "Test Title", "id": 200},
+            {"title": "Test Title", "id": 300},
+        ]
         ok_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
 
         with (
@@ -266,7 +270,37 @@ class TestKleinanzeigenBotAdDeletion:
         assert isinstance(result, DeleteResult)
         assert result == DeleteResult(deleted = True, attempted = True)
         assert ad_cfg.id is None
-        mock_request.assert_called_once()  # Deduplicated — only one request
+        mock_request.assert_called_once()
+        assert mock_request.call_args.kwargs["url"] == f"{test_bot.root_url}/m-anzeigen-loeschen.json?ids=100"
+
+    @pytest.mark.asyncio
+    async def test_delete_ad_with_id_ignores_published_ads_list_for_exact_id_delete(
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any],
+    ) -> None:
+        """When an ID is present, deletion should target that exact ID even without a published-list match."""
+        ad_cfg = Ad.model_validate(minimal_ad_config | {"title": "Test Title", "id": 100})
+        published_ads = [{"title": "Other Title", "id": 200}]
+        ok_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
+
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ok_response) as mock_request,
+        ):
+            mock_find.return_value.attrs = {"content": "some-token"}
+            result = await delete_flow.delete_ad(
+                web = test_bot, root_url = test_bot.root_url,
+                ad_cfg = ad_cfg,
+                published_ads_list = published_ads,
+                delete_old_ads_by_title = True,
+            )
+
+        assert isinstance(result, DeleteResult)
+        assert result == DeleteResult(deleted = True, attempted = True)
+        assert ad_cfg.id is None
+        mock_request.assert_called_once()
+        assert mock_request.call_args.kwargs["url"] == f"{test_bot.root_url}/m-anzeigen-loeschen.json?ids=100"
 
     @pytest.mark.asyncio
     async def test_delete_ad_exception_preserves_id(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
@@ -394,6 +428,52 @@ class TestDeleteAdsAfterDeletePolicy:
         mock_save.assert_not_called()
         # delete_ad called twice (once per ad)
         assert mock_delete_ad.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_delete_ads_fetches_published_ads_strictly_for_id_less_title_matching(
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any], tmp_path:Path,
+    ) -> None:
+        """Title matching needs a complete published-ad list to detect ambiguous matches safely."""
+        test_bot.config.deleting.after_delete = "NONE"
+        ad_file, ad_cfg, ad_cfg_orig = self._make_ad(minimal_ad_config, tmp_path)
+        ad_cfg.id = None
+        ad_cfg_orig.pop("id", None)
+
+        with (
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = []) as mock_fetch,
+            patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock, return_value = DeleteResult(deleted = False, attempted = False)),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await delete_flow.delete_ads(
+                web = test_bot, root_url = test_bot.root_url,
+                after_delete = test_bot.config.deleting.after_delete,
+                delete_old_ads_by_title = True,
+                ad_cfgs = [(ad_file, ad_cfg, ad_cfg_orig)],
+            )
+
+        mock_fetch.assert_awaited_once_with(test_bot, test_bot.root_url, strict = True)
+
+    @pytest.mark.asyncio
+    async def test_delete_ads_keeps_published_ads_fetch_non_strict_for_id_only_deletes(
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any], tmp_path:Path,
+    ) -> None:
+        """ID-only deletes should not fail because unrelated published-ad pagination is incomplete."""
+        test_bot.config.deleting.after_delete = "NONE"
+        ad_file, ad_cfg, ad_cfg_orig = self._make_ad(minimal_ad_config, tmp_path)
+
+        with (
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = []) as mock_fetch,
+            patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock, return_value = DeleteResult(deleted = False, attempted = False)),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await delete_flow.delete_ads(
+                web = test_bot, root_url = test_bot.root_url,
+                after_delete = test_bot.config.deleting.after_delete,
+                delete_old_ads_by_title = True,
+                ad_cfgs = [(ad_file, ad_cfg, ad_cfg_orig)],
+            )
+
+        mock_fetch.assert_awaited_once_with(test_bot, test_bot.root_url, strict = False)
 
     @pytest.mark.asyncio
     async def test_cleanup_on_title_match_all_404_with_id_none(

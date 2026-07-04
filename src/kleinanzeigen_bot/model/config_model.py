@@ -266,7 +266,10 @@ class PublishingConfig(ContextualModel):
     delete_old_ads:Literal["BEFORE_PUBLISH", "AFTER_PUBLISH", "NEVER"] | None = Field(
         default = "AFTER_PUBLISH", description = "when to delete old versions of republished ads", examples = ["BEFORE_PUBLISH", "AFTER_PUBLISH", "NEVER"]
     )
-    delete_old_ads_by_title:bool = Field(default = True, description = "match old ads by title when deleting (only works with BEFORE_PUBLISH)")
+    delete_old_ads_by_title:bool = Field(
+        default = True,
+        description = "match ads by title when deleting old ads before publish or deleting ID-less ads; ambiguous title matches are skipped",
+    )
     local_path_renaming:LocalPathRenamingConfig = Field(
         default_factory = LocalPathRenamingConfig,
         description = (

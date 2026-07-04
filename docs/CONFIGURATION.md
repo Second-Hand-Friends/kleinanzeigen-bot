@@ -272,7 +272,7 @@ Publishing configuration.
 ```yaml
 publishing:
   delete_old_ads: "AFTER_PUBLISH"  # one of: AFTER_PUBLISH, BEFORE_PUBLISH, NEVER
-  delete_old_ads_by_title: true   # only works if delete_old_ads is set to BEFORE_PUBLISH
+  delete_old_ads_by_title: true   # match by title before publish or for ID-less deletes; ambiguous matches are skipped
 ```
 
 ### captcha
