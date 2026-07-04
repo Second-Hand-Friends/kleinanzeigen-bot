@@ -455,15 +455,15 @@ class TestDeleteAdsAfterDeletePolicy:
         mock_fetch.assert_awaited_once_with(test_bot, test_bot.root_url, strict = True)
 
     @pytest.mark.asyncio
-    async def test_delete_ads_keeps_published_ads_fetch_non_strict_for_id_only_deletes(
+    async def test_delete_ads_skips_published_ads_fetch_for_id_only_deletes(
         self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any], tmp_path:Path,
     ) -> None:
-        """ID-only deletes should not fail because unrelated published-ad pagination is incomplete."""
+        """ID-only deletes should not depend on fetching unrelated published-ad pages."""
         test_bot.config.deleting.after_delete = "NONE"
         ad_file, ad_cfg, ad_cfg_orig = self._make_ad(minimal_ad_config, tmp_path)
 
         with (
-            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = []) as mock_fetch,
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock) as mock_fetch,
             patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock, return_value = DeleteResult(deleted = False, attempted = False)),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
@@ -474,7 +474,7 @@ class TestDeleteAdsAfterDeletePolicy:
                 ad_cfgs = [(ad_file, ad_cfg, ad_cfg_orig)],
             )
 
-        mock_fetch.assert_awaited_once_with(test_bot, test_bot.root_url, strict = False)
+        mock_fetch.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_delete_ads_skips_title_deletes_but_continues_id_deletes_when_strict_fetch_fails(

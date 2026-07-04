@@ -53,7 +53,7 @@ async def delete_ads(
             published_ads_list = []
             title_matching_fetch_error = ex
     else:
-        published_ads_list = await published_ads.fetch_published_ads(web, root_url, strict = False)
+        published_ads_list = []
 
     for ad_file, ad_cfg, ad_cfg_orig in ad_cfgs:
         count += 1
