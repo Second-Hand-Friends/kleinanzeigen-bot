@@ -44,13 +44,29 @@ async def delete_ads(
     count = 0
     deleted_count = 0
 
-    published_ads_list = await published_ads.fetch_published_ads(web, root_url)
+    needs_title_matching = delete_old_ads_by_title and any(ad_cfg.id is None for _, ad_cfg, _ in ad_cfgs)
+    title_matching_fetch_error:published_ads.PublishedAdsFetchIncompleteError | None = None
+    if needs_title_matching:
+        try:
+            published_ads_list = await published_ads.fetch_published_ads(web, root_url, strict = True)
+        except published_ads.PublishedAdsFetchIncompleteError as ex:
+            published_ads_list = []
+            title_matching_fetch_error = ex
+    else:
+        published_ads_list = []
 
     for ad_file, ad_cfg, ad_cfg_orig in ad_cfgs:
         count += 1
         LOG.info("Processing %s/%s: '%s' from [%s]...", count, len(ad_cfgs), ad_cfg.title, ad_file)
 
-        result = await delete_ad(web, root_url, ad_cfg, published_ads_list, delete_old_ads_by_title = delete_old_ads_by_title)
+        if ad_cfg.id is None and delete_old_ads_by_title and title_matching_fetch_error is not None:
+            LOG.error(
+                " -> SKIPPED: title-based deletion requires a complete published ads list: %s",
+                title_matching_fetch_error,
+            )
+            result = DeleteResult(deleted = False, attempted = False)
+        else:
+            result = await delete_ad(web, root_url, ad_cfg, published_ads_list, delete_old_ads_by_title = delete_old_ads_by_title)
         if result.deleted:
             deleted_count += 1
 
@@ -85,10 +101,13 @@ async def delete_ad(
     """
     LOG.info("Deleting ad '%s' if already present...", ad_cfg.title)
 
-    # Phase A: Build set of IDs to delete, unified across both modes
+    # Phase A: Build set of IDs to delete. Explicit IDs are exact-ID only;
+    # title matching is only used for ID-less ads and must fail closed when ambiguous.
     ids_to_delete:set[int] = set()
 
-    if delete_old_ads_by_title:
+    if ad_cfg.id is not None:
+        ids_to_delete.add(ad_cfg.id)
+    elif delete_old_ads_by_title:
         for published_ad in published_ads_list:
             raw_id = published_ad.get("id")
             if raw_id is None:
@@ -100,11 +119,17 @@ async def delete_ad(
                 LOG.debug("Skipping published ad with invalid id: %r", raw_id)
                 continue
             published_ad_title = published_ad.get("title", "")
-            if ad_cfg.id == published_ad_id or ad_cfg.title == published_ad_title:
+            if ad_cfg.title == published_ad_title:
                 LOG.debug(" -> matched ad %s '%s' for deletion", published_ad_id, published_ad_title)
                 ids_to_delete.add(published_ad_id)
-    elif ad_cfg.id is not None:
-        ids_to_delete.add(ad_cfg.id)
+
+        if len(ids_to_delete) > 1:
+            LOG.error(
+                " -> SKIPPED: title '%s' matched multiple published ads (%s); delete by ID instead",
+                ad_cfg.title,
+                ", ".join(str(ad_id) for ad_id in sorted(ids_to_delete)),
+            )
+            return DeleteResult(deleted = False, attempted = False)
 
     # Early return if nothing to delete — skip page open, CSRF fetch, and sleep
     if not ids_to_delete:

@@ -378,11 +378,13 @@ kleinanzeigen_bot/delete_flow.py:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "DONE: Deleted %s of %s": "FERTIG: %s von %s gelöscht"
     "ad": "Anzeige"
+    " -> SKIPPED: title-based deletion requires a complete published ads list: %s": " -> ÜBERSPRUNGEN: titelbasierte Löschung erfordert eine vollständige Liste veröffentlichter Anzeigen: %s"
 
   delete_ad:
     "Deleting ad '%s' if already present...": "Lösche Anzeige '%s', falls bereits vorhanden..."
     "Expected CSRF Token not found in HTML content!": "Erwartetes CSRF-Token wurde im HTML-Inhalt nicht gefunden!"
     " -> SKIPPED: no published ad matched '%s' for deletion": " -> ÜBERSPRUNGEN: Keine veröffentlichte Anzeige '%s' zum Löschen gefunden"
+    " -> SKIPPED: title '%s' matched multiple published ads (%s); delete by ID instead": " -> ÜBERSPRUNGEN: Titel '%s' passt zu mehreren veröffentlichten Anzeigen (%s); stattdessen per ID löschen"
     " -> SUCCESS: deleted ad '%s' (ID: %s)": " -> ERFOLG: Anzeige '%s' (ID: %s) gelöscht"
     " -> ad %s not found (status %s), may have been removed already": " -> Anzeige %s nicht gefunden (Status %s), möglicherweise bereits entfernt"
 

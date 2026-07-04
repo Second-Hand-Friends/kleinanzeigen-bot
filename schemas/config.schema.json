@@ -707,7 +707,7 @@
         },
         "delete_old_ads_by_title": {
           "default": true,
-          "description": "match old ads by title when deleting (only works with BEFORE_PUBLISH)",
+          "description": "match ads by title when deleting old ads before publish or deleting ID-less ads; ambiguous title matches are skipped",
           "title": "Delete Old Ads By Title",
           "type": "boolean"
         },

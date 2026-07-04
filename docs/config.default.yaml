@@ -171,7 +171,7 @@ publishing:
   #   • NEVER
   delete_old_ads: AFTER_PUBLISH
 
-  # match old ads by title when deleting (only works with BEFORE_PUBLISH)
+  # match ads by title when deleting old ads before publish or deleting ID-less ads; ambiguous title matches are skipped
   delete_old_ads_by_title: true
 
   # local file and folder rename behavior after a successful publish changes the ad ID. When TEMPLATE_MATCH is enabled, the download.folder_name_template and download.ad_file_name_template are used to determine which paths qualify for renaming — only paths whose names match the template structure are updated.
