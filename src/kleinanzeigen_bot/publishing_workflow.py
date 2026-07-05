@@ -188,10 +188,13 @@ async def _fetch_published_ads_for_publish(
     root_url:str,
     config:Config,
     ad_cfgs:list[tuple[str, Ad, dict[str, Any]]],
+    *,
+    keep_old_ads:bool,
 ) -> tuple[list[PublishedAd], list[PublishedAd] | None, bool]:
     """Fetch published ads for publish flow, strictly when title cleanup needs it."""
     require_strict_fetch = (
-        config.publishing.delete_old_ads == "BEFORE_PUBLISH"
+        not keep_old_ads
+        and config.publishing.delete_old_ads == "BEFORE_PUBLISH"
         and config.publishing.delete_old_ads_by_title
         and any(ad_cfg.id is None for _ad_file, ad_cfg, _ad_cfg_orig in ad_cfgs)
     )
@@ -247,6 +250,7 @@ async def publish_ads(
         root_url,
         config,
         ad_cfgs,
+        keep_old_ads = keep_old_ads,
     )
 
     for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ad_cfgs, start = 1):

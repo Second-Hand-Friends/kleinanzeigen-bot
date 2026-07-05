@@ -482,6 +482,38 @@ class TestKleinanzeigenBotPublishAdsBasics:
             assert any("DONE: (Re-)published 0 ads (1 failed after retries)" in record.getMessage() for record in summary)
 
     @pytest.mark.asyncio
+    async def test_publish_ads_keep_old_does_not_require_strict_title_cleanup_fetch(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        test_bot.config.publishing.delete_old_ads = "BEFORE_PUBLISH"
+        test_bot.config.publishing.delete_old_ads_by_title = True
+        test_bot.keep_old_ads = True
+
+        ad_cfg = Ad.model_validate(base_ad_config)
+        ad_cfg_orig = copy.deepcopy(base_ad_config)
+        ad_file = "ad.yaml"
+        published_ads = [{"id": 10, "state": "active"}]
+
+        with (
+            patch(
+                "kleinanzeigen_bot.published_ads.fetch_published_ads",
+                new_callable = AsyncMock,
+                return_value = published_ads,
+            ) as fetch_mock,
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock) as publish_mock,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+            patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock) as delete_mock,
+        ):
+            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+
+            fetch_mock.assert_awaited_once_with(test_bot, test_bot.root_url)
+            publish_mock.assert_awaited_once()
+            assert publish_mock.call_args.args[4] == published_ads
+            delete_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_update_ads_persistence_failure_is_not_retried_and_still_processes_next_ad(
         self,
         test_bot:KleinanzeigenBot,
