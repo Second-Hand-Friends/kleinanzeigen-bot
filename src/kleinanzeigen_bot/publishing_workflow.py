@@ -29,7 +29,7 @@ from . import publishing_persistence as _publishing_persistence
 from . import publishing_submission as _publishing_submission
 from .model.ad_model import Ad, AdUpdateStrategy
 from .model.config_model import Config
-from .published_ads import PublishedAd, ad_matches_id
+from .published_ads import PublishedAd, PublishedAdsFetchIncompleteError, ad_matches_id
 from .utils import loggers as _loggers
 from .utils.exceptions import CategoryResolutionError, PublishSubmissionUncertainError
 from .utils.i18n import pluralize
@@ -183,6 +183,41 @@ async def publish_ad(
         raise PostPublishPersistenceError(ad_id = ad_id, ad_title = ad_cfg.title, original = ex) from ex
 
 
+async def _fetch_published_ads_for_publish(
+    web:WebScrapingMixin,
+    root_url:str,
+    config:Config,
+    ad_cfgs:list[tuple[str, Ad, dict[str, Any]]],
+    *,
+    keep_old_ads:bool,
+) -> tuple[list[PublishedAd], list[PublishedAd] | None, bool]:
+    """Fetch published ads for publish flow, strictly when title cleanup needs it."""
+    require_strict_fetch = (
+        not keep_old_ads
+        and config.publishing.delete_old_ads == "BEFORE_PUBLISH"
+        and config.publishing.delete_old_ads_by_title
+        and any(ad_cfg.id is None for _ad_file, ad_cfg, _ad_cfg_orig in ad_cfgs)
+    )
+    published_ads_list = await published_ads.fetch_published_ads(web, root_url)
+    strict_published_ads_list:list[PublishedAd] | None = None
+
+    if require_strict_fetch:
+        try:
+            strict_published_ads_list = await published_ads.fetch_published_ads(
+                web,
+                root_url,
+                strict = True,
+            )
+        except PublishedAdsFetchIncompleteError as ex:
+            LOG.error(
+                "Skipping title-based publishes because full published-ad list could not "
+                "be fetched before publish: %s",
+                ex,
+            )
+
+    return published_ads_list, strict_published_ads_list, require_strict_fetch
+
+
 async def publish_ads(
     web:WebScrapingMixin,
     ad_cfgs:list[tuple[str, Ad, dict[str, Any]]],
@@ -210,13 +245,34 @@ async def publish_ads(
     count = 0
     failed_count = 0
     max_retries = SUBMISSION_MAX_RETRIES
-
-    published_ads_list = await published_ads.fetch_published_ads(web, root_url)
+    published_ads_list, strict_published_ads_list, require_strict_fetch = await _fetch_published_ads_for_publish(
+        web,
+        root_url,
+        config,
+        ad_cfgs,
+        keep_old_ads = keep_old_ads,
+    )
 
     for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ad_cfgs, start = 1):
         LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ad_cfgs), ad_cfg.title, ad_file)
 
-        if any(ad_matches_id(x, ad_cfg.id) and x.get("state") == "paused" for x in published_ads_list):
+        published_ads_for_matching = (
+            strict_published_ads_list
+            if ad_cfg.id is None and strict_published_ads_list is not None
+            else published_ads_list
+        )
+
+        if ad_cfg.id is None and strict_published_ads_list is None and require_strict_fetch:
+            LOG.warning(
+                "Skipping '%s' because strict published-ad fetch failed before publish. "
+                "Retry by re-running the publish after transient API issues have resolved.",
+                ad_cfg.title,
+            )
+            count += 1
+            failed_count += 1
+            continue
+
+        if any(ad_matches_id(x, ad_cfg.id) and x.get("state") == "paused" for x in published_ads_for_matching):
             LOG.info("Skipping because ad is reserved")
             continue
 
@@ -233,7 +289,7 @@ async def publish_ads(
                 ad_cfg.price_reduction_count = baseline_price_reduction_count
                 await publish_ad(
                     web, ad_file, ad_cfg, ad_cfg_orig,
-                    published_ads_list, AdUpdateStrategy.REPLACE,
+                    published_ads_for_matching, AdUpdateStrategy.REPLACE,
                     root_url = root_url, config = config,
                     keep_old_ads = keep_old_ads,
                     config_file_path = config_file_path,
@@ -313,7 +369,7 @@ async def publish_ads(
                 )
 
             await delete_old_ad_if_needed(
-                web, ad_cfg, published_ads_list,
+                web, ad_cfg, published_ads_for_matching,
                 timing = "AFTER_PUBLISH",
                 keep_old_ads = keep_old_ads,
                 config = config,
