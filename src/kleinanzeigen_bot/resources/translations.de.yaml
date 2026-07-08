@@ -169,7 +169,7 @@ kleinanzeigen_bot/login_flow.py:
   has_logged_in_marker:
     "Starting login detection (timeout: %.1fs base, %.1fs effective with multiplier/backoff)": "Starte Login-Erkennung (Timeout: %.1fs Basis, %.1fs effektiv mit Multiplikator/Backoff)"
     "Login detected via login detection selector '%s'": "Login erkannt über Login-Erkennungs-Selektor '%s'"
-    "Timeout waiting for login detection selector group after %.1fs": "Timeout beim Warten auf die Login-Erkennungs-Selektorgruppe nach %.1fs"
+    "No login detected via selector group after %.1fs (timeout or stale node)": "Kein Login erkannt über Selektorgruppe nach %.1fs (Timeout oder veralteter Knoten)"
 
   handle_after_login_logic:
     "Handling GDPR disclaimer...": "Verarbeite DSGVO-Hinweis..."
