@@ -861,7 +861,7 @@ async def has_logged_in_marker(web:WebScrapingMixin, *, username:str) -> bool:
             LOG.debug("Login detected via login detection selector '%s'", matched_selector_display)
             return True
     except (TimeoutError, ProtocolException):
-        LOG.debug("Timeout waiting for login detection selector group after %.1fs", effective_timeout)
+        LOG.debug("No login detected via selector group after %.1fs (timeout or stale node)", effective_timeout)
 
     return False
 
