@@ -20,6 +20,8 @@ from gettext import gettext as _
 from pathlib import Path
 from typing import Final, Sequence
 
+from nodriver.core.connection import ProtocolException
+
 from . import captcha_flow
 from .model.config_model import CaptchaConfig, DiagnosticsConfig
 from .utils import diagnostics as _diagnostics
@@ -840,7 +842,7 @@ async def has_logged_in_marker(web:WebScrapingMixin, *, username:str) -> bool:
             )
             LOG.debug("Login detected via login detection selector '%s'", matched_selector_display)
             return True
-    except TimeoutError:
+    except (TimeoutError, ProtocolException):
         LOG.debug("No login detected via configured login detection selectors (%s)", tried_login_selectors)
 
     try:
@@ -858,7 +860,7 @@ async def has_logged_in_marker(web:WebScrapingMixin, *, username:str) -> bool:
             )
             LOG.debug("Login detected via login detection selector '%s'", matched_selector_display)
             return True
-    except TimeoutError:
+    except (TimeoutError, ProtocolException):
         LOG.debug("Timeout waiting for login detection selector group after %.1fs", effective_timeout)
 
     return False
@@ -903,7 +905,7 @@ async def has_logged_out_cta(web:WebScrapingMixin, *, log_timeout:bool = True) -
                 return True
             LOG.debug("Fast logged-out pre-check got unexpected selector index '%s'; failing closed", cta_index)
             return False
-    except TimeoutError:
+    except (TimeoutError, ProtocolException):
         if log_timeout:
             LOG.debug(
                 "Fast logged-out pre-check found no login CTA (%s) within %.1fs",
