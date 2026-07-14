@@ -9,6 +9,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
+from nodriver.core.connection import ProtocolException
 
 from kleinanzeigen_bot import login_flow
 from kleinanzeigen_bot.app import KleinanzeigenBot
@@ -21,6 +22,7 @@ from kleinanzeigen_bot.login_flow import (
     current_page_url,
     fill_login_data_and_send,
     handle_identifier_captcha_state,
+    has_logged_in_marker,
     has_logged_out_cta,
     is_valid_post_auth0_destination,
     wait_for_post_auth0_submit_transition,
@@ -78,6 +80,108 @@ class TestKleinanzeigenBotAuthentication:
             patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = "Einloggen"),
         ):
             assert await has_logged_out_cta(test_bot) is True
+
+    @pytest.mark.asyncio
+    async def test_has_logged_in_marker_stale_quick_protocol_error_falls_back_to_full_lookup(self, test_bot:KleinanzeigenBot) -> None:
+        stale_error = ProtocolException({"code": -32000, "message": "Could not find node with given id"})
+        with patch.object(
+            test_bot,
+            "web_text_first_available",
+            new_callable = AsyncMock,
+            side_effect = [stale_error, ("Welcome dummy_user", 0)],
+        ) as mock_web_text:
+            assert await has_logged_in_marker(test_bot, username = "dummy_user") is True
+
+        assert mock_web_text.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_has_logged_in_marker_stale_full_protocol_error_after_quick_timeout_returns_false(self, test_bot:KleinanzeigenBot) -> None:
+        stale_error = ProtocolException({"code": -32000, "message": "Could not find node with given id"})
+        with patch.object(
+            test_bot,
+            "web_text_first_available",
+            new_callable = AsyncMock,
+            side_effect = [TimeoutError(), stale_error],
+        ) as mock_web_text:
+            assert await has_logged_in_marker(test_bot, username = "dummy_user") is False
+
+        assert mock_web_text.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_has_logged_out_cta_stale_text_extraction_protocol_error_returns_false(self, test_bot:KleinanzeigenBot) -> None:
+        stale_error = ProtocolException({"code": -32000, "message": "Could not find node with given id"})
+        matched_element = MagicMock(spec = Element)
+
+        with (
+            patch.object(
+                test_bot,
+                "web_find_first_available",
+                new_callable = AsyncMock,
+                return_value = (matched_element, 0),
+            ),
+            patch.object(
+                test_bot,
+                "extract_visible_text",
+                new_callable = AsyncMock,
+                side_effect = stale_error,
+            ),
+        ):
+            assert await has_logged_out_cta(test_bot) is False
+
+    @pytest.mark.asyncio
+    async def test_has_logged_in_marker_unrelated_protocol_error_re_raises_quick_lookup(self, test_bot:KleinanzeigenBot) -> None:
+        unrelated_error = ProtocolException({"code": -32000, "message": "Could not parse JSON"})
+        with (
+            patch.object(test_bot, "web_text_first_available", new_callable = AsyncMock, side_effect = unrelated_error),
+            pytest.raises(ProtocolException),
+        ):
+            await has_logged_in_marker(test_bot, username = "dummy_user")
+
+    @pytest.mark.asyncio
+    async def test_has_logged_in_marker_unrelated_protocol_error_re_raises_selector_group_lookup(self, test_bot:KleinanzeigenBot) -> None:
+        unrelated_error = ProtocolException({"code": -32000, "message": "Could not parse JSON"})
+        with (
+            patch.object(
+                test_bot,
+                "web_text_first_available",
+                new_callable = AsyncMock,
+                side_effect = [TimeoutError(), unrelated_error],
+            ),
+            pytest.raises(ProtocolException),
+        ):
+            await has_logged_in_marker(test_bot, username = "dummy_user")
+
+    @pytest.mark.asyncio
+    async def test_has_logged_out_cta_unrelated_protocol_error_re_raises_text_extraction(self, test_bot:KleinanzeigenBot) -> None:
+        unrelated_error = ProtocolException({"code": -32000, "message": "Could not parse JSON"})
+        matched_element = MagicMock(spec = Element)
+
+        with (
+            patch.object(
+                test_bot,
+                "web_find_first_available",
+                new_callable = AsyncMock,
+                return_value = (matched_element, 0),
+            ),
+            patch.object(
+                test_bot,
+                "extract_visible_text",
+                new_callable = AsyncMock,
+                side_effect = unrelated_error,
+            ),
+            pytest.raises(ProtocolException),
+        ):
+            await has_logged_out_cta(test_bot)
+
+    @pytest.mark.parametrize(
+        ("code", "message"),
+        [
+            pytest.param(-32601, "Could not find node with given id", id = "wrong_code"),
+            pytest.param(-32000, "Could not locate node with given id", id = "wrong_message"),
+        ],
+    )
+    def test_is_stale_node_protocol_error_rejects_non_stale_values(self, code:int, message:str) -> None:
+        assert not login_flow._is_stale_node_protocol_error(ProtocolException({"code": code, "message": message}))
 
     @pytest.mark.asyncio
     async def test_is_logged_in_uses_selector_group_timeout_key(self, test_bot:KleinanzeigenBot) -> None:
