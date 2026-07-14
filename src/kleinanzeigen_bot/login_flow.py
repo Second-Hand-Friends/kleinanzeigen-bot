@@ -31,6 +31,9 @@ from .utils.web_scraping_mixin import By, WebScrapingMixin
 
 LOG:Final[_loggers.Logger] = _loggers.get_logger(__name__)
 
+_STALE_NODE_PROTOCOL_ERROR_CODE:Final[int] = -32000
+_STALE_NODE_PROTOCOL_ERROR_MESSAGE:Final[str] = "could not find node with given id"
+
 _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
     (By.ID, "user-email"),
@@ -84,6 +87,17 @@ async def _click_auth0_submit(web:WebScrapingMixin, *, timeout:float | None = No
 
 def _format_login_detection_selectors(selectors:Sequence[tuple["By", str]]) -> str:
     return ", ".join(f"{selector_type.name}={selector_value}" for selector_type, selector_value in selectors)
+
+
+def _is_stale_node_protocol_error(error:ProtocolException) -> bool:
+    if getattr(error, "code", None) != _STALE_NODE_PROTOCOL_ERROR_CODE:
+        return False
+
+    message = getattr(error, "message", None)
+    if not isinstance(message, str):
+        return False
+
+    return message.strip().casefold() == _STALE_NODE_PROTOCOL_ERROR_MESSAGE
 
 
 class LoginDetectionReason(enum.Enum):
@@ -842,8 +856,17 @@ async def has_logged_in_marker(web:WebScrapingMixin, *, username:str) -> bool:
             )
             LOG.debug("Login detected via login detection selector '%s'", matched_selector_display)
             return True
-    except (TimeoutError, ProtocolException):
+    except TimeoutError:
         LOG.debug("No login detected via configured login detection selectors (%s)", tried_login_selectors)
+    except ProtocolException as error:
+        if _is_stale_node_protocol_error(error):
+            LOG.debug(
+                "Suppressing stale node protocol error during quick logged-in lookup (code=%s, message=%s)",
+                error.code,
+                error.message,
+            )
+        else:
+            raise
 
     try:
         user_info, matched_selector = await web.web_text_first_available(
@@ -860,8 +883,17 @@ async def has_logged_in_marker(web:WebScrapingMixin, *, username:str) -> bool:
             )
             LOG.debug("Login detected via login detection selector '%s'", matched_selector_display)
             return True
-    except (TimeoutError, ProtocolException):
+    except TimeoutError:
         LOG.debug("No login detected via selector group after %.1fs (timeout or stale node)", effective_timeout)
+    except ProtocolException as error:
+        if _is_stale_node_protocol_error(error):
+            LOG.debug(
+                "Suppressing stale node protocol error during logged-in selector group lookup (code=%s, message=%s)",
+                error.code,
+                error.message,
+            )
+        else:
+            raise
 
     return False
 
@@ -905,12 +937,21 @@ async def has_logged_out_cta(web:WebScrapingMixin, *, log_timeout:bool = True) -
                 return True
             LOG.debug("Fast logged-out pre-check got unexpected selector index '%s'; failing closed", cta_index)
             return False
-    except (TimeoutError, ProtocolException):
+    except TimeoutError:
         if log_timeout:
             LOG.debug(
                 "Fast logged-out pre-check found no login CTA (%s) within %.1fs",
                 tried_logged_out_selectors,
                 quick_dom_timeout,
             )
+    except ProtocolException as error:
+        if _is_stale_node_protocol_error(error):
+            LOG.debug(
+                "Suppressing stale node protocol error during logged-out CTA check (code=%s, message=%s)",
+                error.code,
+                error.message,
+            )
+        else:
+            raise
 
     return False
