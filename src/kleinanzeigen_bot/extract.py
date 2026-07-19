@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import asyncio
 import errno
+import html
 import os
 import stat
 import time
@@ -619,7 +620,7 @@ class AdExtractor(WebScrapingMixin):
         if cached_ad is not None:
             title = cached_ad.get("title")
             if isinstance(title, str) and title.strip():
-                return title.strip()
+                return html.unescape(title.strip())
 
         return await self._extract_title_from_ad_page()
 

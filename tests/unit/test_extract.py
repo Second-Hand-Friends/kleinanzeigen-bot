@@ -1011,6 +1011,17 @@ class TestAdExtractorContent:
         mock_extract_title.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_resolve_download_title_decodes_published_metadata_entities(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Decode HTML entities only when using the cached manage-ads title."""
+        test_extractor.published_ads_by_id = {12345: {"id": 12345, "title": " Foo &#x2F; Bar &#x27;Test&#x27; &quot;Example&quot; "}}
+
+        with patch.object(test_extractor, "_extract_title_from_ad_page", new_callable = AsyncMock) as mock_extract_title:
+            title = await test_extractor._resolve_download_title(12345)
+
+        assert title == "Foo / Bar 'Test' \"Example\""
+        mock_extract_title.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_resolve_download_title_falls_back_to_page_title(self, test_extractor:extract_module.AdExtractor) -> None:
         """Keep manual page extraction unchanged when manage-ads metadata is missing."""
         test_extractor.published_ads_by_id = {12345: {"id": 12345, "title": "   "}}
@@ -1019,6 +1030,50 @@ class TestAdExtractorContent:
             title = await test_extractor._resolve_download_title(12345)
 
         assert title == "Page Title"
+
+    @pytest.mark.asyncio
+    async def test_cached_title_entities_are_decoded_before_title_validation(
+        self,
+        test_extractor:extract_module.AdExtractor,
+        tmp_path:Path,
+    ) -> None:
+        """Validate downloaded ad info with the decoded visible title, not encoded entity text."""
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        encoded_title = f"{'A' * 58} &#x2F; B"
+        decoded_title = f"{'A' * 58} / B"
+        test_extractor.published_ads_by_id = {12345: {"id": 12345, "title": encoded_title}}
+
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+        test_extractor.page = page_mock
+
+        with (
+            patch.object(test_extractor, "web_text", new_callable = AsyncMock) as mock_web_text,
+            patch.multiple(
+                test_extractor,
+                web_execute = AsyncMock(return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
+                _extract_category_from_ad_page = AsyncMock(return_value = "160"),
+                _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
+                _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
+                _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
+                _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
+                _download_images_from_ad_page = AsyncMock(return_value = []),
+                _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+            ),
+            patch.object(test_extractor, "_extract_title_from_ad_page", new_callable = AsyncMock) as mock_extract_title,
+        ):
+            mock_web_text.side_effect = ["Description text", "03.02.2025"]
+            ad_cfg, _staging_dir, final_dir, ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+        assert len(encoded_title) > 65
+        assert len(decoded_title) <= 65
+        assert ad_cfg.title == decoded_title
+        assert "&#x2F;" not in ad_file_stem
+        assert "&#x2F;" not in final_dir.name
+        assert "/" not in ad_file_stem
+        assert "/" not in final_dir.name
+        mock_extract_title.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_directory_handling_uses_published_title_for_names_and_ad_info(
