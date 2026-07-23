@@ -174,13 +174,13 @@ files = [
 
 [[package]]
 name = "bracex"
-version = "3.0"
+version = "3.0.1"
 requires_python = ">=3.10"
 summary = "Bash style brace expander."
 groups = ["default"]
 files = [
-    {file = "bracex-3.0-py3-none-any.whl", hash = "sha256:3833e61c2f092d5aa0468fa2e6c6e990a306185abf763b6d122f0158e59c58a5"},
-    {file = "bracex-3.0.tar.gz", hash = "sha256:b73f718d6bd98d8419e45df02426c86e9967c179949f779340d6c3a8c83b9111"},
+    {file = "bracex-3.0.1-py3-none-any.whl", hash = "sha256:6523ad83aeb5098a4ee597cff0f964442ff74e460bd3fafaffab6a013ff2288c"},
+    {file = "bracex-3.0.1.tar.gz", hash = "sha256:4e38e32392e4a4780fe15d644bfc7c8514057cfc3861e060b11814ce829c25e4"},
 ]
 
 [[package]]
@@ -216,13 +216,13 @@ files = [
 
 [[package]]
 name = "certifi"
-version = "2026.6.17"
+version = "2026.7.22"
 requires_python = ">=3.7"
 summary = "Python package for providing Mozilla's CA Bundle."
 groups = ["default", "dev"]
 files = [
-    {file = "certifi-2026.6.17-py3-none-any.whl", hash = "sha256:2227dcbaafe0d2f59279d1762ddddc37783ed4354594f194ffc31d20f41fc3db"},
-    {file = "certifi-2026.6.17.tar.gz", hash = "sha256:024c88eeec92ca068db80f02b8b07c9cef7b9fe261d1d535abfd5abd6f6af432"},
+    {file = "certifi-2026.7.22-py3-none-any.whl", hash = "sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775"},
+    {file = "certifi-2026.7.22.tar.gz", hash = "sha256:741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55"},
 ]
 
 [[package]]
@@ -627,13 +627,13 @@ files = [
 
 [[package]]
 name = "filelock"
-version = "3.31.1"
+version = "3.32.0"
 requires_python = ">=3.10"
 summary = "A platform independent file lock."
 groups = ["dev"]
 files = [
-    {file = "filelock-3.31.1-py3-none-any.whl", hash = "sha256:9ea33146c780161bf67cb20c7cb26b651566820d65ad8dfdd79422602a2dcfc0"},
-    {file = "filelock-3.31.1.tar.gz", hash = "sha256:9e0c4e88ebe90833c1beafd3a547ccbc0bf7f491cd3858c3ec7aed63efe02163"},
+    {file = "filelock-3.32.0-py3-none-any.whl", hash = "sha256:d396bea984af47333ef05e50eae7eff88c84256de6112aea0ec48a233c064fe3"},
+    {file = "filelock-3.32.0.tar.gz", hash = "sha256:7be2ad23a14607ccc71808e68fe30848aeace7058ace17852f68e2a68e310402"},
 ]
 
 [[package]]
@@ -1229,13 +1229,13 @@ files = [
 
 [[package]]
 name = "platformdirs"
-version = "4.10.1"
+version = "4.11.0"
 requires_python = ">=3.10"
 summary = "A small Python package for determining appropriate platform-specific dirs, e.g. a `user data dir`."
 groups = ["default", "dev"]
 files = [
-    {file = "platformdirs-4.10.1-py3-none-any.whl", hash = "sha256:0e4eff26be2d75293977f7cddc153fd9b8eaa7fb0c7b64ffe4076cb443117443"},
-    {file = "platformdirs-4.10.1.tar.gz", hash = "sha256:ceab4084426fe6319ce18e86deada8ab1b7487c7aee7040c55e277c9ae793695"},
+    {file = "platformdirs-4.11.0-py3-none-any.whl", hash = "sha256:360ccded2b7fce0af0ff80cc8f5942a1c5d99b0e856033acb030bfc634709e74"},
+    {file = "platformdirs-4.11.0.tar.gz", hash = "sha256:0555d18370482847566ffabcaa53ad7c6c1c29f195989ae1ed634a05f76ea1e0"},
 ]
 
 [[package]]
