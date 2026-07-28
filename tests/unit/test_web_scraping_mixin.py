@@ -1082,6 +1082,26 @@ class TestWebScrapingSessionManagement:
         assert scraper.page is None
 
     @pytest.mark.asyncio
+    async def test_close_browser_session_cleans_up_when_aclose_fails(self) -> None:
+        """Cleanup should finish and the original aclose error should propagate."""
+        scraper = WebScrapingMixin()
+        scraper.browser = MagicMock()
+        scraper.browser._process_pid = 999
+        scraper.browser.aclose = AsyncMock(side_effect = RuntimeError("aclose failed"))
+        stop_mock = scraper.browser.stop = MagicMock()
+        scraper.page = MagicMock(spec = Page)
+
+        with patch("psutil.Process") as mock_proc:
+            mock_proc.return_value.children.return_value = []
+            with pytest.raises(RuntimeError, match = "aclose failed"):
+                await scraper.close_browser_session()
+
+        mock_proc.assert_called_once_with(999)
+        stop_mock.assert_called_once()
+        assert scraper.browser is None
+        assert scraper.page is None
+
+    @pytest.mark.asyncio
     async def test_wait_for_browser_process_exit_kills_after_timeout(self) -> None:
         """A browser process that does not exit after stop should be killed and reaped."""
         scraper = WebScrapingMixin()

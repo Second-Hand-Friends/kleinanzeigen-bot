@@ -951,7 +951,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 timeout = _BROWSER_PROCESS_EXIT_TIMEOUT_SECONDS,
             )
             return
-        except (TimeoutError, OSError) as exc:
+        except (TimeoutError, asyncio.TimeoutError, OSError) as exc:
             LOG.debug("Browser process did not exit cleanly: %s", exc)
 
         try:
@@ -965,7 +965,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 browser_process.wait(),
                 timeout = _BROWSER_PROCESS_KILL_TIMEOUT_SECONDS,
             )
-        except (TimeoutError, OSError) as exc:
+        except (TimeoutError, asyncio.TimeoutError, OSError) as exc:
             LOG.debug("Browser process could not be reaped after being killed: %s", exc)
 
     def _close_browser_session_nowait(self) -> None:
