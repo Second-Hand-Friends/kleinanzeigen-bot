@@ -10,7 +10,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Awaitable, Iterator
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -1547,7 +1547,10 @@ class TestShippingOptionsDialog:
         assert "self::dialog[@open]" in _OTHER_SHIPPING_METHODS_XPATH
         assert "self::button" not in _OTHER_SHIPPING_METHODS_XPATH
         assert "not(.//*[" in _OTHER_SHIPPING_METHODS_XPATH
-        mock_click.assert_any_await(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH)
+        assert any(
+            click.args == (By.XPATH, _OTHER_SHIPPING_METHODS_XPATH)
+            for click in mock_click.await_args_list
+        )
 
     @pytest.mark.asyncio
     async def test_modify_navigates_back_to_tag_agnostic_dialog_action(
@@ -1558,15 +1561,30 @@ class TestShippingOptionsDialog:
         """MODIFY mode retries the tag-agnostic action after navigating back one dialog step."""
         ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
         action = MagicMock()
+        events:list[str] = []
+
+        async def find_action(*_:Any, **__:Any) -> MagicMock:
+            events.append("find")
+            if events.count("find") == 1:
+                raise TimeoutError("action not on current step")
+            return action
+
+        async def record_click(selector_type:By, selector_value:str, **_:Any) -> None:
+            if selector_type != By.XPATH:
+                return
+            if selector_value == '//button[contains(., "Zurück")]':
+                events.append("back")
+            elif selector_value == _OTHER_SHIPPING_METHODS_XPATH:
+                events.append("action")
 
         with (
             patch.object(
                 test_bot,
                 "web_find",
                 new_callable = AsyncMock,
-                side_effect = [TimeoutError("action not on current step"), action],
-            ) as mock_find,
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+                side_effect = find_action,
+            ),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = record_click),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock),
         ):
@@ -1577,12 +1595,7 @@ class TestShippingOptionsDialog:
                 test_bot.timeout("quick_dom"),
             )
 
-        assert mock_find.await_args_list == [
-            call(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = test_bot.timeout("quick_dom")),
-            call(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = test_bot.timeout("quick_dom")),
-        ]
-        mock_click.assert_any_await(By.XPATH, '//button[contains(., "Zurück")]')
-        mock_click.assert_any_await(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH)
+        assert events == ["find", "back", "find", "action"]
 
     @pytest.mark.parametrize(
         "case",
