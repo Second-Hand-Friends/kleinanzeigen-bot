@@ -1560,14 +1560,11 @@ class TestShippingOptionsDialog:
     ) -> None:
         """MODIFY mode retries the tag-agnostic action after navigating back one dialog step."""
         ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
-        action = MagicMock()
         events:list[str] = []
 
-        async def find_action(*_:Any, **__:Any) -> MagicMock:
+        async def find_action(*_:Any, **__:Any) -> None:
             events.append("find")
-            if events.count("find") == 1:
-                raise TimeoutError("action not on current step")
-            return action
+            raise TimeoutError("action not on current step")
 
         async def record_click(selector_type:By, selector_value:str, **_:Any) -> None:
             if selector_type != By.XPATH:
@@ -1595,7 +1592,7 @@ class TestShippingOptionsDialog:
                 test_bot.timeout("quick_dom"),
             )
 
-        assert events == ["find", "back", "find", "action"]
+        assert events == ["find", "back", "find", "back", "action"]
 
     @pytest.mark.parametrize(
         "case",
