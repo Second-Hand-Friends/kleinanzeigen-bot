@@ -10,7 +10,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Awaitable, Iterator
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
@@ -1547,6 +1547,41 @@ class TestShippingOptionsDialog:
         assert "self::dialog[@open]" in _OTHER_SHIPPING_METHODS_XPATH
         assert "self::button" not in _OTHER_SHIPPING_METHODS_XPATH
         assert "not(.//*[" in _OTHER_SHIPPING_METHODS_XPATH
+        mock_click.assert_any_await(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH)
+
+    @pytest.mark.asyncio
+    async def test_modify_navigates_back_to_tag_agnostic_dialog_action(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """MODIFY mode retries the tag-agnostic action after navigating back one dialog step."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
+        action = MagicMock()
+
+        with (
+            patch.object(
+                test_bot,
+                "web_find",
+                new_callable = AsyncMock,
+                side_effect = [TimeoutError("action not on current step"), action],
+            ) as mock_find,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock),
+        ):
+            await _set_configured_shipping_options(
+                test_bot,
+                ad_cfg,
+                AdUpdateStrategy.MODIFY,
+                test_bot.timeout("quick_dom"),
+            )
+
+        assert mock_find.await_args_list == [
+            call(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = test_bot.timeout("quick_dom")),
+            call(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = test_bot.timeout("quick_dom")),
+        ]
+        mock_click.assert_any_await(By.XPATH, '//button[contains(., "Zurück")]')
         mock_click.assert_any_await(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH)
 
     @pytest.mark.parametrize(
