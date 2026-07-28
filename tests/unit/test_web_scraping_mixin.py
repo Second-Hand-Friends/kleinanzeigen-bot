@@ -1081,6 +1081,61 @@ class TestWebScrapingSessionManagement:
         assert scraper.browser is None
         assert scraper.page is None
 
+    @pytest.mark.asyncio
+    async def test_wait_for_browser_process_exit_kills_after_timeout(self) -> None:
+        """A browser process that does not exit after stop should be killed and reaped."""
+        scraper = WebScrapingMixin()
+
+        class HangingProcess:
+            returncode:int | None = None
+
+            def __init__(self) -> None:
+                self.killed = False
+                self.wait_calls = 0
+
+            async def wait(self) -> int:
+                self.wait_calls += 1
+                if not self.killed:
+                    await asyncio.Event().wait()
+                self.returncode = -9
+                return self.returncode
+
+            def kill(self) -> None:
+                self.killed = True
+
+        process = HangingProcess()
+        with patch("kleinanzeigen_bot.utils.web_scraping_mixin._BROWSER_PROCESS_EXIT_TIMEOUT_SECONDS", 0.01):
+            await scraper._wait_for_browser_process_exit(cast(asyncio.subprocess.Process, process))  # noqa: SLF001
+
+        assert process.killed
+        assert process.wait_calls == 2
+
+    @pytest.mark.asyncio
+    async def test_wait_for_browser_process_exit_ignores_wait_and_kill_errors(self) -> None:
+        """Process cleanup errors should not prevent the remaining browser cleanup."""
+        scraper = WebScrapingMixin()
+
+        class FailingProcess:
+            returncode:int | None = None
+
+            def __init__(self) -> None:
+                self.wait_calls = 0
+                self.kill_calls = 0
+
+            async def wait(self) -> int:
+                self.wait_calls += 1
+                raise OSError("wait failed")
+
+            def kill(self) -> None:
+                self.kill_calls += 1
+                raise OSError("kill failed")
+
+        process = FailingProcess()
+        await scraper._wait_for_browser_process_exit(cast(asyncio.subprocess.Process, process))  # noqa: SLF001
+
+        assert process.wait_calls == 2
+        assert process.kill_calls == 1
+
     def test_close_browser_session_nowait_cleans_up_resources(self) -> None:
         """Destructor cleanup should stop the browser without requiring an event loop."""
         scraper = WebScrapingMixin()

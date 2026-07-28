@@ -50,6 +50,8 @@ _KEY_VALUE_PAIR_SIZE = 2
 _PRIMARY_SELECTOR_BUDGET_RATIO:Final[float] = 0.70
 _BACKUP_SELECTOR_BUDGET_CAP_SECONDS:Final[float] = 0.75
 _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS:Final[float] = 0.25
+_BROWSER_PROCESS_EXIT_TIMEOUT_SECONDS:Final[float] = 5.0
+_BROWSER_PROCESS_KILL_TIMEOUT_SECONDS:Final[float] = 2.0
 
 # Viewport jitter bounds applied when the real screen is probed successfully.
 # The base size is jittered uniformly within these ranges, capped by the
@@ -740,7 +742,7 @@ class WebScrapingMixin:  # noqa: PLR0904
             await self.page.send(cdp_browser.set_window_bounds(window_id, bounds = new_bounds))
             LOG.info("Applied randomized browser window size: %dx%d", width, height)
             return True
-        except Exception as exc:  # noqa: BLE001
+        except (TimeoutError, ProtocolException, RuntimeError, OSError) as exc:
             LOG.debug("Viewport resize failed via CDP: %s", exc)
             return False
 
@@ -935,12 +937,36 @@ class WebScrapingMixin:  # noqa: PLR0904
             try:
                 browser.stop()
                 if isinstance(browser_process, asyncio.subprocess.Process):
-                    await browser_process.wait()
+                    await self._wait_for_browser_process_exit(browser_process)
                 # Browser.stop() schedules one final, idempotent aclose() call.
                 await asyncio.sleep(0)
                 self._kill_orphaned_browser_children(browser_pid)
             finally:
                 self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
+
+    async def _wait_for_browser_process_exit(self, browser_process:asyncio.subprocess.Process) -> None:
+        try:
+            await asyncio.wait_for(
+                browser_process.wait(),
+                timeout = _BROWSER_PROCESS_EXIT_TIMEOUT_SECONDS,
+            )
+            return
+        except (TimeoutError, OSError) as exc:
+            LOG.debug("Browser process did not exit cleanly: %s", exc)
+
+        try:
+            if browser_process.returncode is None:
+                browser_process.kill()
+        except OSError as exc:
+            LOG.debug("Browser process could not be killed: %s", exc)
+
+        try:
+            await asyncio.wait_for(
+                browser_process.wait(),
+                timeout = _BROWSER_PROCESS_KILL_TIMEOUT_SECONDS,
+            )
+        except (TimeoutError, OSError) as exc:
+            LOG.debug("Browser process could not be reaped after being killed: %s", exc)
 
     def _close_browser_session_nowait(self) -> None:
         """Best-effort browser cleanup for destructors, where awaiting is impossible."""
