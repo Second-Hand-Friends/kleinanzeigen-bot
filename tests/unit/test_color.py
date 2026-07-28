@@ -24,11 +24,11 @@ class TestShouldUseColor:
 
     def test_tty_true_enables_color(self) -> None:
         """TTY stream with no env overrides → colour enabled."""
-        assert should_use_color(stream = _tty(True))
+        assert should_use_color(stream = _tty(True), env = {})
 
     def test_tty_false_disables_color(self) -> None:
         """Non-TTY stream with no env overrides → colour disabled."""
-        assert not should_use_color(stream = _tty(False))
+        assert not should_use_color(stream = _tty(False), env = {})
 
     def test_tty_oserror_disables_color(self) -> None:
         """Stream.isatty() raising OSError → colour disabled."""
@@ -38,11 +38,11 @@ class TestShouldUseColor:
                 msg = "boom"
                 raise OSError(msg)
 
-        assert not should_use_color(stream = _Boom())  # type: ignore[arg-type]
+        assert not should_use_color(stream = _Boom(), env = {})  # type: ignore[arg-type]
 
     def test_tty_attributeerror_disables_color(self) -> None:
         """Stream without isatty() → colour disabled."""
-        assert not should_use_color(stream = _NoIsATTY())  # type: ignore[arg-type]
+        assert not should_use_color(stream = _NoIsATTY(), env = {})  # type: ignore[arg-type]
 
     # ------------------------------------------------------------------ #
     # NO_COLOR

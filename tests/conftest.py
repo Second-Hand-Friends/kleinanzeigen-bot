@@ -29,8 +29,8 @@ from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import i18n, loggers
 from kleinanzeigen_bot.utils.web_scraping_mixin import Browser
 
-loggers.configure_console_logging()
-
+# Let pytest own the logging handlers so late teardown records remain captured
+# instead of being written directly to the worker's original stderr stream.
 LOG:Final[loggers.Logger] = loggers.get_logger("kleinanzeigen_bot")
 LOG.setLevel(loggers.DEBUG)
 
@@ -268,7 +268,7 @@ class SmokeKleinanzeigenBot(KleinanzeigenBot):
         # Use cast to satisfy type checker for browser attribute
         self.browser = cast(Browser, DummyBrowser())
 
-    def close_browser_session(self) -> None:
+    async def close_browser_session(self) -> None:
         # Override to avoid psutil.Process logic in tests
         self.page = None  # pyright: ignore[reportAttributeAccessIssue]
         if self.browser:

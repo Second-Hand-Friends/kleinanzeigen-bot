@@ -70,7 +70,7 @@ class TestKleinanzeigenBotInitialization:
             patch("kleinanzeigen_bot.download_flow.download_ads", new_callable = AsyncMock),
 
 
-            patch.object(test_bot, "close_browser_session"),
+            patch.object(test_bot, "close_browser_session", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.update_checker.UpdateChecker", DummyUpdateChecker),
         ):
             await test_bot.run(["app", command])

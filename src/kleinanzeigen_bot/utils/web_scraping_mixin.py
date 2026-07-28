@@ -50,6 +50,8 @@ _KEY_VALUE_PAIR_SIZE = 2
 _PRIMARY_SELECTOR_BUDGET_RATIO:Final[float] = 0.70
 _BACKUP_SELECTOR_BUDGET_CAP_SECONDS:Final[float] = 0.75
 _BACKUP_SELECTOR_BUDGET_FLOOR_SECONDS:Final[float] = 0.25
+_BROWSER_PROCESS_EXIT_TIMEOUT_SECONDS:Final[float] = 5.0
+_BROWSER_PROCESS_KILL_TIMEOUT_SECONDS:Final[float] = 2.0
 
 # Viewport jitter bounds applied when the real screen is probed successfully.
 # The base size is jittered uniformly within these ranges, capped by the
@@ -740,7 +742,7 @@ class WebScrapingMixin:  # noqa: PLR0904
             await self.page.send(cdp_browser.set_window_bounds(window_id, bounds = new_bounds))
             LOG.info("Applied randomized browser window size: %dx%d", width, height)
             return True
-        except Exception as exc:  # noqa: BLE001
+        except (TimeoutError, ProtocolException, RuntimeError, OSError) as exc:
             LOG.debug("Viewport resize failed via CDP: %s", exc)
             return False
 
@@ -916,7 +918,7 @@ class WebScrapingMixin:  # noqa: PLR0904
             get_compatible_browser = self.get_compatible_browser,
         )
 
-    def close_browser_session(self) -> None:
+    async def close_browser_session(self) -> None:
         if not self.browser:
             return
 
@@ -926,7 +928,55 @@ class WebScrapingMixin:  # noqa: PLR0904
         # Safely read private nodriver PID. In tests/mocked sessions this can be non-int,
         # and in externally managed browser sessions it can be None.
         browser_pid = getattr(browser, "_process_pid", None)
-        # Let nodriver perform graceful shutdown first; only force-kill leftovers afterwards.
+        browser_process = getattr(browser, "_process", None)
+        # Close nodriver's websocket tasks before stopping the event loop. Browser.stop()
+        # schedules this cleanup without awaiting it, which can leave pending tasks behind.
+        try:
+            await browser.aclose()
+        finally:
+            try:
+                browser.stop()
+                if isinstance(browser_process, asyncio.subprocess.Process):
+                    await self._wait_for_browser_process_exit(browser_process)
+                # Browser.stop() schedules one final, idempotent aclose() call.
+                await asyncio.sleep(0)
+                self._kill_orphaned_browser_children(browser_pid)
+            finally:
+                self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
+
+    async def _wait_for_browser_process_exit(self, browser_process:asyncio.subprocess.Process) -> None:
+        try:
+            await asyncio.wait_for(
+                browser_process.wait(),
+                timeout = _BROWSER_PROCESS_EXIT_TIMEOUT_SECONDS,
+            )
+            return
+        except (TimeoutError, asyncio.TimeoutError, OSError) as exc:
+            LOG.debug("Browser process did not exit cleanly: %s", exc)
+
+        try:
+            if browser_process.returncode is None:
+                browser_process.kill()
+        except OSError as exc:
+            LOG.debug("Browser process could not be killed: %s", exc)
+
+        try:
+            await asyncio.wait_for(
+                browser_process.wait(),
+                timeout = _BROWSER_PROCESS_KILL_TIMEOUT_SECONDS,
+            )
+        except (TimeoutError, asyncio.TimeoutError, OSError) as exc:
+            LOG.debug("Browser process could not be reaped after being killed: %s", exc)
+
+    def _close_browser_session_nowait(self) -> None:
+        """Best-effort browser cleanup for destructors, where awaiting is impossible."""
+        if not self.browser:
+            return
+
+        LOG.debug("Closing Browser session...")
+        browser = self.browser
+        self.page = None  # pyright: ignore[reportAttributeAccessIssue]
+        browser_pid = getattr(browser, "_process_pid", None)
         try:
             browser.stop()
             self._kill_orphaned_browser_children(browser_pid)
