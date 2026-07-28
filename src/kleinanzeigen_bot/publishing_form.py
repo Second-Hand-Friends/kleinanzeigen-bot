@@ -35,6 +35,11 @@ from .utils.misc import ensure
 from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
 
 LOG:Final[_loggers.Logger] = _loggers.get_logger(__name__)
+_OTHER_SHIPPING_METHODS_XPATH:Final[str] = (
+    '//*[self::dialog[@open] or (@role="dialog" and not(@aria-hidden="true"))]'
+    '//*[contains(normalize-space(.), "Andere Versandmethoden")'
+    ' and not(.//*[contains(normalize-space(.), "Andere Versandmethoden")])]'
+)
 
 
 async def set_category(web:WebScrapingMixin, *, root_url:str, category:str | None, ad_file:str) -> None:
@@ -727,15 +732,18 @@ async def _set_configured_shipping_options(
 
     if mode == AdUpdateStrategy.MODIFY:
         try:
-            await web.web_find(By.XPATH, '//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
+            await web.web_find(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = short_timeout)
         except TimeoutError:
             await web.web_click(By.XPATH, '//button[contains(., "Zurück")]')
             try:
-                await web.web_find(By.XPATH, '//button[contains(., "Andere Versandmethoden")]', timeout = short_timeout)
+                await web.web_find(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = short_timeout)
             except TimeoutError:
                 await web.web_click(By.XPATH, '//button[contains(., "Zurück")]')
 
-    await web.web_click(By.XPATH, '//button[contains(., "Andere Versandmethoden")]')
+    # The redesign has rendered this action as different element types. Click
+    # its deepest text-bearing node so the event bubbles to whichever clickable
+    # ancestor the current dialog uses.
+    await web.web_click(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH)
     await set_shipping_options(web, ad_cfg, mode)
 
 

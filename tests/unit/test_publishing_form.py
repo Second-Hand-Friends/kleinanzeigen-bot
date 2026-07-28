@@ -20,8 +20,10 @@ from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import PublishingConfig
 from kleinanzeigen_bot.publishing_form import (
+    _OTHER_SHIPPING_METHODS_XPATH,  # noqa: PLC2701
     _select_button_combobox,  # noqa: PLC2701 - needed for coverage of React fiber selection
     _set_condition,  # noqa: PLC2701
+    _set_configured_shipping_options,  # noqa: PLC2701
     _special_attribute_candidate_priority,  # noqa: PLC2701
     city_option_text,
     fill_image_section,
@@ -1520,6 +1522,32 @@ class TestShippingOptionsDialog:
         else:
             el.attrs = {}
         return el
+
+    @pytest.mark.asyncio
+    async def test_open_dialog_action_is_tag_agnostic(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """The shipping action may be a button, link, span, or another clickable element."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock),
+        ):
+            await _set_configured_shipping_options(
+                test_bot,
+                ad_cfg,
+                AdUpdateStrategy.REPLACE,
+                test_bot.timeout("quick_dom"),
+            )
+
+        assert "self::dialog[@open]" in _OTHER_SHIPPING_METHODS_XPATH
+        assert "self::button" not in _OTHER_SHIPPING_METHODS_XPATH
+        assert "not(.//*[" in _OTHER_SHIPPING_METHODS_XPATH
+        mock_click.assert_any_await(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH)
 
     @pytest.mark.parametrize(
         "case",
