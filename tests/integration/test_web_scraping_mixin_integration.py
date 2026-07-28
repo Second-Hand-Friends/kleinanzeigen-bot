@@ -3,7 +3,6 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import platform
 
-import nodriver
 import pytest
 
 from kleinanzeigen_bot.utils.misc import ensure
@@ -16,7 +15,10 @@ pytestmark = pytest.mark.slow
 # and pytest handles verbosity with -v flag automatically
 
 
-async def atest_init() -> None:
+@pytest.mark.flaky(reruns = 5, reruns_delay = 10)
+@pytest.mark.itest
+@pytest.mark.asyncio
+async def test_init() -> None:
     web_scraping_mixin = WebScrapingMixin()
     if platform.system() == "Linux":
         # required for Ubuntu 24.04 or newer
@@ -25,14 +27,7 @@ async def atest_init() -> None:
     browser_path = web_scraping_mixin.get_compatible_browser()
     ensure(browser_path is not None, "Browser not auto-detected")
 
-    web_scraping_mixin.close_browser_session()
     try:
         await web_scraping_mixin.create_browser_session()
     finally:
-        web_scraping_mixin.close_browser_session()
-
-
-@pytest.mark.flaky(reruns = 5, reruns_delay = 10)
-@pytest.mark.itest
-def test_init() -> None:
-    nodriver.loop().run_until_complete(atest_init())  # type: ignore[attr-defined]
+        await web_scraping_mixin.close_browser_session()

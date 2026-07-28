@@ -9,7 +9,7 @@ import copy
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -671,7 +671,7 @@ async def test_status_guardrails(
         patch.object(bot, "load_ads", side_effect = _track_load_ads),
         patch.object(bot, "create_browser_session", side_effect = _track_browser),
         patch.object(bot, "login", side_effect = _track_browser),
-        patch.object(bot, "close_browser_session"),
+        patch.object(bot, "close_browser_session", new_callable = AsyncMock),
         patch(
             "kleinanzeigen_bot.ad_loading.load_ad_configs",
             return_value = [("/abs/a.yaml", "ads/a.yaml", _ad(id = 1), _raw())],

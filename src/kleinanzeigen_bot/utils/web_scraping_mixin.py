@@ -916,7 +916,7 @@ class WebScrapingMixin:  # noqa: PLR0904
             get_compatible_browser = self.get_compatible_browser,
         )
 
-    def close_browser_session(self) -> None:
+    async def close_browser_session(self) -> None:
         if not self.browser:
             return
 
@@ -926,7 +926,31 @@ class WebScrapingMixin:  # noqa: PLR0904
         # Safely read private nodriver PID. In tests/mocked sessions this can be non-int,
         # and in externally managed browser sessions it can be None.
         browser_pid = getattr(browser, "_process_pid", None)
-        # Let nodriver perform graceful shutdown first; only force-kill leftovers afterwards.
+        browser_process = getattr(browser, "_process", None)
+        # Close nodriver's websocket tasks before stopping the event loop. Browser.stop()
+        # schedules this cleanup without awaiting it, which can leave pending tasks behind.
+        try:
+            await browser.aclose()
+        finally:
+            try:
+                browser.stop()
+                if isinstance(browser_process, asyncio.subprocess.Process):
+                    await browser_process.wait()
+                # Browser.stop() schedules one final, idempotent aclose() call.
+                await asyncio.sleep(0)
+                self._kill_orphaned_browser_children(browser_pid)
+            finally:
+                self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
+
+    def _close_browser_session_nowait(self) -> None:
+        """Best-effort browser cleanup for destructors, where awaiting is impossible."""
+        if not self.browser:
+            return
+
+        LOG.debug("Closing Browser session...")
+        browser = self.browser
+        self.page = None  # pyright: ignore[reportAttributeAccessIssue]
+        browser_pid = getattr(browser, "_process_pid", None)
         try:
             browser.stop()
             self._kill_orphaned_browser_children(browser_pid)

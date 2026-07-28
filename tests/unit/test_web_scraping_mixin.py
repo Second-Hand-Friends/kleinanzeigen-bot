@@ -912,11 +912,13 @@ class TestSelectorTimeoutMessages:
 class TestWebScrapingSessionManagement:
     """Test session management edge cases in WebScrapingMixin."""
 
-    def test_close_browser_session_cleans_up_resources(self) -> None:
+    @pytest.mark.asyncio
+    async def test_close_browser_session_cleans_up_resources(self) -> None:
         """Ensure browser and page references are cleared and child processes are killed."""
         scraper = WebScrapingMixin()
         scraper.browser = MagicMock()
         scraper.browser._process_pid = 42
+        aclose_mock = scraper.browser.aclose = AsyncMock()
         stop_mock = scraper.browser.stop = MagicMock()
         scraper.page = MagicMock(spec = Page)
 
@@ -925,31 +927,36 @@ class TestWebScrapingSessionManagement:
             mock_child.is_running.return_value = True
             mock_proc.return_value.children.return_value = [mock_child]
 
-            scraper.close_browser_session()
+            await scraper.close_browser_session()
 
         mock_proc.assert_called_once_with(42)
+        aclose_mock.assert_awaited_once()
         stop_mock.assert_called_once()
         mock_child.kill.assert_called_once()
         assert scraper.browser is None
         assert scraper.page is None
 
-    def test_close_browser_session_idempotent(self) -> None:
+    @pytest.mark.asyncio
+    async def test_close_browser_session_idempotent(self) -> None:
         """Repeated calls should leave the state clean without re-running cleanup logic."""
         scraper = WebScrapingMixin()
         scraper.browser = MagicMock()
         scraper.browser._process_pid = 99
+        aclose_mock = scraper.browser.aclose = AsyncMock()
         stop_mock = scraper.browser.stop = MagicMock()
         scraper.page = MagicMock(spec = Page)
 
         with patch("psutil.Process") as mock_proc:
             mock_proc.return_value.children.return_value = []
-            scraper.close_browser_session()
-            scraper.close_browser_session()
+            await scraper.close_browser_session()
+            await scraper.close_browser_session()
 
         mock_proc.assert_called_once()
+        aclose_mock.assert_awaited_once()
         stop_mock.assert_called_once()
 
-    def test_close_browser_session_without_browser_skips_inspection(self) -> None:
+    @pytest.mark.asyncio
+    async def test_close_browser_session_without_browser_skips_inspection(self) -> None:
         """When no browser exists, no process inspection should run and the page should stay untouched."""
         scraper = WebScrapingMixin()
         scraper.browser = None  # type: ignore[unused-ignore,reportAttributeAccessIssue]
@@ -957,47 +964,53 @@ class TestWebScrapingSessionManagement:
         scraper.page = preserved_page
 
         with patch("psutil.Process") as mock_proc:
-            scraper.close_browser_session()
+            await scraper.close_browser_session()
 
         mock_proc.assert_not_called()
         assert scraper.page is preserved_page
 
-    def test_close_browser_session_handles_missing_children(self) -> None:
+    @pytest.mark.asyncio
+    async def test_close_browser_session_handles_missing_children(self) -> None:
         """Child-less browsers should still stop cleanly without raising."""
         scraper = WebScrapingMixin()
         scraper.browser = MagicMock()
         scraper.browser._process_pid = 123
+        scraper.browser.aclose = AsyncMock()
         stop_mock = scraper.browser.stop = MagicMock()
         scraper.page = MagicMock(spec = Page)
 
         with patch("psutil.Process") as mock_proc:
             mock_proc.return_value.children.return_value = []
-            scraper.close_browser_session()
+            await scraper.close_browser_session()
 
         mock_proc.assert_called_once()
         stop_mock.assert_called_once()
 
-    def test_close_browser_session_handles_parent_process_disappearing_after_stop(self) -> None:
+    @pytest.mark.asyncio
+    async def test_close_browser_session_handles_parent_process_disappearing_after_stop(self) -> None:
         """A browser that exits during stop() should still leave shutdown state clean."""
         scraper = WebScrapingMixin()
         scraper.browser = MagicMock()
         scraper.browser._process_pid = 777
+        scraper.browser.aclose = AsyncMock()
         stop_mock = scraper.browser.stop = MagicMock()
         scraper.page = MagicMock(spec = Page)
 
         with patch("psutil.Process", side_effect = psutil.NoSuchProcess(777)) as mock_proc:
-            scraper.close_browser_session()
+            await scraper.close_browser_session()
 
         mock_proc.assert_called_once_with(777)
         stop_mock.assert_called_once()
         assert scraper.browser is None
         assert scraper.page is None
 
-    def test_close_browser_session_skips_killing_stopped_children(self) -> None:
+    @pytest.mark.asyncio
+    async def test_close_browser_session_skips_killing_stopped_children(self) -> None:
         """Stopped child processes should not be force-killed."""
         scraper = WebScrapingMixin()
         scraper.browser = MagicMock()
         scraper.browser._process_pid = 456
+        scraper.browser.aclose = AsyncMock()
         stop_mock = scraper.browser.stop = MagicMock()
         scraper.page = MagicMock(spec = Page)
 
@@ -1005,7 +1018,7 @@ class TestWebScrapingSessionManagement:
             mock_child = MagicMock()
             mock_child.is_running.return_value = False
             mock_proc.return_value.children.return_value = [mock_child]
-            scraper.close_browser_session()
+            await scraper.close_browser_session()
 
         mock_proc.assert_called_once_with(456)
         stop_mock.assert_called_once()
@@ -1013,11 +1026,13 @@ class TestWebScrapingSessionManagement:
         assert scraper.browser is None
         assert scraper.page is None
 
-    def test_close_browser_session_stops_before_force_killing_children(self) -> None:
+    @pytest.mark.asyncio
+    async def test_close_browser_session_stops_before_force_killing_children(self) -> None:
         """Browser stop should run before force-killing child processes."""
         scraper = WebScrapingMixin()
         scraper.browser = MagicMock()
         scraper.browser._process_pid = 321
+        scraper.browser.aclose = AsyncMock()
         stopped = {"value": False}
 
         def mark_stopped() -> None:
@@ -1036,11 +1051,12 @@ class TestWebScrapingSessionManagement:
             mock_child.kill.side_effect = assert_stop_happened
             mock_proc.return_value.children.return_value = [mock_child]
 
-            scraper.close_browser_session()
+            await scraper.close_browser_session()
 
         stop_mock.assert_called_once()
         mock_child.kill.assert_called_once()
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "pid_value",
         [
@@ -1048,18 +1064,36 @@ class TestWebScrapingSessionManagement:
             pytest.param(MagicMock(), id = "non-int-pid"),
         ],
     )
-    def test_close_browser_session_skips_psutil_when_pid_is_invalid(self, pid_value:object) -> None:
+    async def test_close_browser_session_skips_psutil_when_pid_is_invalid(self, pid_value:object) -> None:
         """When _process_pid is not a valid int, psutil.Process should not be called but stop() should."""
         scraper = WebScrapingMixin()
         scraper.browser = MagicMock()
         scraper.browser._process_pid = pid_value
+        scraper.browser.aclose = AsyncMock()
         stop_mock = scraper.browser.stop = MagicMock()
         scraper.page = MagicMock(spec = Page)
 
         with patch("psutil.Process") as mock_proc:
-            scraper.close_browser_session()
+            await scraper.close_browser_session()
 
         mock_proc.assert_not_called()
+        stop_mock.assert_called_once()
+        assert scraper.browser is None
+        assert scraper.page is None
+
+    def test_close_browser_session_nowait_cleans_up_resources(self) -> None:
+        """Destructor cleanup should stop the browser without requiring an event loop."""
+        scraper = WebScrapingMixin()
+        scraper.browser = MagicMock()
+        scraper.browser._process_pid = 654
+        stop_mock = scraper.browser.stop = MagicMock()
+        scraper.page = MagicMock(spec = Page)
+
+        with patch("psutil.Process") as mock_proc:
+            mock_proc.return_value.children.return_value = []
+            scraper._close_browser_session_nowait()  # noqa: SLF001
+
+        mock_proc.assert_called_once_with(654)
         stop_mock.assert_called_once()
         assert scraper.browser is None
         assert scraper.page is None
@@ -1133,7 +1167,7 @@ class TestWebScrolling:
             mock_child = MagicMock()
             mock_child.is_running.return_value = True
             mock_proc.return_value.children.return_value = [mock_child]
-            web_scraper.close_browser_session()
+            await web_scraper.close_browser_session()
         assert web_scraper.browser is None
         assert web_scraper.page is None
         # Re-assign browser for new session
@@ -1780,7 +1814,7 @@ class TestWebScrapingBrowserConfiguration:
         scraper.browser.stop = MagicMock()
         with patch("psutil.Process") as mock_proc:
             mock_proc.return_value.children.return_value = []
-            scraper.close_browser_session()
+            await scraper.close_browser_session()
 
         # Second session: read state
         scraper2 = WebScrapingMixin()
@@ -1793,7 +1827,7 @@ class TestWebScrapingBrowserConfiguration:
         scraper2.browser.stop = MagicMock()
         with patch("psutil.Process") as mock_proc:
             mock_proc.return_value.children.return_value = []
-            scraper2.close_browser_session()
+            await scraper2.close_browser_session()
 
     @pytest.mark.asyncio
     async def test_session_creation_error_cleanup(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
@@ -1909,7 +1943,7 @@ class TestWebScrapingBrowserConfiguration:
 
         with patch("psutil.Process") as mock_proc:
             mock_proc.side_effect = psutil.NoSuchProcess(12345)
-            scraper.close_browser_session()
+            await scraper.close_browser_session()
 
         assert scraper.browser is None
         assert scraper.page is None
