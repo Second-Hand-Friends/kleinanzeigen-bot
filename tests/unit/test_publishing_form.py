@@ -21,6 +21,8 @@ from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import PublishingConfig
 from kleinanzeigen_bot.publishing_form import (
     _OTHER_SHIPPING_METHODS_XPATH,  # noqa: PLC2701
+    _SHIPPING_BACK_XPATH,  # noqa: PLC2701
+    _SHIPPING_SIZE_RADIO_XPATH,  # noqa: PLC2701
     _select_button_combobox,  # noqa: PLC2701 - needed for coverage of React fiber selection
     _set_condition,  # noqa: PLC2701
     _set_configured_shipping_options,  # noqa: PLC2701
@@ -1534,6 +1536,13 @@ class TestShippingOptionsDialog:
 
         with (
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(
+                test_bot,
+                "web_probe",
+                new_callable = AsyncMock,
+                side_effect = [None, MagicMock()],
+            ),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock),
         ):
@@ -1553,46 +1562,40 @@ class TestShippingOptionsDialog:
         )
 
     @pytest.mark.asyncio
-    async def test_modify_navigates_back_to_tag_agnostic_dialog_action(
+    async def test_navigates_back_to_direct_size_selection(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
-        """MODIFY mode retries the tag-agnostic action after navigating back one dialog step."""
+        """A nested dialog state is unwound before selecting a package size."""
         ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
-        events:list[str] = []
-
-        async def find_action(*_:Any, **__:Any) -> None:
-            events.append("find")
-            raise TimeoutError("action not on current step")
-
-        async def record_click(selector_type:By, selector_value:str, **_:Any) -> None:
-            if selector_type != By.XPATH:
-                return
-            if selector_value == '//button[contains(., "Zurück")]':
-                events.append("back")
-            elif selector_value == _OTHER_SHIPPING_METHODS_XPATH:
-                events.append("action")
 
         with (
             patch.object(
                 test_bot,
-                "web_find",
+                "web_probe",
                 new_callable = AsyncMock,
-                side_effect = find_action,
+                side_effect = [None, None, MagicMock(), MagicMock()],
             ),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = record_click),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock),
         ):
             await _set_configured_shipping_options(
                 test_bot,
                 ad_cfg,
-                AdUpdateStrategy.MODIFY,
+                AdUpdateStrategy.REPLACE,
                 test_bot.timeout("quick_dom"),
             )
 
-        assert events == ["find", "back", "find", "back", "action"]
+        assert any(
+            click.args == (By.XPATH, _SHIPPING_BACK_XPATH)
+            for click in mock_click.await_args_list
+        )
+        assert not any(
+            click.args == (By.XPATH, _OTHER_SHIPPING_METHODS_XPATH)
+            for click in mock_click.await_args_list
+        )
 
     @pytest.mark.parametrize(
         "case",
@@ -1915,6 +1918,8 @@ class TestShippingOptionsDialog:
             async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
                 if selector_type == By.ID and selector_value == "ad-category-path":
                     return category_path_elem
+                if selector_type == By.XPATH and selector_value == _SHIPPING_SIZE_RADIO_XPATH:
+                    return shipping_size_radio
                 return None
 
             mock_probe.side_effect = probe_side_effect

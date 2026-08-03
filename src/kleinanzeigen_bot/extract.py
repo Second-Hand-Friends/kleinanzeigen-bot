@@ -41,6 +41,10 @@ _RMTREE_RETRY_DELAY_SECONDS:Final[float] = 0.25
 _LOG_SNIPPET_LIMIT:Final[int] = 120
 _ELLIPSIS:Final[str] = "..."
 _ELLIPSIS_LEN:Final[int] = len(_ELLIPSIS)
+_OWNED_AD_TITLE_DECORATION_PREFIXES:Final[tuple[str, ...]] = ("Gelöscht",)
+_OWNED_AD_TITLE_DECORATION_RE:Final[re.Pattern[str]] = re.compile(
+    rf"^(?:{'|'.join(re.escape(prefix) for prefix in _OWNED_AD_TITLE_DECORATION_PREFIXES)})\s*•\s*"
+)
 _CONDITION_DISPLAY_TO_API:Final[dict[str, str]] = {
     "neu": "new",
     "sehr gut": "like_new",
@@ -282,20 +286,32 @@ class AdExtractor(WebScrapingMixin):
     def _render_download_folder_name(self, ad_id:int, title:str) -> str:
         return self._render_download_name_with_budget(self.config.download.folder_name_template, ad_id, title, self.config.download.folder_name_max_length)
 
-    async def download_ad(self, ad_id:int, *, active:bool | None = None) -> None:
+    async def download_ad(
+        self,
+        ad_id:int,
+        *,
+        active:bool | None = None,
+        owned_overview:bool = False,
+    ) -> None:
         """
         Downloads an ad to a specific location, specified by config and ad ID.
         NOTE: Requires that the driver session currently is on the ad page.
 
         :param ad_id: the ad ID
         :param active: optional override for ad activity state
+        :param owned_overview: whether the ad was discovered in the user's overview
         """
 
         download_dir = self.download_dir
         LOG.info("Using download directory: %s", download_dir)
 
         # Extract ad info into a staging directory and determine final target directory
-        ad_cfg, staging_dir, final_dir, ad_file_stem = await self._extract_ad_page_info_with_directory_handling(download_dir, ad_id, active_override = active)
+        ad_cfg, staging_dir, final_dir, ad_file_stem = await self._extract_ad_page_info_with_directory_handling(
+            download_dir,
+            ad_id,
+            active_override = active,
+            owned_overview = owned_overview,
+        )
 
         # Preserve local-only settings when re-downloading an existing ad
         await self._preserve_local_settings_from_existing_ad(ad_cfg, final_dir, ad_file_stem, ad_id)
@@ -614,7 +630,7 @@ class AdExtractor(WebScrapingMixin):
         """
         return await self.web_text(By.ID, "viewad-title")
 
-    async def _resolve_download_title(self, ad_id:int) -> str:
+    async def _resolve_download_title(self, ad_id:int, *, owned_overview:bool = False) -> str:
         """Return the canonical title for a downloaded ad."""
         cached_ad = self.published_ads_by_id.get(ad_id)
         if cached_ad is not None:
@@ -622,7 +638,15 @@ class AdExtractor(WebScrapingMixin):
             if isinstance(title, str) and title.strip():
                 return html.unescape(title.strip())
 
-        return await self._extract_title_from_ad_page()
+        page_title = await self._extract_title_from_ad_page()
+        if not owned_overview:
+            return page_title
+
+        cleaned_title = _OWNED_AD_TITLE_DECORATION_RE.sub("", page_title, count = 1).strip()
+        if cleaned_title and cleaned_title != page_title:
+            LOG.info("Removed owned-ad status decoration from downloaded ad %s title.", ad_id)
+            return cleaned_title
+        return page_title
 
     async def _extract_ad_page_info(
         self,
@@ -716,6 +740,7 @@ class AdExtractor(WebScrapingMixin):
         ad_id:int,
         *,
         active_override:bool | None = None,
+        owned_overview:bool = False,
     ) -> tuple[AdPartial, Path, Path, str]:
         """
         Extracts ad information and handles directory creation/renaming.
@@ -723,9 +748,10 @@ class AdExtractor(WebScrapingMixin):
         :param relative_directory: Base directory for downloads
         :param ad_id: The ad ID
         :param active_override: optional override for ad activity state
+        :param owned_overview: whether the ad was discovered in the user's overview
         :return: AdPartial with staging/final directory information and rendered ad file stem
         """
-        title = await self._resolve_download_title(ad_id)
+        title = await self._resolve_download_title(ad_id, owned_overview = owned_overview)
         LOG.info('Resolved title for ad %s: "%s"', ad_id, title)
 
         # Determine the final directory path

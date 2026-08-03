@@ -14,7 +14,7 @@ from gettext import gettext as _
 
 from nodriver.core.connection import ProtocolException
 
-from . import captcha_flow
+from . import captcha_flow, published_ads
 from .model.ad_model import Ad, AdUpdateStrategy
 from .model.config_model import CaptchaConfig
 from .utils import loggers as _loggers
@@ -23,6 +23,72 @@ from .utils.misc import ainput
 from .utils.web_scraping_mixin import By, WebScrapingMixin
 
 LOG = _loggers.get_logger(__name__)
+_PUBLISHED_AD_RECOVERY_DELAYS_MS = (0, 1_000, 2_000, 4_000)
+
+
+async def _is_idless_publish_success_page(web:WebScrapingMixin) -> bool:
+    """Detect the redesigned successful publish page that exposes no ad ID."""
+    try:
+        result = await web.web_execute(r"""
+(() => {
+    const bodyText = (document.body?.innerText || '').replace(/\s+/g, ' ').trim();
+    const hasManageAdsControl = [...document.querySelectorAll('a, button')].some((element) =>
+        (element.innerText || '').replace(/\s+/g, ' ').trim().includes('Zu meinen Anzeigen')
+    );
+    return bodyText.includes('Geschafft!') && hasManageAdsControl;
+})()
+""")
+    except (TimeoutError, ProtocolException):
+        return False
+    return result is True
+
+
+async def _try_recover_ad_id_from_published_ads(
+    web:WebScrapingMixin,
+    *,
+    root_url:str,
+    title:str,
+    known_published_ad_ids:frozenset[int] | None,
+) -> int | None:
+    """Recover exactly one newly published exact-title ad from a complete list."""
+    if known_published_ad_ids is None:
+        LOG.warning("Published-ad ID recovery skipped because the pre-submit list was incomplete")
+        return None
+
+    for delay_ms in _PUBLISHED_AD_RECOVERY_DELAYS_MS:
+        if delay_ms:
+            await web.web_sleep(delay_ms)
+        try:
+            current_ads = await published_ads.fetch_published_ads(web, root_url, strict = True)
+        except published_ads.PublishedAdsFetchIncompleteError as ex:
+            LOG.debug("Strict published-ad recovery fetch failed: %s", ex)
+            continue
+
+        candidates:set[int] = set()
+        for published_ad in current_ads:
+            if published_ad.get("title") != title:
+                continue
+            raw_id = published_ad.get("id")
+            if raw_id is None:
+                continue
+            try:
+                candidate_id = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if candidate_id not in known_published_ad_ids:
+                candidates.add(candidate_id)
+
+        if len(candidates) == 1:
+            return next(iter(candidates))
+        if len(candidates) > 1:
+            LOG.warning(
+                "Published-ad ID recovery was ambiguous for '%s'; refusing candidate IDs: %s",
+                title,
+                sorted(candidates),
+            )
+            return None
+
+    return None
 
 
 async def _try_recover_ad_id_from_redirect(
@@ -91,6 +157,8 @@ async def submit_and_confirm_ad(
     mode:AdUpdateStrategy,
     *,
     captcha_config:CaptchaConfig,
+    root_url:str,
+    known_published_ad_ids:frozenset[int] | None = None,
 ) -> int:
     """Submit the ad form, handle post-submit dialogs, wait for confirmation,
     and extract the published ad ID.
@@ -130,6 +198,7 @@ async def submit_and_confirm_ad(
 
     # Everything after the first click is uncertain: the ad may already have been submitted.
     ad_id:int | None = None
+    idless_success_detected = False
     try:
         quick_dom = web.timeout("quick_dom")
 
@@ -171,11 +240,17 @@ async def submit_and_confirm_ad(
 
         confirmation_timeout = web.timeout("publishing_confirmation")
 
-        async def _check_confirmation_url() -> bool:
+        async def _check_confirmation_state() -> bool:
+            nonlocal idless_success_detected
             url = str(await web.web_execute("window.location.href"))
-            return "p-anzeige-aufgeben-bestaetigung.html?adId=" in url
+            if "p-anzeige-aufgeben-bestaetigung.html?adId=" in url:
+                return True
+            if mode == AdUpdateStrategy.REPLACE and await _is_idless_publish_success_page(web):
+                idless_success_detected = True
+                return True
+            return False
 
-        await web.web_await(_check_confirmation_url, timeout = confirmation_timeout)
+        await web.web_await(_check_confirmation_state, timeout = confirmation_timeout)
 
         # extract the ad id from the URL's query parameter (use JS for fresh URL, not stale page url)
         current_url = str(await web.web_execute("window.location.href"))
@@ -187,18 +262,37 @@ async def submit_and_confirm_ad(
         # or the URL was redirected between polling and extraction (race condition).
         # Try to recover the ad ID from tracking data on the current page.
         LOG.debug("Confirmation URL polling or extraction failed (%s), attempting tracking data fallback...", type(ex).__name__)
+        recovered_from_tracking = False
         try:
             ad_id = await _try_recover_ad_id_from_redirect(web, pre_submit_referrer = pre_submit_referrer)
+            recovered_from_tracking = ad_id is not None
         except Exception as fallback_ex:  # noqa: BLE001
             LOG.debug("Tracking data fallback failed: %s", fallback_ex)
+
+        if ad_id is None and idless_success_detected and mode == AdUpdateStrategy.REPLACE:
+            try:
+                ad_id = await _try_recover_ad_id_from_published_ads(
+                    web,
+                    root_url = root_url,
+                    title = ad_cfg.title,
+                    known_published_ad_ids = known_published_ad_ids,
+                )
+            except Exception as fallback_ex:  # noqa: BLE001
+                LOG.debug("Published-ad list fallback failed: %s", fallback_ex)
+            if ad_id is not None:
+                LOG.warning(
+                    "Confirmation page exposed no ad ID; recovered ad ID %s from the published ads list",
+                    ad_id,
+                )
 
         if ad_id is None:
             raise PublishSubmissionUncertainError("submission may have succeeded before failure") from ex
 
-        LOG.warning(
-            "Confirmation page redirected too fast; extracted ad ID %s from page tracking data",
-            ad_id,
-        )
+        if recovered_from_tracking:
+            LOG.warning(
+                "Confirmation page redirected too fast; extracted ad ID %s from page tracking data",
+                ad_id,
+            )
 
     # Defensive guard: ad_id must be set by now — either from the confirmation URL
     # (try block) or the tracking fallback (except block). The except block always

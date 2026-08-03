@@ -7,7 +7,7 @@
 import json
 import re
 from gettext import gettext as _
-from typing import Any, Final, Sequence, cast
+from typing import Any, Final, Literal, Sequence, cast
 
 from .ad_description import get_ad_description
 from .ad_form_helpers import (
@@ -35,11 +35,17 @@ from .utils.misc import ensure
 from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
 
 LOG:Final[_loggers.Logger] = _loggers.get_logger(__name__)
+_OPEN_SHIPPING_DIALOG_XPATH:Final[str] = '//*[self::dialog[@open] or (@role="dialog" and not(@aria-hidden="true"))]'
 _OTHER_SHIPPING_METHODS_XPATH:Final[str] = (
-    '//*[self::dialog[@open] or (@role="dialog" and not(@aria-hidden="true"))]'
-    '//*[contains(normalize-space(.), "Andere Versandmethoden")'
+    _OPEN_SHIPPING_DIALOG_XPATH
+    + '//*[contains(normalize-space(.), "Andere Versandmethoden")'
     ' and not(.//*[contains(normalize-space(.), "Andere Versandmethoden")])]'
 )
+_SHIPPING_SIZE_RADIO_XPATH:Final[str] = (
+    f'{_OPEN_SHIPPING_DIALOG_XPATH}//input[@type="radio" and '
+    '(@value="SMALL" or @value="MEDIUM" or @value="LARGE")]'
+)
+_SHIPPING_BACK_XPATH:Final[str] = f'{_OPEN_SHIPPING_DIALOG_XPATH}//button[contains(., "Zurück")]'
 
 
 async def set_category(web:WebScrapingMixin, *, root_url:str, category:str | None, ad_file:str) -> None:
@@ -730,21 +736,38 @@ async def _set_configured_shipping_options(
         LOG.debug("Shipping enabled toggle not found before options dialog: %s", ex)
     await web.web_click(By.ID, "ad-shipping-options")
 
-    if mode == AdUpdateStrategy.MODIFY:
-        try:
-            await web.web_find(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = short_timeout)
-        except TimeoutError:
-            await web.web_click(By.XPATH, '//button[contains(., "Zurück")]', timeout = short_timeout)
-            try:
-                await web.web_find(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = short_timeout)
-            except TimeoutError:
-                await web.web_click(By.XPATH, '//button[contains(., "Zurück")]', timeout = short_timeout)
-
-    # The redesign has rendered this action as different element types. Click
-    # its deepest text-bearing node so the event bubbles to whichever clickable
-    # ancestor the current dialog uses.
-    await web.web_click(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = short_timeout)
+    await _open_shipping_size_selection(web, short_timeout)
     await set_shipping_options(web, ad_cfg, mode)
+
+
+async def _open_shipping_size_selection(
+    web:WebScrapingMixin,
+    short_timeout:int | float,
+) -> Literal["direct_size", "via_other_methods"]:
+    """Reach a supported shipping size pane across Kleinanzeigen A/B variants."""
+    max_back_steps = 2
+    for back_steps in range(max_back_steps + 1):
+        size_radio = await web.web_probe(By.XPATH, _SHIPPING_SIZE_RADIO_XPATH, timeout = short_timeout)
+        if size_radio is not None:
+            LOG.debug("Shipping dialog route: direct size selection (%s back step(s)).", back_steps)
+            return "direct_size"
+
+        other_methods = await web.web_probe(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = short_timeout)
+        if other_methods is not None:
+            await web.web_click(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = short_timeout)
+            await web.web_find(By.XPATH, _SHIPPING_SIZE_RADIO_XPATH, timeout = short_timeout)
+            LOG.debug("Shipping dialog route: Andere Versandmethoden (%s back step(s)).", back_steps)
+            return "via_other_methods"
+
+        if back_steps == max_back_steps:
+            break
+        back_button = await web.web_probe(By.XPATH, _SHIPPING_BACK_XPATH, timeout = short_timeout)
+        if back_button is None:
+            break
+        await web.web_click(By.XPATH, _SHIPPING_BACK_XPATH, timeout = short_timeout)
+        await web.web_sleep(300, 500)
+
+    raise TimeoutError(_("Failed to configure shipping options in dialog!"))
 
 
 async def _enable_platform_default_shipping(

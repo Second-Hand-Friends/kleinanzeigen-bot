@@ -78,7 +78,7 @@ async def _download_ad_with_resolved_state(
         published_ad = published_ads_by_id.get(ad_id, {})
         LOG.debug("Ad %d has state '%s'. Saving as inactive.", ad_id, published_ad.get("state", "unknown"))
 
-    await ad_extractor.download_ad(ad_id, active = resolved.active)
+    await ad_extractor.download_ad(ad_id, active = resolved.active, owned_overview = True)
 
 
 async def _fetch_published_ads_by_id(

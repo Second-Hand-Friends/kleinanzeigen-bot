@@ -187,6 +187,7 @@ kleinanzeigen_bot/publishing_workflow.py:
 
   _fetch_published_ads_for_publish:
     "Skipping title-based publishes because full published-ad list could not be fetched before publish: %s": "Titelbasierte Veröffentlichungen werden übersprungen, weil die vollständige Liste veröffentlichter Anzeigen vor der Veröffentlichung nicht abgerufen werden konnte: %s"
+    "Complete published-ad snapshot unavailable; no-ID publish recovery is disabled: %s": "Vollständiger Stand der veröffentlichten Anzeigen nicht verfügbar; die Wiederherstellung nach Veröffentlichung ohne Anzeigen-ID ist deaktiviert: %s"
 
   publish_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
@@ -249,6 +250,9 @@ kleinanzeigen_bot/published_ads.py:
 #################################################
 kleinanzeigen_bot/publishing_form.py:
 #################################################
+  _open_shipping_size_selection:
+    "Failed to configure shipping options in dialog!": "Versandoptionen konnten im Dialog nicht konfiguriert werden!"
+
   set_contact_fields:
     "Could not set contact street.": "Kontaktstraße konnte nicht gesetzt werden."
     "Could not set contact name.": "Kontaktname konnte nicht gesetzt werden."
@@ -371,12 +375,17 @@ kleinanzeigen_bot/publishing_persistence.py:
 #################################################
 kleinanzeigen_bot/publishing_submission.py:
 #################################################
+  _try_recover_ad_id_from_published_ads:
+    "Published-ad ID recovery skipped because the pre-submit list was incomplete": "Wiederherstellung der Anzeigen-ID übersprungen, weil die Liste vor dem Absenden unvollständig war"
+    "Published-ad ID recovery was ambiguous for '%s'; refusing candidate IDs: %s": "Wiederherstellung der Anzeigen-ID für '%s' war mehrdeutig; mögliche IDs werden abgelehnt: %s"
+
   submit_and_confirm_ad:
     "############################################": "############################################"
     "Dismissing upsell dialog...": "Upsell-Dialog schließen..."
     "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
     "Confirmation page redirected too fast; extracted ad ID %s from page tracking data": "Bestätigungsseite wurde zu schnell weitergeleitet; Anzeigen-ID %s aus Seiten-Trackingdaten extrahiert"
+    "Confirmation page exposed no ad ID; recovered ad ID %s from the published ads list": "Bestätigungsseite enthielt keine Anzeigen-ID; Anzeigen-ID %s aus der Liste veröffentlichter Anzeigen wiederhergestellt"
     "ad_id is unexpectedly None after confirmation flow for %s": "ad_id ist unerwartet None nach dem Bestätigungsablauf für %s"
 
 #################################################
@@ -587,6 +596,9 @@ kleinanzeigen_bot/price_reduction.py:
 #################################################
 kleinanzeigen_bot/extract.py:
 #################################################
+  _resolve_download_title:
+    "Removed owned-ad status decoration from downloaded ad %s title.": "Statuspräfix aus dem Titel der eigenen heruntergeladenen Anzeige %s entfernt."
+
   download_ad:
     "Using download directory: %s": "Verwende Download-Verzeichnis: %s"
 

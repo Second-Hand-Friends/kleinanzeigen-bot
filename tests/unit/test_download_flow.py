@@ -288,7 +288,11 @@ class TestDownloadFlow:
         mock_fetch_published_ads.assert_awaited_once_with(test_bot, test_bot.root_url, strict = False)
 
         # Verify download_ad called with correct active parameter
-        extractor_mock.download_ad.assert_awaited_once_with(123, active = scenario["expected_active"])
+        extractor_mock.download_ad.assert_awaited_once_with(
+            123,
+            active = scenario["expected_active"],
+            owned_overview = True,
+        )
 
         # Verify ownership warning only when expected
         ownership_warnings = [msg for msg in caplog.messages if "found in overview but not in published profile" in msg]
@@ -404,7 +408,11 @@ class TestDownloadFlow:
         mock_fetch_published_ads.assert_awaited_once_with(test_bot, test_bot.root_url, strict = False)
 
         # Verify download_ad called with correct active parameter
-        extractor_mock.download_ad.assert_awaited_once_with(999, active = scenario["expected_active"])
+        extractor_mock.download_ad.assert_awaited_once_with(
+            999,
+            active = scenario["expected_active"],
+            owned_overview = True,
+        )
 
     @pytest.mark.asyncio
     async def test_download_ads_new_selector_skips_already_saved(
@@ -512,7 +520,11 @@ class TestDownloadFlow:
             )
 
         # Verify download_ad was called with active=False (not in profile)
-        extractor_mock.download_ad.assert_awaited_once_with(999, active = False)
+        extractor_mock.download_ad.assert_awaited_once_with(
+            999,
+            active = False,
+            owned_overview = True,
+        )
 
     @pytest.mark.asyncio
     async def test_download_ads_all_selector_skips_when_navigation_fails(
@@ -582,4 +594,8 @@ class TestDownloadFlow:
             )
 
         # All non-"active" states should result in active=False
-        extractor_mock.download_ad.assert_awaited_once_with(123, active = False)
+        extractor_mock.download_ad.assert_awaited_once_with(
+            123,
+            active = False,
+            owned_overview = True,
+        )

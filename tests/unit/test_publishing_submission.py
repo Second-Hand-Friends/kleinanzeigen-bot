@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Tests for publishing submission functionality."""
 
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -135,6 +136,7 @@ class TestSubmitAndConfirmAd:
             result = await publishing_submission.submit_and_confirm_ad(
                 test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
                 captcha_config = captcha_config,
+                root_url = test_bot.root_url,
             )
 
         assert result == 12345
@@ -163,6 +165,7 @@ class TestSubmitAndConfirmAd:
             result = await publishing_submission.submit_and_confirm_ad(
                 test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
                 captcha_config = captcha_config,
+                root_url = test_bot.root_url,
             )
 
         assert result == 12345
@@ -195,6 +198,7 @@ class TestSubmitAndConfirmAd:
             result = await publishing_submission.submit_and_confirm_ad(
                 test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
                 captcha_config = captcha_config,
+                root_url = test_bot.root_url,
             )
 
         assert result == 12345
@@ -221,6 +225,7 @@ class TestSubmitAndConfirmAd:
             result = await publishing_submission.submit_and_confirm_ad(
                 test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
                 captcha_config = captcha_config,
+                root_url = test_bot.root_url,
             )
 
         assert result == 12345
@@ -247,6 +252,7 @@ class TestSubmitAndConfirmAd:
             result = await publishing_submission.submit_and_confirm_ad(
                 test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
                 captcha_config = captcha_config,
+                root_url = test_bot.root_url,
             )
 
         assert result == 99999
@@ -272,4 +278,124 @@ class TestSubmitAndConfirmAd:
             await publishing_submission.submit_and_confirm_ad(
                 test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
                 captcha_config = captcha_config,
+                root_url = test_bot.root_url,
             )
+
+
+class TestPublishedAdsRecovery:
+    """Tests for fail-closed recovery from a complete published-ad snapshot."""
+
+    @pytest.mark.asyncio
+    async def test_requires_complete_pre_submit_baseline(self, test_bot:KleinanzeigenBot) -> None:
+        with patch(
+            "kleinanzeigen_bot.publishing_submission.published_ads.fetch_published_ads",
+            new_callable = AsyncMock,
+        ) as fetch_mock:
+            result = await publishing_submission._try_recover_ad_id_from_published_ads(
+                test_bot,
+                root_url = test_bot.root_url,
+                title = "Test Ad Title",
+                known_published_ad_ids = None,
+            )
+
+        assert result is None
+        fetch_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_retries_until_one_new_exact_title_id_appears(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch(
+                "kleinanzeigen_bot.publishing_submission.published_ads.fetch_published_ads",
+                new_callable = AsyncMock,
+                side_effect = [
+                    [{"id": 10, "state": "active", "title": "Test Ad Title"}],
+                    [
+                        {"id": 10, "state": "active", "title": "Test Ad Title"},
+                        {"id": "11", "state": "active", "title": "Test Ad Title"},
+                        {"id": 12, "state": "active", "title": "Test Ad Title extra"},
+                    ],
+                ],
+            ) as fetch_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
+        ):
+            result = await publishing_submission._try_recover_ad_id_from_published_ads(
+                test_bot,
+                root_url = test_bot.root_url,
+                title = "Test Ad Title",
+                known_published_ad_ids = frozenset({10}),
+            )
+
+        assert result == 11
+        assert fetch_mock.await_count == 2
+        sleep_mock.assert_awaited_once_with(1_000)
+
+    @pytest.mark.asyncio
+    async def test_rejects_ambiguous_new_exact_title_ids(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch(
+                "kleinanzeigen_bot.publishing_submission.published_ads.fetch_published_ads",
+                new_callable = AsyncMock,
+                return_value = [
+                    {"id": 11, "state": "active", "title": "Test Ad Title"},
+                    {"id": 12, "state": "active", "title": "Test Ad Title"},
+                ],
+            ),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
+        ):
+            result = await publishing_submission._try_recover_ad_id_from_published_ads(
+                test_bot,
+                root_url = test_bot.root_url,
+                title = "Test Ad Title",
+                known_published_ad_ids = frozenset({10}),
+            )
+
+        assert result is None
+        sleep_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_submit_recovers_id_after_explicit_idless_success(self, test_bot:KleinanzeigenBot) -> None:
+        ad = _make_min_ad()
+
+        async def await_condition(condition:Any, **_:object) -> bool:
+            return bool(await condition())
+
+        with (
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(
+                test_bot,
+                "web_execute",
+                new_callable = AsyncMock,
+                side_effect = ["", f"{test_bot.root_url}/done", True, f"{test_bot.root_url}/done"],
+            ),
+            patch(
+                "kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect",
+                new_callable = AsyncMock,
+                return_value = None,
+            ),
+            patch(
+                "kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_published_ads",
+                new_callable = AsyncMock,
+                return_value = 777,
+            ) as recover_mock,
+        ):
+            result = await publishing_submission.submit_and_confirm_ad(
+                test_bot,
+                "test.yaml",
+                ad,
+                AdUpdateStrategy.REPLACE,
+                captcha_config = test_bot.config.captcha,
+                root_url = test_bot.root_url,
+                known_published_ad_ids = frozenset({10}),
+            )
+
+        assert result == 777
+        recover_mock.assert_awaited_once_with(
+            test_bot,
+            root_url = test_bot.root_url,
+            title = ad.title,
+            known_published_ad_ids = frozenset({10}),
+        )

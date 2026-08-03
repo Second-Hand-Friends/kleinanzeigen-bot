@@ -416,7 +416,6 @@ class TestKleinanzeigenBotPublishAdsBasics:
         ad_cfg_orig = copy.deepcopy(base_ad_config)
         ad_file = "ad.yaml"
 
-        non_strict_ads = [{"id": 10, "state": "active"}]
         strict_ads = [
             {"id": 10, "state": "active"},
             {"id": 11, "state": "active"},
@@ -426,7 +425,7 @@ class TestKleinanzeigenBotPublishAdsBasics:
             patch(
                 "kleinanzeigen_bot.published_ads.fetch_published_ads",
                 new_callable = AsyncMock,
-                side_effect = [non_strict_ads, strict_ads],
+                return_value = strict_ads,
             ) as fetch_mock,
             patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock) as publish_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
@@ -434,10 +433,7 @@ class TestKleinanzeigenBotPublishAdsBasics:
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
-            fetch_mock.assert_has_awaits([
-                call(test_bot, test_bot.root_url),
-                call(test_bot, test_bot.root_url, strict = True),
-            ])
+            fetch_mock.assert_awaited_once_with(test_bot, test_bot.root_url, strict = True)
             assert publish_mock.await_count == 1
             assert publish_mock.call_args.args[4] == strict_ads
 
@@ -462,7 +458,7 @@ class TestKleinanzeigenBotPublishAdsBasics:
             patch(
                 "kleinanzeigen_bot.published_ads.fetch_published_ads",
                 new_callable = AsyncMock,
-                side_effect = [[], PublishedAdsFetchIncompleteError("incomplete published-ad fetch")],
+                side_effect = [PublishedAdsFetchIncompleteError("incomplete published-ad fetch"), []],
             ) as fetch_mock,
             patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock) as publish_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
@@ -482,7 +478,7 @@ class TestKleinanzeigenBotPublishAdsBasics:
             assert any("DONE: (Re-)published 0 ads (1 failed after retries)" in record.getMessage() for record in summary)
 
     @pytest.mark.asyncio
-    async def test_publish_ads_keep_old_does_not_require_strict_title_cleanup_fetch(
+    async def test_publish_ads_keep_old_falls_back_when_strict_recovery_snapshot_fails(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
@@ -500,7 +496,7 @@ class TestKleinanzeigenBotPublishAdsBasics:
             patch(
                 "kleinanzeigen_bot.published_ads.fetch_published_ads",
                 new_callable = AsyncMock,
-                return_value = published_ads,
+                side_effect = [PublishedAdsFetchIncompleteError("incomplete published-ad fetch"), published_ads],
             ) as fetch_mock,
             patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock) as publish_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
@@ -508,9 +504,13 @@ class TestKleinanzeigenBotPublishAdsBasics:
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
-            fetch_mock.assert_awaited_once_with(test_bot, test_bot.root_url)
+            fetch_mock.assert_has_awaits([
+                call(test_bot, test_bot.root_url, strict = True),
+                call(test_bot, test_bot.root_url),
+            ])
             publish_mock.assert_awaited_once()
             assert publish_mock.call_args.args[4] == published_ads
+            assert publish_mock.call_args.kwargs["known_published_ad_ids"] is None
             delete_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
