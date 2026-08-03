@@ -101,7 +101,8 @@ async def publish_ad(
     config:Config,
     keep_old_ads:bool,
     config_file_path:str,
-) -> None:
+    known_published_ad_ids:frozenset[int] | None = None,
+) -> int:
     """Publish or update an ad on Kleinanzeigen.
 
     Args:
@@ -118,6 +119,12 @@ async def publish_ad(
         keep_old_ads: If True, skip old-ad deletion.
         config_file_path: Path to the config file (for relative path
             resolution).
+        known_published_ad_ids: IDs from a complete pre-submit snapshot. ``None``
+            disables ID-less publish recovery because ownership cannot be
+            established safely.
+
+    Returns:
+        The resolved ID of the published or updated ad.
     """
     old_ad_id = ad_cfg.id
 
@@ -167,6 +174,8 @@ async def publish_ad(
     ad_id = await _publishing_submission.submit_and_confirm_ad(
         web, ad_file, ad_cfg, mode,
         captcha_config = config.captcha,
+        root_url = root_url,
+        known_published_ad_ids = known_published_ad_ids,
     )
 
     try:
@@ -182,6 +191,8 @@ async def publish_ad(
         )
         raise PostPublishPersistenceError(ad_id = ad_id, ad_title = ad_cfg.title, original = ex) from ex
 
+    return ad_id
+
 
 async def _fetch_published_ads_for_publish(
     web:WebScrapingMixin,
@@ -191,31 +202,56 @@ async def _fetch_published_ads_for_publish(
     *,
     keep_old_ads:bool,
 ) -> tuple[list[PublishedAd], list[PublishedAd] | None, bool]:
-    """Fetch published ads for publish flow, strictly when title cleanup needs it."""
+    """Fetch published ads and a complete baseline for ownership-critical work.
+
+    Returns:
+        The ads used for matching, the complete pre-submit snapshot (or
+        ``None`` when unavailable), and whether publishing must fail closed
+        without that complete snapshot.
+    """
     require_strict_fetch = (
         not keep_old_ads
         and config.publishing.delete_old_ads == "BEFORE_PUBLISH"
         and config.publishing.delete_old_ads_by_title
         and any(ad_cfg.id is None for _ad_file, ad_cfg, _ad_cfg_orig in ad_cfgs)
     )
-    published_ads_list = await published_ads.fetch_published_ads(web, root_url)
-    strict_published_ads_list:list[PublishedAd] | None = None
-
-    if require_strict_fetch:
-        try:
-            strict_published_ads_list = await published_ads.fetch_published_ads(
-                web,
-                root_url,
-                strict = True,
-            )
-        except PublishedAdsFetchIncompleteError as ex:
+    try:
+        strict_published_ads_list = await published_ads.fetch_published_ads(
+            web,
+            root_url,
+            strict = True,
+        )
+        published_ads_list = strict_published_ads_list
+    except PublishedAdsFetchIncompleteError as ex:
+        strict_published_ads_list = None
+        if require_strict_fetch:
             LOG.error(
                 "Skipping title-based publishes because full published-ad list could not "
                 "be fetched before publish: %s",
                 ex,
             )
+        else:
+            LOG.warning(
+                "Complete published-ad snapshot unavailable; no-ID publish recovery is disabled: %s",
+                ex,
+            )
+        published_ads_list = await published_ads.fetch_published_ads(web, root_url)
 
     return published_ads_list, strict_published_ads_list, require_strict_fetch
+
+
+def _published_ad_ids(ads:list[PublishedAd]) -> set[int]:
+    """Return parseable IDs from a complete published-ad snapshot."""
+    result:set[int] = set()
+    for published_ad in ads:
+        raw_id = published_ad.get("id")
+        if raw_id is None:
+            continue
+        try:
+            result.add(int(raw_id))
+        except (TypeError, ValueError):
+            continue
+    return result
 
 
 async def publish_ads(
@@ -252,6 +288,11 @@ async def publish_ads(
         ad_cfgs,
         keep_old_ads = keep_old_ads,
     )
+    known_published_ad_ids = (
+        _published_ad_ids(strict_published_ads_list)
+        if strict_published_ads_list is not None
+        else None
+    )
 
     for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ad_cfgs, start = 1):
         LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ad_cfgs), ad_cfg.title, ad_file)
@@ -287,13 +328,20 @@ async def publish_ads(
                 # so retries remain idempotent for a single eligible reduction cycle.
                 ad_cfg.price = baseline_price
                 ad_cfg.price_reduction_count = baseline_price_reduction_count
-                await publish_ad(
+                resolved_ad_id = await publish_ad(
                     web, ad_file, ad_cfg, ad_cfg_orig,
                     published_ads_for_matching, AdUpdateStrategy.REPLACE,
                     root_url = root_url, config = config,
                     keep_old_ads = keep_old_ads,
                     config_file_path = config_file_path,
+                    known_published_ad_ids = (
+                        frozenset(known_published_ad_ids)
+                        if known_published_ad_ids is not None
+                        else None
+                    ),
                 )
+                if known_published_ad_ids is not None and isinstance(resolved_ad_id, int):
+                    known_published_ad_ids.add(resolved_ad_id)
                 success = True
                 break  # Publish succeeded, exit retry loop
             except asyncio.CancelledError:
@@ -328,6 +376,8 @@ async def publish_ads(
                 failed_count += 1
                 break
             except PostPublishPersistenceError as ex:
+                if known_published_ad_ids is not None and ex.ad_id is not None:
+                    known_published_ad_ids.add(ex.ad_id)
                 if capture_diagnostics:
                     await capture_diagnostics(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
                 LOG.warning(
@@ -451,6 +501,7 @@ async def update_ads(
                     root_url = root_url, config = config,
                     keep_old_ads = keep_old_ads,
                     config_file_path = config_file_path,
+                    known_published_ad_ids = None,
                 )
                 success = True
                 break

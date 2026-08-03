@@ -1000,12 +1000,15 @@ class TestAdExtractorContent:
         assert ad_cfg.created_on.isoformat().startswith("2025-02-03")
 
     @pytest.mark.asyncio
-    async def test_resolve_download_title_prefers_published_metadata(self, test_extractor:extract_module.AdExtractor) -> None:
-        """Use the clean manage-ads title for owned ads instead of the page title."""
+    async def test_resolve_download_title_prefers_published_metadata_for_owned_overview(
+        self,
+        test_extractor:extract_module.AdExtractor,
+    ) -> None:
+        """Use the clean manage-ads title even for an owned-overview download."""
         test_extractor.published_ads_by_id = {12345: {"id": 12345, "title": " Clean API Title "}}
 
         with patch.object(test_extractor, "_extract_title_from_ad_page", new_callable = AsyncMock) as mock_extract_title:
-            title = await test_extractor._resolve_download_title(12345)
+            title = await test_extractor._resolve_download_title(12345, owned_overview = True)
 
         assert title == "Clean API Title"
         mock_extract_title.assert_not_called()
@@ -1030,6 +1033,49 @@ class TestAdExtractorContent:
             title = await test_extractor._resolve_download_title(12345)
 
         assert title == "Page Title"
+
+    @pytest.mark.asyncio
+    async def test_resolve_download_title_strips_deleted_decoration_for_owned_overview_ad(
+        self,
+        test_extractor:extract_module.AdExtractor,
+    ) -> None:
+        """Strip a verified status decoration only on an owned overview fallback."""
+        test_extractor.published_ads_by_id = {}
+
+        with patch.object(
+            test_extractor,
+            "_extract_title_from_ad_page",
+            new_callable = AsyncMock,
+            return_value = "Gelöscht • Original title",
+        ):
+            title = await test_extractor._resolve_download_title(12345, owned_overview = True)
+
+        assert title == "Original title"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "page_title",
+        ["Gelöscht • Original title", "Pausiert • Original title"],
+    )
+    async def test_resolve_download_title_keeps_decorations_outside_verified_owned_context(
+        self,
+        test_extractor:extract_module.AdExtractor,
+        page_title:str,
+    ) -> None:
+        """Manual downloads and unverified status words keep the literal page title."""
+        test_extractor.published_ads_by_id = {}
+
+        with patch.object(
+            test_extractor,
+            "_extract_title_from_ad_page",
+            new_callable = AsyncMock,
+            return_value = page_title,
+        ):
+            manual_title = await test_extractor._resolve_download_title(12345)
+            owned_title = await test_extractor._resolve_download_title(12345, owned_overview = True)
+
+        assert manual_title == page_title
+        assert owned_title == ("Original title" if page_title.startswith("Gelöscht") else page_title)
 
     @pytest.mark.asyncio
     async def test_cached_title_entities_are_decoded_before_title_validation(
@@ -1664,7 +1710,10 @@ class TestAdExtractorDownload:
 
             await extractor.download_ad(12345, active = False)
 
-            mock_extract_with_dir.assert_awaited_once_with(download_base, 12345, active_override = False)
+            await_args = mock_extract_with_dir.await_args
+            assert await_args is not None
+            assert await_args.args == (download_base, 12345)
+            assert await_args.kwargs["active_override"] is False
 
     @pytest.mark.asyncio
     async def test_download_ad_writes_schema_compliant_yaml(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
