@@ -119,6 +119,12 @@ async def publish_ad(
         keep_old_ads: If True, skip old-ad deletion.
         config_file_path: Path to the config file (for relative path
             resolution).
+        known_published_ad_ids: IDs from a complete pre-submit snapshot. ``None``
+            disables ID-less publish recovery because ownership cannot be
+            established safely.
+
+    Returns:
+        The resolved ID of the published or updated ad.
     """
     old_ad_id = ad_cfg.id
 
@@ -196,7 +202,13 @@ async def _fetch_published_ads_for_publish(
     *,
     keep_old_ads:bool,
 ) -> tuple[list[PublishedAd], list[PublishedAd] | None, bool]:
-    """Fetch published ads and a complete baseline for ownership-critical work."""
+    """Fetch published ads and a complete baseline for ownership-critical work.
+
+    Returns:
+        The ads used for matching, the complete pre-submit snapshot (or
+        ``None`` when unavailable), and whether publishing must fail closed
+        without that complete snapshot.
+    """
     require_strict_fetch = (
         not keep_old_ads
         and config.publishing.delete_old_ads == "BEFORE_PUBLISH"

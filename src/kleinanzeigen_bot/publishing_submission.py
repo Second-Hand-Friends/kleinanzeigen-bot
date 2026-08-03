@@ -11,6 +11,7 @@ confirmation page redirects too fast to inspect the URL directly.
 import re
 import urllib.parse as urllib_parse
 from gettext import gettext as _
+from typing import Final
 
 from nodriver.core.connection import ProtocolException
 
@@ -23,7 +24,7 @@ from .utils.misc import ainput
 from .utils.web_scraping_mixin import By, WebScrapingMixin
 
 LOG = _loggers.get_logger(__name__)
-_PUBLISHED_AD_RECOVERY_DELAYS_MS = (0, 1_000, 2_000, 4_000)
+_PUBLISHED_AD_RECOVERY_DELAYS_MS:Final[tuple[int, ...]] = (0, 1_000, 2_000, 4_000)
 
 
 async def _is_idless_publish_success_page(web:WebScrapingMixin) -> bool:
@@ -50,7 +51,13 @@ async def _try_recover_ad_id_from_published_ads(
     title:str,
     known_published_ad_ids:frozenset[int] | None,
 ) -> int | None:
-    """Recover exactly one newly published exact-title ad from a complete list."""
+    """Recover one newly published exact-title ad from a complete list.
+
+    Recovery makes four strict fetch attempts, after delays of 0, 1, 2, and 4
+    seconds. It returns ``None`` when the pre-submit baseline is unavailable,
+    no unique match appears, or multiple matching candidates make the result
+    ambiguous.
+    """
     if known_published_ad_ids is None:
         LOG.warning("Published-ad ID recovery skipped because the pre-submit list was incomplete")
         return None
@@ -252,10 +259,32 @@ async def submit_and_confirm_ad(
 
         await web.web_await(_check_confirmation_state, timeout = confirmation_timeout)
 
-        # extract the ad id from the URL's query parameter (use JS for fresh URL, not stale page url)
-        current_url = str(await web.web_execute("window.location.href"))
-        current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(current_url).query)
-        ad_id = int(current_url_query_params.get("adId", [])[0])
+        if idless_success_detected:
+            try:
+                ad_id = await _try_recover_ad_id_from_published_ads(
+                    web,
+                    root_url = root_url,
+                    title = ad_cfg.title,
+                    known_published_ad_ids = known_published_ad_ids,
+                )
+            except Exception as recovery_ex:  # noqa: BLE001
+                LOG.debug("Published-ad list fallback failed: %s", recovery_ex)
+                raise PublishSubmissionUncertainError(
+                    "publish succeeded but no ad ID could be recovered"
+                ) from recovery_ex
+            if ad_id is None:
+                raise PublishSubmissionUncertainError(
+                    "publish succeeded but no ad ID could be recovered"
+                )
+            LOG.warning(
+                "Confirmation page exposed no ad ID; recovered ad ID %s from the published ads list",
+                ad_id,
+            )
+        else:
+            # Use the live URL because the page object URL may be stale after redirects.
+            current_url = str(await web.web_execute("window.location.href"))
+            current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(current_url).query)
+            ad_id = int(current_url_query_params.get("adId", [])[0])
 
     except (TimeoutError, ProtocolException, IndexError, ValueError, TypeError) as ex:
         # The confirmation page may have auto-redirected before we could poll it,
@@ -268,22 +297,6 @@ async def submit_and_confirm_ad(
             recovered_from_tracking = ad_id is not None
         except Exception as fallback_ex:  # noqa: BLE001
             LOG.debug("Tracking data fallback failed: %s", fallback_ex)
-
-        if ad_id is None and idless_success_detected and mode == AdUpdateStrategy.REPLACE:
-            try:
-                ad_id = await _try_recover_ad_id_from_published_ads(
-                    web,
-                    root_url = root_url,
-                    title = ad_cfg.title,
-                    known_published_ad_ids = known_published_ad_ids,
-                )
-            except Exception as fallback_ex:  # noqa: BLE001
-                LOG.debug("Published-ad list fallback failed: %s", fallback_ex)
-            if ad_id is not None:
-                LOG.warning(
-                    "Confirmation page exposed no ad ID; recovered ad ID %s from the published ads list",
-                    ad_id,
-                )
 
         if ad_id is None:
             raise PublishSubmissionUncertainError("submission may have succeeded before failure") from ex

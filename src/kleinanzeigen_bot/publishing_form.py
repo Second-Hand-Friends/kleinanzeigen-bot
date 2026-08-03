@@ -7,7 +7,7 @@
 import json
 import re
 from gettext import gettext as _
-from typing import Any, Final, Literal, Sequence, cast
+from typing import Any, Final, Sequence, cast
 
 from .ad_description import get_ad_description
 from .ad_form_helpers import (
@@ -743,21 +743,29 @@ async def _set_configured_shipping_options(
 async def _open_shipping_size_selection(
     web:WebScrapingMixin,
     short_timeout:int | float,
-) -> Literal["direct_size", "via_other_methods"]:
-    """Reach a supported shipping size pane across Kleinanzeigen A/B variants."""
+) -> None:
+    """Reach a supported shipping size pane across Kleinanzeigen A/B variants.
+
+    A size pane may be visible directly or behind ``Andere Versandmethoden``.
+    Nested panes are unwound by at most two back steps; unsupported dialog
+    states fail with a clear timeout error.
+    """
     max_back_steps = 2
     for back_steps in range(max_back_steps + 1):
         size_radio = await web.web_probe(By.XPATH, _SHIPPING_SIZE_RADIO_XPATH, timeout = short_timeout)
         if size_radio is not None:
             LOG.debug("Shipping dialog route: direct size selection (%s back step(s)).", back_steps)
-            return "direct_size"
+            return
 
         other_methods = await web.web_probe(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = short_timeout)
         if other_methods is not None:
             await web.web_click(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = short_timeout)
-            await web.web_find(By.XPATH, _SHIPPING_SIZE_RADIO_XPATH, timeout = short_timeout)
+            try:
+                await web.web_find(By.XPATH, _SHIPPING_SIZE_RADIO_XPATH, timeout = short_timeout)
+            except TimeoutError as ex:
+                raise TimeoutError(_("Failed to configure shipping options in dialog!")) from ex
             LOG.debug("Shipping dialog route: Andere Versandmethoden (%s back step(s)).", back_steps)
-            return "via_other_methods"
+            return
 
         if back_steps == max_back_steps:
             break
@@ -805,7 +813,7 @@ async def set_shipping_options(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStr
     all_codes_for_size = CARRIER_CODES_BY_SIZE[shipping_size]
 
     short_timeout = web.timeout("quick_dom")
-    dialog = '//*[self::dialog or @role="dialog"]'
+    dialog = _OPEN_SHIPPING_DIALOG_XPATH
 
     try:
         # Select the size group via radio button value (e.g. "SMALL", "MEDIUM", "LARGE")

@@ -1562,6 +1562,42 @@ class TestShippingOptionsDialog:
         )
 
     @pytest.mark.asyncio
+    async def test_reports_clear_error_when_alternate_size_pane_does_not_open(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Report the workflow error when the alternate size pane never renders."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
+
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(
+                test_bot,
+                "web_probe",
+                new_callable = AsyncMock,
+                side_effect = [None, MagicMock()],
+            ),
+            patch.object(
+                test_bot,
+                "web_find",
+                new_callable = AsyncMock,
+                side_effect = TimeoutError("radio missing"),
+            ),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock) as options_mock,
+            pytest.raises(TimeoutError, match = "Failed to configure shipping options in dialog"),
+        ):
+            await _set_configured_shipping_options(
+                test_bot,
+                ad_cfg,
+                AdUpdateStrategy.REPLACE,
+                test_bot.timeout("quick_dom"),
+            )
+
+        options_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_navigates_back_to_direct_size_selection(
         self,
         test_bot:KleinanzeigenBot,

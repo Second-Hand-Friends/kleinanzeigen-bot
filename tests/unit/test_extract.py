@@ -1000,12 +1000,15 @@ class TestAdExtractorContent:
         assert ad_cfg.created_on.isoformat().startswith("2025-02-03")
 
     @pytest.mark.asyncio
-    async def test_resolve_download_title_prefers_published_metadata(self, test_extractor:extract_module.AdExtractor) -> None:
-        """Use the clean manage-ads title for owned ads instead of the page title."""
+    async def test_resolve_download_title_prefers_published_metadata_for_owned_overview(
+        self,
+        test_extractor:extract_module.AdExtractor,
+    ) -> None:
+        """Use the clean manage-ads title even for an owned-overview download."""
         test_extractor.published_ads_by_id = {12345: {"id": 12345, "title": " Clean API Title "}}
 
         with patch.object(test_extractor, "_extract_title_from_ad_page", new_callable = AsyncMock) as mock_extract_title:
-            title = await test_extractor._resolve_download_title(12345)
+            title = await test_extractor._resolve_download_title(12345, owned_overview = True)
 
         assert title == "Clean API Title"
         mock_extract_title.assert_not_called()
@@ -1707,12 +1710,10 @@ class TestAdExtractorDownload:
 
             await extractor.download_ad(12345, active = False)
 
-            mock_extract_with_dir.assert_awaited_once_with(
-                download_base,
-                12345,
-                active_override = False,
-                owned_overview = False,
-            )
+            await_args = mock_extract_with_dir.await_args
+            assert await_args is not None
+            assert await_args.args == (download_base, 12345)
+            assert await_args.kwargs["active_override"] is False
 
     @pytest.mark.asyncio
     async def test_download_ad_writes_schema_compliant_yaml(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:

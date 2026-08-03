@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Tests for publishing submission functionality."""
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -36,6 +37,21 @@ def _make_min_ad() -> Ad:
             "location": "Test City",
         },
     })
+
+
+def _idless_success_execute(root_url:str) -> Callable[[str], Awaitable[Any]]:
+    """Return browser-script behavior for the redesigned ID-less success page."""
+
+    async def execute(script:str) -> Any:
+        if "document.referrer" in script:
+            return ""
+        if "Geschafft!" in script:
+            return True
+        if "window.location.href" in script:
+            return f"{root_url}/done"
+        return None
+
+    return execute
 
 
 class TestTrackingFallback:
@@ -354,15 +370,16 @@ class TestPublishedAdsRecovery:
         sleep_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_recovery_ignores_incomplete_fetches_and_invalid_ids(
+    async def test_recovery_continues_after_incomplete_fetch_and_ignores_invalid_ids(
         self,
         test_bot:KleinanzeigenBot,
     ) -> None:
-        invalid_ads = [
+        recovered_ads = [
             {"title": "Test Ad Title"},
             {"id": "not-an-id", "title": "Test Ad Title"},
             {"id": 10, "title": "Test Ad Title"},
             {"id": 11, "title": "Different title"},
+            {"id": 12, "title": "Test Ad Title"},
         ]
         with (
             patch(
@@ -370,9 +387,7 @@ class TestPublishedAdsRecovery:
                 new_callable = AsyncMock,
                 side_effect = [
                     PublishedAdsFetchIncompleteError("incomplete"),
-                    invalid_ads,
-                    [],
-                    [],
+                    recovered_ads,
                 ],
             ) as fetch_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
@@ -384,9 +399,9 @@ class TestPublishedAdsRecovery:
                 known_published_ad_ids = frozenset({10}),
             )
 
-        assert result is None
-        assert fetch_mock.await_count == 4
-        assert sleep_mock.await_count == 3
+        assert result == 12
+        assert fetch_mock.await_count == 2
+        sleep_mock.assert_awaited_once_with(1_000)
 
     @pytest.mark.asyncio
     async def test_submit_recovers_id_after_explicit_idless_success(self, test_bot:KleinanzeigenBot) -> None:
@@ -405,13 +420,13 @@ class TestPublishedAdsRecovery:
                 test_bot,
                 "web_execute",
                 new_callable = AsyncMock,
-                side_effect = ["", f"{test_bot.root_url}/done", True, f"{test_bot.root_url}/done"],
+                side_effect = _idless_success_execute(test_bot.root_url),
             ),
             patch(
                 "kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect",
                 new_callable = AsyncMock,
                 return_value = None,
-            ),
+            ) as redirect_recover_mock,
             patch(
                 "kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_published_ads",
                 new_callable = AsyncMock,
@@ -429,6 +444,7 @@ class TestPublishedAdsRecovery:
             )
 
         assert result == 777
+        redirect_recover_mock.assert_not_awaited()
         recover_mock.assert_awaited_once_with(
             test_bot,
             root_url = test_bot.root_url,
@@ -456,13 +472,13 @@ class TestPublishedAdsRecovery:
                 test_bot,
                 "web_execute",
                 new_callable = AsyncMock,
-                side_effect = ["", f"{test_bot.root_url}/done", True, f"{test_bot.root_url}/done"],
+                side_effect = _idless_success_execute(test_bot.root_url),
             ),
             patch(
                 "kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect",
                 new_callable = AsyncMock,
                 return_value = None,
-            ),
+            ) as redirect_recover_mock,
             patch(
                 "kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_published_ads",
                 new_callable = AsyncMock,
@@ -479,3 +495,5 @@ class TestPublishedAdsRecovery:
                 root_url = test_bot.root_url,
                 known_published_ad_ids = frozenset({10}),
             )
+
+        redirect_recover_mock.assert_not_awaited()
