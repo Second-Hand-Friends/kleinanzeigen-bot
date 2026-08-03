@@ -1562,27 +1562,26 @@ class TestShippingOptionsDialog:
         )
 
     @pytest.mark.asyncio
-    async def test_reports_clear_error_when_alternate_size_pane_does_not_open(
+    async def test_reports_clear_error_when_alternate_action_disappears(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
-        """Report the workflow error when the alternate size pane never renders."""
+        """Report the workflow error when a probed alternate action disappears."""
         ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
 
         with (
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(
+                test_bot,
+                "web_click",
+                new_callable = AsyncMock,
+                side_effect = [None, None, TimeoutError("action disappeared")],
+            ),
             patch.object(
                 test_bot,
                 "web_probe",
                 new_callable = AsyncMock,
                 side_effect = [None, MagicMock()],
-            ),
-            patch.object(
-                test_bot,
-                "web_find",
-                new_callable = AsyncMock,
-                side_effect = TimeoutError("radio missing"),
             ),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock) as options_mock,

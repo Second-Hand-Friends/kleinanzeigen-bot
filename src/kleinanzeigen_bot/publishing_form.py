@@ -749,31 +749,36 @@ async def _open_shipping_size_selection(
     A size pane may be visible directly or behind ``Andere Versandmethoden``.
     Nested panes are unwound by at most two back steps; unsupported dialog
     states fail with a clear timeout error.
+
+    Examples:
+        A direct size pane returns immediately. An alternate-methods action is
+        opened before returning. A nested carrier pane is unwound with bounded
+        back navigation. A dialog exposing none of these routes times out.
     """
     max_back_steps = 2
-    for back_steps in range(max_back_steps + 1):
-        size_radio = await web.web_probe(By.XPATH, _SHIPPING_SIZE_RADIO_XPATH, timeout = short_timeout)
-        if size_radio is not None:
-            LOG.debug("Shipping dialog route: direct size selection (%s back step(s)).", back_steps)
-            return
+    try:
+        for back_steps in range(max_back_steps + 1):
+            size_radio = await web.web_probe(By.XPATH, _SHIPPING_SIZE_RADIO_XPATH, timeout = short_timeout)
+            if size_radio is not None:
+                LOG.debug("Shipping dialog route: direct size selection (%s back step(s)).", back_steps)
+                return
 
-        other_methods = await web.web_probe(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = short_timeout)
-        if other_methods is not None:
-            await web.web_click(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = short_timeout)
-            try:
+            other_methods = await web.web_probe(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = short_timeout)
+            if other_methods is not None:
+                await web.web_click(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = short_timeout)
                 await web.web_find(By.XPATH, _SHIPPING_SIZE_RADIO_XPATH, timeout = short_timeout)
-            except TimeoutError as ex:
-                raise TimeoutError(_("Failed to configure shipping options in dialog!")) from ex
-            LOG.debug("Shipping dialog route: Andere Versandmethoden (%s back step(s)).", back_steps)
-            return
+                LOG.debug("Shipping dialog route: Andere Versandmethoden (%s back step(s)).", back_steps)
+                return
 
-        if back_steps == max_back_steps:
-            break
-        back_button = await web.web_probe(By.XPATH, _SHIPPING_BACK_XPATH, timeout = short_timeout)
-        if back_button is None:
-            break
-        await web.web_click(By.XPATH, _SHIPPING_BACK_XPATH, timeout = short_timeout)
-        await web.web_sleep(300, 500)
+            if back_steps == max_back_steps:
+                break
+            back_button = await web.web_probe(By.XPATH, _SHIPPING_BACK_XPATH, timeout = short_timeout)
+            if back_button is None:
+                break
+            await web.web_click(By.XPATH, _SHIPPING_BACK_XPATH, timeout = short_timeout)
+            await web.web_sleep(300, 500)
+    except TimeoutError as ex:
+        raise TimeoutError(_("Failed to configure shipping options in dialog!")) from ex
 
     raise TimeoutError(_("Failed to configure shipping options in dialog!"))
 
