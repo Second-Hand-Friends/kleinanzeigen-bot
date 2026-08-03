@@ -1597,6 +1597,73 @@ class TestShippingOptionsDialog:
             for click in mock_click.await_args_list
         )
 
+    @pytest.mark.asyncio
+    async def test_fails_when_dialog_has_no_supported_navigation(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Fail clearly when neither a size pane nor a back route is present."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(
+                test_bot,
+                "web_probe",
+                new_callable = AsyncMock,
+                side_effect = [None, None, None],
+            ),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock) as options_mock,
+            pytest.raises(TimeoutError, match = "Failed to configure shipping options"),
+        ):
+            await _set_configured_shipping_options(
+                test_bot,
+                ad_cfg,
+                AdUpdateStrategy.REPLACE,
+                test_bot.timeout("quick_dom"),
+            )
+
+        options_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_fails_after_bounded_back_navigation(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Stop after two back steps when no supported size pane appears."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
+        with (
+            patch.object(
+                test_bot,
+                "web_probe",
+                new_callable = AsyncMock,
+                side_effect = [
+                    None, None, MagicMock(),
+                    None, None, MagicMock(),
+                    None, None,
+                ],
+            ),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as click_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock) as options_mock,
+            pytest.raises(TimeoutError, match = "Failed to configure shipping options"),
+        ):
+            await _set_configured_shipping_options(
+                test_bot,
+                ad_cfg,
+                AdUpdateStrategy.REPLACE,
+                test_bot.timeout("quick_dom"),
+            )
+
+        back_clicks = [
+            call for call in click_mock.await_args_list
+            if call.args == (By.XPATH, _SHIPPING_BACK_XPATH)
+        ]
+        assert len(back_clicks) == 2
+        options_mock.assert_not_awaited()
+
     @pytest.mark.parametrize(
         "case",
         [

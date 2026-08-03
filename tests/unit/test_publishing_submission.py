@@ -11,6 +11,7 @@ import pytest
 from kleinanzeigen_bot import publishing_submission
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
+from kleinanzeigen_bot.published_ads import PublishedAdsFetchIncompleteError
 from kleinanzeigen_bot.utils.exceptions import PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By
 
@@ -353,6 +354,41 @@ class TestPublishedAdsRecovery:
         sleep_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_recovery_ignores_incomplete_fetches_and_invalid_ids(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        invalid_ads = [
+            {"title": "Test Ad Title"},
+            {"id": "not-an-id", "title": "Test Ad Title"},
+            {"id": 10, "title": "Test Ad Title"},
+            {"id": 11, "title": "Different title"},
+        ]
+        with (
+            patch(
+                "kleinanzeigen_bot.publishing_submission.published_ads.fetch_published_ads",
+                new_callable = AsyncMock,
+                side_effect = [
+                    PublishedAdsFetchIncompleteError("incomplete"),
+                    invalid_ads,
+                    [],
+                    [],
+                ],
+            ) as fetch_mock,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
+        ):
+            result = await publishing_submission._try_recover_ad_id_from_published_ads(
+                test_bot,
+                root_url = test_bot.root_url,
+                title = "Test Ad Title",
+                known_published_ad_ids = frozenset({10}),
+            )
+
+        assert result is None
+        assert fetch_mock.await_count == 4
+        assert sleep_mock.await_count == 3
+
+    @pytest.mark.asyncio
     async def test_submit_recovers_id_after_explicit_idless_success(self, test_bot:KleinanzeigenBot) -> None:
         ad = _make_min_ad()
 
@@ -399,3 +435,47 @@ class TestPublishedAdsRecovery:
             title = ad.title,
             known_published_ad_ids = frozenset({10}),
         )
+
+    @pytest.mark.asyncio
+    async def test_submit_fails_closed_when_published_ads_recovery_raises(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        ad = _make_min_ad()
+
+        async def await_condition(condition:Any, **_:object) -> bool:
+            return bool(await condition())
+
+        with (
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(
+                test_bot,
+                "web_execute",
+                new_callable = AsyncMock,
+                side_effect = ["", f"{test_bot.root_url}/done", True, f"{test_bot.root_url}/done"],
+            ),
+            patch(
+                "kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect",
+                new_callable = AsyncMock,
+                return_value = None,
+            ),
+            patch(
+                "kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_published_ads",
+                new_callable = AsyncMock,
+                side_effect = RuntimeError("API unavailable"),
+            ),
+            pytest.raises(PublishSubmissionUncertainError),
+        ):
+            await publishing_submission.submit_and_confirm_ad(
+                test_bot,
+                "test.yaml",
+                ad,
+                AdUpdateStrategy.REPLACE,
+                captcha_config = test_bot.config.captcha,
+                root_url = test_bot.root_url,
+                known_published_ad_ids = frozenset({10}),
+            )
