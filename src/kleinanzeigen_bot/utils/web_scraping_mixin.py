@@ -1064,7 +1064,8 @@ class WebScrapingMixin:  # noqa: PLR0904
         timeout:int | float | None = None,
         timeout_error_message:str = "",
         apply_multiplier:bool = True,
-    ) -> T: ...
+    ) -> T:
+        pass  # pragma: no cover
 
     @overload
     async def web_await(
@@ -1074,7 +1075,8 @@ class WebScrapingMixin:  # noqa: PLR0904
         timeout:int | float | None = None,
         timeout_error_message:str = "",
         apply_multiplier:bool = True,
-    ) -> T: ...
+    ) -> T:
+        pass  # pragma: no cover
 
     async def web_await(
         self,

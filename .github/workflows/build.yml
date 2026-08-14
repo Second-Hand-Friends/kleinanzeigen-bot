@@ -190,6 +190,8 @@ jobs:
 
     - name: Check with pip-audit
       # until https://github.com/astral-sh/ruff/issues/8277
+      # pip-api imports sre_constants, which was removed in Python 3.15.
+      if: matrix.PYTHON_VERSION != '3.15'
       run:
         pdm run pip-audit --progress-spinner off --skip-editable --verbose
 
