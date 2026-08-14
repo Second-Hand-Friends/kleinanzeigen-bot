@@ -28,6 +28,8 @@ from .chrome_version_detector import (
 from .net import is_port_open
 
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
+_CAP_SYS_PTRACE:Final[int] = 19
+_CONTAINER_CGROUP_MARKERS:Final[tuple[str, ...]] = ("docker", "containerd", "kubepods", "libpod", "lxc")
 
 
 def _format_url_host(host:str) -> str:
@@ -56,6 +58,35 @@ def _is_admin() -> bool:
         return False
     except AttributeError:
         return False
+
+
+def _is_linux_container() -> bool:
+    """Return whether common Linux container markers are present."""
+    if os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv") or any(key.lower() == "container" for key in os.environ):
+        return True
+    try:
+        with open("/proc/1/cgroup", encoding = "UTF-8") as fd:  # noqa: PTH123
+            return any(marker in fd.read().lower() for marker in _CONTAINER_CGROUP_MARKERS)
+    except OSError:
+        return False
+
+
+def _has_linux_capability(capability:int) -> bool:
+    """Return whether the current Linux process has *capability*."""
+    try:
+        with open("/proc/self/status", encoding = "UTF-8") as fd:  # noqa: PTH123
+            for line in fd:
+                if line.startswith("CapEff:"):
+                    effective_capabilities = int(line.split(maxsplit = 1)[1], 16)
+                    return bool(effective_capabilities & (1 << capability))
+    except (OSError, ValueError, IndexError):
+        pass
+    return False
+
+
+def _is_linux_container_without_sys_ptrace() -> bool:
+    """Return whether a recognized Linux container lacks CAP_SYS_PTRACE."""
+    return platform.system() == "Linux" and _is_linux_container() and not _has_linux_capability(_CAP_SYS_PTRACE)
 
 
 def _remote_debugging_api_browser(remote_host:str, remote_port:int, probe_timeout:float) -> tuple[str | None, Exception | None]:

@@ -206,6 +206,9 @@ browser:
   #     - "--user-data-dir=/path/to/profile"
   arguments: []
 
+  # add Chromium's --test-type switch to suppress unsupported command-line flag warnings. Set to false in ptrace-restricted containers where this switch can prevent the browser from starting
+  suppress_unsupported_flag_warning: true
+
   # path to custom browser executable (optional). Leave empty to use system default
   binary_location: ''
 

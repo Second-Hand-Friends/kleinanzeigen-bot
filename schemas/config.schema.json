@@ -243,6 +243,12 @@
           "title": "Arguments",
           "type": "array"
         },
+        "suppress_unsupported_flag_warning": {
+          "default": true,
+          "description": "add Chromium's --test-type switch to suppress unsupported command-line flag warnings. Set to false in ptrace-restricted containers where this switch can prevent the browser from starting",
+          "title": "Suppress Unsupported Flag Warning",
+          "type": "boolean"
+        },
         "binary_location": {
           "anyOf": [
             {

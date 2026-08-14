@@ -57,6 +57,15 @@ def test_minimal_config_validation() -> None:
     config = Config.model_validate(minimal_cfg)
     assert config.login.username == "dummy"
     assert config.login.password == "dummy"  # noqa: S105
+    assert config.browser.suppress_unsupported_flag_warning is True
+
+
+def test_browser_config_allows_unsupported_flag_warning_to_be_shown() -> None:
+    config = Config.model_validate({
+        "login": {"username": "dummy", "password": "dummy"},  # noqa: S106
+        "browser": {"suppress_unsupported_flag_warning": False},
+    })
+    assert config.browser.suppress_unsupported_flag_warning is False
 
 
 def test_publishing_local_path_renaming_defaults_to_off() -> None:

@@ -849,6 +849,8 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "4. Check if any antivirus or security software is blocking the connection": "4. Überprüfen Sie, ob Antiviren- oder Sicherheitssoftware die Verbindung blockiert"
 
   _build_new_browser_launch_args:
+    ? "Container without CAP_SYS_PTRACE detected. If the browser fails to start, set browser.suppress_unsupported_flag_warning: false to omit --test-type."
+    : "Container ohne CAP_SYS_PTRACE erkannt. Falls der Browser nicht startet, setzen Sie browser.suppress_unsupported_flag_warning: false, um --test-type wegzulassen."
     " -> Browser profile name: %s": " -> Browser-Profilname: %s"
     " -> Custom Browser argument: %s": " -> Benutzerdefiniertes Browser-Argument: %s"
     "Ignoring empty --user-data-dir= argument; falling back to configured user_data_dir.": "Ignoriere leeres --user-data-dir= Argument; verwende konfiguriertes user_data_dir."

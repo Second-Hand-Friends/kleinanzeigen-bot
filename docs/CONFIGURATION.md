@@ -299,6 +299,8 @@ browser:
     - --no-sandbox
     # --headless
     # --start-maximized
+  # Set false in ptrace-restricted containers if --test-type prevents browser startup.
+  suppress_unsupported_flag_warning: true
   binary_location:  # path to custom browser executable, if not specified will be looked up on PATH
   extensions: []    # a list of .crx extension files to be loaded
   use_private_window: true
@@ -312,6 +314,8 @@ browser:
 - `--no-sandbox` - Required when running as root (not recommended)
 - `--headless` - Run browser in headless mode (no GUI)
 - `--start-maximized` - Start browser maximized
+
+`suppress_unsupported_flag_warning` keeps Chromium's `--test-type` flag enabled by default to hide unsupported-command-line warnings. Set it to `false` in Docker or LXC environments without `CAP_SYS_PTRACE` if Chrome or Brave exits before the DevTools endpoint becomes available.
 
 For detailed browser connection troubleshooting, including Chrome 136+ security requirements and remote debugging setup, see [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md).
 

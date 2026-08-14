@@ -24,8 +24,8 @@ from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
 
 from kleinanzeigen_bot.model.config_model import Config
-from kleinanzeigen_bot.utils import files, loggers
-from kleinanzeigen_bot.utils.browser_diagnostics import _format_url_host, _is_admin  # noqa: PLC2701
+from kleinanzeigen_bot.utils import browser_diagnostics, files, loggers
+from kleinanzeigen_bot.utils.browser_diagnostics import _format_url_host, _is_admin, _is_linux_container_without_sys_ptrace  # noqa: PLC2701
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is, WebScrapingMixin, _allocate_selector_group_budgets  # noqa: PLC2701
 
 
@@ -1442,6 +1442,39 @@ class TestWebScrolling:
 
 class TestWebScrapingBrowserConfiguration:
     """Test browser configuration in WebScrapingMixin."""
+
+    def test_browser_args_suppress_unsupported_flag_warning_by_default(self) -> None:
+        scraper = WebScrapingMixin()
+
+        args, _ = scraper._build_new_browser_launch_args()
+
+        assert "--test-type" in args
+
+    def test_browser_args_can_show_unsupported_flag_warning(self) -> None:
+        scraper = WebScrapingMixin()
+        scraper.browser_config.arguments = ["--custom-arg=value"]
+        scraper.browser_config.suppress_unsupported_flag_warning = False
+
+        args, _ = scraper._build_new_browser_launch_args()
+
+        assert "--test-type" not in args
+        assert "--custom-arg=value" in args
+        assert "--incognito" in args
+
+    @pytest.mark.skipif(platform.system() != "Linux", reason = "Linux-specific container capability test")
+    def test_linux_container_without_sys_ptrace_is_detected(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(browser_diagnostics, "_is_linux_container", lambda: True)
+        monkeypatch.setattr(browser_diagnostics, "_has_linux_capability", lambda capability: capability != 19)
+
+        assert _is_linux_container_without_sys_ptrace() is True
+
+    def test_ptrace_restricted_container_warns_about_test_type(self, monkeypatch:pytest.MonkeyPatch, caplog:pytest.LogCaptureFixture) -> None:
+        scraper = WebScrapingMixin()
+        monkeypatch.setattr("kleinanzeigen_bot.utils.web_scraping_mixin._is_linux_container_without_sys_ptrace", lambda: True)
+
+        scraper._build_new_browser_launch_args()
+
+        assert "Container without CAP_SYS_PTRACE detected" in caplog.text
 
     @pytest.mark.asyncio
     async def test_browser_binary_location_detection(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:

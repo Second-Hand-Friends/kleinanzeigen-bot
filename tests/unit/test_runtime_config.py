@@ -220,6 +220,7 @@ publishing:
             {
                 "login": {"username": "user", "password": "pass"},
                 "ad_defaults": {"contact": {"name": "Test User", "zipcode": "12345"}},
+                "browser": {"suppress_unsupported_flag_warning": False},
                 "publishing": {"delete_old_ads": "BEFORE_PUBLISH", "delete_old_ads_by_title": False},
             }
         )
@@ -228,6 +229,7 @@ publishing:
 
         assert browser_config.user_data_dir == str(workspace.browser_profile_dir)
         assert browser_config.profile_name == config.browser.profile_name
+        assert browser_config.suppress_unsupported_flag_warning is False
 
     def test_apply_browser_config_uses_custom_profile_dir(self, tmp_path:Path) -> None:
         config_path = tmp_path / "config.yaml"
