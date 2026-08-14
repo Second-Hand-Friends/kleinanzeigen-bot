@@ -487,7 +487,9 @@ class TestUpdateChecker:
         checker = UpdateChecker(config, state_file)
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025")
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
+        mock_get = mocker.patch("requests.get")
         checker.check_for_updates()  # Should not raise
+        mock_get.assert_not_called()
 
     def test_check_for_updates_no_commit_dates(self, config:Config, state_file:Path, mocker:MockerFixture, caplog:pytest.LogCaptureFixture) -> None:
         """Test check_for_updates logs warning if commit dates cannot be determined."""

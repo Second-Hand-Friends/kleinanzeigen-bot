@@ -25,7 +25,7 @@ Please read through this document before submitting any contributions to ensure 
 
 ### Prerequisites
 
-- Python 3.12 or higher
+- Python 3.12 through 3.15
 - PDM for dependency management
 - Git
 
