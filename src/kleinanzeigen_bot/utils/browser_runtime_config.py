@@ -14,6 +14,7 @@ class BrowserConfig:
 
     Attributes:
         arguments: Additional browser command-line arguments.
+        suppress_unsupported_flag_warning: Whether to add --test-type to suppress browser warnings.
         binary_location: Path to the browser executable, or None for auto-detection.
         extensions: List of extension paths to load.
         use_private_window: Whether to start in incognito/private mode.
@@ -23,6 +24,7 @@ class BrowserConfig:
 
     def __init__(self) -> None:
         self.arguments:list[str] = []
+        self.suppress_unsupported_flag_warning:bool = True
         self.binary_location:str | None = None
         self.extensions:list[str] = []
         self.use_private_window:bool = True

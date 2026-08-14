@@ -223,6 +223,13 @@ class BrowserConfig(ContextualModel):
         ),
         examples = ['"--headless"', '"--disable-dev-shm-usage"', '"--user-data-dir=/path/to/profile"'],
     )
+    suppress_unsupported_flag_warning:bool = Field(
+        default = True,
+        description=(
+            "add Chromium's --test-type switch to suppress unsupported command-line flag warnings. "
+            "Set to false in ptrace-restricted containers where this switch can prevent the browser from starting"
+        ),
+    )
     binary_location:str | None = Field(default = "", description = "path to custom browser executable (optional). Leave empty to use system default")
     extensions:list[str] = Field(
         default_factory = list,

@@ -22,7 +22,7 @@ from kleinanzeigen_bot.model.config_model import Config as BotConfig
 from kleinanzeigen_bot.model.config_model import HumanizationConfig, TimeoutConfig
 
 from . import files, loggers, net, xdg_paths
-from .browser_diagnostics import _run_browser_diagnostics
+from .browser_diagnostics import _is_linux_container_without_sys_ptrace, _run_browser_diagnostics
 from .browser_runtime_config import BrowserConfig
 from .chrome_version_detector import (
     ChromeVersionInfo,
@@ -788,10 +788,17 @@ class WebScrapingMixin:  # noqa: PLR0904
             "--disable-search-engine-choice-screen",
             "--disable-features=MediaRouter",
             "--use-mock-keychain",
-            "--test-type",  # https://stackoverflow.com/a/36746675/5116073
             # https://chromium.googlesource.com/chromium/src/+/master/net/dns/README.md#request-remapping
             '--host-resolver-rules="MAP connect.facebook.net 127.0.0.1, MAP securepubads.g.doubleclick.net 127.0.0.1, MAP www.googletagmanager.com 127.0.0.1"',
         ]
+
+        if self.browser_config.suppress_unsupported_flag_warning:
+            browser_args.append("--test-type")  # https://stackoverflow.com/a/36746675/5116073
+            if _is_linux_container_without_sys_ptrace():
+                LOG.warning(
+                    "Container without CAP_SYS_PTRACE detected. If the browser fails to start, "
+                    "set browser.suppress_unsupported_flag_warning: false to omit --test-type."
+                )
 
         is_edge = "edge" in (self.browser_config.binary_location or "").lower()
 

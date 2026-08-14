@@ -148,6 +148,7 @@ def load_config(config_file_path:str, workspace:_xdg_paths.Workspace | None, com
 
 def apply_browser_config(browser_config:Any, config:Config, workspace:_xdg_paths.Workspace | None, config_file_path:str) -> None:
     browser_config.arguments = config.browser.arguments
+    browser_config.suppress_unsupported_flag_warning = config.browser.suppress_unsupported_flag_warning
     browser_config.binary_location = config.browser.binary_location
     browser_config.extensions = [abspath(item, relative_to = config_file_path) for item in config.browser.extensions]
     browser_config.use_private_window = config.browser.use_private_window

@@ -465,6 +465,15 @@ browser:
 - **Root user**: Never run as root, use regular user
 - **Display**: Ensure X11 or Wayland is properly configured
 
+#### ptrace-restricted containers
+
+Chrome and Brave can exit before startup in Docker or LXC containers without `CAP_SYS_PTRACE` when launched with Chromium's internal `--test-type` flag. Keep the normal default for desktop use, but disable only this warning-suppression flag in affected containers:
+
+```yaml
+browser:
+  suppress_unsupported_flag_warning: false
+```
+
 ## Configuration Examples
 
 ### Basic working configuration
