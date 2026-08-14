@@ -727,6 +727,7 @@ class TestSelectorTimeoutMessages:
     @pytest.mark.parametrize(
         ("selector_type", "selector_value", "expected_message"),
         [
+            (By.CLASS_NAME, "hero", "No HTML element found with CSS class 'hero' within 2.0 seconds."),
             (By.TAG_NAME, "section", "No HTML element found of tag <section> within 2.0 seconds."),
             (By.CSS_SELECTOR, ".hero", "No HTML element found using CSS selector '.hero' within 2.0 seconds."),
             (By.TEXT, "Submit", "No HTML element found containing text 'Submit' within 2.0 seconds."),
