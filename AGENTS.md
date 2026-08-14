@@ -95,7 +95,7 @@ CI and workflows are the source of truth for the exact required checks, coverage
 ## PR Expectations
 
 - PR titles must follow the semantic format enforced by `.github/workflows/validate-pr-title.yml`.
-- Branch names should use the same conventional type prefix as the PR title, e.g. `docs/update-agent-playbook`, `fix/browser-timeout`, or `feat/price-logging`.
+- Branch names must use the same conventional type prefix as the PR title, e.g. `docs/update-agent-playbook`, `fix/browser-timeout`, or `feat/price-logging`. Never add an agent- or tool-specific prefix such as `agent/`.
 - PR descriptions should use `.github/PULL_REQUEST_TEMPLATE.md` and complete its required sections and checklist.
 - Do not open a PR with placeholder sections, missing checklist decisions, or a non-semantic title; fix the title/body before publishing.
 
