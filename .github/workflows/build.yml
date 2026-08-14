@@ -79,35 +79,35 @@ jobs:
         include:
         - os: macos-15-intel  # X86
           PYTHON_VERSION: "3.12"
-          PUBLISH_RELEASE: false
+          PUBLISH_RELEASE: true
         - os: macos-latest  # ARM
           PYTHON_VERSION: "3.12"
-          PUBLISH_RELEASE: false
+          PUBLISH_RELEASE: true
         - os: ubuntu-latest
           PYTHON_VERSION: "3.12"
-          PUBLISH_RELEASE: false
+          PUBLISH_RELEASE: true
         - os: ubuntu-24.04-arm  # https://github.com/actions/partner-runner-images#available-images
           PYTHON_VERSION: "3.12"
-          PUBLISH_RELEASE: false
+          PUBLISH_RELEASE: true
         - os: windows-latest
           PYTHON_VERSION: "3.12"
-          PUBLISH_RELEASE: false
+          PUBLISH_RELEASE: true
 
         - os: macos-15-intel  # X86
           PYTHON_VERSION: "3.15"
-          PUBLISH_RELEASE: true
+          PUBLISH_RELEASE: false
         - os: macos-latest  # ARM
           PYTHON_VERSION: "3.15"
-          PUBLISH_RELEASE: true
+          PUBLISH_RELEASE: false
         - os: ubuntu-latest
           PYTHON_VERSION: "3.15"
-          PUBLISH_RELEASE: true
+          PUBLISH_RELEASE: false
         - os: ubuntu-24.04-arm  # https://github.com/actions/partner-runner-images#available-images
           PYTHON_VERSION: "3.15"
-          PUBLISH_RELEASE: true
+          PUBLISH_RELEASE: false
         - os: windows-latest
           PYTHON_VERSION: "3.15"
-          PUBLISH_RELEASE: true
+          PUBLISH_RELEASE: false
 
     runs-on: ${{ matrix.os }} # https://github.com/actions/runner-images#available-images
     timeout-minutes: 20
@@ -315,7 +315,7 @@ jobs:
 
 
     - name: Build Docker image
-      if: startsWith(matrix.os, 'ubuntu')
+      if: startsWith(matrix.os, 'ubuntu') && matrix.PUBLISH_RELEASE
       run: |
         set -eux
 
