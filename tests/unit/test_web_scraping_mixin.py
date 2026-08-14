@@ -1461,6 +1461,19 @@ class TestWebScrapingBrowserConfiguration:
         assert "--custom-arg=value" in args
         assert "--incognito" in args
 
+    def test_linux_container_detection_uses_cgroup_marker(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(os.path, "exists", lambda _: False)
+        with patch("builtins.open", mock_open(read_data = "0::/docker/test-container\n")):
+            assert browser_diagnostics._is_linux_container() is True  # noqa: SLF001
+
+    def test_linux_capability_detection_handles_procfs_errors(self) -> None:
+        with patch("builtins.open", side_effect = OSError("procfs unavailable")):
+            assert browser_diagnostics._has_linux_capability(19) is False  # noqa: SLF001
+
+    def test_linux_capability_detection_reads_effective_capabilities(self) -> None:
+        with patch("builtins.open", mock_open(read_data = "CapEff:\t0000000000080000\n")):
+            assert browser_diagnostics._has_linux_capability(19) is True  # noqa: SLF001
+
     @pytest.mark.skipif(platform.system() != "Linux", reason = "Linux-specific container capability test")
     def test_linux_container_without_sys_ptrace_is_detected(self, monkeypatch:pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(browser_diagnostics, "_is_linux_container", lambda: True)

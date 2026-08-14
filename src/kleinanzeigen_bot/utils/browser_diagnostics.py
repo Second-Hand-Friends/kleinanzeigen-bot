@@ -80,7 +80,8 @@ def _has_linux_capability(capability:int) -> bool:
                     effective_capabilities = int(line.split(maxsplit = 1)[1], 16)
                     return bool(effective_capabilities & (1 << capability))
     except (OSError, ValueError, IndexError):
-        pass
+        # procfs can be unavailable in restricted containers; treat the capability as absent.
+        return False
     return False
 
 
