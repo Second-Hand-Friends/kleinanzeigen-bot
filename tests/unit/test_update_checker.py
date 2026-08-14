@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone, tzinfo
+from datetime import UTC, datetime, timedelta, timezone, tzinfo
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, patch
 
@@ -29,13 +29,13 @@ def _freeze_update_state_datetime(monkeypatch:pytest.MonkeyPatch, fixed_now:date
 
     class FixedDateTime(datetime):
         @classmethod
-        def now(cls, tz:tzinfo | None = None) -> "FixedDateTime":
+        def now(cls, tz:tzinfo | None = None) -> FixedDateTime:
             base = fixed_now.replace(tzinfo = None) if tz is None else fixed_now.astimezone(tz)
             return cls(base.year, base.month, base.day, base.hour, base.minute, base.second, base.microsecond, tzinfo = base.tzinfo)
 
         @classmethod
-        def utcnow(cls) -> "FixedDateTime":
-            base = fixed_now.astimezone(timezone.utc).replace(tzinfo = None)
+        def utcnow(cls) -> FixedDateTime:
+            base = fixed_now.astimezone(UTC).replace(tzinfo = None)
             return cls(base.year, base.month, base.day, base.hour, base.minute, base.second, base.microsecond)
 
     datetime_module = getattr(update_check_state_module, "datetime")
@@ -72,9 +72,9 @@ class TestUpdateChecker:
         with patch("requests.get", return_value = MagicMock(json = lambda: {"sha": "e7a3d46", "commit": {"author": {"date": "2025-05-18T00:00:00Z"}}})):
             commit_hash, commit_date = checker._resolve_commitish("latest")
             assert commit_hash == "e7a3d46"
-            assert commit_date == datetime(2025, 5, 18, tzinfo = timezone.utc)
+            assert commit_date == datetime(2025, 5, 18, tzinfo = UTC)
 
-    def test_request_timeout_uses_config(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
+    def test_request_timeout_uses_config(self, config:Config, state_file:Path, mocker:MockerFixture) -> None:
         """Ensure HTTP calls honor the timeout configuration."""
         config.timeouts.multiplier = 1.5
         checker = UpdateChecker(config, state_file)
@@ -86,7 +86,7 @@ class TestUpdateChecker:
         expected_timeout = config.timeouts.effective("update_check")
         assert mock_get.call_args.kwargs["timeout"] == expected_timeout
 
-    def test_resolve_commitish_no_commit(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
+    def test_resolve_commitish_no_commit(self, config:Config, state_file:Path, mocker:MockerFixture) -> None:
         """Test resolving a commit-ish when the API returns no commit data."""
         checker = UpdateChecker(config, state_file)
         mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"sha": "abc"}))
@@ -134,7 +134,7 @@ class TestUpdateChecker:
             checker.check_for_updates()  # Should not raise exception
 
     def test_check_for_updates_latest_prerelease_warning(
-        self, config:Config, state_file:Path, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture
+        self, config:Config, state_file:Path, mocker:MockerFixture, caplog:pytest.LogCaptureFixture
     ) -> None:
         """Test that the update checker warns when latest points to a prerelease."""
         caplog.set_level("WARNING", logger = "kleinanzeigen_bot.update_checker")
@@ -149,7 +149,7 @@ class TestUpdateChecker:
         expected = "Latest release from GitHub is a prerelease, but 'latest' channel expects a stable release."
         assert any(expected in r.getMessage() for r in caplog.records)
 
-    def test_check_for_updates_ahead(self, config:Config, state_file:Path, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
+    def test_check_for_updates_ahead(self, config:Config, state_file:Path, mocker:MockerFixture, caplog:pytest.LogCaptureFixture) -> None:
         """Test that the update checker correctly identifies when the local version is ahead of the latest release."""
         caplog.set_level("INFO", logger = "kleinanzeigen_bot.update_checker")
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
@@ -157,7 +157,7 @@ class TestUpdateChecker:
         mocker.patch.object(
             UpdateChecker,
             "_resolve_commitish",
-            side_effect = [("fb00f11", datetime(2025, 5, 18, tzinfo = timezone.utc)), ("e7a3d46", datetime(2025, 5, 16, tzinfo = timezone.utc))],
+            side_effect = [("fb00f11", datetime(2025, 5, 18, tzinfo = UTC)), ("e7a3d46", datetime(2025, 5, 16, tzinfo = UTC))],
         )
         mocker.patch.object(requests, "get", return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": False}))
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
@@ -168,7 +168,7 @@ class TestUpdateChecker:
         msgs = [r.getMessage() for r in caplog.records if r.levelno >= logging.INFO]
         assert any("different commit" in m and "channel 'latest'" in m for m in msgs)
 
-    def test_check_for_updates_preview(self, config:Config, state_file:Path, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
+    def test_check_for_updates_preview(self, config:Config, state_file:Path, mocker:MockerFixture, caplog:pytest.LogCaptureFixture) -> None:
         """Test that the update checker correctly handles preview releases."""
         caplog.set_level("INFO", logger = "kleinanzeigen_bot.update_checker")
         config.update_check.channel = "preview"
@@ -177,7 +177,7 @@ class TestUpdateChecker:
         mocker.patch.object(
             UpdateChecker,
             "_resolve_commitish",
-            side_effect = [("fb00f11", datetime(2025, 5, 18, tzinfo = timezone.utc)), ("e7a3d46", datetime(2025, 5, 16, tzinfo = timezone.utc))],
+            side_effect = [("fb00f11", datetime(2025, 5, 18, tzinfo = UTC)), ("e7a3d46", datetime(2025, 5, 16, tzinfo = UTC))],
         )
         mocker.patch.object(requests, "get", return_value = mocker.Mock(json = lambda: [{"tag_name": "preview", "prerelease": True, "draft": False}]))
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
@@ -189,7 +189,7 @@ class TestUpdateChecker:
         assert any("different commit" in m and "channel 'preview'" in m for m in msgs)
 
     def test_check_for_updates_preview_missing_prerelease(
-        self, config:Config, state_file:Path, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture
+        self, config:Config, state_file:Path, mocker:MockerFixture, caplog:pytest.LogCaptureFixture
     ) -> None:
         """Test that the update checker warns when no preview prerelease is available."""
         caplog.set_level("WARNING", logger = "kleinanzeigen_bot.update_checker")
@@ -204,7 +204,7 @@ class TestUpdateChecker:
 
         assert any("No prerelease found for 'preview' channel." in r.getMessage() for r in caplog.records)
 
-    def test_check_for_updates_behind(self, config:Config, state_file:Path, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
+    def test_check_for_updates_behind(self, config:Config, state_file:Path, mocker:MockerFixture, caplog:pytest.LogCaptureFixture) -> None:
         """Test that the update checker correctly identifies when the local version is behind the latest release."""
         caplog.set_level("INFO", logger = "kleinanzeigen_bot.update_checker")
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
@@ -212,7 +212,7 @@ class TestUpdateChecker:
         mocker.patch.object(
             UpdateChecker,
             "_resolve_commitish",
-            side_effect = [("fb00f11", datetime(2025, 5, 16, tzinfo = timezone.utc)), ("e7a3d46", datetime(2025, 5, 18, tzinfo = timezone.utc))],
+            side_effect = [("fb00f11", datetime(2025, 5, 16, tzinfo = UTC)), ("e7a3d46", datetime(2025, 5, 18, tzinfo = UTC))],
         )
         mocker.patch.object(requests, "get", return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": False}))
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
@@ -223,7 +223,7 @@ class TestUpdateChecker:
         msgs = [r.getMessage() for r in caplog.records if r.levelno >= logging.INFO]
         assert any("new version is available" in m and "channel: latest" in m for m in msgs)
 
-    def test_check_for_updates_logs_release_notes(self, config:Config, state_file:Path, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
+    def test_check_for_updates_logs_release_notes(self, config:Config, state_file:Path, mocker:MockerFixture, caplog:pytest.LogCaptureFixture) -> None:
         """Test that release notes are logged when present."""
         caplog.set_level("INFO", logger = "kleinanzeigen_bot.update_checker")
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
@@ -231,7 +231,7 @@ class TestUpdateChecker:
         mocker.patch.object(
             UpdateChecker,
             "_resolve_commitish",
-            side_effect = [("fb00f11", datetime(2025, 5, 16, tzinfo = timezone.utc)), ("e7a3d46", datetime(2025, 5, 18, tzinfo = timezone.utc))],
+            side_effect = [("fb00f11", datetime(2025, 5, 16, tzinfo = UTC)), ("e7a3d46", datetime(2025, 5, 18, tzinfo = UTC))],
         )
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
         mocker.patch.object(
@@ -248,7 +248,7 @@ class TestUpdateChecker:
 
         assert any("Release notes:\nRelease notes here" in r.getMessage() for r in caplog.records)
 
-    def test_check_for_updates_same(self, config:Config, state_file:Path, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
+    def test_check_for_updates_same(self, config:Config, state_file:Path, mocker:MockerFixture, caplog:pytest.LogCaptureFixture) -> None:
         """Test that the update checker correctly identifies when the local version is the same as the latest release."""
         caplog.set_level("INFO", logger = "kleinanzeigen_bot.update_checker")
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
@@ -256,7 +256,7 @@ class TestUpdateChecker:
         mocker.patch.object(
             UpdateChecker,
             "_resolve_commitish",
-            side_effect = [("fb00f11", datetime(2025, 5, 18, tzinfo = timezone.utc)), ("fb00f11", datetime(2025, 5, 18, tzinfo = timezone.utc))],
+            side_effect = [("fb00f11", datetime(2025, 5, 18, tzinfo = UTC)), ("fb00f11", datetime(2025, 5, 18, tzinfo = UTC))],
         )
         mocker.patch.object(requests, "get", return_value = mocker.Mock(json = lambda: {"tag_name": "latest", "prerelease": False}))
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
@@ -267,7 +267,7 @@ class TestUpdateChecker:
         msgs = [r.getMessage() for r in caplog.records if r.levelno >= logging.INFO]
         assert any("on the latest version" in m and "channel latest" in m for m in msgs)
 
-    def test_check_for_updates_unknown_channel(self, config:Config, state_file:Path, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
+    def test_check_for_updates_unknown_channel(self, config:Config, state_file:Path, mocker:MockerFixture, caplog:pytest.LogCaptureFixture) -> None:
         """Test that the update checker warns on unknown update channels."""
         caplog.set_level("WARNING", logger = "kleinanzeigen_bot.update_checker")
         cast(Any, config.update_check).channel = "unknown"
@@ -320,7 +320,7 @@ class TestUpdateChecker:
     def test_update_check_state_interval_units(self, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that different interval units are handled correctly."""
         state = UpdateCheckState()
-        fixed_now = datetime(2025, 1, 15, 8, 0, tzinfo = timezone.utc)
+        fixed_now = datetime(2025, 1, 15, 8, 0, tzinfo = UTC)
         _freeze_update_state_datetime(monkeypatch, fixed_now)
         now = fixed_now
 
@@ -369,7 +369,7 @@ class TestUpdateChecker:
     def test_update_check_state_interval_validation(self, monkeypatch:pytest.MonkeyPatch) -> None:
         """Test that interval validation works correctly."""
         state = UpdateCheckState()
-        fixed_now = datetime(2025, 1, 1, 12, 0, tzinfo = timezone.utc)
+        fixed_now = datetime(2025, 1, 1, 12, 0, tzinfo = UTC)
 
         _freeze_update_state_datetime(monkeypatch, fixed_now)
 
@@ -442,7 +442,7 @@ class TestUpdateChecker:
         state = UpdateCheckState.load(state_file)
         assert state.last_check is None
 
-    def test_resolve_commitish_no_author(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
+    def test_resolve_commitish_no_author(self, config:Config, state_file:Path, mocker:MockerFixture) -> None:
         """Test resolving a commit-ish when the API returns no author key."""
         checker = UpdateChecker(config, state_file)
         mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"sha": "abc", "commit": {}}))
@@ -450,7 +450,7 @@ class TestUpdateChecker:
         assert commit_hash == "abc"
         assert commit_date is None
 
-    def test_resolve_commitish_no_date(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
+    def test_resolve_commitish_no_date(self, config:Config, state_file:Path, mocker:MockerFixture) -> None:
         """Test resolving a commit-ish when the API returns no date key."""
         checker = UpdateChecker(config, state_file)
         mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"sha": "abc", "commit": {"author": {}}}))
@@ -458,7 +458,7 @@ class TestUpdateChecker:
         assert commit_hash == "abc"
         assert commit_date is None
 
-    def test_resolve_commitish_list_instead_of_dict(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
+    def test_resolve_commitish_list_instead_of_dict(self, config:Config, state_file:Path, mocker:MockerFixture) -> None:
         """Test resolving a commit-ish when the API returns a list instead of dict."""
         checker = UpdateChecker(config, state_file)
         mocker.patch("requests.get", return_value = mocker.Mock(json = list))
@@ -466,7 +466,7 @@ class TestUpdateChecker:
         assert commit_hash is None
         assert commit_date is None
 
-    def test_check_for_updates_missing_release_commitish(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
+    def test_check_for_updates_missing_release_commitish(self, config:Config, state_file:Path, mocker:MockerFixture) -> None:
         """Test check_for_updates handles missing release commit-ish."""
         checker = UpdateChecker(config, state_file)
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
@@ -475,21 +475,21 @@ class TestUpdateChecker:
         mocker.patch("requests.get", return_value = mocker.Mock(json = lambda: {"prerelease": False}))
         checker.check_for_updates()  # Should not raise
 
-    def test_check_for_updates_no_releases_empty(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
+    def test_check_for_updates_no_releases_empty(self, config:Config, state_file:Path, mocker:MockerFixture) -> None:
         """Test check_for_updates handles no releases found (API returns empty list)."""
         checker = UpdateChecker(config, state_file)
         mocker.patch("requests.get", return_value = mocker.Mock(json = list))
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
         checker.check_for_updates()  # Should not raise
 
-    def test_check_for_updates_no_commit_hash_extracted(self, config:Config, state_file:Path, mocker:"MockerFixture") -> None:
+    def test_check_for_updates_no_commit_hash_extracted(self, config:Config, state_file:Path, mocker:MockerFixture) -> None:
         """Test check_for_updates handles no commit hash extracted."""
         checker = UpdateChecker(config, state_file)
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025")
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
         checker.check_for_updates()  # Should not raise
 
-    def test_check_for_updates_no_commit_dates(self, config:Config, state_file:Path, mocker:"MockerFixture", caplog:pytest.LogCaptureFixture) -> None:
+    def test_check_for_updates_no_commit_dates(self, config:Config, state_file:Path, mocker:MockerFixture, caplog:pytest.LogCaptureFixture) -> None:
         """Test check_for_updates logs warning if commit dates cannot be determined."""
         caplog.set_level("WARNING", logger = "kleinanzeigen_bot.update_checker")
         mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
@@ -505,7 +505,7 @@ class TestUpdateChecker:
     def test_update_check_state_version_tracking(self, state_file:Path) -> None:
         """Test that version tracking works correctly."""
         # Create a state with version 0 (old format)
-        state_file.write_text(json.dumps({"last_check": datetime.now(timezone.utc).isoformat()}), encoding = "utf-8")
+        state_file.write_text(json.dumps({"last_check": datetime.now(UTC).isoformat()}), encoding = "utf-8")
 
         # Load the state - should migrate to version 1
         state = UpdateCheckState.load(state_file)
@@ -521,7 +521,7 @@ class TestUpdateChecker:
     def test_update_check_state_migration(self, state_file:Path) -> None:
         """Test that state migration works correctly."""
         # Create a state with version 0 (old format)
-        old_time = datetime.now(timezone.utc)
+        old_time = datetime.now(UTC)
         state_file.write_text(json.dumps({"last_check": old_time.isoformat()}), encoding = "utf-8")
 
         # Load the state - should migrate to version 1
@@ -533,15 +533,15 @@ class TestUpdateChecker:
         state.save(state_file)
 
         # Verify the saved file has the new version
-        with open(state_file, "r", encoding = "utf-8") as f:
+        with open(state_file, encoding = "utf-8") as f:
             data = json.load(f)
             assert data["version"] == 1
             assert data["last_check"] == old_time.isoformat()
 
-    def test_update_check_state_save_errors(self, state_file:Path, mocker:"MockerFixture") -> None:
+    def test_update_check_state_save_errors(self, state_file:Path, mocker:MockerFixture) -> None:
         """Test that save errors are handled gracefully."""
         state = UpdateCheckState()
-        state.last_check = datetime.now(timezone.utc)
+        state.last_check = datetime.now(UTC)
 
         # Test permission error
         mocker.patch("kleinanzeigen_bot.utils.dicts.save_dict", side_effect = PermissionError)
@@ -557,7 +557,7 @@ class TestUpdateChecker:
         state_file.write_text(json.dumps({"version": 1, "last_check": "2024-03-20T12:00:00"}), encoding = "utf-8")
         state = UpdateCheckState.load(state_file)
         assert state.last_check is not None
-        assert state.last_check.tzinfo == timezone.utc
+        assert state.last_check.tzinfo == UTC
         assert state.last_check.hour == 12
 
         # Test loading timestamp with different timezone (should convert to UTC)
@@ -572,14 +572,14 @@ class TestUpdateChecker:
         )
         state = UpdateCheckState.load(state_file)
         assert state.last_check is not None
-        assert state.last_check.tzinfo == timezone.utc
+        assert state.last_check.tzinfo == UTC
         assert state.last_check.hour == 10  # Converted to UTC
 
         # Test saving timestamp (should always be in UTC)
         state = UpdateCheckState()
         state.last_check = datetime(2024, 3, 20, 12, 0, tzinfo = timezone(timedelta(hours = 2)))
         state.save(state_file)
-        with open(state_file, "r", encoding = "utf-8") as f:
+        with open(state_file, encoding = "utf-8") as f:
             data = json.load(f)
             assert data["last_check"] == "2024-03-20T10:00:00+00:00"  # Converted to UTC
 
@@ -604,7 +604,7 @@ class TestUpdateChecker:
     def test_should_check_fallback_to_default_interval(self, caplog:pytest.LogCaptureFixture) -> None:
         """Test that should_check falls back to default interval and logs a warning for invalid/too short/too long/zero intervals and unsupported units."""
         state = UpdateCheckState()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         state.last_check = now - timedelta(days = 2)
 
         # Invalid format (unsupported unit)

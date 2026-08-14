@@ -48,7 +48,7 @@ class AutoPriceReductionConfig(ContextualModel):
     )
 
     @model_validator(mode = "after")
-    def _validate_config(self) -> "AutoPriceReductionConfig":
+    def _validate_config(self) -> AutoPriceReductionConfig:
         if self.enabled:
             if self.strategy is None:
                 raise ValueError(_("strategy must be specified when auto_price_reduction is enabled"))
@@ -197,7 +197,7 @@ class DownloadConfig(ContextualModel):
         return trimmed
 
     @model_validator(mode = "after")
-    def _validate_templates(self) -> "DownloadConfig":
+    def _validate_templates(self) -> DownloadConfig:
         self.folder_name_template = _validate_download_template(
             self.folder_name_template,
             allowed_fields = _DOWNLOAD_TEMPLATE_ALLOWED_FIELDS,
@@ -487,7 +487,7 @@ class DiagnosticsConfig(ContextualModel):
         return data
 
     @model_validator(mode = "after")
-    def _validate_pause_requires_capture(self) -> "DiagnosticsConfig":
+    def _validate_pause_requires_capture(self) -> DiagnosticsConfig:
         if self.pause_on_login_detection_failure and not self.capture_on.login_detection:
             raise ValueError(_("pause_on_login_detection_failure requires capture_on.login_detection to be enabled"))
         return self

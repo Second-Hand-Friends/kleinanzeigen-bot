@@ -72,8 +72,7 @@ def _is_retryable_rmtree_error(error:BaseException) -> bool:
     return error.errno in {errno.EACCES, errno.EPERM, errno.EBUSY}
 
 
-def _handle_rmtree_onerror(func:Any, path:str, exc_info:tuple[type[BaseException], BaseException, Any]) -> None:
-    error = exc_info[1]
+def _handle_rmtree_onexc(func:Any, path:str, error:BaseException) -> None:
     if not _is_retryable_rmtree_error(error):
         raise error
 
@@ -99,7 +98,7 @@ def _remove_tree_with_retries(path:Path) -> None:
     last_error:OSError | None = None
     for attempt in range(_RMTREE_RETRY_ATTEMPTS):
         try:
-            shutil.rmtree(path, onerror = _handle_rmtree_onerror)
+            shutil.rmtree(path, onexc = _handle_rmtree_onexc)
             return
         except FileNotFoundError:
             return
@@ -603,7 +602,7 @@ class AdExtractor(WebScrapingMixin):
         """
         if reflect.is_integer(id_or_url):
             # navigate to search page
-            await self.web_open("https://www.kleinanzeigen.de/s-suchanfrage.html?keywords={0}".format(id_or_url))
+            await self.web_open(f"https://www.kleinanzeigen.de/s-suchanfrage.html?keywords={id_or_url}")
         else:
             await self.web_open(str(id_or_url))  # navigate to URL directly given
         await self.web_sleep()

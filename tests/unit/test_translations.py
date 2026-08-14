@@ -95,7 +95,7 @@ def _extract_log_messages(file_path:str, exclude_debug:bool = False) -> MessageD
     Returns:
         Dictionary mapping function names to their messages
     """
-    with open(file_path, "r", encoding = "utf-8") as file:
+    with open(file_path, encoding = "utf-8") as file:
         tree = ast.parse(file.read(), filename = file_path)
 
     # Add parent references for context tracking

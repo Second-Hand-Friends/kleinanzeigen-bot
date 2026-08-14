@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, Protocol, runtime_checkable
 
@@ -347,7 +347,7 @@ def test_apply_auto_price_reduction_waits_when_reduction_already_applied(
 def test_apply_auto_price_reduction_respects_day_delay(
     monkeypatch:pytest.MonkeyPatch, caplog:pytest.LogCaptureFixture, apply_auto_price_reduction:_ApplyAutoPriceReduction
 ) -> None:
-    reference = datetime(2025, 1, 1, tzinfo = timezone.utc)
+    reference = datetime(2025, 1, 1, tzinfo = UTC)
     ad_cfg = SimpleNamespace(
         price = 150,
         auto_price_reduction = AutoPriceReductionConfig(
@@ -377,7 +377,7 @@ def test_apply_auto_price_reduction_respects_day_delay(
 
 @pytest.mark.unit
 def test_apply_auto_price_reduction_runs_after_delays(monkeypatch:pytest.MonkeyPatch, apply_auto_price_reduction:_ApplyAutoPriceReduction) -> None:
-    reference = datetime(2025, 1, 1, tzinfo = timezone.utc)
+    reference = datetime(2025, 1, 1, tzinfo = UTC)
     ad_cfg = SimpleNamespace(
         price = 120,
         auto_price_reduction = AutoPriceReductionConfig(
@@ -607,7 +607,7 @@ def test_apply_modify_mode_applies_reduction_when_on_update_true_and_day_delay_s
 
     delay_reposts must be ignored in MODIFY mode (repost count does not change).
     """
-    reference = datetime(2025, 1, 1, tzinfo = timezone.utc)
+    reference = datetime(2025, 1, 1, tzinfo = UTC)
     ad_cfg = SimpleNamespace(
         price = 200,
         # delay_reposts=5 would normally block reduction, but MODIFY mode ignores it
@@ -632,7 +632,7 @@ def test_apply_modify_mode_skips_new_cycle_when_day_delay_not_satisfied(
     apply_auto_price_reduction:_ApplyAutoPriceReduction,
 ) -> None:
     """MODIFY mode with on_update=true does NOT apply a new cycle when day delay is not met."""
-    reference = datetime(2025, 1, 1, tzinfo = timezone.utc)
+    reference = datetime(2025, 1, 1, tzinfo = UTC)
     ad_cfg = SimpleNamespace(
         price = 200,
         auto_price_reduction = _price_cfg(on_update = True, amount = 25, delay_days = 3),
@@ -905,7 +905,7 @@ def test_is_price_reduction_due_returns_true_when_eligible_real(
     monkeypatch:pytest.MonkeyPatch,
 ) -> None:
     """is_auto_price_reduction_due returns True when eligible (exercises real evaluate_auto_price_reduction)."""
-    now_dt = datetime(2024, 6, 1, tzinfo = timezone.utc)
+    now_dt = datetime(2024, 6, 1, tzinfo = UTC)
     monkeypatch.setattr("kleinanzeigen_bot.utils.misc.now", lambda: now_dt)
 
     price_cfg = _price_cfg(on_update = True, delay_days = 0)
@@ -914,7 +914,7 @@ def test_is_price_reduction_due_returns_true_when_eligible_real(
         price = 100,
         auto_price_reduction = price_cfg,
         price_reduction_count = 0,
-        updated_on = datetime(2024, 1, 1, tzinfo = timezone.utc),
+        updated_on = datetime(2024, 1, 1, tzinfo = UTC),
         repost_count = 5,
     )
 
@@ -926,7 +926,7 @@ def test_is_price_reduction_due_returns_false_when_delay_not_satisfied_real(
     monkeypatch:pytest.MonkeyPatch,
 ) -> None:
     """is_auto_price_reduction_due returns False when day-delay is not satisfied (exercises real evaluate_auto_price_reduction)."""
-    now_dt = datetime(2024, 1, 1, 12, 0, 0, tzinfo = timezone.utc)
+    now_dt = datetime(2024, 1, 1, 12, 0, 0, tzinfo = UTC)
     monkeypatch.setattr("kleinanzeigen_bot.utils.misc.now", lambda: now_dt)
 
     price_cfg = _price_cfg(on_update = True, delay_days = 1)
@@ -935,7 +935,7 @@ def test_is_price_reduction_due_returns_false_when_delay_not_satisfied_real(
         price = 100,
         auto_price_reduction = price_cfg,
         price_reduction_count = 0,
-        updated_on = datetime(2024, 1, 1, tzinfo = timezone.utc),
+        updated_on = datetime(2024, 1, 1, tzinfo = UTC),
         repost_count = 5,
     )
 
@@ -947,7 +947,7 @@ def test_is_price_reduction_due_returns_false_when_on_update_disabled_real(
     monkeypatch:pytest.MonkeyPatch,
 ) -> None:
     """is_auto_price_reduction_due returns False when on_update is False (exercises real evaluate_auto_price_reduction)."""
-    now_dt = datetime(2024, 6, 1, tzinfo = timezone.utc)
+    now_dt = datetime(2024, 6, 1, tzinfo = UTC)
     monkeypatch.setattr("kleinanzeigen_bot.utils.misc.now", lambda: now_dt)
 
     price_cfg = _price_cfg(on_update = False, delay_days = 0)
@@ -956,7 +956,7 @@ def test_is_price_reduction_due_returns_false_when_on_update_disabled_real(
         price = 100,
         auto_price_reduction = price_cfg,
         price_reduction_count = 0,
-        updated_on = datetime(2024, 1, 1, tzinfo = timezone.utc),
+        updated_on = datetime(2024, 1, 1, tzinfo = UTC),
         repost_count = 5,
     )
 

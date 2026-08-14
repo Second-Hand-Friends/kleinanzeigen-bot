@@ -78,35 +78,35 @@ jobs:
       matrix:
         include:
         - os: macos-15-intel  # X86
-          PYTHON_VERSION: "3.10"
+          PYTHON_VERSION: "3.12"
           PUBLISH_RELEASE: false
         - os: macos-latest  # ARM
-          PYTHON_VERSION: "3.10"
+          PYTHON_VERSION: "3.12"
           PUBLISH_RELEASE: false
         - os: ubuntu-latest
-          PYTHON_VERSION: "3.10"
+          PYTHON_VERSION: "3.12"
           PUBLISH_RELEASE: false
         - os: ubuntu-24.04-arm  # https://github.com/actions/partner-runner-images#available-images
-          PYTHON_VERSION: "3.10"
+          PYTHON_VERSION: "3.12"
           PUBLISH_RELEASE: false
         - os: windows-latest
-          PYTHON_VERSION: "3.10"
+          PYTHON_VERSION: "3.12"
           PUBLISH_RELEASE: false
 
         - os: macos-15-intel  # X86
-          PYTHON_VERSION: "3.14"
+          PYTHON_VERSION: "3.15"
           PUBLISH_RELEASE: true
         - os: macos-latest  # ARM
-          PYTHON_VERSION: "3.14"
+          PYTHON_VERSION: "3.15"
           PUBLISH_RELEASE: true
         - os: ubuntu-latest
-          PYTHON_VERSION: "3.14"
+          PYTHON_VERSION: "3.15"
           PUBLISH_RELEASE: true
         - os: ubuntu-24.04-arm  # https://github.com/actions/partner-runner-images#available-images
-          PYTHON_VERSION: "3.14"
+          PYTHON_VERSION: "3.15"
           PUBLISH_RELEASE: true
         - os: windows-latest
-          PYTHON_VERSION: "3.14"
+          PYTHON_VERSION: "3.15"
           PUBLISH_RELEASE: true
 
     runs-on: ${{ matrix.os }} # https://github.com/actions/runner-images#available-images
@@ -178,12 +178,12 @@ jobs:
 
 
     - name: Check generated schemas and default docs config
-      if: matrix.os == 'ubuntu-latest' && matrix.PYTHON_VERSION == '3.14'
+      if: matrix.os == 'ubuntu-latest' && matrix.PYTHON_VERSION == '3.15'
       run: pdm run python scripts/check_generated_artifacts.py
 
 
     - name: Check GitHub Actions workflows
-      if: matrix.os == 'ubuntu-latest' && matrix.PYTHON_VERSION == '3.14'
+      if: matrix.os == 'ubuntu-latest' && matrix.PYTHON_VERSION == '3.15'
       run: pdm run lint:actions
 
 

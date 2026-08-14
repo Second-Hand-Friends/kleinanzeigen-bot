@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 class UpdateChecker:
     """Checks for updates to the bot."""
 
-    def __init__(self, config:"Config", state_file:"Path") -> None:
+    def __init__(self, config:Config, state_file:Path) -> None:
         """Initialize the update checker.
 
         Args:

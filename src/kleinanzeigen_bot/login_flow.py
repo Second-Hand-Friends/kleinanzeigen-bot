@@ -14,11 +14,11 @@ import asyncio
 import enum
 import sys
 import urllib.parse as urllib_parse
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from gettext import gettext as _
 from pathlib import Path
-from typing import Final, Sequence
+from typing import Final
 
 from nodriver.core.connection import ProtocolException
 
@@ -477,7 +477,7 @@ async def wait_for_post_auth0_submit_transition(
     login_confirmed = False
     try:
         login_confirmed = await asyncio.wait_for(is_logged_in(web, username = username), timeout = post_submit_timeout)
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         LOG.debug("Post-submit login verification did not complete within %.1fs", post_submit_timeout)
 
     if login_confirmed:
@@ -490,7 +490,7 @@ async def wait_for_post_auth0_submit_transition(
     try:
         if await asyncio.wait_for(is_logged_in(web, username = username), timeout = quick_dom_timeout):
             return
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         LOG.debug("Final post-submit login confirmation did not complete within %.1fs", quick_dom_timeout)
 
     classification = await _classify_post_submit_state(web)

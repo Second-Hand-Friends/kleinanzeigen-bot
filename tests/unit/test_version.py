@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import importlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,7 +16,7 @@ class TestVersion:
         monkeypatch.setenv("GIT_COMMIT_HASH", "abc1234")
 
         with patch("version.shutil.which") as which_mock, patch("version.subprocess.run") as run_mock:
-            assert version.get_version() == f"{datetime.now(timezone.utc).year}+abc1234"
+            assert version.get_version() == f"{datetime.now(UTC).year}+abc1234"
 
         which_mock.assert_not_called()
         run_mock.assert_not_called()
@@ -27,7 +27,7 @@ class TestVersion:
         result = MagicMock(stdout = "deadbee\n")
 
         with patch("version.shutil.which", return_value = "/usr/bin/git") as which_mock, patch("version.subprocess.run", return_value = result) as run_mock:
-            assert version.get_version() == f"{datetime.now(timezone.utc).year}+deadbee"
+            assert version.get_version() == f"{datetime.now(UTC).year}+deadbee"
 
         which_mock.assert_called_once_with("git")
         run_mock.assert_called_once_with(

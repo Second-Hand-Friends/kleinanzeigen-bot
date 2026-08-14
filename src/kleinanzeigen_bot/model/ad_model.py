@@ -11,10 +11,9 @@ from dataclasses import dataclass
 from datetime import datetime  # noqa: TC003 Move import into a type-checking block
 from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
 from gettext import gettext as _
-from typing import Annotated, Any, Final, Literal
+from typing import Annotated, Any, Final, Literal, Self
 
 from pydantic import AfterValidator, Field, field_validator, model_validator
-from typing_extensions import Self
 
 from kleinanzeigen_bot.model.config_model import AdDefaults, AutoPriceReductionConfig  # noqa: TC001 Move application import into a type-checking block
 from kleinanzeigen_bot.utils import dicts
@@ -446,14 +445,14 @@ class Ad(AdPartial):
     price_reduction_count:int = 0
 
     @model_validator(mode = "after")
-    def _validate_auto_price_config(self) -> "Ad":
+    def _validate_auto_price_config(self) -> Ad:
         # Validate the final Ad object after merging with defaults
         # This ensures the merged configuration is valid even if raw YAML had None values
         _validate_auto_price_reduction_constraints(self.price, self.auto_price_reduction)
         return self
 
     @model_validator(mode = "after")
-    def _validate_sell_directly(self) -> "Ad":
+    def _validate_sell_directly(self) -> Ad:
         # Direct-buy rules apply only to non-WANTED ads.
         # WANTED ads with sell_directly: true are silently accepted
         # (publishing skips direct-buy handling for them).

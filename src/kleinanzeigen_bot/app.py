@@ -68,7 +68,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # capture_login_detection_diagnostics_if_enabled can read/write it
         # via getattr/setattr. The per-attempt reset happens in login_flow.login().
         self._login_detection_diagnostics_captured:bool = False
-        self._timing_collector:"TimingCollector | None" = None
+        self._timing_collector:TimingCollector | None = None
 
     def __del__(self) -> None:
         if self.file_log:

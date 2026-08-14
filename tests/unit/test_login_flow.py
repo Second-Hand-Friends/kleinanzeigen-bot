@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import asyncio
 import inspect
 from collections.abc import Callable
 from pathlib import Path
@@ -760,7 +759,7 @@ class TestKleinanzeigenBotAuthentication:
         """Sleep fallback should run when bounded login check times out."""
         with (
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]) as mock_wait,
-            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError) as mock_is_logged_in,
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = TimeoutError) as mock_is_logged_in,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
             patch(
                 "kleinanzeigen_bot.login_flow._classify_post_submit_state",
@@ -1449,7 +1448,7 @@ class TestClassifyPostSubmitState:
         """TimeoutError uses coarse labels and sanitised URL."""
         with (
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]),
-            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = TimeoutError),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch(
                 "kleinanzeigen_bot.login_flow._classify_post_submit_state",
@@ -1495,7 +1494,7 @@ class TestClassifyPostSubmitState:
         """TimeoutError prefix preserved when URL retrieval fails."""
         with (
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]),
-            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = TimeoutError),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch(
                 "kleinanzeigen_bot.login_flow._classify_post_submit_state",
@@ -1528,7 +1527,7 @@ class TestClassifyPostSubmitState:
         with (
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _call_predicate),
             patch("kleinanzeigen_bot.login_flow.current_page_url", side_effect = RuntimeError("boom")),
-            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = TimeoutError),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.login_flow._classify_post_submit_state", new_callable = AsyncMock, return_value = "STILL_ON_PASSWORD_PAGE"),
             pytest.raises(TimeoutError, match = "Auth0 post-submit verification remained inconclusive"),
@@ -1556,7 +1555,7 @@ class TestClassifyPostSubmitState:
 
         with (
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]),
-            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = TimeoutError),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch(
                 "kleinanzeigen_bot.login_flow._classify_post_submit_state",
@@ -1599,7 +1598,7 @@ class TestClassifyPostSubmitState:
         """Disabled diagnostics config (None) skips capture and raises original TimeoutError."""
         with (
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]),
-            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = TimeoutError),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch(
                 "kleinanzeigen_bot.login_flow._classify_post_submit_state",
@@ -1630,7 +1629,7 @@ class TestClassifyPostSubmitState:
 
         with (
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]),
-            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = TimeoutError),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch(
                 "kleinanzeigen_bot.login_flow._classify_post_submit_state",
@@ -1669,7 +1668,7 @@ class TestClassifyPostSubmitState:
 
         with (
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [TimeoutError()]),
-            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = asyncio.TimeoutError),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = TimeoutError),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch(
                 "kleinanzeigen_bot.login_flow._classify_post_submit_state",

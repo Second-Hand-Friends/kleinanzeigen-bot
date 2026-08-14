@@ -6,8 +6,9 @@
 
 import json
 import re
+from collections.abc import Sequence
 from gettext import gettext as _
-from typing import Any, Final, Sequence, cast
+from typing import Any, Final, cast
 
 from .ad_description import get_ad_description
 from .ad_form_helpers import (

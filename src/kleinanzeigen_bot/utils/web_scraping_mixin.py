@@ -5,13 +5,8 @@ import asyncio, enum, inspect, json, math, os, platform, secrets, shutil, subpro
 from collections.abc import Awaitable, Callable, Coroutine, Iterable, Sequence
 from gettext import gettext as _
 from pathlib import Path, PureWindowsPath
-from typing import Any, Final, Optional, cast
+from typing import Any, Final, cast, overload
 from urllib.parse import urlparse
-
-try:
-    from typing import Never  # type: ignore[attr-defined,unused-ignore] # mypy
-except ImportError:
-    from typing import NoReturn as Never  # Python <3.11
 
 import nodriver, psutil  # isort: skip
 from nodriver.cdp import browser as cdp_browser, input_ as cdp_input  # isort: skip
@@ -38,7 +33,6 @@ from .misc import T, ensure
 
 if TYPE_CHECKING:
     from nodriver.cdp.runtime import RemoteObject
-
 
 # Crypto-secure RNG used for human-like interaction jitter (typing, timing, viewport).
 # Using SystemRandom keeps behavior unpredictable and stays consistent with the module's use of
@@ -323,7 +317,7 @@ class WebScrapingMixin:  # noqa: PLR0904
     def _get_humanization_config(self) -> HumanizationConfig:
         config = getattr(self, "config", None)
         if config is not None:
-            humanization = cast(Optional[HumanizationConfig], getattr(config, "humanization", None))
+            humanization = cast(HumanizationConfig | None, getattr(config, "humanization", None))
             if humanization is not None:
                 return humanization
 
@@ -335,7 +329,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         config = getattr(self, "config", None)
         timeouts:TimeoutConfig | None = None
         if config is not None:
-            timeouts = cast(Optional[TimeoutConfig], getattr(config, "timeouts", None))
+            timeouts = cast(TimeoutConfig | None, getattr(config, "timeouts", None))
             if timeouts is not None:
                 return timeouts
 
@@ -951,7 +945,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 timeout = _BROWSER_PROCESS_EXIT_TIMEOUT_SECONDS,
             )
             return
-        except (TimeoutError, asyncio.TimeoutError, OSError) as exc:
+        except (TimeoutError, OSError) as exc:
             LOG.debug("Browser process did not exit cleanly: %s", exc)
 
         try:
@@ -965,7 +959,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 browser_process.wait(),
                 timeout = _BROWSER_PROCESS_KILL_TIMEOUT_SECONDS,
             )
-        except (TimeoutError, asyncio.TimeoutError, OSError) as exc:
+        except (TimeoutError, OSError) as exc:
             LOG.debug("Browser process could not be reaped after being killed: %s", exc)
 
     def _close_browser_session_nowait(self) -> None:
@@ -1062,9 +1056,29 @@ class WebScrapingMixin:  # noqa: PLR0904
 
         raise AssertionError(_("Installed browser could not be detected"))
 
+    @overload
     async def web_await(
         self,
-        condition:Callable[[], T | Never | Coroutine[Any, Any, T | Never]],
+        condition:Callable[[], Coroutine[Any, Any, T]],
+        *,
+        timeout:int | float | None = None,
+        timeout_error_message:str = "",
+        apply_multiplier:bool = True,
+    ) -> T: ...
+
+    @overload
+    async def web_await(
+        self,
+        condition:Callable[[], T],
+        *,
+        timeout:int | float | None = None,
+        timeout_error_message:str = "",
+        apply_multiplier:bool = True,
+    ) -> T: ...
+
+    async def web_await(
+        self,
+        condition:Callable[[], T | Coroutine[Any, Any, T]],
         *,
         timeout:int | float | None = None,
         timeout_error_message:str = "",
@@ -1197,7 +1211,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         if _is_remote_object(result):
             try:
                 # Type cast to RemoteObject for type checker
-                remote_obj:"RemoteObject" = result
+                remote_obj:RemoteObject = result
 
                 # Use the proper RemoteObject API - try to get the value directly first
                 if hasattr(remote_obj, "value") and remote_obj.value is not None:
@@ -1346,50 +1360,50 @@ class WebScrapingMixin:  # noqa: PLR0904
         match selector_type:
             case By.ID:
                 escaped_id = selector_value.translate(METACHAR_ESCAPER)
-                return await self.web_await(
+                return cast(Element, await self.web_await(
                     lambda: self.page.query_selector(f"#{escaped_id}", parent),
                     timeout = timeout,
                     timeout_error_message = f"No HTML element found with ID '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
-                )
+                ))
             case By.CLASS_NAME:
                 escaped_classname = selector_value.translate(METACHAR_ESCAPER)
-                return await self.web_await(
+                return cast(Element, await self.web_await(
                     lambda: self.page.query_selector(f".{escaped_classname}", parent),
                     timeout = timeout,
                     timeout_error_message = f"No HTML element found with CSS class '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
-                )
+                ))
             case By.TAG_NAME:
-                return await self.web_await(
+                return cast(Element, await self.web_await(
                     lambda: self.page.query_selector(selector_value, parent),
                     timeout = timeout,
                     timeout_error_message = f"No HTML element found of tag <{selector_value}>{timeout_suffix}",
                     apply_multiplier = False,
-                )
+                ))
             case By.CSS_SELECTOR:
-                return await self.web_await(
+                return cast(Element, await self.web_await(
                     lambda: self.page.query_selector(selector_value, parent),
                     timeout = timeout,
                     timeout_error_message = f"No HTML element found using CSS selector '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
-                )
+                ))
             case By.TEXT:
                 ensure(not parent, f"Specifying a parent element currently not supported with selector type: {selector_type}")
-                return await self.web_await(
+                return cast(Element, await self.web_await(
                     lambda: self.page.find_element_by_text(selector_value, best_match = True),
                     timeout = timeout,
                     timeout_error_message = f"No HTML element found containing text '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
-                )
+                ))
             case By.XPATH:
                 ensure(not parent, f"Specifying a parent element currently not supported with selector type: {selector_type}")
-                return await self.web_await(
+                return cast(Element, await self.web_await(
                     lambda: self._xpath_first(selector_value),
                     timeout = timeout,
                     timeout_error_message = f"No HTML element found using XPath '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
-                )
+                ))
 
         raise AssertionError(_("Unsupported selector type: %s") % selector_type)
 
@@ -1399,26 +1413,26 @@ class WebScrapingMixin:  # noqa: PLR0904
         match selector_type:
             case By.CLASS_NAME:
                 escaped_classname = selector_value.translate(METACHAR_ESCAPER)
-                return await self.web_await(
+                return cast(list[Element], await self.web_await(
                     lambda: self.page.query_selector_all(f".{escaped_classname}", parent),
                     timeout = timeout,
                     timeout_error_message = f"No HTML elements found with CSS class '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
-                )
+                ))
             case By.CSS_SELECTOR:
-                return await self.web_await(
+                return cast(list[Element], await self.web_await(
                     lambda: self.page.query_selector_all(selector_value, parent),
                     timeout = timeout,
                     timeout_error_message = f"No HTML elements found using CSS selector '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
-                )
+                ))
             case By.TAG_NAME:
-                return await self.web_await(
+                return cast(list[Element], await self.web_await(
                     lambda: self.page.query_selector_all(selector_value, parent),
                     timeout = timeout,
                     timeout_error_message = f"No HTML elements found of tag <{selector_value}>{timeout_suffix}",
                     apply_multiplier = False,
-                )
+                ))
             case By.TEXT:
                 ensure(not parent, f"Specifying a parent element currently not supported with selector type: {selector_type}")
                 return await self.web_await(

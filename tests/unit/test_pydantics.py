@@ -6,12 +6,11 @@
 Covers ContextualValidationError, ContextualModel, and format_validation_error.
 """
 
-from typing import Any, TypedDict, cast
+from typing import Any, NotRequired, TypedDict, cast
 
 import pytest
 from pydantic import BaseModel, ValidationError
 from pydantic_core import ErrorDetails as PydanticErrorDetails
-from typing_extensions import NotRequired
 
 from kleinanzeigen_bot.utils.pydantics import (
     ContextualModel,

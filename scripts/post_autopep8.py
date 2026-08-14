@@ -3,9 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import ast, logging, re, sys  # isort: skip
 from pathlib import Path
-from typing import Final, List, Protocol, Tuple
-
-from typing_extensions import override
+from typing import Final, Protocol, override
 
 # Configure basic logging
 logging.basicConfig(level = logging.INFO, format = "%(levelname)s: %(message)s")
@@ -17,7 +15,7 @@ class FormatterRule(Protocol):
     A code processor that can modify source lines based on the AST.
     """
 
-    def apply(self, tree:ast.AST, lines:List[str], path:Path) -> List[str]:
+    def apply(self, tree:ast.AST, lines:list[str], path:Path) -> list[str]:
         raise NotImplementedError
 
 
@@ -39,8 +37,8 @@ class NoSpaceAfterColonInTypeAnnotationRule(FormatterRule):
     """
 
     @override
-    def apply(self, tree:ast.AST, lines:List[str], path:Path) -> List[str]:
-        ann_positions:List[Tuple[int, int]] = []
+    def apply(self, tree:ast.AST, lines:list[str], path:Path) -> list[str]:
+        ann_positions:list[tuple[int, int]] = []
         for node in ast.walk(tree):
             if isinstance(node, ast.arg) and node.annotation is not None:
                 ann_positions.append((node.annotation.lineno - 1, node.annotation.col_offset))
@@ -51,7 +49,7 @@ class NoSpaceAfterColonInTypeAnnotationRule(FormatterRule):
         if not ann_positions:
             return lines
 
-        new_lines:List[str] = []
+        new_lines:list[str] = []
         for idx, line in enumerate(lines):
             if line.lstrip().startswith("#"):
                 new_lines.append(line)
@@ -95,8 +93,8 @@ class EqualSignSpacingInDefaultsAndNamedArgsRule(FormatterRule):
     """
 
     @override
-    def apply(self, tree:ast.AST, lines:List[str], path:Path) -> List[str]:
-        equals_positions:List[Tuple[int, int]] = []
+    def apply(self, tree:ast.AST, lines:list[str], path:Path) -> list[str]:
+        equals_positions:list[tuple[int, int]] = []
         for node in ast.walk(tree):
             # --- Defaults in function definitions, async defs & lambdas ---
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
@@ -125,7 +123,7 @@ class EqualSignSpacingInDefaultsAndNamedArgsRule(FormatterRule):
         if not equals_positions:
             return lines
 
-        new_lines:List[str] = []
+        new_lines:list[str] = []
         for line_idx, line in enumerate(lines):
             if line.lstrip().startswith("#"):
                 new_lines.append(line)
@@ -174,7 +172,7 @@ class PreferDoubleQuotesRule(FormatterRule):
     """
 
     @override
-    def apply(self, tree:ast.AST, lines:List[str], path:Path) -> List[str]:
+    def apply(self, tree:ast.AST, lines:list[str], path:Path) -> list[str]:
         new_lines = lines.copy()
 
         # Track how much each line has shifted so far
@@ -256,7 +254,7 @@ class PreferDoubleQuotesRule(FormatterRule):
         return new_lines
 
 
-FORMATTER_RULES:List[FormatterRule] = [
+FORMATTER_RULES:list[FormatterRule] = [
     NoSpaceAfterColonInTypeAnnotationRule(),
     EqualSignSpacingInDefaultsAndNamedArgsRule(),
     PreferDoubleQuotesRule(),

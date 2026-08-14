@@ -22,7 +22,7 @@ Before making non-trivial changes, review:
 - For runtime/user-facing output, follow the translation rules in `CONTRIBUTING.md` and update translations when messages change.
 - Keep log message strings in plain English; do **not** wrap `LOG.*`/`logger.*` strings with `_()`, because logging messages are translated by `TranslatingLogger`.
 - New Python files need the full SPDX header block from `CONTRIBUTING.md`.
-- Use full type hints (Python 3.10+ syntax).
+- Use full type hints (Python 3.12+ syntax).
 - Catch `TimeoutError` in browser automation paths.
 - Never hardcode credentials or secrets.
 - Prefer small, simple changes over speculative abstractions.

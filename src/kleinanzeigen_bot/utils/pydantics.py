@@ -2,11 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 from gettext import gettext as _
-from typing import Any, Literal, cast
+from typing import Any, Literal, Self, cast
 
 from pydantic import BaseModel, ValidationError
 from pydantic_core import InitErrorDetails
-from typing_extensions import Self
 
 from kleinanzeigen_bot.utils.i18n import pluralize
 

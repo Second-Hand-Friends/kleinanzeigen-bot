@@ -8,17 +8,13 @@ from gettext import gettext as _
 from importlib.resources import read_text as get_resource_as_string
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Final, TypeVar, cast, get_origin
+from typing import Any, Final, cast, get_origin
 
 from ruamel.yaml import YAML
 
 from . import files, loggers  # pylint: disable=cyclic-import
 
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
-
-# https://mypy.readthedocs.io/en/stable/generics.html#generic-functions
-K = TypeVar("K")
-V = TypeVar("V")
 
 
 def apply_defaults(
@@ -56,7 +52,7 @@ def apply_defaults(
     return target
 
 
-def defaultdict_to_dict(d:defaultdict[K, V]) -> dict[K, V]:
+def defaultdict_to_dict[K, V](d:defaultdict[K, V]) -> dict[K, V]:
     """Recursively convert defaultdict to dict."""
     result:dict[K, V] = {}
     for key, value in d.items():
