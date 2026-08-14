@@ -7,7 +7,7 @@ Covers port availability checking functionality.
 """
 
 import socket
-from typing import Generator
+from collections.abc import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest

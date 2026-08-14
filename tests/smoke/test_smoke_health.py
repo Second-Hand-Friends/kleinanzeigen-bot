@@ -12,9 +12,10 @@ import json
 import logging
 import os
 import re
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 from unittest.mock import patch
 
 import pytest

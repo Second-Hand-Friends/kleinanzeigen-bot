@@ -3,7 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Tests for publishing persistence functionality."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -167,7 +167,7 @@ class TestPersistPublishedAdTimestamps:
         ad.id = 12345
         ad_cfg_orig = self._make_ad_cfg_orig()
         cfg = _make_config()
-        published_at = datetime(2026, 7, 4, 12, 34, 56, tzinfo = timezone.utc)
+        published_at = datetime(2026, 7, 4, 12, 34, 56, tzinfo = UTC)
 
         with (
             patch("kleinanzeigen_bot.local_path_renaming.rename_referenced_local_image_files_after_id_change",
@@ -198,10 +198,10 @@ class TestPersistPublishedAdTimestamps:
         """Updating an existing ad keeps the original created_on value."""
         ad = _make_min_ad()
         ad.id = 12345
-        ad.created_on = datetime(2024, 1, 2, 3, 4, 5, tzinfo = timezone.utc)
+        ad.created_on = datetime(2024, 1, 2, 3, 4, 5, tzinfo = UTC)
         ad_cfg_orig = self._make_ad_cfg_orig(created_on = "2024-01-02T03:04:05")
         cfg = _make_config()
-        updated_at = datetime(2026, 7, 4, 12, 34, 56, tzinfo = timezone.utc)
+        updated_at = datetime(2026, 7, 4, 12, 34, 56, tzinfo = UTC)
 
         with (
             patch("kleinanzeigen_bot.local_path_renaming.rename_referenced_local_image_files_after_id_change",

@@ -31,9 +31,12 @@ classifiers = [  # https://pypi.org/classifiers/
 
   "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10"
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15"
 ]
-requires-python = ">=3.10,<3.15"
+requires-python = ">=3.12,<3.16"
 dependencies = [
   "certifi",
   "colorama",
@@ -166,7 +169,7 @@ cache-dir = ".temp/cache_ruff"
 include = ["pyproject.toml", "scripts/**/*.py", "src/**/*.py", "tests/**/*.py"]
 line-length = 160
 indent-width = 4
-target-version = "py310"
+target-version = "py312"
 
 [tool.ruff.lint]
 # https://docs.astral.sh/ruff/rules/
@@ -210,6 +213,7 @@ select = [
   "TC",    # flake8-type-checking
   "TD",    # flake8-todo
   "TID",   # flake8-flake8-tidy-import
+  "UP",    # pyupgrade
   "YTT",   # flake8-2020
 
   "E",    # pycodestyle-errors
@@ -226,6 +230,7 @@ select = [
 ]
 ignore = [
   "ANN401",  # Dynamically typed expressions (typing.Any) are disallowed
+  "ASYNC109",  # Timeout parameters are passed through to browser helpers; replacing them with asyncio.timeout would change behavior
   "COM812",  # Trailing comma missing
   "D1",  # Missing docstring in ...
   "D200",  # One-line docstring should fit on one line
@@ -311,7 +316,7 @@ max-complexity = 30
 # https://mypy.readthedocs.io/en/stable/config_file.html
 #mypy_path = "$MYPY_CONFIG_FILE_DIR/tests/stubs"
 cache_dir = ".temp/cache_mypy"
-python_version = "3.10"
+python_version = "3.12"
 files = "scripts,src,tests"
 strict = true
 disallow_untyped_calls = false
@@ -331,7 +336,7 @@ verbosity = 0
 # https://docs.basedpyright.com/latest/configuration/config-files/
 include = ["scripts", "src", "tests"]
 defineConstant = { DEBUG = false }
-pythonVersion = "3.10"
+pythonVersion = "3.12"
 typeCheckingMode = "standard"
 
 

@@ -4,7 +4,7 @@
 import asyncio
 import decimal
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sanitize_filename import sanitize
@@ -51,7 +51,7 @@ def test_parse_datetime_none_returns_none() -> None:
 
 
 def test_parse_datetime_from_datetime() -> None:
-    dt = datetime(2020, 1, 1, 0, 0, tzinfo = timezone.utc)
+    dt = datetime(2020, 1, 1, 0, 0, tzinfo = UTC)
     assert misc.parse_datetime(dt, add_timezone_if_missing = False) == dt
 
 

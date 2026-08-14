@@ -5,14 +5,14 @@
 
 import json
 from gettext import gettext as _
-from typing import Any, Final, TypeAlias
+from typing import Any, Final
 
 from .utils import loggers as _loggers
 from .utils import misc as _misc
 from .utils.exceptions import KleinanzeigenBotError
 from .utils.web_scraping_mixin import WebScrapingMixin
 
-PublishedAd:TypeAlias = dict[str, Any]
+type PublishedAd = dict[str, Any]
 """A raw published ad entry from the Kleinanzeigen manage-ads JSON API."""
 
 

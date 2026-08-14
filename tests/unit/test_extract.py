@@ -453,7 +453,7 @@ class TestAdExtractorNavigation:
         """Test navigation to ad page using an ID."""
         ad_id = 12345
         page_mock = AsyncMock()
-        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/{0}".format(ad_id)
+        page_mock.url = f"https://www.kleinanzeigen.de/s-anzeige/test/{ad_id}"
 
         with (
             patch.object(test_extractor, "page", page_mock),
@@ -463,7 +463,7 @@ class TestAdExtractorNavigation:
         ):
             result = await test_extractor.navigate_to_ad_page(ad_id)
             assert result is True
-            mock_web_open.assert_called_with("https://www.kleinanzeigen.de/s-suchanfrage.html?keywords={0}".format(ad_id))
+            mock_web_open.assert_called_with(f"https://www.kleinanzeigen.de/s-suchanfrage.html?keywords={ad_id}")
             mock_web_click.assert_awaited_once_with(By.CLASS_NAME, "mfp-close")
 
     @pytest.mark.asyncio
@@ -2698,7 +2698,7 @@ class TestAdExtractorDownload:
         assert calls == 1
         assert path.exists()
 
-    def test_handle_rmtree_onerror_adds_write_bit_preserving_other_mode_bits_on_windows(self) -> None:
+    def test_handle_rmtree_onexc_adds_write_bit_preserving_other_mode_bits_on_windows(self) -> None:
         path = "C:/Temp/readonly.txt"
         retry_func = MagicMock()
         stat_result = MagicMock(st_mode = 0o555)
@@ -2708,13 +2708,13 @@ class TestAdExtractorDownload:
             patch("kleinanzeigen_bot.extract.os.stat", return_value = stat_result) as mock_stat,
             patch("kleinanzeigen_bot.extract.os.chmod") as mock_chmod,
         ):
-            extract_module._handle_rmtree_onerror(retry_func, path, (PermissionError, PermissionError("busy"), None))
+            extract_module._handle_rmtree_onexc(retry_func, path, PermissionError("busy"))
 
         mock_stat.assert_any_call(path)
         mock_chmod.assert_called_once_with(path, 0o555 | stat.S_IWRITE)
         retry_func.assert_called_once_with(path)
 
-    def test_handle_rmtree_onerror_skips_chmod_on_posix(self, tmp_path:Path) -> None:
+    def test_handle_rmtree_onexc_skips_chmod_on_posix(self, tmp_path:Path) -> None:
         path = str(tmp_path / "readonly.txt")
         retry_func = MagicMock()
 
@@ -2723,12 +2723,12 @@ class TestAdExtractorDownload:
             patch("kleinanzeigen_bot.extract.os.stat"),
             patch("kleinanzeigen_bot.extract.os.chmod") as mock_chmod,
         ):
-            extract_module._handle_rmtree_onerror(retry_func, path, (PermissionError, PermissionError("busy"), None))
+            extract_module._handle_rmtree_onexc(retry_func, path, PermissionError("busy"))
 
         mock_chmod.assert_not_called()
         retry_func.assert_called_once_with(path)
 
-    def test_handle_rmtree_onerror_ignores_chmod_failures_on_windows(self) -> None:
+    def test_handle_rmtree_onexc_ignores_chmod_failures_on_windows(self) -> None:
         path = "C:/Temp/readonly.txt"
         retry_func = MagicMock()
         stat_result = MagicMock(st_mode = 0o555)
@@ -2738,11 +2738,11 @@ class TestAdExtractorDownload:
             patch("kleinanzeigen_bot.extract.os.stat", return_value = stat_result),
             patch("kleinanzeigen_bot.extract.os.chmod", side_effect = OSError("chmod failed")),
         ):
-            extract_module._handle_rmtree_onerror(retry_func, path, (PermissionError, PermissionError("busy"), None))
+            extract_module._handle_rmtree_onexc(retry_func, path, PermissionError("busy"))
 
         retry_func.assert_called_once_with(path)
 
-    def test_handle_rmtree_onerror_continues_when_stat_fails_on_windows(self) -> None:
+    def test_handle_rmtree_onexc_continues_when_stat_fails_on_windows(self) -> None:
         path = "C:/Temp/readonly.txt"
         retry_func = MagicMock()
 
@@ -2751,17 +2751,17 @@ class TestAdExtractorDownload:
             patch("kleinanzeigen_bot.extract.os.stat", side_effect = OSError("stat failed")),
             patch("kleinanzeigen_bot.extract.os.chmod") as mock_chmod,
         ):
-            extract_module._handle_rmtree_onerror(retry_func, path, (PermissionError, PermissionError("busy"), None))
+            extract_module._handle_rmtree_onexc(retry_func, path, PermissionError("busy"))
 
         mock_chmod.assert_not_called()
         retry_func.assert_called_once_with(path)
 
-    def test_handle_rmtree_onerror_raises_for_non_retryable_error(self, tmp_path:Path) -> None:
+    def test_handle_rmtree_onexc_raises_for_non_retryable_error(self, tmp_path:Path) -> None:
         path = str(tmp_path / "file.txt")
         retry_func = MagicMock()
 
         with pytest.raises(OSError, match = "bad"):
-            extract_module._handle_rmtree_onerror(retry_func, path, (OSError, OSError(errno.EINVAL, "bad"), None))
+            extract_module._handle_rmtree_onexc(retry_func, path, OSError(errno.EINVAL, "bad"))
 
         retry_func.assert_not_called()
 

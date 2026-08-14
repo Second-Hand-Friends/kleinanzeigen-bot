@@ -41,10 +41,10 @@ class UpdateCheckState(ContextualModel):
             timestamp = datetime.datetime.fromisoformat(timestamp_str)
             if timestamp.tzinfo is None:
                 # If no timezone info, assume UTC
-                timestamp = timestamp.replace(tzinfo = datetime.timezone.utc)
-            elif timestamp.tzinfo != datetime.timezone.utc:
+                timestamp = timestamp.replace(tzinfo = datetime.UTC)
+            elif timestamp.tzinfo != datetime.UTC:
                 # Convert to UTC if in a different timezone
-                timestamp = timestamp.astimezone(datetime.timezone.utc)
+                timestamp = timestamp.astimezone(datetime.UTC)
             return timestamp
         except ValueError as e:
             LOG.warning("Invalid timestamp format in state file: %s", e)
@@ -114,8 +114,8 @@ class UpdateCheckState(ContextualModel):
             data = self.model_dump()
             if data["last_check"]:
                 # Ensure timestamp is in UTC before saving
-                if data["last_check"].tzinfo != datetime.timezone.utc:
-                    data["last_check"] = data["last_check"].astimezone(datetime.timezone.utc)
+                if data["last_check"].tzinfo != datetime.UTC:
+                    data["last_check"] = data["last_check"].astimezone(datetime.UTC)
                 data["last_check"] = data["last_check"].isoformat()
             xdg_paths.ensure_directory(state_file.parent, "update check state directory")
             dicts.save_dict(str(state_file), data)
@@ -126,7 +126,7 @@ class UpdateCheckState(ContextualModel):
 
     def update_last_check(self) -> None:
         """Update the last check time to now in UTC."""
-        self.last_check = datetime.datetime.now(datetime.timezone.utc)
+        self.last_check = datetime.datetime.now(datetime.UTC)
 
     def _validate_update_interval(self, interval:str) -> tuple[datetime.timedelta, bool, str]:
         """
@@ -189,7 +189,7 @@ class UpdateCheckState(ContextualModel):
                 LOG.warning("Falling back to default interval: 7d (latest channel). Please fix your config to avoid this warning.")
         if not self.last_check:
             return True
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         elapsed = now - self.last_check
         # Compare using integer seconds to avoid microsecond-level flakiness
         return int(elapsed.total_seconds()) > int(td.total_seconds())

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import copy
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -37,7 +37,7 @@ def _strip_ansi(value:str) -> str:
     return _ANSI_RE.sub("", value)
 
 
-_TZ = timezone.utc
+_TZ = UTC
 
 
 def _now() -> datetime:

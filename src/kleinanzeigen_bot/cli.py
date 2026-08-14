@@ -20,7 +20,7 @@ import sys
 import textwrap
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, Sequence
+from typing import TYPE_CHECKING, Final
 
 import colorama
 import nodriver
@@ -34,6 +34,9 @@ from kleinanzeigen_bot.utils.exceptions import CaptchaEncountered
 from kleinanzeigen_bot.utils.files import abspath
 from kleinanzeigen_bot.utils.i18n import Locale, get_current_locale, set_current_locale
 from kleinanzeigen_bot.utils.misc import is_frozen
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 LOG:Final[_loggers.Logger] = _loggers.get_logger(__name__)
 LOG.setLevel(_loggers.INFO)

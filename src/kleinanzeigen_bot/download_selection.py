@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Final, Mapping, NamedTuple
+from typing import TYPE_CHECKING, Any, Final, NamedTuple
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 __all__ = [
     "NUMERIC_IDS_RE",

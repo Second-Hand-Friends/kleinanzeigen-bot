@@ -19,7 +19,10 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import IO, Mapping
+from typing import IO, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 # ---------------------------------------------------------------------------
 # Public API

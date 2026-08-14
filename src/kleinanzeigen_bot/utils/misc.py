@@ -3,16 +3,15 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 import asyncio, decimal, re, sys, time  # isort: skip
 import unicodedata
-from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from collections.abc import Callable, Mapping
+from datetime import UTC, datetime, timedelta
 from gettext import gettext as _
-from typing import Any, Mapping, TypeVar
+from typing import Any, TypeVar
 
 from sanitize_filename import sanitize
 
 from . import i18n
 
-# https://mypy.readthedocs.io/en/stable/generics.html#generic-functions
 T = TypeVar("T")
 
 
@@ -150,7 +149,7 @@ def get_attr(obj:Mapping[str, Any] | Any, key:str, default:Any | None = None) ->
 
 
 def now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def is_frozen() -> bool:
@@ -222,7 +221,7 @@ def parse_datetime(date:datetime | str | None, *, add_timezone_if_missing:bool =
     dt = date if isinstance(date, datetime) else datetime.fromisoformat(date)
 
     if dt.tzinfo is None and add_timezone_if_missing:
-        dt = dt.astimezone() if use_local_timezone else dt.replace(tzinfo = timezone.utc)
+        dt = dt.astimezone() if use_local_timezone else dt.replace(tzinfo = UTC)
 
     return dt
 
