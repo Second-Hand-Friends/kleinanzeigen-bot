@@ -477,10 +477,13 @@ class TestUpdateChecker:
 
     def test_check_for_updates_no_releases_empty(self, config:Config, state_file:Path, mocker:MockerFixture) -> None:
         """Test check_for_updates handles no releases found (API returns empty list)."""
+        config.update_check.channel = "preview"
         checker = UpdateChecker(config, state_file)
-        mocker.patch("requests.get", return_value = mocker.Mock(json = list))
+        mocker.patch.object(UpdateChecker, "get_local_version", return_value = "2025+fb00f11")
         mocker.patch.object(UpdateCheckState, "should_check", return_value = True)
+        mock_get = mocker.patch("requests.get", return_value = mocker.Mock(json = list))
         checker.check_for_updates()  # Should not raise
+        mock_get.assert_called_once()
 
     def test_check_for_updates_no_commit_hash_extracted(self, config:Config, state_file:Path, mocker:MockerFixture) -> None:
         """Test check_for_updates handles no commit hash extracted."""
