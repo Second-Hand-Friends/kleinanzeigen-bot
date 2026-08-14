@@ -75,6 +75,7 @@ jobs:
       uses: pdm-project/setup-pdm@973541a5febeafcfdadf8a51211435be6ecfd90f # v4.5
       with:
         python-version: "${{ env.PYTHON_VERSION }}"
+        allow-python-prereleases: true
         cache: true
 
 

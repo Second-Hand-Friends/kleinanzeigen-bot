@@ -153,6 +153,7 @@ jobs:
       uses: pdm-project/setup-pdm@973541a5febeafcfdadf8a51211435be6ecfd90f # v4.5
       with:
         python-version: "${{ matrix.PYTHON_VERSION }}"
+        allow-python-prereleases: ${{ matrix.PYTHON_VERSION == '3.15' }}
         cache: ${{ !startsWith(matrix.os, 'macos') }}  # https://github.com/pdm-project/setup-pdm/issues/55
 
 
