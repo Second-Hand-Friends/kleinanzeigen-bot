@@ -386,6 +386,7 @@ kleinanzeigen_bot/publishing_submission.py:
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
     "Confirmation page redirected too fast; extracted ad ID %s from page tracking data": "Bestätigungsseite wurde zu schnell weitergeleitet; Anzeigen-ID %s aus Seiten-Trackingdaten extrahiert"
     "Confirmation page exposed no ad ID; recovered ad ID %s from the published ads list": "Bestätigungsseite enthielt keine Anzeigen-ID; Anzeigen-ID %s aus der Liste veröffentlichter Anzeigen wiederhergestellt"
+    "Update confirmation page exposed no ad ID; using configured ad ID %s": "Update-Bestätigungsseite enthielt keine Anzeigen-ID; konfigurierte Anzeigen-ID %s wird verwendet"
     "ad_id is unexpectedly None after confirmation flow for %s": "ad_id ist unerwartet None nach dem Bestätigungsablauf für %s"
 
 #################################################
