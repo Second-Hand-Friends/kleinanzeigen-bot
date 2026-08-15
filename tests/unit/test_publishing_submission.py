@@ -453,6 +453,160 @@ class TestPublishedAdsRecovery:
         )
 
     @pytest.mark.asyncio
+    async def test_submit_accepts_idless_success_after_update(self, test_bot:KleinanzeigenBot) -> None:
+        """An ID-less update confirmation reuses the configured ad ID."""
+        ad = _make_min_ad()
+        ad.id = 777
+
+        async def await_condition(condition:Any, **_:object) -> bool:
+            return bool(await condition())
+
+        with (
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(
+                test_bot,
+                "web_execute",
+                new_callable = AsyncMock,
+                side_effect = ["", f"{test_bot.root_url}/done"],
+            ),
+            patch(
+                "kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page",
+                new_callable = AsyncMock,
+                return_value = True,
+            ),
+            patch(
+                "kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_published_ads",
+                new_callable = AsyncMock,
+            ) as recover_mock,
+        ):
+            result = await publishing_submission.submit_and_confirm_ad(
+                test_bot,
+                "test.yaml",
+                ad,
+                AdUpdateStrategy.MODIFY,
+                captcha_config = test_bot.config.captcha,
+                root_url = test_bot.root_url,
+            )
+
+        assert result == 777
+        recover_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_submit_rejects_idless_update_success_without_configured_id(self, test_bot:KleinanzeigenBot) -> None:
+        """An update cannot recover safely if its configured ID is unexpectedly absent."""
+        ad = _make_min_ad()
+
+        async def await_condition(condition:Any, **_:object) -> bool:
+            return bool(await condition())
+
+        with (
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = ["", f"{test_bot.root_url}/done"]),
+            patch(
+                "kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page",
+                new_callable = AsyncMock,
+                return_value = True,
+            ),
+            pytest.raises(PublishSubmissionUncertainError, match = "configured ad ID is missing"),
+        ):
+            await publishing_submission.submit_and_confirm_ad(
+                test_bot,
+                "test.yaml",
+                ad,
+                AdUpdateStrategy.MODIFY,
+                captcha_config = test_bot.config.captcha,
+                root_url = test_bot.root_url,
+            )
+
+    @pytest.mark.asyncio
+    async def test_submit_falls_back_to_tracking_when_idless_marker_is_absent(self, test_bot:KleinanzeigenBot) -> None:
+        """An unrecognized confirmation page retains the existing tracking fallback."""
+        ad = _make_min_ad()
+
+        async def await_condition(condition:Any, **_:object) -> bool:
+            return bool(await condition())
+
+        with (
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(
+                test_bot,
+                "web_execute",
+                new_callable = AsyncMock,
+                side_effect = ["", f"{test_bot.root_url}/done", f"{test_bot.root_url}/done"],
+            ),
+            patch(
+                "kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page",
+                new_callable = AsyncMock,
+                return_value = False,
+            ),
+            patch(
+                "kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect",
+                new_callable = AsyncMock,
+                return_value = 777,
+            ) as tracking_recover_mock,
+        ):
+            result = await publishing_submission.submit_and_confirm_ad(
+                test_bot,
+                "test.yaml",
+                ad,
+                AdUpdateStrategy.MODIFY,
+                captcha_config = test_bot.config.captcha,
+                root_url = test_bot.root_url,
+            )
+
+        assert result == 777
+        tracking_recover_mock.assert_awaited_once_with(test_bot, pre_submit_referrer = "")
+
+    @pytest.mark.asyncio
+    async def test_submit_fails_closed_when_idless_publish_recovery_finds_no_ad(self, test_bot:KleinanzeigenBot) -> None:
+        """An ID-less publish confirmation remains uncertain without one new exact-title ad."""
+        ad = _make_min_ad()
+
+        async def await_condition(condition:Any, **_:object) -> bool:
+            return bool(await condition())
+
+        with (
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = ["", f"{test_bot.root_url}/done"]),
+            patch(
+                "kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page",
+                new_callable = AsyncMock,
+                return_value = True,
+            ),
+            patch(
+                "kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_published_ads",
+                new_callable = AsyncMock,
+                return_value = None,
+            ),
+            pytest.raises(PublishSubmissionUncertainError, match = "no ad ID could be recovered"),
+        ):
+            await publishing_submission.submit_and_confirm_ad(
+                test_bot,
+                "test.yaml",
+                ad,
+                AdUpdateStrategy.REPLACE,
+                captcha_config = test_bot.config.captcha,
+                root_url = test_bot.root_url,
+                known_published_ad_ids = frozenset({10}),
+            )
+
+    @pytest.mark.asyncio
     async def test_submit_fails_closed_when_published_ads_recovery_raises(
         self,
         test_bot:KleinanzeigenBot,

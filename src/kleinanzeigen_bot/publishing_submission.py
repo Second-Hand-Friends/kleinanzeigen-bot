@@ -252,7 +252,7 @@ async def submit_and_confirm_ad(
             url = str(await web.web_execute("window.location.href"))
             if "p-anzeige-aufgeben-bestaetigung.html?adId=" in url:
                 return True
-            if mode == AdUpdateStrategy.REPLACE and await _is_idless_publish_success_page(web):
+            if await _is_idless_publish_success_page(web):
                 idless_success_detected = True
                 return True
             return False
@@ -260,26 +260,37 @@ async def submit_and_confirm_ad(
         await web.web_await(_check_confirmation_state, timeout = confirmation_timeout)
 
         if idless_success_detected:
-            try:
-                ad_id = await _try_recover_ad_id_from_published_ads(
-                    web,
-                    root_url = root_url,
-                    title = ad_cfg.title,
-                    known_published_ad_ids = known_published_ad_ids,
+            if mode == AdUpdateStrategy.MODIFY:
+                ad_id = ad_cfg.id
+                if ad_id is None:
+                    raise PublishSubmissionUncertainError(
+                        _("update succeeded but the configured ad ID is missing")
+                    )
+                LOG.warning(
+                    "Update confirmation page exposed no ad ID; using configured ad ID %s",
+                    ad_id,
                 )
-            except Exception as recovery_ex:  # noqa: BLE001
-                LOG.debug("Published-ad list fallback failed: %s", recovery_ex)
-                raise PublishSubmissionUncertainError(
-                    "publish succeeded but no ad ID could be recovered"
-                ) from recovery_ex
-            if ad_id is None:
-                raise PublishSubmissionUncertainError(
-                    "publish succeeded but no ad ID could be recovered"
+            else:
+                try:
+                    ad_id = await _try_recover_ad_id_from_published_ads(
+                        web,
+                        root_url = root_url,
+                        title = ad_cfg.title,
+                        known_published_ad_ids = known_published_ad_ids,
+                    )
+                except Exception as recovery_ex:  # noqa: BLE001
+                    LOG.debug("Published-ad list fallback failed: %s", recovery_ex)
+                    raise PublishSubmissionUncertainError(
+                        "publish succeeded but no ad ID could be recovered"
+                    ) from recovery_ex
+                if ad_id is None:
+                    raise PublishSubmissionUncertainError(
+                        "publish succeeded but no ad ID could be recovered"
+                    )
+                LOG.warning(
+                    "Confirmation page exposed no ad ID; recovered ad ID %s from the published ads list",
+                    ad_id,
                 )
-            LOG.warning(
-                "Confirmation page exposed no ad ID; recovered ad ID %s from the published ads list",
-                ad_id,
-            )
         else:
             # Use the live URL because the page object URL may be stale after redirects.
             current_url = str(await web.web_execute("window.location.href"))
