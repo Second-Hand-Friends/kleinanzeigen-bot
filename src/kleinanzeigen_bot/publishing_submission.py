@@ -264,7 +264,7 @@ async def submit_and_confirm_ad(
                 ad_id = ad_cfg.id
                 if ad_id is None:
                     raise PublishSubmissionUncertainError(
-                        "update succeeded but the configured ad ID is missing"
+                        _("update succeeded but the configured ad ID is missing")
                     )
                 LOG.warning(
                     "Update confirmation page exposed no ad ID; using configured ad ID %s",
