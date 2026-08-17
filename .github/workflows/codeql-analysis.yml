@@ -72,7 +72,7 @@ jobs:
 
 
     - name: "Install: Python and PDM"  # https://github.com/pdm-project/setup-pdm
-      uses: pdm-project/setup-pdm@973541a5febeafcfdadf8a51211435be6ecfd90f # v4.5
+      uses: pdm-project/setup-pdm@544d7237314ee09c256785bd360f6b30add38b37 # v4.6
       with:
         python-version: "${{ env.PYTHON_VERSION }}"
         allow-python-prereleases: true
@@ -93,7 +93,7 @@ jobs:
 
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+      uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
       # https://github.com/github/codeql-action/blob/main/init/action.yml
       with:
         languages: actions,python
@@ -103,5 +103,5 @@ jobs:
         queries: security-and-quality
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+      uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
       # https://github.com/github/codeql-action
