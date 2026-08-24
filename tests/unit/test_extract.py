@@ -459,6 +459,7 @@ class TestAdExtractorNavigation:
             patch.object(test_extractor, "page", page_mock),
             patch.object(test_extractor, "web_open", new_callable = AsyncMock) as mock_web_open,
             patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(test_extractor, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
             patch.object(test_extractor, "web_click", new_callable = AsyncMock) as mock_web_click,
         ):
             result = await test_extractor.navigate_to_ad_page(ad_id)
@@ -1536,18 +1537,13 @@ class TestAdExtractorContact:
         with (
             patch.object(extractor, "page", MagicMock()),
             patch.object(extractor, "web_text", new_callable = AsyncMock) as mock_web_text,
-            patch.object(extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [street_element, None]),
+            patch.object(extractor, "web_find", new_callable = AsyncMock),
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [street_element, contact_person_element, name_element, None]),
             patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
         ):
             mock_web_text.side_effect = [
                 "12345 Berlin - Mitte",
                 "Test User",
-            ]
-
-            mock_web_find.side_effect = [
-                contact_person_element,
-                name_element,
             ]
 
             contact_info = await extractor._extract_contact_from_ad_page()
@@ -1580,12 +1576,11 @@ class TestAdExtractorContact:
         with (
             patch.object(extractor, "page", MagicMock()),
             patch.object(extractor, "web_text", new_callable = AsyncMock) as mock_web_text,
-            patch.object(extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [street_element, None]),
+            patch.object(extractor, "web_find", new_callable = AsyncMock),
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [street_element, contact_person_element, name_element, None]),
             patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, side_effect = TimeoutError()),
         ):
             mock_web_text.side_effect = ["12345 Berlin - Mitte", "Test User"]
-            mock_web_find.side_effect = [contact_person_element, name_element]
 
             contact_info = await extractor._extract_contact_from_ad_page()
             assert contact_info.street is None
@@ -1605,11 +1600,10 @@ class TestAdExtractorContact:
         with (
             patch.object(extractor, "page", MagicMock()),
             patch.object(extractor, "web_text", new_callable = AsyncMock) as mock_web_text,
-            patch.object(extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, phone_element]),
+            patch.object(extractor, "web_find", new_callable = AsyncMock),
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, contact_person_element, name_element, phone_element]),
         ):
             mock_web_text.side_effect = ["12345 Berlin - Mitte", "Test User", TimeoutError()]
-            mock_web_find.side_effect = [contact_person_element, name_element]
 
             contact_info = await extractor._extract_contact_from_ad_page()
             assert contact_info.street is None
@@ -1629,15 +1623,10 @@ class TestAdExtractorContact:
         with (
             patch.object(extractor, "page", MagicMock()),
             patch.object(extractor, "web_text", new_callable = AsyncMock) as mock_web_text,
-            patch.object(extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, phone_element]),
+            patch.object(extractor, "web_find", new_callable = AsyncMock),
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, contact_person_element, name_element, phone_element]),
         ):
             mock_web_text.side_effect = ["12345 Berlin - Mitte", "Test User", "+49(0)1234 567890"]
-
-            mock_web_find.side_effect = [
-                contact_person_element,
-                name_element,
-            ]
 
             contact_info = await extractor._extract_contact_from_ad_page()
             assert contact_info.phone == "01234567890"  # Normalized phone number
@@ -1746,7 +1735,10 @@ class TestAdExtractorDownload:
     # pylint: disable=protected-access
     async def test_download_images_no_images(self, extractor:extract_module.AdExtractor) -> None:
         """Test image download when no images are found."""
-        with patch.object(extractor, "web_probe", new_callable = AsyncMock, return_value = None):
+        with (
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = []),
+        ):
             image_paths = await extractor._download_images_from_ad_page("/some/dir", "ad_12345")
             assert len(image_paths) == 0
 

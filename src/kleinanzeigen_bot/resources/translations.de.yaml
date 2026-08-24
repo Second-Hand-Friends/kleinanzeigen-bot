@@ -623,6 +623,8 @@ kleinanzeigen_bot/extract.py:
     "Found %s.": "%s gefunden."
     "Downloaded %s.": "%s heruntergeladen."
     "No image area found. Continuing without downloading images.": "Keine Bildbereiche gefunden. Fahre ohne Bilder-Download fort."
+    "Downloaded %s from island data.": "%s aus Insel-Daten heruntergeladen."
+    "Island image fallback failed: %s": "Insel-Daten Bild-Fallback fehlgeschlagen: %s"
 
   _log_download_name_truncation:
     "Download name truncated {id} placeholder: template='%s', max_length=%d, id='%s', rendered='%s'": "Download-Name hat {id} Platzhalter gekürzt: Vorlage='%s', max_length=%d, id='%s', gerendert='%s'"
@@ -656,10 +658,14 @@ kleinanzeigen_bot/extract.py:
     "Renaming folder from %s to %s for ad %s...": "Benenne Ordner von %s zu %s für Anzeige %s um..."
     "Using existing folder for ad %s at %s.": "Verwende bestehenden Ordner für Anzeige %s unter %s."
     "Could not remove staging directory %s: %s": "Konnte Staging-Verzeichnis %s nicht entfernen: %s"
+
+  _extract_ad_page_info:
     "Could not extract creation date from any selector or island data.": "Erstellungsdatum konnte weder über Selektoren noch über Insel-Daten extrahiert werden."
 
   _extract_contact_from_ad_page:
     "No street given in the contact.": "Keine Straße in den Kontaktdaten angegeben."
+    "Could not extract seller name from contact area or island data.": "Verkäufername konnte weder aus dem Kontaktbereich noch aus den Insel-Daten extrahiert werden."
+    "Could not extract seller name from contact area.": "Verkäufername konnte aus dem Kontaktbereich nicht extrahiert werden."
 
   _extract_category_from_ad_page:
     "Breadcrumb container 'vap-brdcrmb' not found; cannot extract ad category: %s": "Breadcrumb-Container 'vap-brdcrmb' nicht gefunden; kann Anzeigenkategorie nicht extrahieren: %s"
