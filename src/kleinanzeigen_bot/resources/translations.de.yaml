@@ -656,6 +656,7 @@ kleinanzeigen_bot/extract.py:
     "Renaming folder from %s to %s for ad %s...": "Benenne Ordner von %s zu %s für Anzeige %s um..."
     "Using existing folder for ad %s at %s.": "Verwende bestehenden Ordner für Anzeige %s unter %s."
     "Could not remove staging directory %s: %s": "Konnte Staging-Verzeichnis %s nicht entfernen: %s"
+    "Could not extract creation date from any selector or island data.": "Erstellungsdatum konnte weder über Selektoren noch über Insel-Daten extrahiert werden."
 
   _extract_contact_from_ad_page:
     "No street given in the contact.": "Keine Straße in den Kontaktdaten angegeben."

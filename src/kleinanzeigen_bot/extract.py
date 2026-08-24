@@ -15,14 +15,14 @@ import urllib.error as urllib_error
 import urllib.request as urllib_request
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 from kleinanzeigen_bot.model.ad_model import ContactPartial
 
 from .model.ad_model import OPTION_NAME_BY_CARRIER_CODE, AdPartial, validate_condition_api_mapping
 from .model.config_model import AutoPriceReductionConfig, Config
 from .utils import dicts, files, i18n, loggers, misc, reflect
-from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
+from .utils.web_scraping_mixin import Browser, By, WebScrapingMixin
 
 __all__ = [
     "AdExtractor",
@@ -34,6 +34,7 @@ _BREADCRUMB_MIN_DEPTH:Final[int] = 2
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
 _MAX_FILENAME_COMPONENT_LENGTH:Final[int] = 255
 _DOWNLOAD_STEM_SUFFIX_BUDGET:Final[int] = len("__img9999.jpeg")
+_ISLAND_ENVELOPE_LENGTH:Final[int] = 2
 _STAGING_DIR_PREFIX:Final[str] = ".tmp-"
 _BACKUP_DIR_PREFIX:Final[str] = ".bak-"
 _RMTREE_RETRY_ATTEMPTS:Final[int] = 5
@@ -456,8 +457,10 @@ class AdExtractor(WebScrapingMixin):
                 with open(img_path, "wb") as f:
                     shutil.copyfileobj(response, f)
                 return str(img_path)
-        except (urllib_error.URLError, urllib_error.HTTPError, OSError, shutil.Error) as e:
-            # Narrow exception handling to expected network/filesystem errors
+        except (urllib_error.URLError, urllib_error.HTTPError, ValueError, OSError, shutil.Error) as e:
+            # ValueError: malformed URL string from island data
+            # URLError/HTTPError: network or server errors
+            # OSError/shutil.Error: filesystem errors
             LOG.warning("Failed to download image %s: %s", url, e)
             return None
 
@@ -657,6 +660,8 @@ class AdExtractor(WebScrapingMixin):
                 await self.web_open(self.page.url, reload_if_already_open = True)
                 await self.web_sleep()
                 LOG.debug("After force-reload, current URL: %s", self.page.url)
+                # Verify ad content is now present after the reload
+                await self.web_find(By.ID, "viewad-title", timeout = self.effective_timeout("page_load"))
 
         # handle the case that invalid ad ID given
         if self.page.url.endswith("k0"):
@@ -701,17 +706,17 @@ class AdExtractor(WebScrapingMixin):
             props = json.loads(decoded)
             # The ad data is nested under 'data' -> [0, {...}]
             data_val = props.get("data", {})
-            if isinstance(data_val, list) and len(data_val) == 2:
+            if isinstance(data_val, list) and len(data_val) == _ISLAND_ENVELOPE_LENGTH:
                 data_val = data_val[1]
             if isinstance(data_val, dict):
-                return data_val
-            return props
+                return cast(dict[str, Any], data_val)
+            return cast(dict[str, Any], props) if isinstance(props, dict) else {}
         except Exception:
             return {}
 
     def _unwrap_island_value(self, val:Any) -> Any:
         """Unwrap an Astro island prop value from its [type_index, value] envelope."""
-        if isinstance(val, list) and len(val) == 2 and isinstance(val[0], int):
+        if isinstance(val, list) and len(val) == _ISLAND_ENVELOPE_LENGTH and isinstance(val[0], int):
             return val[1]
         return val
 
@@ -825,13 +830,13 @@ class AdExtractor(WebScrapingMixin):
             try:
                 creation_date = await self.web_text(By.CSS_SELECTOR, "#viewad-extra-info span")
             except TimeoutError:
-                pass
+                pass  # Redesigned layout may lack #viewad-extra-info; fall through to island fallback
         if not creation_date and island_props:
             island_date = self._unwrap_island_value(island_props.get("formattedCreationDate"))
             if isinstance(island_date, str):
                 creation_date = island_date
         if not creation_date:
-            raise TimeoutError("Could not extract creation date from any selector or island data.")
+            raise TimeoutError(_("Could not extract creation date from any selector or island data."))
 
         # convert creation date to ISO format
         created_parts = creation_date.split(".")
@@ -972,7 +977,11 @@ class AdExtractor(WebScrapingMixin):
         """
 
         # e.g. "art_s:lautsprecher_kopfhoerer|condition_s:like_new|versand_s:t"
-        special_attributes_str = belen_conf.get("universalAnalyticsOpts", {}).get("dimensions", {}).get("ad_attributes") if isinstance(belen_conf, dict) else None
+        if isinstance(belen_conf, dict):
+            opts = belen_conf.get("universalAnalyticsOpts", {})
+            special_attributes_str = opts.get("dimensions", {}).get("ad_attributes")
+        else:
+            special_attributes_str = None
         if not special_attributes_str:
             return await self._extract_special_attributes_from_dom()
         special_attributes = dict(item.split(":") for item in special_attributes_str.split("|") if ":" in item)
@@ -1172,34 +1181,45 @@ class AdExtractor(WebScrapingMixin):
         contact["zipcode"] = zipcode  # e.g. 19372
         contact["location"] = location  # e.g. Mecklenburg-Vorpommern - Steinbeck
 
-        contact_person_element:Element = await self.web_find(By.ID, "viewad-contact")
+        contact_person_element = await self.web_probe(By.ID, "viewad-contact")
 
-        # Legacy layout: name is inside .iconlist-text > a/span
-        name_element = await self.web_probe(By.CLASS_NAME, "iconlist-text", parent = contact_person_element)
-        if name_element is not None:
-            try:
-                name = await self.web_text(By.TAG_NAME, "a", parent = name_element)
-            except TimeoutError:  # edge case: name without link
-                name = await self.web_text(By.TAG_NAME, "span", parent = name_element)
-        else:
-            # Redesigned layout: seller name is in a link to /s-bestandsliste.html?userId=
-            name_link = await self.web_probe(
-                By.CSS_SELECTOR,
-                "a[href*='/s-bestandsliste.html']",
-                parent = contact_person_element,
-            )
-            if name_link is not None:
-                name = await self.extract_visible_text(name_link)
-            elif island_props:
-                # Island fallback: extract contact name from embedded JSON
-                user_details = self._unwrap_island_value(island_props.get("userDetails", {}))
-                island_name = self._unwrap_island_value(user_details.get("contactName", "")) if isinstance(user_details, dict) else ""
-                name = str(island_name) if island_name else ""
-                if not name:
-                    LOG.warning("Could not extract seller name from contact area or island data.")
+        if contact_person_element is not None:
+            # Legacy layout: name is inside .iconlist-text > a/span
+            name_element = await self.web_probe(By.CLASS_NAME, "iconlist-text", parent = contact_person_element)
+            if name_element is not None:
+                try:
+                    name = await self.web_text(By.TAG_NAME, "a", parent = name_element)
+                except TimeoutError:  # edge case: name without link
+                    name = await self.web_text(By.TAG_NAME, "span", parent = name_element)
             else:
-                LOG.warning("Could not extract seller name from contact area.")
-                name = ""
+                # Redesigned layout: seller name is in a link to /s-bestandsliste.html?userId=
+                name_link = await self.web_probe(
+                    By.CSS_SELECTOR,
+                    "a[href*='/s-bestandsliste.html']",
+                    parent = contact_person_element,
+                )
+                if name_link is not None:
+                    name = await self.extract_visible_text(name_link)
+                elif island_props:
+                    # Island fallback: extract contact name from embedded JSON
+                    user_details = self._unwrap_island_value(island_props.get("userDetails", {}))
+                    island_name = self._unwrap_island_value(user_details.get("contactName", "")) if isinstance(user_details, dict) else ""
+                    name = str(island_name) if island_name else ""
+                    if not name:
+                        LOG.warning("Could not extract seller name from contact area or island data.")
+                else:
+                    LOG.warning("Could not extract seller name from contact area.")
+                    name = ""
+        elif island_props:
+            # No viewad-contact container; try island fallback directly
+            user_details = self._unwrap_island_value(island_props.get("userDetails", {}))
+            island_name = self._unwrap_island_value(user_details.get("contactName", "")) if isinstance(user_details, dict) else ""
+            name = str(island_name) if island_name else ""
+            if not name:
+                LOG.warning("Could not extract seller name from contact area or island data.")
+        else:
+            LOG.warning("Could not extract seller name from contact area.")
+            name = ""
         contact["name"] = name
 
         if "street" not in contact:
