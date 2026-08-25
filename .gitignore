@@ -18,6 +18,7 @@ downloaded-ads
 
 # python
 __pycache__
+__pypackages__
 /dist
 
 # IntelliJ

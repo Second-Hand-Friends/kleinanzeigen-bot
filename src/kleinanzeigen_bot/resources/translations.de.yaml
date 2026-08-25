@@ -623,8 +623,10 @@ kleinanzeigen_bot/extract.py:
     "Found %s.": "%s gefunden."
     "Downloaded %s.": "%s heruntergeladen."
     "No image area found. Continuing without downloading images.": "Keine Bildbereiche gefunden. Fahre ohne Bilder-Download fort."
-    "Downloaded %s from island data.": "%s aus Insel-Daten heruntergeladen."
-    "Island image fallback failed: %s": "Insel-Daten Bild-Fallback fehlgeschlagen: %s"
+
+  _download_images_from_island:
+    "Downloaded %s from Astro component data.": "%s aus Astro-Komponentendaten heruntergeladen."
+    "Astro component image fallback failed: %s": "Bild-Fallback aus Astro-Komponentendaten fehlgeschlagen: %s"
 
   _log_download_name_truncation:
     "Download name truncated {id} placeholder: template='%s', max_length=%d, id='%s', rendered='%s'": "Download-Name hat {id} Platzhalter gekürzt: Vorlage='%s', max_length=%d, id='%s', gerendert='%s'"
@@ -660,11 +662,11 @@ kleinanzeigen_bot/extract.py:
     "Could not remove staging directory %s: %s": "Konnte Staging-Verzeichnis %s nicht entfernen: %s"
 
   _extract_ad_page_info:
-    "Could not extract creation date from any selector or island data.": "Erstellungsdatum konnte weder über Selektoren noch über Insel-Daten extrahiert werden."
+    "Could not extract creation date from any selector or Astro component data.": "Erstellungsdatum konnte weder über Selektoren noch über Astro-Komponentendaten extrahiert werden."
 
   _extract_contact_from_ad_page:
     "No street given in the contact.": "Keine Straße in den Kontaktdaten angegeben."
-    "Could not extract seller name from contact area or island data.": "Verkäufername konnte weder aus dem Kontaktbereich noch aus den Insel-Daten extrahiert werden."
+    "Could not extract seller name from contact area or Astro component data.": "Verkäufername konnte weder aus dem Kontaktbereich noch aus Astro-Komponentendaten extrahiert werden."
     "Could not extract seller name from contact area.": "Verkäufername konnte aus dem Kontaktbereich nicht extrahiert werden."
 
   _extract_category_from_ad_page:

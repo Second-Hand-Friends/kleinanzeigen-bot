@@ -90,6 +90,26 @@ class TestAdExtractorBasics:
         assert extractor.config == test_bot_config
         assert extractor.download_dir == Path("downloaded-ads")
 
+    @pytest.mark.asyncio
+    async def test_extract_island_props_unescapes_and_unwraps_ad_data(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Extract usable ad data from an HTML-escaped Astro props attribute."""
+        astro_props = (
+            "{&quot;data&quot;:[0,{&quot;formattedCreationDate&quot;:[0,&quot;22.08.2026&quot;],"
+            "&quot;userDetails&quot;:[0,{&quot;contactName&quot;:[0,&quot;DanielP&quot;]}]}]}"
+        )
+
+        with patch.object(test_extractor, "web_execute", new_callable = AsyncMock, return_value = astro_props):
+            island_props = await test_extractor._extract_island_props()
+
+        assert island_props["formattedCreationDate"] == [0, "22.08.2026"]
+        assert island_props["userDetails"] == [0, {"contactName": [0, "DanielP"]}]
+
+    @pytest.mark.asyncio
+    async def test_extract_island_props_ignores_malformed_data(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Ignore malformed island attributes so legacy extraction can continue."""
+        with patch.object(test_extractor, "web_execute", new_callable = AsyncMock, return_value = "{not json"):
+            assert await test_extractor._extract_island_props() == {}
+
     @pytest.mark.parametrize(
         ("url", "expected_id"),
         [
@@ -496,19 +516,16 @@ class TestAdExtractorNavigation:
         page_mock = AsyncMock()
         page_mock.url = "https://www.kleinanzeigen.de/s-suchen.html?k0"
 
-        input_mock = AsyncMock()
-        input_mock.clear_input = AsyncMock()
-        input_mock.send_keys = AsyncMock()
-        input_mock.apply = AsyncMock(return_value = True)
-        input_mock.attrs = {}
-
         with (
             patch.object(test_extractor, "page", page_mock),
-            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_find", new_callable = AsyncMock, return_value = input_mock),
+            patch.object(test_extractor, "web_open", new_callable = AsyncMock) as mock_web_open,
+            patch.object(test_extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
         ):
             result = await test_extractor.navigate_to_ad_page(99999)
-            assert result is False
+
+        assert result is False
+        mock_web_open.assert_awaited_once_with("https://www.kleinanzeigen.de/s-suchanfrage.html?keywords=99999")
+        mock_web_find.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_extract_own_ads_urls(self, test_extractor:extract_module.AdExtractor) -> None:
@@ -999,6 +1016,42 @@ class TestAdExtractorContent:
         mock_web_text.assert_any_await(By.CSS_SELECTOR, extract_module.DOWNLOAD_CREATION_DATE_SELECTOR)
         assert ad_cfg.created_on is not None
         assert ad_cfg.created_on.isoformat().startswith("2025-02-03")
+
+    @pytest.mark.asyncio
+    async def test_extract_ad_page_info_uses_island_creation_date_when_dom_is_missing(
+        self,
+        test_extractor:extract_module.AdExtractor,
+    ) -> None:
+        """Use the embedded date when neither supported DOM selector is available."""
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+        test_extractor.page = page_mock
+        island_props = {"formattedCreationDate": [0, "22.08.2026"]}
+
+        with (
+            patch.object(test_extractor, "_extract_island_props", new_callable = AsyncMock, return_value = island_props),
+            patch.object(test_extractor, "web_execute", new_callable = AsyncMock, return_value = None),
+            patch.object(
+                test_extractor,
+                "web_text",
+                new_callable = AsyncMock,
+                side_effect = ["Description text", TimeoutError(), TimeoutError()],
+            ),
+            patch.multiple(
+                test_extractor,
+                _extract_category_from_ad_page = AsyncMock(return_value = "160"),
+                _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
+                _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
+                _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
+                _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
+                _download_images_from_ad_page = AsyncMock(return_value = []),
+                _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+            ),
+        ):
+            ad_cfg = await test_extractor._extract_ad_page_info("/some/dir", 12345, "ad_12345", "Test Title")
+
+        assert ad_cfg.created_on is not None
+        assert ad_cfg.created_on.isoformat().startswith("2026-08-22")
 
     @pytest.mark.asyncio
     async def test_resolve_download_title_prefers_published_metadata_for_owned_overview(
@@ -1566,6 +1619,21 @@ class TestAdExtractorContact:
             await extractor._extract_contact_from_ad_page()
 
     @pytest.mark.asyncio
+    async def test_extract_contact_uses_island_name_without_legacy_contact_container(self, extractor:extract_module.AdExtractor) -> None:
+        """Keep the seller name when the redesigned page omits viewad-contact."""
+        island_props = {"userDetails": [0, {"contactName": [0, "DanielP"]}]}
+
+        with (
+            patch.object(extractor, "web_text", new_callable = AsyncMock, return_value = "12345 Berlin - Mitte"),
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, None, None]),
+        ):
+            contact = await extractor._extract_contact_from_ad_page(island_props = island_props)
+
+        assert contact.name == "DanielP"
+        assert contact.street is None
+        assert contact.phone is None
+
+    @pytest.mark.asyncio
     # pylint: disable=protected-access
     async def test_extract_contact_info_with_street_timeout(self, extractor:extract_module.AdExtractor) -> None:
         """Test street extraction timeout does not abort contact extraction."""
@@ -1741,6 +1809,40 @@ class TestAdExtractorDownload:
         ):
             image_paths = await extractor._download_images_from_ad_page("/some/dir", "ad_12345")
             assert len(image_paths) == 0
+
+    @pytest.mark.asyncio
+    async def test_download_images_uses_island_urls_after_missing_dom_gallery(self, extractor:extract_module.AdExtractor) -> None:
+        """Download valid island image URLs and skip malformed entries independently."""
+        island_props = {
+            "imageDetails": [
+                0,
+                {
+                    "imageList": [
+                        0,
+                        [
+                            [0, {"xxLargeUrl": [0, "https://images.example/one.jpg"]}],
+                            [0, {"xLargeUrl": [0, "https://images.example/two.jpg"]}],
+                            [0, {"largeUrl": [0, None]}],
+                        ],
+                    ],
+                },
+            ],
+        }
+
+        with (
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(
+                extract_module.AdExtractor,
+                "_download_and_save_image_sync",
+                side_effect = ["/some/dir/ad_12345__img1.jpg", None],
+            ) as download_image,
+        ):
+            image_paths = await extractor._download_images_from_ad_page("/some/dir", "ad_12345", island_props = island_props)
+
+        assert image_paths == ["ad_12345__img1.jpg"]
+        assert download_image.call_args_list[0].args[0] == "https://images.example/one.jpg"
+        assert download_image.call_args_list[1].args[0] == "https://images.example/two.jpg"
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access

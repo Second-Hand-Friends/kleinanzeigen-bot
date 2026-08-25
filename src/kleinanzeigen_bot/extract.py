@@ -464,6 +464,56 @@ class AdExtractor(WebScrapingMixin):
             LOG.warning("Failed to download image %s: %s", url, e)
             return None
 
+    def _extract_island_image_urls(self, island_props:dict[str, Any]) -> list[str]:
+        """Return usable image URLs from Astro island image data."""
+        image_details = self._unwrap_island_value(island_props.get("imageDetails", {}))
+        if not isinstance(image_details, dict):
+            return []
+
+        image_list = self._unwrap_island_value(image_details.get("imageList", []))
+        if not isinstance(image_list, list):
+            return []
+
+        image_urls:list[str] = []
+        for image_entry in image_list:
+            image_data = self._unwrap_island_value(image_entry) if isinstance(image_entry, list) else image_entry
+            if not isinstance(image_data, dict):
+                continue
+            image_url_raw = image_data.get("xxLargeUrl") or image_data.get("xLargeUrl") or image_data.get("largeUrl")
+            image_url = self._unwrap_island_value(image_url_raw)
+            if isinstance(image_url, str):
+                image_urls.append(image_url)
+
+        return image_urls
+
+    async def _download_images_from_island(self, directory:str, ad_file_stem:str, island_props:dict[str, Any]) -> list[str]:
+        """Download the images embedded in Astro island data."""
+        try:
+            image_urls = self._extract_island_image_urls(island_props)
+            if not image_urls:
+                return []
+
+            image_paths:list[str] = []
+            image_filename_prefix = f"{ad_file_stem}__img"
+            loop = asyncio.get_running_loop()
+            for image_number, image_url in enumerate(image_urls, start = 1):
+                image_path = await loop.run_in_executor(
+                    None,
+                    self._download_and_save_image_sync,
+                    image_url,
+                    directory,
+                    image_filename_prefix,
+                    image_number,
+                )
+                if image_path:
+                    image_paths.append(Path(image_path).name)
+
+            LOG.info("Downloaded %s from Astro component data.", i18n.pluralize("image", len(image_paths)))
+            return image_paths
+        except Exception as error:
+            LOG.warning("Astro component image fallback failed: %s", error)
+            return []
+
     async def _download_images_from_ad_page(self, directory:str, ad_file_stem:str, *, island_props:dict[str, Any] | None = None) -> list[str]:
         """
         Downloads all images of an ad.
@@ -519,30 +569,7 @@ class AdExtractor(WebScrapingMixin):
         except TimeoutError:  # some ads do not require images
             # Last-resort fallback: extract image URLs from the Astro island JSON
             if island_props:
-                try:
-                    image_details = self._unwrap_island_value(island_props.get("imageDetails", {}))
-                    image_list = self._unwrap_island_value(image_details.get("imageList", [])) if isinstance(image_details, dict) else []
-                    if isinstance(image_list, list) and image_list:
-                        img_fn_prefix = f"{ad_file_stem}__img"
-                        img_nr = 1
-                        dl_counter = 0
-                        loop = asyncio.get_running_loop()
-                        for img_entry in image_list:
-                            img_data = self._unwrap_island_value(img_entry) if isinstance(img_entry, list) else img_entry
-                            if not isinstance(img_data, dict):
-                                continue
-                            img_url_raw = img_data.get("xxLargeUrl") or img_data.get("xLargeUrl") or img_data.get("largeUrl")
-                            img_url = self._unwrap_island_value(img_url_raw)
-                            if not isinstance(img_url, str):
-                                continue
-                            img_path = await loop.run_in_executor(None, self._download_and_save_image_sync, str(img_url), directory, img_fn_prefix, img_nr)
-                            if img_path:
-                                dl_counter += 1
-                                img_paths.append(Path(img_path).name)
-                            img_nr += 1
-                        LOG.info("Downloaded %s from island data.", i18n.pluralize("image", dl_counter))
-                except Exception as e:
-                    LOG.warning("Island image fallback failed: %s", e)
+                img_paths = await self._download_images_from_island(directory, ad_file_stem, island_props)
             if not img_paths:
                 LOG.warning("No image area found. Continuing without downloading images.")
 
@@ -647,6 +674,12 @@ class AdExtractor(WebScrapingMixin):
             await self.web_open(str(id_or_url))  # navigate to URL directly given
         await self.web_sleep()
 
+        # Handle invalid IDs before waiting for an ad title: the ``k0`` page
+        # has no ad content and must retain the documented False result.
+        if self.page.url.endswith("k0"):
+            LOG.error("There is no ad under the given ID.")
+            return False
+
         # When navigating via the search page, the initial page load completes
         # on the search URL before the JS redirect to the ad page fires.
         # Wait for the ad page content to actually appear.
@@ -662,11 +695,6 @@ class AdExtractor(WebScrapingMixin):
                 LOG.debug("After force-reload, current URL: %s", self.page.url)
                 # Verify ad content is now present after the reload
                 await self.web_find(By.ID, "viewad-title", timeout = self.effective_timeout("page_load"))
-
-        # handle the case that invalid ad ID given
-        if self.page.url.endswith("k0"):
-            LOG.error("There is no ad under the given ID.")
-            return False
 
         # close (warning) popup, if given
         popup = await self.web_probe(By.ID, "vap-ovrly-secure")
@@ -836,7 +864,7 @@ class AdExtractor(WebScrapingMixin):
             if isinstance(island_date, str):
                 creation_date = island_date
         if not creation_date:
-            raise TimeoutError(_("Could not extract creation date from any selector or island data."))
+            raise TimeoutError(_("Could not extract creation date from any selector or Astro component data."))
 
         # convert creation date to ISO format
         created_parts = creation_date.split(".")
@@ -1206,7 +1234,7 @@ class AdExtractor(WebScrapingMixin):
                     island_name = self._unwrap_island_value(user_details.get("contactName", "")) if isinstance(user_details, dict) else ""
                     name = str(island_name) if island_name else ""
                     if not name:
-                        LOG.warning("Could not extract seller name from contact area or island data.")
+                        LOG.warning("Could not extract seller name from contact area or Astro component data.")
                 else:
                     LOG.warning("Could not extract seller name from contact area.")
                     name = ""
@@ -1216,7 +1244,7 @@ class AdExtractor(WebScrapingMixin):
             island_name = self._unwrap_island_value(user_details.get("contactName", "")) if isinstance(user_details, dict) else ""
             name = str(island_name) if island_name else ""
             if not name:
-                LOG.warning("Could not extract seller name from contact area or island data.")
+                LOG.warning("Could not extract seller name from contact area or Astro component data.")
         else:
             LOG.warning("Could not extract seller name from contact area.")
             name = ""
