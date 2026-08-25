@@ -1086,6 +1086,10 @@ class TestWantedShippingSelection:
         async def execute_side_effect(script:str) -> Any:
             if "window.location.href" in script:
                 return test_bot.page.url
+            # _click_submit_button uses JS to find and click the <button>;
+            # return True so the click is considered successful.
+            if "querySelectorAll('button')" in script:
+                return True
             return None
 
         with (

@@ -45,6 +45,11 @@ def _idless_success_execute(root_url:str) -> Callable[[str], Awaitable[Any]]:
     async def execute(script:str) -> Any:
         if "document.referrer" in script:
             return ""
+        # _click_submit_button injects JS that locates a <button> by label
+        # text and clicks it, returning True/False. The helper must report a
+        # successful click so the submit step advances.
+        if "querySelectorAll('button')" in script and ".textContent.trim().includes" in script:
+            return True
         if "Geschafft!" in script:
             return True
         if "window.location.href" in script:
@@ -166,13 +171,17 @@ class TestSubmitAndConfirmAd:
         ad = _make_min_ad()
         captcha_config = test_bot.config.captcha
         upsell_element = AsyncMock()
+        dismiss_btn = AsyncMock()
         confirmation_url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
 
         with (
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            # First probe detects the upsell dialog (By.TEXT); remaining probes
+            # (imprint, no-image hint, payment form) return None.
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [upsell_element, None, None, None]),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = dismiss_btn) as mock_find,
             patch.object(test_bot, "web_await", new_callable = AsyncMock),
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = confirmation_url),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
@@ -186,12 +195,13 @@ class TestSubmitAndConfirmAd:
             )
 
         assert result == 12345
-        assert mock_click.await_count == 2
-        # Verify the dismiss button XPath was used (without coupling to internal timeout constant)
-        dismiss_xpath = "//dialog[@open]//button[contains(., 'Ohne Hochschieben weiter')]"
+        # Submit is now performed via web_execute (JS), not web_click.
+        mock_click.assert_not_awaited()
+        # The dismiss button is located by text and clicked directly.
+        dismiss_btn.click.assert_awaited_once()
         assert any(
-            call_args.args[0] == By.XPATH and call_args.args[1] == dismiss_xpath
-            for call_args in mock_click.await_args_list
+            call_args.args[:2] == (By.TEXT, "Ohne Hochschieben weiter")
+            for call_args in mock_find.await_args_list
         )
 
     @pytest.mark.asyncio
@@ -471,7 +481,7 @@ class TestPublishedAdsRecovery:
                 test_bot,
                 "web_execute",
                 new_callable = AsyncMock,
-                side_effect = ["", f"{test_bot.root_url}/done"],
+                side_effect = ["", True, f"{test_bot.root_url}/done"],
             ),
             patch(
                 "kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page",
@@ -509,7 +519,7 @@ class TestPublishedAdsRecovery:
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = ["", f"{test_bot.root_url}/done"]),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = ["", True, f"{test_bot.root_url}/done"]),
             patch(
                 "kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page",
                 new_callable = AsyncMock,
@@ -544,7 +554,7 @@ class TestPublishedAdsRecovery:
                 test_bot,
                 "web_execute",
                 new_callable = AsyncMock,
-                side_effect = ["", f"{test_bot.root_url}/done", f"{test_bot.root_url}/done"],
+                side_effect = ["", True, f"{test_bot.root_url}/done", f"{test_bot.root_url}/done"],
             ),
             patch(
                 "kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page",
@@ -583,7 +593,7 @@ class TestPublishedAdsRecovery:
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = ["", f"{test_bot.root_url}/done"]),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = ["", True, f"{test_bot.root_url}/done"]),
             patch(
                 "kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page",
                 new_callable = AsyncMock,
