@@ -996,7 +996,7 @@ class AdExtractor(WebScrapingMixin):
 
         return category
 
-    async def _extract_special_attributes_from_ad_page(self, belen_conf:dict[str, Any]) -> dict[str, str]:
+    async def _extract_special_attributes_from_ad_page(self, belen_conf:dict[str, Any] | None) -> dict[str, str]:
         """
         Extracts the special attributes from an ad page.
         If no items are available then special_attributes is empty

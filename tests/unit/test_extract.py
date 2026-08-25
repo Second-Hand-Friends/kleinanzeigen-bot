@@ -110,6 +110,16 @@ class TestAdExtractorBasics:
         with patch.object(test_extractor, "web_execute", new_callable = AsyncMock, return_value = "{not json"):
             assert await test_extractor._extract_island_props() == {}
 
+    @pytest.mark.asyncio
+    async def test_extract_island_props_returns_unwrapped_props_for_unexpected_data_shape(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Retain parseable props when their data envelope has an unexpected shape."""
+        with patch.object(test_extractor, "web_execute", new_callable = AsyncMock, return_value = '{"data":"unexpected"}'):
+            assert await test_extractor._extract_island_props() == {"data": "unexpected"}
+
+    def test_unwrap_island_value_keeps_non_enveloped_values(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Keep ordinary values intact when they do not use Astro's tuple envelope."""
+        assert test_extractor._unwrap_island_value("plain value") == "plain value"
+
     @pytest.mark.parametrize(
         ("url", "expected_id"),
         [
@@ -526,6 +536,23 @@ class TestAdExtractorNavigation:
         assert result is False
         mock_web_open.assert_awaited_once_with("https://www.kleinanzeigen.de/s-suchanfrage.html?keywords=99999")
         mock_web_find.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_navigate_to_ad_page_reloads_when_search_redirect_has_no_ad_content(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Retry once when the search page has not yet redirected to ad content."""
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+
+        with (
+            patch.object(test_extractor, "page", page_mock),
+            patch.object(test_extractor, "web_open", new_callable = AsyncMock) as mock_web_open,
+            patch.object(test_extractor, "web_find", new_callable = AsyncMock, side_effect = [TimeoutError(), MagicMock()]),
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = None),
+        ):
+            assert await test_extractor.navigate_to_ad_page(12345) is True
+
+        assert mock_web_open.await_args_list[1].args == (page_mock.url,)
+        assert mock_web_open.await_args_list[1].kwargs == {"reload_if_already_open": True}
 
     @pytest.mark.asyncio
     async def test_extract_own_ads_urls(self, test_extractor:extract_module.AdExtractor) -> None:
@@ -1515,6 +1542,14 @@ class TestAdExtractorCategory:
         assert result == {}
 
     @pytest.mark.asyncio
+    async def test_extract_special_attributes_falls_back_when_belen_conf_is_missing(self, extractor:extract_module.AdExtractor) -> None:
+        """Use the DOM fallback when BelenConf is unavailable."""
+        with patch.object(extractor, "_extract_special_attributes_from_dom", new_callable = AsyncMock, return_value = {"condition_s": "ok"}):
+            result = await extractor._extract_special_attributes_from_ad_page(None)
+
+        assert result == {"condition_s": "ok"}
+
+    @pytest.mark.asyncio
     # pylint: disable=protected-access
     async def test_extract_special_attributes_from_dom_skips_unrecognized_label(self, extractor:extract_module.AdExtractor) -> None:
         """DOM fallback should skip rows whose label is not in the lookup map."""
@@ -1632,6 +1667,51 @@ class TestAdExtractorContact:
         assert contact.name == "DanielP"
         assert contact.street is None
         assert contact.phone is None
+
+    @pytest.mark.asyncio
+    async def test_extract_contact_uses_redesigned_seller_link(self, extractor:extract_module.AdExtractor) -> None:
+        """Use the redesigned seller-profile link when legacy name markup is absent."""
+        contact_element = MagicMock()
+        seller_link = MagicMock()
+
+        with (
+            patch.object(extractor, "web_text", new_callable = AsyncMock, return_value = "12345 Berlin - Mitte"),
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, contact_element, None, seller_link, None]),
+            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, return_value = "DanielP"),
+        ):
+            contact = await extractor._extract_contact_from_ad_page()
+
+        assert contact.name == "DanielP"
+
+    @pytest.mark.asyncio
+    async def test_extract_contact_uses_span_when_legacy_name_has_no_link(self, extractor:extract_module.AdExtractor) -> None:
+        """Support legacy seller names rendered without an anchor element."""
+        contact_element = MagicMock()
+        name_element = MagicMock()
+
+        with (
+            patch.object(
+                extractor,
+                "web_text",
+                new_callable = AsyncMock,
+                side_effect = ["12345 Berlin - Mitte", TimeoutError(), "DanielP"],
+            ),
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, contact_element, name_element, None]),
+        ):
+            contact = await extractor._extract_contact_from_ad_page()
+
+        assert contact.name == "DanielP"
+
+    @pytest.mark.asyncio
+    async def test_extract_contact_keeps_empty_name_when_no_seller_source_exists(self, extractor:extract_module.AdExtractor) -> None:
+        """Return an empty seller name when neither DOM nor Astro data provides one."""
+        with (
+            patch.object(extractor, "web_text", new_callable = AsyncMock, return_value = "12345 Berlin - Mitte"),
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, None, None]),
+        ):
+            contact = await extractor._extract_contact_from_ad_page()
+
+        assert not contact.name
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
@@ -1843,6 +1923,27 @@ class TestAdExtractorDownload:
         assert image_paths == ["ad_12345__img1.jpg"]
         assert download_image.call_args_list[0].args[0] == "https://images.example/one.jpg"
         assert download_image.call_args_list[1].args[0] == "https://images.example/two.jpg"
+
+    def test_extract_island_image_urls_skips_unusable_values(self, extractor:extract_module.AdExtractor) -> None:
+        """Ignore malformed image structures and URLs from embedded Astro data."""
+        assert extractor._extract_island_image_urls({"imageDetails": [0, []]}) == []
+        assert extractor._extract_island_image_urls({"imageDetails": [0, {"imageList": [0, {}]}]}) == []
+        malformed_entries = {
+            "imageDetails": [
+                0,
+                {"imageList": [0, [[0, "invalid"], [0, {"largeUrl": [0, 42]}]]]},
+            ],
+        }
+        assert extractor._extract_island_image_urls(malformed_entries) == []
+
+    @pytest.mark.asyncio
+    async def test_download_images_from_island_handles_missing_urls_and_extraction_errors(self, extractor:extract_module.AdExtractor) -> None:
+        """Treat unusable Astro image data as a non-fatal fallback failure."""
+        empty_props = {"imageDetails": [0, {"imageList": [0, []]}]}
+        assert await extractor._download_images_from_island("/some/dir", "ad_12345", empty_props) == []
+
+        with patch.object(extractor, "_extract_island_image_urls", side_effect = RuntimeError("bad data")):
+            assert await extractor._download_images_from_island("/some/dir", "ad_12345", empty_props) == []
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
