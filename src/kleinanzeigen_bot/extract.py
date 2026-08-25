@@ -15,14 +15,14 @@ import urllib.error as urllib_error
 import urllib.request as urllib_request
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 from kleinanzeigen_bot.model.ad_model import ContactPartial
 
 from .model.ad_model import OPTION_NAME_BY_CARRIER_CODE, AdPartial, validate_condition_api_mapping
 from .model.config_model import AutoPriceReductionConfig, Config
 from .utils import dicts, files, i18n, loggers, misc, reflect
-from .utils.web_scraping_mixin import Browser, By, Element, WebScrapingMixin
+from .utils.web_scraping_mixin import Browser, By, WebScrapingMixin
 
 __all__ = [
     "AdExtractor",
@@ -34,6 +34,7 @@ _BREADCRUMB_MIN_DEPTH:Final[int] = 2
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
 _MAX_FILENAME_COMPONENT_LENGTH:Final[int] = 255
 _DOWNLOAD_STEM_SUFFIX_BUDGET:Final[int] = len("__img9999.jpeg")
+_ISLAND_ENVELOPE_LENGTH:Final[int] = 2
 _STAGING_DIR_PREFIX:Final[str] = ".tmp-"
 _BACKUP_DIR_PREFIX:Final[str] = ".bak-"
 _RMTREE_RETRY_ATTEMPTS:Final[int] = 5
@@ -456,29 +457,94 @@ class AdExtractor(WebScrapingMixin):
                 with open(img_path, "wb") as f:
                     shutil.copyfileobj(response, f)
                 return str(img_path)
-        except (urllib_error.URLError, urllib_error.HTTPError, OSError, shutil.Error) as e:
-            # Narrow exception handling to expected network/filesystem errors
+        except (urllib_error.URLError, urllib_error.HTTPError, ValueError, OSError, shutil.Error) as e:
+            # ValueError: malformed URL string from island data
+            # URLError/HTTPError: network or server errors
+            # OSError/shutil.Error: filesystem errors
             LOG.warning("Failed to download image %s: %s", url, e)
             return None
 
-    async def _download_images_from_ad_page(self, directory:str, ad_file_stem:str) -> list[str]:
+    def _extract_island_image_urls(self, island_props:dict[str, Any]) -> list[str]:
+        """Return usable image URLs from Astro island image data."""
+        image_details = self._unwrap_island_value(island_props.get("imageDetails", {}))
+        if not isinstance(image_details, dict):
+            return []
+
+        image_list = self._unwrap_island_value(image_details.get("imageList", []))
+        if not isinstance(image_list, list):
+            return []
+
+        image_urls:list[str] = []
+        for image_entry in image_list:
+            image_data = self._unwrap_island_value(image_entry) if isinstance(image_entry, list) else image_entry
+            if not isinstance(image_data, dict):
+                continue
+            image_url_raw = image_data.get("xxLargeUrl") or image_data.get("xLargeUrl") or image_data.get("largeUrl")
+            image_url = self._unwrap_island_value(image_url_raw)
+            if isinstance(image_url, str):
+                image_urls.append(image_url)
+
+        return image_urls
+
+    async def _download_images_from_island(self, directory:str, ad_file_stem:str, island_props:dict[str, Any]) -> list[str]:
+        """Download the images embedded in Astro island data."""
+        try:
+            image_urls = self._extract_island_image_urls(island_props)
+            if not image_urls:
+                return []
+
+            image_paths:list[str] = []
+            image_filename_prefix = f"{ad_file_stem}__img"
+            loop = asyncio.get_running_loop()
+            for image_number, image_url in enumerate(image_urls, start = 1):
+                image_path = await loop.run_in_executor(
+                    None,
+                    self._download_and_save_image_sync,
+                    image_url,
+                    directory,
+                    image_filename_prefix,
+                    image_number,
+                )
+                if image_path:
+                    image_paths.append(Path(image_path).name)
+
+            LOG.info("Downloaded %s from Astro component data.", i18n.pluralize("image", len(image_paths)))
+            return image_paths
+        except Exception as error:
+            LOG.warning("Astro component image fallback failed: %s", error)
+            return []
+
+    async def _download_images_from_ad_page(self, directory:str, ad_file_stem:str, *, island_props:dict[str, Any] | None = None) -> list[str]:
         """
         Downloads all images of an ad.
 
         :param directory: the path of the directory created for this ad
         :param ad_file_stem: the rendered filename stem shared by the ad config and images
+        :param island_props: optional Astro island props from the redesigned layout
         :return: the relative paths for all downloaded images
         """
 
         n_images:int
         img_paths = []
         try:
-            # download all images from box
+            # Try legacy layout first (galleryimage-large class)
             image_box = await self.web_probe(By.CLASS_NAME, "galleryimage-large")
-            if image_box is None:
-                raise TimeoutError("No image area found.")
+            if image_box is not None:
+                images = await self.web_find_all(By.CSS_SELECTOR, ".galleryimage-element[data-ix] > img", parent = image_box)
+            else:
+                images = []
 
-            images = await self.web_find_all(By.CSS_SELECTOR, ".galleryimage-element[data-ix] > img", parent = image_box)
+            if not images:
+                # Redesigned layout: images use Tailwind-style classes.
+                # Scope to the main article's image gallery to avoid picking up
+                # thumbnails from "other ads" or recommendation sections.
+                images = await self.web_find_all(
+                    By.CSS_SELECTOR,
+                    "article img[src*='img.kleinanzeigen.de'][class*='object-contain']",
+                )
+                if not images:
+                    raise TimeoutError("No image area found.")
+
             n_images = len(images)
             LOG.info("Found %s.", i18n.pluralize("image", n_images))
 
@@ -504,9 +570,25 @@ class AdExtractor(WebScrapingMixin):
             LOG.info("Downloaded %s.", i18n.pluralize("image", dl_counter))
 
         except TimeoutError:  # some ads do not require images
-            LOG.warning("No image area found. Continuing without downloading images.")
+            # Last-resort fallback: extract image URLs from the Astro island JSON
+            if island_props:
+                img_paths = await self._download_images_from_island(directory, ad_file_stem, island_props)
+            if not img_paths:
+                LOG.warning("No image area found. Continuing without downloading images.")
 
         return img_paths
+
+    @staticmethod
+    def _is_valid_creation_date(value:object) -> bool:
+        """Return whether value is a calendar date in the page's DD.MM.YYYY format."""
+        if not isinstance(value, str):
+            return False
+        try:
+            day, month, year = value.split(".")
+            datetime.fromisoformat(f"{year}-{month}-{day} 00:00:00")
+        except (ValueError, IndexError):
+            return False
+        return True
 
     def extract_ad_id_from_ad_url(self, url:str) -> int:
         """
@@ -607,10 +689,27 @@ class AdExtractor(WebScrapingMixin):
             await self.web_open(str(id_or_url))  # navigate to URL directly given
         await self.web_sleep()
 
-        # handle the case that invalid ad ID given
+        # Handle invalid IDs before waiting for an ad title: the ``k0`` page
+        # has no ad content and must retain the documented False result.
         if self.page.url.endswith("k0"):
             LOG.error("There is no ad under the given ID.")
             return False
+
+        # When navigating via the search page, the initial page load completes
+        # on the search URL before the JS redirect to the ad page fires.
+        # Wait for the ad page content to actually appear.
+        if reflect.is_integer(id_or_url):
+            LOG.debug("After search redirect, current URL: %s", self.page.url)
+            try:
+                await self.web_find(By.ID, "viewad-title", timeout = self.effective_timeout("page_load"))
+            except TimeoutError:
+                LOG.debug("viewad-title not found after search redirect. Current URL: %s", self.page.url)
+                # Force-reload the page to ensure the ad page content is present
+                await self.web_open(self.page.url, reload_if_already_open = True)
+                await self.web_sleep()
+                LOG.debug("After force-reload, current URL: %s", self.page.url)
+                # Verify ad content is now present after the reload
+                await self.web_find(By.ID, "viewad-title", timeout = self.effective_timeout("page_load"))
 
         # close (warning) popup, if given
         popup = await self.web_probe(By.ID, "vap-ovrly-secure")
@@ -619,6 +718,50 @@ class AdExtractor(WebScrapingMixin):
             await self.web_click(By.CLASS_NAME, "mfp-close")
             await self.web_sleep()
         return True
+
+    async def _extract_island_props(self) -> dict[str, Any]:
+        """Extract the props JSON from the Astro island on redesigned ad pages.
+
+        Kleinanzeigen's redesigned ad pages embed all ad data in an
+        ``<astro-island>`` element's ``props`` attribute as a JSON-encoded
+        string. When the page's JavaScript hasn't fully hydrated (common in
+        automated browsers), the DOM elements the bot normally queries may be
+        absent, but this data is always present in the HTML.
+
+        Returns an empty dict if the island or its props cannot be parsed.
+        """
+        try:
+            raw = await self.web_execute("""(() => {
+                // Find the astro-island that contains ad data (imageDetails, userDetails, etc.)
+                const islands = document.querySelectorAll('astro-island');
+                for (const island of islands) {
+                    const props = island.getAttribute('props') || '';
+                    if (props.includes('imageDetails') || props.includes('formattedCreationDate') || props.includes('userDetails')) {
+                        return props;
+                    }
+                }
+                return null;
+            })()""")
+            if not raw or not isinstance(raw, str):
+                return {}
+            # The props attribute uses &quot; encoded quotes
+            decoded = html.unescape(raw)
+            props = json.loads(decoded)
+            # The ad data is nested under 'data' -> [0, {...}]
+            data_val = props.get("data", {})
+            if isinstance(data_val, list) and len(data_val) == _ISLAND_ENVELOPE_LENGTH:
+                data_val = data_val[1]
+            if isinstance(data_val, dict):
+                return cast(dict[str, Any], data_val)
+            return cast(dict[str, Any], props) if isinstance(props, dict) else {}
+        except Exception:
+            return {}
+
+    def _unwrap_island_value(self, val:Any) -> Any:
+        """Unwrap an Astro island prop value from its [type_index, value] envelope."""
+        if isinstance(val, list) and len(val) == _ISLAND_ENVELOPE_LENGTH and isinstance(val[0], int):
+            return val[1]
+        return val
 
     async def _extract_title_from_ad_page(self) -> str:
         """
@@ -669,6 +812,9 @@ class AdExtractor(WebScrapingMixin):
         """
         info:dict[str, Any] = {"active": active_override if active_override is not None else True}
 
+        # Extract embedded Astro island data (redesigned layout fallback)
+        island_props = await self._extract_island_props()
+
         # Get BelenConf data which contains accurate ad_type information
         belen_conf = await self.web_execute("window.BelenConf")
 
@@ -684,7 +830,7 @@ class AdExtractor(WebScrapingMixin):
         # append subcategory and change e.g. category "161/172" to "161/172/lautsprecher_kopfhoerer"
         # take subcategory from third_category_name as key 'art_s' sometimes is a special attribute (e.g. gender for clothes)
         # the subcategory isn't really necessary, but when set, the appropriate special attribute gets preselected
-        if third_category_id := belen_conf["universalAnalyticsOpts"]["dimensions"].get("l3_category_id"):
+        if isinstance(belen_conf, dict) and (third_category_id := belen_conf.get("universalAnalyticsOpts", {}).get("dimensions", {}).get("l3_category_id")):
             info["category"] += f"/{third_category_id}"
 
         info["title"] = title
@@ -713,11 +859,33 @@ class AdExtractor(WebScrapingMixin):
         info["price"], info["price_type"] = await self._extract_pricing_info_from_ad_page()
         info["shipping_type"], info["shipping_costs"], info["shipping_options"] = await self._extract_shipping_info_from_ad_page()
         info["sell_directly"] = await self._extract_sell_directly_from_ad_page()
-        info["images"] = await self._download_images_from_ad_page(directory, ad_file_stem)
-        info["contact"] = await self._extract_contact_from_ad_page()
+        info["images"] = await self._download_images_from_ad_page(directory, ad_file_stem, island_props = island_props)
+        info["contact"] = await self._extract_contact_from_ad_page(island_props = island_props)
         info["id"] = ad_id
 
-        creation_date = await self.web_text(By.CSS_SELECTOR, DOWNLOAD_CREATION_DATE_SELECTOR)
+        # Extraction of creation date — try the legacy selector first, fall back
+        # to a broader query that works on the redesigned (Tailwind) layout,
+        # then finally try the Astro island embedded JSON.
+        creation_date:str | None = None
+        try:
+            legacy_date = await self.web_text(By.CSS_SELECTOR, DOWNLOAD_CREATION_DATE_SELECTOR)
+            if self._is_valid_creation_date(legacy_date):
+                creation_date = legacy_date
+        except TimeoutError:
+            pass  # Legacy layout may omit the creation-date element.
+        if not creation_date:
+            try:
+                redesigned_date = await self.web_text(By.CSS_SELECTOR, "#viewad-extra-info span")
+                if self._is_valid_creation_date(redesigned_date):
+                    creation_date = redesigned_date
+            except TimeoutError:
+                pass  # Redesigned layout may lack #viewad-extra-info; fall through to island fallback
+        if not creation_date and island_props:
+            island_date = self._unwrap_island_value(island_props.get("formattedCreationDate"))
+            if self._is_valid_creation_date(island_date):
+                creation_date = island_date
+        if not creation_date:
+            raise TimeoutError(_("Could not extract creation date from any selector or Astro component data."))
 
         # convert creation date to ISO format
         created_parts = creation_date.split(".")
@@ -849,7 +1017,7 @@ class AdExtractor(WebScrapingMixin):
 
         return category
 
-    async def _extract_special_attributes_from_ad_page(self, belen_conf:dict[str, Any]) -> dict[str, str]:
+    async def _extract_special_attributes_from_ad_page(self, belen_conf:dict[str, Any] | None) -> dict[str, str]:
         """
         Extracts the special attributes from an ad page.
         If no items are available then special_attributes is empty
@@ -858,7 +1026,11 @@ class AdExtractor(WebScrapingMixin):
         """
 
         # e.g. "art_s:lautsprecher_kopfhoerer|condition_s:like_new|versand_s:t"
-        special_attributes_str = belen_conf["universalAnalyticsOpts"]["dimensions"].get("ad_attributes")
+        if isinstance(belen_conf, dict):
+            opts = belen_conf.get("universalAnalyticsOpts", {})
+            special_attributes_str = opts.get("dimensions", {}).get("ad_attributes")
+        else:
+            special_attributes_str = None
         if not special_attributes_str:
             return await self._extract_special_attributes_from_dom()
         special_attributes = dict(item.split(":") for item in special_attributes_str.split("|") if ":" in item)
@@ -1034,7 +1206,7 @@ class AdExtractor(WebScrapingMixin):
             LOG.debug("Could not determine sell_directly status: %s", e)
             return None
 
-    async def _extract_contact_from_ad_page(self) -> ContactPartial:
+    async def _extract_contact_from_ad_page(self, *, island_props:dict[str, Any] | None = None) -> ContactPartial:
         """
         Processes the address part involving street (optional), zip code + city, and phone number (optional).
 
@@ -1058,12 +1230,45 @@ class AdExtractor(WebScrapingMixin):
         contact["zipcode"] = zipcode  # e.g. 19372
         contact["location"] = location  # e.g. Mecklenburg-Vorpommern - Steinbeck
 
-        contact_person_element:Element = await self.web_find(By.ID, "viewad-contact")
-        name_element = await self.web_find(By.CLASS_NAME, "iconlist-text", parent = contact_person_element)
-        try:
-            name = await self.web_text(By.TAG_NAME, "a", parent = name_element)
-        except TimeoutError:  # edge case: name without link
-            name = await self.web_text(By.TAG_NAME, "span", parent = name_element)
+        contact_person_element = await self.web_probe(By.ID, "viewad-contact")
+
+        if contact_person_element is not None:
+            # Legacy layout: name is inside .iconlist-text > a/span
+            name_element = await self.web_probe(By.CLASS_NAME, "iconlist-text", parent = contact_person_element)
+            if name_element is not None:
+                try:
+                    name = await self.web_text(By.TAG_NAME, "a", parent = name_element)
+                except TimeoutError:  # edge case: name without link
+                    name = await self.web_text(By.TAG_NAME, "span", parent = name_element)
+            else:
+                # Redesigned layout: seller name is in a link to /s-bestandsliste.html?userId=
+                name_link = await self.web_probe(
+                    By.CSS_SELECTOR,
+                    "a[href*='/s-bestandsliste.html']",
+                    parent = contact_person_element,
+                )
+                if name_link is not None:
+                    name = await self.extract_visible_text(name_link)
+                elif island_props:
+                    # Island fallback: extract contact name from embedded JSON
+                    user_details = self._unwrap_island_value(island_props.get("userDetails", {}))
+                    island_name = self._unwrap_island_value(user_details.get("contactName", "")) if isinstance(user_details, dict) else ""
+                    name = str(island_name) if island_name else ""
+                    if not name:
+                        LOG.warning("Could not extract seller name from contact area or Astro component data.")
+                else:
+                    LOG.warning("Could not extract seller name from contact area.")
+                    name = ""
+        elif island_props:
+            # No viewad-contact container; try island fallback directly
+            user_details = self._unwrap_island_value(island_props.get("userDetails", {}))
+            island_name = self._unwrap_island_value(user_details.get("contactName", "")) if isinstance(user_details, dict) else ""
+            name = str(island_name) if island_name else ""
+            if not name:
+                LOG.warning("Could not extract seller name from contact area or Astro component data.")
+        else:
+            LOG.warning("Could not extract seller name from contact area.")
+            name = ""
         contact["name"] = name
 
         if "street" not in contact:
