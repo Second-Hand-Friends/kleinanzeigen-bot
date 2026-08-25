@@ -532,6 +532,9 @@ class AdExtractor(WebScrapingMixin):
             if image_box is not None:
                 images = await self.web_find_all(By.CSS_SELECTOR, ".galleryimage-element[data-ix] > img", parent = image_box)
             else:
+                images = []
+
+            if not images:
                 # Redesigned layout: images use Tailwind-style classes.
                 # Scope to the main article's image gallery to avoid picking up
                 # thumbnails from "other ads" or recommendation sections.
@@ -574,6 +577,18 @@ class AdExtractor(WebScrapingMixin):
                 LOG.warning("No image area found. Continuing without downloading images.")
 
         return img_paths
+
+    @staticmethod
+    def _is_valid_creation_date(value:object) -> bool:
+        """Return whether value is a calendar date in the page's DD.MM.YYYY format."""
+        if not isinstance(value, str):
+            return False
+        try:
+            day, month, year = value.split(".")
+            datetime.fromisoformat(f"{year}-{month}-{day} 00:00:00")
+        except (ValueError, IndexError):
+            return False
+        return True
 
     def extract_ad_id_from_ad_url(self, url:str) -> int:
         """
@@ -853,15 +868,21 @@ class AdExtractor(WebScrapingMixin):
         # then finally try the Astro island embedded JSON.
         creation_date:str | None = None
         try:
-            creation_date = await self.web_text(By.CSS_SELECTOR, DOWNLOAD_CREATION_DATE_SELECTOR)
+            legacy_date = await self.web_text(By.CSS_SELECTOR, DOWNLOAD_CREATION_DATE_SELECTOR)
+            if self._is_valid_creation_date(legacy_date):
+                creation_date = legacy_date
         except TimeoutError:
+            pass  # Legacy layout may omit the creation-date element.
+        if not creation_date:
             try:
-                creation_date = await self.web_text(By.CSS_SELECTOR, "#viewad-extra-info span")
+                redesigned_date = await self.web_text(By.CSS_SELECTOR, "#viewad-extra-info span")
+                if self._is_valid_creation_date(redesigned_date):
+                    creation_date = redesigned_date
             except TimeoutError:
                 pass  # Redesigned layout may lack #viewad-extra-info; fall through to island fallback
         if not creation_date and island_props:
             island_date = self._unwrap_island_value(island_props.get("formattedCreationDate"))
-            if isinstance(island_date, str):
+            if self._is_valid_creation_date(island_date):
                 creation_date = island_date
         if not creation_date:
             raise TimeoutError(_("Could not extract creation date from any selector or Astro component data."))

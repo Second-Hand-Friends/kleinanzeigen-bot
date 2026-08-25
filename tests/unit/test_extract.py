@@ -1081,6 +1081,42 @@ class TestAdExtractorContent:
         assert ad_cfg.created_on.isoformat().startswith("2026-08-22")
 
     @pytest.mark.asyncio
+    async def test_extract_ad_page_info_uses_island_creation_date_when_broader_selector_is_not_a_date(
+        self,
+        test_extractor:extract_module.AdExtractor,
+    ) -> None:
+        """Ignore unrelated extra-info text and retain the valid Astro creation date."""
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+        test_extractor.page = page_mock
+        island_props = {"formattedCreationDate": [0, "22.08.2026"]}
+
+        with (
+            patch.object(test_extractor, "_extract_island_props", new_callable = AsyncMock, return_value = island_props),
+            patch.object(test_extractor, "web_execute", new_callable = AsyncMock, return_value = None),
+            patch.object(
+                test_extractor,
+                "web_text",
+                new_callable = AsyncMock,
+                side_effect = ["Description text", TimeoutError(), "Anzeige online"],
+            ),
+            patch.multiple(
+                test_extractor,
+                _extract_category_from_ad_page = AsyncMock(return_value = "160"),
+                _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
+                _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
+                _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
+                _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
+                _download_images_from_ad_page = AsyncMock(return_value = []),
+                _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+            ),
+        ):
+            ad_cfg = await test_extractor._extract_ad_page_info("/some/dir", 12345, "ad_12345", "Test Title")
+
+        assert ad_cfg.created_on is not None
+        assert ad_cfg.created_on.isoformat().startswith("2026-08-22")
+
+    @pytest.mark.asyncio
     async def test_resolve_download_title_prefers_published_metadata_for_owned_overview(
         self,
         test_extractor:extract_module.AdExtractor,
@@ -1923,6 +1959,20 @@ class TestAdExtractorDownload:
         assert image_paths == ["ad_12345__img1.jpg"]
         assert download_image.call_args_list[0].args[0] == "https://images.example/one.jpg"
         assert download_image.call_args_list[1].args[0] == "https://images.example/two.jpg"
+
+    @pytest.mark.asyncio
+    async def test_download_images_uses_island_urls_when_legacy_gallery_is_empty(self, extractor:extract_module.AdExtractor) -> None:
+        """Fall back when a legacy gallery container exists but contains no images."""
+        island_props = {"imageDetails": [0, {"imageList": [0, [[0, {"xxLargeUrl": [0, "https://images.example/one.jpg"]}]]]}]}
+
+        with (
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(extract_module.AdExtractor, "_download_and_save_image_sync", return_value = "/some/dir/ad_12345__img1.jpg"),
+        ):
+            image_paths = await extractor._download_images_from_ad_page("/some/dir", "ad_12345", island_props = island_props)
+
+        assert image_paths == ["ad_12345__img1.jpg"]
 
     def test_extract_island_image_urls_skips_unusable_values(self, extractor:extract_module.AdExtractor) -> None:
         """Ignore malformed image structures and URLs from embedded Astro data."""
