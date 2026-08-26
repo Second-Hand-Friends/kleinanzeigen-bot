@@ -1612,20 +1612,26 @@ class TestShippingOptionsDialog:
         other_methods_elem = MagicMock()
         other_methods_elem.click = AsyncMock()
 
+        # Track whether "Andere Versandmethoden" has been clicked yet.
+        andere_clicked = [False]
+
         async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
-            # Size radio probes return None initially.
             if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
-                return None
+                # Before Andere Versandmethoden click: no radios. After: radios appear.
+                return MagicMock() if andere_clicked[0] else None
             # "Andere Versandmethoden" text probe returns the element.
             if selector_type == By.TEXT and selector_value == "Andere Versandmethoden":
                 return other_methods_elem
             return None
 
         async def find_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
-            # After clicking "Andere Versandmethoden", size radio is found via web_find.
-            if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
-                return MagicMock()
             return MagicMock()
+
+        # Set the flag when click is awaited.
+        async def _track_click() -> None:
+            andere_clicked[0] = True
+
+        other_methods_elem.click.side_effect = _track_click
 
         with (
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
@@ -1660,14 +1666,14 @@ class TestShippingOptionsDialog:
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
-        """Report the workflow error when a probed alternate action disappears."""
+        """When size radios don't appear after clicking Andere Versandmethoden, the route returns without raising."""
         ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
 
         other_methods_elem = MagicMock()
         other_methods_elem.click = AsyncMock()
 
         async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
-            # Size radio probes return None initially.
+            # Size radio probes return None (radios never appear).
             if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
                 return None
             # "Andere Versandmethoden" text probe returns the element.
@@ -1676,9 +1682,6 @@ class TestShippingOptionsDialog:
             return None
 
         async def find_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
-            # After clicking "Andere Versandmethoden", size radio web_find times out.
-            if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
-                raise TimeoutError("action disappeared")
             return MagicMock()
 
         with (
@@ -1694,6 +1697,9 @@ class TestShippingOptionsDialog:
             patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock) as options_mock,
             pytest.raises(TimeoutError, match = "Failed to configure shipping options in dialog"),
         ):
+            # With web_probe returning None for all size radios, the Andere Versandmethoden
+            # route completes without finding a radio — the outer loop exhausts max_back_steps
+            # and raises TimeoutError.
             await _set_configured_shipping_options(
                 test_bot,
                 ad_cfg,
@@ -1859,28 +1865,6 @@ class TestShippingOptionsDialog:
         assert len(back_xpath_clicks) == 0
         options_mock.assert_not_awaited()
 
-    @pytest.mark.parametrize(
-        "case",
-        [
-            # SMALL pre-checked, only unwanted carriers are toggled
-            {
-                "options": ["Hermes_Päckchen"],
-                "radio_checked": True,
-                "expected_radio_click": False,
-                "expected_clicked_carriers": ["HERMES_002", "DHL_001"],
-                "expected_not_clicked_carriers": ["HERMES_001"],
-            },
-            # LARGE not checked, radio click needed and only unwanted carriers are toggled
-            {
-                "options": ["DHL_10"],
-                "radio_checked": False,
-                "expected_radio_click": True,
-                "expected_clicked_carriers": ["HERMES_004", "DHL_004", "DHL_005"],
-                "expected_not_clicked_carriers": ["DHL_003"],
-            },
-        ],
-    )
-    @pytest.mark.asyncio
     @staticmethod
     def _mock_interactable_checkbox(checked:bool = False) -> MagicMock:
         """Create a mock checkbox element with click tracking and optional checked attribute."""
@@ -3369,7 +3353,7 @@ class TestConditionFallbackToGenericHandler:
         assert len([message for message in warning_messages if "Special attribute 'condition_s' is not available" in message]) == 1
 
     @pytest.mark.asyncio
-    async def test_condition_s_lookup_timeout_propagates(
+    async def test_condition_s_lookup_timeout_warns_and_continues(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
