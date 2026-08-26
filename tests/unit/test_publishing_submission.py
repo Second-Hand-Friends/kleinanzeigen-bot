@@ -314,6 +314,7 @@ class TestPublishedAdsRecovery:
 
     @pytest.mark.asyncio
     async def test_requires_complete_pre_submit_baseline(self, test_bot:KleinanzeigenBot) -> None:
+        """Recovery requires a complete pre-submit baseline before attempting reconciliation."""
         with patch(
             "kleinanzeigen_bot.publishing_submission.published_ads.fetch_published_ads",
             new_callable = AsyncMock,
@@ -330,6 +331,7 @@ class TestPublishedAdsRecovery:
 
     @pytest.mark.asyncio
     async def test_retries_until_one_new_exact_title_id_appears(self, test_bot:KleinanzeigenBot) -> None:
+        """Recovery retries until exactly one new ad with the expected title ID appears."""
         with (
             patch(
                 "kleinanzeigen_bot.publishing_submission.published_ads.fetch_published_ads",
@@ -358,6 +360,7 @@ class TestPublishedAdsRecovery:
 
     @pytest.mark.asyncio
     async def test_rejects_ambiguous_new_exact_title_ids(self, test_bot:KleinanzeigenBot) -> None:
+        """Recovery rejects ambiguous results when multiple new exact-title IDs are found."""
         with (
             patch(
                 "kleinanzeigen_bot.publishing_submission.published_ads.fetch_published_ads",
@@ -384,6 +387,7 @@ class TestPublishedAdsRecovery:
         self,
         test_bot:KleinanzeigenBot,
     ) -> None:
+        """Recovery continues after an incomplete fetch and ignores invalid ad IDs."""
         recovered_ads = [
             {"title": "Test Ad Title"},
             {"id": "not-an-id", "title": "Test Ad Title"},
@@ -415,6 +419,7 @@ class TestPublishedAdsRecovery:
 
     @pytest.mark.asyncio
     async def test_submit_recovers_id_after_explicit_idless_success(self, test_bot:KleinanzeigenBot) -> None:
+        """Submit recovers the ad ID after an explicit id-less success response."""
         ad = _make_min_ad()
 
         async def await_condition(condition:Any, **_:object) -> bool:
@@ -621,6 +626,7 @@ class TestPublishedAdsRecovery:
         self,
         test_bot:KleinanzeigenBot,
     ) -> None:
+        """Submit fails closed when published-ads recovery itself raises an exception."""
         ad = _make_min_ad()
 
         async def await_condition(condition:Any, **_:object) -> bool:

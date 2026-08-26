@@ -277,6 +277,11 @@ async def submit_and_confirm_ad(
         confirmation_timeout = web.timeout("publishing_confirmation")
 
         async def _check_confirmation_state() -> bool:
+            """Check whether the submitted ad has reached a confirmed state.
+
+            Polls the confirmation page indicators and returns the ad ID when
+            confirmation is detected, or raises on timeout.
+            """
             nonlocal idless_success_detected
             url = str(await web.web_execute("window.location.href"))
             if "p-anzeige-aufgeben-bestaetigung.html?adId=" in url:

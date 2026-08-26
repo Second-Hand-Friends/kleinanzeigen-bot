@@ -47,6 +47,7 @@ from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 class TestKleinanzeigenBotContactLocationHardening:
     @pytest.mark.asyncio
     async def test_city_option_text_falls_back_to_visible_text(self, test_bot:KleinanzeigenBot) -> None:
+        """City option text falls back to visible text when aria-label is empty."""
         option = MagicMock(spec = Element)
         option.text = ""
         with patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = "  Metroville  "):
@@ -54,6 +55,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_city_option_text_returns_empty_when_visible_text_times_out(self, test_bot:KleinanzeigenBot) -> None:
+        """City option text returns empty string when visible text probe times out."""
         option = MagicMock(spec = Element)
         option.text = ""
 
@@ -62,6 +64,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_read_city_selection_text_prefers_live_input_value(self, test_bot:KleinanzeigenBot) -> None:
+        """Reading city selection prefers the live input value over the selected option."""
         city_input = MagicMock(spec = Element)
         city_input.local_name = "input"
         city_input.apply = AsyncMock(return_value = "Live City")
@@ -77,6 +80,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_read_city_selection_text_uses_selected_option_text(self, test_bot:KleinanzeigenBot) -> None:
+        """Reading city selection uses the selected option text when input value is unavailable."""
         city_button = MagicMock(spec = Element)
         city_button.local_name = "button"
 
@@ -92,6 +96,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_read_city_selection_text_falls_back_to_element_text(self, test_bot:KleinanzeigenBot) -> None:
+        """Reading city selection falls back to element text when no input or option is found."""
         city_button = MagicMock(spec = Element)
         city_button.local_name = "button"
         city_button.apply = AsyncMock(return_value = "Button City")
@@ -106,6 +111,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_read_city_selection_text_returns_none_when_city_field_missing(self, test_bot:KleinanzeigenBot) -> None:
+        """Reading city selection returns None when the city field element is missing."""
         with patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = TimeoutError("missing city")):
             assert await read_city_selection_text(test_bot) is None
 
@@ -115,6 +121,7 @@ class TestKleinanzeigenBotContactLocationHardening:
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
+        """Setting contact fields fails closed when zipcode cannot be set."""
         ad_cfg = Ad.model_validate(base_ad_config)
 
         with (
@@ -152,6 +159,7 @@ class TestKleinanzeigenBotContactLocationHardening:
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
+        """Setting contact fields populates optional contact inputs (phone, street)."""
         config = base_ad_config | {"contact": base_ad_config["contact"] | {"street": "Test Street 1", "phone": "+491234567"}}
         ad_cfg = Ad.model_validate(config)
         checks = {
@@ -186,6 +194,7 @@ class TestKleinanzeigenBotContactLocationHardening:
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
+        """Setting contact fields skips the phone field when it is absent from the form."""
         config = base_ad_config | {"contact": base_ad_config["contact"] | {"phone": "+491234567"}}
         ad_cfg = Ad.model_validate(config)
 
@@ -236,6 +245,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_set_contact_location_returns_for_blank_location(self, test_bot:KleinanzeigenBot) -> None:
+        """Setting contact location returns early when the configured location is blank."""
         with patch("kleinanzeigen_bot.publishing_form.read_city_selection_text", new_callable = AsyncMock) as read_city_mock:
             await set_contact_location(test_bot, "   ")
 
@@ -243,6 +253,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_set_contact_location_raises_for_missing_city_element(self, test_bot:KleinanzeigenBot) -> None:
+        """Setting contact location raises TimeoutError when the city element is missing."""
         with (
             patch("kleinanzeigen_bot.publishing_form.read_city_selection_text", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = None),
@@ -252,6 +263,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_set_contact_location_raises_for_unsupported_city_element(self, test_bot:KleinanzeigenBot) -> None:
+        """Setting contact location raises ValueError for an unsupported city element type."""
         city_input = MagicMock(spec = Element)
         city_input.local_name = "input"
         city_input.attrs = {}
@@ -265,6 +277,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_select_city_combobox_option_raises_when_options_do_not_load(self, test_bot:KleinanzeigenBot) -> None:
+        """Selecting a city combobox option raises TimeoutError when options do not load."""
         city_button = MagicMock(spec = Element)
         city_button.attrs = {}
 
@@ -279,6 +292,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_select_city_combobox_option_raises_when_no_option_matches(self, test_bot:KleinanzeigenBot) -> None:
+        """Selecting a city combobox option raises TimeoutError when no option matches."""
         city_button = MagicMock(spec = Element)
         city_button.attrs = {"aria-controls": "custom-city-list extra-token"}
         option = MagicMock(spec = Element)
@@ -299,6 +313,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_set_contact_location_raises_when_selection_does_not_converge(self, test_bot:KleinanzeigenBot) -> None:
+        """Setting contact location raises TimeoutError when the selection does not converge."""
         city_button = MagicMock(spec = Element)
         city_button.local_name = "button"
         city_button.attrs = {"role": "combobox", "aria-controls": "ad-city-menu"}

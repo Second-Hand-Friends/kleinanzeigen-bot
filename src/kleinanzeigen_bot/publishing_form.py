@@ -54,6 +54,11 @@ _SHIPPING_SIZE_RADIO_VALUES:Final[tuple[str, ...]] = ("SMALL", "MEDIUM", "LARGE"
 
 
 async def set_category(web:WebScrapingMixin, *, root_url:str, category:str | None, ad_file:str) -> None:
+    """Set or verify the ad category on the publishing form.
+
+    Clicks through the category picker to select the configured category path,
+    or verifies the auto-detected category when none is specified.
+    """
     # click on something to trigger automatic category detection
     await web.web_click(By.ID, "ad-description")
 
@@ -157,6 +162,7 @@ async def resolve_category_suggestions(web:WebScrapingMixin, category:str) -> No
 
 
 async def city_option_text(web:WebScrapingMixin, option:Element) -> str:
+    """Return the visible text of a city combobox option element."""
     text = str(getattr(option, "text", "") or "").strip()
     if text:
         return text
@@ -167,6 +173,7 @@ async def city_option_text(web:WebScrapingMixin, option:Element) -> str:
 
 
 async def read_city_selection_text(web:WebScrapingMixin) -> str | None:
+    """Read the currently selected city text from the contact location combobox."""
     city_timeout = web.timeout("default")
     quick_dom_timeout = web.timeout("quick_dom")
     try:
@@ -203,6 +210,7 @@ async def read_city_selection_text(web:WebScrapingMixin) -> str | None:
 
 
 async def select_city_combobox_option(web:WebScrapingMixin, target:str) -> None:
+    """Select a city option in the contact-location combobox by visible text."""
     quick_dom_timeout = web.timeout("quick_dom")
     city_flow_timeout = web.timeout("default")
 
@@ -227,6 +235,7 @@ async def select_city_combobox_option(web:WebScrapingMixin, target:str) -> None:
     candidates:list[Element] = []
 
     async def _options_available() -> bool:
+        """Probe whether the shipping-options section is present on the form."""
         nonlocal candidates
         try:
             candidates = await web.web_find_all(By.CSS_SELECTOR, option_selector, timeout = quick_dom_timeout)
@@ -240,6 +249,7 @@ async def select_city_combobox_option(web:WebScrapingMixin, target:str) -> None:
         raise TimeoutError(_("City combobox options did not load for location: %s") % target) from ex
 
     def normalize(value:str) -> str:
+        """Normalize a shipping-option label for comparison (strip, lower-case, collapse spaces)."""
         return " ".join(value.split()).casefold()
 
     target_norm = normalize(target)
@@ -265,6 +275,7 @@ async def select_city_combobox_option(web:WebScrapingMixin, target:str) -> None:
     await selected_option.click()
 
     async def _selection_converged() -> bool:
+        """Check whether the city selection has converged on a stable value across polls."""
         selected_city = await read_city_selection_text(web)
         return location_matches_target(target, selected_city)
 
@@ -275,6 +286,10 @@ async def select_city_combobox_option(web:WebScrapingMixin, target:str) -> None:
 
 
 async def set_contact_location(web:WebScrapingMixin, location:str) -> None:
+    """Fill the contact/location section of the publishing form.
+
+    Sets the city combobox and validates that the selection stabilises.
+    """
     target = location.strip()
     if not target:
         return
@@ -309,6 +324,7 @@ async def set_contact_location(web:WebScrapingMixin, location:str) -> None:
 
 
 async def set_contact_fields(web:WebScrapingMixin, contact:Contact) -> None:
+    """Fill contact fields (name, phone, street, zip) on the publishing form."""
     #############################
     # set contact zipcode + location
     #############################
@@ -364,6 +380,7 @@ async def set_contact_fields(web:WebScrapingMixin, contact:Contact) -> None:
 
 
 async def fill_image_section(web:WebScrapingMixin, ad_cfg:Ad) -> None:
+    """Upload images and fill the image section of the publishing form."""
     #############################
     # delete previous images to ensure a clean slate
     # (needed for MODIFY because we don't know which changed,
@@ -404,6 +421,7 @@ async def fill_image_section(web:WebScrapingMixin, ad_cfg:Ad) -> None:
 
 
 async def upload_images(web:WebScrapingMixin, ad_cfg:Ad) -> None:
+    """Upload image files for an ad via the publishing form uploader."""
     if not ad_cfg.images:
         return
 
@@ -434,6 +452,7 @@ async def upload_images(web:WebScrapingMixin, ad_cfg:Ad) -> None:
     LOG.info(" -> waiting for %s to be processed...", pluralize("image", ad_cfg.images))
 
     async def count_processed_images() -> int:
+        """Count the number of processed thumbnail images on the form."""
         try:
             markers = await web._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom_timeout)  # noqa: SLF001 - WebScrapingMixin fast marker probe
             marker_count = sum(1 for marker in markers if get_marker_value(marker))
@@ -443,6 +462,7 @@ async def upload_images(web:WebScrapingMixin, ad_cfg:Ad) -> None:
         return max(0, marker_count - baseline_marker_count)
 
     async def check_thumbnails_uploaded() -> bool:
+        """Check whether all uploaded thumbnails have finished processing."""
         current_count = await count_processed_images()
         if current_count < expected_count:
             LOG.debug(" -> %d of %d images processed", current_count, expected_count)
@@ -1064,6 +1084,7 @@ def _build_special_attribute_xpath(normalized_special_attribute_key:str, special
 
 
 def _special_attribute_candidate_priority(elem:Element) -> tuple[int, int]:
+    """Compute a sorting priority for a special-attribute candidate element."""
     local_name = elem.local_name
     elem_type = str(cast(Any, elem.attrs.get("type")) or "").lower()
     role = str(cast(Any, elem.attrs.get("role")) or "").lower()
@@ -1084,6 +1105,7 @@ def _special_attribute_candidate_priority(elem:Element) -> tuple[int, int]:
 
 
 def _describe_special_attribute_candidate(elem:Element) -> str:
+    """Return a short human-readable description of a special-attribute candidate."""
     elem_id = cast(str | None, elem.attrs.get("id"))
     elem_name = cast(str | None, elem.attrs.get("name"))
     elem_type = cast(str | None, elem.attrs.get("type"))
@@ -1092,6 +1114,7 @@ def _describe_special_attribute_candidate(elem:Element) -> str:
 
 
 def _pick_special_attribute_candidate(candidates:Sequence[Element], special_attribute_key:str) -> Element:
+    """Pick the best special-attribute candidate from a list of matching elements."""
     ensure(candidates, f"No candidates found for special attribute [{special_attribute_key}]")
     ranked_candidates = sorted(
         enumerate(candidates),
@@ -1239,6 +1262,11 @@ async def _set_special_attribute_input(
 
 
 async def set_special_attributes(web:WebScrapingMixin, ad_cfg:Ad) -> None:
+    """Set special attributes (condition, brand, etc.) on the publishing form.
+
+    Iterates configured special attributes, resolves the form element via XPath
+    or CSS fallback, and dispatches to the appropriate input handler.
+    """
     if not ad_cfg.special_attributes:
         return
 
