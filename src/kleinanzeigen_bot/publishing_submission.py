@@ -186,6 +186,7 @@ async def _click_submit_button(web:WebScrapingMixin) -> None:
         }})()
         """)
         if clicked:
+            await web.web_sleep()
             return
     raise TimeoutError(_("Could not find submit button"))
 

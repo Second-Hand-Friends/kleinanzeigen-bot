@@ -71,7 +71,6 @@ async def set_category(web:WebScrapingMixin, *, root_url:str, category:str | Non
             category_link = await web.web_find(By.TEXT, "Kategorie")
         await category_link.click()
         await web.web_sleep()
-        await web.web_find(By.TEXT, "Weiter")
 
         category_url = f"{root_url}/p-kategorie-aendern.html#?path={category}"
         await web.web_open(category_url)
@@ -809,15 +808,17 @@ async def _open_shipping_size_selection(
                 await web.web_sleep(300, 500)
                 # Verify size radios appeared after clicking.
                 for size_value in _SHIPPING_SIZE_RADIO_VALUES:
-                    size_radio = await web.web_find(
+                    size_radio = await web.web_probe(
                         By.CSS_SELECTOR,
                         f'{_OPEN_DIALOG_CSS} input[type="radio"][value="{size_value}"]',
                         timeout = short_timeout,
                     )
                     if size_radio is not None:
                         break
-                LOG.debug("Shipping dialog route: Andere Versandmethoden (%s back step(s)).", back_steps)
-                return
+                if size_radio is not None:
+                    LOG.debug("Shipping dialog route: Andere Versandmethoden (%s back step(s)).", back_steps)
+                    return
+                # Radios didn't appear after clicking; continue loop to try back navigation.
 
             if back_steps == max_back_steps:
                 break
@@ -950,7 +951,11 @@ async def _set_condition(web:WebScrapingMixin, condition_value:str) -> bool:
     })()
     """)
 
-    ti = json.loads(trigger_info)
+    try:
+        ti = json.loads(trigger_info) if isinstance(trigger_info, str) else {}
+    except (json.JSONDecodeError, TypeError):
+        LOG.debug("Condition dialog trigger returned malformed data for [%s]; falling back to generic handler.", condition_value)
+        return False
     if not ti.get("found"):
         LOG.debug("Condition dialog trigger not available for [%s]; falling back to generic handler.", condition_value)
         return False
@@ -1118,6 +1123,8 @@ async def _resolve_special_attribute_element(
     try:
         special_attr_candidates = await web.web_find_all(By.XPATH, special_attr_xpath)
     except TimeoutError:
+        # XPath via CDP dom.perform_search is unreliable on redesigned pages;
+        # fall through to the CSS selector fallback below.
         pass
 
     if not special_attr_candidates:
@@ -1141,6 +1148,7 @@ async def _resolve_special_attribute_element(
                 found = await web.web_find_all(By.CSS_SELECTOR, css_sel)
                 special_attr_candidates.extend(found)
             except TimeoutError:
+                # Selector didn't match any elements; try the next pattern.
                 pass
             if special_attr_candidates:
                 break
@@ -1151,7 +1159,6 @@ async def _resolve_special_attribute_element(
 async def _set_special_attribute_input(
     web:WebScrapingMixin,
     special_attr_elem:Element,
-    special_attr_xpath:str,
     special_attribute_key:str,
     special_attribute_value_str:str,
 ) -> None:
@@ -1172,8 +1179,7 @@ async def _set_special_attribute_input(
         elem_selector_type = By.CSS_SELECTOR
         elem_selector_value = f"[name='{elem_name}']"
     else:
-        elem_selector_type = By.CSS_SELECTOR
-        elem_selector_value = special_attr_xpath  # last resort; may not work on redesigned pages
+        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
 
     # If the only match was a hidden backing input, search for the
     # associated <button role="combobox"> by walking up the DOM tree.
@@ -1267,6 +1273,7 @@ async def set_special_attributes(web:WebScrapingMixin, ad_cfg:Ad) -> None:
             try:
                 special_attr_probe = await web.web_probe(By.XPATH, special_attr_xpath, timeout = quick_dom)
             except TimeoutError:
+                # XPath probe failed on redesigned page; fall through to CSS fallback.
                 pass
             if special_attr_probe is None:
                 # XPath fallback: try CSS selectors for the condition attribute.
@@ -1298,7 +1305,7 @@ async def set_special_attributes(web:WebScrapingMixin, ad_cfg:Ad) -> None:
             raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
 
         try:
-            await _set_special_attribute_input(web, special_attr_elem, special_attr_xpath, special_attribute_key, special_attribute_value_str)
+            await _set_special_attribute_input(web, special_attr_elem, special_attribute_key, special_attribute_value_str)
         except TimeoutError as ex:
             LOG.debug("Failed to set attribute field '%s' via known input types.", special_attribute_key)
             raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
