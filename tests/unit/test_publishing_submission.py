@@ -43,6 +43,7 @@ def _idless_success_execute(root_url:str) -> Callable[[str], Awaitable[Any]]:
     """Return browser-script behavior for the redesigned ID-less success page."""
 
     async def execute(script:str) -> Any:
+        """Async side effect for mocking web_execute calls."""
         if "document.referrer" in script:
             return ""
         # _click_submit_button injects JS that locates a <button> by label

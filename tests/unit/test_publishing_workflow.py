@@ -1094,6 +1094,7 @@ class TestWantedShippingSelection:
         ad_file = str(tmp_path / "ad.yaml")
 
         async def execute_side_effect(script:str) -> Any:
+            """Async side effect for mocking web_execute calls."""
             if "window.location.href" in script:
                 return test_bot.page.url
             # _click_submit_button uses JS to find and click the <button>;

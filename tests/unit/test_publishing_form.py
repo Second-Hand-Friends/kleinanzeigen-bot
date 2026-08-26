@@ -591,6 +591,7 @@ class TestCategorySuggestionPicker:
         category_link.click = AsyncMock()
 
         async def probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
+            """Async probe side effect for mocking web_probe calls."""
             if selector_value == "W\u00e4hle deine Kategorie":
                 return None  # long label not found
             if selector_value == "ad-category-path":
@@ -673,6 +674,7 @@ class TestCategorySuggestionPicker:
         label_elem.click = AsyncMock()
 
         async def find_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_find calls."""
             if selector_type == By.CSS_SELECTOR and selector_value == "#ad-category-picker label[for='category-suggestion-leaf']":
                 return label_elem
             return MagicMock()
@@ -726,6 +728,7 @@ class TestCategorySuggestionPicker:
         label_elem.click = AsyncMock()
 
         async def find_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_find calls."""
             if selector_type == By.CSS_SELECTOR and selector_value == "#ad-category-picker label[for='id-for-77']":
                 return label_elem
             return MagicMock()
@@ -1380,6 +1383,7 @@ class TestShippingDialogFlow:
     def _versand_probe_factory(combobox:MagicMock | None) -> Callable[..., Any]:
         """Return a web_probe side effect that returns the combobox for the first matching versand selector, None otherwise."""
         async def probe(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async probe side effect for mocking web_probe calls."""
             if selector_type == By.CSS_SELECTOR and selector_value in TestShippingDialogFlow.versand_selectors:
                 return combobox
             return None
@@ -1432,6 +1436,7 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
             # All versand combobox probes return None (not a commercial account).
             if selector_type == By.CSS_SELECTOR and selector_value in self.versand_selectors:
                 return None
@@ -1462,6 +1467,7 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
             # All versand combobox probes return None (not a commercial account).
             if selector_type == By.CSS_SELECTOR and selector_value in self.versand_selectors:
                 return None
@@ -1489,6 +1495,7 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
             # All versand combobox probes return None.
             if selector_type == By.CSS_SELECTOR and selector_value in self.versand_selectors:
                 return None
@@ -1520,6 +1527,7 @@ class TestShippingDialogFlow:
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
         async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
             # All versand combobox probes return None.
             if selector_type == By.CSS_SELECTOR and selector_value in self.versand_selectors:
                 return None
@@ -1656,6 +1664,7 @@ class TestShippingOptionsDialog:
         andere_clicked = [False]
 
         async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
             if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
                 # Before Andere Versandmethoden click: no radios. After: radios appear.
                 return MagicMock() if andere_clicked[0] else None
@@ -1665,10 +1674,12 @@ class TestShippingOptionsDialog:
             return None
 
         async def find_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_find calls."""
             return MagicMock()
 
         # Set the flag when click is awaited.
         async def _track_click() -> None:
+            """Track that the Andere Versandmethoden button was clicked."""
             andere_clicked[0] = True
 
         other_methods_elem.click.side_effect = _track_click
@@ -1713,6 +1724,7 @@ class TestShippingOptionsDialog:
         other_methods_elem.click = AsyncMock()
 
         async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
             # Size radio probes return None (radios never appear).
             if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
                 return None
@@ -1722,6 +1734,7 @@ class TestShippingOptionsDialog:
             return None
 
         async def find_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_find calls."""
             return MagicMock()
 
         with (
@@ -1765,6 +1778,7 @@ class TestShippingOptionsDialog:
         call_count = {"probe": 0}
 
         async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
             call_count["probe"] += 1
             # First iteration: all size radio probes return None.
             if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
@@ -1862,6 +1876,7 @@ class TestShippingOptionsDialog:
         zuruck_call_count = {"n": 0}
 
         async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
             # Size radio probes always return None.
             if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
                 return None
@@ -1955,6 +1970,7 @@ class TestShippingOptionsDialog:
         checkbox_mocks:dict[str, MagicMock] = {}
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            """Async side effect for mocking web_find calls."""
             # Size radio via CSS selector.
             if selector_type == By.CSS_SELECTOR and "radio" in selector_value:
                 return radio_mock
@@ -2018,6 +2034,7 @@ class TestShippingOptionsDialog:
         }
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            """Async side effect for mocking web_find calls."""
             if selector_type == By.CSS_SELECTOR and "radio" in selector_value and "MEDIUM" in selector_value:
                 return radio_mock
             if selector_type == By.TEXT and selector_value == "Weiter":
@@ -2063,6 +2080,7 @@ class TestShippingOptionsDialog:
         }
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            """Async side effect for mocking web_find calls."""
             if selector_type == By.CSS_SELECTOR and "radio" in selector_value and "SMALL" in selector_value:
                 return radio_mock
             if selector_type == By.TEXT and selector_value == "Weiter":
@@ -2190,6 +2208,7 @@ class TestShippingOptionsDialog:
         checkbox_mock = self._mock_interactable_checkbox(checked = True)
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            """Async side effect for mocking web_find calls."""
             if selector_type == By.CSS_SELECTOR and "radio" in selector_value:
                 return radio_mock
             if selector_type == By.TEXT and selector_value == "Weiter":
@@ -2238,6 +2257,7 @@ class TestShippingOptionsDialog:
 
         # Mock web_execute to handle all JavaScript calls
         async def mock_web_execute(script:str) -> Any:
+            """Async mock for web_execute calls."""
             if script == "document.body.scrollHeight":
                 return 0  # Return integer to prevent scrolling loop
             if "window.location.href" in script:
@@ -2290,6 +2310,7 @@ class TestShippingOptionsDialog:
         ):
 
             async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+                """Async side effect for mocking web_probe calls."""
                 if selector_type == By.ID and selector_value == "ad-category-path":
                     return category_path_elem
                 # Shipping size radio via CSS probe
@@ -2301,6 +2322,7 @@ class TestShippingOptionsDialog:
 
             # Mock web_find to simulate element detection
             async def mock_find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+                """Async mock side effect for web_find calls."""
                 if selector_value == "meta[name=_csrf]":
                     return csrf_token_elem
                 if selector_value == "myftr-shppngcrt-frm":
@@ -3008,6 +3030,7 @@ class TestCssFallbackCandidates:
         brand_elem.local_name = "input"
 
         async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[Element]:
+            """Async side effect for mocking web_find_all calls."""
             if selector_type == By.XPATH:
                 raise TimeoutError("xpath timeout")
             if selector_type == By.CSS_SELECTOR and selector_value == "#brand":
@@ -3047,12 +3070,14 @@ class TestConditionSelector:
         trigger_info = '{"found": true, "id": "condition-trigger", "ariaControls": "condition-dialog"}'
 
         async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            """Async side effect for mocking web_probe calls."""
             # radio lookup returns the matching radio (CSS selector scoped to open dialog)
             if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value and '"ok"' in selector_value:
                 return radio
             return None
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
+            """Async side effect for mocking web_find calls."""
             if selector_type == By.CSS_SELECTOR and selector_value == "dialog[open]":
                 return dialog
             if selector_type == By.ID and selector_value == "condition-trigger":
@@ -3116,6 +3141,7 @@ class TestConditionSelector:
         trigger_info = '{"found": true, "id": "", "ariaControls": "condition-dialog"}'
 
         async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            """Async side effect for mocking web_probe calls."""
             if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value and '"ok"' in selector_value:
                 return radio
             if selector_type == By.CSS_SELECTOR and "aria-haspopup" in selector_value:
@@ -3123,6 +3149,7 @@ class TestConditionSelector:
             return None
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
+            """Async side effect for mocking web_find calls."""
             if selector_type == By.CSS_SELECTOR and selector_value == "dialog[open]":
                 return dialog
             if selector_type == By.CSS_SELECTOR and 'label[for="radio-condition-ok"]' in selector_value:
@@ -3148,6 +3175,7 @@ class TestConditionSelector:
         trigger_info = '{"found": true, "id": "", "ariaControls": "condition-dialog"}'
 
         async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            """Async side effect for mocking web_probe calls."""
             # No aria-haspopup buttons found.
             return None
 
@@ -3200,6 +3228,7 @@ class TestConditionSelector:
         probed_values:list[str] = []
 
         async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            """Async side effect for mocking web_probe calls."""
             if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
                 if f'value="{expected_api_value}"' in selector_value:
                     probed_values.append(expected_api_value)
@@ -3210,6 +3239,7 @@ class TestConditionSelector:
             return None
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
+            """Async side effect for mocking web_find calls."""
             if selector_type == By.CSS_SELECTOR and selector_value == "dialog[open]":
                 return dialog
             if selector_type == By.ID and selector_value == "condition-trigger":
@@ -3269,6 +3299,7 @@ class TestConditionSelector:
         probed_values:list[str] = []
 
         async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            """Async side effect for mocking web_probe calls."""
             if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
                 if 'value="like_new"' in selector_value:
                     probed_values.append("like_new")
@@ -3279,6 +3310,7 @@ class TestConditionSelector:
             return None
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
+            """Async side effect for mocking web_find calls."""
             if selector_type == By.CSS_SELECTOR and selector_value == "dialog[open]":
                 return dialog
             if selector_type == By.ID and selector_value == "condition-trigger":
@@ -3338,10 +3370,12 @@ class TestConditionSelector:
         trigger_info = '{"found": true, "id": "condition-trigger", "ariaControls": "condition-dialog"}'
 
         async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            """Async side effect for mocking web_probe calls."""
             # Radio lookups for unknown values return None (no matching radio in the dialog).
             return None
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
+            """Async side effect for mocking web_find calls."""
             if selector_type == By.CSS_SELECTOR and selector_value == "dialog[open]":
                 return dialog
             if selector_type == By.ID and selector_value == "condition-trigger":
@@ -3570,6 +3604,7 @@ class TestConditionFallbackToGenericHandler:
         condition_elem.local_name = "button"
 
         async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            """Async side effect for mocking web_probe calls."""
             # XPath probe raises TimeoutError (handled by try/except).
             if selector_type == By.XPATH and "condition_s" in selector_value:
                 raise TimeoutError("xpath timeout")
@@ -3579,6 +3614,7 @@ class TestConditionFallbackToGenericHandler:
             return None
 
         async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[Element]:
+            """Async side effect for mocking web_find_all calls."""
             # CSS fallback inside _resolve_special_attribute_element finds the element.
             if selector_type == By.CSS_SELECTOR and selector_value == "#condition":
                 return [condition_elem]
