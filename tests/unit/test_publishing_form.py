@@ -584,6 +584,31 @@ class TestCategoryProbeBehavior:
 class TestCategorySuggestionPicker:
     """Regression tests for the post-redesign category-suggestion radio picker fallback."""
 
+    @pytest.mark.asyncio
+    async def test_set_category_falls_back_to_short_label_when_long_label_missing(self, test_bot:KleinanzeigenBot) -> None:
+        """When the 'Wähle deine Kategorie' probe returns None, fall back to 'Kategorie'."""
+        category_link = MagicMock()
+        category_link.click = AsyncMock()
+
+        async def probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
+            if selector_value == "W\u00e4hle deine Kategorie":
+                return None  # long label not found
+            if selector_value == "ad-category-path":
+                return None  # no auto-selected category
+            return None
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = category_link) as mock_find,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await set_category(test_bot, root_url = test_bot.root_url, category = "185/249", ad_file = "data/my_ads/ad.yaml")
+
+        # The fallback web_find(By.TEXT, "Kategorie") should have been called.
+        mock_find.assert_any_await(By.TEXT, "Kategorie")
+
     @staticmethod
     def _picker_probe_factory(picker_present:bool) -> Callable[..., Any]:
         async def probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
@@ -2956,6 +2981,48 @@ class TestSpecialAttributes:
         assert _special_attribute_candidate_priority(elem) == (8, 0)
 
 
+class TestCssFallbackCandidates:
+    """Tests for CSS fallback when XPath returns no special-attribute candidates."""
+
+    @pytest.mark.asyncio
+    async def test_css_fallback_extends_candidates_when_xpath_empty(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """When XPath returns no candidates, the CSS fallback should find and extend the list."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"brand_s": "audi"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        brand_elem = MagicMock()
+        brand_attrs = MagicMock()
+        brand_attrs.get.side_effect = lambda key, default = None: {
+            "id": "brand",
+            "type": None,
+            "role": None,
+            "name": None,
+        }.get(key, default)
+        brand_elem.attrs = brand_attrs
+        brand_elem.local_name = "input"
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[Element]:
+            if selector_type == By.XPATH:
+                raise TimeoutError("xpath timeout")
+            if selector_type == By.CSS_SELECTOR and selector_value == "#brand":
+                return [brand_elem]
+            return []
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        mock_input.assert_awaited_once()
+
+
 class TestConditionSelector:
     """Regression tests for condition dialog selection."""
 
@@ -3014,6 +3081,84 @@ class TestConditionSelector:
             bestaetigen_btn.click.assert_awaited_once()
             # web_click is no longer used by the condition dialog path.
             mock_click.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_condition_malformed_trigger_json_falls_back(self, test_bot:KleinanzeigenBot) -> None:
+        """Malformed JSON from web_execute should return False (fall back to generic handler)."""
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "not-json"),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+        ):
+            handled = await _set_condition(test_bot, "ok")
+
+        assert handled is False
+
+    @pytest.mark.asyncio
+    async def test_condition_no_trigger_id_uses_aria_haspopup_fallback(self, test_bot:KleinanzeigenBot) -> None:
+        """When trigger_info lacks an id, fall back to button[aria-haspopup] CSS probes."""
+        hp_btn = MagicMock()
+        hp_btn.click = AsyncMock()
+        dialog = MagicMock()
+        radio = MagicMock()
+        radio_attrs = MagicMock()
+        radio_attrs.id = "radio-condition-ok"
+        radio_attrs.get.side_effect = lambda key, default = None: "radio-condition-ok" if key == "id" else default
+        radio.attrs = radio_attrs
+        radio.click = AsyncMock()
+        label_elem = MagicMock()
+        label_elem.click = AsyncMock()
+        bestaetigen_btn = MagicMock()
+        bestaetigen_btn.click = AsyncMock()
+
+        # trigger_info has found:true but no id — forces aria-haspopup fallback.
+        trigger_info = '{"found": true, "id": "", "ariaControls": "condition-dialog"}'
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value and '"ok"' in selector_value:
+                return radio
+            if selector_type == By.CSS_SELECTOR and "aria-haspopup" in selector_value:
+                return hp_btn
+            return None
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
+            if selector_type == By.CSS_SELECTOR and selector_value == "dialog[open]":
+                return dialog
+            if selector_type == By.CSS_SELECTOR and 'label[for="radio-condition-ok"]' in selector_value:
+                return label_elem
+            if selector_type == By.TEXT and selector_value == "Best\u00e4tigen":
+                return bestaetigen_btn
+            raise TimeoutError(f"unexpected find: {selector_type} {selector_value}")
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = trigger_info),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+        ):
+            handled = await _set_condition(test_bot, "ok")
+
+        assert handled is True
+        hp_btn.click.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_condition_no_trigger_id_and_no_aria_haspopup_raises(self, test_bot:KleinanzeigenBot) -> None:
+        """When trigger_info has no id and no aria-haspopup button is found, raise TimeoutError."""
+        trigger_info = '{"found": true, "id": "", "ariaControls": "condition-dialog"}'
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            # No aria-haspopup buttons found.
+            return None
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = trigger_info),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            pytest.raises(TimeoutError, match = "Failed to set attribute"),
+        ):
+            await _set_condition(test_bot, "ok")
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -3395,6 +3540,60 @@ class TestConditionFallbackToGenericHandler:
         # the resilient fallback warns and skips instead of raising.
         warning_messages = [record.message for record in caplog.records if record.levelno == logging.WARNING]
         assert any("Special attribute 'condition_s' is not available" in m for m in warning_messages)
+
+    @pytest.mark.asyncio
+    async def test_condition_s_xpath_probe_timeout_then_css_found(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """When the XPath probe raises TimeoutError but a CSS fallback probe finds the
+        condition element, the element should be used (covers lines 1303-1305, 1317)."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "category": "185/249",
+                "special_attributes": {"condition_s": "ok"},
+                "shipping_type": "PICKUP",
+            }
+        )
+
+        condition_elem = MagicMock()
+        condition_attrs = MagicMock()
+        condition_attrs.get.side_effect = lambda key, default = None: {
+            "id": "sonstiges.condition",
+            "type": "button",
+            "role": "combobox",
+            "name": None,
+        }.get(key, default)
+        condition_elem.attrs = condition_attrs
+        condition_elem.local_name = "button"
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            # XPath probe raises TimeoutError (handled by try/except).
+            if selector_type == By.XPATH and "condition_s" in selector_value:
+                raise TimeoutError("xpath timeout")
+            # CSS fallback: first pattern matches.
+            if selector_type == By.CSS_SELECTOR and "label[for*='.condition']" in selector_value:
+                return condition_elem
+            return None
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[Element]:
+            # CSS fallback inside _resolve_special_attribute_element finds the element.
+            if selector_type == By.CSS_SELECTOR and selector_value == "#condition":
+                return [condition_elem]
+            return []
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._set_condition", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch("kleinanzeigen_bot.publishing_form._select_button_combobox", new_callable = AsyncMock) as mock_select_combobox,
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        # The condition element was found via CSS fallback and dispatched to the combobox handler.
+        mock_select_combobox.assert_awaited_once_with(test_bot, "sonstiges.condition", "ok")
 
     @pytest.mark.asyncio
     async def test_special_attributes_text_input_fallback(

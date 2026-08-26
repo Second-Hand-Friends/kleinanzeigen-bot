@@ -135,6 +135,20 @@ class TestTrackingFallback:
         assert result is None
 
 
+class TestClickSubmitButton:
+    """Tests for the _click_submit_button helper."""
+
+    @pytest.mark.asyncio
+    async def test_raises_timeout_when_no_submit_button_found(self, test_bot:KleinanzeigenBot) -> None:
+        """When web_execute returns False for all labels, TimeoutError is raised."""
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(TimeoutError, match = "Could not find submit button"),
+        ):
+            await publishing_submission._click_submit_button(test_bot)
+
+
 class TestSubmitAndConfirmAd:
     """Tests for the submit_and_confirm_ad helper."""
 
