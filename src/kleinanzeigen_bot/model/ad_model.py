@@ -301,7 +301,7 @@ class AdPartial(ContextualModel):
         self.content_hash = hashlib.sha256(json_string.encode()).hexdigest()
         return self
 
-    def to_ad(self, ad_defaults:AdDefaults) -> Ad:
+    def to_ad(self, ad_defaults:AdDefaults, *, context:Any | None = None) -> Ad:
         """
         Returns a complete, validated Ad by merging this partial with values from ad_defaults.
 
@@ -323,7 +323,7 @@ class AdPartial(ContextualModel):
             ad_cfg["price_reduction_count"] = 0
         if not isinstance(ad_cfg.get("repost_count"), int):
             ad_cfg["repost_count"] = 0
-        return Ad.model_validate(ad_cfg)
+        return Ad.model_validate(ad_cfg, context = context)
 
 
 def _calculate_auto_price_internal(

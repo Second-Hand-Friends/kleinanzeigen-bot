@@ -73,7 +73,7 @@ def discover_ad_files(
 
 def load_ad(ad_cfg_orig:dict[str, Any], ad_defaults:Any, ad_file:str) -> Ad:
     """Validate a raw YAML dict into an :class:`Ad` with *ad_defaults* applied."""
-    return AdPartial.model_validate(ad_cfg_orig, context = ad_file).to_ad(ad_defaults)
+    return AdPartial.model_validate(ad_cfg_orig, context = ad_file).to_ad(ad_defaults, context = ad_file)
 
 
 # --------------------------------------------------------------------------- #

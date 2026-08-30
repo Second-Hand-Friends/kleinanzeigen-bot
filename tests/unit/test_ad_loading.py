@@ -402,6 +402,38 @@ def test_load_ads_validation_errors_include_ad_file_path(
     assert expected_error in formatted_error
 
 
+def test_load_ads_final_validation_errors_include_ad_file_path(
+    tmp_path:Path,
+    base_ad_config:dict[str, Any],
+    test_bot_config:Config,
+) -> None:
+    """Final Ad validation errors retain the source ad file path."""
+    ad_dir = tmp_path / "ads"
+    ad_dir.mkdir()
+    ad_file = ad_dir / "invalid_ad.yaml"
+    ad_cfg = base_ad_config.copy()
+    ad_cfg.pop("sell_directly")
+    dicts.save_dict(ad_file, ad_cfg)
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("")
+    ad_defaults = test_bot_config.ad_defaults.model_copy(update = {"sell_directly": True})
+
+    with pytest.raises(ValidationError) as exc_info:
+        load_ads(
+            config_file_path = str(config_file),
+            ad_file_patterns = ["ads/*.yaml"],
+            ad_defaults = ad_defaults,
+            categories = {},
+            ads_selector = "due",
+            command = "publish",
+        )
+
+    formatted_error = format_validation_error(exc_info.value)
+    assert str(ad_file) in formatted_error
+    assert "shipping_options" in formatted_error
+
+
 # --------------------------------------------------------------------------- #
 # load_ads — selector behavior tests
 # --------------------------------------------------------------------------- #
