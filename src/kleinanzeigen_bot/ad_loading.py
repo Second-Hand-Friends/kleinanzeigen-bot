@@ -71,9 +71,9 @@ def discover_ad_files(
 # --------------------------------------------------------------------------- #
 
 
-def load_ad(ad_cfg_orig:dict[str, Any], ad_defaults:Any) -> Ad:
+def load_ad(ad_cfg_orig:dict[str, Any], ad_defaults:Any, ad_file:str) -> Ad:
     """Validate a raw YAML dict into an :class:`Ad` with *ad_defaults* applied."""
-    return AdPartial.model_validate(ad_cfg_orig).to_ad(ad_defaults)
+    return AdPartial.model_validate(ad_cfg_orig, context = ad_file).to_ad(ad_defaults)
 
 
 # --------------------------------------------------------------------------- #
@@ -377,7 +377,7 @@ def load_ad_configs(
     result:list[tuple[str, str, Ad, dict[str, Any]]] = []
     for ad_file, ad_file_relative in sorted(ad_files.items()):
         ad_cfg_orig = _dicts.load_dict(ad_file, "ad")
-        ad_cfg = load_ad(ad_cfg_orig, ad_defaults)
+        ad_cfg = load_ad(ad_cfg_orig, ad_defaults, ad_file)
         result.append((ad_file, ad_file_relative, ad_cfg, ad_cfg_orig))
     return result
 
