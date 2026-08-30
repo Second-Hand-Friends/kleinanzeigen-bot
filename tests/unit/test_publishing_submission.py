@@ -142,8 +142,16 @@ class TestClickSubmitButton:
     @pytest.mark.asyncio
     async def test_raises_timeout_when_no_submit_button_found(self, test_bot:KleinanzeigenBot) -> None:
         """When web_execute returns False for all labels, TimeoutError is raised."""
+
+        async def await_side_effect(condition: Any, **__: Any) -> Any:
+            """Simulate web_await: call condition, raise TimeoutError if falsy."""
+            result = await condition()
+            if not result:
+                raise TimeoutError("Could not find submit button")
+
         with (
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_side_effect),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             pytest.raises(TimeoutError, match = "Could not find submit button"),
         ):
@@ -285,7 +293,7 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = TimeoutError("timed out")),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [True, TimeoutError("timed out")]),
             patch.object(test_bot, "web_execute", new_callable = AsyncMock),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect", new_callable = AsyncMock, return_value = 99999),
@@ -310,7 +318,7 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = TimeoutError("timed out")),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [True, TimeoutError("timed out")]),
             patch.object(test_bot, "web_execute", new_callable = AsyncMock),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect", new_callable = AsyncMock, return_value = None),

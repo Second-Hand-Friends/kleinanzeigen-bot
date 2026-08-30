@@ -263,7 +263,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_set_contact_location_raises_for_unsupported_city_element(self, test_bot:KleinanzeigenBot) -> None:
-        """Setting contact location raises ValueError for an unsupported city element type."""
+        """Setting contact location raises TimeoutError for an unsupported city element type."""
         city_input = MagicMock(spec = Element)
         city_input.local_name = "input"
         city_input.attrs = {}
@@ -1717,7 +1717,7 @@ class TestShippingOptionsDialog:
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
-        """When size radios don't appear after clicking Andere Versandmethoden, the route returns without raising."""
+        """When size radios don't appear after clicking Andere Versandmethoden, the route exhausts back-navigation and raises TimeoutError."""
         ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
 
         other_methods_elem = MagicMock()
@@ -1775,16 +1775,23 @@ class TestShippingOptionsDialog:
         back_elem.click = AsyncMock()
         size_radio_elem = MagicMock()
 
-        call_count = {"probe": 0}
+        # _probe_in_dialog tries 2 dialog selectors per size value, so each
+        # pass generates up to 6 probes (3 sizes × 2 selectors).  Track
+        # passes by counting rounds of size-radio probes.
+        size_pass = {"round": 0, "probes_this_round": 0}
 
         async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
             """Async side effect for mocking web_probe calls."""
-            call_count["probe"] += 1
-            # First iteration: all size radio probes return None.
             if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
-                if call_count["probe"] <= 3:
+                size_pass["probes_this_round"] += 1
+                # After 6 probes (= 3 sizes × 2 dialog selectors), advance to next round.
+                if size_pass["probes_this_round"] > 6:
+                    size_pass["round"] += 1
+                    size_pass["probes_this_round"] = 1
+                # First round: all probes return None.
+                if size_pass["round"] == 0:
                     return None
-                # Second iteration: first size radio probe returns element.
+                # Second round: first probe returns the element.
                 return size_radio_elem
             # "Andere Versandmethoden" probe returns None.
             if selector_type == By.TEXT and selector_value == "Andere Versandmethoden":
@@ -3334,7 +3341,7 @@ class TestConditionSelector:
         assert len(warning_messages) == 1
         assert "wie_neu" in warning_messages[0]
         assert "like_new" in warning_messages[0]
-        assert probed_values == ["like_new", "wie_neu"]
+        assert probed_values == ["like_new", "like_new", "wie_neu"]
         # The legacy radio's label is clicked directly.
         label_elem.click.assert_awaited_once()
         mock_click.assert_not_awaited()

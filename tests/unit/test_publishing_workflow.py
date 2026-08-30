@@ -907,7 +907,10 @@ class TestPublishAdPostSubmitUncertainty:
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = web_await_side_effect),
+            patch.object(
+                test_bot, "web_await", new_callable = AsyncMock,
+                side_effect = [True, web_await_side_effect] if web_await_side_effect is not None else None,
+            ),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ]
 
