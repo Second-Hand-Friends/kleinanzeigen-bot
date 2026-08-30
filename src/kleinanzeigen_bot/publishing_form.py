@@ -49,8 +49,54 @@ _SHIPPING_BACK_XPATH:Final[str] = f'{_OPEN_SHIPPING_DIALOG_XPATH}//button[contai
 
 # CSS-selector counterparts for the redesigned publishing form where nodriver
 # XPath evaluation (via CDP dom.perform_search) is unreliable.
-_OPEN_DIALOG_CSS:Final[str] = "dialog[open]"
+# Kleinanzeigen renders overlays as either native <dialog open> or ARIA
+# [role="dialog"]; both variants must be probed.  Each selector is tried
+# individually because comma-separated CSS triggers CDP error -32000.
+_OPEN_DIALOG_SELECTORS:Final[tuple[str, ...]] = (
+    "dialog[open]",
+    '[role="dialog"]:not([aria-hidden="true"])',
+)
 _SHIPPING_SIZE_RADIO_VALUES:Final[tuple[str, ...]] = ("SMALL", "MEDIUM", "LARGE")
+
+
+async def _probe_in_dialog(
+    web:WebScrapingMixin,
+    child_css:str,
+    *,
+    timeout:int | float,
+) -> Element | None:
+    """Probe for a child element inside any visible dialog variant.
+
+    Kleinanzeigen renders shipping/condition overlays as either native
+    ``<dialog open>`` or ARIA ``[role="dialog"]`` depending on page variant.
+    Each dialog selector is probed individually to avoid CDP -32000 errors
+    from comma-separated CSS.
+    """
+    for dialog_sel in _OPEN_DIALOG_SELECTORS:
+        elem = await web.web_probe(By.CSS_SELECTOR, f"{dialog_sel} {child_css}", timeout = timeout)
+        if elem is not None:
+            return elem
+    return None
+
+
+async def _find_in_dialog(
+    web:WebScrapingMixin,
+    child_css:str,
+    *,
+    timeout:int | float,
+    error_message:str,
+) -> Element:
+    """Find a child element inside any visible dialog variant, or raise.
+
+    Like :func:`_probe_in_dialog` but raises ``TimeoutError`` with the given
+    message when neither dialog variant contains the child element.
+    """
+    for dialog_sel in _OPEN_DIALOG_SELECTORS:
+        try:
+            return await web.web_find(By.CSS_SELECTOR, f"{dialog_sel} {child_css}", timeout = timeout)
+        except TimeoutError:
+            continue
+    raise TimeoutError(error_message)
 
 
 async def set_category(web:WebScrapingMixin, *, root_url:str, category:str | None, ad_file:str) -> None:
@@ -235,7 +281,7 @@ async def select_city_combobox_option(web:WebScrapingMixin, target:str) -> None:
     candidates:list[Element] = []
 
     async def _options_available() -> bool:
-        """Probe whether the shipping-options section is present on the form."""
+        """Probe whether the city-combobox options are present on the form."""
         nonlocal candidates
         try:
             candidates = await web.web_find_all(By.CSS_SELECTOR, option_selector, timeout = quick_dom_timeout)
@@ -249,7 +295,7 @@ async def select_city_combobox_option(web:WebScrapingMixin, target:str) -> None:
         raise TimeoutError(_("City combobox options did not load for location: %s") % target) from ex
 
     def normalize(value:str) -> str:
-        """Normalize a shipping-option label for comparison (strip, lower-case, collapse spaces)."""
+        """Normalize a city-option label for comparison (strip, lower-case, collapse spaces)."""
         return " ".join(value.split()).casefold()
 
     target_norm = normalize(target)
@@ -810,9 +856,9 @@ async def _open_shipping_size_selection(
             # which can trigger CDP dom-query errors (-32000).
             size_radio:Element | None = None
             for size_value in _SHIPPING_SIZE_RADIO_VALUES:
-                size_radio = await web.web_probe(
-                    By.CSS_SELECTOR,
-                    f'{_OPEN_DIALOG_CSS} input[type="radio"][value="{size_value}"]',
+                size_radio = await _probe_in_dialog(
+                    web,
+                    f'input[type="radio"][value="{size_value}"]',
                     timeout = short_timeout,
                 )
                 if size_radio is not None:
@@ -828,9 +874,9 @@ async def _open_shipping_size_selection(
                 await web.web_sleep(300, 500)
                 # Verify size radios appeared after clicking.
                 for size_value in _SHIPPING_SIZE_RADIO_VALUES:
-                    size_radio = await web.web_probe(
-                        By.CSS_SELECTOR,
-                        f'{_OPEN_DIALOG_CSS} input[type="radio"][value="{size_value}"]',
+                    size_radio = await _probe_in_dialog(
+                        web,
+                        f'input[type="radio"][value="{size_value}"]',
                         timeout = short_timeout,
                     )
                     if size_radio is not None:
@@ -893,8 +939,12 @@ async def set_shipping_options(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStr
     try:
         # Select the size group via radio button value (e.g. "SMALL", "MEDIUM", "LARGE").
         # Use CSS selector scoped to the open dialog (redesign-safe).
-        size_radio_css = f'{_OPEN_DIALOG_CSS} input[type="radio"][value="{shipping_radio_value}"]'
-        shipping_size_radio = await web.web_find(By.CSS_SELECTOR, size_radio_css, timeout = short_timeout)
+        shipping_size_radio = await _find_in_dialog(
+            web,
+            f'input[type="radio"][value="{shipping_radio_value}"]',
+            timeout = short_timeout,
+            error_message = _("Failed to configure shipping options in dialog!"),
+        )
         shipping_size_radio_is_checked = shipping_size_radio.attrs.get("checked") is not None
 
         if not shipping_size_radio_is_checked:
@@ -914,8 +964,12 @@ async def set_shipping_options(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStr
         LOG.debug("Processing %d packages for size '%s'", len(all_codes_for_size), shipping_size)
 
         for carrier_code in all_codes_for_size:
-            checkbox_css = f'{_OPEN_DIALOG_CSS} input[type="checkbox"][value="{carrier_code}"]'
-            checkbox = await web.web_find(By.CSS_SELECTOR, checkbox_css, timeout = short_timeout)
+            checkbox = await _find_in_dialog(
+                web,
+                f'input[type="checkbox"][value="{carrier_code}"]',
+                timeout = short_timeout,
+                error_message = _("Failed to configure shipping options in dialog!"),
+            )
             is_checked = checkbox.attrs.get("checked") is not None
             should_be_checked = carrier_code in wanted_codes
 
@@ -1021,12 +1075,20 @@ async def _set_condition(web:WebScrapingMixin, condition_value:str) -> bool:
             await hp_btn.click()
 
         # Wait for dialog to open (CSS selector — redesign-safe).
-        await web.web_find(By.CSS_SELECTOR, "dialog[open]", timeout = short_timeout)
+        # Probe both native <dialog open> and ARIA [role="dialog"] variants.
+        for dialog_sel in _OPEN_DIALOG_SELECTORS:
+            try:
+                await web.web_find(By.CSS_SELECTOR, dialog_sel, timeout = short_timeout)
+                break
+            except TimeoutError:
+                continue
+        else:
+            raise TimeoutError(_("Condition dialog did not open"))
         condition_radio = None
         for candidate in candidate_values:
-            condition_radio = await web.web_probe(
-                By.CSS_SELECTOR,
-                f'dialog[open] input[type="radio"][value="{candidate}"]',
+            condition_radio = await _probe_in_dialog(
+                web,
+                f'input[type="radio"][value="{candidate}"]',
                 timeout = short_timeout,
             )
             if condition_radio is not None:
@@ -1036,7 +1098,12 @@ async def _set_condition(web:WebScrapingMixin, condition_value:str) -> bool:
         condition_radio_id = str(condition_radio.attrs.get("id") or "")
         if condition_radio_id:
             try:
-                label_elem = await web.web_find(By.CSS_SELECTOR, f'dialog[open] label[for="{condition_radio_id}"]', timeout = short_timeout)
+                label_elem = await _find_in_dialog(
+                    web,
+                    f'label[for="{condition_radio_id}"]',
+                    timeout = short_timeout,
+                    error_message = _("Condition dialog label not found"),
+                )
                 await label_elem.click()
             except TimeoutError:
                 await condition_radio.click()

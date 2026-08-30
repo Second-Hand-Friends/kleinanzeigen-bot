@@ -168,27 +168,38 @@ async def _click_submit_button(web:WebScrapingMixin) -> None:
     """Find and click the submit button across page variants.
 
     Uses JS to locate the <button> element (not a child span/div) containing
-    the label text, ensuring the click reaches the actual button.
+    the label text, ensuring the click reaches the actual button.  Wrapped in
+    ``web_await`` to retry because React may not have re-rendered the submit
+    button after a deferred title update or captcha solve.
     """
-    for label in _SUBMIT_LABELS:
-        # Use JS to find the actual <button> containing the label text,
-        # since By.TEXT may return a child <span> whose click doesn't submit.
-        clicked = await web.web_execute(f"""
-        (() => {{
-            const buttons = document.querySelectorAll('button');
-            for (const btn of buttons) {{
-                if (btn.textContent.trim().includes('{label}')) {{
-                    btn.click();
-                    return true;
+
+    async def _find_and_click() -> bool:
+        """Attempt to find and click a submit button for any known label."""
+        for label in _SUBMIT_LABELS:
+            clicked = await web.web_execute(f"""
+            (() => {{
+                const buttons = document.querySelectorAll('button');
+                for (const btn of buttons) {{
+                    if (btn.textContent.trim().includes('{label}')) {{
+                        btn.click();
+                        return true;
+                    }}
                 }}
-            }}
-            return false;
-        }})()
-        """)
-        if clicked:
-            await web.web_sleep()
-            return
-    raise TimeoutError(_("Could not find submit button"))
+                return false;
+            }})()
+            """)
+            if clicked:
+                return True
+        return False
+
+    try:
+        await web.web_await(
+            _find_and_click,
+            timeout_error_message = str(_("Could not find submit button")),
+        )
+    except TimeoutError:
+        raise TimeoutError(_("Could not find submit button")) from None
+    await web.web_sleep()
 
 
 async def submit_and_confirm_ad(
